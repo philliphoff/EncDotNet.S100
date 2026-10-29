@@ -1248,11 +1248,19 @@ internal sealed class DatasetsViewModel : ViewModelBase
     public ICommand ResetOpacityCommand { get; }
 
     /// <summary>
-    /// Raised when <see cref="LoadFromPathAsync"/> rejects a file because
-    /// no S-100 product specification recognised its extension. The window
-    /// surfaces this as a status-bar message.
+    /// Raised with the file's path when <see cref="LoadFromPathAsync"/> (or
+    /// <see cref="ReportUnrecognizedFile"/>) rejects a file because no product
+    /// recognised it. The window shows it as a warning toast, saying why when
+    /// the factory can tell (<see cref="Services.UnrecognizedFileMessage"/>).
     /// </summary>
     public event Action<string>? UnrecognizedFileEncountered;
+
+    /// <summary>
+    /// Raises <see cref="UnrecognizedFileEncountered"/> for a file another
+    /// path (the Datasets panel's Add button) found no product for.
+    /// </summary>
+    /// <param name="path">The file no product recognised.</param>
+    public void ReportUnrecognizedFile(string path) => UnrecognizedFileEncountered?.Invoke(path);
 
     /// <summary>
     /// Raised when a listed entry's <see cref="DatasetEntry.PortrayalSpec"/>
@@ -1619,9 +1627,9 @@ internal sealed class DatasetsViewModel : ViewModelBase
 
     /// <summary>
     /// Detects the product spec for <paramref name="path"/>, adds an entry,
-    /// and asks the loader to render it. If the file extension is not
-    /// recognised, raises <see cref="UnrecognizedFileEncountered"/> with the
-    /// extension and returns <c>null</c>.
+    /// and asks the loader to render it. If no product recognises the file,
+    /// raises <see cref="UnrecognizedFileEncountered"/> with its path and
+    /// returns <c>null</c>.
     /// </summary>
     public async Task<DatasetEntry?> LoadFromPathAsync(string path)
     {
@@ -1630,7 +1638,7 @@ internal sealed class DatasetsViewModel : ViewModelBase
         var spec = Datasets.Pipelines.DatasetPipelineFactory.DetectProductSpec(path);
         if (spec is null)
         {
-            UnrecognizedFileEncountered?.Invoke(System.IO.Path.GetExtension(path));
+            UnrecognizedFileEncountered?.Invoke(path);
             return null;
         }
 

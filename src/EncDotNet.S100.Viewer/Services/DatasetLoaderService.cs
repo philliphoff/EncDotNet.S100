@@ -604,11 +604,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         if (spec is null)
         {
             _logger.LogWarning(
-                "Could not open {Path}: the file type {Extension} is not a recognized S-100 dataset",
-                entry.FilePath, Path.GetExtension(entry.FilePath));
+                "Could not open {Path}: the file type {Extension} is not a recognized S-100 dataset. {Reason}",
+                entry.FilePath, Path.GetExtension(entry.FilePath),
+                DatasetPipelineFactory.DescribeUnrecognizedDataset(entry.FilePath));
             _notifications.Create(Strings.Toast_Warning)
                 .WithSeverity(NotificationSeverity.Warning)
-                .WithContent(string.Format(Strings.Status_UnrecognizedFileType, Path.GetExtension(entry.FilePath)))
+                .WithContent(UnrecognizedFileMessage.For(entry.FilePath))
                 .Show();
         }
 

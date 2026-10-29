@@ -461,6 +461,96 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     }
 
     /// <summary>
+    /// The message for an HDF5 file whose root has no <c>productSpecification</c>
+    /// attribute (S-100 Part 10c Table 10c-6, mandatory). Such a file is unknown:
+    /// it isn't assumed to be S-102 (#1092).
+    /// </summary>
+    internal const string Hdf5NoProductSpecificationMessage =
+        "This HDF5 file doesn't say which S-100 product it is (no productSpecification attribute).";
+
+    /// <summary>
+    /// Explains why <see cref="DetectProductSpec(string)"/> found no product for
+    /// <paramref name="path"/>, as one sentence a host can show, using
+    /// <see cref="ProductRegistry.Default"/>. Returns <see langword="null"/>
+    /// when there is nothing more specific to say than "not recognised" (the
+    /// file isn't HDF5, or a product does claim it).
+    /// </summary>
+    /// <remarks>
+    /// Three HDF5 cases are told apart:
+    /// <list type="bullet">
+    /// <item><description>
+    /// the root has no <c>productSpecification</c> attribute;
+    /// </description></item>
+    /// <item><description>
+    /// it names a product no registration reads, quoting the value;
+    /// </description></item>
+    /// <item><description>
+    /// a file named <c>.h5</c> or <c>.hdf5</c> can't be read as HDF5: with no
+    /// HDF5 signature it may be encrypted (S-100 Part 15), otherwise damaged.
+    /// </description></item>
+    /// </list>
+    /// </remarks>
+    /// <param name="path">The dataset file.</param>
+    public static string? DescribeUnrecognizedDataset(string path) =>
+        DescribeUnrecognizedDataset(path, ProductRegistry.Default);
+
+    /// <summary>
+    /// Registry-aware <see cref="DescribeUnrecognizedDataset(string)"/>: a value
+    /// naming a product <paramref name="registry"/> lacks is reported as
+    /// unsupported.
+    /// </summary>
+    /// <param name="path">The dataset file.</param>
+    /// <param name="registry">The products that can be detected.</param>
+    public static string? DescribeUnrecognizedDataset(string path, ProductRegistry registry)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(registry);
+
+        if (Directory.Exists(path) || !File.Exists(path))
+            return null;
+
+        var header = ReadHeader(path);
+        if (EncodingOf(header, acceptXmlExtension: false) != DatasetEncoding.Hdf5)
+            return null;
+
+        try
+        {
+            using var stream = File.OpenRead(path);
+            using var hdf5 = PureHdfFile.Open(stream);
+            if (ClaimHdf5(hdf5, registry) is not null)
+                return null;
+
+            var group = hdf5.Root;
+            string? productSpecification = null;
+            try
+            {
+                if (group.AttributeExists("productSpecification"))
+                    productSpecification = group.ReadStringAttribute("productSpecification");
+            }
+            catch
+            {
+                // Not a string (or unreadable): the file declares no product, as detection reads it.
+            }
+
+            return string.IsNullOrWhiteSpace(productSpecification)
+                ? Hdf5NoProductSpecificationMessage
+                : string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"This HDF5 file declares productSpecification '{productSpecification.Trim()}', which isn't a supported product.");
+        }
+        catch
+        {
+            // Not readable as HDF5. An S-100 Part 15 encrypted dataset is
+            // ciphertext from its first byte, so it has no HDF5 signature.
+            return header.IsHdf5
+                ? "This HDF5 file can't be read; it may be damaged or truncated."
+                : string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"This file is named {header.Extension} but isn't readable as HDF5. It may be encrypted (S-100 Part 15), which opens only from its exchange set with a permit, or it isn't HDF5.");
+        }
+    }
+
+    /// <summary>
     /// Determines the product specification (e.g. <c>"S-411"</c>) of an
     /// already-loaded GML document body by reading its root element once and
     /// returning the spec of the first product in <paramref name="registry"/>
@@ -545,7 +635,10 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     public IDatasetProcessor CreateProcessor(string path)
     {
         var spec = DetectProductSpec(path, _registry)
-            ?? throw new NotSupportedException($"Unrecognized dataset file: {Path.GetFileName(path)}");
+            ?? throw new NotSupportedException(
+                DescribeUnrecognizedDataset(path, _registry) is { } reason
+                    ? $"Unrecognized dataset file: {Path.GetFileName(path)}. {reason}"
+                    : $"Unrecognized dataset file: {Path.GetFileName(path)}");
 
         if (!_registry.TryResolve(spec, out var registration))
             throw new NotSupportedException($"Pipeline not implemented for {spec}.");

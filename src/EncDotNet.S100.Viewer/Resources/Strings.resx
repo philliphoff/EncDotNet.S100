@@ -1525,6 +1525,10 @@
   <data name="Status_UnrecognizedFileType" xml:space="preserve">
     <value>Unrecognized file type: {0}</value>
   </data>
+  <data name="Status_UnrecognizedDataset" xml:space="preserve">
+    <value>Couldn't open {0}. {1}</value>
+    <comment>{0} = file name, {1} = why no product recognised it, one sentence from the dataset factory (for example an HDF5 file with no productSpecification attribute).</comment>
+  </data>
   <data name="Status_SelectPortrayalCatalogue" xml:space="preserve">
     <value>Please select a portrayal catalogue for {0} first.</value>
   </data>

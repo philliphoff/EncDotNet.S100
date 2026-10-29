@@ -86,7 +86,7 @@ internal static class DatasetInputResolver
                 : DatasetPipelineFactory.DetectProductSpec(path);
             if (spec is null)
             {
-                warnings.Add($"Skipped unsupported dataset (no known product specification): {path}");
+                warnings.Add(UnrecognizedDatasetMessage.Skipped(path));
                 continue;
             }
 

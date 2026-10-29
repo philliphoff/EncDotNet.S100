@@ -30,7 +30,11 @@ public partial class DatasetsView : UserControl
         if (!File.Exists(path)) return;
 
         var spec = DatasetPipelineFactory.DetectProductSpec(path);
-        if (spec is null) return;
+        if (spec is null)
+        {
+            vm.ReportUnrecognizedFile(path);
+            return;
+        }
 
         var entry = vm.Add(path, spec);
         vm.RequestLoad(entry);

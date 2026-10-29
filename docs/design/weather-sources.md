@@ -122,7 +122,8 @@ Rejected alternatives:
 
 `DatasetPipelineFactory.DetectProductSpec` dispatches on the file
 extension. An HDF5 file with no recognised `productSpecification`
-attribute is treated as S-102.
+attribute is treated as S-102. (That was before #1061, which removed the
+fallback; §3.2.1 records why it stays removed.)
 
 Changes:
 
@@ -144,6 +145,68 @@ Each format is a product registration with `CreateFromPath`,
 `CreateFromSource` and the traits from §8.2, registered in
 `S100Products.RegisterAll`. A host can leave them out of its registry,
 as it can any product.
+
+#### 3.2.1 No S-102 fallback for undeclared HDF5 (#1092)
+
+#1061 removed the S-102 fallback described above: an HDF5 file is
+claimed only by the product its root `productSpecification` names. #1092
+asked whether to bring the fallback back, or add an S-102 shape probe.
+The answer is no. Detection stays strict, and the message for an
+unclaimed HDF5 file now says why.
+
+Evidence:
+
+- **The specs require the attribute.** S-100 Ed 5.2.1 Part 10c
+  Table 10c-6 lists `productSpecification` first among the root
+  attributes, multiplicity 1, for example `INT.IHO.S-NNN.X.X`. S-102
+  Ed 3.0.0 §10.2.1 Table 10-2 repeats it, multiplicity 1, for example
+  `INT.IHO.S-102.3.0.0`. Both are in the repo (`docs/specs/`, `docs/`).
+  S-102 2.x isn't in the repo. NOAA's `s100py` writes
+  `INT.IHO.S-102.2.0`, `.2.1`, `.2.2` and `INT.IHO.S-102.3.0.0` for its 2.0
+  to 3.0 writers, and its upgrade path refuses a file without the
+  attribute.
+- **Real files declare it.** Every readable S-102, S-104 and S-111 file
+  in `tests/datasets` does: `INT.IHO.S-102.3.0.0`, `INT.IHO.S-104.2.0`,
+  `INT.IHO.S-111.1.0`. So do 25 NOAA S-102 tiles from
+  `noaa-s102-pds/ed3.0.0`, one or two from each of its 14 regional folders
+  (`INT.IHO.S-102.3.0.0`), and NOAA's S-104 (`INT.IHO.S-104.2.0`) and
+  S-111 (`INT.IHO.S-111.1.0`) buckets. Each was read by HTTP range with
+  only the root group fetched. No real S-102 file without the attribute
+  was found.
+- **What has no attribute isn't S-102 2.x or later.** BAG files, which
+  S-102 Ed 1.0 was based on, are HDF5 with a `BAG_root` group and no
+  `productSpecification`, for example `s100py`'s test file
+  `F00788_SR_8m.bag`. NetCDF-4 is HDF5 too. NOAA's CBOFS output on
+  `noaa-nos-ofs-pds` has `Conventions` = `CF-1.4, SGRID-0.3` and no
+  `productSpecification`, so the NetCDF registration claims it (§7.1).
+  Under the old fallback, an undeclared HDF5 file named `.h5` that no
+  other check claimed went to the S-102 reader and failed there. Neither
+  BAG nor NetCDF should ever have been read as S-102.
+- **Encrypted files have no attribute to read.** An S-100 Part 15
+  encrypted dataset is ciphertext from its first byte, as in
+  `tests/datasets/ExchangeSets/Protected-Mixed/S-102`. Its exchange set's
+  catalogue names the product, and the exchange-set loader decrypts it
+  with the permit. Opened on its own, it can't be read either way.
+- **The only breakage was our own fixture.** The perf runner's synthetic
+  S-102 files declared nothing. They were fixed in #1090 (`1e30fd8`).
+
+What a user sees: `DatasetPipelineFactory.DescribeUnrecognizedDataset`
+gives one sentence for an HDF5 file no product claims. The viewer's
+toast, `s100 info`, `validate`, `render`, `tiles` and `identify`, the
+viewer's and `s100 mcp serve`'s `open_dataset`, `S100Dataset.Open` and
+`CreateProcessor` all show it:
+
+| Case | Message |
+|---|---|
+| No `productSpecification`, or one that is blank or not a string | This HDF5 file doesn't say which S-100 product it is (no productSpecification attribute). |
+| Names a product no registration reads | This HDF5 file declares productSpecification 'INT.IHO.S-412.1.0', which isn't a supported product. |
+| Named `.h5`/`.hdf5` with no HDF5 signature | This file is named .h5 but isn't readable as HDF5. It may be encrypted (S-100 Part 15), which opens only from its exchange set with a permit, or it isn't HDF5. |
+| Has the HDF5 signature but can't be opened | This HDF5 file can't be read; it may be damaged or truncated. |
+
+If a producer's undeclared S-102 file does turn up, it can still be
+opened by naming the product: `open_dataset`'s `spec`, an exchange
+set's catalogue, or a Library item's declared spec. A shape probe can
+be added later if that happens.
 
 ### 3.3 Project layout
 

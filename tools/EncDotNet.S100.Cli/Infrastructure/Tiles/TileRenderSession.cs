@@ -123,8 +123,7 @@ internal sealed class TileRenderSession : IDisposable
                     var spec = DatasetPipelineFactory.DetectProductSpec(path);
                     if (spec is null)
                     {
-                        AnsiConsole.MarkupLineInterpolated(
-                            $"[red]Could not detect an S-100 product specification for:[/] {path}");
+                        UnrecognizedDatasetMessage.Write(path);
                         return 2;
                     }
 

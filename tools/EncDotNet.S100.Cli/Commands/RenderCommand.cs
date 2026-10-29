@@ -394,8 +394,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             var spec = DatasetPipelineFactory.DetectProductSpec(datasetPath);
             if (spec is null)
             {
-                AnsiConsole.MarkupLineInterpolated(
-                    $"[red]Could not detect an S-100 product specification for:[/] {datasetPath}");
+                UnrecognizedDatasetMessage.Write(datasetPath);
                 return 2;
             }
 

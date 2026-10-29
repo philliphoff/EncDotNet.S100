@@ -282,13 +282,13 @@ public partial class MainWindow : ShadUI.Window
         ScaleBar.Unit = _viewModel.Settings.DistanceUnit;
         _viewModel.Settings.DistanceUnitChanged += unit => ScaleBar.Unit = unit;
 
-        // Surface DatasetsViewModel rejection of unknown file extensions.
-        _viewModel.Datasets.UnrecognizedFileEncountered += extension =>
+        // Surface DatasetsViewModel rejection of files no product recognises.
+        _viewModel.Datasets.UnrecognizedFileEncountered += path =>
         {
             App.Services.GetRequiredService<INotificationService>()
                 .Create(Strings.Toast_Warning)
                 .WithSeverity(NotificationSeverity.Warning)
-                .WithContent(string.Format(Strings.Status_UnrecognizedFileType, extension))
+                .WithContent(UnrecognizedFileMessage.For(path))
                 .Show();
         };
 
