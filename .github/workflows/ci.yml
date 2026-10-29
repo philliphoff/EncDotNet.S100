@@ -45,7 +45,19 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release -p:Version=${{ steps.version.outputs.version }}
 
+      - name: Cache S-164 test data
+        # The IHO S-164 exchange sets (about 30 MB) aren't committed. The S-164
+        # tests download them into ~/.cache when S100_S164_DOWNLOAD is set, and
+        # skip without them (as in the arm64 jobs). The key follows the pinned
+        # manifest, so a new release is fetched afresh.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/EncDotNet.S100/s164
+          key: s164-${{ hashFiles('tests/EncDotNet.S100.S164.Tests/s164-*.json') }}
+
       - name: Test
+        env:
+          S100_S164_DOWNLOAD: '1'
         run: dotnet test --no-build --configuration Release --logger trx --results-directory TestResults
 
       - name: Run route check sample

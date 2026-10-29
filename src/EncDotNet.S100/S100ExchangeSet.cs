@@ -26,6 +26,10 @@ public sealed class S100ExchangeSet : IDisposable, IAsyncDisposable
 {
     private const string CatalogueFileName = "CATALOG.XML";
 
+    // S-100 Part 17 packs an exchange set under an S100_ROOT folder, so a
+    // folder or archive delivered as a whole holds S100_ROOT/CATALOG.XML.
+    private const string RootFolderName = "S100_ROOT";
+
     private readonly IAssetSource _source;
     private readonly bool _ownsSource;
     private bool _disposed;
@@ -44,8 +48,9 @@ public sealed class S100ExchangeSet : IDisposable, IAsyncDisposable
     /// <summary>
     /// Opens the exchange set at <paramref name="path"/>: a folder whose top
     /// level holds <c>CATALOG.XML</c>, the <c>CATALOG.XML</c> file itself, or a
-    /// <c>.zip</c> archive whose root holds <c>CATALOG.XML</c>. The file name is
-    /// matched case-insensitively.
+    /// <c>.zip</c> archive whose root holds <c>CATALOG.XML</c>. A folder or
+    /// archive that instead holds the S-100 Part 17 <c>S100_ROOT</c> folder is
+    /// opened at <c>S100_ROOT</c>. Names are matched case-insensitively.
     /// </summary>
     /// <param name="path">The folder, catalogue file, or ZIP archive.</param>
     /// <param name="cancellationToken">Cancels reading the catalogue.</param>
@@ -179,9 +184,17 @@ public sealed class S100ExchangeSet : IDisposable, IAsyncDisposable
     {
         if (Directory.Exists(path))
         {
-            var catalogue = FindCatalogueInDirectory(path)
-                ?? throw new FileNotFoundException($"No {CatalogueFileName} found in folder: {path}", path);
-            return (FileSystemAssetSource.Create(path), Path.GetFileName(catalogue));
+            var root = path;
+            var catalogue = FindCatalogueInDirectory(root);
+            if (catalogue is null && FindRootFolder(path) is { } rootFolder)
+            {
+                root = rootFolder;
+                catalogue = FindCatalogueInDirectory(root);
+            }
+
+            if (catalogue is null)
+                throw new FileNotFoundException($"No {CatalogueFileName} found in folder: {path}", path);
+            return (FileSystemAssetSource.Create(root), Path.GetFileName(catalogue));
         }
 
         if (!File.Exists(path))
@@ -195,15 +208,9 @@ public sealed class S100ExchangeSet : IDisposable, IAsyncDisposable
 
         if (string.Equals(Path.GetExtension(path), ".zip", StringComparison.OrdinalIgnoreCase))
         {
-            var source = ZipAssetSource.Create(path);
-            var entry = FindRootCatalogueEntry(path);
-            if (entry is null)
-            {
-                source.Dispose();
-                throw new FileNotFoundException($"No root {CatalogueFileName} found in archive: {path}", path);
-            }
-
-            return (source, entry);
+            var entry = FindRootCatalogueEntry(path)
+                ?? throw new FileNotFoundException($"No root {CatalogueFileName} found in archive: {path}", path);
+            return (ZipAssetSource.Create(path, entry.BasePath), entry.Name);
         }
 
         throw new FileNotFoundException(
@@ -214,13 +221,35 @@ public sealed class S100ExchangeSet : IDisposable, IAsyncDisposable
         Directory.EnumerateFiles(directory, "*", SearchOption.TopDirectoryOnly)
             .FirstOrDefault(f => string.Equals(Path.GetFileName(f), CatalogueFileName, StringComparison.OrdinalIgnoreCase));
 
-    private static string? FindRootCatalogueEntry(string zipPath)
+    private static string? FindRootFolder(string directory) =>
+        Directory.EnumerateDirectories(directory, "*", SearchOption.TopDirectoryOnly)
+            .FirstOrDefault(d => string.Equals(Path.GetFileName(d), RootFolderName, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Finds the archive's catalogue: <c>CATALOG.XML</c> at the root, or else
+    /// <c>S100_ROOT/CATALOG.XML</c>. Returns the entry prefix to read the
+    /// exchange set under and the catalogue's name within it, with their stored
+    /// spelling.
+    /// </summary>
+    private static (string BasePath, string Name)? FindRootCatalogueEntry(string zipPath)
     {
         using var archive = ZipFile.OpenRead(zipPath);
-        return archive.Entries
-            .FirstOrDefault(e => !e.FullName.Contains('/') && !e.FullName.Contains('\\')
-                && string.Equals(e.FullName, CatalogueFileName, StringComparison.OrdinalIgnoreCase))
-            ?.FullName;
+        (string BasePath, string Name)? nested = null;
+        foreach (var entry in archive.Entries)
+        {
+            var parts = entry.FullName.Replace('\\', '/').Split('/');
+            if (!string.Equals(parts[^1], CatalogueFileName, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (parts.Length == 1)
+                return (string.Empty, entry.FullName);
+            if (parts.Length == 2 && nested is null
+                && string.Equals(parts[0], RootFolderName, StringComparison.OrdinalIgnoreCase))
+            {
+                nested = (entry.FullName[..(parts[0].Length + 1)], parts[1]);
+            }
+        }
+
+        return nested;
     }
 
     private static IReadOnlyDictionary<string, string>? BuildSupportFileMap(ExchangeCatalogue catalogue)

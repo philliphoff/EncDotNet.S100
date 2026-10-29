@@ -853,7 +853,8 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
 
     /// <summary>
     /// Normalizes an exchange-set product identifier (e.g. <c>"S-101"</c>,
-    /// <c>"S101"</c>, <c>"s-101"</c>) to the canonical spec strings used
+    /// <c>"S101"</c>, <c>"s-101"</c>, or the long form
+    /// <c>"INT.IHO.S-101.2.0.0"</c>) to the canonical spec strings used
     /// by <see cref="CreateProcessor(string)"/>'s switch (<c>"S-101"</c>, etc.).
     /// Returns <c>null</c> when the identifier is null, blank, or unrecognized.
     /// </summary>
@@ -861,6 +862,14 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     {
         if (string.IsNullOrWhiteSpace(productIdentifier)) return null;
         var trimmed = productIdentifier.Trim();
+        if (trimmed.StartsWith("INT.IHO.", StringComparison.OrdinalIgnoreCase))
+        {
+            // The long form carries the edition too; only the name selects the product.
+            return SpecRef.TryParse(trimmed, out var specRef) && S100Products.KnownSpecs.Contains(specRef.Name)
+                ? specRef.Name
+                : null;
+        }
+
         var normalized = trimmed.StartsWith("S-", StringComparison.OrdinalIgnoreCase)
             ? "S-" + trimmed[2..]
             : trimmed.StartsWith('S') || trimmed.StartsWith('s')

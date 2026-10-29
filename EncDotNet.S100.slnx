@@ -91,6 +91,7 @@
     <Project Path="tests/EncDotNet.S100.Mcp.Tests/EncDotNet.S100.Mcp.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Navigation.Tests/EncDotNet.S100.Navigation.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Routes.Rtz.Tests/EncDotNet.S100.Routes.Rtz.Tests.csproj" />
+    <Project Path="tests/EncDotNet.S100.S164.Tests/EncDotNet.S100.S164.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.PerfReport.Tests/EncDotNet.S100.PerfReport.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.PerfRunner.Tests/EncDotNet.S100.PerfRunner.Tests.csproj" />
     <Project Path="tests/EncDotNet.S100.Viewer.Tests/EncDotNet.S100.Viewer.Tests.csproj" />

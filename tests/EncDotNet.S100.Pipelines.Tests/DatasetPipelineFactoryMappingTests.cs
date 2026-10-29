@@ -23,6 +23,9 @@ public class DatasetPipelineFactoryMappingTests
     [InlineData("s-101", "S-101")]
     [InlineData("  S-101  ", "S-101")]
     [InlineData("s101", "S-101")]
+    [InlineData("INT.IHO.S-101.2.0.0", "S-101")]
+    [InlineData("INT.IHO.S-102.3.0.0", "S-102")]
+    [InlineData("int.iho.s-124.2.0.0", "S-124")]
     public void MapProductIdentifierToSpec_NormalizesKnownIdentifiers(string input, string expected)
     {
         Assert.Equal(expected, DatasetPipelineFactory.MapProductIdentifierToSpec(input));
@@ -34,6 +37,8 @@ public class DatasetPipelineFactoryMappingTests
     [InlineData("   ")]
     [InlineData("S-999")]
     [InlineData("garbage")]
+    [InlineData("INT.IHO.S-999.1.0.0")]
+    [InlineData("INT.IHO.S-101")]
     public void MapProductIdentifierToSpec_ReturnsNullForUnknown(string? input)
     {
         Assert.Null(DatasetPipelineFactory.MapProductIdentifierToSpec(input));
@@ -50,6 +55,21 @@ public class DatasetPipelineFactoryMappingTests
     {
         var spec = new ProductSpecification { ProductIdentifier = "S-102", Name = "S-101", Number = 101 };
         Assert.Equal("S-102", DatasetPipelineFactory.MapProductSpecificationToSpec(spec));
+    }
+
+    [Fact]
+    public void MapProductSpecificationToSpec_ReadsLongFormIdentifierBeforeNumber()
+    {
+        // S-164 v2.0.0 catalogues declare the long form with the IHO register
+        // number (214) rather than 101 in the number field.
+        var spec = new ProductSpecification
+        {
+            ProductIdentifier = "INT.IHO.S-101.2.0.0",
+            Name = "Electronic Navigational Chart",
+            Version = "2.0.0",
+            Number = 214,
+        };
+        Assert.Equal("S-101", DatasetPipelineFactory.MapProductSpecificationToSpec(spec));
     }
 
     [Fact]

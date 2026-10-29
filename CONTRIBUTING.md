@@ -47,6 +47,11 @@ Test conventions:
 - **Never commit real ENC data files to the repository.** Use small synthetic
   test fixtures, or skip tests that require live data. Synthetic GML fixtures
   live under `tests/datasets/<SXXX>/`.
+- `tests/EncDotNet.S100.S164.Tests` runs against the IHO S-164 test exchange
+  sets, which aren't committed. Its tests skip until the data is cached; set
+  `S100_S164_DOWNLOAD=1` to download the pinned release into
+  `~/.cache/EncDotNet.S100/s164` (or `S100_S164_DATA`). CI does this. See
+  [S-164 conformance](docs/design/s164-conformance.md).
 - Some libraries lock their public API in a checked-in `PublicApi.txt`
   (`EncDotNet.S100.Navigation` so far). If you change that API on purpose,
   update the file with `S100_UPDATE_API_BASELINE=1 dotnet test tests/<Library>.Tests`
