@@ -525,11 +525,10 @@ How warnings are handled:
 - **Atom.** Both entry shapes: a whole `<alert>` inside the entry, and the
   NWS entry whose fields are `cap:` elements (identifier from the entry's
   `id`, headline from `title`, description from `summary`).
-- **Zone layer.** All 696 NWS coastal and offshore zones (`mz18mr25`,
-  `oz18mr25`), Douglas-Peucker at 0.005° and four decimals, 798 KB, embedded.
-  weather.gov was unreachable, so the features came from a mirror that keeps
-  the shapefile records unchanged; `tools/cap` has the scripts and the
-  provenance. Only `UGC` geocodes are resolved (not marine SAME codes), and
+- **Zone layer.** All 699 NWS coastal and offshore zones (`mz16ap26`,
+  `oz16ap26`), built straight from the NWS shapefiles, Douglas-Peucker at
+  0.005° and four decimals, 1.6 MB, embedded; `tools/cap` has the scripts
+  and the provenance. Only `UGC` geocodes are resolved (not marine SAME codes), and
   only for an area with no polygon or circle of its own.
 - **Validity.** The NWS sets `expires` to when the message should be
   replaced, often before the hazard starts (a gale warning for tomorrow that

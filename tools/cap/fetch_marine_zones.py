@@ -1,56 +1,32 @@
-"""Fetches every NWS marine zone (coastal mz18mr25 and offshore oz18mr25) as one
-GeoJSON feature per UGC code, into the directory given as the first argument.
+"""Downloads one release of the NWS coastal (mzDDmmYY.zip) and offshore
+(ozDDmmYY.zip) marine zone shapefiles from https://www.weather.gov/gis/MarineZones
+into the directory given as the first argument, for build_marine_zones.py.
 
-weather.gov wasn't reachable when the layer was built, so this reads the KDE
-foss-public-alert-server mirror, whose generate_UGC.py wrote each feature of
-the NWS shapefiles unchanged (pyshp's __geo_interface__: the NWS geometry and
-DBF attributes) to data/UGC/<UGC>.geojson. Every marine UGC prefix is probed
-for zones 000 to 999; a missing file is a code with no zone.
+The release is the date part of the file names the page lists, for example
+16ap26 for mz16ap26.zip and oz16ap26.zip. Use the newest one the page offers.
+The zips are untrusted downloads: give a fresh, empty directory outside the
+repository.
 
-Usage: python3 -I fetch_marine_zones.py <out-dir>
+Usage: python3 -I fetch_marine_zones.py <out-dir> <release>
 Set SSL_CERT_FILE for a proxy's CA bundle.
 """
-import concurrent.futures
-import json
 import os
 import ssl
 import sys
-import urllib.error
 import urllib.request
 
-BASE = "https://raw.githubusercontent.com/KDE/foss-public-alert-server/master/foss_public_alert_server/alertHandler/data/UGC/"
-PREFIXES = ["AM", "AN", "GM", "LC", "LE", "LH", "LM", "LO", "LS", "PH", "PK", "PM", "PS", "PZ", "SL"]
-out = sys.argv[1]
+BASE = "https://www.weather.gov/source/gis/Shapefiles/WSOM/"
+USER_AGENT = "EncDotNet.S100 fixture capture (+https://github.com/philliphoff/EncDotNet.S100)"
+
+out, release = sys.argv[1], sys.argv[2]
 os.makedirs(out, exist_ok=True)
 ctx = ssl.create_default_context(cafile=os.environ.get("SSL_CERT_FILE"))
 
-
-def fetch(ugc):
-    path = os.path.join(out, ugc + ".geojson")
-    if os.path.exists(path):
-        return ugc, True
-    for attempt in range(4):
-        try:
-            with urllib.request.urlopen(BASE + ugc + ".geojson", context=ctx, timeout=30) as r:
-                data = r.read()
-            with open(path, "wb") as f:
-                f.write(data)
-            return ugc, True
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                return ugc, False
-        except Exception:
-            pass
-    return ugc, None
-
-
-ids = [f"{p}Z{n:03d}" for p in PREFIXES for n in range(1000)]
-found = failed = 0
-with concurrent.futures.ThreadPoolExecutor(48) as pool:
-    for ugc, ok in pool.map(fetch, ids):
-        if ok:
-            found += 1
-        elif ok is None:
-            failed += 1
-            print("FAILED", ugc, flush=True)
-print("found", found, "failed", failed)
+for kind in ("mz", "oz"):
+    name = f"{kind}{release}.zip"
+    request = urllib.request.Request(BASE + name, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request, context=ctx, timeout=120) as r:
+        data = r.read()
+    with open(os.path.join(out, name), "wb") as f:
+        f.write(data)
+    print(name, len(data))

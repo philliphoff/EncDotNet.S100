@@ -1,7 +1,9 @@
 """Builds the compact marine zone layer bundled with EncDotNet.S100.Datasets.Cap
-(src/EncDotNet.S100.Datasets.Cap/Resources/MarineZones.geojson) from a directory
-of NWS marine zone features, one GeoJSON feature per file with the shapefile's
-ID, NAME and WFO attributes (what fetch_marine_zones.py writes).
+(src/EncDotNet.S100.Datasets.Cap/Resources/MarineZones.geojson) from the NWS
+coastal (mzDDmmYY.zip) and offshore (ozDDmmYY.zip) marine zone shapefiles in a
+directory (what fetch_marine_zones.py downloads). Each shapefile record is one
+zone: its ID (the UGC code), NAME and WFO attributes and its geometry, read with
+pyshp (pip install pyshp, in a virtual environment outside the repository).
 
 Each ring is rounded to four decimals and simplified with Douglas-Peucker at
 the tolerance given (0.005 degrees for the bundled layer); holes smaller than
@@ -10,6 +12,8 @@ the tolerance are dropped. The output is one feature per line, sorted by code.
 Usage: python3 -I build_marine_zones.py <zone-dir> <out.geojson> 0.005
 """
 import json, os, sys, collections
+
+import shapefile
 
 src, dst, tol = sys.argv[1], sys.argv[2], float(sys.argv[3])
 DIGITS = 4
@@ -63,13 +67,20 @@ def simplify_ring(ring):
     return [[x, y] for x, y in out]
 
 
+def read_zones():
+    for name in sorted(os.listdir(src)):
+        if not name.endswith(".zip"):
+            continue
+        with shapefile.Reader(os.path.join(src, name)) as reader:
+            for shape_record in reader.shapeRecords():
+                props = {k: (v.strip() if isinstance(v, str) else v) for k, v in shape_record.record.as_dict().items()}
+                yield props, shape_record.shape.__geo_interface__
+
+
+releases = sorted(n[:-4] for n in os.listdir(src) if n.endswith(".zip"))
 features = []
 stats = collections.Counter()
-for name in sorted(os.listdir(src)):
-    with open(os.path.join(src, name)) as f:
-        feat = json.load(f)
-    props = feat["properties"]
-    geom = feat["geometry"]
+for props, geom in sorted(read_zones(), key=lambda z: z[0]["ID"]):
     polys = geom["coordinates"] if geom["type"] == "MultiPolygon" else [geom["coordinates"]]
     out_polys = []
     for poly in polys:
@@ -93,7 +104,7 @@ for name in sorted(os.listdir(src)):
 collection = {
     "type": "FeatureCollection",
     "name": "NWS marine zones",
-    "source": "NWS coastal (mz18mr25) and offshore (oz18mr25) marine zone shapefiles, https://www.weather.gov/gis/MarineZones",
+    "source": f"NWS coastal ({releases[0]}) and offshore ({releases[1]}) marine zone shapefiles, https://www.weather.gov/gis/MarineZones",
     "license": "Public domain (US Government work)",
     "simplification": f"Douglas-Peucker, {tol} degrees; coordinates rounded to {DIGITS} decimals",
     "features": features,

@@ -25,4 +25,4 @@ Special Marine Warnings), Moderate (gale, Small Craft Advisories) and Minor
 The zone codes resolve against the marine zone layer bundled with
 `EncDotNet.S100.Datasets.Cap` (`src/EncDotNet.S100.Datasets.Cap/Resources/MarineZones.geojson`),
 built from the full NWS coastal and offshore marine zone shapefiles by
-`tools/cap-zones` (see its README).
+`tools/cap` (see its README).

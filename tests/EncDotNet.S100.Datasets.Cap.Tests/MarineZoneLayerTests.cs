@@ -10,9 +10,9 @@ public sealed class MarineZoneLayerTests
     {
         var layer = MarineZoneLayer.Default;
 
-        Assert.Equal(696, layer.Count);
-        Assert.Contains("mz18mr25", layer.Source);
-        Assert.Contains("oz18mr25", layer.Source);
+        Assert.Equal(699, layer.Count);
+        Assert.Contains("mz16ap26", layer.Source);
+        Assert.Contains("oz16ap26", layer.Source);
         // Every marine UGC area prefix, coastal (ANZ5xx) and offshore (ANZ8xx).
         foreach (var code in new[] { "ANZ535", "ANZ800", "AMZ040", "GMZ475", "PZZ560", "PZZ650", "PKZ731", "PHZ110", "LMZ043", "LEZ148", "SLZ022" })
             Assert.NotNull(layer.Find(code));
