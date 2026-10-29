@@ -9,7 +9,8 @@
 // Options: --only <ids>, --out <dir>, --viewer <exe>, --ienc <dir>, --chs <dir>, --keep-open, --two-shades,
 // --theme light (the themed window shots again with Light chrome, as <ID>.light.png),
 // --no-clone (run the build in place instead of a cached clone),
-// --manifest-only (run the recipes and update the manifest, keeping the existing images).
+// --manifest-only (run the recipes and update the manifest, keeping the existing images),
+// --gfs-run yyyyMMddHH (W1: that GFS run instead of the latest).
 // Data is downloaded once into site/capture/.cache/ (gitignored).
 #:package ModelContextProtocol
 #:package SkiaSharp
@@ -39,6 +40,9 @@ var viewerExe = Option("--viewer") ?? Path.Combine(repoRoot, "src", "EncDotNet.S
 var chsDir = Option("--chs") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "Unencrypted_S100_DatasetsNov2025 (1)", "COMBINED");
 var iencDir = Option("--ienc") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "SynologyDrive", "Charts", "Inland S-57 ENCs");
 var keepOpen = args.Contains("--keep-open");
+var gfsRun = Option("--gfs-run") is { } pinnedRun
+    ? DateTime.SpecifyKind(DateTime.ParseExact(pinnedRun, "yyyyMMddHH", System.Globalization.CultureInfo.InvariantCulture), DateTimeKind.Utc)
+    : (DateTime?)null;
 var manifestOnly = args.Contains("--manifest-only");
 ShotManifest.RepoRoot = repoRoot;
 Viewer.FourShades = !args.Contains("--two-shades");
@@ -112,8 +116,10 @@ var rebellionBox = new Box(32.754, -79.890, 32.778, -79.864);
 var checkDeparture = new DateTimeOffset(2025, 12, 18, 13, 30, 0, TimeSpan.Zero);
 // W1: the coast from Cape Lookout past Cape Hatteras to the Chesapeake Bay
 // entrance and the Gulf Stream offshore, where GFS-Wave's Atlantic grid has its
-// steepest gradients near the coast.
-var hatterasBox = new Box(33.4, -78.6, 37.6, -72.4);
+// steepest gradients near the coast. The west and south edges sit just inside
+// US2ATLOC, the band-2 cell that draws at this scale (the band-3 cells don't),
+// so the chart reaches the edges of the view.
+var hatterasBox = new Box(33.62, -76.75, 37.8, -71.0);
 
 var shots = new List<Shot>
 {
@@ -277,7 +283,8 @@ var shots = new List<Shot>
 
     // W1: wind and waves over the chart off Cape Hatteras: NOAA GFS-Wave
     // significant wave height (the Atlantic 0.16° grid) and the GFS 10 m wind and
-    // sea level pressure, six hours into the latest run on AWS (public domain),
+    // sea level pressure, six hours into the latest run on AWS (public domain), or
+    // into the run --gfs-run names (the committed shot: Hurricane Erin, 2025082100),
     // over the NOAA coastal charts the Library downloads. Display controls is
     // open on its Weather switches (isobars on, wind speed fill and wave arrows
     // off, the defaults).
@@ -286,7 +293,7 @@ var shots = new List<Shot>
         await v.Reset(category: "DisplayBase");
         await CoastalCharts(v, "NC", hatterasBox);
         const int hour = 6;
-        var run = await data.LatestGfsRun(hour);
+        var run = gfsRun ?? await data.LatestGfsRun(hour);
         await v.OpenAll([await data.GfsWave(run, "atlocn.0p16", hour, ["HTSGW:surface", "PERPW:surface", "DIRPW:surface"])]);
         await v.OpenAll([await data.Gfs(run, hour, ["UGRD:10 m above ground", "VGRD:10 m above ground", "PRMSL:mean sea level"])]);
         await v.Call("set_view_time", new() { ["time"] = run.AddHours(hour).ToString("O"), ["snap"] = "nearest" });
