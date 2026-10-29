@@ -379,4 +379,76 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
         Assert.DoesNotContain(queued, loaded);
         Assert.DoesNotContain(queued, unloaded);
     }
+
+    [Fact]
+    public async Task DebouncedEvaluation_RunsThroughMarshal()
+    {
+        // Mapsui raises viewport changes from animation callbacks that have no
+        // synchronisation context; the debounced pass must still reach the UI
+        // thread through the injected marshal, not run on the thread pool.
+        var notifier = new FakeNotifier();
+        var marshalled = 0;
+        var loadedInsideMarshal = new ConcurrentBag<bool>();
+        var inMarshal = new ThreadLocal<bool>();
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            (entry, _) =>
+            {
+                loadedInsideMarshal.Add(inMarshal.Value);
+                return Task.CompletedTask;
+            },
+            _ => { },
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.FromMilliseconds(10) },
+            marshal: action =>
+            {
+                Interlocked.Increment(ref marshalled);
+                inMarshal.Value = true;
+                try { action(); }
+                finally { inMarshal.Value = false; }
+            });
+
+        coordinator.Register(new[] { Cell("US5MA", 40, -75, 41, -74) });
+        await Task.Run(() => notifier.Publish(Viewport(40, -75, 41, -74)), TestContext.Current.CancellationToken);
+
+        Assert.True(await WaitUntilAsync(() => coordinator.LoadedCount == 1));
+        Assert.True(marshalled >= 1);
+        Assert.Equal(new[] { true }, loadedInsideMarshal.ToArray());
+    }
+
+    [Fact]
+    public async Task QueuedLoad_NoLongerInView_IsSkippedAndStaysDeferred()
+    {
+        var notifier = new FakeNotifier();
+        var loaded = new ConcurrentBag<DatasetEntry>();
+        var release = new TaskCompletionSource();
+        var blocker = Cell("US5AA", 40, -75, 41, -74);
+        var far = Cell("US5BB", 50, -5, 51, -4);
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            async (entry, _) =>
+            {
+                if (ReferenceEquals(entry, blocker))
+                    await release.Task;
+                loaded.Add(entry);
+            },
+            _ => { },
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 });
+
+        coordinator.Register(new[] { blocker, far });
+
+        // A wide view wants both; the far cell queues behind the blocker.
+        notifier.Publish(Viewport(39, -76, 52, -3));
+        // The view moves to the blocker only before the far cell's turn comes.
+        notifier.Publish(Viewport(40, -75, 41, -74));
+        release.SetResult();
+
+        Assert.True(await WaitUntilAsync(() => loaded.Contains(blocker)));
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(far, loaded);
+        Assert.True(far.IsDeferred);
+
+        // Panning back to it loads it.
+        notifier.Publish(Viewport(50, -5, 51, -4));
+        Assert.True(await WaitUntilAsync(() => loaded.Contains(far)));
+    }
 }
