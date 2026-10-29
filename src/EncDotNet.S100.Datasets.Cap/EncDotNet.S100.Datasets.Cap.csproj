@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The NWS coastal and offshore marine zones, simplified once by tools/cap-zones. -->
+    <!-- The NWS coastal and offshore marine zones, simplified once by tools/cap. -->
     <EmbeddedResource Include="Resources\MarineZones.geojson" LogicalName="EncDotNet.S100.Datasets.Cap.MarineZones.geojson" />
     <!-- The severity hatching, served by CapStyle.Symbols. -->
     <EmbeddedResource Include="Symbols\*.svg" LogicalName="EncDotNet.S100.Datasets.Cap.Symbols.%(Filename)%(Extension)" />

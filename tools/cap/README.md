@@ -5,31 +5,29 @@ Scripts that build the committed data of `EncDotNet.S100.Datasets.Cap`
 
 ## The marine zone layer
 
-`src/EncDotNet.S100.Datasets.Cap/Resources/MarineZones.geojson` (798 KB) is
-the NWS coastal (`mz18mr25`) and offshore (`oz18mr25`) marine zone
-shapefiles from <https://www.weather.gov/gis/MarineZones>: 696 zones,
-simplified with Douglas-Peucker at 0.005° (about 500 m), coordinates to four
-decimals, 35,611 vertices. Each feature carries its UGC code as `id`, and its
-`name` and forecast office (`wfo`). NWS data is a US Government work in the
-public domain.
+`src/EncDotNet.S100.Datasets.Cap/Resources/MarineZones.geojson` (1.6 MB) is
+built straight from the NWS coastal (`mz16ap26.zip`) and offshore
+(`oz16ap26.zip`) marine zone shapefiles at
+<https://www.weather.gov/gis/MarineZones>: 699 zones (569 coastal, 130
+offshore), one per shapefile record, simplified with Douglas-Peucker at
+0.005° (about 500 m), coordinates to four decimals, 77,246 vertices. Each
+feature carries the record's `ID` (its UGC code) as `id`, and its `NAME` and
+forecast office (`WFO`) as `name` and `wfo`. NWS data is a US Government work
+in the public domain.
+
+`fetch_marine_zones.py` downloads one release's two zips; the release is the
+date part of the file names on the page (use the newest). `build_marine_zones.py`
+reads the zips with pyshp. The downloads are untrusted, so keep them in a
+fresh directory outside the repository, and install pyshp in a virtual
+environment outside it too:
 
 ```bash
-python3 -I tools/cap/fetch_marine_zones.py /tmp/zones
-python3 -I tools/cap/build_marine_zones.py /tmp/zones \
+python3 -m venv "$TMPDIR/cap-venv" && "$TMPDIR/cap-venv/bin/pip" install pyshp
+mkdir "$TMPDIR/zones"
+"$TMPDIR/cap-venv/bin/python" -I tools/cap/fetch_marine_zones.py "$TMPDIR/zones" 16ap26
+"$TMPDIR/cap-venv/bin/python" -I tools/cap/build_marine_zones.py "$TMPDIR/zones" \
     src/EncDotNet.S100.Datasets.Cap/Resources/MarineZones.geojson 0.005
 ```
-
-weather.gov wasn't reachable from the build environment, so
-`fetch_marine_zones.py` reads the per-zone files of KDE's FOSS Public Alert
-Server (its GitHub mirror, `KDE/foss-public-alert-server`, at
-`foss_public_alert_server/alertHandler/data/UGC/<UGC>.geojson`), whose
-`generate_UGC.py` wrote each feature of the `mz18mr25` and `oz18mr25`
-shapefiles unchanged with pyshp: the NWS geometry and attributes, with no
-editing. To build from the NWS files directly, unzip `mz18mr25.zip` and
-`oz18mr25.zip` (or a newer release), write each shapefile record as one
-GeoJSON feature per file (with pyshp, `shapefile.Reader(...).shapeRecords()`
-and each record's `__geo_interface__`), and run `build_marine_zones.py` on
-that directory.
 
 The NWS publishes a new release a few times a year. The layer only needs
 rebuilding when zones are added, renumbered or redrawn. Codes the layer

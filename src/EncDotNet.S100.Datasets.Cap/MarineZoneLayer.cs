@@ -18,10 +18,10 @@ public sealed record MarineZone(string Code, string Name, string Office, IReadOn
 /// <remarks>
 /// <para>
 /// <see cref="Default"/> is the layer bundled with this package: the NWS
-/// coastal (<c>mz18mr25</c>) and offshore (<c>oz18mr25</c>) marine zone
-/// shapefiles from <c>https://www.weather.gov/gis/MarineZones</c>, 696 zones,
+/// coastal (<c>mz16ap26</c>) and offshore (<c>oz16ap26</c>) marine zone
+/// shapefiles from <c>https://www.weather.gov/gis/MarineZones</c>, 699 zones,
 /// simplified once to a compact GeoJSON (Douglas-Peucker at 0.005°, about
-/// 500 m, coordinates to four decimals) by <c>tools/cap-zones</c>. The NWS
+/// 500 m, coordinates to four decimals) by <c>tools/cap</c>. The NWS
 /// data is a US Government work in the public domain. The simplification
 /// is fine for drawing a warning area on a chart; neighbouring zones may
 /// overlap or leave slivers of up to a few hundred metres along shared edges.

@@ -65,8 +65,8 @@ Each `CapWarningArea` is one CAP area of one alert:
 ## The marine zone layer
 
 `MarineZoneLayer.Default` is the NWS coastal and offshore marine zone
-shapefiles (`mz18mr25`, `oz18mr25`; 696 zones), simplified once to about
-500 m and bundled as GeoJSON (798 KB). It's a US Government work in the
+shapefiles (`mz16ap26`, `oz16ap26`; 699 zones), simplified once to about
+500 m and bundled as GeoJSON (1.6 MB). It's a US Government work in the
 public domain. `tools/cap` rebuilds it. A host with a newer release can load
 its own with `MarineZoneLayer.Load(stream)` and pass it to
 `CapWarningSet.Build`.
