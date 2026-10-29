@@ -39,8 +39,20 @@ internal sealed class WeatherFakeServer : HttpMessageHandler
     /// <summary>True to answer a ranged request with the whole file (200), as a server that ignores <c>Range</c> does.</summary>
     public bool IgnoreRanges { get; set; }
 
-    /// <summary>Every request, in order.</summary>
-    public List<(HttpMethod Method, Uri Uri, string? UserAgent, string? Range, string? Accept)> Requests { get; } = [];
+    private readonly List<(HttpMethod Method, Uri Uri, string? UserAgent, string? Range, string? Accept)> _requests = [];
+
+    /// <summary>
+    /// Every request so far, in order: a snapshot, since background reads can
+    /// still be arriving while a test enumerates it.
+    /// </summary>
+    public IReadOnlyList<(HttpMethod Method, Uri Uri, string? UserAgent, string? Range, string? Accept)> Requests
+    {
+        get
+        {
+            lock (_requests)
+                return [.. _requests];
+        }
+    }
 
     /// <summary>The bytes of the fake AWS file for <paramref name="hour"/>: the filler, then the hour's messages.</summary>
     public byte[] AwsFile(int hour) => [.. Filler, .. Messages[hour].SelectMany(m => m.Bytes)];
@@ -86,8 +98,8 @@ internal sealed class WeatherFakeServer : HttpMessageHandler
     {
         var uri = request.RequestUri!;
         var range = request.Headers.TryGetValues("Range", out var ranges) ? ranges.First() : null;
-        lock (Requests)
-            Requests.Add((request.Method, uri, request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null, range, request.Headers.Accept.ToString()));
+        lock (_requests)
+            _requests.Add((request.Method, uri, request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null, range, request.Headers.Accept.ToString()));
         await Task.Yield();
 
         return uri.Host switch
