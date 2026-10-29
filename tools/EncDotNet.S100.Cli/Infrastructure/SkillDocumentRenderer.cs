@@ -71,9 +71,9 @@ internal static class SkillDocumentRenderer
                      .OrderBy(argument => argument.Position))
         {
             builder.Append(' ');
-            builder.Append(argument.Required ? '<' : '[');
+            builder.Append(argument.IsRequired ? '<' : '[');
             builder.Append(argument.Value);
-            builder.Append(argument.Required ? '>' : ']');
+            builder.Append(argument.IsRequired ? '>' : ']');
         }
 
         if (command.Parameters.OfType<ICommandOption>().Any(option => !option.IsHidden))
@@ -156,7 +156,7 @@ internal static class SkillDocumentRenderer
             builder.Append("| `");
             builder.Append(EscapeMarkdown(argument.Value));
             builder.Append("` | ");
-            builder.Append(argument.Required ? "yes" : "no");
+            builder.Append(argument.IsRequired ? "yes" : "no");
             builder.Append(" | ");
             builder.Append(EscapeMarkdownText(argument.Description ?? string.Empty));
             builder.AppendLine(" |");
@@ -183,7 +183,7 @@ internal static class SkillDocumentRenderer
             builder.Append("| `");
             builder.Append(EscapeMarkdown(FormatOption(option)));
             builder.Append("` | ");
-            builder.Append(option.Required ? "yes" : "no");
+            builder.Append(option.IsRequired ? "yes" : "no");
             builder.Append(" | ");
             builder.Append(EscapeMarkdown(FormatDefault(option)));
             builder.Append(" | ");

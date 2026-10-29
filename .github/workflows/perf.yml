@@ -12,12 +12,12 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
 
@@ -42,6 +42,10 @@ jobs:
       # the base already declares keep the base's versions, so the base
       # library code builds and is measured against its own dependencies
       # even when the PR upgrades one (with breaking changes or not).
+      # The exception is a package only the harness itself references
+      # (no library project it builds does, e.g. Spectre.Console.Cli): it keeps
+      # the PR's version, because the overlaid harness code is written
+      # against that version's API and nothing under test depends on it.
       - name: Overlay PR perf tooling onto base tree
         run: |
           cp Directory.Packages.props /tmp/base-packages.props
@@ -53,9 +57,27 @@ jobs:
             src/EncDotNet.S100.Diagnostics.Export \
             Directory.Packages.props
           python3 - /tmp/base-packages.props Directory.Packages.props <<'PY'
-          import re, sys
+          import glob, os, re, sys
           entry = re.compile(r'(<PackageVersion\s+Include="([^"]+)"\s+Version=")([^"]+)(")')
-          base = {m.group(2): m.group(3) for m in entry.finditer(open(sys.argv[1]).read())}
+          pkg = re.compile(r'<PackageReference\s+Include="([^"]+)"')
+          proj = re.compile(r'<ProjectReference\s+Include="([^"]+)"')
+          harness = [os.path.abspath(p) for p in glob.glob('tools/EncDotNet.S100.Perf*/*.csproj')]
+          # Library projects the harness builds: its ProjectReference closure.
+          def closure():
+              seen, stack = set(), list(harness)
+              while stack:
+                  f = stack.pop()
+                  for r in proj.findall(open(f).read()):
+                      p = os.path.normpath(os.path.join(os.path.dirname(f), r.replace('\\', '/')))
+                      if p not in seen:
+                          seen.add(p)
+                          stack.append(p)
+              return seen
+          def refs(files):
+              return {r for f in files for r in pkg.findall(open(f).read())}
+          harness_only = refs(harness) - refs(closure())
+          base = {m.group(2): m.group(3) for m in entry.finditer(open(sys.argv[1]).read())
+                  if m.group(2) not in harness_only}
           path = sys.argv[2]
           merged = entry.sub(lambda m: m.group(1) + base.get(m.group(2), m.group(3)) + m.group(4), open(path).read())
           open(path, 'w').write(merged)
@@ -156,7 +178,7 @@ jobs:
 
       - name: Upload gate report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: perf-gate-report
           path: |
@@ -168,7 +190,7 @@ jobs:
 
       - name: Post PR comment
         if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');

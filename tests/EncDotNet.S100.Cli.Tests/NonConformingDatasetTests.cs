@@ -22,7 +22,7 @@ public sealed class NonConformingDatasetTests
             // gridOriginLatitude attribute — and declaring a draft edition.
             WriteNonConformingS104(dataset, productSpecification: "INT.IHO.S-104.0.8");
 
-            int exit = CliApp.Build().Run(["render", dataset, output]);
+            int exit = CliApp.Build().Run(["render", dataset, output], TestContext.Current.CancellationToken);
 
             Assert.Equal(5, exit);
             Assert.False(File.Exists(output));

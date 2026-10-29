@@ -56,7 +56,7 @@ public sealed class RunCommand : AsyncCommand<RunCommand.Settings>
         public int ProfileSamplingIntervalMs { get; set; } = 1;
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         if (string.Equals(settings.Scenario, "list", StringComparison.OrdinalIgnoreCase))
         {

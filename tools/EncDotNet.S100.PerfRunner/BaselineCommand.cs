@@ -83,7 +83,7 @@ public sealed class BaselineCommand : AsyncCommand<BaselineCommand.Settings>
         public int ProfileSamplingIntervalMs { get; set; } = 1;
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var corpus = Path.GetFullPath(settings.Corpus);
         if (!Directory.Exists(corpus))

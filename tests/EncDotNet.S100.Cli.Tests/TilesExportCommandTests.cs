@@ -28,7 +28,7 @@ public sealed class TilesExportCommandTests
         try
         {
             int exit = CliApp.Build().Run(
-                ["tiles", "export", S57, "-o", output, "--min-zoom", "12", "--max-zoom", "13", "--parallel", "2"]);
+                ["tiles", "export", S57, "-o", output, "--min-zoom", "12", "--max-zoom", "13", "--parallel", "2"], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             var json = JsonNode.Parse(File.ReadAllText(Path.Combine(output, XyzDirectoryTileSink.TileJsonFileName)))!;
@@ -73,8 +73,8 @@ public sealed class TilesExportCommandTests
         try
         {
             string[] common = ["--min-zoom", "12", "--max-zoom", "14", "--tile-size", "512", "--format", "webp"];
-            Assert.Equal(0, CliApp.Build().Run(["tiles", "export", S57, "-o", xyz, .. common]));
-            Assert.Equal(0, CliApp.Build().Run(["tiles", "export", S57, "-o", pmtiles, .. common]));
+            Assert.Equal(0, CliApp.Build().Run(["tiles", "export", S57, "-o", xyz, .. common], TestContext.Current.CancellationToken));
+            Assert.Equal(0, CliApp.Build().Run(["tiles", "export", S57, "-o", pmtiles, .. common], TestContext.Current.CancellationToken));
 
             var archive = PmTilesArchive.Read(pmtiles);
             Assert.Equal(12, archive.MinZoom);
@@ -120,8 +120,8 @@ public sealed class TilesExportCommandTests
         try
         {
             string[] common = ["--min-zoom", "12", "--max-zoom", "14"];
-            Assert.Equal(0, CliApp.Build().Run(["tiles", "export", S57, "-o", xyz, .. common]));
-            Assert.Equal(0, CliApp.Build().Run(["tiles", "export", S57, "-o", mbtiles, .. common]));
+            Assert.Equal(0, CliApp.Build().Run(["tiles", "export", S57, "-o", xyz, .. common], TestContext.Current.CancellationToken));
+            Assert.Equal(0, CliApp.Build().Run(["tiles", "export", S57, "-o", mbtiles, .. common], TestContext.Current.CancellationToken));
 
             using var connection = new SqliteConnection(
                 new SqliteConnectionStringBuilder { DataSource = mbtiles, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
@@ -225,8 +225,8 @@ public sealed class TilesExportCommandTests
         {
             // The bbox reaches well past the cell, so some tiles are empty.
             string[] common = ["--min-zoom", "13", "--max-zoom", "13", "--bbox", "-70.45,41.2,-70.2,41.4"];
-            Assert.Equal(0, CliApp.Build().Run(["tiles", "export", S57, "-o", all, .. common]));
-            Assert.Equal(0, CliApp.Build().Run(["tiles", "export", S57, "-o", some, "--skip-empty", .. common]));
+            Assert.Equal(0, CliApp.Build().Run(["tiles", "export", S57, "-o", all, .. common], TestContext.Current.CancellationToken));
+            Assert.Equal(0, CliApp.Build().Run(["tiles", "export", S57, "-o", some, "--skip-empty", .. common], TestContext.Current.CancellationToken));
 
             int allCount = Directory.GetFiles(all, "*.png", SearchOption.AllDirectories).Length;
             int someCount = Directory.GetFiles(some, "*.png", SearchOption.AllDirectories).Length;
@@ -250,7 +250,7 @@ public sealed class TilesExportCommandTests
         var output = TempPath("big") + ".pmtiles";
         try
         {
-            int exit = CliApp.Build().Run(["tiles", "export", S57, "-o", output, "--min-zoom", "0", "--max-zoom", "22"]);
+            int exit = CliApp.Build().Run(["tiles", "export", S57, "-o", output, "--min-zoom", "0", "--max-zoom", "22"], TestContext.Current.CancellationToken);
 
             Assert.Equal(2, exit);
             Assert.False(File.Exists(output));
@@ -273,7 +273,7 @@ public sealed class TilesExportCommandTests
         Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");
 
         var output = TempPath("invalid");
-        int exit = CliApp.Build().Run(["tiles", "export", S57, "-o", output, option, value]);
+        int exit = CliApp.Build().Run(["tiles", "export", S57, "-o", output, option, value], TestContext.Current.CancellationToken);
 
         Assert.NotEqual(0, exit);
         Assert.False(Directory.Exists(output));
@@ -284,7 +284,7 @@ public sealed class TilesExportCommandTests
     {
         Assert.SkipUnless(File.Exists(S57), "S-57 fixture not present.");
 
-        Assert.NotEqual(0, CliApp.Build().Run(["tiles", "export", S57]));
+        Assert.NotEqual(0, CliApp.Build().Run(["tiles", "export", S57], TestContext.Current.CancellationToken));
     }
 
     [Theory]

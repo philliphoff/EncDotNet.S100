@@ -120,7 +120,8 @@ public sealed class ViewerStressCommand : AsyncCommand<ViewerStressCommand.Setti
     /// <inheritdoc />
     public override async Task<int> ExecuteAsync(
         CommandContext context,
-        Settings settings)
+        Settings settings,
+        CancellationToken cancellationToken)
     {
         var endpoint = ResolveEndpoint(settings);
         if (endpoint is null)

@@ -21,7 +21,7 @@ public sealed class ValidateCommandTests
         var dataset = FixturePath("marine_curve.gml");
         Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
-        int exit = CliApp.Build().Run(["validate", dataset]);
+        int exit = CliApp.Build().Run(["validate", dataset], TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exit);
     }
@@ -32,7 +32,7 @@ public sealed class ValidateCommandTests
         var dataset = FixturePath("marine_curve.gml");
         Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
-        int exit = CliApp.Build().Run(["validate", dataset, "--strict"]);
+        int exit = CliApp.Build().Run(["validate", dataset, "--strict"], TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exit);
     }
@@ -103,7 +103,7 @@ public sealed class ValidateCommandTests
     [Fact]
     public void Validate_with_missing_dataset_returns_nonzero()
     {
-        int exit = CliApp.Build().Run(["validate", "does-not-exist.gml"]);
+        int exit = CliApp.Build().Run(["validate", "does-not-exist.gml"], TestContext.Current.CancellationToken);
         Assert.NotEqual(0, exit);
     }
 
@@ -113,7 +113,7 @@ public sealed class ValidateCommandTests
         var dataset = FixturePath("marine_curve.gml");
         Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
-        int exit = CliApp.Build().Run(["validate", dataset, "--format", "bogus"]);
+        int exit = CliApp.Build().Run(["validate", dataset, "--format", "bogus"], TestContext.Current.CancellationToken);
         Assert.NotEqual(0, exit);
     }
 
@@ -123,7 +123,7 @@ public sealed class ValidateCommandTests
         var dataset = FixturePath("marine_curve.gml");
         Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
 
-        int exit = CliApp.Build().Run(["validate", dataset, "--suppress", ","]);
+        int exit = CliApp.Build().Run(["validate", dataset, "--suppress", ","], TestContext.Current.CancellationToken);
         Assert.NotEqual(0, exit);
     }
 
@@ -174,7 +174,7 @@ public sealed class ValidateCommandTests
             // Suppress just one of the flagged rules; the zero compilation scale
             // (S57-R-1.1) keeps it failing.
             int exit = CliApp.Build().Run(
-                ["validate", dataset, "--suppress", "S101-as-S57/S101-R-2.1"]);
+                ["validate", dataset, "--suppress", "S101-as-S57/S101-R-2.1"], TestContext.Current.CancellationToken);
             Assert.Equal(6, exit);
         }
         finally

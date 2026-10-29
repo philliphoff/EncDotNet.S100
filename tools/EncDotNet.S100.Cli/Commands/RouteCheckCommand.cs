@@ -142,7 +142,7 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         Check,
     }
 
-    public override int Execute(CommandContext context, Settings settings)
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         RouteFile route;
         try

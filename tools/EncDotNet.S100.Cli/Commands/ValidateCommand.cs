@@ -74,7 +74,7 @@ internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings
         }
     }
 
-    public override int Execute(CommandContext context, Settings settings)
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var diagnosticTrace = settings.Debug ? DiagnosticTraceScope.ToStandardError() : null;
         TryParseFormat(settings.Format, out var format);

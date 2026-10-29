@@ -210,7 +210,7 @@ public sealed class McpServeCommandTests
     public void Serve_rejects_only_without_an_exchange_set_or_folder()
     {
         // Purely a settings-validation path — the server is never started.
-        var exit = CliApp.Build().Run(["mcp", "serve", "--layer", "a.gml", "--only", "S101"]);
+        var exit = CliApp.Build().Run(["mcp", "serve", "--layer", "a.gml", "--only", "S101"], TestContext.Current.CancellationToken);
 
         Assert.NotEqual(0, exit);
     }

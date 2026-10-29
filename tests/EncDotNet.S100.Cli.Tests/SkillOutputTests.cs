@@ -60,7 +60,7 @@ public sealed class SkillOutputTests
             Out = new AnsiConsoleOutput(output),
         });
 
-        var exitCode = CliApp.Build("test", console).Run(["--help"]);
+        var exitCode = CliApp.Build("test", console).Run(["--help"], TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
         Assert.Contains("--skill", output.ToString());
@@ -72,7 +72,7 @@ public sealed class SkillOutputTests
     public void RendererIncludesEveryVisibleCommandAndParameter()
     {
         var capture = new SkillModelCaptureHelpProvider();
-        var exitCode = CliApp.Build("test", helpProvider: capture).Run(["--help"]);
+        var exitCode = CliApp.Build("test", helpProvider: capture).Run(["--help"], TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
         var model = Assert.IsAssignableFrom<ICommandModel>(capture.Model);
@@ -114,7 +114,7 @@ public sealed class SkillOutputTests
     public void AuthoredGuidanceReferencesRegisteredCommands()
     {
         var capture = new SkillModelCaptureHelpProvider();
-        var exitCode = CliApp.Build("test", helpProvider: capture).Run(["--help"]);
+        var exitCode = CliApp.Build("test", helpProvider: capture).Run(["--help"], TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exitCode);
         var model = Assert.IsAssignableFrom<ICommandModel>(capture.Model);

@@ -26,7 +26,7 @@ public sealed class NetCdfRenderCommandTests : IDisposable
             NetCdfFixtures.WriteWaveNetCdf4(dataset);
         var output = Path.Combine(_dir, "out.png");
 
-        int exit = CliApp.Build().Run(["render", dataset, output, "--width", "320", "--height", "320"]);
+        int exit = CliApp.Build().Run(["render", dataset, output, "--width", "320", "--height", "320"], TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exit);
         using var bitmap = SKBitmap.Decode(output);
@@ -42,8 +42,8 @@ public sealed class NetCdfRenderCommandTests : IDisposable
         var first = Path.Combine(_dir, "t0.png");
         var last = Path.Combine(_dir, "t2.png");
 
-        Assert.Equal(0, CliApp.Build().Run(["render", dataset, first, "--width", "200", "--height", "200", "--time-step", "0"]));
-        Assert.Equal(0, CliApp.Build().Run(["render", dataset, last, "--width", "200", "--height", "200", "--time-step", "2"]));
+        Assert.Equal(0, CliApp.Build().Run(["render", dataset, first, "--width", "200", "--height", "200", "--time-step", "0"], TestContext.Current.CancellationToken));
+        Assert.Equal(0, CliApp.Build().Run(["render", dataset, last, "--width", "200", "--height", "200", "--time-step", "2"], TestContext.Current.CancellationToken));
 
         using var a = SKBitmap.Decode(first);
         using var b = SKBitmap.Decode(last);
@@ -70,7 +70,7 @@ public sealed class NetCdfRenderCommandTests : IDisposable
         // No --bbox: the composite frames the 0.2° grids on their own extent
         // (issue #1097), so they fill most of the image.
         int exit = CliApp.Build().Run(
-            ["render", "--layer", waves, "--layer", wind, output, "--width", "320", "--height", "320", "--time-step", "1"]);
+            ["render", "--layer", waves, "--layer", wind, output, "--width", "320", "--height", "320", "--time-step", "1"], TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exit);
         using var bitmap = SKBitmap.Decode(output);
@@ -84,7 +84,7 @@ public sealed class NetCdfRenderCommandTests : IDisposable
         var path = Path.Combine(_dir, "plain.nc");
         new PureHDF.H5File { ["x"] = new float[] { 1, 2 } }.Write(path);
 
-        int exit = CliApp.Build().Run(["render", path, Path.Combine(_dir, "plain.png")]);
+        int exit = CliApp.Build().Run(["render", path, Path.Combine(_dir, "plain.png")], TestContext.Current.CancellationToken);
 
         Assert.NotEqual(0, exit);
         Assert.False(File.Exists(Path.Combine(_dir, "plain.png")));

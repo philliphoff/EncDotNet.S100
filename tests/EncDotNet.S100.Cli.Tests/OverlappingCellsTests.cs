@@ -45,7 +45,7 @@ public sealed class OverlappingCellsTests : IDisposable
         var output = Path.Combine(_root, "composite.png");
         int exit = CliApp.Build().Run(
             ["render", "--layer", _coarse, "--layer", _fine, output,
-             "--bbox", "10,50,10.2,50.2", "--width", "200", "--height", "200"]);
+             "--bbox", "10,50,10.2,50.2", "--width", "200", "--height", "200"], TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exit);
         using var bitmap = SKBitmap.Decode(output);
@@ -72,7 +72,7 @@ public sealed class OverlappingCellsTests : IDisposable
         // draws and no longer hides the coarse cell.
         int exit = CliApp.Build().Run(
             ["tiles", "export", "--layer", _coarse, "--layer", _fine, "-o", tiles,
-             "--min-zoom", "12", "--max-zoom", "13"]);
+             "--min-zoom", "12", "--max-zoom", "13"], TestContext.Current.CancellationToken);
         Assert.Equal(0, exit);
 
         Assert.True(IsOpaque(TileAt(tiles, 13, 10.17, 50.1)), "The coarse cell draws outside the fine coverage.");

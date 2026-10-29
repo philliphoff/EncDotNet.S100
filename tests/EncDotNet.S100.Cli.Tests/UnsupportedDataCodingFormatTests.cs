@@ -49,7 +49,7 @@ public sealed class UnsupportedDataCodingFormatTests
         {
             WriteDcf1S111(dataset);
 
-            int exit = CliApp.Build().Run(["render", dataset, output]);
+            int exit = CliApp.Build().Run(["render", dataset, output], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             Assert.True(File.Exists(output));
@@ -73,7 +73,7 @@ public sealed class UnsupportedDataCodingFormatTests
         {
             WriteDcf1S104(dataset);
 
-            int exit = CliApp.Build().Run(["render", dataset, output]);
+            int exit = CliApp.Build().Run(["render", dataset, output], TestContext.Current.CancellationToken);
 
             Assert.Equal(0, exit);
             Assert.True(File.Exists(output));

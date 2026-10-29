@@ -102,7 +102,7 @@ internal sealed class TilesServeCommand : AsyncCommand<TilesServeCommand.Setting
         }
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var diagnosticTrace = settings.Debug ? DiagnosticTraceScope.ToStandardError() : null;
         ITileSource source;

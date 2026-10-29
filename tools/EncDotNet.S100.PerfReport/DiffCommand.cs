@@ -25,7 +25,7 @@ public sealed class DiffCommand : Command<DiffCommand.Settings>
         public string? OutputPath { get; set; }
     }
 
-    public override int Execute(CommandContext context, Settings settings)
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         if (!File.Exists(settings.Baseline))
         {

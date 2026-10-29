@@ -104,7 +104,7 @@ public sealed class TilesServeRenderTests : IDisposable
 
         var exported = Path.Combine(_root, "export");
         Assert.Equal(0, CliApp.Build().Run(
-            ["tiles", "export", S57, "-o", exported, "--min-zoom", "13", "--max-zoom", "14", "--skip-empty"]));
+            ["tiles", "export", S57, "-o", exported, "--min-zoom", "13", "--max-zoom", "14", "--skip-empty"], TestContext.Current.CancellationToken));
         var files = Directory.GetFiles(exported, "*.png", SearchOption.AllDirectories);
         Assert.NotEmpty(files);
 
