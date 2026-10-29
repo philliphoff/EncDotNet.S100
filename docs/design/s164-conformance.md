@@ -61,10 +61,10 @@ existing S-64 datasets, which a later slice covers.
 
 ## 4. Cross-cutting findings
 
-These account for most of the Partial and Gap ratings. Each is a candidate
-follow-up issue.
+These account for most of the Partial and Gap ratings. Each has its own
+issue.
 
-1. **Portrayal instructions that are skipped.** `DrawingInstructionParser`
+1. **Portrayal instructions that are skipped.** ([#1126](https://github.com/philliphoff/EncDotNet.S100/issues/1126)) `DrawingInstructionParser`
    recognises `SpatialReference`, `AreaPlacement`, `Date`, `TimeValid` and
    `AlertReference` but does nothing with them, and treats
    `LineInstructionUnsuppressed` as a plain line. `VectorSceneBuilder` sorts
@@ -74,37 +74,37 @@ follow-up issue.
    placement all follow from this. Part 3 tests affected: SafetyContourDisplay,
    AreaBorders, ComplexPortrayal, DifferentPriority, LineSuppression,
    FixedDateRange, PeriodicDateRange, CentredSymbols1.
-2. **Route checks use their own rules, not the S-101 alert catalogue.** The
+2. **Route checks use their own rules, not the S-101 alert catalogue.** ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)) The
    portrayal catalogue reader finds the alert catalogue but nothing loads
    it, and `AlertReference` is skipped (finding 1). The checks cover wrecks,
    obstructions and rocks, and eight area kinds plus S-122, so other
    NavHazard and ProhAre features aren't checked. Affects Parts 5–7 and 9.
-3. **Protected data stops at the library.** Part 15 decryption, permits and
+3. **Protected data stops at the library.** ([#1128](https://github.com/philliphoff/EncDotNet.S100/issues/1128)) Part 15 decryption, permits and
    signature checks work in the library, but SoundCharts and `s100` don't
    open protected datasets. The viewer verifies exchange sets with
    `AllowUntrustedCertificates = true`, shows the result as a badge and
    never refuses data. Authorities added in Keys & certificates are used
    only for SECOM. `CATALOG.SIGN` is written but never verified. Affects
    most of §2.6–2.7.
-4. **No installed-data store.** The Library indexes sources where they are.
+4. **No installed-data store.** ([#1129](https://github.com/philliphoff/EncDotNet.S100/issues/1129)) The Library indexes sources where they are.
    S-101 updates apply only when they sit beside their base cell, and the
    update applicator checks sequence numbers but not editions. Re-issues,
    cancellations and later update sets don't change what was loaded before.
    Affects §2.2–2.5 and the S-128 status reports.
-5. **Spherical geodesy.** The measure tool, route legs and
+5. **Spherical geodesy.** ([#1130](https://github.com/philliphoff/EncDotNet.S100/issues/1130)) The measure tool, route legs and
    `GeodesicHelper` use a sphere. The S-164 accuracy tests ask for metre
    and 0.001° agreement on WGS-84, so all 15 need an ellipsoidal (Karney)
    implementation. The measure tool is rhumb line only, and there's no
    tool that turns a range and bearing into a position.
-6. **No route monitoring.** A steerable simulated own ship exists, but
+6. **No route monitoring.** ([#1131](https://github.com/philliphoff/EncDotNet.S100/issues/1131)) A steerable simulated own ship exists, but
    nothing looks ahead from it for hazards, areas or the safety contour.
    The 12 monitoring-mode tests are rated Gap rather than N/A because the
    own-ship pieces are already there.
-7. **Water level adjustment is point-only.** S-104 is applied at a picked
+7. **Water level adjustment is point-only.** ([#1132](https://github.com/philliphoff/EncDotNet.S100/issues/1132)) S-104 is applied at a picked
    point, over time at a point, and in route clearance. It isn't applied to
    the chart: no adjusted depths or safety contour, no adjustment boundary,
    and no permanent indication.
-8. **Chart furniture.** There's no S-52-style north arrow or vertical scale
+8. **Chart furniture.** ([#1133](https://github.com/philliphoff/EncDotNet.S100/issues/1133)) There's no S-52-style north arrow or vertical scale
    bar, no latitude bar, no "no data" indication, no chart legend for a
    position, no check symbol, no colour differentiation diagram and no
    scale-boundary line. Each is small. Affects Parts 3 and 4.
