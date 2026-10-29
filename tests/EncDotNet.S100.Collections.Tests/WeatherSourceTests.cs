@@ -129,8 +129,78 @@ public sealed class WeatherSourceTests : IDisposable
         Assert.Equal(
             "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl?dir=%2Fgfs.20261025%2F06%2Fatmos&file=gfs.t06z.pgrb2.0p25.f003"
             + "&var_UGRD=on&var_VGRD=on&var_PRMSL=on&lev_10_m_above_ground=on&lev_mean_sea_level=on"
-            + "&subregion=&toplat=40&leftlon=-76&rightlon=-68&bottomlat=32",
+            + "&subregion=&toplat=40&leftlon=-76&rightlon=-67.875&bottomlat=32",
             uri.AbsoluteUri);
+    }
+
+    [Theory]
+    [InlineData(-90, -180, 90, 180, "-180", "180")] // The whole globe: no wider than a turn, or the filter answers nothing.
+    [InlineData(10.1, 175.1, 11.9, 180, "175", "180")] // Not past 180°: GFS-Wave's column there is 180.000007°.
+    [InlineData(10.1, -180, 11.9, -178.1, "-180", "-177.875")]
+    [InlineData(10.1, 178.1, 11.9, -178.1, "178", "182.125")] // Across 180°, as the filter takes it.
+    public void The_grib_filter_east_edge_is_half_a_cell_out_but_not_past_180_or_a_turn(
+        double south, double west, double north, double east, string leftlon, string rightlon)
+    {
+        var service = Known("noaa-nomads-gfswave").Weather!;
+
+        var query = WeatherRequests.GribFilterUri(
+            Known("noaa-nomads-gfswave").CatalogUri, service, service.Parameters, new GeoBounds(south, west, north, east), Run, 3).Query;
+
+        Assert.Contains($"&leftlon={leftlon}&rightlon={rightlon}&", query, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(175, -170, -180, -170)] // The east side is wider.
+    [InlineData(170, -175, 170, 180)] // The west side is wider.
+    [InlineData(175, -175, 175, 180)] // A tie keeps the west side.
+    public void An_area_across_the_antimeridian_is_cut_to_its_wider_side_for_a_grid(double west, double east, double keptWest, double keptEast)
+    {
+        var kept = WeatherRequests.OneSideOfAntimeridian(new GeoBounds(50, west, 56, east), out var clipped);
+
+        Assert.True(clipped);
+        Assert.Equal(new GeoBounds(50, keptWest, 56, keptEast), kept);
+        Assert.Equal(UsEast, WeatherRequests.OneSideOfAntimeridian(UsEast, out clipped));
+        Assert.False(clipped);
+    }
+
+    [Fact]
+    public async Task A_grib_filter_area_across_the_antimeridian_downloads_its_wider_side_with_a_warning()
+    {
+        var server = WaveServer();
+        var http = new HttpClient(server);
+        var feed = Feed("noaa-nomads-gfswave", ThreeHours with { Area = new GeoBounds(50.1, 177.1, 55.9, -170.1) });
+
+        var index = await new WeatherFeedIndexer(http, timeProvider: At(Run.AddHours(5))).IndexAsync(feed, null, TestContext.Current.CancellationToken);
+
+        var warning = Assert.Single(index.Diagnostics);
+        Assert.Equal(IndexDiagnosticSeverity.Warning, warning.Severity);
+        Assert.Contains("antimeridian", warning.Message, StringComparison.Ordinal);
+        var item = Assert.Single(index.Items);
+        Assert.Equal(new GeoBounds(50, -180, 56, -170), item.Bounds);
+        var remote = (RemoteItemLocation)item.Location;
+        Assert.All(remote.Parts!, p => Assert.Contains("&leftlon=-180&rightlon=-169.875&", p.Uri.Query, StringComparison.Ordinal));
+
+        var cell = await new EncCellDownloader(http, Path.Combine(_temp.Path, "am"))
+            .DownloadAsync(item, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.True(new FileInfo(Path.Combine(cell.Location.RootPath, cell.Location.RelativePath)).Length > 0);
+    }
+
+    [Fact]
+    public async Task A_grib_filter_subregion_the_live_filter_cant_cut_downloads_nothing_and_fails()
+    {
+        // The fake answers as the live filter does for 178 to -178 degrees: 200 with no messages.
+        var server = WaveServer();
+        var http = new HttpClient(server);
+        var item = Assert.Single((await new WeatherFeedIndexer(http, timeProvider: At(Run.AddHours(5)))
+            .IndexAsync(Feed("noaa-nomads-gfswave", ThreeHours), null, TestContext.Current.CancellationToken)).Items);
+        var remote = (RemoteItemLocation)item.Location;
+        var wrapped = remote with
+        {
+            Parts = [.. remote.Parts!.Select(p => new RemotePart(new Uri(p.Uri.AbsoluteUri.Replace("leftlon=-76&rightlon=-67.875", "leftlon=178&rightlon=-178", StringComparison.Ordinal))))],
+        };
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => new EncCellDownloader(http, Path.Combine(_temp.Path, "wrapped"))
+            .DownloadAsync(item with { Location = wrapped }, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -399,14 +469,16 @@ public sealed class WeatherSourceTests : IDisposable
 
     private const string ErddapInfo = """
         {"table":{"columnNames":["Row Type","Variable Name","Attribute Name","Data Type","Value"],"rows":[
-          ["attribute","NC_GLOBAL","date_issued","String","2026-10-25T04:10:00Z"],
-          ["attribute","NC_GLOBAL","time_coverage_start","String","2026-10-17T00:00:00Z"],
+          ["attribute","NC_GLOBAL","date_created","String","2010-06-20"],
+          ["attribute","NC_GLOBAL","date_issued","String","2010-06-20"],
+          ["attribute","NC_GLOBAL","date_modified","String","2021-12-17"],
+          ["attribute","NC_GLOBAL","time_coverage_start","String","2017-01-01T21:00:00Z"],
           ["attribute","NC_GLOBAL","time_coverage_end","String","2026-11-01T00:00:00Z"],
-          ["attribute","NC_GLOBAL","title","String","Wave Watch 3 (NWW3) Global Wave Model, Best Time Series"],
-          ["dimension","time","","double","nValues=120, evenlySpaced=true, averageSpacing=3h 0m 0s"],
-          ["attribute","time","actual_range","double","1.7606592E9, 1.7619552E9"],
+          ["attribute","NC_GLOBAL","title","String","WaveWatch III (WW3) Global Wave Model"],
+          ["dimension","time","","double","nValues=85444, evenlySpaced=false, averageSpacing=1h 0m 32s"],
+          ["attribute","time","actual_range","double","1.4833044E9, 1.7619552E9"],
           ["dimension","depth","","float","nValues=1, onlyValue=0.0"],
-          ["dimension","latitude","","float","nValues=311, evenlySpaced=true, averageSpacing=-0.5"],
+          ["dimension","latitude","","float","nValues=311, evenlySpaced=true, averageSpacing=0.5"],
           ["attribute","latitude","actual_range","float","-77.5, 77.5"],
           ["dimension","longitude","","float","nValues=720, evenlySpaced=true, averageSpacing=0.5"],
           ["attribute","longitude","actual_range","float","0.0, 359.5"],
@@ -428,17 +500,36 @@ public sealed class WeatherSourceTests : IDisposable
         var item = Assert.Single(index.Items);
         Assert.Equal("NetCDF", item.ProductSpec);
         Assert.Equal("NWW3_Global_Best", item.Name);
-        Assert.Equal("Wave Watch 3 (NWW3) Global Wave Model, Best Time Series", item.Title);
-        Assert.Equal(new DateTimeOffset(2026, 10, 25, 4, 10, 0, TimeSpan.Zero), S100ForecastFeedIndexer.RunOf(item));
+        Assert.Equal("WaveWatch III (WW3) Global Wave Model", item.Title);
+
+        // Its date_issued (2010) and date_modified (2021) are the dataset's, not a run's: no run, never stale,
+        // and the end of its time coverage (which moves on with each run) says when it changed.
+        Assert.Null(S100ForecastFeedIndexer.RunOf(item));
+        Assert.False(item.Properties.ContainsKey(WeatherRuns.StaleAfterProperty));
         var remote = (RemoteItemLocation)item.Location;
+        Assert.Equal(new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero), remote.LastModified);
         Assert.Equal(
-            "Thgt[(2026-10-25T02:00:00Z):1:(2026-10-26T05:00:00Z)][0][(39.9):1:(32.1)][(284.1):1:(291.8)]",
+            "Thgt[(2026-10-25T02:00:00Z):1:(2026-10-26T05:00:00Z)][0][(32.1):1:(39.9)][(284.1):1:(291.8)]",
             Uri.UnescapeDataString(remote.Uri.Query.TrimStart('?')).Split(',')[0]);
 
         var cell = await new EncCellDownloader(http, Path.Combine(_temp.Path, "erddap"))
             .DownloadAsync(item, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("NWW3_Global_Best.nc", cell.Location.RelativePath);
+    }
+
+    [Fact]
+    public async Task An_erddap_issue_date_within_the_forecast_is_its_run()
+    {
+        var server = WaveServer();
+        server.ErddapInfoJson = ErddapInfo.Replace(
+            "\"date_issued\",\"String\",\"2010-06-20\"", "\"date_issued\",\"String\",\"2026-10-25T04:10:00Z\"", StringComparison.Ordinal);
+        var feed = Feed("noaa-erddap-ww3", new WeatherSelection(Hours: [0, 3, 6], Area: UsEast));
+
+        var index = await new WeatherFeedIndexer(new HttpClient(server), timeProvider: At(Run.AddHours(5)))
+            .IndexAsync(feed, null, TestContext.Current.CancellationToken);
+
+        Assert.Equal(new DateTimeOffset(2026, 10, 25, 4, 10, 0, TimeSpan.Zero), S100ForecastFeedIndexer.RunOf(Assert.Single(index.Items)));
     }
 
     [Fact]
@@ -449,7 +540,7 @@ public sealed class WeatherSourceTests : IDisposable
         var info = WeatherFeedIndexer.ParseErddapInfo(document.RootElement);
 
         Assert.Equal(["time", "depth", "latitude", "longitude"], info.Axes.Select(a => a.Name));
-        Assert.True(info.Axes[2].Descending);
+        Assert.False(info.Axes[2].Descending);
         Assert.False(info.Axes[3].Descending);
         Assert.Equal(359.5, info.Axes[3].Maximum);
         Assert.Equal(new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero), info.End);

@@ -55,6 +55,17 @@ public static class WeatherRequests
     /// variables and levels, so an extra field can come back; the GRIB2
     /// reader lists it.
     /// </summary>
+    /// <remarks>
+    /// Checked against the live filters (#1075): they take −180 to 180 or 0 to
+    /// 360 longitudes alike, and an area across the antimeridian only as a
+    /// west edge with an east edge past 180° (170° to 190°; 170° to −170°
+    /// returns nothing, as does a box wider than 360°). The edges are
+    /// inclusive except the east one on the GFS-Wave grid, whose longitudes
+    /// sit a few millionths of a degree east of the grid (292.000007°), so
+    /// <c>rightlon</c> is asked for half a cell further east, but not past
+    /// 180° (the reader takes a column at 180.000007° as crossing it) or a
+    /// turn past the west edge.
+    /// </remarks>
     /// <param name="filterUri">The filter script.</param>
     /// <param name="service">The GRIB2 service.</param>
     /// <param name="parameters">The parameters.</param>
@@ -82,6 +93,9 @@ public static class WeatherRequests
         if (area is { } box)
         {
             var (south, west, north, east) = Rounded(box, service.GridDegrees);
+            if (service.GridDegrees > 0)
+                east = Math.Min(east + (service.GridDegrees / 2), east <= 180 ? 180 : west + 360);
+            east = Math.Min(east, west + 360);
             query.Append("&subregion=");
             query.Append("&toplat=").Append(Number(north));
             query.Append("&leftlon=").Append(Number(west));
@@ -104,6 +118,25 @@ public static class WeatherRequests
         double Up(double v) => gridDegrees > 0 ? Math.Ceiling(v / gridDegrees) * gridDegrees : v;
         var east = area.CrossesAntimeridian ? area.East + 360 : area.East;
         return (Math.Max(-90, Down(area.South)), Down(area.West), Math.Min(90, Up(area.North)), Up(east));
+    }
+
+    /// <summary>
+    /// The part of <paramref name="area"/> one grid download can hold: the
+    /// area itself, or, for an area across the antimeridian, its wider side
+    /// of 180° (the west side on a tie). The weather readers can't open a
+    /// regional grid that crosses 180° (<c>WeatherGridLayout</c>), though the
+    /// GRIB filter and ERDDAP would serve one.
+    /// </summary>
+    /// <param name="area">The chosen area.</param>
+    /// <param name="clipped">True when the area crossed the antimeridian and was cut to one side.</param>
+    public static GeoBounds OneSideOfAntimeridian(GeoBounds area, out bool clipped)
+    {
+        clipped = area.CrossesAntimeridian;
+        if (!clipped)
+            return area;
+        return 180 - area.West >= area.East + 180
+            ? area with { East = 180 }
+            : area with { West = -180 };
     }
 
     /// <summary>

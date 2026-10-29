@@ -183,11 +183,13 @@ public sealed class WeatherLibraryLoadTests : IDisposable
         server.ErddapNetCdf = File.ReadAllBytes(nc);
         server.ErddapInfoJson = """
             {"table":{"columnNames":["Row Type","Variable Name","Attribute Name","Data Type","Value"],"rows":[
-              ["attribute","NC_GLOBAL","date_issued","String","2026-10-25T04:10:00Z"],
+              ["attribute","NC_GLOBAL","date_issued","String","2010-06-20"],
+              ["attribute","NC_GLOBAL","date_modified","String","2021-12-17"],
+              ["attribute","NC_GLOBAL","time_coverage_start","String","2017-01-01T21:00:00Z"],
               ["attribute","NC_GLOBAL","time_coverage_end","String","2026-11-01T00:00:00Z"],
-              ["dimension","time","","double","nValues=120, evenlySpaced=true, averageSpacing=3h 0m 0s"],
+              ["dimension","time","","double","nValues=85444, evenlySpaced=false, averageSpacing=1h 0m 32s"],
               ["dimension","depth","","float","nValues=1, onlyValue=0.0"],
-              ["dimension","latitude","","float","nValues=311, evenlySpaced=true, averageSpacing=-0.5"],
+              ["dimension","latitude","","float","nValues=311, evenlySpaced=true, averageSpacing=0.5"],
               ["dimension","longitude","","float","nValues=720, evenlySpaced=true, averageSpacing=0.5"],
               ["attribute","longitude","actual_range","float","0.0, 359.5"]
             ]}}

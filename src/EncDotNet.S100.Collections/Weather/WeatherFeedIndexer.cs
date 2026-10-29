@@ -95,6 +95,13 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
         var diagnostics = new List<IndexDiagnostic>();
         var items = new List<CollectionItem>();
         progress?.Report(new IndexProgress(0, feed.ServiceUri.AbsoluteUri));
+        if (feed.Service.Kind is WeatherServiceKind.GribFilter or WeatherServiceKind.ErddapGriddap
+            && feed.Selection.Area is { } chosen && RequestArea(feed) is { } kept && kept != chosen)
+        {
+            diagnostics.Add(new IndexDiagnostic(IndexDiagnosticSeverity.Warning, string.Create(CultureInfo.InvariantCulture,
+                $"The area crosses the antimeridian (180°), which weather grids can't cross yet; only its side from {kept.West}° to {kept.East}° is downloaded."),
+                feed.ServiceUri.AbsoluteUri));
+        }
 
         try
         {
@@ -240,7 +247,7 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
         var service = feed.Service;
         var parameters = feed.Selection.ParametersOf(service);
         var hours = feed.Selection.HoursOf(service);
-        var area = service.Kind == WeatherServiceKind.GribFilter ? feed.Selection.Area : null;
+        var area = service.Kind == WeatherServiceKind.GribFilter ? RequestArea(feed) : null;
         var parts = hours.Select(hour => service.Kind == WeatherServiceKind.GribFilter
                 ? new RemotePart(WeatherRequests.GribFilterUri(feed.ServiceUri, service, parameters, area, run, hour))
                 : new RemotePart(WeatherRequests.FileUri(service, run, hour), [.. parameters.Select(p => p.IndexMatch)]))
@@ -321,10 +328,18 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
         if (end < start)
             end = start;
 
-        var uri = WeatherRequests.ErddapGriddapUri(feed.ServiceUri, dataset, info.Axes, feed.Selection.Area, start, end);
-        var issued = info.Issued ?? info.End ?? now;
-        var properties = Stamp(feed, info.Issued, info.Issued is null ? null : end);
-        if (info.Issued is null)
+        var area = RequestArea(feed);
+        var uri = WeatherRequests.ErddapGriddapUri(feed.ServiceUri, dataset, info.Axes, area, start, end);
+
+        // An issue date counts as the run only within the forecast it describes: NWW3_Global_Best
+        // carries the dataset's own dates (date_issued 2010, date_modified 2021), not its run's.
+        var run = info.Issued is { } stated && (info.End is not { } coverageEnd
+            || stated >= coverageEnd - TimeSpan.FromHours(Math.Max(feed.Service.MaxHours, 24)))
+                ? stated
+                : (DateTimeOffset?)null;
+        var issued = run ?? info.End ?? now;
+        var properties = Stamp(feed, run, run is null ? null : end);
+        if (run is null)
             properties.Remove(WeatherRuns.StaleAfterProperty);
         properties["variables"] = string.Join(", ", dataset.Variables);
         return new CollectionItem
@@ -334,7 +349,7 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
             Name = dataset.Id,
             Title = info.Title ?? dataset.Name,
             IssueDate = DateOnly.FromDateTime(issued.UtcDateTime),
-            Bounds = AreaOf(feed, feed.Selection.Area),
+            Bounds = AreaOf(feed, area),
             Location = new RemoteItemLocation(uri, null, issued, DownloadFolderFor(feed), Layout: new PackageLayout(dataset.Id + ".nc", []))
             {
                 Parts = [new RemotePart(uri)],
@@ -436,7 +451,7 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
             Name = name,
             Title = feed.Service.ModelName ?? feed.Service.Model,
             IssueDate = copy.PublishedAt is { } published ? DateOnly.FromDateTime(published.UtcDateTime) : null,
-            Bounds = AreaOf(feed, feed.Selection.Area),
+            Bounds = AreaOf(feed, RequestArea(feed)),
             Location = copy.Location,
             Properties = properties,
         };
@@ -463,7 +478,7 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
                 Title = string.Create(CultureInfo.InvariantCulture,
                     $"{feed.Service.ModelName ?? feed.Service.Model} {WeatherRequests.FormatRun(run)}"),
                 IssueDate = DateOnly.FromDateTime(run.UtcDateTime),
-                Bounds = AreaOf(feed, feed.Service.Kind == WeatherServiceKind.GribIndex ? null : feed.Selection.Area),
+                Bounds = AreaOf(feed, feed.Service.Kind == WeatherServiceKind.GribIndex ? null : RequestArea(feed)),
                 Location = copy.Location,
                 Properties = properties,
             };
@@ -492,6 +507,16 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
             properties[WeatherRuns.AttributionProperty] = attribution;
         return properties;
     }
+
+    /// <summary>
+    /// The area a grid service is asked for: the chosen area, cut to one side
+    /// of the antimeridian (<see cref="WeatherRequests.OneSideOfAntimeridian"/>);
+    /// alerts keep the chosen area, as their zones were picked from it.
+    /// </summary>
+    private static GeoBounds? RequestArea(WeatherFeedSource feed) =>
+        feed.Selection.Area is { } area && feed.Service.Kind is not WeatherServiceKind.NwsAlerts
+            ? WeatherRequests.OneSideOfAntimeridian(area, out _)
+            : feed.Selection.Area;
 
     private static GeoBounds AreaOf(WeatherFeedSource feed, GeoBounds? area)
     {
