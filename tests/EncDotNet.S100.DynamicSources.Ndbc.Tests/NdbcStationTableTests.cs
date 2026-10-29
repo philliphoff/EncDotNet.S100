@@ -27,13 +27,43 @@ public sealed class NdbcStationTableTests
         Assert.True(cman.IsFixed);
         Assert.True(cman.HasMeteorology);
 
-        Assert.False(Assert.Single(table.Stations, s => s.Id == "44401").HasMeteorology);
+        Assert.False(Assert.Single(table.Stations, s => s.Id == "44403").HasMeteorology);
     }
 
     [Fact]
     public void Skips_entries_without_a_position()
     {
         Assert.DoesNotContain(Load().Stations, s => s.Id == "NOLAT");
+    }
+
+    [Fact]
+    public void Entries_without_a_met_attribute_have_no_meteorology()
+    {
+        // TAO buoys carry only id, position, elev, name, owner, pgm and type,
+        // and have no realtime2 file.
+        var tao = Assert.Single(Load().Stations, s => s.Id == "32303");
+
+        Assert.False(tao.HasMeteorology);
+        Assert.Equal("tao", tao.Type);
+        Assert.Equal(5, tao.Latitude);
+        Assert.Equal(-95, tao.Longitude);
+    }
+
+    [Fact]
+    public void Names_are_unescaped()
+    {
+        var rig = Assert.Single(Load().Stations, s => s.Id == "KGBK");
+
+        Assert.Equal("Garden Banks 783 / Magnolia TLP (W&T Offshore)", rig.Name);
+        Assert.True(rig.HasMeteorology);
+    }
+
+    [Fact]
+    public void Reads_every_well_formed_entry()
+    {
+        Assert.Equal(
+            ["32303", "44013", "44020", "44403", "46026", "BUZM3", "KGBK"],
+            Load().Stations.Select(s => s.Id));
     }
 
     [Fact]
@@ -46,7 +76,7 @@ public sealed class NdbcStationTableTests
         Assert.Contains(NdbcFixtures.Buoy, ids);
         Assert.Contains(NdbcFixtures.Cman, ids);
         Assert.DoesNotContain("46026", ids);
-        Assert.DoesNotContain("44401", ids);
+        Assert.DoesNotContain("44403", ids);
     }
 
     [Fact]

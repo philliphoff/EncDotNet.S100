@@ -48,7 +48,7 @@ Each feature is a point at the station with `Kind`
 | --- | --- |
 | `NdbcObservationSource` | The `IDynamicFeatureSource`. Fetches the station table once a day and the head of each `realtime2/{station}.txt` file for the meteorological stations in the area plus a margin, every 10 minutes per station, with exponential backoff on errors. Nothing is fetched until `UpdateArea` sets an area, while the area is wider than 25°, or while `IsActive` is false. Marks observations older than 3 hours stale and drops them after 12. Also an `IDynamicFeatureDescriber`, so a pick report lists every value with its unit and the observation time. |
 | `NdbcObservationSourceOptions` | Base address, paths, poll interval, ageing, backoff, margin, span gate, per-poll and concurrency limits, and the HTTP `Range` size. |
-| `NdbcRealtimeParser` / `NdbcObservation` | The `realtime2` standard meteorological format: wind direction, speed and gust; wave height, dominant and average period and mean direction; pressure, air, water and dew-point temperature, visibility, pressure tendency and tide. `MM` is missing (`null`). `NdbcObservation.Combine` merges a station's newest rows, since buoys report waves hourly but wind every 10 minutes. |
+| `NdbcRealtimeParser` / `NdbcObservation` | The `realtime2` standard meteorological format: wind direction, speed and gust; wave height, dominant and average period and mean direction; pressure, air, water and dew-point temperature, visibility, pressure tendency and tide. `MM` is missing (`null`). `NdbcObservation.Combine` merges a station's newest rows, since buoys report waves less often than wind (half-hourly or hourly, against every 10 minutes). |
 | `NdbcStationTable` / `NdbcStation` | The `activestations.xml` station table: ids, positions, types and whether a station reports meteorological data. |
 | `NdbcStationPortrayal` | The station-model glyph as drawing instructions: a station marker, the weather styles' WMO wind barb rotated into the wind (the mirrored southern-hemisphere barb for a station south of the equator, through `WindBarbSymbols`), and the wave height as a label. Stale stations are grey. Implements `IDynamicFeaturePortrayal`. |
 | `NdbcObservationFormatter` | The pick-report rows for an observation. |
@@ -68,10 +68,11 @@ places it on the S-98 `OtherChartOverlays` plane at within-plane priority
 
 The files come from `https://www.ndbc.noaa.gov/` (US government data, public
 domain). Each station request asks for the first 16 KiB of its file with an
-HTTP `Range` header, about a day of rows; the parser stops at rows older
-than 12 hours either way. Set a `User-Agent` that identifies your
-application on the `HttpClient` you pass in. The client stays yours to
-dispose.
+HTTP `Range` header, about a day of rows. NDBC answers with `206 Partial
+Content`, so the last line is usually cut off; the parser skips it, and
+stops at rows older than 12 hours either way. Set a `User-Agent` that
+identifies your application on the `HttpClient` you pass in. The client
+stays yours to dispose.
 
 ## See also
 

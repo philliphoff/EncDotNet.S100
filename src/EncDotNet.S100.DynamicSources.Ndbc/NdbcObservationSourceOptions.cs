@@ -81,7 +81,7 @@ public sealed record NdbcObservationSourceOptions
     /// The files list 45 days newest first, so the head holds the latest hours.
     /// A server that ignores the range sends the whole file; the source stops
     /// reading once rows are older than <see cref="DropAfter"/>. <see langword="null"/>
-    /// sends no range. Defaults to 16 KiB, about a day of 10-minute rows.
+    /// sends no range. Defaults to 16 KiB: NDBC rows are 94 bytes, so about 29 hours of 10-minute rows, or a week of a C-MAN station's hourly rows.
     /// </summary>
     public int? RangeBytes { get; init; } = 16 * 1024;
 

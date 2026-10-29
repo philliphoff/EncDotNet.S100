@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 
 namespace EncDotNet.S100.DynamicSources.Ndbc.Tests;
@@ -49,6 +50,26 @@ internal sealed class FakeNdbcHandler : HttpMessageHandler
         _routes[path] = _ => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new ByteArrayContent(body) { Headers = { { "Content-Type", mediaType } } },
+        };
+
+    /// <summary>
+    /// Serves <paramref name="body"/> the way NDBC answers a <c>Range</c>
+    /// request: 206 with at most <paramref name="maxBytes"/> leading bytes and a
+    /// <c>Content-Range</c> header.
+    /// </summary>
+    public void ServeRanged(string path, byte[] body, int maxBytes) =>
+        _routes[path] = request =>
+        {
+            var range = request.Headers.Range?.Ranges.SingleOrDefault();
+            if (range is null)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(body) };
+            }
+
+            long last = Math.Min(Math.Min(range.To ?? long.MaxValue, maxBytes - 1), body.Length - 1);
+            var content = new ByteArrayContent(body, 0, (int)last + 1);
+            content.Headers.ContentRange = new ContentRangeHeaderValue(0, last, body.Length);
+            return new HttpResponseMessage(HttpStatusCode.PartialContent) { Content = content };
         };
 
     public void Serve(string path, string body) => Serve(path, Encoding.ASCII.GetBytes(body));
