@@ -111,7 +111,7 @@ public sealed class S101Document
     /// <remarks>
     /// Mirrors <c>EncDotNet.S57.S57Document.ApplyChanges</c>: there is no separate
     /// update document type, and merging is a pure document-to-document operation.
-    /// This single-step merge does not validate edition/update preconditions; use
+    /// This single-step merge does not validate edition or update preconditions; use
     /// <see cref="S101UpdateApplicator.Apply(S101Document, IReadOnlyList{S101Document}, out S101UpdateReport)"/>
     /// for sequenced, best-effort application with a report.
     /// </remarks>
@@ -171,6 +171,25 @@ public sealed record S101DatasetIdentification
     /// catalogue's <c>editionNumber</c>. S-100 Part 10a.
     /// </remarks>
     public string DatasetEdition { get; init; } = "";
+
+    /// <summary>
+    /// The edition number in <see cref="DatasetEdition"/>: its leading whole
+    /// number (<c>4</c> for a base cell's <c>4</c> and an update's <c>4.1</c>),
+    /// or <see langword="null"/> when it's empty or doesn't start with one.
+    /// </summary>
+    public int? EditionNumber
+    {
+        get
+        {
+            var edition = DatasetEdition.AsSpan().Trim();
+            var dot = edition.IndexOf('.');
+            var whole = dot < 0 ? edition : edition[..dot];
+            return int.TryParse(whole, System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var number)
+                ? number
+                : null;
+        }
+    }
 
     /// <summary>
     /// Update number of this dataset within its edition: <c>0</c> for a base

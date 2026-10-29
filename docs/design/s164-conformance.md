@@ -1,10 +1,10 @@
 # S-164 conformance — Design Note
 
-> Status: **Assessment** (slices 1–2 of
-> [#1120](https://github.com/philliphoff/EncDotNet.S100/issues/1120)). Every
-> status in the matrix comes from reading the code. Slice 2 added the test
-> harness and a smoke test over every v2.0.0 exchange set (§6.1); no S-164
-> test itself runs yet.
+> Status: **Assessment** (slices 1–3 of
+> [#1120](https://github.com/philliphoff/EncDotNet.S100/issues/1120)). Most
+> statuses come from reading the code. Slice 2 added the test harness and a
+> smoke test over every v2.0.0 exchange set (§6.1); slice 3 runs the first
+> Part 2 tests against the data, and those rows say **Passes**.
 
 SoundCharts isn't an ECDIS and won't go through type approval. The IHO's
 S-164 test datasets are still the most complete public description of what
@@ -35,6 +35,7 @@ holds 18 S-101 cells from an earlier S-164 release.
 
 | Status | Meaning |
 |---|---|
+| Passes | A test in `tests/EncDotNet.S100.S164.Tests` runs it against the v2.0.0 data and it passes. The note says where the apps still fall short. |
 | Supported | The code does what the test checks. Not yet verified against S-164 data. |
 | Partial | Some of it is done; the note says what's missing. |
 | Gap | Not done, and worth doing in a viewer. |
@@ -45,17 +46,17 @@ they drift.
 
 ## 3. Summary
 
-| Part | Area | Tests | Supported | Partial | Gap | N/A |
-|---|---|---|---|---|---|---|
-| 2 | Catalogue and dataset loading and updating | 70 | 9 | 36 | 25 | 0 |
-| 3 | Chart display | 61 | 30 | 25 | 5 | 1 |
-| 4 | Chart related functions | 47 | 2 | 32 | 11 | 2 |
-| 5 | Navigational hazards | 6 | 1 | 1 | 4 | 0 |
-| 6 | Areas with special conditions | 5 | 2 | 1 | 2 | 0 |
-| 7 | Safety contour | 6 | 1 | 3 | 2 | 0 |
-| 8 | S-57 testing | 0 | — | — | — | — |
-| 9 | Dual fuel mode and SECOM | 17 | 2 | 9 | 6 | 0 |
-| | **Total** | **212** | **47** | **107** | **55** | **3** |
+| Part | Area | Tests | Passes | Supported | Partial | Gap | N/A |
+|---|---|---|---|---|---|---|---|
+| 2 | Catalogue and dataset loading and updating | 70 | 5 | 9 | 35 | 21 | 0 |
+| 3 | Chart display | 61 | 0 | 30 | 25 | 5 | 1 |
+| 4 | Chart related functions | 47 | 0 | 2 | 32 | 11 | 2 |
+| 5 | Navigational hazards | 6 | 0 | 1 | 1 | 4 | 0 |
+| 6 | Areas with special conditions | 5 | 0 | 2 | 1 | 2 | 0 |
+| 7 | Safety contour | 6 | 0 | 1 | 3 | 2 | 0 |
+| 8 | S-57 testing | 0 | — | — | — | — | — |
+| 9 | Dual fuel mode and SECOM | 17 | 0 | 2 | 9 | 6 | 0 |
+| | **Total** | **212** | **5** | **47** | **106** | **51** | **3** |
 
 Part 8 has no tests of its own in 2.0.1. It points S-57 testing at the
 existing S-64 datasets, which a later slice covers.
@@ -85,11 +86,13 @@ issue.
    open protected datasets. The viewer verifies exchange sets with
    `AllowUntrustedCertificates = true`, shows the result as a badge and
    never refuses data. Authorities added in Keys & certificates are used
-   only for SECOM. `CATALOG.SIGN` is written but never verified. Affects
-   most of §2.6–2.7.
+   only for SECOM. Since slice 3 the library checks `CATALOG.SIGN`, and a
+   catalogue that fails it shows as an invalid signature. Affects most of
+   §2.6–2.7.
 4. **No installed-data store.** ([#1129](https://github.com/philliphoff/EncDotNet.S100/issues/1129)) The Library indexes sources where they are.
-   S-101 updates apply only when they sit beside their base cell, and the
-   update applicator checks sequence numbers but not editions. Re-issues,
+   S-101 updates apply only when they sit beside their base cell. Since
+   slice 3 the update applicator rejects an update for another edition as
+   well as a break in the sequence. Re-issues,
    cancellations and later update sets don't change what was loaded before.
    Affects §2.2–2.5 and the S-128 status reports.
 5. **Spherical geodesy.** ([#1130](https://github.com/philliphoff/EncDotNet.S100/issues/1130)) The measure tool, route legs and
@@ -135,7 +138,7 @@ doesn't try to close them.
 |---|---|---|
 | 1 | This note: the matrix, findings and differences. | — |
 | 2 | **Done.** `tests/EncDotNet.S100.S164.Tests`: the v2.0.0 release pinned by SHA-256 in `s164-v2.0.0.json`, downloaded on demand into a cache, cached in CI, and skipped cleanly without it. A smoke test opens every exchange set, opens every dataset in it, and verifies every signature. | 1 |
-| 3 | Part 2 tests: catalogue loading, dataset loading, update sequences, editions, overlays. The trust fixes from finding 3 land here. | 2 |
+| 3 | **Done for updates and catalogue signatures.** S-164 tests apply the update sets to the `X01SW` cell across exchange sets (SequentialUpdates, InvalidSequence, NewerEditionUpdate, OlderEditionUpdate) and check every `CATALOG.SIGN` (MissingCatalogueSignature, InvalidCatalogueSignature). The applicator now rejects updates for another edition, and the library checks `CATALOG.SIGN`. The rest of finding 3 (authorities for exchange sets, a refuse-untrusted setting, protected data) stays with #1128; cross-set updates in the apps stay with #1129. | 2 |
 | 4 | Part 3 tests: display categories, viewing groups and text groups against DisplayBase, DisplayStandard and DisplayOther, using headless renders and feature-presence checks; Chart 1. | 2 |
 | 5 | Part 4 tests: pick report checks, and Accuracy1–15 as unit tests once ellipsoidal geodesy (finding 5) lands. | 2 |
 | 6 | Parts 5–7 tests: route checks over the NavigationalHazards, SpecialConditions and SafetyContour exchange sets, compared with the expected findings. Dual-fuel tests follow when that data is released. | 2 |
@@ -174,7 +177,18 @@ test ran. Slice 2 fixes the first three in the library:
 
 Ten exchange sets (`SequentialUpdate1`–`5`, `InvalidSequence001`–`003`,
 `NewUpdate`, `OldUpdate`) hold only S-101 updates for cells in other sets.
-They can't be applied until #1129 adds cross-set updates.
+The apps can't apply them until #1129 adds cross-set updates; slice 3's
+tests apply them in the library.
+
+Slice 3 found one more problem, in the S-101 reader:
+
+5. **S-101 2.0 field layouts.** The v2.0.0 cells describe DSID, FASC and
+   INAS with a fixed part followed by a repeating group (`DSED\\*DSTC`,
+   `FAUI\\*NATC…`): one association per FASC or INAS field, with its
+   attributes repeated after it. The reader expected the association itself
+   to repeat, so it dropped every feature and information association in
+   these cells (77 and 20 in `X01SW`), and it didn't find the edition. It
+   now reads both layouts.
 
 ## 7. Matrix
 
@@ -190,11 +204,11 @@ They can't be applied until #1129 adds cross-set updates.
 | PowerUp | S-98: 6.1.1; IEC 61174: 4.4.1 | PowerUp | Partial | `src/EncDotNet.S100.Collections/Library/LibraryItemText.cs` | Edition, update and dates show per Library item; no table of everything installed. |
 | AdditionalCell | IEC 61174: 4.4.1 | Settings | Supported | `src/EncDotNet.S100.Viewer/ViewModels/LibraryPanelViewModel.cs` | Adding a folder or ZIP indexes it and draws its coverage. |
 | RemoveCell | S-98: 6.1.1; IEC 61174: 4.4.1 | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/LibraryPanelViewModel.cs` | Sources and loaded datasets can be removed, not single cells. |
-| SequentialUpdates | S-98: 20.4.3; IEC 61174: 4.4.2 | PowerUp, SequentialUpdate1 | Partial | `src/EncDotNet.S100.Datasets.S101/S101UpdateApplicator.cs` | Updates apply in order within one set; not across exchange sets, and there's no update review. |
-| InvalidSequence | S-98: 20.4.3; IEC 61174: 4.4.2 | InvalidSequence001–003 | Partial | `src/EncDotNet.S100.Datasets.S101/S101UpdateApplicator.cs` | Stops at the gap with a toast; no lasting indication. |
-| NewerEditionUpdate | IEC 61174: 6.8.16.1 | GoodBaseCells, NewUpdate | Gap | `src/EncDotNet.S100.Datasets.S101/S101UpdateApplicator.cs` | Editions aren't compared. |
+| SequentialUpdates | S-98: 20.4.3; IEC 61174: 4.4.2 | PowerUp, SequentialUpdate1 | Passes | `tests/EncDotNet.S100.S164.Tests/Part2UpdateTests.cs` | The library applies SequentialUpdate1–5 to the PowerUp cell. The apps apply updates only within one exchange set (#1129), and there's no update review. |
+| InvalidSequence | S-98: 20.4.3; IEC 61174: 4.4.2 | InvalidSequence001–003 | Passes | `tests/EncDotNet.S100.S164.Tests/Part2UpdateTests.cs` | The library stops after update 2 and reports the missing update 3. The apps show a toast, with no lasting indication. |
+| NewerEditionUpdate | IEC 61174: 6.8.16.1 | GoodBaseCells, NewUpdate | Passes | `tests/EncDotNet.S100.S164.Tests/Part2UpdateTests.cs` | An update for a newer edition than the cell is rejected with a message; it applies to that edition. |
 | UpdateInformation | S-98 20.4.3; IEC 61174 4.4.2 | — | Supported | `src/EncDotNet.S100.Specifications/content/S101/pc/Rules/UpdateInformation.lua` | Drawn by the S-101 PC and shown in the pick report. |
-| OlderEditionUpdate | S-98: 20.4.3; IEC 61174: 4.4.2 | OldUpdate | Gap | `src/EncDotNet.S100.Datasets.S101/S101Document.cs` | Updates for an older edition aren't rejected. |
+| OlderEditionUpdate | S-98: 20.4.3; IEC 61174: 4.4.2 | OldUpdate | Passes | `tests/EncDotNet.S100.S164.Tests/Part2UpdateTests.cs` | An update for an older edition is rejected with a message. |
 | ReIssueAndUpdate | S-98: 20.5; IEC 61174: 4.4.2 | — | Partial | `src/EncDotNet.S100.Datasets.Pipelines/S101ExchangeSetUpdatePlan.cs` | A re-issue loads with in-set updates; later sets don't build on it. |
 | UpdateRejection | S-98: 20.4.3; IEC 61174: 4.4.2 | — | Gap | — | Needs manual updates. |
 | ManualUpdateCreation | S-98: 20.4.4; IEC 61174 6.8.17 | PowerUp | Gap | — | No manual-update editor. |
@@ -216,8 +230,8 @@ They can't be applied until #1129 adds cross-set updates.
 | InstallSACertificate | S-98: B-3 | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/Keys/AddAuthorityDialogViewModel.cs` | Authorities can be added but only SECOM uses them. |
 | MissingSACertificate | S-98: B-3 | — | Partial | `docs/protected-exchange-sets.md` | The library needs a trusted root for permits; the viewer doesn't for exchange sets. |
 | CertificateExpiry | S-98: B-3 | — | Partial | `src/EncDotNet.S100.ExchangeSets/ExchangeSetVerifier.cs` | Library reports an expired certificate; the viewer shows a badge only. |
-| MissingCatalogueSignature | S-98: B-3 | — | Gap | `src/EncDotNet.S100.ExchangeSets/Protection/StandaloneDigitalSignatureWriter.cs` | CATALOG.SIGN is written but never verified. |
-| InvalidCatalogueSignature | S-98: B-3 | — | Gap | `src/EncDotNet.S100.ExchangeSets/Protection/StandaloneDigitalSignatureWriter.cs` | As above. |
+| MissingCatalogueSignature | S-98: B-3 | — | Partial | `tests/EncDotNet.S100.S164.Tests/Part2CatalogueSignatureTests.cs` | The library reports a missing `CATALOG.SIGN`; the apps don't show it, and the set loads (§5). |
+| InvalidCatalogueSignature | S-98: B-3 | — | Passes | `tests/EncDotNet.S100.S164.Tests/Part2CatalogueSignatureTests.cs` | A catalogue that doesn't match `CATALOG.SIGN` shows as an invalid signature; the set still loads (§5). |
 | NonSASignedData | S-98: B-3 | — | Partial | `src/EncDotNet.S100.ExchangeSets/ExchangeSetVerifier.cs` | Library rejects chains outside the roots; the viewer allows untrusted certificates. |
 | AuthenticationDomainCoordinator | S-98: B-3 | — | Partial | `src/EncDotNet.S100.ExchangeSets/ExchangeSetVerifier.cs` | Intermediate chains build in the library; the viewer doesn't anchor them to the SA. |
 | InvalidDatasetSignature | — | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/SignatureStatus.cs` | Shown as a badge; nothing is blocked. |

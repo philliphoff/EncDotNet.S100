@@ -136,6 +136,49 @@ public class S101UpdateApplicatorTests
         Assert.Contains(report.Messages, m => m.Severity == S101UpdateSeverity.Warning && m.UpdateNumber == 3);
     }
 
+    [Theory]
+    [InlineData("4", "3.1", "older edition")]
+    [InlineData("3", "4.1", "Load edition 4")]
+    public void Apply_UpdateForAnotherEdition_IsRejected(string baseEdition, string updateEdition, string expected)
+    {
+        var baseDoc = Doc(0, "1", features: new[] { Feature(10) }, edition: baseEdition);
+        var u1 = Doc(1, "2", features: new[] { Feature(11, instruction: S101UpdateInstruction.Insert) }, edition: updateEdition);
+
+        var result = S101UpdateApplicator.Apply(baseDoc, new[] { u1 }, out var report);
+
+        Assert.Same(baseDoc, result);
+        Assert.Equal(0, report.AppliedThroughUpdateNumber);
+        Assert.False(report.Success);
+        var message = Assert.Single(report.Messages);
+        Assert.Equal(S101UpdateSeverity.Error, message.Severity);
+        Assert.Contains(expected, message.Text);
+    }
+
+    [Theory]
+    [InlineData("4", "4.1")]
+    [InlineData("", "4.1")]
+    [InlineData("4", "")]
+    public void Apply_UpdateForSameOrUnknownEdition_IsApplied(string baseEdition, string updateEdition)
+    {
+        var baseDoc = Doc(0, "1", features: new[] { Feature(10) }, edition: baseEdition);
+        var u1 = Doc(1, "2", features: new[] { Feature(11, instruction: S101UpdateInstruction.Insert) }, edition: updateEdition);
+
+        S101UpdateApplicator.Apply(baseDoc, new[] { u1 }, out var report);
+
+        Assert.Equal(1, report.AppliedThroughUpdateNumber);
+        Assert.True(report.Success);
+    }
+
+    [Theory]
+    [InlineData("4", 4)]
+    [InlineData("4.1", 4)]
+    [InlineData(" 12.3 ", 12)]
+    [InlineData("", null)]
+    [InlineData("1.0a", 1)]
+    [InlineData("v2", null)]
+    public void EditionNumber_ReadsLeadingWholeNumber(string datasetEdition, int? expected) =>
+        Assert.Equal(expected, new S101DatasetIdentification { DatasetEdition = datasetEdition }.EditionNumber);
+
     [Fact]
     public void Apply_EmptyUpdateList_ReturnsBaseUnchanged()
     {
@@ -174,7 +217,8 @@ public class S101UpdateApplicatorTests
         int updateNumber,
         string profile,
         IEnumerable<S101PointRecord>? points = null,
-        IEnumerable<S101FeatureRecord>? features = null) =>
+        IEnumerable<S101FeatureRecord>? features = null,
+        string edition = "") =>
         new()
         {
             Identification = new S101DatasetIdentification
@@ -182,6 +226,7 @@ public class S101UpdateApplicatorTests
                 DatasetName = $"TEST.{updateNumber:D3}",
                 ApplicationProfile = profile,
                 UpdateNumber = updateNumber,
+                DatasetEdition = edition,
             },
             StructureInfo = new S101DatasetStructureInfo
             {

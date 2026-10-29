@@ -203,7 +203,8 @@ internal static class S101DocumentReader
         reader.TryGetSubfield<string>("DSRD", out var dsrd);
         reader.TryGetSubfield<string>("DSLG", out var dslg);
         reader.TryGetSubfield<string>("DSAB", out var dsab);
-        reader.TryGetSubfield<string>("DSED", out var dsed);
+        // Read by ordinal: the S-101 descriptor names this subfield "DSED\\" (see Ordinal).
+        var dsed = Optional<string?>(reader, 0, Ordinal(reader, "DSED"), null);
 
         return new S101DatasetIdentification
         {
@@ -265,7 +266,7 @@ internal static class S101DocumentReader
 
     private static S101UpdateInstruction ReadUpdateInstruction(Iso8211FieldReader reader, int group, int ordinal)
     {
-        return reader.TryGetSubfield<byte>(group, ordinal, out var value) &&
+        return TryRead<byte>(reader, group, ordinal, out var value) &&
             Enum.IsDefined(typeof(S101UpdateInstruction), (S101UpdateInstruction)value)
                 ? (S101UpdateInstruction)value
                 : S101UpdateInstruction.None;
@@ -341,15 +342,34 @@ internal static class S101DocumentReader
     }
 
     /// <summary>
+    /// Counts the associations in one FASC or INAS field. S-101 2.0 writes one association
+    /// per field, its subfields up to <paramref name="lastOrdinal"/> followed by a repeating
+    /// group of association attributes (<c>RRNM!…!FAUI\\*NATC!…</c>); older producers
+    /// repeat the association subfields themselves (<c>*RRNM!…!FAUI</c>).
+    /// </summary>
+    private static int Associations(Iso8211FieldReader reader, int lastOrdinal)
+    {
+        var definition = reader.FieldDefinition;
+        return definition.HasRepeatingGroup && lastOrdinal >= 0 && definition.RepeatingSubfieldStartIndex > lastOrdinal
+            ? 1
+            : Repetitions(reader);
+    }
+
+    /// <summary>
     /// Finds a subfield's ordinal in the field definition, or <c>-1</c> when the definition
     /// has none, in which case every read of it finds nothing.
     /// </summary>
+    /// <remarks>
+    /// S-100 Part 10a descriptors write <c>\\</c> before the <c>*</c> that starts a repeating
+    /// group (<c>DSED\\*DSTC</c>), and the ISO 8211 reader keeps it in the name of the
+    /// subfield before, so it's ignored here.
+    /// </remarks>
     private static int Ordinal(Iso8211FieldReader reader, string name)
     {
         var subfields = reader.FieldDefinition.SubfieldDefinitions;
         for (var i = 0; i < subfields.Count; i++)
         {
-            if (string.Equals(subfields[i].Name, name, StringComparison.Ordinal))
+            if (subfields[i].Name.AsSpan().TrimEnd('\\').Equals(name, StringComparison.Ordinal))
                 return i;
         }
 
@@ -361,12 +381,40 @@ internal static class S101DocumentReader
     /// <see cref="KeyNotFoundException"/> a group lookup throws when it is missing.
     /// </summary>
     private static T Required<T>(Iso8211FieldReader reader, int group, int ordinal, string name) =>
-        reader.TryGetSubfield<T>(group, ordinal, out var value)
+        TryRead<T>(reader, group, ordinal, out var value)
             ? value
             : throw new KeyNotFoundException($"Subfield '{name}' not found in group {group}.");
 
     private static T Optional<T>(Iso8211FieldReader reader, int group, int ordinal, T fallback) =>
-        reader.TryGetSubfield<T>(group, ordinal, out var value) ? value : fallback;
+        TryRead<T>(reader, group, ordinal, out var value) ? value : fallback;
+
+    /// <summary>
+    /// Reads a subfield by group and ordinal. A subfield before the field's repeating group
+    /// occurs once, so it's read by its position in the field whatever the group.
+    /// </summary>
+    private static bool TryRead<T>(Iso8211FieldReader reader, int group, int ordinal, out T value)
+    {
+        var definition = reader.FieldDefinition;
+        if (ordinal >= 0 && definition.HasRepeatingGroup && ordinal < definition.RepeatingSubfieldStartIndex)
+        {
+            if (ordinal < reader.SubfieldCount)
+            {
+                try
+                {
+                    value = reader.GetSubfieldAt<T>(ordinal);
+                    return true;
+                }
+                catch (Exception ex) when (ex is FormatException or InvalidCastException or ArgumentException or OverflowException)
+                {
+                }
+            }
+
+            value = default!;
+            return false;
+        }
+
+        return reader.TryGetSubfield(group, ordinal, out value);
+    }
 
     private static S101DatasetStructureInfo ParseDssi(Iso8211Record record, Iso8211DataDescriptiveRecord ddr)
     {
@@ -650,7 +698,7 @@ internal static class S101DocumentReader
             var facsReader = new Iso8211FieldReader(facsDef, facsField.Data);
             var (nfacAt, rridAt, narcAt, fauiAt) =
                 (Ordinal(facsReader, "NFAC"), Ordinal(facsReader, "RRID"), Ordinal(facsReader, "NARC"), Ordinal(facsReader, "FAUI"));
-            for (int g = 0, count = Repetitions(facsReader); g < count; g++)
+            for (int g = 0, count = Associations(facsReader, fauiAt); g < count; g++)
             {
                 var nfac = Required<ushort>(facsReader, g, nfacAt, "NFAC");
                 var rrid = Required<uint>(facsReader, g, rridAt, "RRID");
@@ -669,7 +717,7 @@ internal static class S101DocumentReader
             var inasReader = new Iso8211FieldReader(inasDef, inasField.Data);
             var (niacAt, rridAt, narcAt, iuinAt) =
                 (Ordinal(inasReader, "NIAC"), Ordinal(inasReader, "RRID"), Ordinal(inasReader, "NARC"), Ordinal(inasReader, "IUIN"));
-            for (int g = 0, count = Repetitions(inasReader); g < count; g++)
+            for (int g = 0, count = Associations(inasReader, iuinAt); g < count; g++)
             {
                 var niac = Required<ushort>(inasReader, g, niacAt, "NIAC");
                 var rrid = Required<uint>(inasReader, g, rridAt, "RRID");

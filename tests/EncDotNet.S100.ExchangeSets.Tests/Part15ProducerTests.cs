@@ -232,6 +232,78 @@ public sealed class Part15ProducerTests : IDisposable
     }
 
     [Fact]
+    public async Task Catalogue_signature_verifies_the_signed_catalogue()
+    {
+        var source = SignedCatalogue(_scheme, "<catalogue/>"u8.ToArray());
+
+        var result = await CatalogueSignatureVerifier.VerifyAsync(
+            source, _scheme.TrustAnchors, TestContext.Current.CancellationToken);
+
+        Assert.Equal(VerificationOutcome.Ok, result.Outcome);
+        Assert.Equal("CATALOG.XML", result.Signature?.FileName);
+    }
+
+    [Fact]
+    public async Task Catalogue_signature_fails_when_the_catalogue_changes()
+    {
+        var source = SignedCatalogue(_scheme, "<catalogue/>"u8.ToArray());
+        source.AddFile("CATALOG.XML", "<catalogue changed=\"true\"/>"u8.ToArray());
+
+        var result = await CatalogueSignatureVerifier.VerifyAsync(
+            source, _scheme.TrustAnchors, TestContext.Current.CancellationToken);
+
+        Assert.Equal(VerificationOutcome.SignatureInvalid, result.Outcome);
+        Assert.Contains("CATALOG.XML", result.Detail);
+    }
+
+    [Fact]
+    public async Task Catalogue_signature_from_another_scheme_is_untrusted_unless_allowed()
+    {
+        using var other = new TestScheme();
+        var source = SignedCatalogue(other, "<catalogue/>"u8.ToArray());
+        var ct = TestContext.Current.CancellationToken;
+
+        var trusted = await CatalogueSignatureVerifier.VerifyAsync(source, _scheme.TrustAnchors, ct);
+        var allowed = await CatalogueSignatureVerifier.VerifyAsync(
+            source, new TrustAnchorOptions { AllowUntrustedCertificates = true }, ct);
+
+        Assert.Equal(VerificationOutcome.CertificateUntrusted, trusted.Outcome);
+        Assert.Equal(VerificationOutcome.Ok, allowed.Outcome);
+    }
+
+    [Fact]
+    public async Task Catalogue_signature_reports_a_missing_or_malformed_signature_file()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var unsigned = new InMemoryAssetSource();
+        unsigned.AddFile("CATALOG.XML", "<catalogue/>"u8.ToArray());
+        var malformed = new InMemoryAssetSource();
+        malformed.AddFile("CATALOG.XML", "<catalogue/>"u8.ToArray());
+        malformed.AddFile(CatalogueSignatureVerifier.SignatureFileName, "synthetic"u8.ToArray());
+        var noCatalogue = SignedCatalogue(_scheme, "<catalogue/>"u8.ToArray(), includeCatalogue: false);
+
+        Assert.Equal(VerificationOutcome.NotSigned, (await CatalogueSignatureVerifier.VerifyAsync(unsigned, _scheme.TrustAnchors, ct)).Outcome);
+        Assert.Equal(VerificationOutcome.Error, (await CatalogueSignatureVerifier.VerifyAsync(malformed, _scheme.TrustAnchors, ct)).Outcome);
+        Assert.Equal(VerificationOutcome.FileMissing, (await CatalogueSignatureVerifier.VerifyAsync(noCatalogue, _scheme.TrustAnchors, ct)).Outcome);
+    }
+
+    [Fact]
+    public void Verification_result_fails_on_a_bad_catalogue_signature_but_not_a_missing_one()
+    {
+        ExchangeSetVerificationResult With(VerificationOutcome outcome) => new()
+        {
+            FileResults = [new FileVerificationResult { FileName = "a.000", Outcome = VerificationOutcome.Ok }],
+            CatalogueSignature = new CatalogueSignatureVerificationResult(outcome),
+        };
+
+        Assert.True(With(VerificationOutcome.Ok).AllValid);
+        Assert.True(With(VerificationOutcome.NotSigned).AllValid);
+        Assert.False(With(VerificationOutcome.SignatureInvalid).AllValid);
+        Assert.True(With(VerificationOutcome.SignatureInvalid).HasInvalidSignatures);
+        Assert.False(With(VerificationOutcome.CertificateUntrusted).AllValid);
+    }
+
+    [Fact]
     public async Task SignData_produces_a_der_p384_signature_over_the_content()
     {
         using var signer = _scheme.CreateSigner();
@@ -363,6 +435,21 @@ public sealed class Part15ProducerTests : IDisposable
 
         Assert.Throws<ArgumentException>(() => new Part15Signer(certificate, other, "id", "SA"));
         Assert.Throws<ArgumentException>(() => new Part15Signer(certificate, p256, "id", "SA"));
+    }
+
+    private static InMemoryAssetSource SignedCatalogue(TestScheme scheme, byte[] catalogue, bool includeCatalogue = true)
+    {
+        using var signer = scheme.CreateSigner();
+        using var signature = new MemoryStream();
+        StandaloneDigitalSignatureWriter.Write(signer.SignStandalone(catalogue, "CATALOG.XML", "catalogue"), signature);
+        var source = new InMemoryAssetSource();
+        source.AddFile(CatalogueSignatureVerifier.SignatureFileName, signature.ToArray());
+        if (includeCatalogue)
+        {
+            source.AddFile("CATALOG.XML", catalogue);
+        }
+
+        return source;
     }
 
     /// <summary>A test Scheme Administrator and a data-server certificate it issued.</summary>

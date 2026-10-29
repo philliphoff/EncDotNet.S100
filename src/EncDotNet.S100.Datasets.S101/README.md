@@ -105,7 +105,10 @@ level (S-100 Part 10a). You apply them in order to get the up-to-date cell.
 
 Application is best-effort. An unreadable file, or an invalid or
 non-contiguous update, is recorded in the report, and you can still use the
-partly updated cell.
+partly updated cell. An update for another edition of the cell is rejected,
+and application stops there. The edition comes from each file's DSID
+edition (DSED: `4` for a base cell, `4.1` for its first update); when either
+file leaves it empty, the check is skipped.
 
 In an exchange set, `ExchangeSetLoader` groups each base cell with the update
 files for it in the same set (`S101ExchangeSetUpdatePlan`) and returns one

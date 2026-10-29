@@ -17,7 +17,8 @@ namespace EncDotNet.S100.ExchangeSets;
 /// signatures use ECDSA P-384 with SHA-384 (§15-8.4); legacy algorithms retain
 /// their existing compatibility behavior. Each file is also independently
 /// integrity-checked with SHA-256 when the catalogue declares a cryptographic
-/// hash (§15-8.10).
+/// hash (§15-8.10). The catalogue itself is checked against <c>CATALOG.SIGN</c>
+/// when the exchange set has one (§15-8.11.2).
 /// </remarks>
 public class ExchangeSetVerifier : IExchangeSetVerifier
 {
@@ -98,11 +99,14 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
             results.Add(result);
         }
 
+        var catalogueSignature = await CatalogueSignatureVerifier.VerifyAsync(source, trustAnchors, cancellationToken)
+            .ConfigureAwait(false);
+
         activity?.SetTag("s100.exchangeset.verify.file_count", results.Count);
         activity?.SetTag("s100.exchangeset.verify.ok_count",
             results.Count(r => r.Outcome == VerificationOutcome.Ok));
 
-        return new ExchangeSetVerificationResult { FileResults = results };
+        return new ExchangeSetVerificationResult { FileResults = results, CatalogueSignature = catalogueSignature };
     }
 
     private async Task<FileVerificationResult> VerifyFileAsync(
