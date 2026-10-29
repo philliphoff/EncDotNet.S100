@@ -9,6 +9,19 @@ public sealed class ExchangeSetVerificationResult
     public required IReadOnlyList<FileVerificationResult> FileResults { get; init; }
 
     /// <summary>
+    /// The check of the catalogue against <c>CATALOG.SIGN</c>, or
+    /// <see langword="null"/> when it wasn't checked.
+    /// </summary>
+    /// <remarks>
+    /// A missing <c>CATALOG.SIGN</c> (<see cref="VerificationOutcome.NotSigned"/>)
+    /// doesn't count as a failure in <see cref="AllValid"/>: many exchange sets
+    /// in use don't carry one. Any other outcome but
+    /// <see cref="VerificationOutcome.Ok"/> does. S-100 Edition 5.2.1 Part 15
+    /// §15-8.11.2.
+    /// </remarks>
+    public CatalogueSignatureVerificationResult? CatalogueSignature { get; init; }
+
+    /// <summary>
     /// Returns <c>true</c> when every file in the exchange set has
     /// <see cref="VerificationOutcome.Ok"/> as its <em>signature</em> outcome.
     /// </summary>
@@ -32,14 +45,28 @@ public sealed class ExchangeSetVerificationResult
     /// Withdrawn records (<see cref="VerificationOutcome.Withdrawn"/>) ship no
     /// file and are left out, here and in <see cref="IsUnsigned"/>.
     /// </para>
+    /// <para>
+    /// A catalogue that fails its <c>CATALOG.SIGN</c> check makes this
+    /// <c>false</c> too (<see cref="CatalogueSignatureFailed"/>).
+    /// </para>
     /// </remarks>
-    public bool AllValid => Delivered.All(r => r.Outcome == VerificationOutcome.Ok);
+    public bool AllValid =>
+        Delivered.All(r => r.Outcome == VerificationOutcome.Ok) && !CatalogueSignatureFailed;
 
     /// <summary>
-    /// Returns <c>true</c> when at least one file has
+    /// Returns <c>true</c> when at least one file, or the catalogue, has
     /// <see cref="VerificationOutcome.SignatureInvalid"/>.
     /// </summary>
-    public bool HasInvalidSignatures => FileResults.Any(r => r.Outcome == VerificationOutcome.SignatureInvalid);
+    public bool HasInvalidSignatures =>
+        FileResults.Any(r => r.Outcome == VerificationOutcome.SignatureInvalid)
+        || CatalogueSignature?.Outcome == VerificationOutcome.SignatureInvalid;
+
+    /// <summary>
+    /// Returns <c>true</c> when the exchange set has a <c>CATALOG.SIGN</c> and
+    /// the catalogue didn't verify against it (see <see cref="CatalogueSignature"/>).
+    /// </summary>
+    public bool CatalogueSignatureFailed =>
+        CatalogueSignature is { Outcome: not (VerificationOutcome.Ok or VerificationOutcome.NotSigned) };
 
     /// <summary>
     /// Returns <c>true</c> when no file carries a signature

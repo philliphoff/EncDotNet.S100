@@ -63,6 +63,8 @@ public sealed class S101UpdateReport
 /// per-element instructions (<c>ATIN</c> / <c>SAUI</c> / <c>FAUI</c> / <c>IUIN</c>).
 /// Spatial records (point / multi-point / curve / composite-curve / surface) carry
 /// no inline element instructions, so <c>Modify</c> replaces the record wholesale.
+/// An update whose edition (DSID/DSED) differs from the base cell's is rejected,
+/// and application stops there; S-100 Part 10a, S-98 20.4.3.
 /// </remarks>
 public static class S101UpdateApplicator
 {
@@ -93,6 +95,7 @@ public static class S101UpdateApplicator
         var counts = new ApplyCounts();
 
         var baseUpdateNumber = baseDocument.Identification.UpdateNumber;
+        var baseEdition = baseDocument.Identification.EditionNumber;
         var current = baseDocument;
         var appliedThrough = baseUpdateNumber;
         var expectedNext = baseUpdateNumber + 1;
@@ -108,6 +111,21 @@ public static class S101UpdateApplicator
                     $"Skipped '{update.Identification.DatasetName}': not an update dataset (application profile is '{update.Identification.ApplicationProfile}').",
                     updateNumber));
                 continue;
+            }
+
+            // An update belongs to one edition of the cell. Producers don't all
+            // fill in DSED, so the check is skipped when either side has none.
+            if (baseEdition is { } cellEdition &&
+                update.Identification.EditionNumber is { } updateEdition &&
+                updateEdition != cellEdition)
+            {
+                messages.Add(new S101UpdateMessage(
+                    S101UpdateSeverity.Error,
+                    updateEdition < cellEdition
+                        ? $"Rejected update {updateNumber}: it's for edition {updateEdition}, but the cell is edition {cellEdition}. Updates for an older edition don't apply."
+                        : $"Rejected update {updateNumber}: it's for edition {updateEdition}, but the cell is edition {cellEdition}. Load edition {updateEdition} of the cell first.",
+                    updateNumber));
+                break;
             }
 
             if (updateNumber != expectedNext)

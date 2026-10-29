@@ -92,7 +92,14 @@ is applied to its base cell, so it isn't a withdrawal.
 
 ## Verify signatures and checksums
 
-`ExchangeSetVerifier` checks two things for each file in an exchange set:
+`ExchangeSetVerifier` checks the catalogue and each file in an exchange set.
+For the catalogue, it checks `CATALOG.XML` against `CATALOG.SIGN` when the
+set has one (`ExchangeSetVerificationResult.CatalogueSignature`, §15-8.11.2).
+A missing `CATALOG.SIGN` is reported as `NotSigned` and doesn't make
+`AllValid` false; a catalogue that fails its signature does.
+`CatalogueSignatureVerifier` runs the catalogue check on its own.
+
+For each file, it checks two things:
 
 - **Digital signatures.** An exchange set can carry several signatures per
   file in `CATALOG.XML`, using DSA or ECDSA over SHA-256. They can cover the
