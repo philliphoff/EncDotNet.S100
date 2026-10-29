@@ -7,7 +7,9 @@ namespace EncDotNet.S100.DynamicSources.Ndbc.Tests;
 
 public sealed class NdbcObservationSourceTests : IAsyncLifetime
 {
-    // Massachusetts Bay to Buzzards Bay: holds 44013, BUZM3 and 44020 (which has no file).
+    // Massachusetts Bay to Buzzards Bay: holds 44013, BUZM3 and 44020. The fake
+    // handler has no file for 44020, so it stands in for a failing station (the
+    // live realtime2/44020.txt exists).
     private static readonly BoundingBox NewEngland = new(40.5, -71.5, 43.0, -69.5);
     private static readonly BoundingBox SanFrancisco = new(37.0, -123.5, 38.5, -122.0);
 
@@ -91,7 +93,7 @@ public sealed class NdbcObservationSourceTests : IAsyncLifetime
         Assert.Equal(1, _handler.CountRequests(StationPath(NdbcFixtures.Cman)));
         Assert.Equal(1, _handler.CountRequests(StationPath("44020")));
         Assert.Equal(0, _handler.CountRequests(StationPath("46026")));
-        Assert.Equal(0, _handler.CountRequests(StationPath("44401")));
+        Assert.Equal(0, _handler.CountRequests(StationPath("44403")));
         Assert.Equal(2, result.Fetched);
         Assert.Equal(1, result.Failed);
 
@@ -122,6 +124,24 @@ public sealed class NdbcObservationSourceTests : IAsyncLifetime
         var range = Assert.Single(request.Headers.Range!.Ranges);
         Assert.Equal(0, range.From);
         Assert.Equal(16 * 1024 - 1, range.To);
+    }
+
+    [Fact]
+    public async Task A_partial_content_response_is_read_up_to_its_cut_off_last_line()
+    {
+        // NDBC answers the Range request with 206 and the first bytes of the
+        // file, so the last line is usually cut mid-row.
+        _handler.ServeRanged(StationPath(NdbcFixtures.Buoy), NdbcFixtures.ReadBytes(NdbcFixtures.Buoy + ".txt"), maxBytes: 1000);
+        _source.UpdateArea(NewEngland);
+
+        await _source.PollAsync(TestContext.Current.CancellationToken);
+
+        var request = _handler.Requests.First(r => r.RequestUri!.AbsolutePath == StationPath(NdbcFixtures.Buoy));
+        Assert.NotNull(request.Headers.Range);
+        var buoy = _source.CurrentFeatures.Single(f => f.Id == "ndbc:44013");
+        var observation = NdbcObservationSource.GetObservation(buoy)!;
+        Assert.Equal(NdbcFixtures.NewestTime(NdbcFixtures.Buoy), observation.Time);
+        Assert.Equal(0.5, observation.WaveHeight!.Value.TotalMetres, 6);
     }
 
     [Fact]

@@ -23,23 +23,31 @@ public sealed class NdbcRealtimeParserTests
     {
         var rows = NdbcRealtimeParser.Parse(NdbcFixtures.ReadText("44013.txt"), NdbcFixtures.Buoy);
 
-        // 2026 10 27 14 50 230   7.4   8.9   1.1     6   4.6 210 1016.2  11.8  13.1   6.4   MM   MM    MM
+        // 2026 10 28 23 40 180  3.0  4.0    MM    MM    MM  MM 1029.7  11.6  13.2   6.2   MM   MM    MM
         var newest = rows[0];
-        Assert.Equal(new DateTimeOffset(2026, 10, 27, 14, 50, 0, TimeSpan.Zero), newest.Time);
-        Assert.Equal(230, newest.WindFromDirection!.Value.TotalDegrees, 6);
-        Assert.Equal(7.4, newest.WindSpeed!.Value.TotalMetresPerSecond, 6);
-        Assert.Equal(8.9, newest.WindGust!.Value.TotalMetresPerSecond, 6);
-        Assert.Equal(1.1, newest.WaveHeight!.Value.TotalMetres, 6);
-        Assert.Equal(6, newest.DominantWavePeriodSeconds);
-        Assert.Equal(4.6, newest.AverageWavePeriodSeconds);
-        Assert.Equal(210, newest.MeanWaveDirection!.Value.TotalDegrees, 6);
-        Assert.Equal(1016.2, newest.PressureHectopascals);
-        Assert.Equal(11.8, newest.AirTemperatureCelsius);
-        Assert.Equal(13.1, newest.WaterTemperatureCelsius);
-        Assert.Equal(6.4, newest.DewPointCelsius);
+        Assert.Equal(new DateTimeOffset(2026, 10, 28, 23, 40, 0, TimeSpan.Zero), newest.Time);
+        Assert.Equal(180, newest.WindFromDirection!.Value.TotalDegrees, 6);
+        Assert.Equal(3.0, newest.WindSpeed!.Value.TotalMetresPerSecond, 6);
+        Assert.Equal(4.0, newest.WindGust!.Value.TotalMetresPerSecond, 6);
+        Assert.Null(newest.WaveHeight);
+        Assert.Null(newest.DominantWavePeriodSeconds);
+        Assert.Null(newest.MeanWaveDirection);
+        Assert.Equal(1029.7, newest.PressureHectopascals);
+        Assert.Equal(11.6, newest.AirTemperatureCelsius);
+        Assert.Equal(13.2, newest.WaterTemperatureCelsius);
+        Assert.Equal(6.2, newest.DewPointCelsius);
         Assert.Null(newest.VisibilityNauticalMiles);
         Assert.Null(newest.PressureTendencyHectopascals);
         Assert.Null(newest.TideFeet);
+
+        // The newest wave report, at :20 (waves come at :20 and :50).
+        // 2026 10 28 23 20 180  3.0  4.0   0.5     9   5.6  96 1029.9  11.5  13.2   6.0   MM   MM    MM
+        var waves = rows[1];
+        Assert.Equal(new DateTimeOffset(2026, 10, 28, 23, 20, 0, TimeSpan.Zero), waves.Time);
+        Assert.Equal(0.5, waves.WaveHeight!.Value.TotalMetres, 6);
+        Assert.Equal(9, waves.DominantWavePeriodSeconds);
+        Assert.Equal(5.6, waves.AverageWavePeriodSeconds);
+        Assert.Equal(96, waves.MeanWaveDirection!.Value.TotalDegrees, 6);
     }
 
     [Fact]
@@ -47,16 +55,22 @@ public sealed class NdbcRealtimeParserTests
     {
         var rows = NdbcRealtimeParser.Parse(NdbcFixtures.ReadText("44013.txt"), NdbcFixtures.Buoy);
 
-        // Waves are hourly, so most rows have MM for them.
+        // Waves are half-hourly, so most rows have MM for them.
         Assert.Contains(rows, r => r.WaveHeight is null && r.WindSpeed is not null);
-        // The 13:40 row lost its wind report.
-        var gap = Assert.Single(rows, r => r.Time == new DateTimeOffset(2026, 10, 27, 13, 40, 0, TimeSpan.Zero));
-        Assert.Null(gap.WindFromDirection);
-        Assert.Null(gap.WindSpeed);
-        Assert.Null(gap.WindGust);
-        Assert.Equal(1016.0, gap.PressureHectopascals);
-        // The pressure tendency is on the hour, signed.
-        Assert.Equal(-0.8, Assert.Single(rows, r => r.Time == new DateTimeOffset(2026, 10, 27, 14, 0, 0, TimeSpan.Zero)).PressureTendencyHectopascals);
+        // The 22:30 row lost its water temperature.
+        var gap = Assert.Single(rows, r => r.Time == new DateTimeOffset(2026, 10, 28, 22, 30, 0, TimeSpan.Zero));
+        Assert.Null(gap.WaterTemperatureCelsius);
+        Assert.Equal(11.0, gap.AirTemperatureCelsius);
+        // The 09:10 row has a wave height but no dominant period.
+        var partial = Assert.Single(rows, r => r.Time == new DateTimeOffset(2026, 10, 28, 9, 10, 0, TimeSpan.Zero));
+        Assert.Equal(0.9, partial.WaveHeight!.Value.TotalMetres, 6);
+        Assert.Null(partial.DominantWavePeriodSeconds);
+        Assert.Equal(3.8, partial.AverageWavePeriodSeconds);
+        // The pressure tendency is on the hour, with an explicit sign even at zero.
+        Assert.Equal(0.0, Assert.Single(rows, r => r.Time == new DateTimeOffset(2026, 10, 28, 23, 0, 0, TimeSpan.Zero)).PressureTendencyHectopascals);
+        Assert.Equal(-0.4, Assert.Single(rows, r => r.Time == new DateTimeOffset(2026, 10, 28, 22, 0, 0, TimeSpan.Zero)).PressureTendencyHectopascals);
+        // The 23:30 report is missing from the file altogether.
+        Assert.DoesNotContain(rows, r => r.Time == new DateTimeOffset(2026, 10, 28, 23, 30, 0, TimeSpan.Zero));
     }
 
     [Fact]
@@ -64,19 +78,31 @@ public sealed class NdbcRealtimeParserTests
     {
         var rows = NdbcRealtimeParser.Parse(NdbcFixtures.ReadText("BUZM3.txt"), NdbcFixtures.Cman);
 
-        Assert.NotEmpty(rows);
+        // The C-MAN station reports hourly.
+        Assert.Equal(24, rows.Count);
+        Assert.All(rows, r => Assert.Equal(0, r.Time.Minute));
         Assert.All(rows, r => Assert.Null(r.WaveHeight));
         Assert.All(rows, r => Assert.Null(r.MeanWaveDirection));
+        Assert.All(rows, r => Assert.Null(r.WaterTemperatureCelsius));
         Assert.Contains(rows, r => r.WindSpeed is not null && r.PressureHectopascals is not null);
 
-        // 2026 10 27 15 00 254   9.0  11.4    MM    MM    MM  MM 1015.8  10.9    MM   5.2   MM -1.1    MM
+        // 2026 10 28 23 00 200  5.1  6.2    MM    MM    MM  MM 1030.6    MM    MM    MM   MM +0.0    MM
         var newest = rows[0];
-        Assert.Equal(new DateTimeOffset(2026, 10, 27, 15, 0, 0, TimeSpan.Zero), newest.Time);
-        Assert.Equal(254, newest.WindFromDirection!.Value.TotalDegrees, 6);
-        Assert.Equal(9.0, newest.WindSpeed!.Value.TotalMetresPerSecond, 6);
-        Assert.Equal(11.4, newest.WindGust!.Value.TotalMetresPerSecond, 6);
-        Assert.Null(newest.WaterTemperatureCelsius);
-        Assert.Equal(-1.1, newest.PressureTendencyHectopascals);
+        Assert.Equal(new DateTimeOffset(2026, 10, 28, 23, 0, 0, TimeSpan.Zero), newest.Time);
+        Assert.Equal(200, newest.WindFromDirection!.Value.TotalDegrees, 6);
+        Assert.Equal(5.1, newest.WindSpeed!.Value.TotalMetresPerSecond, 6);
+        Assert.Equal(6.2, newest.WindGust!.Value.TotalMetresPerSecond, 6);
+        Assert.Equal(1030.6, newest.PressureHectopascals);
+        Assert.Null(newest.AirTemperatureCelsius);
+        Assert.Equal(0.0, newest.PressureTendencyHectopascals);
+
+        // In a calm the direction is MM and the speed 0.0.
+        // 2026 10 28 18 00  MM  0.0  0.5    MM    MM    MM  MM 1031.4    MM    MM    MM   MM -1.9    MM
+        var calm = Assert.Single(rows, r => r.Time == new DateTimeOffset(2026, 10, 28, 18, 0, 0, TimeSpan.Zero));
+        Assert.Null(calm.WindFromDirection);
+        Assert.Equal(0.0, calm.WindSpeed!.Value.TotalMetresPerSecond, 6);
+        Assert.Equal(0.5, calm.WindGust!.Value.TotalMetresPerSecond, 6);
+        Assert.Equal(-1.9, calm.PressureTendencyHectopascals);
     }
 
     [Fact]

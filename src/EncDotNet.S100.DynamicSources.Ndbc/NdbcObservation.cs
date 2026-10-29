@@ -69,7 +69,7 @@ public sealed record NdbcObservation
     /// <summary>
     /// The time of the row the wave values came from, when <see cref="Combine"/>
     /// took them from an older row than <see cref="Time"/>; otherwise
-    /// <see langword="null"/>. Buoys report waves hourly but wind every 10 minutes.
+    /// <see langword="null"/>. Buoys report waves less often than wind (44013: waves at :20 and :50, wind every 10 minutes).
     /// </summary>
     public DateTimeOffset? WaveTime { get; init; }
 

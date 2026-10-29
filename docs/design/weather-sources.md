@@ -599,15 +599,18 @@ symbols). Choices made along the way:
 - **Ageing.** Stale after 3 hours (feature kind `weather.observation.ndbc.stale`,
   drawn in the grey `NDBCSTALE` ink by re-colouring the same SVGs), dropped
   after 12.
-- **Drawing.** `NdbcStationPortrayal` builds a marker, the `WXBARBN*`/`WXCALM`
-  barb rotated by the "from" direction in the geographic frame, and a
-  wave-height label (SCAMIN 1:2,000,000) with `InstructionBuilder`. It
-  implements a new `IDynamicFeaturePortrayal` (Portrayals.Application); the
-  Mapsui side is a generic `PortrayedDynamicFeatureRenderer`, which lowers the
-  instructions with the vector scene builder into self-styled Mapsui features
-  (`MapsuiDisplayListRenderer.RenderFeatures`). Barbs are northern-hemisphere
-  everywhere until #1072. The palette follows Day/Dusk/Night on the next
-  update, not instantly.
+- **Drawing.** `NdbcStationPortrayal` builds a marker, the
+  `WXBARBN*`/`WXBARBS*`/`WXCALM` barb rotated by the "from" direction in the
+  geographic frame, and a wave-height label (SCAMIN 1:2,000,000) with
+  `InstructionBuilder`. It implements a new `IDynamicFeaturePortrayal`
+  (Portrayals.Application); the Mapsui side is a generic
+  `PortrayedDynamicFeatureRenderer`, which lowers the instructions with the
+  vector scene builder into self-styled Mapsui features
+  (`MapsuiDisplayListRenderer.RenderFeatures`). Since #1072 the barb comes
+  from `WindBarbSymbols.For` at the station's latitude: southern barbs below
+  0°, northern on and north of the equator, the rule the gridded wind barbs
+  (`SouthernHemisphereBands`) and the NMEA own-ship barb also follow. The
+  palette follows Day/Dusk/Night on the next update, not instantly.
 - **Plane.** `DynamicSourceMetadata` gained `Plane` and
   `WithinPlanePriority`; the source says `OtherChartOverlays`, 100, and the
   Layer Stack groups it there. The dynamic-source host still draws every
