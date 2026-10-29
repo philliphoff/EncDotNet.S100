@@ -215,7 +215,8 @@ datasets). Each index lists one item per model or dataset:
   five cycles, and the first whose `.idx` for the last chosen hour is
   published is the latest. Its item downloads one filter request per forecast
   hour (`WeatherRequests.GribFilterUri`: the run's file, `var_X=on` per
-  parameter, `lev_Y=on` per level, the area rounded out to the grid), appended
+  parameter, `lev_Y=on` per level, the area rounded out to the grid, its
+  east edge half a cell further out as the GFS-Wave grid needs), appended
   into one GRIB2 file.
 - **GRIB2 files with `.idx` inventories** (`gribIndex`, NOAA's
   `noaa-gfs-bdp-pds` bucket on AWS): no area cut, so for larger areas. Each
@@ -230,7 +231,14 @@ datasets). Each index lists one item per model or dataset:
 - **ERDDAP `griddap`** (`erddapGriddap`): datasets by id. Each dataset's
   `info/<id>/index.json` gives its axes (a negative `averageSpacing` is a
   descending axis), `actual_range` and time coverage. The item downloads a
-  NetCDF subset of the area from now to the last chosen hour.
+  NetCDF subset of the area from now to the last chosen hour. An issue date
+  (`date_issued`, `date_modified`, `date_created`) is taken as the run only
+  when it falls within the forecast; `NWW3_Global_Best` gives the dataset's
+  own dates, so its item has no run and is never stale.
+
+The weather readers can't yet open a regional grid that crosses the
+antimeridian, so a filter or ERDDAP area across 180° is downloaded as its wider
+side (`WeatherRequests.OneSideOfAntimeridian`), with a warning in the index.
 
 Runs and freshness (`WeatherRuns`):
 

@@ -8,7 +8,8 @@ namespace EncDotNet.S100.TestSupport;
 
 /// <summary>
 /// A fake of the weather services the Library reads (#1075), with no
-/// network: NOMADS (the GRIB filter and the <c>pub/</c> tree whose
+/// network: NOMADS (the GRIB filter, answering nothing for a subregion the
+/// live filter can't cut, and the <c>pub/</c> tree whose
 /// <c>.idx</c> files say a run is published), NOAA's GFS bucket on AWS (whole
 /// GRIB2 files with generated <c>.idx</c> inventories, honouring
 /// <c>Range</c>), <c>api.weather.gov</c> alerts (refusing requests without a
@@ -108,9 +109,22 @@ internal sealed class WeatherFakeServer : HttpMessageHandler
     private HttpResponseMessage Filter(Uri uri)
     {
         var file = Uri.UnescapeDataString(Regex.Match(uri.Query, "[?&]file=([^&]+)").Groups[1].Value);
-        return HourOf(file) is { } hour && Messages.TryGetValue(hour, out var messages)
-            ? Bytes([.. messages.SelectMany(m => m.Bytes)], "application/octet-stream")
-            : new HttpResponseMessage(HttpStatusCode.NotFound);
+        if (HourOf(file) is not { } hour || !Messages.TryGetValue(hour, out var messages))
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+
+        // As the live filters do (#1075): a subregion whose east edge is west of its west
+        // edge (170° to −170°) or that spans more than a turn answers 200 with no messages.
+        if (Query(uri, "leftlon") is { } left && Query(uri, "rightlon") is { } right && (right < left || right - left > 360))
+            return Bytes([], "application/octet-stream");
+        return Bytes([.. messages.SelectMany(m => m.Bytes)], "application/octet-stream");
+    }
+
+    private static double? Query(Uri uri, string name)
+    {
+        var match = Regex.Match(uri.Query, $"[?&]{name}=([^&]*)");
+        return match.Success && double.TryParse(Uri.UnescapeDataString(match.Groups[1].Value), NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : null;
     }
 
     private HttpResponseMessage Published(HttpRequestMessage request, string path) =>
