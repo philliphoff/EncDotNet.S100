@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using EncDotNet.S100.ExchangeSets;
 
 namespace EncDotNet.S100.Collections.Indexing;
 
@@ -14,7 +15,8 @@ namespace EncDotNet.S100.Collections.Indexing;
 /// A folder that contains an S-100 catalogue (<c>CATALOG.XML</c> or
 /// <c>CATALOGUE.XML</c>) or an S-57 catalogue (<c>CATALOG.031</c>) is an
 /// exchange-set root: it is indexed from its catalogue, and the walk does not
-/// descend into it looking for loose files. In any other folder, <c>.zip</c>
+/// descend into it looking for loose files. So is a folder whose
+/// <c>S100_ROOT</c> folder holds the S-100 catalogue (S-100 Part 17). In any other folder, <c>.zip</c>
 /// files are planned as candidate exchange sets and files with a dataset
 /// extension (<c>.000</c>, <c>.h5</c>, <c>.gml</c>) as loose datasets, with
 /// S-57 sequential updates (<c>.001</c>, …) attached to their base cell.
@@ -31,7 +33,7 @@ internal static partial class LocalSourceScanner
     /// Bumped whenever indexing output changes for the same input, so indexes
     /// cached by an older build are rebuilt.
     /// </summary>
-    internal const string FingerprintVersion = "local-v4"; // v2: catalogue boxes in dataCoverage, plain-text bounds, LineString coverage; v3: loose HDF5 coverages (#1037); v4: weather files and run folders (#1075)
+    internal const string FingerprintVersion = "local-v5"; // v2: catalogue boxes in dataCoverage, plain-text bounds, LineString coverage; v3: loose HDF5 coverages (#1037); v4: weather files and run folders (#1075); v5: S100_ROOT folders (#1136)
 
     private static readonly string[] LooseExtensions = [".000", ".h5", ".gml", ".nc", ".nc4"];
 
@@ -142,6 +144,15 @@ internal static partial class LocalSourceScanner
                     units.Add(new S100FolderUnit(directory, s100Catalogue));
                 if (hasS57Catalogue)
                     units.Add(new S57FolderUnit(directory));
+                StampTree(sourceRoot, directory, stamps);
+                continue;
+            }
+
+            // S-100 Part 17 puts an exchange set under S100_ROOT; the folder above
+            // it is that exchange set, found whether or not the walk recurses.
+            if (ExchangeSetRoot.FindInFolder(directory) is { } nested)
+            {
+                units.Add(new S100FolderUnit(nested.BasePath, nested.CatalogueName));
                 StampTree(sourceRoot, directory, stamps);
                 continue;
             }

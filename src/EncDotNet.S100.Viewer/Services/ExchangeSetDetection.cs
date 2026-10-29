@@ -1,12 +1,12 @@
-using System.IO.Compression;
+using EncDotNet.S100.ExchangeSets;
 
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
 /// Static helpers that decide whether a dropped folder or file is an
 /// S-100 exchange set. The viewer's drag-and-drop handler uses these
-/// to route folders containing a <c>CATALOG.XML</c> and ZIP archives
-/// containing a root-level <c>CATALOG.XML</c> to
+/// to route folders and ZIP archives holding a <c>CATALOG.XML</c> (at the
+/// top level or under <c>S100_ROOT</c>) to
 /// <see cref="IExchangeSetService.OpenAsync"/> instead of the
 /// single-dataset loader.
 /// </summary>
@@ -26,85 +26,60 @@ internal static class ExchangeSetDetection
     /// updates use <c>.001</c>, <c>.002</c>, …</summary>
     private const string BaseCellExtension = ".000";
 
-    private static string? PickCatalogueName(IEnumerable<string?> names) =>
-        EncDotNet.S100.Collections.ExchangeSetLayout.PickS100Catalogue(
-            names.OfType<string>().OrderBy(name => name, StringComparer.Ordinal));
-
     /// <summary>True when <paramref name="path"/> ends with
     /// <c>.zip</c> (case-insensitive).</summary>
     public static bool IsZipPath(string path) =>
         !string.IsNullOrEmpty(path) &&
         string.Equals(Path.GetExtension(path), ".zip", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>True when <paramref name="folderPath"/> exists and
-    /// contains a recognised catalogue file (<c>CATALOG.XML</c> or
-    /// <c>catalogue.xml</c>) at its top level (case-insensitive).
-    /// Returns <c>false</c> for any I/O or permission failure.</summary>
+    /// <summary>True when <paramref name="folderPath"/> exists and holds a
+    /// recognised catalogue file (<c>CATALOG.XML</c> or
+    /// <c>catalogue.xml</c>, case-insensitive) at its top level or in its
+    /// <c>S100_ROOT</c> folder (S-100 Part 17). Returns <c>false</c> for
+    /// any I/O or permission failure.</summary>
     public static bool LooksLikeExchangeSetFolder(string folderPath) =>
-        ResolveFolderCatalogueName(folderPath) is not null;
+        ResolveFolderRoot(folderPath) is not null;
 
     /// <summary>
-    /// Returns the actual top-level catalogue file name found in
-    /// <paramref name="folderPath"/> (preserving its on-disk casing and
-    /// spelling, e.g. <c>CATALOG.XML</c> or <c>catalogue.xml</c>), or
-    /// <c>null</c> when the folder does not exist, is inaccessible, or
-    /// contains no recognised catalogue. Callers pass the returned name
-    /// to <c>ExchangeSet.OpenAsync</c> so producers using the S-411
-    /// <c>catalogue.xml</c> convention resolve correctly.
+    /// Finds the exchange set in <paramref name="folderPath"/>: the folder
+    /// that holds the catalogue (the folder itself or its <c>S100_ROOT</c>)
+    /// and the catalogue's on-disk name, e.g. <c>CATALOG.XML</c> or the
+    /// S-411 <c>catalogue.xml</c>. Returns <c>null</c> when the folder
+    /// doesn't exist, can't be read, or holds no recognised catalogue.
     /// </summary>
-    public static string? ResolveFolderCatalogueName(string folderPath)
-    {
-        if (string.IsNullOrEmpty(folderPath)) return null;
-        try
-        {
-            if (!Directory.Exists(folderPath)) return null;
-            return PickCatalogueName(
-                Directory.EnumerateFiles(
-                        folderPath, "*", SearchOption.TopDirectoryOnly)
-                    .Select(Path.GetFileName));
-        }
-        catch (UnauthorizedAccessException) { return null; }
-        catch (IOException) { return null; }
-    }
+    public static ExchangeSetRootLocation? ResolveFolderRoot(string folderPath) =>
+        string.IsNullOrEmpty(folderPath) ? null : ExchangeSetRoot.FindInFolder(folderPath);
+
+    /// <summary>
+    /// The catalogue's on-disk name within the folder
+    /// <see cref="ResolveFolderRoot"/> finds, or <c>null</c> when there's none.
+    /// </summary>
+    public static string? ResolveFolderCatalogueName(string folderPath) =>
+        ResolveFolderRoot(folderPath)?.CatalogueName;
 
     /// <summary>True when <paramref name="zipPath"/> is a readable
-    /// ZIP archive whose root contains a recognised catalogue entry
-    /// (<c>CATALOG.XML</c> or <c>catalogue.xml</c>, case-insensitive).
-    /// Returns <c>false</c> for corrupt archives or I/O failures.</summary>
+    /// ZIP archive with a recognised catalogue entry (<c>CATALOG.XML</c>
+    /// or <c>catalogue.xml</c>, case-insensitive) at its root or under
+    /// <c>S100_ROOT/</c>. Returns <c>false</c> for corrupt archives or
+    /// I/O failures.</summary>
     public static bool LooksLikeExchangeSetZip(string zipPath) =>
-        ResolveZipCatalogueEntry(zipPath) is not null;
+        ResolveZipRoot(zipPath) is not null;
 
     /// <summary>
-    /// Returns the actual root-level catalogue entry name found in the
-    /// ZIP at <paramref name="zipPath"/> (preserving its stored casing
-    /// and spelling), or <c>null</c> when the archive is missing,
-    /// corrupt, or contains no recognised root catalogue.
+    /// Finds the exchange set in the ZIP at <paramref name="zipPath"/>: the
+    /// entry prefix it sits under (empty, or <c>S100_ROOT/</c>) and the
+    /// catalogue's stored name. Returns <c>null</c> when the archive is
+    /// missing, corrupt, or has no recognised catalogue.
     /// </summary>
-    public static string? ResolveZipCatalogueEntry(string zipPath)
-    {
-        if (string.IsNullOrEmpty(zipPath)) return null;
-        try
-        {
-            if (!File.Exists(zipPath)) return null;
-            using var archive = ZipFile.OpenRead(zipPath);
-            return PickCatalogueName(
-                archive.Entries
-                    .Where(IsRootEntry)
-                    .Select(entry => entry.FullName));
-        }
-        catch (InvalidDataException) { return null; }
-        catch (UnauthorizedAccessException) { return null; }
-        catch (IOException) { return null; }
-    }
+    public static ExchangeSetRootLocation? ResolveZipRoot(string zipPath) =>
+        string.IsNullOrEmpty(zipPath) ? null : ExchangeSetRoot.FindInZip(zipPath);
 
-    private static bool IsRootEntry(ZipArchiveEntry entry)
-    {
-        // ZIP entry names use forward slashes per the spec; tolerate
-        // backslashes too in case a producer wrote them. A "root"
-        // entry has no separator at all.
-        var name = entry.FullName;
-        return !name.Contains('/') && !name.Contains('\\');
-    }
+    /// <summary>
+    /// The catalogue's stored name under the prefix
+    /// <see cref="ResolveZipRoot"/> finds, or <c>null</c> when there's none.
+    /// </summary>
+    public static string? ResolveZipCatalogueEntry(string zipPath) =>
+        ResolveZipRoot(zipPath)?.CatalogueName;
 
     /// <summary>True when <paramref name="path"/> is an S-57 / S-63 exchange set
     /// — a directory containing a top-level <c>CATALOG.031</c>, or a

@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.ExchangeSets;
@@ -25,10 +24,6 @@ namespace EncDotNet.S100;
 public sealed class S100ExchangeSet : IDisposable, IAsyncDisposable
 {
     private const string CatalogueFileName = "CATALOG.XML";
-
-    // S-100 Part 17 packs an exchange set under an S100_ROOT folder, so a
-    // folder or archive delivered as a whole holds S100_ROOT/CATALOG.XML.
-    private const string RootFolderName = "S100_ROOT";
 
     private readonly IAssetSource _source;
     private readonly bool _ownsSource;
@@ -184,17 +179,9 @@ public sealed class S100ExchangeSet : IDisposable, IAsyncDisposable
     {
         if (Directory.Exists(path))
         {
-            var root = path;
-            var catalogue = FindCatalogueInDirectory(root);
-            if (catalogue is null && FindRootFolder(path) is { } rootFolder)
-            {
-                root = rootFolder;
-                catalogue = FindCatalogueInDirectory(root);
-            }
-
-            if (catalogue is null)
-                throw new FileNotFoundException($"No {CatalogueFileName} found in folder: {path}", path);
-            return (FileSystemAssetSource.Create(root), Path.GetFileName(catalogue));
+            var folder = ExchangeSetRoot.FindInFolder(path)
+                ?? throw new FileNotFoundException($"No {CatalogueFileName} found in folder: {path}", path);
+            return (FileSystemAssetSource.Create(folder.BasePath), folder.CatalogueName);
         }
 
         if (!File.Exists(path))
@@ -208,48 +195,13 @@ public sealed class S100ExchangeSet : IDisposable, IAsyncDisposable
 
         if (string.Equals(Path.GetExtension(path), ".zip", StringComparison.OrdinalIgnoreCase))
         {
-            var entry = FindRootCatalogueEntry(path)
+            var entry = ExchangeSetRoot.FindInZip(path)
                 ?? throw new FileNotFoundException($"No root {CatalogueFileName} found in archive: {path}", path);
-            return (ZipAssetSource.Create(path, entry.BasePath), entry.Name);
+            return (ZipAssetSource.Create(path, entry.BasePath), entry.CatalogueName);
         }
 
         throw new FileNotFoundException(
             $"Not an S-100 exchange set (expected a folder, {CatalogueFileName}, or .zip): {path}", path);
-    }
-
-    private static string? FindCatalogueInDirectory(string directory) =>
-        Directory.EnumerateFiles(directory, "*", SearchOption.TopDirectoryOnly)
-            .FirstOrDefault(f => string.Equals(Path.GetFileName(f), CatalogueFileName, StringComparison.OrdinalIgnoreCase));
-
-    private static string? FindRootFolder(string directory) =>
-        Directory.EnumerateDirectories(directory, "*", SearchOption.TopDirectoryOnly)
-            .FirstOrDefault(d => string.Equals(Path.GetFileName(d), RootFolderName, StringComparison.OrdinalIgnoreCase));
-
-    /// <summary>
-    /// Finds the archive's catalogue: <c>CATALOG.XML</c> at the root, or else
-    /// <c>S100_ROOT/CATALOG.XML</c>. Returns the entry prefix to read the
-    /// exchange set under and the catalogue's name within it, with their stored
-    /// spelling.
-    /// </summary>
-    private static (string BasePath, string Name)? FindRootCatalogueEntry(string zipPath)
-    {
-        using var archive = ZipFile.OpenRead(zipPath);
-        (string BasePath, string Name)? nested = null;
-        foreach (var entry in archive.Entries)
-        {
-            var parts = entry.FullName.Replace('\\', '/').Split('/');
-            if (!string.Equals(parts[^1], CatalogueFileName, StringComparison.OrdinalIgnoreCase))
-                continue;
-            if (parts.Length == 1)
-                return (string.Empty, entry.FullName);
-            if (parts.Length == 2 && nested is null
-                && string.Equals(parts[0], RootFolderName, StringComparison.OrdinalIgnoreCase))
-            {
-                nested = (entry.FullName[..(parts[0].Length + 1)], parts[1]);
-            }
-        }
-
-        return nested;
     }
 
     private static IReadOnlyDictionary<string, string>? BuildSupportFileMap(ExchangeCatalogue catalogue)

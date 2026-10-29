@@ -106,6 +106,11 @@ the source it wraps.
 - the `CATALOG.XML` file itself
 - a `.zip` archive with `CATALOG.XML` at its root
 
+A folder or archive can also hold the exchange set in an `S100_ROOT` folder,
+the layout S-100 Part 17 uses (the IHO S-164 test data is packaged this way).
+A top-level `CATALOG.XML` wins when there's both. `ExchangeSetRoot` applies
+this rule, and SoundCharts and the Library use it too.
+
 `Catalogue` is the parsed catalogue, and `Datasets` lists the datasets to load.
 This example opens every dataset in a zipped exchange set and renders it:
 

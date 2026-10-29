@@ -1,5 +1,6 @@
 using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Manifests;
+using EncDotNet.S100.ExchangeSets;
 
 namespace EncDotNet.S100.Collections.Library;
 
@@ -61,8 +62,8 @@ public static class LibrarySourceKinds
     };
 
     /// <summary>
-    /// What adding <paramref name="path"/> means: a folder with a catalogue is
-    /// an exchange set, any other folder is scanned; a collection manifest is
+    /// What adding <paramref name="path"/> means: a folder with a catalogue
+    /// (at its top level or in its <c>S100_ROOT</c> folder) is an exchange set, any other folder is scanned; a collection manifest is
     /// one (by its <c>.s100collection.json</c> name or its <c>format</c>); any
     /// other file is an exchange set (a ZIP or catalogue).
     /// </summary>
@@ -71,7 +72,7 @@ public static class LibrarySourceKinds
     {
         ArgumentNullException.ThrowIfNull(path);
         return Directory.Exists(path)
-            ? (ExchangeSetLayout.PickS100Catalogue(SafeFileNames(path)) is not null
+            ? (ExchangeSetRoot.FindInFolder(path) is not null
                || SafeFileNames(path).Any(ExchangeSetLayout.IsS57CatalogueName)
                 ? LibrarySourceKind.ExchangeSet
                 : LibrarySourceKind.Folder)
