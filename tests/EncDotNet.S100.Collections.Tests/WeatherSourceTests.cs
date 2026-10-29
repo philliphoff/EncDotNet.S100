@@ -737,5 +737,7 @@ public sealed class WeatherSourceTests : IDisposable
             Changed?.Invoke(this, EventArgs.Empty);
             return Task.FromResult(new LibraryOpenOutcome(group.Items.Count, []));
         }
+
+        public int Close(IReadOnlyList<LocalItemLocation> locations) => 0;
     }
 }

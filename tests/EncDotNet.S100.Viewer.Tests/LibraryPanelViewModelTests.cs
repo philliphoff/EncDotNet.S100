@@ -605,6 +605,39 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         Assert.Equal(indexed + 1, indexer.Calls);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task An_open_copy_is_closed_before_a_download_replaces_it_and_open_again_after(bool load)
+    {
+        // An open copy holds its files open; Windows won't replace them (#1075).
+        using var context = new LibraryTestContext();
+        var indexer = new PackageIndexer { Layout = new PackageLayout("x.000", []) };
+        using var library = context.CreateService(new Collections.Indexing.CollectionIndexer([indexer]));
+        library.Initialize();
+        library.AddCollection("Shared", [new ChartCatalogsFeedSource(
+            Guid.NewGuid(), null, new Uri("https://example.test/TEST_Catalog.xml"), ChartCatalogsFilter.All)]);
+        await library.WhenIdle();
+        _downloader.Downloaded = true;
+        _downloader.Outdated = true;
+        _loader.State = LibraryLoadState.Loaded;
+        _loader.LoadSetsState = true;
+        var order = new List<string>();
+        _loader.Closing = () => order.Add("close");
+        _downloader.Downloading = () => order.Add("download");
+        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action());
+        vm.SelectedItem = vm.Items.Single();
+
+        (load ? vm.DownloadCommand : vm.DownloadOnlyCommand).Execute(null);
+        await library.WhenIdle();
+
+        Assert.Equal(["close", "download"], order);
+        Assert.Equal([1], _loader.Closes);
+        // Opened once more: by the load, or (download only) as it was.
+        Assert.Equal((false, 1), Assert.Single(_loader.Calls));
+        Assert.Equal(LibraryLoadState.Loaded, _loader.State);
+    }
+
     [Fact]
     public async Task Unpacked_packages_are_groups_and_undownloaded_ones_are_named_by_description()
     {

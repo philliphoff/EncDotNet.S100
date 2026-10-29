@@ -6,6 +6,7 @@ using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.Weather;
 using EncDotNet.S100.Datasets.Cap;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Mcp.Tools.Library;
 using EncDotNet.S100.TestSupport;
 using Microsoft.Extensions.Time.Testing;
@@ -218,6 +219,42 @@ public sealed class WeatherLibraryLoadTests : IDisposable
         Assert.True(result.Opened == 1, string.Join("; ", result.Problems ?? []));
         var dataset = Assert.Single(_catalog.Datasets);
         Assert.Equal("GRIB2", dataset.Spec.Name);
+    }
+
+    [Fact]
+    public async Task Load_latest_run_closes_the_open_run_before_replacing_its_folder_then_opens_the_new_run()
+    {
+        // A run open in the session holds its GRIB2 files open; Windows won't
+        // move or delete them, so the old run must be closed before its folder
+        // is replaced, and the new run (same folder) opened, not the old one kept.
+        var server = Server();
+        var clock = new FakeTimeProvider(Run.AddHours(4));
+        var (library, operations, readers) = Library(new HttpClient(server), clock);
+        var (source, item) = await AddAsync(library, readers, "noaa-nomads-gfswave", FirstDayOnly);
+        await DownloadAndOpenAsync(operations, source, item);
+        var oldRun = Assert.Single(_catalog.RenderProcessors);
+        var local = Assert.IsType<LocalItemLocation>(operations.Downloads.Localize(item).Location);
+        var runFolder = Path.Combine(local.RootPath, local.RelativePath);
+        var copyFolder = Directory.Exists(runFolder) ? runFolder : Path.GetDirectoryName(runFolder)!;
+        var marker = Path.Combine(copyFolder, "old-copy.marker");
+        File.WriteAllText(marker, "the copy the open run reads");
+        bool? oldCopyInPlaceWhenClosed = null;
+        _catalog.Changed += (_, e) =>
+        {
+            if (e.Kind == DatasetCatalogChangeKind.Removed)
+                oldCopyInPlaceWhenClosed ??= File.Exists(marker);
+        };
+
+        clock.SetUtcNow(Run.AddHours(13));
+        server.Runs.Add(Run.AddHours(6));
+        var outcome = await operations.LoadLatestRunAsync(source.Id, TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, outcome!.Download.Downloaded);
+        Assert.True(outcome.Load is { Opened: 1 }, string.Join("; ", outcome.Load?.Problems ?? []));
+        Assert.True(oldCopyInPlaceWhenClosed, "The open run was not closed before its folder was replaced.");
+        Assert.False(File.Exists(marker));
+        var newRun = Assert.Single(_catalog.RenderProcessors);
+        Assert.NotSame(oldRun, newRun);
     }
 
     // ---------------------------------------------------------------

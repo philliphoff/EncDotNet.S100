@@ -1430,22 +1430,57 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     internal async Task DownloadRowsAsync(IReadOnlyList<LibraryItemViewModel> rows, bool load)
     {
         TrackDownloads(rows);
-        var result = await _downloader.DownloadAsync(rows.Select(row => row.Item).ToArray()).ConfigureAwait(true);
-        if (result.Downloaded == 0)
-            return;
-
-        // A package's cells (and their coverage) appear once its source re-indexes.
-        if (ReindexSources(rows))
+        var replaced = CloseReplacedCopies(rows);
+        try
         {
-            await AnnouncePackagesAsync(rows).ConfigureAwait(true);
-            return;
-        }
+            var result = await _downloader.DownloadAsync(rows.Select(row => row.Item).ToArray()).ConfigureAwait(true);
+            if (result.Downloaded == 0)
+                return;
 
-        foreach (var row in rows)
-            row.RefreshAvailability();
-        if (load)
-            await LoadLabelledAsync(rows, defer: false).ConfigureAwait(true);
+            // A package's cells (and their coverage) appear once its source re-indexes.
+            if (ReindexSources(rows))
+            {
+                await AnnouncePackagesAsync(rows).ConfigureAwait(true);
+                return;
+            }
+
+            foreach (var row in rows)
+                row.RefreshAvailability();
+            if (load)
+                await LoadLabelledAsync(rows, defer: false).ConfigureAwait(true);
+        }
+        finally
+        {
+            await ReopenAsync(replaced).ConfigureAwait(true);
+        }
     }
+
+    /// <summary>
+    /// Closes the open datasets a download of <paramref name="rows"/> replaces
+    /// (#1075): an open copy keeps its files open (a GRIB2 run, a lazily read
+    /// S-111 grid), and Windows won't move or delete them; closing also lets
+    /// the new copy open rather than the old one staying on the map.
+    /// </summary>
+    private LibraryReplacedCopies CloseReplacedCopies(IEnumerable<LibraryItemViewModel> rows) =>
+        LibraryReplacedCopies.Close(
+            rows.Where(row => _downloader.CanDownload(row.Item)).Select(row => (row.Item, (LibrarySource?)row.Source)),
+            _downloader,
+            _loader.StateOf,
+            _loader.Close);
+
+    /// <summary>Opens the copies <see cref="CloseReplacedCopies"/> closed again (the new copy, or the old one when the download failed), unless already open.</summary>
+    private Task ReopenAsync(LibraryReplacedCopies replaced) =>
+        replaced.ReopenAsync((reopen, defer) =>
+        {
+            var sourceOf = new Dictionary<CollectionItem, LibrarySourceLabel>(ReferenceEqualityComparer.Instance);
+            foreach (var (local, source) in reopen)
+            {
+                if (source is not null)
+                    sourceOf[local] = new LibrarySourceLabel(source.Id, SourceDisplayName(source.Id));
+            }
+
+            return _loader.LoadAsync([.. reopen.Select(r => r.Local)], defer, item => sourceOf.GetValueOrDefault(item));
+        });
 
     /// <summary>Opens <paramref name="rows"/> now, or as the map pans to them when <paramref name="defer"/> is true.</summary>
     internal Task<LibraryLoadResult> LoadRowsAsync(IReadOnlyList<LibraryItemViewModel> rows, bool defer) =>
@@ -1458,9 +1493,17 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     {
         var items = Downloadable().ToArray();
         TrackDownloads(items);
-        var result = await _downloader.DownloadAsync(items.Select(i => i.Item).ToArray()).ConfigureAwait(true);
-        if (result.Downloaded > 0 && ReindexSources(items))
-            await AnnouncePackagesAsync(items).ConfigureAwait(true);
+        var replaced = CloseReplacedCopies(items);
+        try
+        {
+            var result = await _downloader.DownloadAsync(items.Select(i => i.Item).ToArray()).ConfigureAwait(true);
+            if (result.Downloaded > 0 && ReindexSources(items))
+                await AnnouncePackagesAsync(items).ConfigureAwait(true);
+        }
+        finally
+        {
+            await ReopenAsync(replaced).ConfigureAwait(true);
+        }
     }
 
     /// <summary>

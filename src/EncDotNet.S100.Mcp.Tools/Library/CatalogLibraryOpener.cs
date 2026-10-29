@@ -99,6 +99,34 @@ public sealed class CatalogLibraryOpener : ILibraryDatasetOpener, IDisposable
         return new LibraryOpenOutcome(opened, problems);
     }
 
+    /// <inheritdoc />
+    /// <remarks>Removes each location's datasets from the catalog, which disposes their processors and so releases their files.</remarks>
+    public int Close(IReadOnlyList<LocalItemLocation> locations)
+    {
+        ArgumentNullException.ThrowIfNull(locations);
+        var ids = new List<IReadOnlyList<DatasetId>>();
+        lock (_gate)
+        {
+            foreach (var key in locations.Select(Key).Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (_opened.Remove(key, out var opened))
+                    ids.Add(opened.Ids);
+            }
+        }
+
+        var closed = 0;
+        foreach (var opened in ids)
+        {
+            var removed = false;
+            foreach (var id in opened)
+                removed |= _catalog.Remove(id);
+            if (removed)
+                closed++;
+        }
+
+        return closed;
+    }
+
     /// <summary>
     /// True when an item this opener opened is <paramref name="path"/> or is
     /// inside it (a folder) and is still in the catalog: a synced copy the
