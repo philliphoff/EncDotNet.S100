@@ -46,7 +46,7 @@ jobs:
         run: dotnet build --no-restore --configuration Release -p:Version=${{ steps.version.outputs.version }}
 
       - name: Test
-        run: dotnet test --no-build --configuration Release --logger trx --results-directory TestResults
+        run: dotnet test --no-build --configuration Release --report-xunit-trx --results-directory TestResults
 
       - name: Run route check sample
         run: dotnet run --no-build --configuration Release --project samples/EncDotNet.S100.Samples.RouteCheck
@@ -181,7 +181,7 @@ jobs:
         run: dotnet build --no-restore --configuration Release
 
       - name: Test
-        run: dotnet test --no-build --configuration Release --logger trx --results-directory TestResults
+        run: dotnet test --no-build --configuration Release --report-xunit-trx --results-directory TestResults
 
       - name: Upload test results
         if: always()

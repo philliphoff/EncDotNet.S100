@@ -93,7 +93,7 @@ docs/                                # DocFX documentation source; specs PDF liv
 | ISO 8211 | `EncDotNet.Iso8211` NuGet package |
 | CRS projection | [ProjNet](https://github.com/NetTopologySuite/ProjNet4GeoAPI) |
 | CLI tools | Spectre.Console.Cli |
-| Testing | xunit v3, coverlet |
+| Testing | xunit v3 on Microsoft Testing Platform (`global.json`), coverlet.MTP |
 | Package management | Central Package Management via `Directory.Packages.props` |
 | Documentation | DocFX (`docfx.json`) |
 | CI/CD | GitHub Actions (`.github/workflows/ci.yml`, `publish.yml`, `release.yml`, `docs.yml`) |
