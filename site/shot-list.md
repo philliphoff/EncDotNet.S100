@@ -277,21 +277,26 @@ as a desktop app.
 - **Light twin:** yes (`--theme light`).
 
 ### W1 · Wind and waves over the chart (feature row)
-- **Recipe (2026-10-28), not yet captured.** Off Cape Hatteras
-  (33.4–37.6 N, 78.6–72.4 W), Display Base: the NOAA ENC cells of usage bands 2
-  and 3 over the box, downloaded and opened by the Library from its NOAA ENC
-  source for North Carolina; NOAA GFS-Wave HTSGW, PERPW and DIRPW on the
-  Atlantic 0.16° grid and GFS 10 m UGRD/VGRD and PRMSL, six hours into the
-  latest run on AWS (`noaa-gfs-bdp-pds`, public domain), cut by byte range from
-  each file's `.idx` into `.cache/gfs/`. The view time is that step. Display
-  controls is open on its **Weather** switches (isobars on, wind speed fill and
-  wave arrows off, the defaults). Window capture, with the Light twin.
-- **Status:** the weather half of the recipe was run on Linux under Xvfb
-  (wave fill, barbs, isobars and the Weather switches drew), but
-  charts.noaa.gov was unreachable there, so the shot still needs a run with
-  the chart: `dotnet run site/capture/capture.cs -- --only W1`, then again
-  with `--theme light`. The forecast run is live data, so pick a run with
-  some swell for the page; the manifest records which.
+- **Done (2026-10-28).** Off Cape Hatteras (33.62–37.8 N, 76.75–71.0 W),
+  Display Base: the NOAA ENC cells of usage bands 2 and 3 over the box
+  (US2ATLOC and 17 `US3…` cells, checked against NOAA's ENC product
+  catalogue), downloaded and opened by the Library from its NOAA ENC source
+  for North Carolina. At this scale only the band-2 cell US2ATLOC draws, so
+  the box's west and south edges sit just inside it and no chart seam shows.
+  NOAA GFS-Wave HTSGW, PERPW and DIRPW on the Atlantic 0.16° grid and GFS
+  10 m UGRD/VGRD and PRMSL, six hours into a run on AWS (`noaa-gfs-bdp-pds`,
+  public domain), cut by byte range from each file's `.idx` into
+  `.cache/gfs/`. The view time is that step. Display controls is open on its
+  **Weather** switches (isobars on, wind speed fill and wave arrows off, the
+  defaults). Window capture, with the Light twin.
+- **Run:** the latest run (2026-10-28 18Z) was calm, so the shot pins
+  Hurricane Erin's closest pass, GFS 2025-08-21 00Z +6 h:
+  `dotnet run site/capture/capture.cs -- --only W1 --gfs-run 2025082100`,
+  then again with `--theme light`. Without `--gfs-run` the recipe takes the
+  latest run. The manifest records the run.
+- **Found while capturing:** the viewer dropped every wind barb whose symbol
+  hadn't been drawn before a fresh framing (all barbs over 20 kn here) until
+  the view moved. Fixed in the arrow renderer; the shot was taken with that fix.
 - **Credit:** the footer's weather note (`#weather-notice`) covers NOAA and the
   other weather providers.
 
