@@ -74,6 +74,17 @@ public interface ILibraryDatasetOpener
     /// <param name="defer">True to load as the items come into view.</param>
     /// <param name="cancellationToken">Cancels the open.</param>
     Task<LibraryOpenOutcome> OpenAsync(LibraryOpenGroup group, bool defer, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Closes the datasets opened (or registered to load as you pan) for
+    /// <paramref name="locations"/>, releasing their files; locations that
+    /// aren't open are ignored. The Library closes a downloaded copy this way
+    /// before a download replaces it, since an open file can't be moved or
+    /// deleted on Windows.
+    /// </summary>
+    /// <param name="locations">Local item locations.</param>
+    /// <returns>How many datasets were closed.</returns>
+    int Close(IReadOnlyList<LocalItemLocation> locations);
 }
 
 /// <summary>
@@ -105,6 +116,24 @@ public sealed class LibraryLoader : IDisposable
     {
         ArgumentNullException.ThrowIfNull(item);
         return item.Location is LocalItemLocation local ? _opener.StateOf(local) : LibraryLoadState.None;
+    }
+
+    /// <summary>
+    /// Closes the open (or deferred) datasets of the local items among
+    /// <paramref name="items"/>; others are ignored.
+    /// </summary>
+    /// <param name="items">The items (downloaded online items localised first).</param>
+    /// <returns>How many datasets were closed.</returns>
+    public int Close(IReadOnlyList<CollectionItem> items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        var locations = items.Select(i => i.Location).OfType<LocalItemLocation>().ToArray();
+        if (locations.Length == 0)
+            return 0;
+        var closed = _opener.Close(locations);
+        if (closed > 0)
+            Changed?.Invoke(this, EventArgs.Empty);
+        return closed;
     }
 
     /// <summary>

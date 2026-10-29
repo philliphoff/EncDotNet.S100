@@ -111,8 +111,12 @@ internal sealed class FakeLibraryDownloader : ILibraryDownloader
 
     public bool CanDownload(CollectionItem item) => CanDownloadAll || item.Location is RemoteItemLocation;
 
+    /// <summary>Runs as each download starts (a test records the order of closing and downloading).</summary>
+    public Action? Downloading { get; set; }
+
     public Task<LibraryDownloadResult> DownloadAsync(IReadOnlyList<CollectionItem> items, CancellationToken cancellationToken = default)
     {
+        Downloading?.Invoke();
         Downloads += items.Count;
         Changed?.Invoke(this, EventArgs.Empty);
         return Task.FromResult(new LibraryDownloadResult(items.Count, 0, false));
@@ -136,7 +140,26 @@ internal sealed class FakeLibraryLoader : ILibraryLoader
     public Task<LibraryLoadResult> LoadAsync(IReadOnlyList<CollectionItem> items, bool defer, CancellationToken cancellationToken = default)
     {
         Calls.Add((defer, items.Count));
+        if (LoadSetsState)
+            State = defer ? LibraryLoadState.Deferred : LibraryLoadState.Loaded;
         return Task.FromResult(new LibraryLoadResult(items.Count, 0));
+    }
+
+    /// <summary>True to have loads and closes change <see cref="State"/>, as a real session would.</summary>
+    public bool LoadSetsState { get; set; }
+
+    /// <summary>Runs on each close (a test records the order of closing and downloading).</summary>
+    public Action? Closing { get; set; }
+
+    public List<int> Closes { get; } = [];
+
+    public int Close(IReadOnlyList<CollectionItem> items)
+    {
+        Closing?.Invoke();
+        Closes.Add(items.Count);
+        if (LoadSetsState)
+            State = LibraryLoadState.None;
+        return items.Count;
     }
 }
 

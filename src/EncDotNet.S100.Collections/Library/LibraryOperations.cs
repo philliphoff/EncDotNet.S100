@@ -149,6 +149,29 @@ public sealed class LibraryOperations
         var downloadable = items.Where(i => Downloads.CanDownload(i.Item)).ToArray();
         using var scope = Activity.Begin(load ? downloadable.Length : 0);
 
+        // An open copy holds its files open, and Windows won't replace them
+        // (#1075): close what the download replaces, and open it again after
+        // (the new copy, or the old one if the download failed) unless the load
+        // below already has.
+        var replaced = LibraryReplacedCopies.Close(
+            downloadable.Select(i => (i.Item, (LibrarySource?)i.Source)), Downloads, Loader.StateOf, Loader.Close);
+        try
+        {
+            return await DownloadAndOpenAsync(items, downloadable, load, progress, cancellationToken).ConfigureAwait(true);
+        }
+        finally
+        {
+            await replaced.ReopenAsync((reopen, defer) => Loader.LoadAsync([.. reopen.Select(r => r.Local)], defer, CancellationToken.None)).ConfigureAwait(true);
+        }
+    }
+
+    private async Task<LibraryDownloadOutcome> DownloadAndOpenAsync(
+        IReadOnlyList<(CollectionItem Item, LibrarySource Source)> items,
+        (CollectionItem Item, LibrarySource Source)[] downloadable,
+        bool load,
+        IProgress<LibraryDownloadProgress>? progress,
+        CancellationToken cancellationToken)
+    {
         var download = await Downloads.DownloadAsync([.. items.Select(i => i.Item)], progress, cancellationToken).ConfigureAwait(true);
         if (download.Downloaded == 0)
             return new LibraryDownloadOutcome(download, [], null);

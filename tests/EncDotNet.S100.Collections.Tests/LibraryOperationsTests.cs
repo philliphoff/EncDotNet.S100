@@ -189,6 +189,56 @@ public sealed class LibraryOperationsTests : IDisposable
     }
 
     [Fact]
+    public async Task An_open_copy_is_closed_before_a_download_replaces_it_and_opened_again_after()
+    {
+        // An open copy holds its files open; Windows won't move them (#1075).
+        var (library, operations, opener) = Create();
+        using var _ = library;
+        var source = SourceOf(new LocalFolderSource(Guid.NewGuid(), null, _context.Root));
+        _server.Release();
+        await operations.DownloadAsync([(Cell(), source)], load: true, cancellationToken: TestContext.Current.CancellationToken);
+        var marker = Path.Combine(_context.Root, "downloads", "US4OH1MK", "old-copy.marker");
+        File.WriteAllText(marker, "the copy that is open");
+        var inPlaceWhenClosed = new List<bool>();
+        opener.Closing = _ => inPlaceWhenClosed.Add(File.Exists(marker));
+
+        // A newer update replaces the copy: closed first, the new copy opened after.
+        var update = Cell() with { Update = 2 };
+        var outcome = await operations.DownloadAsync([(update, source)], load: false, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, outcome.Download.Downloaded);
+        Assert.Equal([true], inPlaceWhenClosed);
+        Assert.False(File.Exists(marker));
+        Assert.Single(opener.Closed);
+        Assert.Equal(2, opener.Groups.Count);
+        Assert.Equal(LibraryLoadState.Loaded, operations.Loader.StateOf(operations.Downloads.Localize(update)));
+
+        // A failed download leaves the old copy, which is opened again.
+        _server.Fail = true;
+        var failed = await operations.DownloadAsync([(Cell() with { Update = 3 }, source)], load: true, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, failed.Download.Failed);
+        Assert.Equal(2, opener.Closed.Count);
+        Assert.Equal(3, opener.Groups.Count);
+        Assert.Equal(LibraryLoadState.Loaded, operations.Loader.StateOf(operations.Downloads.Localize(update)));
+    }
+
+    [Fact]
+    public async Task A_copy_that_is_not_open_is_replaced_without_closing_or_opening_anything()
+    {
+        var (library, operations, opener) = Create();
+        using var _ = library;
+        var source = SourceOf(new LocalFolderSource(Guid.NewGuid(), null, _context.Root));
+        _server.Release();
+        await operations.DownloadAsync([(Cell(), source)], load: false, cancellationToken: TestContext.Current.CancellationToken);
+
+        await operations.DownloadAsync([(Cell() with { Update = 2 }, source)], load: false, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Empty(opener.Closed);
+        Assert.Empty(opener.Groups);
+    }
+
+    [Fact]
     public async Task Cancelling_a_batch_ends_it_and_leaves_the_library_idle()
     {
         var (library, operations, _) = Create();
@@ -277,6 +327,27 @@ public sealed class LibraryOperationsTests : IDisposable
             }
             Changed?.Invoke(this, EventArgs.Empty);
             return new LibraryOpenOutcome(group.Items.Count, []);
+        }
+
+        /// <summary>Runs on each close, before the location is forgotten (a test looks at the disk then).</summary>
+        public Action<LocalItemLocation>? Closing { get; set; }
+
+        public List<LocalItemLocation> Closed { get; } = [];
+
+        public int Close(IReadOnlyList<LocalItemLocation> locations)
+        {
+            var closed = 0;
+            foreach (var location in locations)
+            {
+                Closing?.Invoke(location);
+                if (_open.Remove(location.RootPath + "|" + location.RelativePath))
+                {
+                    Closed.Add(location);
+                    closed++;
+                }
+            }
+
+            return closed;
         }
     }
 
