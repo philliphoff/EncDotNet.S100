@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+    <UseSkiaSharpLinuxNoDependencies>true</UseSkiaSharpLinuxNoDependencies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EncDotNet.S100\EncDotNet.S100.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.ExchangeSets\EncDotNet.S100.ExchangeSets.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="s164-v2.0.0.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

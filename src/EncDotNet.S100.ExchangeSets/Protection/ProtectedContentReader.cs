@@ -64,6 +64,29 @@ internal static class ProtectedContentReader
         content.Length >= ZipLocalFileHeader.Length &&
         content.AsSpan(0, ZipLocalFileHeader.Length).SequenceEqual(ZipLocalFileHeader);
 
+    /// <summary>
+    /// True when <paramref name="content"/> is a ZIP archive that doesn't hold
+    /// exactly one entry, so it can't be the Part 15 compressed form of a
+    /// single file. Catalogue packages such as a zipped portrayal catalogue
+    /// are delivered this way.
+    /// </summary>
+    public static bool IsMultiEntryPackage(byte[] content)
+    {
+        if (!IsZipArchive(content))
+            return false;
+
+        try
+        {
+            using var zipStream = new MemoryStream(content, writable: false);
+            using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
+            return archive.Entries.Count != 1;
+        }
+        catch (InvalidDataException)
+        {
+            return false;
+        }
+    }
+
     public static byte[] ExtractSingleEntry(byte[] zipBytes)
     {
         using var zipStream = new MemoryStream(zipBytes, writable: false);

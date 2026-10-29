@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using EncDotNet.S100.Core;
@@ -131,6 +132,67 @@ public sealed class S100ExchangeSetTests
         Assert.NotEmpty(exchangeSet.Datasets);
         using var dataset = await exchangeSet.Datasets[0].OpenAsync(TestContext.Current.CancellationToken);
         Assert.Equal("S-101", dataset.Spec.Name);
+    }
+
+    [Fact]
+    public async Task ExchangeSet_OpenZipWithS100Root_OpensUnderRoot()
+    {
+        // S-100 Part 17 packs an exchange set under S100_ROOT, as the IHO
+        // S-164 test data does.
+        var zip = Path.Combine(Path.GetTempPath(), $"s100root-{Guid.NewGuid():N}.zip");
+        try
+        {
+            using (var input = ZipFile.OpenRead(S101Zip))
+            using (var output = ZipFile.Open(zip, ZipArchiveMode.Create))
+            {
+                foreach (var entry in input.Entries.Where(e => e.Length > 0))
+                {
+                    using var from = entry.Open();
+                    using var to = output.CreateEntry("S100_ROOT/" + entry.FullName).Open();
+                    from.CopyTo(to);
+                }
+            }
+
+            await using var exchangeSet = await S100ExchangeSet.OpenAsync(zip, TestContext.Current.CancellationToken);
+
+            Assert.NotEmpty(exchangeSet.Datasets);
+            using var dataset = await exchangeSet.Datasets[0].OpenAsync(TestContext.Current.CancellationToken);
+            Assert.Equal("S-101", dataset.Spec.Name);
+        }
+        finally
+        {
+            File.Delete(zip);
+        }
+    }
+
+    [Fact]
+    public async Task ExchangeSet_OpenFolderWithS100Root_OpensUnderRoot()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), $"s100root-{Guid.NewGuid():N}");
+        try
+        {
+            CopyDirectory(Renderable, Path.Combine(folder, "S100_ROOT"));
+
+            await using var exchangeSet = await S100ExchangeSet.OpenAsync(folder, TestContext.Current.CancellationToken);
+
+            var s124 = exchangeSet.Datasets.Single(d => d.Metadata.FileName == "S124/navwarn_surface.gml");
+            using var dataset = await s124.OpenAsync(TestContext.Current.CancellationToken);
+            Assert.Equal("S-124", dataset.Spec.Name);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    private static void CopyDirectory(string from, string to)
+    {
+        foreach (var file in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
+        {
+            var target = Path.Combine(to, Path.GetRelativePath(from, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(file, target);
+        }
     }
 
     [Fact]

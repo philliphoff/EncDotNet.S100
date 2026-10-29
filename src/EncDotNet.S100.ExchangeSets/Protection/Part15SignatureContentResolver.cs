@@ -69,6 +69,14 @@ public sealed class Part15SignatureContentResolver : ISignatureContentResolver
 
         if (request.DataStatus == SignatureDataStatus.Unencrypted && request.CompressionFlag)
         {
+            // A package of several files (a zipped portrayal catalogue, as the
+            // IHO S-164 test data delivers it) has no single unpacked form, so
+            // its signature can only cover the bytes as stored.
+            if (!request.DataProtection && ProtectedContentReader.IsMultiEntryPackage(content))
+            {
+                return new MemoryStream(content, writable: false);
+            }
+
             content = ProtectedContentReader.ExtractSingleEntry(content);
         }
 

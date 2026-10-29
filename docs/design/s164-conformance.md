@@ -1,9 +1,10 @@
 # S-164 conformance — Design Note
 
-> Status: **Assessment** (slice 1 of
+> Status: **Assessment** (slices 1–2 of
 > [#1120](https://github.com/philliphoff/EncDotNet.S100/issues/1120)). Every
-> status below comes from reading the code. No test has yet been run
-> against S-164 data; that starts with slice 2 (§6).
+> status in the matrix comes from reading the code. Slice 2 added the test
+> harness and a smoke test over every v2.0.0 exchange set (§6.1); no S-164
+> test itself runs yet.
 
 SoundCharts isn't an ECDIS and won't go through type approval. The IHO's
 S-164 test datasets are still the most complete public description of what
@@ -46,7 +47,7 @@ they drift.
 
 | Part | Area | Tests | Supported | Partial | Gap | N/A |
 |---|---|---|---|---|---|---|
-| 2 | Catalogue and dataset loading and updating | 70 | 10 | 35 | 25 | 0 |
+| 2 | Catalogue and dataset loading and updating | 70 | 9 | 36 | 25 | 0 |
 | 3 | Chart display | 61 | 30 | 25 | 5 | 1 |
 | 4 | Chart related functions | 47 | 2 | 32 | 11 | 2 |
 | 5 | Navigational hazards | 6 | 1 | 1 | 4 | 0 |
@@ -54,7 +55,7 @@ they drift.
 | 7 | Safety contour | 6 | 1 | 3 | 2 | 0 |
 | 8 | S-57 testing | 0 | — | — | — | — |
 | 9 | Dual fuel mode and SECOM | 17 | 2 | 9 | 6 | 0 |
-| | **Total** | **212** | **48** | **106** | **55** | **3** |
+| | **Total** | **212** | **47** | **107** | **55** | **3** |
 
 Part 8 has no tests of its own in 2.0.1. It points S-57 testing at the
 existing S-64 datasets, which a later slice covers.
@@ -133,7 +134,7 @@ doesn't try to close them.
 | Slice | Scope | Depends on |
 |---|---|---|
 | 1 | This note: the matrix, findings and differences. | — |
-| 2 | Test data and harness. Fetch the v2.0.0 release zips on demand into a cache, checked by hash, and skip S-164 tests cleanly when the data isn't there. Cache it in CI. A smoke test opens every exchange set and verifies its signatures against the S-164 scheme administrator certificate. | 1 |
+| 2 | **Done.** `tests/EncDotNet.S100.S164.Tests`: the v2.0.0 release pinned by SHA-256 in `s164-v2.0.0.json`, downloaded on demand into a cache, cached in CI, and skipped cleanly without it. A smoke test opens every exchange set, opens every dataset in it, and verifies every signature. | 1 |
 | 3 | Part 2 tests: catalogue loading, dataset loading, update sequences, editions, overlays. The trust fixes from finding 3 land here. | 2 |
 | 4 | Part 3 tests: display categories, viewing groups and text groups against DisplayBase, DisplayStandard and DisplayOther, using headless renders and feature-presence checks; Chart 1. | 2 |
 | 5 | Part 4 tests: pick report checks, and Accuracy1–15 as unit tests once ellipsoidal geodesy (finding 5) lands. | 2 |
@@ -145,6 +146,36 @@ any slice become their own issues, and this matrix is updated as tests start
 running: a test moves to **Passes** or **Fails** once it runs against S-164
 data.
 
+### 6.1 What the test data showed
+
+Opening the 39 v2.0.0 exchange sets turned up four problems before any S-164
+test ran. Slice 2 fixes the first three in the library:
+
+1. **`S100_ROOT` packaging.** Every S-164 archive holds its exchange set
+   under `S100_ROOT/`, as S-100 Part 17 lays it out, and `S100ExchangeSet`
+   only looked for `CATALOG.XML` at the root. It now opens a folder or ZIP
+   whose catalogue is at `S100_ROOT/CATALOG.XML`. The viewer's and Library's
+   own exchange-set detection still look only at the root, so SoundCharts
+   can't open these ZIPs directly yet ([#1136](https://github.com/philliphoff/EncDotNet.S100/issues/1136)).
+2. **Long-form product identifiers.** The catalogues declare
+   `INT.IHO.S-101.2.0.0` with `number` 214 (the IHO register number), so
+   nothing mapped to S-101. Base cells were still found by content
+   sniffing, but update files weren't. `MapProductIdentifierToSpec` now
+   reads the long form.
+3. **Zipped catalogues.** The portrayal catalogues are delivered as ZIP
+   packages with `compressionFlag` set and signed as `unencrypted` over the
+   package bytes. Part 15 compression holds exactly one file, so the
+   verifier now checks a multi-file package against its stored bytes.
+4. **Unpublished scheme administrator.** The v2.0.0 data producer
+   certificate is issued by `urn:mrn:iho:00AA:1810`, and the S-164
+   repository publishes no certificate with that name. The smoke test
+   checks each signature against the certificate the catalogue carries but
+   can't anchor the chain; slice 3 needs that certificate for the SA tests.
+
+Ten exchange sets (`SequentialUpdate1`–`5`, `InvalidSequence001`–`003`,
+`NewUpdate`, `OldUpdate`) hold only S-101 updates for cells in other sets.
+They can't be applied until #1129 adds cross-set updates.
+
 ## 7. Matrix
 
 ### Part 2 — Catalogue and dataset loading and updating
@@ -155,7 +186,7 @@ data.
 | OutOfCatalogueSequence Dataset | S-98: 20.1 and B-1 | InitialCatalogues, OutOfCatalogueSequenceDataset | Partial | `src/EncDotNet.S100.Core/DatasetPipelines/IDatasetProcessor.cs` | Version mismatch is a warning badge; the dataset still loads. |
 | UpdateCatalogues | S-98: 20.1 and B-1 | InitialCatalogues, PowerUpCatalogues, UpdatedCatalogueData | Partial | `src/EncDotNet.S100.Viewer/ViewModels/CatalogueViewModels.cs` | Overrides can be replaced by hand; no list of installed versions and no install from exchange sets. |
 | MultipleRevisions | S-98: 20.1 and B-1 | MultipleRevisions | Partial | `src/EncDotNet.S100.Datasets.S101/S101LegacyFeatureNames.cs` | The library supports a catalogue per layer; the viewer uses one per product. 1.x names map onto the 2.0.0 portrayal. |
-| InitialPowerUp | S-98: 6.1.1; IEC 61174: 4.4.1 | InitialPowerUp | Supported | `src/EncDotNet.S100.Viewer/McpTools/SetOwnShipTool.cs` | Exchange sets load; own ship can be placed at a fixed position. |
+| InitialPowerUp | S-98: 6.1.1; IEC 61174: 4.4.1 | InitialPowerUp | Partial | `src/EncDotNet.S100.Viewer/Services/ExchangeSetDetection.cs` | The library opens the set and own ship can be placed at a fixed position; the viewer can't open `S100_ROOT` ZIPs yet (§6.1, [#1136](https://github.com/philliphoff/EncDotNet.S100/issues/1136)). |
 | PowerUp | S-98: 6.1.1; IEC 61174: 4.4.1 | PowerUp | Partial | `src/EncDotNet.S100.Collections/Library/LibraryItemText.cs` | Edition, update and dates show per Library item; no table of everything installed. |
 | AdditionalCell | IEC 61174: 4.4.1 | Settings | Supported | `src/EncDotNet.S100.Viewer/ViewModels/LibraryPanelViewModel.cs` | Adding a folder or ZIP indexes it and draws its coverage. |
 | RemoveCell | S-98: 6.1.1; IEC 61174: 4.4.1 | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/LibraryPanelViewModel.cs` | Sources and loaded datasets can be removed, not single cells. |
