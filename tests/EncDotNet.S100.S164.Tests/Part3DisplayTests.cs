@@ -112,7 +112,7 @@ public sealed class Part3DisplayTests
         Assert.True(inStandard.Length == 0, "In Standard Display: " + string.Join(", ", inStandard));
     }
 
-    [Fact(Skip = "Fails until #1126: SpatialReference is skipped, so the safety contour is drawn round each depth area's whole outline.")]
+    [Fact]
     public async Task SafetyContourDisplay_FollowsOnlyTheSafetyContourEdges()
     {
         // DEPARE03 adds a SpatialReference for each edge where the depth

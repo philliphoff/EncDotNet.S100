@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
@@ -366,6 +367,27 @@ public sealed class S101VectorSource : IVectorSource, IVectorSourceWithIndex
         }
 
         return rings ?? (IReadOnlyList<IReadOnlyList<GeoPosition>>)[];
+    }
+
+    /// <summary>
+    /// Resolves a curve by the spatial id the Lua host gives it
+    /// (<c>RCNM:RCID</c>, a curve segment or composite curve) in its own
+    /// direction, or <see langword="null"/> when the id names no curve.
+    /// </summary>
+    internal static IReadOnlyList<GeoPosition>? ResolveSpatialCurve(S101Document doc, string spatialId)
+    {
+        var colon = spatialId.IndexOf(':');
+        if (colon <= 0
+            || !byte.TryParse(spatialId.AsSpan(0, colon), NumberStyles.None, CultureInfo.InvariantCulture, out var rcnm)
+            || !uint.TryParse(spatialId.AsSpan(colon + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var rcid)
+            || rcnm is not (RcnmCurveSegment or RcnmCompositeCurve))
+        {
+            return null;
+        }
+
+        var coords = new List<GeoPosition>();
+        ResolveCurveCoords(rcnm, rcid, orientation: 1, doc, coords);
+        return coords.Count >= 2 ? coords : null;
     }
 
     private static void ResolveCurveCoords(

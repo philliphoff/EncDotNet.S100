@@ -20,6 +20,7 @@ namespace EncDotNet.S100.Pipelines.Vector.Lua;
 ///   <item><see cref="ILuaDataProviderFactory"/> — render-scoped host-API bridge.</item>
 ///   <item><see cref="LuaContextParameterBinding"/> list — mariner→parameter mapping policy.</item>
 ///   <item><see cref="IFeatureAnchorProvider"/> — optional anchor lookup during parse.</item>
+///   <item><see cref="ISpatialReferenceResolver"/> — optional curve lookup for <c>SpatialReference</c>.</item>
 ///   <item><see cref="IDrawingInstructionTransform"/> list — optional post-parse transforms.</item>
 /// </list>
 /// </remarks>
@@ -31,6 +32,7 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
     private readonly string _productTag;
     private readonly IReadOnlyList<LuaContextParameterBinding> _contextParameterBindings;
     private readonly IFeatureAnchorProvider? _anchorProvider;
+    private readonly ISpatialReferenceResolver? _spatialReferences;
     private readonly IReadOnlyList<IDrawingInstructionTransform> _transforms;
 
     /// <summary>Initialises a new generic Lua rule executor.</summary>
@@ -53,6 +55,11 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
     /// Optional ordered post-parse transforms (e.g. the S-101 SAFCON label
     /// merger); <see langword="null"/> or empty when none are required.
     /// </param>
+    /// <param name="spatialReferences">
+    /// Optional resolver for <c>SpatialReference</c> commands, so lines drawn
+    /// on particular edges (such as the safety contour) follow those edges
+    /// only; <see langword="null"/> for products whose rules emit none.
+    /// </param>
     public LuaRuleExecutor(
         ILuaEngine luaEngine,
         ILuaRuleSource source,
@@ -60,7 +67,8 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         string productTag,
         IReadOnlyList<LuaContextParameterBinding> contextParameterBindings,
         IFeatureAnchorProvider? anchorProvider = null,
-        IReadOnlyList<IDrawingInstructionTransform>? transforms = null)
+        IReadOnlyList<IDrawingInstructionTransform>? transforms = null,
+        ISpatialReferenceResolver? spatialReferences = null)
     {
         ArgumentNullException.ThrowIfNull(luaEngine);
         ArgumentNullException.ThrowIfNull(source);
@@ -74,6 +82,7 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         _productTag = productTag;
         _contextParameterBindings = contextParameterBindings;
         _anchorProvider = anchorProvider;
+        _spatialReferences = spatialReferences;
         _transforms = transforms ?? [];
     }
 
@@ -115,7 +124,7 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
             {
                 var anchor = _anchorProvider?.GetAnchor(e.FeatureRef);
                 parsed.AddRange(DrawingInstructionParser.Parse(
-                    e.FeatureRef, e.InstructionString, anchor));
+                    e.FeatureRef, e.InstructionString, anchor, _spatialReferences));
             }
 
             IReadOnlyList<DrawingInstruction> result = parsed;

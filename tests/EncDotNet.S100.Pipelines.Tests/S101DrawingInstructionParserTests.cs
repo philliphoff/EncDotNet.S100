@@ -406,4 +406,69 @@ public class S101DrawingInstructionParserTests
         var line = Assert.Single(parsed.OfType<LineInstruction>());
         Assert.Null(line.CoordinatesOverride);
     }
+
+    // ── SpatialReference (#1126) ───────────────────────────────────────
+
+    private sealed class Curves : ISpatialReferenceResolver
+    {
+        public IReadOnlyList<GeoPosition>? ResolveCurve(string spatialId) => spatialId switch
+        {
+            "120:1" => [new GeoPosition(10, 10), new GeoPosition(10, 11)],
+            "120:2" => [new GeoPosition(11, 10), new GeoPosition(11, 11), new GeoPosition(12, 11)],
+            _ => null,
+        };
+    }
+
+    [Fact]
+    public void SpatialReference_DrawsTheLineOnTheReferencedCurveOnly()
+    {
+        var parsed = DrawingInstructionParser.Parse(
+            "F1", "ViewingGroup:13010;SpatialReference:120&c1;LineStyle:_simple_,,0.64,DEPSC;LineInstruction:_simple_", spatialReferences: new Curves());
+
+        var line = Assert.Single(parsed.OfType<LineInstruction>());
+        Assert.Equal([new GeoPosition(10, 10), new GeoPosition(10, 11)], line.CoordinatesOverride);
+    }
+
+    [Fact]
+    public void SpatialReference_FalseDrawsAgainstTheCurveDirection()
+    {
+        var parsed = DrawingInstructionParser.Parse(
+            "F1", "SpatialReference:120&c2,false;LineInstruction:_simple_", spatialReferences: new Curves());
+
+        var line = Assert.Single(parsed.OfType<LineInstruction>());
+        Assert.Equal([new GeoPosition(12, 11), new GeoPosition(11, 11), new GeoPosition(11, 10)], line.CoordinatesOverride);
+    }
+
+    [Fact]
+    public void SpatialReference_EachReferenceGetsItsOwnLineUntilClearGeometry()
+    {
+        var parsed = DrawingInstructionParser.Parse(
+            "F1",
+            "SpatialReference:120&c1;SpatialReference:120&c2;LineInstruction:_simple_;ClearGeometry;LineInstruction:_simple_",
+            spatialReferences: new Curves());
+
+        var lines = parsed.OfType<LineInstruction>().ToList();
+        Assert.Equal(3, lines.Count);
+        Assert.Equal(2, lines[0].CoordinatesOverride!.Count);
+        Assert.Equal(3, lines[1].CoordinatesOverride!.Count);
+        Assert.Null(lines[2].CoordinatesOverride);  // the whole geometry again
+    }
+
+    [Fact]
+    public void SpatialReference_UnresolvableCurveDrawsNothing()
+    {
+        var parsed = DrawingInstructionParser.Parse(
+            "F1", "SpatialReference:120&c9;LineInstruction:_simple_", spatialReferences: new Curves());
+
+        Assert.Empty(parsed.OfType<LineInstruction>());
+    }
+
+    [Fact]
+    public void SpatialReference_WithoutAResolverFollowsTheWholeGeometry()
+    {
+        var parsed = DrawingInstructionParser.Parse(
+            "F1", "SpatialReference:120&c1;LineInstruction:_simple_");
+
+        Assert.Null(Assert.Single(parsed.OfType<LineInstruction>()).CoordinatesOverride);
+    }
 }
