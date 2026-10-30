@@ -38,7 +38,7 @@ internal sealed record PickFeaturesResult(
     [property: Description("\"pixel\" when the pick resolved through the x/y form; \"geo\" when it resolved through latitude/longitude.")] string Source,
     [property: Description("Resolved pick latitude in decimal degrees, WGS-84.")] double Latitude,
     [property: Description("Resolved pick longitude in decimal degrees, WGS-84.")] double Longitude,
-    [property: Description("Ranked matches, most-specific first (point before curve before area; ties broken by smaller area / nearer distance).")] IReadOnlyList<IdentifyMatch> Features,
+    [property: Description("Ranked matches: drawn features by drawing priority, highest first, where the dataset was portrayed (S-98 15.1); then most-specific first (point before curve before area; ties broken by smaller area / nearer distance).")] IReadOnlyList<IdentifyMatch> Features,
     [property: Description("Total number of features that matched before applying maxResults.")] int TotalMatched,
     [property: Description("True when more features matched than were returned.")] bool Truncated,
     [property: Description("True when select=true was honoured and the pick was shown on the live viewer (panel + highlight).")] bool Selected = false);

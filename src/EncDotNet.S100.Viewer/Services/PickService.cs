@@ -281,7 +281,37 @@ internal sealed class PickService : IPickService
             hits.Add(BuildHit(info, owningEntry, processor));
         }
 
-        return hits;
+        return OrderByDrawingPriority(hits);
+    }
+
+    /// <summary>
+    /// Orders each dataset's hits as S-98 15.1 asks (S-164
+    /// FeatureInformation2): by drawing priority, highest first, then points,
+    /// curves and surfaces (see <see cref="PickOrder"/>). Datasets keep the
+    /// order of the layer stack, and hits that report no priority keep their
+    /// order after the dataset's drawn ones.
+    /// </summary>
+    internal static List<PickHit> OrderByDrawingPriority(List<PickHit> hits)
+    {
+        var datasetOrder = new Dictionary<object, int>();
+        int DatasetIndex(PickHit hit)
+        {
+            object key = (object?)hit.OwningProcessor ?? hit.DatasetFileName ?? string.Empty;
+            if (!datasetOrder.TryGetValue(key, out var index))
+                datasetOrder[key] = index = datasetOrder.Count;
+            return index;
+        }
+
+        // OrderBy is stable, so equal hits keep the stack order.
+        return hits
+            .Select(hit => (Hit: hit, Dataset: DatasetIndex(hit)))
+            .OrderBy(h => h.Dataset)
+            .ThenBy(h => h.Hit, Comparer<PickHit>.Create((a, b) =>
+                a.DrawingPriority is null && b.DrawingPriority is null
+                    ? 0
+                    : PickOrder.Compare(a.DrawingPriority, a.Geometry, b.DrawingPriority, b.Geometry)))
+            .Select(h => h.Hit)
+            .ToList();
     }
 
     /// <summary>
@@ -313,6 +343,8 @@ internal sealed class PickService : IPickService
             ProductSpec = processor.Spec.Name,
             Attributes = info.Attributes,
             References = info.References,
+            DrawingPriority = info.DrawingPriority,
+            Geometry = info.Geometry,
             OwningProcessor = processor,
             StationSeries = BuildStationSeriesViewModel(info, processor),
             EggCode = info.EggCode,

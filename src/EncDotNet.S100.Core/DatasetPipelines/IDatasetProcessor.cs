@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
@@ -295,6 +296,21 @@ public sealed class FeatureInfo
     /// <see cref="PickAttribute.Children"/>.
     /// </summary>
     public required IReadOnlyList<PickAttribute> Attributes { get; init; }
+
+    /// <summary>
+    /// The highest drawing priority of the feature's drawing instructions in
+    /// the dataset's last portrayal (S-100 Part 9), which orders the pick
+    /// report (S-98 15.1, see <see cref="PickOrder"/>); <c>null</c> when the
+    /// feature wasn't drawn or the product doesn't report it.
+    /// </summary>
+    public int? DrawingPriority { get; init; }
+
+    /// <summary>
+    /// The feature's geometry, which orders the pick report at equal
+    /// <see cref="DrawingPriority"/>; <see cref="S100GeometryType.None"/>
+    /// when the product doesn't report it.
+    /// </summary>
+    public S100GeometryType Geometry { get; init; }
 
     /// <summary>
     /// xlink-style references this feature points to (e.g. S-125

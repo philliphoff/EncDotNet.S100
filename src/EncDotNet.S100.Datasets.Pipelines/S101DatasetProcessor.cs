@@ -116,6 +116,10 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     // Distinct time intervals of the last portrayal (IDateDependentDatasetProcessor).
     private volatile IReadOnlyList<PortrayalTimeInterval> _portrayalTimeIntervals = [];
 
+    // Each drawn feature's highest drawing priority in the last portrayal,
+    // which orders the pick report (S-98 15.1, #1159). Null until portrayed.
+    private volatile IReadOnlyDictionary<string, int>? _drawingPriorities;
+
     // Memoized portrayal-content hash forming the cross-load instruction-cache
     // key prefix (and strengthening the pattern-clip key). Computed once on
     // first render and reused; constant for the lifetime of this processor.
@@ -194,7 +198,10 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     public DatasetMetadata Metadata => _metadata ??= _dataset.ReadMetadata();
 
     /// <inheritdoc />
-    public LoadedDatasetData CreateLoadedData() => new S101DatasetData(_dataset, _externalTextResolver);
+    public LoadedDatasetData CreateLoadedData() => new S101DatasetData(_dataset, _externalTextResolver)
+    {
+        DrawingPriority = DrawingPriority,
+    };
 
     /// <inheritdoc/>
     public SpecVersionAssessment? VersionAssessment { get; }
@@ -829,6 +836,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         var prepared = PortrayalTimeFilter.Apply(
             VectorPipeline.ApplyDisplayFilters(unfiltered, s101Cat), context?.PortrayalTime);
         Console.WriteLine($"[S101] {prepared.Count} of {unfiltered.Count} drawing instructions shown");
+        _drawingPriorities = DrawingPriorities(prepared);
 
         // S-98 R-101-102-A (Annex A §A-6.9.1): S-102 must render between
         // S-101 area fills and S-101 line work / points / text. We split
@@ -1259,6 +1267,28 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         return _validationReport;
     }
 
+    /// <summary>
+    /// Each feature's highest drawing priority among <paramref name="instructions"/>,
+    /// keyed by feature reference.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, int> DrawingPriorities(IEnumerable<DrawingInstruction> instructions)
+    {
+        var result = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var instruction in instructions)
+        {
+            if (string.IsNullOrEmpty(instruction.FeatureReference))
+                continue;
+            if (!result.TryGetValue(instruction.FeatureReference, out var priority) || instruction.DrawingPriority > priority)
+                result[instruction.FeatureReference] = instruction.DrawingPriority;
+        }
+
+        return result;
+    }
+
+    // The feature's drawing priority in the last portrayal, or null.
+    private int? DrawingPriority(string featureRef) =>
+        _drawingPriorities is { } priorities && priorities.TryGetValue(featureRef, out var priority) ? priority : null;
+
     private S101FeatureRecord? FeatureRecord(long featureId)
     {
         _featureRecords ??= _dataset.Document.Features
@@ -1292,13 +1322,16 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         if (_externalTextResolver is not null)
             attributes = FeatureInfoBuilder.ResolveFileReferences(attributes, _externalTextResolver);
 
+        var featureRef = feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
         return new FeatureInfo
         {
-            FeatureRef = feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            FeatureRef = featureRef,
             FeatureType = feature.FeatureType,
             FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
             Attributes = attributes,
             References = references,
+            DrawingPriority = DrawingPriority(featureRef),
+            Geometry = ((IS100Feature)feature).GeometryType,
         };
     }
 
