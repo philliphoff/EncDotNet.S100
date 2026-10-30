@@ -4,6 +4,7 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Spec;
+using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 
@@ -45,7 +46,7 @@ public sealed record IdentifyFeaturesRequest(
 /// <param name="Bounds">Bounding box of the feature's geometry.</param>
 /// <param name="Containment"><c>inside</c> when the pick is within an area feature; <c>near</c> when within the radius of a point/curve feature.</param>
 /// <param name="DistanceMeters">Approximate distance from the pick to the feature (0 for <c>inside</c>); <c>null</c> when not computed.</param>
-/// <param name="ReferencedTexts">Resolved external text files referenced by the feature's <c>fileReference</c> / <c>TXTDSC</c> / <c>NTXTDS</c> attributes; empty when none or unresolvable.</param>
+/// <param name="ReferencedTexts">Resolved external text files referenced by the feature's <c>fileReference</c> / <c>TXTDSC</c> / <c>NTXTDS</c> attributes, or by those of the information types it links to; empty when none or unresolvable.</param>
 public sealed record IdentifyMatch(
     [property: Description("Dataset the feature belongs to.")] DatasetId DatasetId,
     [property: Description("Spec the dataset declares.")] SpecRef Spec,
@@ -55,7 +56,7 @@ public sealed record IdentifyMatch(
     [property: Description("Bounding box of the feature's geometry.")] BoundingBox? Bounds,
     [property: Description("'inside' when the pick is within an area feature; 'near' when within the radius of a point/curve feature.")] string Containment,
     [property: Description("Approximate distance from the pick to the feature in metres (0 for 'inside'); null when not computed.")] double? DistanceMeters,
-    [property: Description("Resolved external text files referenced by the feature's fileReference / TXTDSC / NTXTDS attributes; empty when none or unresolvable.")] IReadOnlyList<ReferencedText>? ReferencedTexts = null);
+    [property: Description("Resolved external text files referenced by the feature's fileReference / TXTDSC / NTXTDS attributes, or by those of the information types it links to; empty when none or unresolvable.")] IReadOnlyList<ReferencedText>? ReferencedTexts = null);
 
 /// <summary>
 /// The resolved content of an external text file referenced by a feature's
@@ -205,7 +206,8 @@ public sealed class IdentifyFeaturesService
                 continue;
             }
 
-            var resolver = (dataset.Data as S101DatasetData)?.ExternalTextResolver;
+            var s101 = dataset.Data as S101DatasetData;
+            var resolver = s101?.ExternalTextResolver;
 
             foreach (var feature in features)
             {
@@ -214,7 +216,7 @@ public sealed class IdentifyFeaturesService
                 if (TryMatch(feature, datasetPoint, latPad, lonPad, out var hit)
                     && (hit.Inside || hit.DistanceMeters <= radius))
                 {
-                    hits.Add(hit with { DatasetId = dataset.Id, Spec = dataset.Spec, Resolver = resolver, Feature = feature });
+                    hits.Add(hit with { DatasetId = dataset.Id, Spec = dataset.Spec, Resolver = resolver, Feature = feature, Document = s101?.Dataset.Document });
                 }
             }
         }
@@ -236,7 +238,7 @@ public sealed class IdentifyFeaturesService
                 h.Bounds,
                 h.Inside ? "inside" : "near",
                 h.Inside ? 0.0 : h.DistanceMeters,
-                ResolveReferencedTexts(h.Feature, h.Resolver)));
+                ResolveReferencedTexts(h.Feature, h.Resolver, LinkedFileReferences(h))));
         }
 
         return Task.FromResult(ToolResult<IdentifyFeaturesResult>.Ok(
@@ -398,13 +400,15 @@ public sealed class IdentifyFeaturesService
     /// <summary>
     /// Resolves every <c>fileReference</c> / <c>TXTDSC</c> / <c>NTXTDS</c>
     /// attribute (S-101 Feature Catalogue) carried by <paramref name="feature"/>
-    /// — across simple and complex (sub-)attributes — to its referenced text
+    /// — across simple and complex (sub-)attributes — and every file named in
+    /// <paramref name="linkedFileReferences"/> (the feature's associated
+    /// information types) to its referenced text
     /// content via <paramref name="resolver"/>, in first-seen order with
     /// duplicate file names collapsed. Returns an empty array when no resolver
     /// is available, the feature carries no file references, or none resolve.
     /// </summary>
     internal static IReadOnlyList<ReferencedText> ResolveReferencedTexts(
-        IS100Feature? feature, Func<string, string?>? resolver)
+        IS100Feature? feature, Func<string, string?>? resolver, IEnumerable<string>? linkedFileReferences = null)
     {
         if (feature is null || resolver is null)
         {
@@ -440,6 +444,11 @@ public sealed class IdentifyFeaturesService
             {
                 Add(code, value);
             }
+        }
+
+        foreach (var value in linkedFileReferences ?? [])
+        {
+            Add("fileReference", value);
         }
 
         return builder is null ? [] : builder;
@@ -492,5 +501,26 @@ public sealed class IdentifyFeaturesService
         public double DistanceMeters { get; init; }
         public Func<string, string?>? Resolver { get; init; }
         public IS100Feature? Feature { get; init; }
+        public S101Document? Document { get; init; }
+    }
+
+    // The fileReference values of the information types an S-101 feature
+    // links to (#1157): a caution area's note sits on a NauticalInformation
+    // record, not on the feature.
+    private static IEnumerable<string>? LinkedFileReferences(Hit hit)
+    {
+        if (hit.Document is not { } document
+            || !uint.TryParse(hit.FeatureId, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var recordId))
+        {
+            return null;
+        }
+
+        foreach (var record in document.Features)
+        {
+            if (record.RecordId == recordId)
+                return S101PickReport.InformationFileReferences(document, record);
+        }
+
+        return null;
     }
 }

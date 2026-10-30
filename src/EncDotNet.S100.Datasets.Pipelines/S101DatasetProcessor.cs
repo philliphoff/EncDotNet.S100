@@ -1270,13 +1270,20 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     private FeatureInfo BuildFeatureInfo(EncDotNet.S100.Pipelines.Vector.Feature feature)
     {
         // Read the attributes from the feature record, not the portrayal's
-        // attribute dictionary, which keeps one value per code (#1156).
-        var attributes = FeatureRecord(feature.Id) is { } record
-            ? S101PickReport.Attributes(_dataset.Document, record.Attributes, _decoder)
+        // attribute dictionary, which keeps one value per code (#1156), and
+        // follow its information and feature associations (#1157).
+        var record = FeatureRecord(feature.Id);
+        var document = _dataset.Document;
+        IReadOnlyList<PickAttribute> attributes = record is not null
+            ? [.. S101PickReport.Attributes(document, record.Attributes, _decoder),
+               .. S101PickReport.InformationRows(document, record, _decoder)]
             : FeatureInfoBuilder.BuildFlat(
                 feature.Attributes.Select(kv =>
                     new KeyValuePair<string, string?>(kv.Key, kv.Value?.ToString())),
                 _decoder);
+        var references = record is not null
+            ? S101PickReport.FeatureReferences(document, record, id => FeatureRecord(id), _decoder)
+            : [];
 
         // Resolve any `fileReference` attribute (S-101 FC; alias TXTDSC /
         // NTXTDS) to the textual content of the external file it names,
@@ -1291,6 +1298,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             FeatureType = feature.FeatureType,
             FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
             Attributes = attributes,
+            References = references,
         };
     }
 

@@ -94,4 +94,16 @@ public class IdentifyFeaturesReferencedTextTests
 
         Assert.Empty(result);
     }
+
+    [Fact]
+    public void Resolves_file_references_of_linked_information_types()
+    {
+        // An S-101 caution area's note sits on a linked NauticalInformation (#1157).
+        var attrs = new Dictionary<string, string> { ["TXTDSC"] = "own.txt" };
+        var result = IdentifyFeaturesService.ResolveReferencedTexts(
+            Feature(attrs), name => name + " body", linkedFileReferences: ["note.txt", "own.txt"]);
+
+        Assert.Equal(["own.txt", "note.txt"], result.Select(t => t.FileName));
+        Assert.Equal("note.txt body", result[1].Text);
+    }
 }

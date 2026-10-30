@@ -362,7 +362,21 @@ public sealed class FeatureReference
 
     /// <summary>
     /// The <c>xlink:arcrole</c> value when present; conveys the semantic
-    /// of the link (e.g. an S-421 segment role) and may be null.
+    /// of the link (e.g. an S-421 segment role, or an S-101 feature
+    /// association's role such as <c>"theEquipment"</c>) and may be null.
     /// </summary>
     public string? ArcRole { get; init; }
+
+    /// <summary>
+    /// A readable name for the referenced feature, e.g. its feature type and
+    /// name (<c>"Light All Around: Bell Rock"</c>), or <c>null</c> when the
+    /// product doesn't resolve one.
+    /// </summary>
+    public string? TargetName { get; init; }
+
+    /// <summary>
+    /// What a pick report shows for the target: <see cref="TargetName"/>
+    /// when set, otherwise <see cref="TargetRef"/>.
+    /// </summary>
+    public string TargetDisplayName => TargetName ?? TargetRef;
 }
