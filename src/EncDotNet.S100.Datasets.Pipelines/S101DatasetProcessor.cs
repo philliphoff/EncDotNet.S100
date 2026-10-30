@@ -78,6 +78,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
 
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
     private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage)? _cellExtent;
+    private Dictionary<long, S101FeatureRecord>? _featureRecords;
     private FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
     private ValidationReport? _validationReport;
@@ -1258,12 +1259,24 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         return _validationReport;
     }
 
+    private S101FeatureRecord? FeatureRecord(long featureId)
+    {
+        _featureRecords ??= _dataset.Document.Features
+            .GroupBy(f => (long)f.RecordId)
+            .ToDictionary(g => g.Key, g => g.First());
+        return _featureRecords.GetValueOrDefault(featureId);
+    }
+
     private FeatureInfo BuildFeatureInfo(EncDotNet.S100.Pipelines.Vector.Feature feature)
     {
-        var attributes = FeatureInfoBuilder.BuildFlat(
-            feature.Attributes.Select(kv =>
-                new KeyValuePair<string, string?>(kv.Key, kv.Value?.ToString())),
-            _decoder);
+        // Read the attributes from the feature record, not the portrayal's
+        // attribute dictionary, which keeps one value per code (#1156).
+        var attributes = FeatureRecord(feature.Id) is { } record
+            ? S101PickReport.Attributes(_dataset.Document, record.Attributes, _decoder)
+            : FeatureInfoBuilder.BuildFlat(
+                feature.Attributes.Select(kv =>
+                    new KeyValuePair<string, string?>(kv.Key, kv.Value?.ToString())),
+                _decoder);
 
         // Resolve any `fileReference` attribute (S-101 FC; alias TXTDSC /
         // NTXTDS) to the textual content of the external file it names,

@@ -840,10 +840,13 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     public bool HasAttributes => Attributes.Count > 0;
 
     /// <summary>
-    /// The number of attribute rows, counting a complex attribute's children,
-    /// shown on the folded Attributes header beneath a Warning card.
+    /// The number of attribute values, counting a complex attribute's leaves
+    /// at any depth, shown on the folded Attributes header beneath a Warning card.
     /// </summary>
-    public int AttributeCount => Attributes.Sum(a => a.Children.Count == 0 ? 1 : a.Children.Count);
+    public int AttributeCount => Attributes.Sum(LeafCount);
+
+    private static int LeafCount(PickAttribute attribute) =>
+        attribute.Children.Count == 0 ? 1 : attribute.Children.Sum(LeafCount);
 
     /// <summary>
     /// The Warning card for the selected hit when it is part of a

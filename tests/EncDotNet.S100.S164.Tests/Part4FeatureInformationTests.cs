@@ -33,7 +33,6 @@ public sealed class Part4FeatureInformationTests
     /// <summary>A yellow-and-black south cardinal buoy, S Skerries, whose light is feature 66.</summary>
     private const string SouthSkerries = "1791";
 
-    private const string RepeatedValues = "#1156: the S-101 pick report keeps one value per attribute code and flattens complex attributes.";
     private const string Associations = "#1157: the S-101 pick report doesn't show information or feature associations.";
     private const string ValueFormat = "#1158: pick report values have no units, keep their padding and show dates as encoded.";
     private const string PriorityOrder = "#1159: picks are ranked by geometry, not by drawing priority.";
@@ -74,7 +73,7 @@ public sealed class Part4FeatureInformationTests
         Assert.Equal("Horizontal Stripes", Row(buoy, "colourPattern").DisplayValue);
     }
 
-    [Fact(Skip = RepeatedValues)]
+    [Fact]
     public async Task FeatureInformation1_ShowsEveryValueOfARepeatedAttribute()
     {
         var pick = await OpenAsync();
@@ -193,7 +192,7 @@ public sealed class Part4FeatureInformationTests
 
     // ── TidalStreamPanelData (S-98 15.4) ──
 
-    [Fact(Skip = RepeatedValues)]
+    [Fact]
     public async Task TidalStreamPanelData_ShowsEveryPanelValue()
     {
         // Each panel carries a speed and direction for every hour from six

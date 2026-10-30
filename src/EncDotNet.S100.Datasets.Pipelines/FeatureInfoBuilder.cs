@@ -168,9 +168,9 @@ public static class FeatureInfoBuilder
     }
 
     /// <summary>
-    /// Creates a flat <see cref="PickAttribute"/> tree from a plain
-    /// dictionary of code → value pairs, used by S-101 (ISO 8211) where
-    /// the source already exposes a flattened attribute bag.
+    /// Creates a flat <see cref="PickAttribute"/> list from a plain
+    /// dictionary of code → value pairs. ISO 8211 records keep their
+    /// repeated and complex attributes through <see cref="BuildTree"/>.
     /// </summary>
     public static IReadOnlyList<PickAttribute> BuildFlat(
         IEnumerable<KeyValuePair<string, string?>> attributes,
@@ -184,6 +184,79 @@ public static class FeatureInfoBuilder
             result.Add(BuildLeaf(code, value!, decoder));
         }
         return result;
+    }
+
+    /// <summary>
+    /// One attribute row of an ISO 8211 encoded feature or information record
+    /// (S-100 Part 10a ATTR field): its code, its value (empty for a complex
+    /// attribute) and the 1-based position of its parent row in the same list
+    /// (<c>PAIX</c>; 0 for a top-level attribute).
+    /// </summary>
+    /// <param name="Code">The attribute code, e.g. <c>"colour"</c>.</param>
+    /// <param name="Value">The encoded value; empty or <c>null</c> for a complex attribute.</param>
+    /// <param name="Parent">The 1-based row of the complex attribute this row belongs to, or 0.</param>
+    public readonly record struct AttributeRow(string Code, string? Value, int Parent);
+
+    /// <summary>
+    /// Builds a <see cref="PickAttribute"/> tree from ISO 8211 attribute rows
+    /// (S-100 Part 10a ATTR with its <c>PAIX</c> parent index): every row is
+    /// kept, so a repeated attribute gives one row per value, and each
+    /// complex attribute nests its sub-attributes, to any depth, as
+    /// <see cref="PickAttribute.Children"/>. Leaves with no value and complex
+    /// attributes with no valued leaves are left out. A row whose parent
+    /// index doesn't name an earlier row is treated as top-level.
+    /// </summary>
+    /// <param name="rows">The record's attribute rows, in record order.</param>
+    /// <param name="decoder">Decodes names and listed values, or <c>null</c>.</param>
+    /// <returns>The top-level rows, in record order.</returns>
+    public static IReadOnlyList<PickAttribute> BuildTree(
+        IReadOnlyList<AttributeRow> rows,
+        FeatureCatalogueDecoder? decoder)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+
+        // Children of each row (index = 1-based row; 0 = top level), in order.
+        var children = new List<int>[rows.Count + 1];
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var parent = rows[i].Parent;
+            if (parent < 0 || parent > i)
+                parent = 0;
+            (children[parent] ??= []).Add(i);
+        }
+
+        return BuildLevel(0);
+
+        List<PickAttribute> BuildLevel(int parent)
+        {
+            var result = new List<PickAttribute>();
+            if (children[parent] is not { } members)
+                return result;
+
+            foreach (var i in members)
+            {
+                var row = rows[i];
+                if (children[i + 1] is not null)
+                {
+                    var nested = BuildLevel(i + 1);
+                    if (nested.Count == 0)
+                        continue;
+                    result.Add(new PickAttribute
+                    {
+                        Code = row.Code,
+                        Name = decoder?.ResolveAttributeName(row.Code),
+                        RawValue = string.Empty,
+                        Children = nested,
+                    });
+                }
+                else if (!string.IsNullOrWhiteSpace(row.Value))
+                {
+                    result.Add(BuildLeaf(row.Code, row.Value, decoder));
+                }
+            }
+
+            return result;
+        }
     }
 
     /// <summary>
