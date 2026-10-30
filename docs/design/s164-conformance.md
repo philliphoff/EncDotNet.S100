@@ -51,14 +51,14 @@ they drift.
 | Part | Area | Tests | Passes | Fails | Supported | Partial | Gap | N/A |
 |---|---|---|---|---|---|---|---|---|
 | 2 | Catalogue and dataset loading and updating | 70 | 5 | 0 | 10 | 34 | 21 | 0 |
-| 3 | Chart display | 61 | 5 | 0 | 27 | 23 | 5 | 1 |
+| 3 | Chart display | 61 | 5 | 0 | 28 | 22 | 5 | 1 |
 | 4 | Chart related functions | 47 | 0 | 0 | 2 | 32 | 11 | 2 |
 | 5 | Navigational hazards | 6 | 1 | 1 | 0 | 0 | 4 | 0 |
 | 6 | Areas with special conditions | 5 | 1 | 2 | 0 | 0 | 2 | 0 |
 | 7 | Safety contour | 6 | 1 | 0 | 0 | 3 | 2 | 0 |
 | 8 | S-57 testing | 0 | — | — | — | — | — | — |
 | 9 | Dual fuel mode and SECOM | 17 | 0 | 0 | 2 | 9 | 6 | 0 |
-| | **Total** | **212** | **13** | **3** | **41** | **101** | **51** | **3** |
+| | **Total** | **212** | **13** | **3** | **42** | **100** | **51** | **3** |
 
 Part 8 has no tests of its own in 2.0.1. It points S-57 testing at the
 existing S-64 datasets, which a later slice covers.
@@ -71,15 +71,16 @@ issue.
 1. **Portrayal instructions that are skipped.** ([#1126](https://github.com/philliphoff/EncDotNet.S100/issues/1126)) `DrawingInstructionParser`
    recognises `SpatialReference`, `AreaPlacement`, `Date`, `TimeValid` and
    `AlertReference` but does nothing with them, and treats
-   `LineInstructionUnsuppressed` as a plain line. `VectorSceneBuilder` sorts
+   `LineInstructionUnsuppressed` as a plain line. `VectorSceneBuilder` sorted
    by geometry type before drawing priority, where S-100 Part 9 puts
    priority first. Edge-specific lines (the safety contour on depth areas,
    area borders), line suppression, date-dependent display and area-symbol
    placement all follow from this. In the S-164 DisplayBase cell the
    safety contour was drawn round each adjoining depth area's whole outline,
    coastline and cell edges included. `SpatialReference` is now honoured for
-   lines, so the safety contour and other edge lines follow their edges; line
-   suppression, priority order, dates and `AreaPlacement` remain. Part 3 tests affected: SafetyContourDisplay,
+   lines, so the safety contour and other edge lines follow their edges, and
+   ops now draw in Part 9 order (plane, priority, then area, pattern, line,
+   point, text); line suppression, dates and `AreaPlacement` remain. Part 3 tests affected: SafetyContourDisplay,
    AreaBorders, ComplexPortrayal, DifferentPriority, LineSuppression,
    FixedDateRange, PeriodicDateRange, CentredSymbols1.
 2. **Route checks use their own rules, not the S-101 alert catalogue.** ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)) The
@@ -387,7 +388,7 @@ the S-101 portrayal catalogue, which settles what a plot leaves unclear.
 | OtherLanguages | S-98 10.3 | — | Supported | `src/EncDotNet.S100.Datasets.S101/S101LuaDataProvider.cs` | NationalLanguage parameter selects chart text. |
 | Language Selections | S-98 10.3 | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/SettingsViewModel.cs` | One language, not a ranked list; pick report not localised. |
 | LanguagePacks | S-98 15.1 | InitialPowerUp | Gap | — | No language packs. |
-| DifferentPriority | S-101PC | — | Partial | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | Instructions sort by geometry type before drawing priority. |
+| DifferentPriority | S-101PC | — | Supported | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | Ops draw by plane, then drawing priority, then geometry. The v2.0.0 data has no features for this test, so it can't run yet. |
 | SamePriority | S-101PC | — | Supported | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | Equal priority draws area, line, point, text. |
 | LineSuppression | S-101PC | — | Gap | `src/EncDotNet.S100.Core/Pipelines/Vector/DrawingInstructionParser.cs` | LineInstructionUnsuppressed is treated as a plain line; no shared-edge suppression. |
 | ManualUpdates | S-98 12.12.1 | — | N/A | — | Mariner chart corrections are ECDIS chart maintenance. |
@@ -397,7 +398,7 @@ the S-101 portrayal catalogue, which settles what a plot leaves unclear.
 | BoundaryDisplay1 | S-98 9.1.1 | — | Partial | `src/EncDotNet.S100.Renderers.Mapsui/S100DatasetExtentIndicatorLayer.cs` | Extents outlined only when out of scale. |
 | BoundaryDisplay2 | S-98 12.3.1 | — | Gap | — | No scale-boundary line between areas of different scale. |
 | OverscalePattern1 | S-98 12.3.2 | — | Supported | `src/EncDotNet.S100.Renderers.Mapsui/OverscaleCurtain.cs` | Overscale pattern over overscaled coverage. |
-| ComplexPortrayal | S-101PC | — | Partial | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | Affected by the SpatialReference and priority-order gaps. |
+| ComplexPortrayal | S-101PC | — | Partial | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | SpatialReference and priority order are honoured; line suppression is not. The v2.0.0 data has no features for this test. |
 | CentredSymbols1 | S-101PC | Settings | Partial | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | Fixed centroid; not re-centred in the visible part. AreaPlacement skipped. |
 | OverscaleIndication1 | S-98 12.3 | PowerUp | Supported | `src/EncDotNet.S100.Renderers.Mapsui/OverscaleEvaluator.cs` | Status-bar overscale pill with factor. |
 | LargerScaleData | S-98 12.3.3 | PowerUp | Partial | `src/EncDotNet.S100.Renderers.Mapsui/S100DatasetExtentIndicatorLayer.cs` | Outlines hint at larger-scale data; no explicit indication. |

@@ -5,44 +5,20 @@ using EncDotNet.S100.Quantities;
 namespace EncDotNet.S100.Pipelines.Tests;
 
 /// <summary>
-/// Verifies the invalidation contract of
-/// <see cref="S101DatasetProcessor.BuildPortrayalCacheKey"/>: the key
-/// must change exactly when an input that changes the emitted
-/// drawing-instruction list changes (mariner settings or ECDIS display
-/// state), and must be stable across inputs that only affect later
-/// rendering (palette / symbol / text scale — none of which are even
-/// parameters of the key builder).
+/// Verifies the invalidation contract of the portrayal caches' keys:
+/// <see cref="S101DatasetProcessor.BuildRuleOutputCacheKey"/> must change
+/// exactly when an input to the Lua rules changes (the mariner settings, and the
+/// display mode only for catalogues whose XSLT rules read it), and
+/// <see cref="S101DatasetProcessor.BuildVisibleAreaSignature"/> exactly when the
+/// set of visible area fills, the pattern clip's only input, changes.
 /// </summary>
 public class S101PortrayalCacheKeyTests
 {
-    private static EcdisDisplaySettings Ecdis(
-        EcdisDisplayCategory category = EcdisDisplayCategory.Standard,
-        IReadOnlySet<int>? hiddenS101ViewingGroups = null,
-        IReadOnlySet<DisplayPlane>? hiddenPlanes = null)
-    {
-        var settings = new EcdisDisplaySettings { Category = category };
-        if (hiddenS101ViewingGroups is not null)
-        {
-            settings = settings with
-            {
-                HiddenViewingGroups = new Dictionary<string, IReadOnlySet<int>>
-                {
-                    ["S-101"] = hiddenS101ViewingGroups,
-                },
-            };
-        }
-        if (hiddenPlanes is not null)
-        {
-            settings = settings with { HiddenDisplayPlanes = hiddenPlanes };
-        }
-        return settings;
-    }
-
     [Fact]
     public void IdenticalInputs_ProduceEqualKeys()
     {
-        var a = S101DatasetProcessor.BuildPortrayalCacheKey(MarinerSettings.Default, Ecdis());
-        var b = S101DatasetProcessor.BuildPortrayalCacheKey(MarinerSettings.Default, Ecdis());
+        var a = S101DatasetProcessor.BuildRuleOutputCacheKey(MarinerSettings.Default, displayModeId: null);
+        var b = S101DatasetProcessor.BuildRuleOutputCacheKey(MarinerSettings.Default, displayModeId: null);
 
         Assert.Equal(a, b);
     }
@@ -50,9 +26,9 @@ public class S101PortrayalCacheKeyTests
     [Fact]
     public void DifferentSafetyContour_ProducesDifferentKey()
     {
-        var baseline = S101DatasetProcessor.BuildPortrayalCacheKey(MarinerSettings.Default, Ecdis());
-        var changed = S101DatasetProcessor.BuildPortrayalCacheKey(
-            MarinerSettings.Default with { SafetyContour = Depth.FromMetres(10.0) }, Ecdis());
+        var baseline = S101DatasetProcessor.BuildRuleOutputCacheKey(MarinerSettings.Default, displayModeId: null);
+        var changed = S101DatasetProcessor.BuildRuleOutputCacheKey(
+            MarinerSettings.Default with { SafetyContour = Depth.FromMetres(10.0) }, displayModeId: null);
 
         Assert.NotEqual(baseline, changed);
     }
@@ -60,9 +36,9 @@ public class S101PortrayalCacheKeyTests
     [Fact]
     public void DifferentNationalLanguage_ProducesDifferentKey()
     {
-        var baseline = S101DatasetProcessor.BuildPortrayalCacheKey(MarinerSettings.Default, Ecdis());
-        var changed = S101DatasetProcessor.BuildPortrayalCacheKey(
-            MarinerSettings.Default with { NationalLanguage = "fra" }, Ecdis());
+        var baseline = S101DatasetProcessor.BuildRuleOutputCacheKey(MarinerSettings.Default, displayModeId: null);
+        var changed = S101DatasetProcessor.BuildRuleOutputCacheKey(
+            MarinerSettings.Default with { NationalLanguage = "fra" }, displayModeId: null);
 
         Assert.NotEqual(baseline, changed);
     }
@@ -70,68 +46,66 @@ public class S101PortrayalCacheKeyTests
     [Fact]
     public void DifferentBooleanToggle_ProducesDifferentKey()
     {
-        var baseline = S101DatasetProcessor.BuildPortrayalCacheKey(MarinerSettings.Default, Ecdis());
-        var changed = S101DatasetProcessor.BuildPortrayalCacheKey(
-            MarinerSettings.Default with { SimplifiedSymbols = true }, Ecdis());
+        var baseline = S101DatasetProcessor.BuildRuleOutputCacheKey(MarinerSettings.Default, displayModeId: null);
+        var changed = S101DatasetProcessor.BuildRuleOutputCacheKey(
+            MarinerSettings.Default with { SimplifiedSymbols = true }, displayModeId: null);
 
         Assert.NotEqual(baseline, changed);
     }
 
     [Fact]
-    public void DifferentEcdisCategory_ProducesDifferentKey()
+    public void DisplayMode_IsFoldedOnlyWhenRulesDependOnIt()
     {
-        var standard = S101DatasetProcessor.BuildPortrayalCacheKey(
-            MarinerSettings.Default, Ecdis(EcdisDisplayCategory.Standard));
-        var displayBase = S101DatasetProcessor.BuildPortrayalCacheKey(
-            MarinerSettings.Default, Ecdis(EcdisDisplayCategory.DisplayBase));
+        var lua = S101DatasetProcessor.BuildRuleOutputCacheKey(MarinerSettings.Default, displayModeId: null);
+        var standard = S101DatasetProcessor.BuildRuleOutputCacheKey(MarinerSettings.Default, displayModeId: "Standard");
+        var displayBase = S101DatasetProcessor.BuildRuleOutputCacheKey(MarinerSettings.Default, displayModeId: "DisplayBase");
 
+        Assert.NotEqual(lua, standard);
         Assert.NotEqual(standard, displayBase);
     }
 
     [Fact]
-    public void DifferentHiddenViewingGroups_ProducesDifferentKey()
+    public void VisibleAreaSignature_IgnoresNonAreaInstructions()
     {
-        var none = S101DatasetProcessor.BuildPortrayalCacheKey(MarinerSettings.Default, Ecdis());
-        var hidden = S101DatasetProcessor.BuildPortrayalCacheKey(
-            MarinerSettings.Default, Ecdis(hiddenS101ViewingGroups: new HashSet<int> { 22 }));
+        var area = Area("1");
+        var point = new PointInstruction { FeatureReference = "2", SymbolReference = "UWTROC03" };
+        IReadOnlyList<DrawingInstruction> unfiltered = [area, point];
 
-        Assert.NotEqual(none, hidden);
+        // Hiding a point (rocks, say) leaves the area fills, and so the clip, unchanged.
+        Assert.Equal(
+            S101DatasetProcessor.BuildVisibleAreaSignature(unfiltered, unfiltered),
+            S101DatasetProcessor.BuildVisibleAreaSignature(unfiltered, [area]));
     }
 
     [Fact]
-    public void HiddenViewingGroupOrder_DoesNotAffectKey()
+    public void VisibleAreaSignature_ChangesWhenAnAreaIsHidden()
     {
-        var a = S101DatasetProcessor.BuildPortrayalCacheKey(
-            MarinerSettings.Default, Ecdis(hiddenS101ViewingGroups: new HashSet<int> { 22, 5, 31 }));
-        var b = S101DatasetProcessor.BuildPortrayalCacheKey(
-            MarinerSettings.Default, Ecdis(hiddenS101ViewingGroups: new HashSet<int> { 31, 22, 5 }));
+        var a = Area("1");
+        var b = Area("2");
+        IReadOnlyList<DrawingInstruction> unfiltered = [a, b];
 
-        Assert.Equal(a, b);
+        var both = S101DatasetProcessor.BuildVisibleAreaSignature(unfiltered, unfiltered);
+        var onlyA = S101DatasetProcessor.BuildVisibleAreaSignature(unfiltered, [a]);
+        var onlyB = S101DatasetProcessor.BuildVisibleAreaSignature(unfiltered, [b]);
+
+        Assert.NotEqual(both, onlyA);
+        Assert.NotEqual(both, onlyB);
+        Assert.NotEqual(onlyA, onlyB);
     }
 
     [Fact]
-    public void HiddenViewingGroupsForOtherSpec_DoNotAffectKey()
+    public void VisibleAreaSignature_MatchesByIdentity_NotContent()
     {
-        var baseline = S101DatasetProcessor.BuildPortrayalCacheKey(MarinerSettings.Default, Ecdis());
-        var otherSpec = new EcdisDisplaySettings
-        {
-            HiddenViewingGroups = new Dictionary<string, IReadOnlySet<int>>
-            {
-                ["S-201"] = new HashSet<int> { 7 },
-            },
-        };
+        // Two instructions with identical content are still different areas.
+        var a = Area("1");
+        var twin = Area("1");
+        IReadOnlyList<DrawingInstruction> unfiltered = [a, twin];
 
-        Assert.Equal(baseline, S101DatasetProcessor.BuildPortrayalCacheKey(MarinerSettings.Default, otherSpec));
+        Assert.NotEqual(
+            S101DatasetProcessor.BuildVisibleAreaSignature(unfiltered, [a]),
+            S101DatasetProcessor.BuildVisibleAreaSignature(unfiltered, [twin]));
     }
 
-    [Fact]
-    public void DifferentHiddenDisplayPlanes_ProducesDifferentKey()
-    {
-        var none = S101DatasetProcessor.BuildPortrayalCacheKey(MarinerSettings.Default, Ecdis());
-        var hidden = S101DatasetProcessor.BuildPortrayalCacheKey(
-            MarinerSettings.Default,
-            Ecdis(hiddenPlanes: new HashSet<DisplayPlane> { DisplayPlane.UnderRadar }));
-
-        Assert.NotEqual(none, hidden);
-    }
+    private static AreaInstruction Area(string featureReference) =>
+        new() { FeatureReference = featureReference, AreaFillReference = "DIAMOND1", DrawingPriority = 5 };
 }
