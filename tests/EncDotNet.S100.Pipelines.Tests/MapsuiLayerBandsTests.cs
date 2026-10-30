@@ -121,5 +121,66 @@ public sealed class MapsuiLayerBandsTests
         Assert.Equal([external], map.Layers);
     }
 
+    [Fact]
+    public void ReplaceDatasetLayers_OneLayerAdded_ChangesTheMapOnce()
+    {
+        using var map = new Map();
+        var bands = new MapsuiLayerBands(map);
+        var basemap = Layer("basemap");
+        var overlay = Layer("overlay");
+        var datasets = Enumerable.Range(0, 50).Select(i => Layer($"dataset-{i}")).ToArray();
+        bands.SetBasemapLayer(basemap);
+        bands.AddOverlayLayer(overlay);
+        bands.ReplaceDatasetLayers(datasets);
+
+        var changes = 0;
+        map.Layers.Changed += (_, _) => changes++;
+        var added = Layer("added");
+        bands.ReplaceDatasetLayers([.. datasets[..20], added, .. datasets[20..]]);
+
+        Assert.Equal(1, changes);
+        Assert.Equal([basemap, .. datasets[..20], added, .. datasets[20..], overlay], map.Layers);
+    }
+
+    [Fact]
+    public void ReplaceDatasetLayers_SameLayers_LeavesTheMapAlone()
+    {
+        using var map = new Map();
+        var bands = new MapsuiLayerBands(map);
+        ILayer[] datasets = [Layer("a"), Layer("b"), Layer("c")];
+        bands.ReplaceDatasetLayers(datasets);
+
+        var changes = 0;
+        map.Layers.Changed += (_, _) => changes++;
+        bands.ReplaceDatasetLayers(datasets);
+
+        Assert.Equal(0, changes);
+    }
+
+    [Fact]
+    public void ReplaceDatasetLayers_RemovedAndReordered_KeepsTheBandInPlace()
+    {
+        using var map = new Map();
+        var bands = new MapsuiLayerBands(map);
+        var basemap = Layer("basemap");
+        var overlay = Layer("overlay");
+        var (a, b, c, d) = (Layer("a"), Layer("b"), Layer("c"), Layer("d"));
+        bands.SetBasemapLayer(basemap);
+        bands.AddOverlayLayer(overlay);
+        bands.ReplaceDatasetLayers([a, b, c]);
+
+        bands.ReplaceDatasetLayers([a, c]);
+        Assert.Equal([basemap, a, c, overlay], map.Layers);
+
+        bands.ReplaceDatasetLayers([d, c, a]);
+        Assert.Equal([basemap, d, c, a, overlay], map.Layers);
+
+        bands.ReplaceDatasetLayers([b]);
+        Assert.Equal([basemap, b, overlay], map.Layers);
+
+        bands.ReplaceDatasetLayers([]);
+        Assert.Equal([basemap, overlay], map.Layers);
+    }
+
     private static MemoryLayer Layer(string name) => new() { Name = name };
 }

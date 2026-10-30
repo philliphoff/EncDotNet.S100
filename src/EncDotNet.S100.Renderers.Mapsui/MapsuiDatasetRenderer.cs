@@ -389,6 +389,7 @@ public sealed class MapsuiDatasetRenderer
             Spec = result.Spec,
             LayerNames = layerNames,
             StackEntries = stackEntries,
+            CellMinimumDisplayScale = result.CellMinimumDisplayScale,
         };
     }
 

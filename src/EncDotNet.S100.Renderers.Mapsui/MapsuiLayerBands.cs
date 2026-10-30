@@ -143,19 +143,83 @@ public sealed class MapsuiLayerBands : IMapsuiOverlayLayerHost, IS100MapLayerHos
             EnsureAvailableOutsideDatasetBand(layer, orderedDatasetLayers);
         }
 
-        var insertAt = FindFirstDatasetIndex();
-        foreach (var layer in _datasetLayers)
+        // Apply only the difference. Every Mapsui layer-collection change
+        // raises an event that walks all layers (extent, refresh), so
+        // removing and re-inserting a band of hundreds of layers one by one
+        // on every compose made loading many datasets quadratic and froze
+        // the UI thread.
+        var current = CurrentDatasetLayersInOrder();
+        if (current.SequenceEqual(orderedDatasetLayers))
         {
-            _map.Layers.Remove(layer);
+            return;
+        }
+
+        var removed = current.Where(layer => !replacements.Contains(layer)).ToArray();
+        var kept = current.Where(replacements.Contains).ToList();
+        var keptInNewOrder = orderedDatasetLayers.Where(_datasetLayers.Contains).ToList();
+
+        if (kept.SequenceEqual(keptInNewOrder))
+        {
+            // The surviving layers keep their order: drop the removed ones in
+            // one change and insert each new layer at its final position.
+            var originalStart = FindFirstDatasetIndex();
+            if (removed.Length > 0)
+            {
+                _map.Layers.Remove(removed);
+                foreach (var layer in removed)
+                {
+                    _datasetLayers.Remove(layer);
+                }
+            }
+
+            var bandStart = kept.Count > 0
+                ? FindFirstDatasetIndex()
+                : Math.Min(originalStart, _map.Layers.Count);
+            for (var i = 0; i < orderedDatasetLayers.Count; i++)
+            {
+                var layer = orderedDatasetLayers[i];
+                if (_datasetLayers.Add(layer))
+                {
+                    _map.Layers.Insert(bandStart + i, layer, 0);
+                }
+            }
+
+            return;
+        }
+
+        // Reordered: replace the band in one removal and one insertion.
+        var insertAt = FindFirstDatasetIndex();
+        if (current.Count > 0)
+        {
+            _map.Layers.Remove(current.ToArray());
         }
 
         _datasetLayers.Clear();
         insertAt = Math.Min(insertAt, _map.Layers.Count);
+        _map.Layers.Insert(insertAt, orderedDatasetLayers, 0);
         foreach (var layer in orderedDatasetLayers)
         {
-            _map.Layers.Insert(insertAt++, layer, 0);
             _datasetLayers.Add(layer);
         }
+    }
+
+    private List<ILayer> CurrentDatasetLayersInOrder()
+    {
+        var layers = new List<ILayer>(_datasetLayers.Count);
+        if (_datasetLayers.Count == 0)
+        {
+            return layers;
+        }
+
+        foreach (var layer in _map.Layers)
+        {
+            if (_datasetLayers.Contains(layer))
+            {
+                layers.Add(layer);
+            }
+        }
+
+        return layers;
     }
 
     /// <summary>
@@ -324,7 +388,7 @@ public sealed class MapsuiLayerBands : IMapsuiOverlayLayerHost, IS100MapLayerHos
         if (ReferenceEquals(layer, _basemapLayer)
             || _overlayLayers.Contains(layer)
             || _toolLayers.Contains(layer)
-            || (_map.Layers.Contains(layer) && !_datasetLayers.Contains(layer)))
+            || (!_datasetLayers.Contains(layer) && _map.Layers.Contains(layer)))
         {
             throw new ArgumentException(
                 "A layer can belong to only one managed layer band.",

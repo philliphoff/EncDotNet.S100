@@ -143,14 +143,13 @@ internal sealed class ViewerDatasetCatalog : IDatasetCatalog, IDisposable
         var id = new DatasetId(entry.DisplayName);
         var externalTextResolver = BuildExternalTextResolver(entry);
 
-        // A legacy S-57 cell (DatasetPipelineFactory detects it by its DSPM
-        // field) is a different ISO 8211 profile from S-101 and must be
-        // translated, not opened with the S-101 reader. Prefer the resident
-        // processor's translated model: it is authoritative about identity
-        // ("S-57") and carries any exchange-set updates the raw base-cell
-        // bytes lack.
-        if (entry.ProductSpec == "S-57"
-            && TryProjectFromProcessor(entry, id, externalTextResolver) is { } fromProcessor)
+        // Prefer the resident processor's model: the loader has already
+        // parsed the dataset, so re-reading its bytes here (on the UI thread,
+        // once per load) only repeats that work. It is also authoritative
+        // about identity — a legacy S-57 cell is translated to the S-101
+        // model but stays "S-57" — and carries any exchange-set updates the
+        // raw base-cell bytes lack.
+        if (TryProjectFromProcessor(entry, id, externalTextResolver) is { } fromProcessor)
         {
             return fromProcessor;
         }
