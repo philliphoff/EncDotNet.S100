@@ -48,7 +48,7 @@ they drift.
 
 | Part | Area | Tests | Passes | Supported | Partial | Gap | N/A |
 |---|---|---|---|---|---|---|---|
-| 2 | Catalogue and dataset loading and updating | 70 | 5 | 9 | 35 | 21 | 0 |
+| 2 | Catalogue and dataset loading and updating | 70 | 5 | 10 | 34 | 21 | 0 |
 | 3 | Chart display | 61 | 0 | 30 | 25 | 5 | 1 |
 | 4 | Chart related functions | 47 | 0 | 2 | 32 | 11 | 2 |
 | 5 | Navigational hazards | 6 | 0 | 1 | 1 | 4 | 0 |
@@ -56,7 +56,7 @@ they drift.
 | 7 | Safety contour | 6 | 0 | 1 | 3 | 2 | 0 |
 | 8 | S-57 testing | 0 | — | — | — | — | — |
 | 9 | Dual fuel mode and SECOM | 17 | 0 | 2 | 9 | 6 | 0 |
-| | **Total** | **212** | **5** | **47** | **106** | **51** | **3** |
+| | **Total** | **212** | **5** | **48** | **105** | **51** | **3** |
 
 Part 8 has no tests of its own in 2.0.1. It points S-57 testing at the
 existing S-64 datasets, which a later slice covers.
@@ -157,9 +157,10 @@ test ran. Slice 2 fixes the first three in the library:
 1. **`S100_ROOT` packaging.** Every S-164 archive holds its exchange set
    under `S100_ROOT/`, as S-100 Part 17 lays it out, and `S100ExchangeSet`
    only looked for `CATALOG.XML` at the root. It now opens a folder or ZIP
-   whose catalogue is at `S100_ROOT/CATALOG.XML`. The viewer's and Library's
-   own exchange-set detection still look only at the root, so SoundCharts
-   can't open these ZIPs directly yet ([#1136](https://github.com/philliphoff/EncDotNet.S100/issues/1136)).
+   whose catalogue is at `S100_ROOT/CATALOG.XML`. SoundCharts and the Library
+   use the same rule (`ExchangeSetRoot`) since
+   [#1136](https://github.com/philliphoff/EncDotNet.S100/issues/1136), so the
+   S-164 ZIPs open there too.
 2. **Long-form product identifiers.** The catalogues declare
    `INT.IHO.S-101.2.0.0` with `number` 214 (the IHO register number), so
    nothing mapped to S-101. Base cells were still found by content
@@ -200,7 +201,7 @@ Slice 3 found one more problem, in the S-101 reader:
 | OutOfCatalogueSequence Dataset | S-98: 20.1 and B-1 | InitialCatalogues, OutOfCatalogueSequenceDataset | Partial | `src/EncDotNet.S100.Core/DatasetPipelines/IDatasetProcessor.cs` | Version mismatch is a warning badge; the dataset still loads. |
 | UpdateCatalogues | S-98: 20.1 and B-1 | InitialCatalogues, PowerUpCatalogues, UpdatedCatalogueData | Partial | `src/EncDotNet.S100.Viewer/ViewModels/CatalogueViewModels.cs` | Overrides can be replaced by hand; no list of installed versions and no install from exchange sets. |
 | MultipleRevisions | S-98: 20.1 and B-1 | MultipleRevisions | Partial | `src/EncDotNet.S100.Datasets.S101/S101LegacyFeatureNames.cs` | The library supports a catalogue per layer; the viewer uses one per product. 1.x names map onto the 2.0.0 portrayal. |
-| InitialPowerUp | S-98: 6.1.1; IEC 61174: 4.4.1 | InitialPowerUp | Partial | `src/EncDotNet.S100.Viewer/Services/ExchangeSetDetection.cs` | The library opens the set and own ship can be placed at a fixed position; the viewer can't open `S100_ROOT` ZIPs yet (§6.1, [#1136](https://github.com/philliphoff/EncDotNet.S100/issues/1136)). |
+| InitialPowerUp | S-98: 6.1.1; IEC 61174: 4.4.1 | InitialPowerUp | Supported | `src/EncDotNet.S100.ExchangeSets/ExchangeSetRoot.cs` | The set opens in SoundCharts and the Library (`S100_ROOT` layout, §6.1), and own ship can be placed at a fixed position. |
 | PowerUp | S-98: 6.1.1; IEC 61174: 4.4.1 | PowerUp | Partial | `src/EncDotNet.S100.Collections/Library/LibraryItemText.cs` | Edition, update and dates show per Library item; no table of everything installed. |
 | AdditionalCell | IEC 61174: 4.4.1 | Settings | Supported | `src/EncDotNet.S100.Viewer/ViewModels/LibraryPanelViewModel.cs` | Adding a folder or ZIP indexes it and draws its coverage. |
 | RemoveCell | S-98: 6.1.1; IEC 61174: 4.4.1 | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/LibraryPanelViewModel.cs` | Sources and loaded datasets can be removed, not single cells. |

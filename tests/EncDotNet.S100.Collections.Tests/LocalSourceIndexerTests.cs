@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using EncDotNet.S100.Collections.Indexing;
+using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Pipelines;
 
@@ -135,6 +136,46 @@ public class LocalSourceIndexerTests
         Assert.Equal(Path.GetFullPath(zip), location.RootPath);
         Assert.StartsWith("S-101/", location.RelativePath);
         Assert.Equal("S101.zip!/", index.Items[0].GroupKey);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_folder_with_S100_ROOT_is_one_exchange_set(bool recursive)
+    {
+        // S-100 Part 17 packs an exchange set under S100_ROOT (#1136).
+        using var temp = new TempDirectory();
+        var set = Path.Combine(temp.Path, "set");
+        temp.CopyTree(TestPaths.Dataset("ExchangeSets", "Synthetic-S101Updates"), Path.Combine("set", "S100_ROOT"));
+
+        Assert.Equal(LibrarySourceKind.ExchangeSet, LibrarySourceKinds.Classify(set));
+        var index = await IndexAsync(Folder(set, recursive));
+
+        var item = Assert.Single(index.Items);
+        Assert.Equal("SYNTH101", item.Name);
+        var location = Assert.IsType<LocalItemLocation>(item.Location);
+        Assert.Equal(Path.GetFullPath(Path.Combine(set, "S100_ROOT")), location.RootPath);
+        Assert.Equal("CATALOG.XML", location.CatalogueRelativePath);
+    }
+
+    [Fact]
+    public async Task Zipped_exchange_set_under_S100_ROOT_resolves_paths_through_it()
+    {
+        using var temp = new TempDirectory();
+        var zipPath = Path.Combine(temp.Path, "set.zip");
+        var source = TestPaths.Dataset("ExchangeSets", "Synthetic-S101Updates");
+        using (var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+        {
+            foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+                archive.CreateEntryFromFile(file, "S100_ROOT/" + Path.GetRelativePath(source, file).Replace('\\', '/'));
+        }
+
+        var index = await IndexAsync(ExchangeSet(zipPath));
+
+        var location = Assert.IsType<LocalItemLocation>(Assert.Single(index.Items).Location);
+        Assert.True(location.IsZip);
+        Assert.Equal("S100_ROOT/S-101/SYNTH101.000", location.RelativePath);
+        Assert.Equal("S100_ROOT/CATALOG.XML", location.CatalogueRelativePath);
     }
 
     [Fact]

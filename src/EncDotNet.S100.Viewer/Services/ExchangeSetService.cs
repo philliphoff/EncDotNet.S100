@@ -147,7 +147,7 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         ExchangeSet? exchangeSet = null;
         try
         {
-            source = OpenSource(folderOrZipPath);
+            source = OpenSource(folderOrZipPath, atExchangeSetRoot: true);
             try
             {
                 // Most producers use the canonical CATALOG.XML (S-100
@@ -1184,7 +1184,13 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             {
                 var exchangeSet = await ExchangeSet.OpenAsync(source, catalogue, cancellationToken).ConfigureAwait(true);
                 owner = exchangeSet;
-                var assetSource = exchangeSet.Source;
+                // The catalogue's file names are relative to its own folder, which
+                // isn't the source root when the set sits under one, as in an
+                // S-100 Part 17 S100_ROOT layout.
+                var folder = CatalogueFolder(catalogue);
+                IAssetSource assetSource = folder.Length == 0
+                    ? exchangeSet.Source
+                    : new SubfolderAssetSource(exchangeSet.Source, folder);
                 var parsed = exchangeSet.Catalogue;
                 verifier = ct => new ExchangeSetVerifier().VerifyAsync(
                     assetSource, parsed, new TrustAnchorOptions { AllowUntrustedCertificates = true }, ct);
@@ -1216,6 +1222,28 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
             librarySource: request.LibrarySource);
         _ = VerifySignaturesAsync(tracked);
         return tracked;
+    }
+
+    /// <summary>The folder part of a catalogue path, with a trailing <c>/</c>, or empty.</summary>
+    private static string CatalogueFolder(string cataloguePath)
+    {
+        var normalized = cataloguePath.Replace('\\', '/');
+        var slash = normalized.LastIndexOf('/');
+        return slash < 0 ? string.Empty : normalized[..(slash + 1)];
+    }
+
+    /// <summary>
+    /// Reads a subfolder of another source, which it doesn't own: disposing
+    /// it leaves the other source open.
+    /// </summary>
+    private sealed class SubfolderAssetSource(IAssetSource inner, string folder) : IAssetSource
+    {
+        public Task<Stream> OpenAsync(string relativePath, CancellationToken cancellationToken = default) =>
+            inner.OpenAsync(folder + relativePath.Replace('\\', '/').TrimStart('/'), cancellationToken);
+
+        public void Dispose()
+        {
+        }
     }
 
     private static string ToSourcePath(string relativePath, bool isZip) =>
@@ -1255,26 +1283,34 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
         return "unknown";
     }
 
-    private static IAssetSource OpenSource(string path)
+    /// <summary>
+    /// Opens the folder or ZIP at <paramref name="path"/>. With
+    /// <paramref name="atExchangeSetRoot"/>, the source is rooted where the
+    /// catalogue is, so an S-100 Part 17 <c>S100_ROOT</c> layout reads like a
+    /// top-level one; otherwise it's rooted at the folder or archive itself.
+    /// </summary>
+    private static IAssetSource OpenSource(string path, bool atExchangeSetRoot = false)
     {
         if (Directory.Exists(path))
         {
-            return FileSystemAssetSource.Create(path);
+            var root = atExchangeSetRoot ? ExchangeSetDetection.ResolveFolderRoot(path)?.BasePath : null;
+            return FileSystemAssetSource.Create(root ?? path);
         }
         if (File.Exists(path) &&
             string.Equals(Path.GetExtension(path), ".zip", StringComparison.OrdinalIgnoreCase))
         {
             // ZipAssetSource.Create(string) opens the file with read-share,
             // so the archive can stay open for as long as the service holds it.
-            return ZipAssetSource.Create(path);
+            var basePath = atExchangeSetRoot ? ExchangeSetDetection.ResolveZipRoot(path)?.BasePath : null;
+            return ZipAssetSource.Create(path, basePath ?? string.Empty);
         }
         throw new FileNotFoundException(
             $"Exchange set source not found or not a folder/.zip: {path}", path);
     }
 
     /// <summary>
-    /// Resolves the relative catalogue name to open within the source at
-    /// <paramref name="path"/>. Folders and ZIP archives may use the
+    /// Resolves the catalogue name to open within the source
+    /// <see cref="OpenSource"/> roots at the exchange set. Folders and ZIP archives may use the
     /// canonical <c>CATALOG.XML</c> or the S-411 <c>catalogue.xml</c>
     /// spelling; the discovered name (preserving casing) is returned so
     /// the asset source opens the correct entry. Falls back to

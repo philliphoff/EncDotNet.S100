@@ -7,10 +7,16 @@ namespace EncDotNet.S100.Core;
 /// <summary>
 /// An asset source backed by a ZIP archive.
 /// </summary>
+/// <remarks>
+/// Safe to read from several threads at once. A <see cref="ZipArchive"/> reads
+/// every entry through one underlying stream, so each entry is read whole
+/// under a lock and returned as a <see cref="MemoryStream"/>.
+/// </remarks>
 public sealed class ZipAssetSource : IAssetSource
 {
     private readonly ZipArchive _archive;
     private readonly string _basePath;
+    private readonly object _gate = new();
 
     private ZipAssetSource(ZipArchive archive, string basePath)
     {
@@ -77,18 +83,36 @@ public sealed class ZipAssetSource : IAssetSource
 
         string fullEntryName = _basePath + entryName;
 
-        var entry = _archive.GetEntry(fullEntryName)
-            ?? throw new FileNotFoundException($"Entry '{fullEntryName}' not found in the archive.");
+        MemoryStream stream;
+        lock (_gate)
+        {
+            var entry = _archive.GetEntry(fullEntryName)
+                ?? throw new FileNotFoundException($"Entry '{fullEntryName}' not found in the archive.");
 
-        Stream stream = entry.Open();
+            // Entries opened together interleave reads of the shared archive
+            // stream and come out corrupt, so read this one before releasing it.
+            stream = new MemoryStream(entry.Length is > 0 and <= int.MaxValue ? (int)entry.Length : 0);
+            using (var entryStream = entry.Open())
+            {
+                entryStream.CopyTo(stream);
+            }
+        }
+
+        stream.Position = 0;
 
         AssetMetrics.ReadDuration.Record(
             (Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency,
             new KeyValuePair<string, object?>(TelemetryTags.AssetKind, "zip"));
 
-        return Task.FromResult(stream);
+        return Task.FromResult<Stream>(stream);
     }
 
     /// <inheritdoc />
-    public void Dispose() => _archive.Dispose();
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            _archive.Dispose();
+        }
+    }
 }
