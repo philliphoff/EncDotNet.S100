@@ -114,6 +114,8 @@ A scheduler producing tiles. Workers = cores−1, each with a **pooled CPU raste
 
 Per frame: for each visible tile slot, draw the **best available** — exact band if present, else nearest band scaled (transient zoom blur), else a flat fallback. **Always blit something; never block.** During a gesture: pure affine of cached tiles + enqueue predictions; zero synchronous render work. Keep recently-used tiles resident as GPU textures so re-composite during a pan doesn't re-upload (upload once on tile-ready, evict with LRU) — *this residency path applies only if the Mapsui foreground surface is GPU-backed; confirm via the Phase 0 surface test (§7).*
 
+A dataset's sub-layers (S-101 area fills and line work) are separate Mapsui layers, each with its own tile state, workers and cache. **Sibling layers reveal a slot together:** a cached tile is held back from the composite until every sibling that needs the same `(band, x, y)` has its tile too, or a short hold timeout passes. A held tile counts as a miss, so the backdrop (cross-band fallback) still draws under it. A slot once revealed stays revealed. The live overlay of a cell waits until some of its base plane is on screen. A layer that replaces another on the map (an S-98 filtered copy) shows the replaced layer's tiles until its own land. See Appendix J.
+
 ### 3.6 Prediction / pre-warm
 
 EMA of recent viewport-center deltas → velocity estimate. Each tick the **warm set** = visible ∪ 1-ring halo ∪ directional fan in the velocity direction (depth ∝ |velocity|, capped) ∪ z±1 center tiles (slight zoom-in bias). On a fling, integrate the inertia curve to the predicted resting viewport and prioritize its tiles + path. Cancel anything outside the warm set after a move, with hysteresis against jitter. Idle time fills the speculative ring at lowest priority. All prediction work is best-effort and yields to visible tiles under CPU/memory pressure.
@@ -1619,3 +1621,113 @@ identical** output to the pre-index path. Verified by `BaseSpatialIndexTests`
 `BaseScopingBenchTests` (an interior tile-sized query over a dense synthetic base
 plane returns O(covering), not O(cell)). Absolute wall-clock reconfirmation
 in-viewer is pending a Metal GUI session.
+
+---
+
+## Appendix J — First-render reveal: one step per tile slot
+
+A review of the IC-ENC UK collection (S-101 + S-102, "load as you pan", Cowes
+at 1:10 500) reported that a cell's first render builds up layer by layer:
+area fills, then line work, then the S-102 raster on top. A reveal trace
+(per-layer cached/shown tile counts per frame, plus the map's dataset-layer
+replacements) found two causes, not one.
+
+### J.1 Causes
+
+1. **Filtered-layer churn (dominant).** The S-98 layer stack is re-projected
+   whenever any dataset loads. R-101-102-B suppresses S-101 depth areas under
+   S-102, and `LayerStackProjector` built a *new* filtered `MemoryLayer` (a new
+   `TileState` with an empty cache) for every suppressed sub-layer on every
+   projection. Each S-102 or S-101 load therefore blanked every visible S-101
+   area-fill layer, which then repainted under the S-102 raster and over the
+   basemap, with its line work already drawn. With 300+ S-102 cells loading
+   as you pan, this repeated many times per view.
+2. **Independent per-layer reveal.** Each tiled layer has its own workers and
+   cache (§3.3–§3.5), so on a genuinely new cell the area-fill and line-work
+   tiles of one slot landed 5–100 ms apart and were blitted in separate
+   frames. The live symbol overlay drew from the first frame, before any fill.
+
+The S-102 raster is a separate dataset with its own load; it appears when its
+load lands and is not tiled by this subsystem. Cause 1 is why it looked as if
+the S-101 layers rebuilt underneath it.
+
+### J.2 What changed
+
+- **Filtered layers are memoised** per source layer while the dropped
+  feature set (and the source's features and bound scene) are unchanged, so an
+  unrelated load keeps the same layer and its warm tiles. The memo holds the
+  filtered layer weakly, so one no longer on the map does not pin its cache.
+- **A replacement layer inherits its predecessor's tiles.** When the dropped
+  set does change (an S-102 lands over a loaded S-101 cell), the new filtered
+  layer is bound with `TryBindFilteredScene(source, target, keep, replaces)`.
+  Until its own tiles land, wherever it cannot show a tile it blits the
+  replaced layer's cached tile for the same key. The predecessor's queued work
+  is cancelled, only one step back is kept, and the reference is dropped once
+  the target is complete or after `PredecessorLifetime` (5 s). The stand-in is
+  the previous filtered copy, or the unfiltered source the first time anything
+  is dropped.
+- **Sibling tiled layers reveal a slot together** (`TileRevealGroup`).
+  `MapsuiDatasetRenderer` joins a vector result's tiled sub-layers in one
+  group; a filtered copy takes its source's place in it. Per frame each member
+  reports the keys it would blit and how to test its cache. A cached tile is
+  shown only once every *active* sibling (one that composited this frame or
+  the last) that needs the same `(band, x, y)` has its own tile there, or
+  once the slot has been held for `HoldTimeout` (400 ms). The rule:
+  - matches by position, not SCAMIN scale class (each layer checks its own key);
+  - a held tile is a miss for `targetComplete`, so the cross-band backdrop
+    still draws under it: holding never opens a hole a zoom did not already have;
+  - a revealed slot stays revealed (bounded set), so panning back over a slot
+    never re-hides fills while an evicted sibling tile is re-rasterised;
+  - decisions are made once per frame. Mapsui gives a layer renderer no frame
+    number (`RenderService.CurrentIteration` stays 0 in the viewer), so the
+    group counts frames itself: each member composites once per frame, so a
+    member reporting a second time starts a new one. A sibling's tile landing
+    between two members' composites therefore cannot reveal one layer a frame
+    early;
+  - while a tile is held the layer requests another paint, so the timeout
+    fires even if no worker publish would repaint;
+  - off-screen frames (captures) draw what is cached and ignore the group.
+- **The live overlay waits for the base plane.** A layer draws its symbol
+  overlay only once some of its base plane is on screen (a revealed target
+  tile, a predecessor tile or a backdrop tile) or no tile in view has base
+  content, so a cell's symbols no longer float over the basemap before its fills.
+
+### J.3 Verification
+
+Reveal trace (Cowes, cold tile cache), per S-101 cell:
+
+| | before | after |
+|---|---|---|
+| area-fill layers rebuilt per dataset load | every visible cell, every load | only when the cell's dropped set changes |
+| frames from first area tile to first line tile | 1–3 (5–100 ms) | 0 (same frame, same count) |
+| frames a replaced area layer shows nothing | until re-rasterised | none (predecessor tiles) |
+
+Pan latency: see J.4.
+
+Tests: `TileRevealGroupTests` (the rule: hold, mid-frame landing, lone member,
+sibling not needing the slot, inactive sibling, timeout, sticky reveal, scale
+class), `TileRevealRenderTests` (overlay held on a cold cell, overlay-only view
+draws at once, replacement layer shows predecessor tiles on its first frame, and
+the control without a predecessor), and `LayerStackProjectorTests` (memoised
+filtered layer, new layer on a changed dropped set, reveal group carried over).
+
+### J.4 Pan latency
+
+Same cold-tile-cache script on `main` and on this change, alternating builds:
+load the collection as you pan, settle at Cowes 1:10 500, then pan to fresh
+areas with `await_render_idle` after each step and the `get_render_stats`
+window reset before it; `dotnet-trace` (sample profiler) ran during the pans.
+
+- **Time to idle per pan** (tiles rasterised and revealed): unchanged. Median
+  153 / 150 / 147 ms on `main` vs 160 / 141 ms on 16-pan runs; mean 213 ms vs
+  214 / 192 ms on quiet 32-pan runs.
+- **Frame time:** the first build blitted predecessor tiles as raster images,
+  re-uploading them to the GPU every frame, and its frame mean ran about 1 ms
+  over `main`. Predecessor tiles now get GPU twins in the successor's texture
+  cache under disjoint keys (negative scale class), so they upload once. After
+  that, the pooled frame mean on quiet 32-pan runs is 5.2 / 5.3 ms vs 6.0 ms on
+  `main`. Runs where many S-102 loads landed mid-pan were 11–21 ms on *both*
+  builds: that variance is the load path, not the compositor.
+- **Profile:** `S100VectorTileRenderer.Composite` is the same share of samples
+  (0.03 %) on both builds; `TileRevealGroup` does not register.
+

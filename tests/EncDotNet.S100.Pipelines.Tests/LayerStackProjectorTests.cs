@@ -157,6 +157,95 @@ public class LayerStackProjectorTests
         Assert.Equal("2", Assert.Single(layer.Features)[MapsuiDisplayListRenderer.FeatureRefKey]);
     }
 
+    [Fact]
+    public void Project_unchanged_suppression_reuses_the_filtered_layer()
+    {
+        // The stack is re-projected whenever any dataset loads, and the engine
+        // returns a new suppressed sub-layer each time. A new filtered layer
+        // would start with an empty tile cache, so the cell's fills would
+        // blank and repaint on every load.
+        const string datasetId = "s101.000";
+        var original = BuildVectorItem(datasetId, "1", "2");
+        var prebuilt = TiledPrebuilt(original);
+
+        var first = ProjectSuppressing(original, prebuilt, "2");
+        var second = ProjectSuppressing(original, prebuilt, "2");
+
+        Assert.Same(first, second);
+    }
+
+    [Fact]
+    public void Project_changed_suppression_builds_a_new_filtered_layer()
+    {
+        const string datasetId = "s101.000";
+        var original = BuildVectorItem(datasetId, "1", "2", "3");
+        var prebuilt = TiledPrebuilt(original);
+
+        var first = ProjectSuppressing(original, prebuilt, "2", "3");
+        var second = ProjectSuppressing(original, prebuilt, "3");
+
+        Assert.NotSame(first, second);
+        Assert.Equal("3", Assert.Single(((MemoryLayer)second).Features)[MapsuiDisplayListRenderer.FeatureRefKey]);
+    }
+
+    [Fact]
+    public void Project_filtered_layer_keeps_its_sources_reveal_group()
+    {
+        // The filtered area layer stands in for its source, so it must reveal
+        // its tiles together with the dataset's line work, as the source did.
+        const string datasetId = "s101.000";
+        var original = BuildVectorItem(datasetId, "1", "2");
+        var prebuilt = TiledPrebuilt(original);
+        var source = prebuilt[LayerStackProjector.KeyOf(original)].Layer;
+        var lines = new MemoryLayer { Name = "S-101 (lines)" };
+        S100VectorTileRenderer.BindScene(lines, new VectorScene(new PaintOp[]
+        {
+            new LinePaintOp { FeatureReference = "3", World = [(0.0, 0.0), (1.0, 1.0)] },
+        }));
+        S100VectorTileRenderer.JoinRevealGroup([(source, "0:s101.areas"), (lines, "1:s101.linework")]);
+
+        var filtered = ProjectSuppressing(original, prebuilt, "2");
+
+        var group = S100VectorTileRenderer.RevealGroupForTest(lines);
+        Assert.NotNull(group);
+        Assert.Same(group, S100VectorTileRenderer.RevealGroupForTest(filtered));
+    }
+
+    private static Dictionary<(string, string), LayerStackEntry> TiledPrebuilt(SubLayerStackItem original)
+    {
+        var refs = ((VectorStackPayload)original.Payload).SubLayer.Instructions
+            .Select(i => i.FeatureReference!)
+            .ToArray();
+        var square = new[] { (0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 0.0) };
+        var layer = new InstrumentedMemoryLayer
+        {
+            Name = "S-101 (areas)",
+            Features = refs.Select(PickFeature).ToList(),
+            CustomLayerRendererName = S100VectorTileRenderer.RendererName,
+            RepeatsAcrossWorldCopies = true,
+        };
+        S100VectorTileRenderer.BindScene(layer, new VectorScene(
+            refs.Select(r => (PaintOp)new AreaPaintOp { FeatureReference = r, WorldShell = square }).ToArray()));
+        return new Dictionary<(string, string), LayerStackEntry>
+        {
+            [LayerStackProjector.KeyOf(original)] = new LayerStackEntry(layer, original),
+        };
+    }
+
+    /// <summary>Projects <paramref name="original"/> with only <paramref name="surviving"/> kept, as a fresh ruled item.</summary>
+    private static ILayer ProjectSuppressing(
+        SubLayerStackItem original,
+        Dictionary<(string, string), LayerStackEntry> prebuilt,
+        params string[] surviving)
+    {
+        var ruled = new SubLayerStackItem(
+            ((VectorStackPayload)original.Payload).WithSubLayer(BuildAreaSubLayer(surviving)),
+            S98DisplayPlane.BaseChartUnder,
+            0,
+            original.SourceDatasetId);
+        return Assert.Single(LayerStackProjector.Project(new[] { ruled }, prebuilt)).Layer;
+    }
+
     private static GeometryFeature PickFeature(string featureReference)
     {
         var feature = new GeometryFeature(new Point(0, 0));

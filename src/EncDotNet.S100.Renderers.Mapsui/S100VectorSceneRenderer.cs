@@ -159,7 +159,7 @@ public static class S100VectorSceneRenderer
     /// Binds to <paramref name="target"/> a copy of the scene bound to
     /// <paramref name="source"/> that keeps only the ops <paramref name="keep"/>
     /// accepts — the single-surface counterpart of
-    /// <see cref="S100VectorTileRenderer.TryBindFilteredScene"/>.
+    /// <see cref="S100VectorTileRenderer.TryBindFilteredScene(ILayer, ILayer, Func{PaintOp, bool})"/>.
     /// </summary>
     /// <param name="source">A layer a scene was bound to.</param>
     /// <param name="target">The layer to bind the filtered scene to.</param>
