@@ -16,7 +16,12 @@ output stay usable without hiding anything the catalogue alerts on.
 [Route checks](../route-checks.md) describes the checks as they are, and
 [Route check architecture](route-check-architecture.md) the engine. The
 findings list and map follow the #958 design round (decisions 6 and 7, the
-`HANDOFF.md` on branch `claude/route-checks-design`), shipped in #959.
+`HANDOFF.md` on branch `claude/route-checks-design`), shipped in #959. The
+mocks for this round are the **Route Checks · Volume (round 2)** artboard
+beside round 1's on the *Navigation & time* page of the SoundCharts design
+canvas (<https://claude.ai/artifact/2hWbgQ9wKM1gC2gM51mSCs>): the list and map
+at Solent volume (3a, 3b), the check settings (3c), the counts (3d) and the
+row and map-mark components (3e).
 
 ## 1. Problem
 
