@@ -203,8 +203,7 @@ internal static class S101DocumentReader
         reader.TryGetSubfield<string>("DSRD", out var dsrd);
         reader.TryGetSubfield<string>("DSLG", out var dslg);
         reader.TryGetSubfield<string>("DSAB", out var dsab);
-        // Read by ordinal: the S-101 descriptor names this subfield "DSED\\" (see Ordinal).
-        var dsed = Optional<string?>(reader, 0, Ordinal(reader, "DSED"), null);
+        reader.TryGetSubfield<string>("DSED", out var dsed);
 
         return new S101DatasetIdentification
         {
@@ -359,17 +358,12 @@ internal static class S101DocumentReader
     /// Finds a subfield's ordinal in the field definition, or <c>-1</c> when the definition
     /// has none, in which case every read of it finds nothing.
     /// </summary>
-    /// <remarks>
-    /// S-100 Part 10a descriptors write <c>\\</c> before the <c>*</c> that starts a repeating
-    /// group (<c>DSED\\*DSTC</c>), and the ISO 8211 reader keeps it in the name of the
-    /// subfield before, so it's ignored here.
-    /// </remarks>
     private static int Ordinal(Iso8211FieldReader reader, string name)
     {
         var subfields = reader.FieldDefinition.SubfieldDefinitions;
         for (var i = 0; i < subfields.Count; i++)
         {
-            if (subfields[i].Name.AsSpan().TrimEnd('\\').Equals(name, StringComparison.Ordinal))
+            if (string.Equals(subfields[i].Name, name, StringComparison.Ordinal))
                 return i;
         }
 
