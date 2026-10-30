@@ -1,6 +1,8 @@
+using System.Runtime.CompilerServices;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Rendering.Scene;
+using Mapsui;
 using Mapsui.Layers;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
@@ -161,7 +163,55 @@ public static class LayerStackProjector
         if (dropped.Count == 0)
             return prebuilt.Layer;
 
-        return FilterFeatures(memoryLayer, dropped);
+        // The stack is re-projected whenever any dataset loads, unloads or
+        // changes, and the engine hands back a new suppressed sub-layer each
+        // time. Rebuilding the filtered layer then would give the map a new
+        // layer with an empty tile cache, so the cell's area fills would blank
+        // and repaint over its line work on every load. Reuse the filtered
+        // layer while the source and the dropped set are unchanged.
+        FilteredLayers.TryGetValue(memoryLayer, out var memo);
+        var previous = memo?.Filtered;
+        if (previous is not null && memo!.Matches(memoryLayer, dropped))
+        {
+            CopyDisplayState(memoryLayer, previous);
+            return previous;
+        }
+
+        // A changed dropped set (an S-102 loaded over the cell) needs a new
+        // filtered layer. It shows the tiles of the layer it replaces on the
+        // map until its own land: the previous filtered copy, or the source
+        // itself the first time anything is dropped.
+        var filtered = FilterFeatures(memoryLayer, dropped, replaces: previous ?? memoryLayer);
+        FilteredLayers.AddOrUpdate(memoryLayer, new FilteredLayerMemo(memoryLayer, dropped, filtered));
+        return filtered;
+    }
+
+    /// <summary>
+    /// The suppression-filtered layer last built for each prebuilt source
+    /// layer. Keyed weakly by source, so it goes with the source's dataset,
+    /// and holding the filtered layer weakly, so one no longer on the map (its
+    /// S-102 switched off) does not keep its tiles alive.
+    /// </summary>
+    private static readonly ConditionalWeakTable<MemoryLayer, FilteredLayerMemo> FilteredLayers = new();
+
+    private sealed class FilteredLayerMemo(MemoryLayer source, HashSet<string> dropped, MemoryLayer filtered)
+    {
+        private readonly IEnumerable<IFeature> _sourceFeatures = source.Features;
+        private readonly VectorScene? _sourceScene = BoundScene(source);
+
+        private readonly WeakReference<MemoryLayer> _filtered = new(filtered);
+
+        public MemoryLayer? Filtered => _filtered.TryGetTarget(out var layer) ? layer : null;
+
+        // A source whose features or bound scene were replaced since the
+        // filtered copy was taken needs a new copy.
+        public bool Matches(MemoryLayer source, HashSet<string> droppedNow) =>
+            ReferenceEquals(source.Features, _sourceFeatures)
+            && ReferenceEquals(BoundScene(source), _sourceScene)
+            && dropped.SetEquals(droppedNow);
+
+        private static VectorScene? BoundScene(MemoryLayer layer) =>
+            S100VectorTileRenderer.TryGetPartitionedScene(layer, out var baseScene, out _) ? baseScene : null;
     }
 
     private static void CopyDisplayState(ILayer source, ILayer target)
@@ -197,7 +247,7 @@ public static class LayerStackProjector
         return dropped;
     }
 
-    private static MemoryLayer FilterFeatures(MemoryLayer source, HashSet<string> droppedRefs)
+    private static MemoryLayer FilterFeatures(MemoryLayer source, HashSet<string> droppedRefs, ILayer? replaces)
     {
         var kept = source.Features
             .Where(f => f[MapsuiDisplayListRenderer.FeatureRefKey] is not string r || !droppedRefs.Contains(r))
@@ -224,7 +274,7 @@ public static class LayerStackProjector
         bool Keep(PaintOp op) => !droppedRefs.Contains(op.FeatureReference);
         var bound = source.CustomLayerRendererName switch
         {
-            S100VectorTileRenderer.RendererName => S100VectorTileRenderer.TryBindFilteredScene(source, filtered, Keep),
+            S100VectorTileRenderer.RendererName => S100VectorTileRenderer.TryBindFilteredScene(source, filtered, Keep, replaces),
             S100VectorSceneRenderer.RendererName => S100VectorSceneRenderer.TryBindFilteredScene(source, filtered, Keep),
             _ => true,
         };

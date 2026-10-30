@@ -184,6 +184,7 @@ public sealed class MapsuiDatasetRenderer
 
         var layers = new List<ILayer>(result.SubLayers.Count);
         var stackEntries = new List<LayerStackEntry>(result.SubLayers.Count);
+        var revealMembers = new List<(ILayer Layer, string Member)>(result.SubLayers.Count);
         MRect? union = null;
 
         foreach (var sub in result.SubLayers)
@@ -242,6 +243,8 @@ public sealed class MapsuiDatasetRenderer
             }
 
             layers.Add(layer);
+            // Indexed: sub-layer keys need not be unique within a product.
+            revealMembers.Add((layer, FormattableString.Invariant($"{revealMembers.Count}:{sub.LayerKey}")));
             stackEntries.Add(new LayerStackEntry(
                 layer,
                 new SubLayerStackItem(
@@ -256,6 +259,10 @@ public sealed class MapsuiDatasetRenderer
 
             union = Union(union, layer.Extent);
         }
+
+        // The dataset's sub-layers (S-101 area fills and line work) are tiled
+        // separately; reveal each tile position of theirs together.
+        S100VectorTileRenderer.JoinRevealGroup(revealMembers);
 
         // GML XSLT products carry an authoritative, padded geographic extent
         // (GeographicExtent) used verbatim. S-131 prefers its rendered layer's
