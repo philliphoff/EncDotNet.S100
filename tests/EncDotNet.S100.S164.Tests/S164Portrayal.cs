@@ -62,17 +62,7 @@ internal static class S164Portrayal
     public static async Task<(S101DatasetProcessor Processor, IReadOnlyList<DrawingInstruction> Instructions)> PortrayAsync(
         string exchangeSet, string cell, MarinerSettings mariner, CancellationToken cancellationToken, PortrayalTime? time = null)
     {
-        var zip = await S164TestData.GetExchangeSetAsync(exchangeSet, cancellationToken);
-        var source = ZipAssetSource.Create(zip, "S100_ROOT/");
-        var catalogues = new PortrayalCatalogueManager();
-        catalogues.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
-        var processor = new S101DatasetProcessor(
-            source,
-            $"S-101/DATASET_FILES/{cell}",
-            catalogues,
-            new MoonSharpLuaEngine(),
-            new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
-
+        var processor = await OpenAsync(exchangeSet, cell, cancellationToken);
         var result = await processor.BuildVectorPortrayalAsync(
             new RenderContext
             {
@@ -82,5 +72,24 @@ internal static class S164Portrayal
             },
             cancellationToken);
         return (processor, result.SubLayers.SelectMany(l => l.Instructions).ToList());
+    }
+
+    /// <summary>
+    /// Opens <c>S100_ROOT/S-101/DATASET_FILES/<paramref name="cell"/></c> from the
+    /// exchange set <paramref name="exchangeSet"/> with the bundled S-101
+    /// catalogues, resolving support files from the exchange set.
+    /// </summary>
+    public static async Task<S101DatasetProcessor> OpenAsync(string exchangeSet, string cell, CancellationToken cancellationToken)
+    {
+        var zip = await S164TestData.GetExchangeSetAsync(exchangeSet, cancellationToken);
+        var source = ZipAssetSource.Create(zip, "S100_ROOT/");
+        var catalogues = new PortrayalCatalogueManager();
+        catalogues.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
+        return new S101DatasetProcessor(
+            source,
+            $"S-101/DATASET_FILES/{cell}",
+            catalogues,
+            new MoonSharpLuaEngine(),
+            new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
     }
 }
