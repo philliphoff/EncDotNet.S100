@@ -139,6 +139,31 @@ public class S102Edition21Tests
     }
 
     [Fact]
+    public async Task Portrayal_WithoutDeclaredScale_HidesBeyondTheGridSpacingCutoff()
+    {
+        // 16 m UTM spacing, four nodes per 0.28 mm pixel: 1:228 571.
+        var path = WriteEdition21Utm(spacing: 16.0);
+        using var manager = CreateCatalogueManager();
+        var processor = new S102DatasetProcessor(
+            path,
+            manager,
+            new MoonSharpLuaEngine(),
+            new ProjNetCrsTransformFactory());
+
+        try
+        {
+            var result = await processor.BuildCoveragePortrayalAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Equal(228_571, result.CellMinimumDisplayScale);
+        }
+        finally
+        {
+            processor.Dispose();
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void Metadata_Edition21Utm_SurfacesCrsAndExtent_WithoutReReadingPayload()
     {
         var path = WriteEdition21Utm();

@@ -333,6 +333,7 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             Spec = Spec,
             SourceDatasetId = _fileName,
             Info = info,
+            CellMinimumDisplayScale = GridDisplayScale.FromGrid(metadata.GridMetadata, geographic: crs == 4326),
         });
     }
 
