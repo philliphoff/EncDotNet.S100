@@ -159,13 +159,15 @@ public sealed class VectorSceneBuilder
         ArgumentNullException.ThrowIfNull(instructions);
         ArgumentNullException.ThrowIfNull(geometryProvider);
 
+        // S-100 Part 9 draw order: display plane, then drawing priority, then the
+        // geometry rule within a priority (areas, pattern fills, lines, points,
+        // text). A higher-priority area therefore covers a lower-priority line
+        // (#1126). The sort is stable, so ties keep display-list order.
         var sorted = instructions
             .OrderBy(i => i.Plane == EncDotNet.S100.Pipelines.Vector.DisplayPlane.OverRadar ? 1 : 0)
+            .ThenBy(i => i.DrawingPriority)
             .ThenBy(i => i switch
             {
-                // Pattern areas draw after solid areas but before lines/points/text,
-                // mirroring the Mapsui renderer's "insert pattern fills after the
-                // last solid colour fill" ordering.
                 AreaInstruction { AreaFillReference: not null } => 1,
                 AreaInstruction => 0,
                 LineInstruction => 2,
@@ -173,7 +175,6 @@ public sealed class VectorSceneBuilder
                 TextInstruction => 4,
                 _ => 5,
             })
-            .ThenBy(i => i.DrawingPriority)
             .ToList();
 
         var ops = new List<PaintOp>(sorted.Count);
@@ -248,7 +249,7 @@ public sealed class VectorSceneBuilder
     /// <summary>
     /// Applies S-100 Part 9 §11.3 pattern priority-clipping to the pattern ops in
     /// <paramref name="ops"/> using the shared <see cref="PatternPriorityClipper"/>,
-    /// then rewrites the pattern-op block in place with the clipped result. Pattern
+    /// then puts each priority's clipped result back in that priority's place. Pattern
     /// ops are grouped by (pattern reference, drawing priority) — matching the
     /// Mapsui feature path — so both render arms produce identical clip topology.
     /// </summary>
@@ -295,9 +296,11 @@ public sealed class VectorSceneBuilder
         var groupPolygons = new Dictionary<(string, int), List<Polygon>>(PatternGroupKeyComparer);
         var groupTemplates = new Dictionary<(string, int), PatternGroupTemplate>(PatternGroupKeyComparer);
         var unclippable = new List<PatternAreaPaintOp>();
+        var priorityOf = new Dictionary<PatternAreaPaintOp, int>(ReferenceEqualityComparer.Instance);
 
         foreach (var (op, priority) in patternPriorities)
         {
+            priorityOf[op] = priority;
             var polygon = CreatePolygon(op.WorldShell, op.WorldHoles);
             if (polygon is null)
             {
@@ -336,7 +339,7 @@ public sealed class VectorSceneBuilder
 
         // Rebuild pattern ops from the clipped geometry, expanding a MultiPolygon
         // result into one op per polygon.
-        var rebuilt = new List<PaintOp>();
+        var rebuilt = new List<(int Priority, PaintOp Op)>();
         foreach (var (patternRef, priority, geometry) in clipped)
         {
             if (geometry.IsEmpty)
@@ -353,7 +356,7 @@ public sealed class VectorSceneBuilder
 
             foreach (var (shell, holes) in EnumeratePolygonRings(geometry))
             {
-                rebuilt.Add(new PatternAreaPaintOp
+                rebuilt.Add((priority, new PatternAreaPaintOp
                 {
                     FeatureReference = template.Value.FeatureReference,
                     ScaleMinimum = template.Value.ScaleMinimum,
@@ -362,19 +365,38 @@ public sealed class VectorSceneBuilder
                     WorldShell = shell,
                     WorldHoles = holes,
                     TilePng = template.Value.TilePng,
-                });
+                }));
             }
         }
 
-        rebuilt.AddRange(unclippable);
+        foreach (var op in unclippable)
+            rebuilt.Add((priorityOf[op], op));
 
-        // Replace the (contiguous, draw-order rank-1) pattern-op block in place:
-        // patterns sit after solid area fills and before lines/points/text.
-        int insertAt = ops.FindIndex(o => o is PatternAreaPaintOp);
-        if (insertAt < 0)
-            insertAt = ops.Count;
-        ops.RemoveAll(o => o is PatternAreaPaintOp);
-        ops.InsertRange(insertAt, rebuilt);
+        // Put each priority's clipped patterns back where that priority's first
+        // pattern op was, so patterns keep their place in the Part 9 draw order.
+        var placed = new HashSet<int>();
+        var reordered = new List<PaintOp>(ops.Count - patternPriorities.Count + rebuilt.Count);
+        foreach (var op in ops)
+        {
+            if (op is not PatternAreaPaintOp pattern)
+            {
+                reordered.Add(op);
+                continue;
+            }
+
+            int priority = priorityOf[pattern];
+            if (placed.Add(priority))
+            {
+                foreach (var (p, patternOp) in rebuilt)
+                {
+                    if (p == priority)
+                        reordered.Add(patternOp);
+                }
+            }
+        }
+
+        ops.Clear();
+        ops.AddRange(reordered);
     }
 
     /// <summary>
