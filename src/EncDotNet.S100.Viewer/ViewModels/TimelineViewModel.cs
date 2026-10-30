@@ -280,7 +280,8 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
 
     /// <summary>
     /// Whether date-dependent data is loaded whose drawing follows the view
-    /// time (S-124 navigational warnings, #993); the App keeps it current.
+    /// time (S-124 navigational warnings, #993; S-101 features with date
+    /// ranges, #1126); the App keeps it current.
     /// </summary>
     public bool HasDateDependentData
     {

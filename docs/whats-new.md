@@ -6,6 +6,17 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **S-101 features follow their dates.** A buoy, traffic separation scheme or
+  other S-101 feature with a fixed or periodic date range is now drawn only
+  at the dates it applies, as S-100 Part 9 asks. The parser turns the
+  portrayal's `Date`, `Time`, `DateTime`, `TimeValid` and `ClearTime`
+  commands into `DrawingInstruction.TimeValid` intervals, and S-101 and S-401
+  draw at `RenderContext.PortrayalTime` (an instant, or a viewing range)
+  without running the portrayal rules again. With no time set, every feature
+  is drawn as before. SoundCharts draws them at the view time, with dates
+  read in your Local/UTC setting, and a pinned view time says "Display Not
+  Real Time" for these charts as it does for S-124 warnings. The S-164
+  FixedDateRange and PeriodicDateRange tests now pass (#1126).
 - **Why an HDF5 file wasn't opened.** An HDF5 file is detected only from its
   root `productSpecification` attribute, which S-100 Part 10c requires, and
   one that doesn't have it is no longer read as S-102. When no product

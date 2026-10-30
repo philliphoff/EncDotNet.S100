@@ -265,11 +265,16 @@ public partial class App : Application
         // and has the map stamp say "Display Not Real Time" while they're loaded
         // and the view time is pinned (S-98 §12.7.2).
         _services.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningDrawingService>();
+        // S-101 features with date ranges count too (S-98 §12.8.2): their
+        // drawing follows the view time as well.
         {
             var warningsService = _services.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>();
+            var datedDrawing = _services.GetRequiredService<EncDotNet.S100.Viewer.Services.DateDependentDrawingService>();
             var timeline = _services.GetRequiredService<TimelineViewModel>();
-            warningsService.Changed += (_, _) => timeline.HasDateDependentData = warningsService.HasWarningDatasets;
-            timeline.HasDateDependentData = warningsService.HasWarningDatasets;
+            void Update() => timeline.HasDateDependentData = warningsService.HasWarningDatasets || datedDrawing.HasDateDependentData;
+            warningsService.Changed += (_, _) => Update();
+            datedDrawing.Changed += (_, _) => Update();
+            Update();
         }
         WatchSecomIdentity();
         settingsVm.McpSettingsChanged += () =>
@@ -1379,6 +1384,12 @@ public partial class App : Application
             RouteFindings = sp.GetService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>(),
         });
         services.AddSingleton<MainViewModel>();
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.DateDependentDrawingService(
+            sp.GetRequiredService<IDatasetLoaderService>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IViewTime>(),
+            sp.GetService<EncDotNet.S100.Viewer.Services.ITimeFormatProvider>(),
+            sp.GetService<TimeProvider>() ?? TimeProvider.System,
+            action => Avalonia.Threading.Dispatcher.UIThread.Post(action)));
         services.AddSingleton(sp =>
         {
             var drawing = new EncDotNet.S100.Viewer.Services.NavigationalWarningDrawingService(

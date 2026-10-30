@@ -1,5 +1,6 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
@@ -60,5 +61,11 @@ internal sealed class FakeDatasetLoaderService : IDatasetLoaderService
 
     public void SetHiddenFeaturesOnLoad(Func<DatasetEntry, IDatasetProcessor, IReadOnlySet<string>?>? policy) =>
         HiddenFeaturesOnLoad = policy;
+
+    /// <summary>The policy last passed to <see cref="SetPortrayalTimeOnLoad"/>.</summary>
+    public Func<DatasetEntry, IDatasetProcessor, PortrayalTime?>? PortrayalTimeOnLoad { get; private set; }
+
+    public void SetPortrayalTimeOnLoad(Func<DatasetEntry, IDatasetProcessor, PortrayalTime?>? policy) =>
+        PortrayalTimeOnLoad = policy;
     public event Action<string>? ActiveChanged { add { } remove { } }
 }

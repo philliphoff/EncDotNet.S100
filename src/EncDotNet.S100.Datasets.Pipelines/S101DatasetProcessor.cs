@@ -44,7 +44,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// in-memory cache is used.
 /// </para>
 /// </remarks>
-public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection, IChartDepthCell
+public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection, IChartDepthCell, IDateDependentDatasetProcessor
 {
     private readonly S101Dataset _dataset;
     private readonly S101UpdateReport? _updateReport;
@@ -112,6 +112,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     // _renderGate.
     private readonly IPortrayalInstructionCache _instructionCache;
 
+    // Distinct time intervals of the last portrayal (IDateDependentDatasetProcessor).
+    private volatile IReadOnlyList<PortrayalTimeInterval> _portrayalTimeIntervals = [];
+
     // Memoized portrayal-content hash forming the cross-load instruction-cache
     // key prefix (and strengthening the pattern-clip key). Computed once on
     // first render and reused; constant for the lifetime of this processor.
@@ -121,6 +124,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     // input is folded in) so previously persisted instruction-cache entries are
     // treated as stale rather than reused under a now-incompatible key.
     private const int PortrayalContentFormatVersion = 2;
+
+    /// <inheritdoc />
+    public IReadOnlyList<PortrayalTimeInterval> PortrayalTimeIntervals => _portrayalTimeIntervals;
 
     /// <summary>
     /// Number of renders served from the portrayal-instruction cache
@@ -815,7 +821,12 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             PortrayalCacheMisses++;
         }
 
-        var prepared = VectorPipeline.ApplyDisplayFilters(unfiltered, s101Cat);
+        // S-100 Part 9 timeValid: leave out what isn't drawn at the view
+        // time. The cached list keeps every instruction, so moving the view
+        // time never re-runs the Lua rules.
+        _portrayalTimeIntervals = PortrayalTimeFilter.Intervals(unfiltered);
+        var prepared = PortrayalTimeFilter.Apply(
+            VectorPipeline.ApplyDisplayFilters(unfiltered, s101Cat), context?.PortrayalTime);
         Console.WriteLine($"[S101] {prepared.Count} of {unfiltered.Count} drawing instructions shown");
 
         // S-98 R-101-102-A (Annex A §A-6.9.1): S-102 must render between

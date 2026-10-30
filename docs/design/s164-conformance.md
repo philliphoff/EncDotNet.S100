@@ -51,14 +51,14 @@ they drift.
 | Part | Area | Tests | Passes | Fails | Supported | Partial | Gap | N/A |
 |---|---|---|---|---|---|---|---|---|
 | 2 | Catalogue and dataset loading and updating | 70 | 5 | 0 | 10 | 34 | 21 | 0 |
-| 3 | Chart display | 61 | 5 | 0 | 28 | 22 | 5 | 1 |
+| 3 | Chart display | 61 | 7 | 0 | 28 | 20 | 5 | 1 |
 | 4 | Chart related functions | 47 | 0 | 0 | 2 | 32 | 11 | 2 |
 | 5 | Navigational hazards | 6 | 1 | 1 | 0 | 0 | 4 | 0 |
 | 6 | Areas with special conditions | 5 | 1 | 2 | 0 | 0 | 2 | 0 |
 | 7 | Safety contour | 6 | 1 | 0 | 0 | 3 | 2 | 0 |
 | 8 | S-57 testing | 0 | — | — | — | — | — | — |
 | 9 | Dual fuel mode and SECOM | 17 | 0 | 0 | 2 | 9 | 6 | 0 |
-| | **Total** | **212** | **13** | **3** | **42** | **100** | **51** | **3** |
+| | **Total** | **212** | **15** | **3** | **42** | **98** | **51** | **3** |
 
 Part 8 has no tests of its own in 2.0.1. It points S-57 testing at the
 existing S-64 datasets, which a later slice covers.
@@ -69,8 +69,8 @@ These account for most of the Partial and Gap ratings. Each has its own
 issue.
 
 1. **Portrayal instructions that are skipped.** ([#1126](https://github.com/philliphoff/EncDotNet.S100/issues/1126)) `DrawingInstructionParser`
-   recognises `SpatialReference`, `AreaPlacement`, `Date`, `TimeValid` and
-   `AlertReference` but does nothing with them, and treats
+   recognised `SpatialReference`, `AreaPlacement`, `Date`, `TimeValid` and
+   `AlertReference` but did nothing with them, and treats
    `LineInstructionUnsuppressed` as a plain line. `VectorSceneBuilder` sorted
    by geometry type before drawing priority, where S-100 Part 9 puts
    priority first. Edge-specific lines (the safety contour on depth areas,
@@ -80,7 +80,10 @@ issue.
    coastline and cell edges included. `SpatialReference` is now honoured for
    lines, so the safety contour and other edge lines follow their edges, and
    ops now draw in Part 9 order (plane, priority, then area, pattern, line,
-   point, text); line suppression, dates and `AreaPlacement` remain. Part 3 tests affected: SafetyContourDisplay,
+   point, text). The time commands (`Date`, `Time`, `DateTime`, `TimeValid`,
+   `ClearTime`) now set each instruction's time intervals, and S-101 and S-401
+   draw only what is valid at the view time. Line suppression and
+   `AreaPlacement` remain. Part 3 tests affected: SafetyContourDisplay,
    AreaBorders, ComplexPortrayal, DifferentPriority, LineSuppression,
    FixedDateRange, PeriodicDateRange, CentredSymbols1.
 2. **Route checks use their own rules, not the S-101 alert catalogue.** ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)) The
@@ -229,6 +232,13 @@ output and compares headless renders with the plots by eye, locally:
   instead, as the portrayal catalogue intends.
 - Three things differed from the plots, all since fixed: the safety contour
   outline (#1126), missing chart text (#1140) and plain boundaries (#1141).
+- FixedDateRange and PeriodicDateRange use the Settings cell `X0001`: two
+  buoys that replace each other on 16.08.2012, a traffic separation scheme
+  that moves on 01.12.2013, and two buoys laid March–October and
+  October–December. All were drawn at every date until #1126.
+- The date-dependent highlight (`CHDATD01`) also carries viewing group
+  90022, which is off at the tests' display settings, so the tests don't
+  check it; the manual turns *Highlight date dependent* on.
 - Dock and lock areas in DBASE belong to Standard Display, so with Display
   Base selected they leave an unfilled hole in the land area; the plot shows
   them filled. Not filed: the plot alone doesn't settle which is right.
@@ -374,8 +384,8 @@ the S-101 portrayal catalogue, which settles what a plot leaves unclear.
 | SimplifiedSymbolsTrue | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Core/Pipelines/MarinerSettings.cs` | As above. |
 | PlainBoundaries | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Core/Pipelines/MarinerSettings.cs` | PlainBoundaries context parameter. |
 | Symbolisedboundaries | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | Complex line styles draw their dashes and symbols along the boundary ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141)). |
-| FixedDateRange | S-98 12.8.1 | — | Partial | `src/EncDotNet.S100.Core/Pipelines/Vector/DrawingInstructionParser.cs` | PC adds the date-dependent highlight, but Date/TimeValid instructions are skipped so S-101 features aren't filtered by view date; the not-real-time stamp only counts S-124. |
-| PeriodicDateRange | S-98 12.8.1 | — | Partial | `src/EncDotNet.S100.Core/Pipelines/Vector/DrawingInstructionParser.cs` | As above. |
+| FixedDateRange | S-98 12.8.1 | Settings | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Features draw only within their dates at the view time, read in the Local/UTC setting, and a pinned time says "Display Not Real Time" ([#1126](https://github.com/philliphoff/EncDotNet.S100/issues/1126)). The library takes a viewing range; the apps show one view time, and the Timeline only moves while time-aware data is loaded. |
+| PeriodicDateRange | S-98 12.8.1 | Settings | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Truncated dates (`----03--` to `----10--`) recur every year, wrapping over the year end. The manual names DisplayOther, but the dated buoys are in the Settings cell. As above for the view time. |
 | SafetyContourDisplay | S-98 12.6.1 | DisplayBase | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | The safety contour is drawn only on the depth-area edges at the safety depth ([#1126](https://github.com/philliphoff/EncDotNet.S100/issues/1126)). |
 | UserSelectedSafetyContour | S-98 Appendix D-1 | PowerUp | Partial | `src/EncDotNet.S100.Datasets.S102/S102PortrayalCatalogue.cs` | S-102 coloured by the user's safety contour; no S-104 adjustment of the contour. |
 | SafetyDepth | — | — | Supported | `src/EncDotNet.S100.Datasets.S101/S101LuaRuleExecutor.cs` | Passed to the PC. |

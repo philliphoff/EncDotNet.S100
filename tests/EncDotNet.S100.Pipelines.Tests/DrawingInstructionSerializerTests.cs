@@ -31,6 +31,11 @@ public class DrawingInstructionSerializerTests
         LocalOffsetY = -2.5,
         LinePlacementPosition = 0.5,
         CoordinateOverride = new GeoPosition(50.5, -1.25),
+        TimeValid =
+        [
+            new PortrayalTimeInterval(PortrayalTimeKind.Date, "----03--", "----10--", TimeIntervalClosure.ClosedInterval),
+            new PortrayalTimeInterval(PortrayalTimeKind.DateTime, null, "20131130T120000Z", TimeIntervalClosure.LtSemiInterval),
+        ],
     };
 
     private static LineInstruction FullLine() => new()
@@ -174,6 +179,7 @@ public class DrawingInstructionSerializerTests
         Assert.Equal(expected.ViewingGroup, actual.ViewingGroup);
         Assert.Equal(expected.AdditionalViewingGroups, actual.AdditionalViewingGroups);
         Assert.Equal(expected.DrawingPriority, actual.DrawingPriority);
+        Assert.Equal(expected.TimeValid, actual.TimeValid);
         Assert.Equal(expected.ScaleMinimum, actual.ScaleMinimum);
         Assert.Equal(expected.ScaleMaximum, actual.ScaleMaximum);
 
