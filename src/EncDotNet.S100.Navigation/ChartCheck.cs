@@ -204,6 +204,7 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
         private BoundingBox[] _chunks = [];
         private List<RouteChartCell> _cells = [];
         private Dictionary<RouteChartCell, int> _cellIndex = new(ReferenceEqualityComparer.Instance);
+        private readonly RouteChartQuery _query;
         private IReadOnlyList<int>[] _centreBands = [];
         private IReadOnlyList<int>?[] _portBands = [];
         private IReadOnlyList<int>?[] _starboardBands = [];
@@ -217,6 +218,7 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
             _findings = findings;
             _dangers = dangers;
             _cancellationToken = cancellationToken;
+            _query = new RouteChartQuery(settings.SafetyContour?.TotalMetres, settings.SafetyDepth?.TotalMetres);
             _port = settings.PortMeters(leg, run.DefaultHalfWidthMeters);
             _starboard = settings.StarboardMeters(leg, run.DefaultHalfWidthMeters);
             (_stations, _spacing) = BuildStations(leg, offset, run.Options);
@@ -237,7 +239,7 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
             // change nothing for them.
             var depths = _depths;
             var (ring, extent) = depths is null ? (_ring, _extent) : WideRing(Math.Max(0, _run.Options.DangerNearbyMeters));
-            var features = _run.Charts.FeaturesInCorridor(ring, extent);
+            var features = _run.Charts.FeaturesInCorridor(ring, extent, _query);
             _cells = new List<RouteChartCell>(_run.Charts.CellsNear(extent));
             foreach (var cell in _cells)
             {

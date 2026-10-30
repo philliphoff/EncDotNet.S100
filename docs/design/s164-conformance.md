@@ -94,8 +94,10 @@ issue.
    AreaBorders, ComplexPortrayal, DifferentPriority, LineSuppression,
    FixedDateRange, PeriodicDateRange, CentredSymbols1.
 2. **Route checks use their own rules, not the S-101 alert catalogue.** ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)) The
-   alert catalogue can now be read, and each drawing instruction keeps its
-   `AlertReference`, but the checks don't use them yet. They cover wrecks,
+   alert catalogue can now be read, each drawing instruction keeps its
+   `AlertReference`, and the route check's chart source portrays the
+   corridor's features and tags each with its alerts, but the checks don't
+   use them yet. They cover wrecks,
    obstructions and rocks, and eight area kinds plus S-122, so other
    NavHazard and ProhAre features aren't checked. Affects Parts 5–7 and 9.
    Slice 6 confirmed this against the data (§6.3). Dangers are now judged

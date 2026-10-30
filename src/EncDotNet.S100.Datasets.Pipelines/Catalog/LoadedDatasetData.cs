@@ -56,7 +56,15 @@ public abstract record LoadedDatasetData;
 public sealed record S101DatasetData(
     S101Dataset Dataset,
     Func<string, string?>? ExternalTextResolver = null,
-    int? CompilationScale = null) : LoadedDatasetData;
+    int? CompilationScale = null) : LoadedDatasetData
+{
+    /// <summary>
+    /// Runs the cell's portrayal rules for chosen features and reports the
+    /// alerts they raise, for route checks (#1127); <c>null</c> when the
+    /// payload was read without a portrayal catalogue.
+    /// </summary>
+    public S101AlertPortrayal? Alerts { get; init; }
+}
 
 /// <summary>S-122 Marine Protected Areas typed model.</summary>
 public sealed record S122DatasetData(S122Dataset Model) : LoadedDatasetData;

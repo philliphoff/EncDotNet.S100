@@ -37,6 +37,15 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// display scale, since S-101 carries no compilation scale), the same as
 /// <see cref="CatalogChartedDepthSource"/>.
 /// </para>
+/// <para>
+/// When the cell's payload can portray (<see cref="S101DatasetData.Alerts"/>),
+/// every feature in the corridor is portrayed at the query's safety contour
+/// and safety depth, and each keeps the alerts its rules raise (#1127). A
+/// feature of no other kind that raises a <c>NavHazard</c> or
+/// <c>SafetyContour</c> alert comes back as
+/// <see cref="RouteChartFeatureKind.Alerted"/>; a sounding keeps the alerts
+/// raised at its own point.
+/// </para>
 /// </remarks>
 internal sealed class CatalogRouteChartSource : IRouteChartSource
 {
@@ -48,7 +57,7 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
         {
             if (dataset.Data is S101DatasetData s101)
             {
-                _cells.Add(new Cell(dataset.Id.Value, dataset.Bounds, s101.Dataset, s101.CompilationScale));
+                _cells.Add(new Cell(dataset.Id.Value, dataset.Bounds, s101.Dataset, s101.CompilationScale, s101.Alerts));
             }
         }
 
@@ -70,11 +79,12 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
         return result;
     }
 
-    public IReadOnlyList<RouteChartFeature> FeaturesInCorridor(IReadOnlyList<GeoPosition> corridor, BoundingBox extent)
+    public IReadOnlyList<RouteChartFeature> FeaturesInCorridor(IReadOnlyList<GeoPosition> corridor, BoundingBox extent, RouteChartQuery query)
     {
         ArgumentNullException.ThrowIfNull(corridor);
         ArgumentNullException.ThrowIfNull(extent);
-        var query = new GeoQuery.Polygon(new GeoPolygon(corridor.Select(p => new GeoPoint(p.Latitude, p.Longitude)).ToList()));
+        ArgumentNullException.ThrowIfNull(query);
+        var ring = new GeoQuery.Polygon(new GeoPolygon(corridor.Select(p => new GeoPoint(p.Latitude, p.Longitude)).ToList()));
         var result = new List<RouteChartFeature>();
         foreach (var cell in _cells)
         {
@@ -83,9 +93,29 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
                 continue;
             }
 
+            // Without a portrayal only the classified features matter, so
+            // they're classified before the dearer intersection test.
+            var portrays = cell.Alerts is not null;
+            var found = new List<(Feature Feature, RouteChartFeatureKind? Kind)>();
             foreach (var feature in cell.Index.Query(extent))
             {
-                if (Classify(feature) is not { } kind || !GeometryIntersection.Intersects(feature, query))
+                var kind = Classify(feature);
+                if ((kind is null && !portrays) || !GeometryIntersection.Intersects(feature, ring))
+                {
+                    continue;
+                }
+
+                found.Add((feature, kind));
+            }
+
+            var soundings = new List<RouteChartFeature>();
+            cell.AddSoundings(corridor, extent, soundings);
+            var alerts = cell.AlertsOf(found.Select(f => Id(f.Feature)).Concat(soundings.Select(s => s.FeatureId)), query);
+
+            foreach (var (feature, classified) in found)
+            {
+                var featureAlerts = alerts.TryGetValue(Id(feature), out var raised) ? raised : [];
+                if ((classified ?? (featureAlerts.Any(a => a.Alert != RouteFindingAlert.ProhAre) ? RouteChartFeatureKind.Alerted : null)) is not { } kind)
                 {
                     continue;
                 }
@@ -95,22 +125,60 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
                 result.Add(new RouteChartFeature(
                     kind,
                     cell,
-                    feature.Id.ToString(CultureInfo.InvariantCulture),
+                    Id(feature),
                     feature.FeatureType,
                     geometry.Surfaces,
                     geometry.Curves)
                 {
                     Points = geometry.Points,
-                    DepthMeters = kind == RouteChartFeatureKind.Danger ? DangerDepth(feature, effect) : MinimumDepth(feature),
+                    DepthMeters = kind switch
+                    {
+                        RouteChartFeatureKind.Danger => DangerDepth(feature, effect),
+                        RouteChartFeatureKind.Alerted => null,
+                        _ => MinimumDepth(feature),
+                    },
                     WaterLevelEffect = effect is { } code ? (int)code : null,
+                    Alerts = featureAlerts,
                 });
             }
 
-            cell.AddSoundings(corridor, extent, result);
+            foreach (var sounding in soundings)
+            {
+                result.Add(alerts.TryGetValue(sounding.FeatureId, out var raised)
+                    ? sounding with { Alerts = AtPoint(raised, sounding.Points[0]) }
+                    : sounding);
+            }
         }
 
         return result;
     }
+
+    private static string Id(Feature feature) => feature.Id.ToString(CultureInfo.InvariantCulture);
+
+    // A sounding's alerts are raised per depth, each at its own point.
+    private static IReadOnlyList<RouteChartAlert> AtPoint(IReadOnlyList<RouteChartAlert> alerts, GeoPosition point)
+    {
+        const double tolerance = 1e-7;
+        List<RouteChartAlert>? result = null;
+        foreach (var alert in alerts)
+        {
+            if (alert.Position is { } at
+                && Math.Abs(at.Latitude - point.Latitude) < tolerance
+                && Math.Abs(at.Longitude - point.Longitude) < tolerance)
+            {
+                (result ??= []).Add(alert);
+            }
+        }
+
+        return result ?? (IReadOnlyList<RouteChartAlert>)[];
+    }
+
+    // The S-101 alert catalogue's alerts; an alert it doesn't define is
+    // dropped. ProhAre names its kind of area by its plan viewing group.
+    private static RouteChartAlert? ToRouteAlert(FeatureAlert alert) =>
+        Enum.TryParse<RouteFindingAlert>(alert.Alert.Reference, ignoreCase: false, out var kind)
+            ? new RouteChartAlert(kind, kind == RouteFindingAlert.ProhAre ? alert.Alert.PlanViewingGroup : null, alert.Position)
+            : null;
 
     /// <summary>The regulated areas (#956) of every cell whose extent overlaps a box.</summary>
     internal void AddAreas(BoundingBox extent, List<RouteArea> result)
@@ -175,12 +243,13 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
         private readonly Lazy<Built> _built;
         private readonly Lazy<Dictionary<uint, S101FeatureRecord>> _records;
 
-        public Cell(string datasetId, BoundingBox bounds, S101Dataset dataset, int? compilationScale)
+        public Cell(string datasetId, BoundingBox bounds, S101Dataset dataset, int? compilationScale, S101AlertPortrayal? alerts)
             : base(datasetId)
         {
             Bounds = bounds;
             _dataset = dataset;
             _compilationScale = compilationScale;
+            Alerts = alerts;
             _built = new Lazy<Built>(Build, LazyThreadSafetyMode.ExecutionAndPublication);
             _records = new Lazy<Dictionary<uint, S101FeatureRecord>>(
                 () => dataset.Document.Features.GroupBy(f => f.RecordId).ToDictionary(g => g.Key, g => g.First()),
@@ -188,6 +257,31 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
         }
 
         public BoundingBox Bounds { get; }
+
+        public S101AlertPortrayal? Alerts { get; }
+
+        // The alerts the features raise at the query's depths, by feature id;
+        // empty without a portrayal. The portrayal is asynchronous only to
+        // load the rules, which it does once per set of depths.
+        public IReadOnlyDictionary<string, IReadOnlyList<RouteChartAlert>> AlertsOf(IEnumerable<string> featureIds, RouteChartQuery query)
+        {
+            var ids = featureIds.ToList();
+            if (Alerts is null || ids.Count == 0)
+            {
+                return new Dictionary<string, IReadOnlyList<RouteChartAlert>>();
+            }
+
+            var mariner = MarinerSettings.Default with
+            {
+                SafetyContour = query.SafetyContourMeters is { } contour ? Quantities.Depth.FromMetres(contour) : MarinerSettings.Default.SafetyContour,
+                SafetyDepth = query.SafetyDepthMeters is { } depth ? Quantities.Depth.FromMetres(depth) : MarinerSettings.Default.SafetyDepth,
+            };
+            var raised = Alerts.AlertsAsync(ids, mariner).GetAwaiter().GetResult();
+            return raised.ToDictionary(
+                p => p.Key,
+                p => (IReadOnlyList<RouteChartAlert>)p.Value.Select(ToRouteAlert).OfType<RouteChartAlert>().Distinct().ToList(),
+                StringComparer.Ordinal);
+        }
 
         public override int? RankingScale => _built.Value.RankingScale;
 

@@ -305,6 +305,18 @@ public class ChartCheckTests
     }
 
     [Fact]
+    public void The_corridor_is_portrayed_at_the_settings_depths()
+    {
+        // The S-101 alert rules judge against the safety contour (#1127).
+        var charts = new CountingCharts(new FakeCharts([Harbour], []));
+        var settings = new RouteCheckSettings { At = Fixture.Departure, SafetyContour = Depth.FromMetres(12), SafetyDepth = Depth.FromMetres(8) };
+
+        Checks.Run(new ChartCheck(), new PassagePlan([East]), settings, new RouteCheckSources { Charts = charts });
+
+        Assert.Equal(new RouteChartQuery(12, 8), charts.LastQuery);
+    }
+
+    [Fact]
     public void The_last_sweep_is_kept_while_only_the_time_changes()
     {
         var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.004, 0.005);
@@ -369,7 +381,7 @@ internal sealed class FakeCharts(IReadOnlyList<RouteChartCell> cells, IReadOnlyL
 {
     public IReadOnlyList<RouteChartCell> CellsNear(BoundingBox extent) => cells;
 
-    public IReadOnlyList<RouteChartFeature> FeaturesInCorridor(IReadOnlyList<GeoPosition> corridor, BoundingBox extent) => features;
+    public IReadOnlyList<RouteChartFeature> FeaturesInCorridor(IReadOnlyList<GeoPosition> corridor, BoundingBox extent, RouteChartQuery query) => features;
 
     /// <summary>A rectangular area from <paramref name="west"/> to <paramref name="east"/> (degrees), straddling the equator by default.</summary>
     public static RouteChartFeature Area(RouteChartFeatureKind kind, RouteChartCell cell, string id, double west, double east, double south = -0.001, double north = 0.001) =>
@@ -390,12 +402,15 @@ internal sealed class CountingCharts(IRouteChartSource inner) : IRouteChartSourc
 {
     public int Calls { get; private set; }
 
+    public RouteChartQuery? LastQuery { get; private set; }
+
     public IReadOnlyList<RouteChartCell> CellsNear(BoundingBox extent) => inner.CellsNear(extent);
 
-    public IReadOnlyList<RouteChartFeature> FeaturesInCorridor(IReadOnlyList<GeoPosition> corridor, BoundingBox extent)
+    public IReadOnlyList<RouteChartFeature> FeaturesInCorridor(IReadOnlyList<GeoPosition> corridor, BoundingBox extent, RouteChartQuery query)
     {
         Calls++;
-        return inner.FeaturesInCorridor(corridor, extent);
+        LastQuery = query;
+        return inner.FeaturesInCorridor(corridor, extent, query);
     }
 }
 
