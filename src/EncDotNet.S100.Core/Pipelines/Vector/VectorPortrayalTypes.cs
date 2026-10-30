@@ -124,11 +124,17 @@ public sealed class AreaFill
 ///     groups regardless of the active mode.
 ///   </item>
 /// </list>
+/// <para>
+/// <em>Mode-independent groups</em> (<see cref="SetModeIndependentGroups"/>)
+/// are base-on whatever the active mode: a portrayal catalogue's chart text
+/// is switched on and off by the mariner, not by the display mode.
+/// </para>
 /// </remarks>
 public sealed class ViewingGroupController
 {
     private readonly Dictionary<int, bool> _userOverrides = new();
     private IReadOnlySet<int>? _modeMembership;
+    private IReadOnlySet<int>? _modeIndependent;
     private ViewingGroupFilter? _datasetFilter;
 
     /// <summary>
@@ -234,6 +240,28 @@ public sealed class ViewingGroupController
         _modeMembership is null ? null : new ReadOnlySetView<int>(_modeMembership);
 
     /// <summary>
+    /// Sets the viewing groups the display mode doesn't govern: they're
+    /// visible unless a user override hides them, whatever the active mode.
+    /// Pass <c>null</c> to clear.
+    /// </summary>
+    /// <remarks>
+    /// The S-101 portrayal catalogue's <c>Chart text</c> layer is the case in
+    /// point: its text groups belong to no display mode (S-100 Part 9 §11.7)
+    /// and are toggled on their own, as S-52 text groups are.
+    /// </remarks>
+    /// <param name="groups">The mode-independent groups, or <c>null</c>.</param>
+    public void SetModeIndependentGroups(IReadOnlySet<int>? groups)
+    {
+        if (ReferenceEquals(_modeIndependent, groups)) return;
+        _modeIndependent = groups;
+        Changed?.Invoke();
+    }
+
+    /// <summary>The groups set by <see cref="SetModeIndependentGroups"/>, or <c>null</c>.</summary>
+    public IReadOnlySet<int>? ModeIndependentGroups =>
+        _modeIndependent is null ? null : new ReadOnlySetView<int>(_modeIndependent);
+
+    /// <summary>
     /// The per-dataset filter applied after the mode membership and user
     /// overrides, or <c>null</c>. See <see cref="SetDatasetFilter"/>.
     /// </summary>
@@ -270,7 +298,9 @@ public sealed class ViewingGroupController
             return overrideValue;
         }
 
-        return _modeMembership is null || _modeMembership.Contains(viewingGroup);
+        return _modeMembership is null
+            || _modeMembership.Contains(viewingGroup)
+            || _modeIndependent?.Contains(viewingGroup) == true;
     }
 
     /// <summary>

@@ -108,6 +108,34 @@ public class MultipleViewingGroupTests
     }
 
     [Fact]
+    public void Controller_ModeIndependentTextGroupFollowsOnlyItsOverrideAndTheFeatureGroup()
+    {
+        // S-101 text carries its text group (26) and the feature's group
+        // (27070). No display mode lists text groups (#1140).
+        var controller = new ViewingGroupController();
+        controller.SetActiveModeMembership(new HashSet<int> { 27070 });
+        controller.SetModeIndependentGroups(new HashSet<int> { 26 });
+
+        var text = new TextInstruction
+        {
+            FeatureReference = "F1",
+            Text = "Nr A",
+            ViewingGroup = 26,
+            AdditionalViewingGroups = [27070],
+        };
+        Assert.True(controller.IsVisible(text));
+
+        // The mariner's text switch still hides it.
+        controller.SetUserOverride(26, false);
+        Assert.False(controller.IsVisible(text));
+        controller.SetUserOverride(26, null);
+
+        // And the feature's own group still follows the display mode.
+        controller.SetActiveModeMembership(new HashSet<int> { 11010 });
+        Assert.False(controller.IsVisible(text));
+    }
+
+    [Fact]
     public async Task S101_AdditionalInformation_Inform01HiddenBy90020_OwnSymbolKept()
     {
         var dataset = PileWithNauticalInformation();

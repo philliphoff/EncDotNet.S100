@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Portrayals;
 
 namespace EncDotNet.S100.S164.Tests;
 
@@ -78,10 +79,13 @@ public sealed class Part3DisplayTests
     {
         var (processor, instructions) = await S164Portrayal.PortrayAsync(
             "DisplayStandard", "10100AA_STNDR.000", S164Portrayal.DisplayTestSettings, TestContext.Current.CancellationToken);
-        var standard = S164Portrayal.ViewingGroups("StandardDisplay");
+        // Text also carries a chart-text group, which no display mode lists.
+        var allowed = S164Portrayal.ViewingGroups("StandardDisplay")
+            .Concat(DisplayModeMembership.ResolveChartText(S164Portrayal.Catalogue))
+            .ToHashSet();
 
         var outside = instructions
-            .Where(i => !standard.Contains(i.ViewingGroup))
+            .Where(i => !i.AdditionalViewingGroups.Prepend(i.ViewingGroup).All(allowed.Contains))
             .Select(i => $"{processor.GetFeatureInfo(i.FeatureReference)?.FeatureType} ({i.ViewingGroup})")
             .Distinct()
             .ToArray();
@@ -122,7 +126,7 @@ public sealed class Part3DisplayTests
         Assert.All(safetyContour, l => Assert.NotNull(l.CoordinatesOverride));
     }
 
-    [Fact(Skip = "Fails until #1140: text viewing groups aren't in any display mode, so chart text is dropped whenever an ECDIS category is set.")]
+    [Fact]
     public async Task TextGrouping_ChartTextShowsInOtherInformation()
     {
         var (_, instructions) = await S164Portrayal.PortrayAsync(
