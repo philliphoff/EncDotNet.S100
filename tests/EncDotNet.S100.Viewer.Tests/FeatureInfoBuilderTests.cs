@@ -372,4 +372,81 @@ public class FeatureInfoBuilderTests
         var child = Assert.Single(parent.Children);
         Assert.Equal("headline", child.Code);
     }
+
+    // ── BuildTree: ISO 8211 attribute rows (ATTR with PAIX, #1156) ──
+
+    [Fact]
+    public void BuildTree_KeepsEveryValueOfARepeatedAttribute()
+    {
+        // A yellow-and-black buoy with a black topmark: the topmark's colour
+        // is its own row under the topmark, not an overwrite.
+        var rows = new FeatureInfoBuilder.AttributeRow[]
+        {
+            new("colour", "6", 0),
+            new("colour", "2", 0),
+            new("topmark", "", 0),
+            new("colour", "2", 3),
+            new("topmarkDaymarkShape", "13", 3),
+        };
+
+        var result = FeatureInfoBuilder.BuildTree(rows, LoadDecoder());
+
+        Assert.Equal(["colour", "colour", "topmark"], result.Select(r => r.Code));
+        Assert.Equal(["Yellow", "Black"], result.Take(2).Select(r => r.DisplayValue));
+        var topmark = result[2];
+        Assert.Equal("Topmark", topmark.Name);
+        Assert.Equal(["colour", "topmarkDaymarkShape"], topmark.Children.Select(c => c.Code));
+        Assert.Equal("Black", topmark.Children[0].DisplayValue);
+    }
+
+    [Fact]
+    public void BuildTree_NestsComplexAttributesToAnyDepth()
+    {
+        var rows = new FeatureInfoBuilder.AttributeRow[]
+        {
+            new("tidalStreamPanelValues", "", 0),
+            new("tidalStreamValue", "", 1),
+            new("speedMaximum", "1.5", 2),
+            new("tidalStreamValue", "", 1),
+            new("speedMaximum", "2.5", 4),
+        };
+
+        var result = FeatureInfoBuilder.BuildTree(rows, decoder: null);
+
+        var panel = Assert.Single(result);
+        Assert.Equal(2, panel.Children.Count);
+        Assert.All(panel.Children, hour => Assert.Equal("speedMaximum", Assert.Single(hour.Children).Code));
+        Assert.Equal(["1.5", "2.5"], panel.Children.Select(h => h.Children[0].RawValue));
+    }
+
+    [Fact]
+    public void BuildTree_DropsEmptyValuesAndEmptyComplexAttributes()
+    {
+        var rows = new FeatureInfoBuilder.AttributeRow[]
+        {
+            new("featureName", "", 0),
+            new("name", " ", 1),
+            new("scaleMinimum", "", 0),
+            new("height", "12", 0),
+        };
+
+        var result = FeatureInfoBuilder.BuildTree(rows, decoder: null);
+
+        Assert.Equal("height", Assert.Single(result).Code);
+    }
+
+    [Fact]
+    public void BuildTree_TreatsAForwardOrMissingParentAsTopLevel()
+    {
+        var rows = new FeatureInfoBuilder.AttributeRow[]
+        {
+            new("height", "12", 2),
+            new("elevation", "5", 9),
+            new("heightLengthUnits", "1", 3),
+        };
+
+        var result = FeatureInfoBuilder.BuildTree(rows, decoder: null);
+
+        Assert.Equal(["height", "elevation", "heightLengthUnits"], result.Select(r => r.Code));
+    }
 }
