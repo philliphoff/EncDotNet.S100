@@ -104,9 +104,10 @@
 
         <!--
             Row template for the attribute table: the attribute's own cell,
-            followed (for complex attributes) by its leaf children indented
-            one level. Children never carry further children, so a single
-            nested ItemsControl is sufficient — no recursion.
+            followed (for complex attributes) by its children indented one
+            level. An S-101 complex attribute can hold further complex
+            attributes (a tidal stream panel's hourly values), so the children
+            use this same template, looked up dynamically.
         -->
         <DataTemplate x:Key="AttributeRowTemplate" x:DataType="pp:PickAttribute">
             <StackPanel>
@@ -114,7 +115,7 @@
                                 ContentTemplate="{StaticResource AttributeCellTemplate}" />
                 <ItemsControl ItemsSource="{Binding Children}"
                               Margin="20,0,0,0"
-                              ItemTemplate="{StaticResource AttributeCellTemplate}" />
+                              ItemTemplate="{DynamicResource AttributeRowTemplate}" />
             </StackPanel>
         </DataTemplate>
 
