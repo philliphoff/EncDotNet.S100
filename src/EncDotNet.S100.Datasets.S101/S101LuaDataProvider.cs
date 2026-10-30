@@ -32,6 +32,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     private Dictionary<string, ComplexAttribute>? _complexAttrByCode;
     private HashSet<ushort>? _complexAttrNumericCodes;
     private Dictionary<ushort, HashSet<ushort>>? _nestedChildComplexCodes;
+    private Dictionary<(byte Rcnm, uint Rcid), List<double>>? _featureIdsBySpatial;
     private static readonly HashSet<ushort> EmptyComplexCodes = new();
 
     // Collected drawing instruction output
@@ -1064,22 +1065,60 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
 
     private List<object> HostSpatialGetAssociatedFeatureIDs(string spatialId)
     {
-        var (_, rcid) = ParseSpatialId(spatialId);
-        var result = new List<object>();
+        var key = ParseSpatialId(spatialId);
+        _featureIdsBySpatial ??= BuildFeatureIdsBySpatial(_doc);
+        return _featureIdsBySpatial.TryGetValue(key, out var ids)
+            ? ids.ConvertAll(static id => (object)id)
+            : new List<object>();
+    }
 
-        foreach (var feat in _doc.Features)
+    /// <summary>
+    /// Indexes, for each spatial record, the features that use it, so that
+    /// <c>HostSpatialGetAssociatedFeatureIDs</c> is a lookup rather than a scan of
+    /// every feature. A feature uses the records it references and, through them,
+    /// the members of its composite curves and the rings of its surfaces: the
+    /// S-101 <c>DEPARE03</c> rule finds the depth area across each edge of a depth
+    /// area's ring from the edge's features, and the neighbour references only its
+    /// surface. Records are keyed by record name and id (point 5 and curve 5 are
+    /// different records); each list keeps dataset order and holds a feature once.
+    /// </summary>
+    internal static Dictionary<(byte Rcnm, uint Rcid), List<double>> BuildFeatureIdsBySpatial(S101Document doc)
+    {
+        var index = new Dictionary<(byte Rcnm, uint Rcid), List<double>>();
+        var used = new HashSet<(byte Rcnm, uint Rcid)>();
+        foreach (var feat in doc.Features)
         {
+            used.Clear();
             foreach (var spa in feat.SpatialAssociations)
+                AddUse(spa.RecordName, spa.RecordId);
+
+            double featureId = feat.RecordId;
+            foreach (var key in used)
             {
-                if (spa.RecordId == rcid)
-                {
-                    result.Add((double)feat.RecordId);
-                    break;
-                }
+                if (!index.TryGetValue(key, out var ids))
+                    index[key] = ids = new List<double>();
+                ids.Add(featureId);
             }
         }
 
-        return result;
+        return index;
+
+        void AddUse(byte rcnm, uint rcid)
+        {
+            if (!used.Add((rcnm, rcid)))
+                return;
+
+            if (rcnm == RcnmCompositeCurve && doc.CompositeCurves.TryGetValue(rcid, out var cc))
+            {
+                foreach (var comp in cc.CurveComponents)
+                    AddUse(comp.RecordName, comp.RecordId);
+            }
+            else if (rcnm == RcnmSurface && doc.Surfaces.TryGetValue(rcid, out var surface))
+            {
+                foreach (var ring in surface.RingAssociations)
+                    AddUse(ring.RecordName, ring.RecordId);
+            }
+        }
     }
 
     private List<object> HostSpatialGetAssociatedInformationIDs(string spatialId, string associationCode, string? roleCode)

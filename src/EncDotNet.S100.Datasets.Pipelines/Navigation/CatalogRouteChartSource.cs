@@ -29,7 +29,8 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// and <c>Coastline</c> curves are kept for crossings. For the depth checks
 /// (#955), other depth areas and dredged areas carry their DRVAL1, dangers
 /// (<c>Wreck</c>, <c>Obstruction</c>, <c>UnderwaterAwashRock</c>) their
-/// <c>valueOfSounding</c> and <c>waterLevelEffect</c>, and each point of a
+/// <c>valueOfSounding</c> (else their <c>defaultClearanceDepth</c>) and
+/// <c>waterLevelEffect</c>, and each point of a
 /// <c>Sounding</c> becomes a feature with its own depth. Cells are ranked like
 /// the display ranks them (<see cref="CellScaleRanking"/> by a translated
 /// S-57 cell's compilation scale, else by the <c>DataCoverage</c> minimum
@@ -90,6 +91,7 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
                 }
 
                 IS100Feature geometry = feature;
+                var effect = kind == RouteChartFeatureKind.Danger ? ReadNumber(feature, WaterLevelEffectCodes) : null;
                 result.Add(new RouteChartFeature(
                     kind,
                     cell,
@@ -99,8 +101,8 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
                     geometry.Curves)
                 {
                     Points = geometry.Points,
-                    DepthMeters = kind == RouteChartFeatureKind.Danger ? ReadNumber(feature, ValueOfSoundingCodes) : MinimumDepth(feature),
-                    WaterLevelEffect = kind == RouteChartFeatureKind.Danger && ReadNumber(feature, WaterLevelEffectCodes) is { } effect ? (int)effect : null,
+                    DepthMeters = kind == RouteChartFeatureKind.Danger ? DangerDepth(feature, effect) : MinimumDepth(feature),
+                    WaterLevelEffect = effect is { } code ? (int)code : null,
                 });
             }
 
@@ -125,6 +127,7 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
     // S-101 codes first, then the S-57 acronyms a translated cell may carry.
     private static readonly string[] ValueOfSoundingCodes = ["valueOfSounding", "VALSOU"];
     private static readonly string[] WaterLevelEffectCodes = ["waterLevelEffect", "WATLEV"];
+    private static readonly string[] DefaultClearanceDepthCodes = ["defaultClearanceDepth"];
 
     private static RouteChartFeatureKind? Classify(Feature feature) => feature.GeometryType switch
     {
@@ -136,6 +139,14 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
         _ when feature.FeatureType is "Wreck" or "Obstruction" or "UnderwaterAwashRock" => RouteChartFeatureKind.Danger,
         _ => null,
     };
+
+    // A danger's depth, as OBSTRN07 and WRECKS05 take it: its valueOfSounding,
+    // else the S-101 2.0 defaultClearanceDepth the producer gave it. A danger
+    // that reaches the surface (waterLevelEffect 1, 2, 4 or 5) keeps no depth,
+    // so its finding says why rather than showing a placeholder depth.
+    private static double? DangerDepth(Feature feature, double? waterLevelEffect) =>
+        ReadNumber(feature, ValueOfSoundingCodes)
+        ?? (waterLevelEffect is 1 or 2 or 4 or 5 ? null : ReadNumber(feature, DefaultClearanceDepthCodes));
 
     private static double? MinimumDepth(Feature feature) => ReadNumber(feature, ChartedDepthResolver.MinimumDepthAttributeCodes);
 

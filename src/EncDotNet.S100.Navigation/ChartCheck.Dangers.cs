@@ -10,10 +10,12 @@ namespace EncDotNet.S100.Navigation;
 // (UDWHAZ05, with OBSTRN07 and WRECKS05 deciding a danger's depth), written
 // out here for the route check rather than taken from them:
 //
-// 1. Its depth is its valueOfSounding (VALSOU). Without one, its depth is
-//    unknown, and its waterLevelEffect says why: above water (1 partly
-//    submerged at high water, 2 always dry), covers and uncovers (4) or
-//    awash (5) reach the surface; anything else is of unknown depth. A
+// 1. Its depth is its valueOfSounding (VALSOU), else the defaultClearanceDepth
+//    S-101 2.0 gives a danger without one (the source fills it in), unless
+//    its waterLevelEffect says it reaches the surface. Without either, its
+//    depth is unknown, and its waterLevelEffect says why: above water (1
+//    partly submerged at high water, 2 always dry), covers and uncovers (4)
+//    or awash (5) reach the surface; anything else is of unknown depth. A
 //    danger whose depth is unknown is always a danger: nothing shows that
 //    there's water over it.
 // 2. A danger with a depth is a danger to the route when it's shallower
