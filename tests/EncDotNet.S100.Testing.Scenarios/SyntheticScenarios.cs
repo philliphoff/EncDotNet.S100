@@ -164,7 +164,7 @@ public static class SyntheticScenarios
     /// the draft); a rock awash 80 m to starboard at the turn; a wreck of
     /// unknown depth 180 m to port (near the route); an obstruction 400 m
     /// north (off the route); an 18 m wreck on the track (no danger); a 5 m
-    /// obstruction on the shoal (not isolated); and a 3 m wreck on the track
+    /// obstruction on the shoal (a danger there too); and a 3 m wreck on the track
     /// charted only in the coastal cell, which the harbour cell overrides.
     /// </para>
     /// </remarks>

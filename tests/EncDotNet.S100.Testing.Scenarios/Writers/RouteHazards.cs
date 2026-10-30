@@ -22,8 +22,8 @@ public enum HazardThreshold
     /// <summary>Its depth is unknown, or it reaches the surface.</summary>
     NoDepth,
 
-    /// <summary>Shallower than the safety depth (and not the keel threshold).</summary>
-    SafetyDepth,
+    /// <summary>No deeper than the safety contour (and not the keel threshold).</summary>
+    SafetyContour,
 
     /// <summary>Shallower than draft + squat + required UKC.</summary>
     Keel,
@@ -36,10 +36,6 @@ public enum HazardThreshold
 /// <param name="DistanceMeters">The distance from departure to its foot on the route, in local metres.</param>
 /// <param name="OffsetMeters">How far it is from the track, positive to port.</param>
 /// <param name="Threshold">Which depth made it a danger.</param>
-/// <param name="Isolated">
-/// Whether it lies in water at least as deep as the safety contour. One that
-/// doesn't is inside water the safety-contour check reports.
-/// </param>
 /// <param name="InFinestCell">
 /// Whether the finest cell covering it charts it. One charted only in a
 /// coarser cell is hidden by the finer one (#947).
@@ -51,11 +47,10 @@ public sealed record RouteHazardTruth(
     double DistanceMeters,
     double OffsetMeters,
     HazardThreshold Threshold,
-    bool Isolated,
     bool InFinestCell)
 {
-    /// <summary>Whether a route check should report it: a danger, isolated, charted in the finest cell, and in or near the corridor.</summary>
-    public bool Expected => Threshold != HazardThreshold.None && Isolated && InFinestCell && Relation != HazardRouteRelation.Off;
+    /// <summary>Whether a route check should report it: a danger, charted in the finest cell, and in or near the corridor.</summary>
+    public bool Expected => Threshold != HazardThreshold.None && InFinestCell && Relation != HazardRouteRelation.Off;
 }
 
 /// <summary>A stretch of a route's track over water shallower than a depth.</summary>
@@ -72,9 +67,8 @@ public sealed record ShoalStretch(int Leg, double StartMeters, double EndMeters,
 /// </summary>
 /// <remarks>
 /// A danger's depth is its <see cref="PointHazard.ValueOfSounding"/>; one
-/// without is a danger whatever the thresholds. It's isolated when the true
-/// seabed at its position is at least the safety contour deep. Its
-/// distance is to the nearest point of the route's legs; a danger past a
+/// without is a danger whatever the thresholds, and one in shallow water
+/// counts as well as one in deep water. Its distance is to the nearest point of the route's legs; a danger past a
 /// leg's end is measured from the end. Cells are ranked by their minimum
 /// display scale, finest first.
 /// </remarks>
@@ -85,7 +79,6 @@ public static class RouteHazards
     /// <param name="route">The route.</param>
     /// <param name="nearbyMeters">How far beyond the cross-track limits counts as near.</param>
     /// <param name="safetyContourMeters">The safety contour.</param>
-    /// <param name="safetyDepthMeters">The safety depth.</param>
     /// <param name="keelMeters">Draft + squat + required UKC, or <c>null</c> without a draft.</param>
     /// <returns>One entry per danger, in definition order.</returns>
     public static IReadOnlyList<RouteHazardTruth> For(
@@ -93,7 +86,6 @@ public static class RouteHazards
         S421RouteSpec route,
         double nearbyMeters,
         double safetyContourMeters,
-        double safetyDepthMeters,
         double? keelMeters)
     {
         ArgumentNullException.ThrowIfNull(definition);
@@ -109,14 +101,13 @@ public static class RouteHazards
                 : HazardRouteRelation.Off;
             var threshold = hazard.ValueOfSounding is not { } depth ? HazardThreshold.NoDepth
                 : keelMeters is { } keel && depth < keel ? HazardThreshold.Keel
-                : depth < safetyDepthMeters ? HazardThreshold.SafetyDepth
+                : depth <= safetyContourMeters ? HazardThreshold.SafetyContour
                 : HazardThreshold.None;
-            var isolated = definition.World.DepthAt(hazard.Position.X, hazard.Position.Y) >= safetyContourMeters;
             var finest = definition.Cells
                 .Where(c => c.Extent.Contains(hazard.Position.X, hazard.Position.Y))
                 .MinBy(c => c.MinimumDisplayScale);
             var inFinest = finest is not null && hazard.ChartedIn(finest);
-            results.Add(new RouteHazardTruth(hazard, relation, leg, distance, offset, threshold, isolated, inFinest));
+            results.Add(new RouteHazardTruth(hazard, relation, leg, distance, offset, threshold, inFinest));
         }
 
         return results;

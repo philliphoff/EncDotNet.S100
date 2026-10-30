@@ -264,6 +264,9 @@ public class RouteFindingFormatter
     /// <summary>The safety-contour threshold fired ({0}).</summary>
     protected virtual string BelowSafetyContourFormat => "shallower than safety contour {0}";
 
+    /// <summary>A danger's safety-contour threshold fired ({0}): a danger at the contour counts too.</summary>
+    protected virtual string DangerSafetyContourFormat => "no deeper than safety contour {0}";
+
     /// <summary>The title of a chart or depth finding.</summary>
     /// <param name="finding">The finding.</param>
     /// <returns>The title.</returns>
@@ -337,7 +340,9 @@ public class RouteFindingFormatter
                     parts.Add(FormatDepth(depth));
                     if (danger is { ThresholdKind: { } kind, Threshold: { } threshold })
                     {
-                        parts.Add(Below(kind, threshold));
+                        parts.Add(kind == RouteFindingThreshold.SafetyContour
+                            ? Format(DangerSafetyContourFormat, FormatSetting(threshold))
+                            : Below(kind, threshold));
                     }
                 }
 

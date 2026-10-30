@@ -34,9 +34,8 @@ public sealed class Part5NavigationalHazardsTests
     public async Task NavigationalHazards_DangerDepthsFollowThePortrayal()
     {
         // OBSTRN07 and WRECKS05 take a danger's depth from valueOfSounding,
-        // else from defaultClearanceDepth. With the safety depth set to the
-        // safety contour the threshold question (#1151) doesn't arise, and the
-        // dangers the 10 m plot boxes are the ones reported.
+        // else from defaultClearanceDepth. The dangers the 10 m plot boxes are
+        // the ones reported.
         var dangers = await DangersAsync(safetyContour: 10, safetyDepth: 10);
 
         // Wrecks of unknown depth (-15 m, 0 m), 5 m and 4 m wrecks, a 4 m
@@ -56,13 +55,13 @@ public sealed class Part5NavigationalHazardsTests
         { 51, ["105", "106", "116", "118", "64", "92", "93", "96"], [] },
     };
 
-    [Theory(Skip = "#1151: dangers are judged against the safety depth, not the safety contour.")]
+    [Theory]
     [MemberData(nameof(ContourCases))]
     public async Task NavigationalHazards_DangersFollowTheSafetyContour(double safetyContour, string[] indicated, string[] notIndicated)
     {
         var dangers = await DangersAsync(safetyContour, SafetyDepth);
 
-        Assert.Superset(indicated.ToHashSet(), dangers);
+        Assert.Empty(indicated.Except(dangers));
         Assert.Empty(dangers.Intersect(notIndicated));
     }
 

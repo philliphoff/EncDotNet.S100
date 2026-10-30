@@ -23,17 +23,17 @@
       "headlineId": "route_check.danger_in_corridor.1"
     },
     "summary": {
-      "count": 7,
-      "mustReview": 6,
+      "count": 8,
+      "mustReview": 7,
       "check": 1,
       "info": 0,
-      "text": "6 to review"
+      "text": "7 to review"
     },
     "checks": [
       {
         "name": "chart",
         "state": "ran",
-        "findingCount": 6
+        "findingCount": 7
       },
       {
         "name": "areas",
@@ -333,6 +333,42 @@
             "uncertaintyMeters": 0.33,
             "datasetId": "S-102/DATASET_FILES/102ZZ00SPIT.h5",
             "cell": "10,80"
+          }
+        }
+      },
+      {
+        "id": "route_check.danger_in_corridor.3",
+        "code": "route_check.danger_in_corridor",
+        "group": "must_review",
+        "category": "depth",
+        "title": "Obstruction in the corridor",
+        "meta": "Leg 2 \u2192 3 \u00B7 Obstruction \u00B7 10 m to port \u00B7 5.0 m \u00B7 shallower than draft \u002B squat \u002B UKC (12 m)",
+        "legIndex": 1,
+        "distanceNm": 1.8886,
+        "location": {
+          "kind": "point",
+          "startNm": 1.8886,
+          "endNm": 1.8886,
+          "path": [
+            [
+              -40.97027,
+              -134.95239
+            ]
+          ]
+        },
+        "feature": {
+          "datasetId": "S-101/DATASET_FILES/101ZZ00SPIT5.000",
+          "featureId": "145"
+        },
+        "details": {
+          "danger": {
+            "featureType": "Obstruction",
+            "depthMeters": 5,
+            "waterLevelEffect": 3,
+            "threshold": "keel",
+            "thresholdMeters": 12,
+            "side": "port",
+            "offsetMeters": 10
           }
         }
       },

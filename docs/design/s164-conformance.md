@@ -91,9 +91,9 @@ issue.
    it, and `AlertReference` is skipped (finding 1). The checks cover wrecks,
    obstructions and rocks, and eight area kinds plus S-122, so other
    NavHazard and ProhAre features aren't checked. Affects Parts 5–7 and 9.
-   Slice 6 confirmed this against the data (§6.3), and found that dangers
-   are judged against the safety depth where the catalogue uses the safety
-   contour ([#1151](https://github.com/philliphoff/EncDotNet.S100/issues/1151)).
+   Slice 6 confirmed this against the data (§6.3). Dangers are now judged
+   against the safety contour, as the catalogue judges them, wherever they
+   lie ([#1151](https://github.com/philliphoff/EncDotNet.S100/issues/1151)).
 3. **Protected data stops at the library.** ([#1128](https://github.com/philliphoff/EncDotNet.S100/issues/1128)) Part 15 decryption, permits and
    signature checks work in the library, but SoundCharts and `s100` don't
    open protected datasets. The viewer verifies exchange sets with
@@ -166,7 +166,7 @@ doesn't try to close them.
 | 3 | **Done for updates and catalogue signatures.** S-164 tests apply the update sets to the `X01SW` cell across exchange sets (SequentialUpdates, InvalidSequence, NewerEditionUpdate, OlderEditionUpdate) and check every `CATALOG.SIGN` (MissingCatalogueSignature, InvalidCatalogueSignature). The applicator now rejects updates for another edition, and the library checks `CATALOG.SIGN`. The rest of finding 3 (authorities for exchange sets, a refuse-untrusted setting, protected data) stays with #1128; cross-set updates in the apps stay with #1129. | 2 |
 | 4 | **Done.** S-164 tests portray every cell in the display sets and Chart 1 at the tests' mariner settings: no portrayal rule fails, and DBASE, STNDR and OTHER features fall in their display categories. The safety contour (#1126) and chart text (#1140) tests failed at first and pass since those fixes; symbolised boundaries (#1141) were found from headless renders compared with the reference plots by eye. | 2 |
 | 5 | Part 4 tests: pick report checks, and Accuracy1–15 as unit tests once ellipsoidal geodesy (finding 5) lands. | 2 |
-| 6 | **Done.** S-164 tests run `RouteChecker` over the NavigationalHazards, SpecialConditions and SafetyContour routes, alone and with NavigationalHazardsOverview for the largest-scale tests, and compare the findings with the reference plots and the S-101 portrayal catalogue's alert references. Danger depths now come from `defaultClearanceDepth` when there's no `valueOfSounding`. The other differences are skipped tests linked to #1127 and #1151 (§6.3). Dual-fuel tests follow when that data is released. | 2 |
+| 6 | **Done.** S-164 tests run `RouteChecker` over the NavigationalHazards, SpecialConditions and SafetyContour routes, alone and with NavigationalHazardsOverview for the largest-scale tests, and compare the findings with the reference plots and the S-101 portrayal catalogue's alert references. Danger depths now come from `defaultClearanceDepth` when there's no `valueOfSounding`. Dangers are judged against the safety contour wherever they lie (#1151). The other differences are skipped tests linked to #1127 (§6.3). Dual-fuel tests follow when that data is released. | 2 |
 | 7 | S-64 for the S-57 path (Part 8). | 2 |
 
 Slices 3–7 are independent of each other once slice 2 lands. Gaps found in
@@ -262,10 +262,11 @@ the S-101 portrayal catalogue, which settles what a plot leaves unclear.
   danger reaches the surface. Translated S-57 hazards carry it too.
 - **Danger threshold** ([#1151](https://github.com/philliphoff/EncDotNet.S100/issues/1151)).
   `UDWHAZ05` raises a NavHazard when the danger's depth is at most the
-  safety contour. The route check uses the safety depth, which the test
-  fixes at 30 m while it varies the contour, so the danger findings don't
-  change with the contour as the plots do. With the safety depth set equal
-  to the contour, the findings match the 10 m plot.
+  safety contour, whatever the depth around it. The route check used the
+  safety depth, which the test fixes at 30 m while it varies the contour,
+  and left out dangers inside water already shallower than the contour.
+  It now follows `UDWHAZ05` on both counts, and the findings match the 0 m,
+  10 m and 51 m plots.
 - **NavHazard features** (#1127). The plots indicate 29 other feature types
   on the NAVHZ route, such as buoys, beacons, piles, platforms, bridges and
   overhead cables. The route check covers only wrecks, obstructions and
@@ -484,7 +485,7 @@ the S-101 portrayal catalogue, which settles what a plot leaves unclear.
 
 | Test | Reference | v2.0.0 data | Status | Evidence | Note |
 |---|---|---|---|---|---|
-| NavigationalHazards | S-98 12.10.6 | NavigationalHazards | Fails | `tests/EncDotNet.S100.S164.Tests/Part5NavigationalHazardsTests.cs` | Route and danger depths pass; dangers follow the safety depth, not the contour ([#1151](https://github.com/philliphoff/EncDotNet.S100/issues/1151)), and only wrecks, obstructions and rocks are checked (#1127). |
+| NavigationalHazards | S-98 12.10.6 | NavigationalHazards | Fails | `tests/EncDotNet.S100.S164.Tests/Part5NavigationalHazardsTests.cs` | Route, danger depths and the safety-contour threshold pass ([#1151](https://github.com/philliphoff/EncDotNet.S100/issues/1151)); only wrecks, obstructions and rocks are checked (#1127). |
 | UserSelectionProhibited Areas | — | — | Gap | — | Area kinds are fixed in code. |
 | NavigationalHazardsLS | S-98 12.10.6 | NavigationalHazards, NavigationalHazardsOverview | Passes | `tests/EncDotNet.S100.S164.Tests/Part5NavigationalHazardsTests.cs` | No overview finding inside NAVHZ. The manual's plots are TBD. |
 | NavigationalHazardsMon | — | — | Gap | `src/EncDotNet.S100.Viewer/Services/DynamicSources/OwnShip/SteerableOwnShipPositionProvider.cs` | A simulated own ship exists; no monitoring look-ahead or alarm. |
