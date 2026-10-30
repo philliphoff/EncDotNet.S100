@@ -33,7 +33,6 @@ public sealed class Part4FeatureInformationTests
     /// <summary>A yellow-and-black south cardinal buoy, S Skerries, whose light is feature 66.</summary>
     private const string SouthSkerries = "1791";
 
-    private const string ValueFormat = "#1158: pick report values have no units, keep their padding and show dates as encoded.";
     private const string PriorityOrder = "#1159: picks are ranked by geometry, not by drawing priority.";
 
     private static Task<S164Pick> OpenAsync(string exchangeSet = PowerUp) =>
@@ -123,7 +122,7 @@ public sealed class Part4FeatureInformationTests
         Assert.Contains(report.References, r => r.TargetRef == light.GetProperty("targetRecordId").GetUInt32().ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
-    [Fact(Skip = ValueFormat)]
+    [Fact]
     public async Task FeatureInformation1_ShowsUnitsOfMeasure()
     {
         // describe_feature gives each value's unit from the feature catalogue;
@@ -140,7 +139,7 @@ public sealed class Part4FeatureInformationTests
         Assert.EndsWith(" " + unit, period.DisplayValue);
     }
 
-    [Fact(Skip = ValueFormat)]
+    [Fact]
     public async Task FeatureInformation1_DoesNotPadValues()
     {
         // Tidal stream directions are reals encoded with leading zeros ("010").
@@ -156,7 +155,7 @@ public sealed class Part4FeatureInformationTests
         Assert.Empty(padded);
     }
 
-    [Fact(Skip = ValueFormat)]
+    [Fact]
     public async Task FeatureInformation1_DatesReadDayMonthYear()
     {
         // The Settings cell's buoy laid on 16.08.2012 (Part 3 FixedDateRange).
