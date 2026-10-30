@@ -334,6 +334,99 @@ public class VectorPipelineTests
         Assert.Empty(layer.Instructions);
     }
 
+    [Fact]
+    public async Task ExecuteRulesAsync_ThenApplyDisplayFilters_MatchesProcessAsync_AsDisplayStateChanges()
+    {
+        // A host keeps the unfiltered rule output and re-filters it when only
+        // the ECDIS display state changes; that must equal a full re-run.
+        var source = new FakeFeatureXmlSource(
+            featureTypes: ["Buoy"],
+            featureXml: "<Dataset><Feature id='1' type='Buoy'/></Dataset>");
+
+        var xslt = CompileXslt("""
+            <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+              <xsl:template match="/">
+                <displayList>
+                  <pointInstruction>
+                    <featureReference>1</featureReference>
+                    <viewingGroup>21010</viewingGroup>
+                    <displayPlane>OverRadar</displayPlane>
+                    <drawingPriority>24</drawingPriority>
+                    <symbol reference="BOYLAT01"/>
+                  </pointInstruction>
+                  <pointInstruction>
+                    <featureReference>1</featureReference>
+                    <viewingGroup>21010</viewingGroup>
+                    <viewingGroup>90020</viewingGroup>
+                    <displayPlane>UnderRadar</displayPlane>
+                    <drawingPriority>8</drawingPriority>
+                    <symbol reference="INFORM01"/>
+                  </pointInstruction>
+                  <lineInstruction>
+                    <featureReference>1</featureReference>
+                    <viewingGroup>23010</viewingGroup>
+                    <displayPlane>UnderRadar</displayPlane>
+                    <drawingPriority>8</drawingPriority>
+                    <lineStyleReference reference="DEPCNT02"/>
+                  </lineInstruction>
+                </displayList>
+              </xsl:template>
+            </xsl:stylesheet>
+            """);
+
+        var viewingGroups = new ViewingGroupController();
+        var catalogue = new FakeVectorPortrayalCatalogue(
+        [
+            new PortrayalRule { Name = "BuoyRule", Type = PortrayalRuleType.Xslt, ExecutionOrder = 1, AppliesTo = ["Buoy"] },
+        ],
+        xsltRules: new() { ["BuoyRule"] = xslt },
+        viewingGroups: viewingGroups);
+
+        var pipeline = new VectorPipeline();
+        var ct = TestContext.Current.CancellationToken;
+        var unfiltered = await pipeline.ExecuteRulesAsync(source, catalogue, cancellationToken: ct);
+        Assert.Equal(3, unfiltered.Count);
+
+        async Task AssertSameAsProcess()
+        {
+            var expected = (await pipeline.ProcessAsync(source, catalogue, cancellationToken: ct)).Instructions;
+            var actual = VectorPipeline.ApplyDisplayFilters(unfiltered, catalogue);
+            Assert.Equal(
+                expected.Select(Describe).ToArray(),
+                actual.Select(Describe).ToArray());
+        }
+
+        await AssertSameAsProcess();
+        viewingGroups.SetVisible(90020, false);
+        await AssertSameAsProcess();
+        catalogue.DisplayPlanes.SetVisible(DisplayPlane.UnderRadar, false);
+        await AssertSameAsProcess();
+        viewingGroups.SetVisible(90020, true);
+        catalogue.DisplayPlanes.SetVisible(DisplayPlane.UnderRadar, true);
+        viewingGroups.SetVisible(21010, false);
+        await AssertSameAsProcess();
+
+        static string Describe(DrawingInstruction i) =>
+            $"{i.GetType().Name}:{i.Plane}:{i.DrawingPriority}:{i.ViewingGroup}";
+    }
+
+    [Fact]
+    public void RuleOutputDependsOnDisplayMode_OnlyForXsltRules()
+    {
+        var lua = new FakeVectorPortrayalCatalogue(
+        [
+            new PortrayalRule { Name = "main", Type = PortrayalRuleType.Lua, ExecutionOrder = 1, AppliesTo = [] },
+        ]);
+        var xslt = new FakeVectorPortrayalCatalogue(
+        [
+            new PortrayalRule { Name = "main", Type = PortrayalRuleType.Lua, ExecutionOrder = 1, AppliesTo = [] },
+            new PortrayalRule { Name = "BuoyRule", Type = PortrayalRuleType.Xslt, ExecutionOrder = 2, AppliesTo = ["Buoy"] },
+        ]);
+
+        Assert.False(VectorPipeline.RuleOutputDependsOnDisplayMode(lua));
+        Assert.True(VectorPipeline.RuleOutputDependsOnDisplayMode(xslt));
+    }
+
     [Theory]
     [InlineData(90020, new[] { "BOYLAT01" })]
     [InlineData(21010, new string[0])]
