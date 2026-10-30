@@ -105,6 +105,14 @@ public abstract class DrawingInstruction
     public IReadOnlyList<PortrayalTimeInterval> TimeValid { get; init; } = [];
 
     /// <summary>
+    /// The alert the instruction's geometry raises when a route crosses it,
+    /// or <see langword="null"/> when it raises none (S-100 Part 9
+    /// <c>alertReference</c>; set by the <c>AlertReference</c> command of Part
+    /// 9a §9a-11.2.2.9). Route checks read it; drawing ignores it.
+    /// </summary>
+    public PortrayalAlertReference? AlertReference { get; init; }
+
+    /// <summary>
     /// Returns a numeric type order for S-100 Part 9 intra-priority sorting:
     /// areas (0) → lines (1) → points (2) → text (3).
     /// </summary>
