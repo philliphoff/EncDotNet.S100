@@ -96,7 +96,7 @@ public sealed class UnrecognizedHdf5MessageTests : IDisposable
         Console.SetError(stderr);
         try
         {
-            CliApp.Build().Run(["identify", path, "--lat", "47.0005", "--lon", "-121.9995"]);
+            CliApp.Build().Run(["identify", path, "--lat", "47.0005", "--lon", "-121.9995"], TestContext.Current.CancellationToken);
         }
         finally
         {
