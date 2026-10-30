@@ -88,13 +88,14 @@ issue.
    is honoured too: area symbols and text, which were drawn at the area's
    first vertex or the mean of its vertices, now go at a point inside the
    area, and `VisibleParts` moves them into the visible part as the view
-   moves (tile exports keep them fixed). `AreaCRS`, `AlertReference` and
-   `Hover` are still skipped. Part 3 tests affected: SafetyContourDisplay,
+   moves (tile exports keep them fixed). `AlertReference` is kept on each
+   instruction for the route checks (finding 2). `AreaCRS` and `Hover` are
+   still skipped. Part 3 tests affected: SafetyContourDisplay,
    AreaBorders, ComplexPortrayal, DifferentPriority, LineSuppression,
    FixedDateRange, PeriodicDateRange, CentredSymbols1.
 2. **Route checks use their own rules, not the S-101 alert catalogue.** ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)) The
-   portrayal catalogue reader finds the alert catalogue but nothing loads
-   it, and `AlertReference` is skipped (finding 1). The checks cover wrecks,
+   alert catalogue can now be read, and each drawing instruction keeps its
+   `AlertReference`, but the checks don't use them yet. They cover wrecks,
    obstructions and rocks, and eight area kinds plus S-122, so other
    NavHazard and ProhAre features aren't checked. Affects Parts 5–7 and 9.
    Slice 6 confirmed this against the data (§6.3). Dangers are now judged

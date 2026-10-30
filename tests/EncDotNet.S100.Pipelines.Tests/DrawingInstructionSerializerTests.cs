@@ -32,6 +32,7 @@ public class DrawingInstructionSerializerTests
         LinePlacementPosition = 0.5,
         CoordinateOverride = new GeoPosition(50.5, -1.25),
         AreaPlacement = AreaPlacementMode.Geographic,
+        AlertReference = new PortrayalAlertReference("NavHazard"),
         TimeValid =
         [
             new PortrayalTimeInterval(PortrayalTimeKind.Date, "----03--", "----10--", TimeIntervalClosure.ClosedInterval),
@@ -54,6 +55,7 @@ public class DrawingInstructionSerializerTests
         DashIntervalLength = 1.0,
         CoordinatesOverride = [new GeoPosition(50.1, -1.1), new GeoPosition(50.2, -1.2), new GeoPosition(50.3, -1.3)],
         Suppression = false,
+        AlertReference = new PortrayalAlertReference("ProhAre", 53023, 53024),
     };
 
     private static AreaInstruction FullArea() => new()
@@ -183,6 +185,7 @@ public class DrawingInstructionSerializerTests
         Assert.Equal(expected.AdditionalViewingGroups, actual.AdditionalViewingGroups);
         Assert.Equal(expected.DrawingPriority, actual.DrawingPriority);
         Assert.Equal(expected.TimeValid, actual.TimeValid);
+        Assert.Equal(expected.AlertReference, actual.AlertReference);
         Assert.Equal(expected.ScaleMinimum, actual.ScaleMinimum);
         Assert.Equal(expected.ScaleMaximum, actual.ScaleMaximum);
 
