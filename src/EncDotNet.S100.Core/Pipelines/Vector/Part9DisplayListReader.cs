@@ -119,8 +119,19 @@ public static class Part9DisplayListReader
             RotationCrs = rotationCrs,
             LocalOffsetX = offsetX,
             LocalOffsetY = offsetY,
+            AreaPlacement = ParseAreaPlacement(symbolEl),
         };
     }
+
+    // <areaPlacement placementMode="VisibleParts|Geographic"/> on a symbol or
+    // text point; VisibleParts when absent (the S-100 Part 9 default).
+    private static AreaPlacementMode ParseAreaPlacement(XElement? owner) =>
+        Enum.TryParse<AreaPlacementMode>(
+            owner?.Element("areaPlacement")?.Attribute("placementMode")?.Value?.Trim(),
+            ignoreCase: true,
+            out var mode)
+            ? mode
+            : AreaPlacementMode.VisibleParts;
 
     private static LineInstruction? ReadLine(
         XElement element, string featureReference, int viewingGroup, IReadOnlyList<int> additionalViewingGroups, int drawingPriority,
@@ -343,6 +354,7 @@ public static class Part9DisplayListReader
             OffsetY = offsetY,
             LineStartOffset = startOffset,
             LineEndOffset = endOffset,
+            AreaPlacement = ParseAreaPlacement(placement),
             LineOffsetMode = lineMode,
             LinePlacementPosition = linePos,
         };

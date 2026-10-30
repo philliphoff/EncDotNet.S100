@@ -88,6 +88,15 @@ public sealed class PointPaintOp : PaintOp
     public required (double X, double Y) World { get; init; }
 
     /// <summary>
+    /// The surface the anchor is kept in view within (S-100 Part 9
+    /// <c>AreaPlacement:VisibleParts</c>), or <see langword="null"/> when the
+    /// anchor is fixed. A live renderer draws at
+    /// <see cref="Scene.PlacementArea.AnchorIn"/> for its view instead of
+    /// <see cref="World"/>.
+    /// </summary>
+    public PlacementArea? PlacementArea { get; init; }
+
+    /// <summary>
     /// The resolved SVG symbol, or <see langword="null"/> when no symbol could
     /// be resolved (the backend falls back to a coloured dot of
     /// <see cref="FallbackColor"/>).
@@ -254,6 +263,15 @@ public sealed class TextPaintOp : PaintOp
 {
     /// <summary>Anchor position in EPSG:3857 metres.</summary>
     public required (double X, double Y) World { get; init; }
+
+    /// <summary>
+    /// The surface the anchor is kept in view within (S-100 Part 9
+    /// <c>AreaPlacement:VisibleParts</c>), or <see langword="null"/> when the
+    /// anchor is fixed. A live renderer draws at
+    /// <see cref="Scene.PlacementArea.AnchorIn"/> for its view instead of
+    /// <see cref="World"/>.
+    /// </summary>
+    public PlacementArea? PlacementArea { get; init; }
 
     /// <summary>The literal text to render.</summary>
     public required string Text { get; init; }

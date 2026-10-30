@@ -31,6 +31,7 @@ public class DrawingInstructionSerializerTests
         LocalOffsetY = -2.5,
         LinePlacementPosition = 0.5,
         CoordinateOverride = new GeoPosition(50.5, -1.25),
+        AreaPlacement = AreaPlacementMode.Geographic,
         TimeValid =
         [
             new PortrayalTimeInterval(PortrayalTimeKind.Date, "----03--", "----10--", TimeIntervalClosure.ClosedInterval),
@@ -99,6 +100,7 @@ public class DrawingInstructionSerializerTests
         FontProportion = TextFontProportion.MonoSpaced,
         HaloColor = "S104HALO",
         HaloWidth = 0.96,
+        AreaPlacement = AreaPlacementMode.Geographic,
     };
 
     // Minimal variants: every optional / nullable left at its default so the
@@ -196,6 +198,7 @@ public class DrawingInstructionSerializerTests
                 Assert.Equal(e.LocalOffsetY, ap.LocalOffsetY);
                 Assert.Equal(e.LinePlacementPosition, ap.LinePlacementPosition);
                 Assert.Equal(e.CoordinateOverride, ap.CoordinateOverride);
+                Assert.Equal(e.AreaPlacement, ap.AreaPlacement);
                 break;
 
             case LineInstruction e:
@@ -240,6 +243,7 @@ public class DrawingInstructionSerializerTests
                 Assert.Equal(e.FontProportion, at.FontProportion);
                 Assert.Equal(e.HaloColor, at.HaloColor);
                 Assert.Equal(e.HaloWidth, at.HaloWidth);
+                Assert.Equal(e.AreaPlacement, at.AreaPlacement);
                 break;
 
             default:

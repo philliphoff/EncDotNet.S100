@@ -37,6 +37,11 @@ internal sealed class OverlaySpatialIndex
     private readonly int _rows;
     private readonly List<int>[] _cells;
 
+    // Ops kept in the visible part of a surface (PlacementArea): they can be
+    // drawn anywhere in it, so a query tests the surface's bounds, not the
+    // anchor's cell.
+    private readonly List<int> _placed = [];
+
     /// <summary>The overlay ops, in original draw order.</summary>
     public IReadOnlyList<PaintOp> Ops => _ops;
 
@@ -59,10 +64,12 @@ internal sealed class OverlaySpatialIndex
         double maxX = double.MinValue, maxY = double.MinValue;
         double maxOffset = 0;
         int n = 0;
-        foreach (var op in _ops)
+        for (int i = 0; i < _ops.Count; i++)
         {
-            if (!TryAnchor(op, out var x, out var y, out var offX, out var offY))
+            if (!TryAnchor(_ops[i], out var x, out var y, out var offX, out var offY))
                 continue;
+            if (PlacementOf(_ops[i]) is not null)
+                _placed.Add(i);
             if (x < minX) minX = x;
             if (y < minY) minY = y;
             if (x > maxX) maxX = x;
@@ -100,7 +107,7 @@ internal sealed class OverlaySpatialIndex
         _cells = new List<int>[_cols * _rows];
         for (int i = 0; i < _ops.Count; i++)
         {
-            if (!TryAnchor(_ops[i], out var x, out var y, out _, out _))
+            if (!TryAnchor(_ops[i], out var x, out var y, out _, out _) || PlacementOf(_ops[i]) is not null)
                 continue;
             int c = CellIndex(x, y);
             (_cells[c] ??= new List<int>()).Add(i);
@@ -148,7 +155,19 @@ internal sealed class OverlaySpatialIndex
             }
         }
 
-        // Restore original op order (each op is in one cell, so no duplicates).
+        foreach (var idx in _placed)
+        {
+            var area = PlacementOf(_ops[idx])!;
+            TryAnchor(_ops[idx], out var x, out var y, out _, out _);
+            if (Math.Max(area.MaxX, x) >= minX && Math.Min(area.MinX, x) <= maxX
+                && Math.Max(area.MaxY, y) >= minY && Math.Min(area.MinY, y) <= maxY)
+            {
+                scratch.Add(idx);
+            }
+        }
+
+        // Restore original op order (each op is in one cell or the placed
+        // list, so no duplicates).
         scratch.Sort();
         foreach (var idx in scratch)
             results.Add(_ops[idx]);
@@ -167,6 +186,13 @@ internal sealed class OverlaySpatialIndex
         int r = (int)((y - _minY) * _invCellH);
         return r < 0 ? 0 : (r >= _rows ? _rows - 1 : r);
     }
+
+    private static PlacementArea? PlacementOf(PaintOp op) => op switch
+    {
+        PointPaintOp p => p.PlacementArea,
+        TextPaintOp t => t.PlacementArea,
+        _ => null,
+    };
 
     private static bool TryAnchor(PaintOp op, out double x, out double y, out double offX, out double offY)
     {

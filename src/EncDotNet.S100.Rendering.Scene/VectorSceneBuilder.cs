@@ -188,6 +188,16 @@ public sealed class VectorSceneBuilder
             return lineGeometry.Parts.Count > 1 ? lineGeometry.Parts : [lineGeometry.Coordinates];
         });
 
+        // Where each surface's point symbols and text go, worked out once per
+        // feature (S-100 Part 9 AreaPlacement).
+        var placements = new Dictionary<FeatureGeometry, SurfacePlacement?>(ReferenceEqualityComparer.Instance);
+        SurfacePlacement? PlacementOf(FeatureGeometry geometry)
+        {
+            if (!placements.TryGetValue(geometry, out var placement))
+                placements[geometry] = placement = PlaceOnSurface(geometry);
+            return placement;
+        }
+
         var ops = new List<PaintOp>(sorted.Count);
         var patternPriorities = new List<(PatternAreaPaintOp Op, int Priority)>();
         HashSet<string>? featuresWithPatterns = null;
@@ -239,8 +249,8 @@ public sealed class VectorSceneBuilder
                     => BuildPatternArea(areaPattern, patternRef, geom),
                 AreaInstruction area when geom is not null => BuildArea(area, geom),
                 LineInstruction line => BuildLine(line, geom),
-                PointInstruction point when geom is not null => [BuildPoint(point, geom)],
-                TextInstruction text when geom is not null => BuildText(text, geom) is { } textOp ? [textOp] : [],
+                PointInstruction point when geom is not null => [BuildPoint(point, geom, PlacementOf)],
+                TextInstruction text when geom is not null => BuildText(text, geom, PlacementOf) is { } textOp ? [textOp] : [],
                 _ => [],
             };
 
@@ -837,16 +847,24 @@ public sealed class VectorSceneBuilder
         return (array, phase);
     }
 
-    private PointPaintOp BuildPoint(PointInstruction instruction, FeatureGeometry geometry)
+    private PointPaintOp BuildPoint(
+        PointInstruction instruction, FeatureGeometry geometry, Func<FeatureGeometry, SurfacePlacement?> placementOf)
     {
-        double lat, lon;
+        (double X, double Y) world;
+        PlacementArea? placementArea = null;
         if (instruction.CoordinateOverride is { } anchor)
         {
-            (lat, lon) = (anchor.Latitude, anchor.Longitude);
+            world = ProjectAnchor(anchor.Latitude, anchor.Longitude);
+        }
+        else if (geometry.Type == GeometryType.Surface && placementOf(geometry) is { } placement)
+        {
+            world = placement.Anchor;
+            if (instruction.AreaPlacement == AreaPlacementMode.VisibleParts)
+                placementArea = placement.Area;
         }
         else
         {
-            (lat, lon) = geometry.Coordinates[0];
+            world = ProjectAnchor(geometry.Coordinates[0].Latitude, geometry.Coordinates[0].Longitude);
         }
 
         var symOffsetXpx = instruction.LocalOffsetX / S100PixelSizeMm;
@@ -869,7 +887,8 @@ public sealed class VectorSceneBuilder
             FeatureReference = instruction.FeatureReference,
             ScaleMinimum = CapScaleMinimum(instruction.ScaleMinimum),
             ScaleMaximum = instruction.ScaleMaximum,
-            World = ProjectAnchor(lat, lon),
+            World = world,
+            PlacementArea = placementArea,
             Symbol = symbol,
             FallbackColor = ColorResolver.ResolveSymbolColor(instruction.SymbolReference, ResolveColor),
             FallbackScale = 0.15 * instruction.SymbolScale * SymbolScale,
@@ -880,7 +899,8 @@ public sealed class VectorSceneBuilder
         };
     }
 
-    private TextPaintOp? BuildText(TextInstruction instruction, FeatureGeometry geometry)
+    private TextPaintOp? BuildText(
+        TextInstruction instruction, FeatureGeometry geometry, Func<FeatureGeometry, SurfacePlacement?> placementOf)
     {
         // Text on a curve or surface with several parts goes on its longest
         // curve or largest surface: the joined Coordinates would put it on a
@@ -893,10 +913,11 @@ public sealed class VectorSceneBuilder
         if (string.IsNullOrEmpty(instruction.Text))
             return null;
 
-        double lat, lon;
+        (double X, double Y) world;
+        PlacementArea? placementArea = null;
         if (instruction.CoordinateOverride is { } anchor)
         {
-            (lat, lon) = (anchor.Latitude, anchor.Longitude);
+            world = ProjectAnchor(anchor.Latitude, anchor.Longitude);
         }
         else if (coords.Count == 0)
         {
@@ -905,19 +926,27 @@ public sealed class VectorSceneBuilder
         else if (instruction.LinePlacementPosition.HasValue && coords.Count >= 2
             && geometry.Type == GeometryType.Curve)
         {
-            (lat, lon) = InterpolateAlongPolyline(coords, instruction.LinePlacementPosition.Value);
+            var (lat, lon) = InterpolateAlongPolyline(coords, instruction.LinePlacementPosition.Value);
+            world = ProjectAnchor(lat, lon);
+        }
+        else if (geometry.Type == GeometryType.Surface && placementOf(geometry) is { } placement)
+        {
+            world = placement.Anchor;
+            if (instruction.AreaPlacement == AreaPlacementMode.VisibleParts)
+                placementArea = placement.Area;
         }
         else if (geometry.Type == GeometryType.Surface && coords.Count >= 3)
         {
-            (lat, lon) = ComputeRingCentroid(coords);
+            var (lat, lon) = ComputeRingCentroid(coords);
+            world = ProjectAnchor(lat, lon);
         }
         else if (geometry.Type == GeometryType.Curve && coords.Count >= 2)
         {
-            (lat, lon) = coords[coords.Count / 2];
+            world = ProjectAnchor(coords[coords.Count / 2].Latitude, coords[coords.Count / 2].Longitude);
         }
         else
         {
-            (lat, lon) = coords[0];
+            world = ProjectAnchor(coords[0].Latitude, coords[0].Longitude);
         }
 
         var foreColor = ColorResolver.ApplyTransparency(
@@ -935,7 +964,8 @@ public sealed class VectorSceneBuilder
             FeatureReference = instruction.FeatureReference,
             ScaleMinimum = CapScaleMinimum(instruction.ScaleMinimum),
             ScaleMaximum = instruction.ScaleMaximum,
-            World = ProjectAnchor(lat, lon),
+            World = world,
+            PlacementArea = placementArea,
             Text = instruction.Text,
             FontSizePx = instruction.FontSize * TextScale,
             ForeColor = foreColor,
@@ -949,6 +979,46 @@ public sealed class VectorSceneBuilder
             HaloColor = string.IsNullOrEmpty(instruction.HaloColor) ? null : ResolveColor(instruction.HaloColor),
             HaloWidthPx = instruction.HaloWidth / S100PixelSizeMm * TextScale,
         };
+    }
+
+    /// <summary>
+    /// Where a surface's point symbols and text go (S-100 Part 9
+    /// <c>AreaPlacement</c>): <see cref="Anchor"/>, a representative point
+    /// inside its largest part, and <see cref="Area"/>, the whole surface for
+    /// keeping them in view.
+    /// </summary>
+    private sealed record SurfacePlacement((double X, double Y) Anchor, PlacementArea Area);
+
+    private static SurfacePlacement? PlaceOnSurface(FeatureGeometry geometry)
+    {
+        var polygons = new List<Polygon>();
+        void Add(IReadOnlyList<GeoPosition> shell, IReadOnlyList<IReadOnlyList<GeoPosition>> holes)
+        {
+            if (shell.Count < 3)
+                return;
+            foreach (var (worldShell, worldHoles) in AntimeridianGeometry.ProjectSurface(shell, holes))
+            {
+                if (CreatePolygon(worldShell, worldHoles) is { IsEmpty: false } polygon)
+                    polygons.Add(polygon);
+            }
+        }
+
+        if (geometry.Parts.Count > 1)
+        {
+            for (int i = 0; i < geometry.Parts.Count; i++)
+                Add(geometry.Parts[i], i < geometry.PartInteriorRings.Count ? geometry.PartInteriorRings[i] : []);
+        }
+        else
+        {
+            Add(geometry.Coordinates, geometry.InteriorRings);
+        }
+
+        if (polygons.Count == 0)
+            return null;
+
+        var largest = polygons.MaxBy(p => p.Area)!;
+        Geometry area = polygons.Count == 1 ? polygons[0] : ClipGeometryFactory.CreateMultiPolygon([.. polygons]);
+        return new SurfacePlacement(PlacementArea.RepresentativePoint(largest), new PlacementArea(area));
     }
 
     // A point or label anchor poleward of the Web-Mercator limit (e.g. the

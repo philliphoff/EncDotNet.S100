@@ -239,11 +239,19 @@ public sealed class VectorCompositeLayer : CompositeLayer
     /// </summary>
     public bool EnableSeamWrap { get; init; } = true;
 
+    /// <summary>
+    /// Whether area-placed symbols and text move into the part of their
+    /// surface in the viewport (see <see cref="SkiaDisplayListRenderer.KeepAreaSymbolsInView"/>).
+    /// Defaults to <see langword="true"/>. A tiled render turns it off.
+    /// </summary>
+    public bool KeepAreaSymbolsInView { get; init; } = true;
+
     private SkiaDisplayListRenderer CreateRenderer() => new()
     {
         Background = _background,
         HonorScaleVisibility = _honorScaleVisibility,
         EnableSeamWrap = EnableSeamWrap,
+        KeepAreaSymbolsInView = KeepAreaSymbolsInView,
     };
 }
 

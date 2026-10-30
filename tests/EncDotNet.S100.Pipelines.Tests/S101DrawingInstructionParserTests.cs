@@ -492,4 +492,29 @@ public class S101DrawingInstructionParserTests
         Assert.False(lines[0].Suppression);
         Assert.True(lines[1].Suppression);
     }
+
+    // ── AreaPlacement (#1126) ──────────────────────────────────────────
+
+    [Fact]
+    public void AreaPlacement_DefaultsToVisibleParts()
+    {
+        var parsed = DrawingInstructionParser.Parse("F1", "PointInstruction:CTNARE51;TextInstruction:Name");
+
+        Assert.All(parsed, i => Assert.Equal(
+            AreaPlacementMode.VisibleParts,
+            i is PointInstruction p ? p.AreaPlacement : ((TextInstruction)i).AreaPlacement));
+    }
+
+    [Fact]
+    public void AreaPlacement_AppliesToFollowingPointsAndTextUntilChanged()
+    {
+        var parsed = DrawingInstructionParser.Parse(
+            "F1",
+            "AreaPlacement:Geographic;PointInstruction:A;TextInstruction:B;AreaPlacement:VisibleParts;PointInstruction:C");
+
+        var points = parsed.OfType<PointInstruction>().ToList();
+        Assert.Equal(AreaPlacementMode.Geographic, points[0].AreaPlacement);
+        Assert.Equal(AreaPlacementMode.Geographic, Assert.Single(parsed.OfType<TextInstruction>()).AreaPlacement);
+        Assert.Equal(AreaPlacementMode.VisibleParts, points[1].AreaPlacement);
+    }
 }
