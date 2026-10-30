@@ -36,8 +36,9 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// reported by <see cref="UpdateReport"/>).
 /// </para>
 /// <para>
-/// Renders are serialized per processor, and the Lua drawing-instruction list
-/// is cached by the inputs that change it. A host may inject a shared
+/// Renders are serialized per processor, and the unfiltered Lua rule output
+/// is cached by the inputs that change it, so a display-category, viewing-group
+/// or display-plane change only re-filters it. A host may inject a shared
 /// <see cref="IPortrayalInstructionCache"/> so a freshly opened processor for a
 /// previously portrayed cell can skip the Lua run; otherwise a per-processor
 /// in-memory cache is used.
@@ -91,13 +92,14 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     // the portrayal-instruction cache below.
     private readonly SemaphoreSlim _renderGate = new(1, 1);
 
-    // Recommendation #1: single-entry cache of the Lua drawing-instruction
-    // list, keyed by the inputs that actually change it (see
-    // BuildPortrayalCacheKey). Guarded by _renderGate.
+    // Recommendation #1: single-entry cache of the unfiltered Lua rule output,
+    // keyed by the inputs that actually change it (see
+    // BuildRuleOutputCacheKey); display filters are re-applied per render.
+    // Guarded by _renderGate.
     private string? _cachedPortrayalKey;
     private IReadOnlyList<DrawingInstruction>? _cachedPortrayalInstructions;
 
-    // Cross-load cache of the post-pipeline drawing-instruction list. The
+    // Cross-load cache of the unfiltered rule output. The
     // single-slot _cachedPortrayalInstructions above only helps re-renders of
     // this already-open processor; this shared cache (an InMemory LRU by
     // default, or a process-global DiskPortrayalInstructionCache when the host
@@ -625,7 +627,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     /// when the assembly's compiled content changes), falling back to the
     /// assembly's full name when the MVID is unavailable.
     /// </summary>
-    private static void AppendModuleVersion(StringBuilder sb, System.Reflection.Assembly assembly)
+    internal static void AppendModuleVersion(StringBuilder sb, System.Reflection.Assembly assembly)
     {
         try
         {
@@ -771,47 +773,50 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         var palette = s101Cat.ActivePalette;
         Console.WriteLine($"[S101] Loaded {paletteType} palette with {palette.Colors.Count} colors");
 
-        // Recommendation #1: the Lua drawing-instruction list depends only
-        // on (mariner, ECDIS display state) — NOT on palette or symbol /
-        // text scale, which are applied later in the renderer. Reuse the
-        // cached list when neither changed (e.g. a Day/Dusk/Night palette
-        // switch, the dominant re-render trigger), skipping the Lua
-        // pipeline. Guarded by _renderGate (held for this whole render).
-        var cacheKey = BuildPortrayalCacheKey(mariner, ecdisSettings, _catalogueSpec);
-        IReadOnlyList<DrawingInstruction> prepared;
+        // Recommendation #1: the Lua rule output depends only on the mariner
+        // settings — NOT on palette or symbol / text scale, which are applied
+        // later in the renderer, nor on the ECDIS display category, viewing
+        // groups or display planes, which only filter it. Reuse the cached
+        // unfiltered list when the mariner settings are unchanged (a palette
+        // switch, or a display toggle such as hiding rocks), skipping the Lua
+        // pipeline, and re-apply the filters. Guarded by _renderGate (held for
+        // this whole render).
+        var ruleKey = BuildRuleOutputCacheKey(
+            mariner,
+            VectorPipeline.RuleOutputDependsOnDisplayMode(s101Cat) ? s101Cat.DisplayModes.ActiveDisplayModeId ?? string.Empty : null);
+        IReadOnlyList<DrawingInstruction> unfiltered;
         if (_cachedPortrayalInstructions is not null
-            && string.Equals(_cachedPortrayalKey, cacheKey, StringComparison.Ordinal))
+            && string.Equals(_cachedPortrayalKey, ruleKey, StringComparison.Ordinal))
         {
-            prepared = _cachedPortrayalInstructions;
+            unfiltered = _cachedPortrayalInstructions;
             PortrayalCacheHits++;
-            Console.WriteLine($"[S101] Reusing {prepared.Count} cached drawing instructions (portrayal cache hit)");
         }
         else
         {
             // Cross-load cache: a fresh processor for a previously-portrayed
-            // cell can reuse the persisted post-pipeline instruction list and
-            // skip the multi-second MoonSharp Part 9A Lua run. The key folds the
+            // cell can reuse the persisted rule output and skip the
+            // multi-second MoonSharp Part 9A Lua run. The key folds the
             // portrayal-content hash (dataset + FC/PC content + assemblies) into
-            // the per-render cacheKey so it self-invalidates on any change.
-            var instructionKey = $"{await GetPortrayalContentHashAsync(cancellationToken).ConfigureAwait(false)}|{cacheKey}";
-            prepared = await _instructionCache.GetOrComputeAsync(instructionKey, async ct =>
+            // the rule key so it self-invalidates on any change.
+            var instructionKey = $"{await GetPortrayalContentHashAsync(cancellationToken).ConfigureAwait(false)}|{ruleKey}";
+            unfiltered = await _instructionCache.GetOrComputeAsync(instructionKey, async ct =>
             {
                 // Drive the unified VectorPipeline with the S-101 Lua rule
                 // executor (Part 9A). XSLT rules in the S-101 catalogue (if
                 // any) are also honoured by the pipeline.
                 var executor = new S101LuaRuleExecutor(_luaEngine, _dataset, s101Cat, fc);
                 var featureSource = new S101FeatureXmlSource(_dataset);
-                var pipeline = new PortrayalPipeline(executor);
-                var portrayalLayer = await pipeline
-                    .ProcessAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: ct)
+                return await new VectorPipeline(executor)
+                    .ExecuteRulesAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: ct)
                     .ConfigureAwait(false);
-                return ((IVectorLayer)portrayalLayer).Instructions;
             }, cancellationToken).ConfigureAwait(false);
-            _cachedPortrayalKey = cacheKey;
-            _cachedPortrayalInstructions = prepared;
+            _cachedPortrayalKey = ruleKey;
+            _cachedPortrayalInstructions = unfiltered;
             PortrayalCacheMisses++;
-            Console.WriteLine($"[S101] Pipeline produced {prepared.Count} drawing instructions");
         }
+
+        var prepared = VectorPipeline.ApplyDisplayFilters(unfiltered, s101Cat);
+        Console.WriteLine($"[S101] {prepared.Count} of {unfiltered.Count} drawing instructions shown");
 
         // S-98 R-101-102-A (Annex A §A-6.9.1): S-102 must render between
         // S-101 area fills and S-101 line work / points / text. We split
@@ -829,10 +834,11 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
 
         // Mapsui-free pattern-clip cache identity: the per-dataset scope
         // (content hash + name + edition + CRS) qualified by the portrayal-
-        // content hash and per-render cache key. The Mapsui renderer appends
+        // content hash, the rule key and which area fills are visible (the
+        // clip's only inputs). The Mapsui renderer appends
         // its own clip-algorithm / serialization-format qualifiers before
         // consulting the actual pattern-clip cache it owns.
-        var patternClipKey = $"{_patternClipScope}|{await GetPortrayalContentHashAsync(cancellationToken).ConfigureAwait(false)}|{cacheKey}";
+        var patternClipKey = $"{_patternClipScope}|{await GetPortrayalContentHashAsync(cancellationToken).ConfigureAwait(false)}|{ruleKey}|areas:{BuildVisibleAreaSignature(unfiltered, prepared)}";
 
         var prewarm = await CataloguePreWarm.ForInstructionsAsync(s101Cat, prepared, cancellationToken).ConfigureAwait(false);
 
@@ -941,38 +947,80 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     }
 
     /// <summary>
-    /// Builds the cache key for the portrayal-instruction list. The key
-    /// captures exactly the inputs that change the emitted instructions:
-    /// every <see cref="MarinerSettings"/> field (S-101 PC context
-    /// parameters fed to the Part 9A Lua rules, incl. NationalLanguage)
-    /// plus the effective ECDIS display state applied to the catalogue
-    /// (display category and the hidden viewing groups / hidden display
-    /// planes, scoped to <paramref name="spec"/>, that drive VectorPipeline
-    /// stage-6 filtering).
+    /// Builds the cache key for the <em>unfiltered</em> rule output
+    /// (<see cref="VectorPipeline.ExecuteRulesAsync"/>): every
+    /// <see cref="MarinerSettings"/> field, plus the display mode only when the
+    /// catalogue's rules can see it (<paramref name="displayModeId"/> non-null,
+    /// see <see cref="VectorPipeline.RuleOutputDependsOnDisplayMode"/>).
     /// </summary>
     /// <remarks>
-    /// The key deliberately excludes palette and symbol/text scale: the
-    /// Lua rules emit colour tokens and nominal sizes that the renderer
-    /// resolves afterwards, so those never alter the instruction list.
-    /// Two ECDIS categories that resolve to the same display mode merely
-    /// over-invalidate (an extra cache miss), never under-invalidate.
+    /// The display category, hidden viewing groups and hidden display planes
+    /// are left out: they only filter the rule output, so changing them reuses
+    /// the cached list instead of running the Part 9A Lua rules again. Palette
+    /// and symbol / text scale are left out too: the Lua rules emit colour
+    /// tokens and nominal sizes that the renderer resolves afterwards.
     /// </remarks>
     /// <param name="mariner">Mariner display preferences.</param>
-    /// <param name="ecdis">Effective ECDIS display state.</param>
-    /// <param name="spec">
-    /// Catalogue spec whose hidden viewing groups scope the key (<c>"S-101"</c>
-    /// or <c>"S-401"</c>).
+    /// <param name="displayModeId">
+    /// The active display mode when the rule output depends on it, otherwise
+    /// <see langword="null"/>.
     /// </param>
-    internal static string BuildPortrayalCacheKey(
-        MarinerSettings mariner,
-        EcdisDisplaySettings ecdis,
-        string spec = DefaultSpec)
+    internal static string BuildRuleOutputCacheKey(MarinerSettings mariner, string? displayModeId)
     {
         ArgumentNullException.ThrowIfNull(mariner);
-        ArgumentNullException.ThrowIfNull(ecdis);
 
+        var sb = new StringBuilder("rules;");
+        AppendMarinerKey(sb, mariner);
+        if (displayModeId is not null)
+            sb.Append(";mode:").Append(displayModeId);
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Identifies which area instructions of a cached rule output are visible,
+    /// as a lowercase hex SHA-256 over their positions in
+    /// <paramref name="unfiltered"/>. The pattern priority-clip only reads area
+    /// fills (patterns, and the opaque solid fills that occlude them), so keying
+    /// the clip cache on this signature lets a display toggle that leaves every
+    /// area as it was (hiding rocks, text or other point and line content) reuse
+    /// the clipped geometry.
+    /// </summary>
+    /// <param name="unfiltered">The rule output, from <see cref="VectorPipeline.ExecuteRulesAsync"/>.</param>
+    /// <param name="visible">
+    /// <paramref name="unfiltered"/> after <see cref="VectorPipeline.ApplyDisplayFilters"/>:
+    /// the same instruction objects, in the same order.
+    /// </param>
+    internal static string BuildVisibleAreaSignature(
+        IReadOnlyList<DrawingInstruction> unfiltered,
+        IReadOnlyList<DrawingInstruction> visible)
+    {
+        ArgumentNullException.ThrowIfNull(unfiltered);
+        ArgumentNullException.ThrowIfNull(visible);
+
+        using var hash = System.Security.Cryptography.IncrementalHash.CreateHash(
+            System.Security.Cryptography.HashAlgorithmName.SHA256);
+        Span<byte> buffer = stackalloc byte[sizeof(int)];
+        var next = 0;
+        for (var i = 0; i < unfiltered.Count; i++)
+        {
+            var instruction = unfiltered[i];
+            if (next >= visible.Count || !ReferenceEquals(visible[next], instruction))
+                continue;
+
+            next++;
+            if (instruction is AreaInstruction)
+            {
+                System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(buffer, i);
+                hash.AppendData(buffer);
+            }
+        }
+
+        return Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant();
+    }
+
+    private static void AppendMarinerKey(StringBuilder sb, MarinerSettings mariner)
+    {
         var c = System.Globalization.CultureInfo.InvariantCulture;
-        var sb = new StringBuilder();
         sb.Append("m:");
         sb.Append(mariner.SafetyContour.TotalMetres.ToString(c)).Append('|');
         sb.Append(mariner.SafetyDepth.TotalMetres.ToString(c)).Append('|');
@@ -987,24 +1035,6 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         sb.Append(mariner.RadarOverlay ? '1' : '0');
         sb.Append(mariner.IgnoreScaleMinimum ? '1' : '0');
         sb.Append('|').Append(mariner.NationalLanguage);
-
-        sb.Append(";e:").Append((int)ecdis.Category);
-
-        // Hidden viewing groups (sorted for order-independence) keyed by this
-        // processor's catalogue spec (S-101 or S-401), matching the key
-        // EcdisDisplayExtensions.ApplyTo reads.
-        sb.Append(";vg:");
-        if (ecdis.HiddenViewingGroups.TryGetValue(spec, out var hiddenVg))
-        {
-            foreach (var id in hiddenVg.OrderBy(static x => x))
-                sb.Append(id).Append(',');
-        }
-
-        sb.Append(";dp:");
-        foreach (var plane in ecdis.HiddenDisplayPlanes.Select(static p => (int)p).OrderBy(static x => x))
-            sb.Append(plane).Append(',');
-
-        return sb.ToString();
     }
 
     /// <summary>

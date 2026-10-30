@@ -1,3 +1,4 @@
+using System.Text;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
@@ -46,6 +47,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     private readonly PortrayalCatalogueProvider _provider;
     private readonly S101PortrayalCatalogue _catalogue;
     private readonly ILuaEngine _luaEngine;
+    private readonly PortrayalCatalogueManager _catalogueManager;
     private readonly FeatureCatalogueManager _featureCatalogueManager;
     private readonly string _fileName;
     private readonly string _contentScope;
@@ -63,6 +65,23 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     private ValidationReport? _validationReport;
     private bool _validationCached;
     private DatasetMetadata? _metadata;
+
+    // Single-entry cache of the unfiltered Lua rule output, keyed by the
+    // mariner settings (S101DatasetProcessor.BuildRuleOutputCacheKey). A
+    // display-category, viewing-group or display-plane change only re-filters
+    // it instead of re-running the Part 9A rules. Guarded by _renderGate.
+    private string? _cachedRuleKey;
+    private IReadOnlyList<DrawingInstruction>? _cachedRuleOutput;
+
+    /// <summary>
+    /// How many times this processor has run the Part 9A Lua rules. A render
+    /// that only changes the ECDIS display state re-filters the cached rule
+    /// output and doesn't count. Test seam.
+    /// </summary>
+    internal int RuleRunCount { get; private set; }
+
+    // Memoized prefix of the pattern-clip cache key; see GetPatternClipScopeAsync.
+    private string? _patternClipScope;
 
     // Sub-layer keys of the S-98 fill / line-work split (mirrors the S-101
     // processor's "<spec>.areas" / "<spec>.linework" keys).
@@ -190,6 +209,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         ArgumentNullException.ThrowIfNull(s57);
         _fileName = fileName;
         _luaEngine = luaEngine;
+        _catalogueManager = catalogueManager;
         _target = SelectTarget(s57, catalogueManager);
         _provider = catalogueManager.GetProvider(_target.Spec);
         _catalogue = new S101PortrayalCatalogue(_provider, _luaEngine);
@@ -301,13 +321,12 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         // product's category mapping and default-hidden VGs correctly.
         (context?.EcdisDisplay ?? UnfilteredEcdisDisplay).ApplyTo(s101Cat);
 
-        var executor = new S101LuaRuleExecutor(_luaEngine, _translatedDataset, s101Cat, fc);
-        var featureSource = new S101FeatureXmlSource(_translatedDataset);
-        var pipeline = new PortrayalPipeline(executor);
-        var portrayalLayer = await pipeline.ProcessAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-        var prepared = ((IVectorLayer)portrayalLayer).Instructions;
-        Console.WriteLine($"[S57] Pipeline produced {prepared.Count} drawing instructions");
+        var (prepared, unfiltered, ruleKey) = await GetDisplayInstructionsAsync(mariner, fc, cancellationToken).ConfigureAwait(false);
+
+        // Pattern-clip cache identity, as for S-101: the clip reads only the
+        // visible area fills, so a display toggle that leaves them unchanged
+        // reuses the clipped geometry instead of re-clipping every pattern.
+        var patternClipKey = $"{await GetPatternClipScopeAsync(cancellationToken).ConfigureAwait(false)}|{ruleKey}|areas:{S101DatasetProcessor.BuildVisibleAreaSignature(unfiltered, prepared)}";
 
         var prewarm = await CataloguePreWarm.ForInstructionsAsync(s101Cat, prepared, cancellationToken).ConfigureAwait(false);
 
@@ -362,6 +381,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
                     Plane = S98DisplayPlane.BaseChartUnder,
                     WithinPlanePriority = 0,
                     SourceFeatureType = "area",
+                    PatternClipCacheKey = patternClipKey,
                     // The per-feature out-of-band cap is deliberately not
                     // applied for S-57 (see above); the whole-cell window
                     // handles zoom-out suppression with an extent border.
@@ -396,6 +416,67 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             CellCompilationScale = cellCompilationScale,
             CoverageAreas = coverageAreas,
         };
+    }
+
+    /// <summary>
+    /// Returns the cell's drawing instructions under the catalogue's current
+    /// ECDIS display state (already applied by the caller). The Lua rules run
+    /// only when the mariner settings change; otherwise the cached rule output
+    /// is re-filtered. Call with <see cref="_renderGate"/> held.
+    /// </summary>
+    private async Task<(IReadOnlyList<DrawingInstruction> Visible, IReadOnlyList<DrawingInstruction> Unfiltered, string RuleKey)> GetDisplayInstructionsAsync(
+        MarinerSettings mariner, FeatureCatalogue fc, CancellationToken cancellationToken)
+    {
+        var s101Cat = _catalogue;
+        var ruleKey = S101DatasetProcessor.BuildRuleOutputCacheKey(
+            mariner,
+            VectorPipeline.RuleOutputDependsOnDisplayMode(s101Cat) ? s101Cat.DisplayModes.ActiveDisplayModeId ?? string.Empty : null);
+
+        if (_cachedRuleOutput is null || !string.Equals(_cachedRuleKey, ruleKey, StringComparison.Ordinal))
+        {
+            var executor = new S101LuaRuleExecutor(_luaEngine, _translatedDataset, s101Cat, fc);
+            var featureSource = new S101FeatureXmlSource(_translatedDataset);
+            _cachedRuleOutput = await new VectorPipeline(executor)
+                .ExecuteRulesAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+            _cachedRuleKey = ruleKey;
+            RuleRunCount++;
+            Console.WriteLine($"[S57] Pipeline produced {_cachedRuleOutput.Count} drawing instructions");
+        }
+
+        return (VectorPipeline.ApplyDisplayFilters(_cachedRuleOutput, s101Cat), _cachedRuleOutput, ruleKey);
+    }
+
+    /// <summary>
+    /// Computes (once, then memoizes) the content prefix of this cell's
+    /// pattern-clip cache key. The clip result can be persisted by the host's
+    /// disk cache, so the prefix covers everything that shapes the clipped
+    /// geometry: the cell bytes and target product (<see cref="_contentScope"/>),
+    /// the portrayal catalogue content, and the code that translates, portrays
+    /// and clips it.
+    /// </summary>
+    private async ValueTask<string> GetPatternClipScopeAsync(CancellationToken cancellationToken)
+    {
+        if (_patternClipScope is not null)
+            return _patternClipScope;
+
+        var sb = new StringBuilder("s57clip:1|");
+        sb.Append(_contentScope);
+        sb.Append("|pc:").Append(
+            await _catalogueManager.GetCatalogueHashAsync(PortrayalSpec, cancellationToken).ConfigureAwait(false) ?? "none");
+        sb.Append("|asm:");
+        S101DatasetProcessor.AppendModuleVersion(sb, typeof(PortrayalPipeline).Assembly);              // Core (pipeline)
+        S101DatasetProcessor.AppendModuleVersion(sb, typeof(PortrayalCatalogue).Assembly);             // Portrayals
+        S101DatasetProcessor.AppendModuleVersion(sb, typeof(S101LuaRuleExecutor).Assembly);            // Datasets.S101 (executor)
+        S101DatasetProcessor.AppendModuleVersion(sb, typeof(S57ToS101Translator).Assembly);            // Datasets.S57 (translator)
+        S101DatasetProcessor.AppendModuleVersion(sb, typeof(S57DatasetProcessor).Assembly);            // Datasets.Pipelines (this)
+        S101DatasetProcessor.AppendModuleVersion(sb, typeof(EncDotNet.S100.Rendering.Scene.PatternPriorityClipper).Assembly); // clipper
+        S101DatasetProcessor.AppendModuleVersion(sb, _luaEngine.GetType().Assembly);                   // Lua engine
+
+        _patternClipScope = Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())))
+            .ToLowerInvariant();
+        return _patternClipScope;
     }
 
     /// <inheritdoc/>
@@ -649,13 +730,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             // portrayal, keyed on this cell's portrayal spec — see the core path.
             (context?.EcdisDisplay ?? UnfilteredEcdisDisplay).ApplyTo(s101Cat);
 
-            var executor = new S101LuaRuleExecutor(_luaEngine, _translatedDataset, s101Cat, fc);
-            var featureSource = new S101FeatureXmlSource(_translatedDataset);
-            var pipeline = new PortrayalPipeline(executor);
-            var portrayalLayer = await pipeline
-                .ProcessAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
-            var prepared = ((IVectorLayer)portrayalLayer).Instructions;
+            var (prepared, _, _) = await GetDisplayInstructionsAsync(mariner, fc, cancellationToken).ConfigureAwait(false);
 
             var geometryProvider = new FeatureGeometryProvider<Feature>(new S101VectorSource(_translatedDataset).GetFeatures());
 
