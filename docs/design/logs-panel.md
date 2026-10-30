@@ -143,11 +143,15 @@ editable rather than becoming hidden state.
 
 ## 4. Suggested slices
 
-1. **Typography** — D1–D3, D4, D6, D12 (mono, weight, muted columns,
-   exception box, redaction). Mostly XAML plus `MonoFontFamily`.
-2. **Levels and toolbar** — D5, D7, D8, D10.
-3. **Follow the tail** — D9, D15.
-4. **Details and time** — D11, D13, D14, D16.
+1. **Typography** ([#1171](https://github.com/philliphoff/EncDotNet.S100/issues/1171))
+   — D1–D3, D4, D6, D12 (mono, weight, muted columns, exception box,
+   redaction). Mostly XAML plus `MonoFontFamily`.
+2. **Levels and toolbar** ([#1172](https://github.com/philliphoff/EncDotNet.S100/issues/1172))
+   — D5, D7, D8, D10.
+3. **Follow the tail** ([#1173](https://github.com/philliphoff/EncDotNet.S100/issues/1173))
+   — D9, D15.
+4. **Details and time** ([#1174](https://github.com/philliphoff/EncDotNet.S100/issues/1174))
+   — D11, D13, D14, D16.
 
 The mock for this round is the **Logs Panel · design pass** artboard on the
 *Security & updates* page of the SoundCharts design canvas
