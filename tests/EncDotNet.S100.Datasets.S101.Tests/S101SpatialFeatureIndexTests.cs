@@ -93,20 +93,20 @@ public sealed class S101SpatialFeatureIndexTests
         S101FeatureRecord[] features,
         S101SurfaceRecord[]? surfaces = null,
         S101CompositeCurveRecord[]? compositeCurves = null) => new()
-    {
-        Identification = new S101DatasetIdentification { DatasetName = "INDEX.000" },
-        StructureInfo = new S101DatasetStructureInfo(),
-        FeatureTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
-        AttributeTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
-        Points = ReadOnlyDictionary<uint, S101PointRecord>.Empty,
-        CurveSegments = ReadOnlyDictionary<uint, S101CurveSegmentRecord>.Empty,
-        CompositeCurves = (compositeCurves ?? []).ToDictionary(c => c.RecordId),
-        Surfaces = (surfaces ?? []).ToDictionary(s => s.RecordId),
-        Features = features,
-        InformationTypes = ReadOnlyDictionary<uint, S101InformationRecord>.Empty,
-        InformationTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
-        InformationAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
-        FeatureAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
-        RoleCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
-    };
+        {
+            Identification = new S101DatasetIdentification { DatasetName = "INDEX.000" },
+            StructureInfo = new S101DatasetStructureInfo(),
+            FeatureTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            AttributeTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            Points = ReadOnlyDictionary<uint, S101PointRecord>.Empty,
+            CurveSegments = ReadOnlyDictionary<uint, S101CurveSegmentRecord>.Empty,
+            CompositeCurves = (compositeCurves ?? []).ToDictionary(c => c.RecordId),
+            Surfaces = (surfaces ?? []).ToDictionary(s => s.RecordId),
+            Features = features,
+            InformationTypes = ReadOnlyDictionary<uint, S101InformationRecord>.Empty,
+            InformationTypeCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            InformationAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            FeatureAssociationCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+            RoleCatalogue = ReadOnlyDictionary<ushort, string>.Empty,
+        };
 }
