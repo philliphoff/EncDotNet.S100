@@ -152,7 +152,34 @@ public sealed class LinePaintOp : PaintOp
     /// width-derived default.
     /// </summary>
     public bool DefaultDash { get; init; }
+
+    /// <summary>
+    /// Distance, in display pixels, into <see cref="DashArrayPx"/> at which the
+    /// line starts, so a line style's first dash starts where the style puts it.
+    /// </summary>
+    public double DashPhasePx { get; init; }
+
+    /// <summary>
+    /// Whether the line itself is stroked. <see langword="false"/> for a line
+    /// style that only places symbols.
+    /// </summary>
+    public bool Stroke { get; init; } = true;
+
+    /// <summary>
+    /// Symbols repeated along the line every <see cref="SymbolIntervalPx"/>
+    /// (S-100 Part 9 line styles), each rotated to the line's direction where
+    /// it lands. Empty for a plain line.
+    /// </summary>
+    public IReadOnlyList<LineSymbolPlacement> Symbols { get; init; } = [];
+
+    /// <summary>Length of the repeating symbol pattern, in display pixels.</summary>
+    public double SymbolIntervalPx { get; init; }
 }
+
+/// <summary>A symbol a line style places along a <see cref="LinePaintOp"/>.</summary>
+/// <param name="Symbol">The resolved symbol.</param>
+/// <param name="PositionPx">Its distance from the start of each interval, in display pixels.</param>
+public readonly record struct LineSymbolPlacement(ResolvedSymbol Symbol, double PositionPx);
 
 /// <summary>A resolved solid-colour area fill (with optional outline).</summary>
 /// <remarks>

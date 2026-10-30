@@ -27,7 +27,7 @@ public sealed class CapStyleTests
         var line = Assert.IsType<LineInstruction>(instructions[1]);
         Assert.Equal("CAPSEV", line.LineColor);
         Assert.Equal(0.7, line.LineWidth);
-        Assert.Equal(0, line.DashOnLength);
+        Assert.Equal(0, line.DashIntervalLength);
         var label = Assert.IsType<TextInstruction>(instructions[2]);
         Assert.Equal("Special Marine Warning", label.Text);
         Assert.Equal(CapStyle.LabelScaleMinimum, label.ScaleMinimum);
@@ -69,7 +69,7 @@ public sealed class CapStyleTests
         var instructions = CapStyle.BuildInstructions([set.Areas[0], unknown]);
 
         var dashed = instructions.OfType<LineInstruction>().Single(l => l.FeatureReference == unknown.Id);
-        Assert.True(dashed.DashOnLength > 0);
+        Assert.True(dashed.DashIntervalLength > 0);
         Assert.True(
             instructions.First(i => i.FeatureReference == set.Areas[0].Id).DrawingPriority
             > instructions.First(i => i.FeatureReference == unknown.Id).DrawingPriority);

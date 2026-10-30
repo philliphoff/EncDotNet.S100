@@ -5,7 +5,9 @@ using EncDotNet.S100.Pipelines.Vector;
 namespace EncDotNet.S100.Portrayals;
 
 /// <summary>
-/// Reads an S-100 line style XML file and produces a <see cref="LineStyle"/>.
+/// Reads an S-100 line style XML file and produces a <see cref="LineStyle"/>:
+/// its pen, dashes, interval and the symbols placed along the line, or the
+/// line styles of a composite line style.
 /// </summary>
 /// <remarks>
 /// S-100 Ed 5.2 Part 9 line style files define pen properties and optional dash patterns.
@@ -38,6 +40,29 @@ public static class LineStyleReader
         var doc = XDocument.Load(stream);
         var root = doc.Root ?? throw new System.Xml.XmlException("Missing root element.");
 
+        // A composite line style stacks its inline line styles (S-100 Part 9).
+        if (root.Name.LocalName == "compositeLineStyle")
+        {
+            var components = root.Elements()
+                .Where(e => e.Name.LocalName == "lineStyle")
+                .Select(e => ReadLineStyle(e, name))
+                .ToList();
+            var first = components.FirstOrDefault();
+            return new LineStyle
+            {
+                Name = name,
+                Width = first?.Width ?? 1.0f,
+                Color = first?.Color ?? "#000000",
+                DashPattern = first?.DashPattern,
+                Components = components,
+            };
+        }
+
+        return ReadLineStyle(root, name);
+    }
+
+    private static LineStyle ReadLineStyle(XElement root, string name)
+    {
         string color = "#000000";
         float width = 1.0f;
         float[]? dashPattern = null;
@@ -94,12 +119,34 @@ public static class LineStyleReader
             }
         }
 
+        float intervalLength = 0;
+        if (FindElement(root, "intervalLength") is { } interval
+            && float.TryParse(interval.Value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var il))
+        {
+            intervalLength = il;
+        }
+
+        var symbols = new List<LineStyleSymbol>();
+        foreach (var symbol in FindElements(root, "symbol"))
+        {
+            var reference = symbol.Attribute("reference")?.Value;
+            var position = FindElement(symbol, "position");
+            if (!string.IsNullOrWhiteSpace(reference) && position is not null
+                && float.TryParse(position.Value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var at))
+            {
+                symbols.Add(new LineStyleSymbol(reference, at));
+            }
+        }
+
         return new LineStyle
         {
             Name = name,
             Width = width,
             Color = color,
             DashPattern = dashPattern,
+            IntervalLength = intervalLength,
+            HasPen = pen is not null,
+            Symbols = symbols,
         };
     }
 

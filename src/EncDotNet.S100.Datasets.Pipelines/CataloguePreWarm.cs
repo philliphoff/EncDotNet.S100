@@ -96,6 +96,27 @@ internal static class CataloguePreWarm
             }
         }
 
+        // Line styles place symbols along the line (S-100 Part 9), which the
+        // scene builder resolves through the same SymbolProvider lambda.
+        foreach (var style in lineStyles.Values)
+        {
+            if (style is null)
+                continue;
+
+            foreach (var part in style.Components.Count > 0 ? style.Components : [style])
+            {
+                foreach (var placed in part.Symbols)
+                {
+                    if (symbols.ContainsKey(placed.Reference))
+                        continue;
+
+                    cancellationToken.ThrowIfCancellationRequested();
+                    try { symbols[placed.Reference] = await catalogue.GetSymbolAsync(placed.Reference, cancellationToken).ConfigureAwait(false); }
+                    catch (Exception) { symbols[placed.Reference] = null; }
+                }
+            }
+        }
+
         return new PreWarmResult(symbols, lineStyles, areaFills);
     }
 

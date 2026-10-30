@@ -611,6 +611,22 @@ public sealed class VectorSceneBuilder
         if (coords is null || coords.Count < 2)
             yield break;
 
+        // A named catalogue line style (S-100 Part 9) defines the pen, dashes
+        // and symbols itself; the instruction's colour is only the parser's
+        // carried-over default, so the style wins (#1141).
+        if (instruction.LineStyleReference is { } styleName
+            && !string.Equals(styleName, LineInstruction.SimpleLineStyleReference, StringComparison.Ordinal)
+            && LineStyleProvider?.Invoke(styleName) is { } namedStyle)
+        {
+            foreach (var part in namedStyle.Components.Count > 0 ? namedStyle.Components : [namedStyle])
+            {
+                foreach (var op in BuildStyledLine(instruction, coords, part))
+                    yield return op;
+            }
+
+            yield break;
+        }
+
         string? colorToken = instruction.LineColor;
         double width = instruction.LineWidth;
         bool dashed = instruction.Dashes is { Count: > 0 };
@@ -632,16 +648,24 @@ public sealed class VectorSceneBuilder
         widthPx = Math.Max(widthPx, 1.0);
 
         IReadOnlyList<float>? dashArray = null;
+        double dashPhase = 0;
         bool defaultDash = false;
-        if (dashed && instruction.Dashes is { Count: > 0 })
+        if (dashed && instruction.Dashes is { Count: > 0 } dashes)
         {
-            var onMm = instruction.DashOnLength > 0
-                ? instruction.DashOnLength
-                : instruction.Dashes[0].Length;
-            var gapMm = instruction.Dashes[0].Length;
-            var onPx = (float)(onMm / S100PixelSizeMm);
-            var gapPx = (float)(gapMm / S100PixelSizeMm);
-            dashArray = [Math.Max(onPx, 1f), Math.Max(gapPx, 1f)];
+            // Dash:start,length pairs within LineStyle:_simple_'s interval
+            // (S-100 Part 9). With no interval, each dash is followed by a gap
+            // as long as itself.
+            var flat = new float[dashes.Count * 2];
+            double end = 0;
+            for (var i = 0; i < dashes.Count; i++)
+            {
+                flat[2 * i] = (float)dashes[i].Offset;
+                flat[2 * i + 1] = (float)dashes[i].Length;
+                end = Math.Max(end, dashes[i].Offset + dashes[i].Length);
+            }
+
+            var interval = instruction.DashIntervalLength > end ? instruction.DashIntervalLength : end * 2;
+            (dashArray, dashPhase) = BuildDashArray(flat, interval);
         }
         else if (dashed)
         {
@@ -660,9 +684,117 @@ public sealed class VectorSceneBuilder
                 Color = color,
                 WidthPx = widthPx,
                 DashArrayPx = dashArray,
+                DashPhasePx = dashPhase,
                 DefaultDash = defaultDash,
             };
         }
+    }
+
+    /// <summary>
+    /// Builds the strokes of one line style (a simple style, or one part of a
+    /// composite): its pen, its dashes as a pattern repeating every interval,
+    /// and the symbols it places along the line.
+    /// </summary>
+    private IEnumerable<PaintOp> BuildStyledLine(
+        LineInstruction instruction, IReadOnlyList<GeoPosition> coords, LineStyle style)
+    {
+        var widthPx = Math.Max(style.Width / S100PixelSizeMm, 1.0);
+        var interval = style.IntervalLength > 0 ? style.IntervalLength : DashPatternEnd(style.DashPattern);
+
+        var (dashArray, dashPhase) = BuildDashArray(style.DashPattern, interval);
+
+        var symbols = new List<LineSymbolPlacement>(style.Symbols.Count);
+        if (SymbolResolver is not null && interval > 0)
+        {
+            foreach (var placed in style.Symbols)
+            {
+                if (SymbolResolver(placed.Reference) is not { } asset)
+                    continue;
+                symbols.Add(new LineSymbolPlacement(
+                    new ResolvedSymbol(asset.ProcessedSvg, LineSymbolScale * SymbolScale, asset.PivotRelativeX, asset.PivotRelativeY),
+                    placed.Position / S100PixelSizeMm));
+            }
+        }
+
+        if (!style.HasPen && symbols.Count == 0)
+            yield break;
+
+        var color = ResolveColor(style.Color);
+        foreach (var world in AntimeridianGeometry.ProjectPolyline(coords))
+        {
+            yield return new LinePaintOp
+            {
+                FeatureReference = instruction.FeatureReference,
+                ScaleMinimum = CapScaleMinimum(instruction.ScaleMinimum),
+                ScaleMaximum = instruction.ScaleMaximum,
+                World = world,
+                Color = color,
+                WidthPx = widthPx,
+                DashArrayPx = dashArray,
+                DashPhasePx = dashPhase,
+                Stroke = style.HasPen,
+                Symbols = symbols,
+                SymbolIntervalPx = interval / S100PixelSizeMm,
+            };
+        }
+    }
+
+    /// <summary>
+    /// Scale for symbols placed along a line. The symbol pictures come out at
+    /// 96 DPI, while a line style's positions and dashes are millimetres at
+    /// 0.32 mm per pixel; this sizes the symbols in the line's own millimetres
+    /// so they fit the gaps the style leaves for them.
+    /// </summary>
+    private static readonly double LineSymbolScale = 1 / S100PixelSizeMm / (96 / 25.4);
+
+    /// <summary>The end of a line style's last dash, in millimetres: its interval when the file gives none.</summary>
+    private static double DashPatternEnd(float[]? dashes)
+    {
+        double end = 0;
+        if (dashes is null)
+            return end;
+        for (var i = 0; i + 1 < dashes.Length; i += 2)
+            end = Math.Max(end, dashes[i] + dashes[i + 1]);
+        return end;
+    }
+
+    /// <summary>
+    /// Turns a line style's dashes, given as (start, length) pairs in
+    /// millimetres within an interval, into an alternating on/off array in
+    /// display pixels beginning with the first dash, and the phase that puts
+    /// that dash at its start within the interval. Returns no array for a solid
+    /// line.
+    /// </summary>
+    internal static (IReadOnlyList<float>? DashArray, double Phase) BuildDashArray(float[]? dashes, double intervalMm)
+    {
+        if (dashes is null || dashes.Length < 2 || intervalMm <= 0)
+            return (null, 0);
+
+        var pairs = new List<(double Start, double Length)>();
+        for (var i = 0; i + 1 < dashes.Length; i += 2)
+        {
+            if (dashes[i + 1] > 0)
+                pairs.Add((dashes[i], dashes[i + 1]));
+        }
+
+        if (pairs.Count == 0)
+            return (null, 0);
+        pairs.Sort((a, b) => a.Start.CompareTo(b.Start));
+
+        var array = new List<float>(pairs.Count * 2);
+        for (var i = 0; i < pairs.Count; i++)
+        {
+            var (start, length) = pairs[i];
+            var nextStart = i + 1 < pairs.Count ? pairs[i + 1].Start : pairs[0].Start + intervalMm;
+            var gap = Math.Max(nextStart - (start + length), 0);
+            array.Add((float)Math.Max(length / S100PixelSizeMm, 0.5));
+            array.Add((float)Math.Max(gap / S100PixelSizeMm, 0.5));
+        }
+
+        // The pattern starts at the first dash; the line starts that far
+        // before it in the interval.
+        var phase = (intervalMm - pairs[0].Start) % intervalMm / S100PixelSizeMm;
+        return (array, phase);
     }
 
     private PointPaintOp BuildPoint(PointInstruction instruction, FeatureGeometry geometry)

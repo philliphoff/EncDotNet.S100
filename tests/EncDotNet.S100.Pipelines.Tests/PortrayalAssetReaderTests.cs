@@ -1,4 +1,5 @@
 using System.Text;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -97,6 +98,57 @@ public class PortrayalAssetReaderTests
         Assert.Equal(0.32f, style.Width, 0.001f);
         Assert.Equal("CHGRF", style.Color);
         Assert.Null(style.DashPattern);
+    }
+
+    [Fact]
+    public void LineStyleReader_ParsesIntervalAndSymbols()
+    {
+        // CTNARE51 from the S-101 portrayal catalogue (#1141).
+        var xml = """
+            <ls:lineStyle xmlns:ls="http://www.iho.int/S100LineStyle/5.2">
+               <intervalLength>32.3</intervalLength>
+               <pen width="0.32"><color>CHMGD</color></pen>
+               <dash><start>2</start><length>6</length></dash>
+               <symbol reference="EMAREMG1"><position>5</position></symbol>
+               <symbol reference="EMCTNAR1"><position>13.1</position></symbol>
+            </ls:lineStyle>
+            """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(xml));
+        var style = LineStyleReader.Read(stream, "CTNARE51");
+
+        Assert.Equal(32.3f, style.IntervalLength, 0.001f);
+        Assert.True(style.HasPen);
+        Assert.Equal([2f, 6f], style.DashPattern!);
+        Assert.Equal([new LineStyleSymbol("EMAREMG1", 5f), new LineStyleSymbol("EMCTNAR1", 13.1f)], style.Symbols);
+    }
+
+    [Fact]
+    public void LineStyleReader_ReadsACompositeStyleAndAPenlessStyle()
+    {
+        var composite = """
+            <ls:compositeLineStyle xmlns:ls="http://www.iho.int/S100LineStyle/5.2">
+                <lineStyle><pen width="1.28"><color>BKAJ1</color></pen></lineStyle>
+                <lineStyle><pen width="0.64"><color>CHYLW</color></pen></lineStyle>
+            </ls:compositeLineStyle>
+            """;
+        using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(composite)))
+        {
+            var style = LineStyleReader.Read(stream, "INDHLT02");
+            Assert.Equal(["BKAJ1", "CHYLW"], style.Components.Select(c => c.Color));
+            Assert.Equal([1.28f, 0.64f], style.Components.Select(c => c.Width));
+        }
+
+        var symbolsOnly = """
+            <ls:lineStyle xmlns:ls="http://www.iho.int/S100LineStyle/5.2">
+               <intervalLength>10</intervalLength>
+               <symbol reference="ARROW"><position>5</position></symbol>
+            </ls:lineStyle>
+            """;
+        using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(symbolsOnly)))
+        {
+            Assert.False(LineStyleReader.Read(stream, "ARROWS").HasPen);
+        }
     }
 
     [Fact]

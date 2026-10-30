@@ -129,6 +129,7 @@ public static class Part9DisplayListReader
         string? lineStyleRef = null;
         string? color = null;
         double width = 0;
+        double interval = 0;
         List<(double Offset, double Length)>? dashes = null;
 
         var refEl = element.Element("lineStyleReference");
@@ -150,6 +151,7 @@ public static class Part9DisplayListReader
             // <dash><start>0</start><length>3.6</length></dash> children of
             // <lineStyle>; carry them through so the renderer can switch to
             // a dashed pen.
+            interval = ParseDouble(inlineStyle.Element("intervalLength")?.Value);
             foreach (var dashEl in inlineStyle.Elements("dash"))
             {
                 var start = ParseDouble(dashEl.Element("start")?.Value);
@@ -173,6 +175,7 @@ public static class Part9DisplayListReader
             LineColor = color,
             LineWidth = width,
             Dashes = dashes,
+            DashIntervalLength = interval,
         };
     }
 

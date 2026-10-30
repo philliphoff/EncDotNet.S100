@@ -127,7 +127,7 @@ public static class DrawingInstructionSerializer
                 w.Write(l.LineWidth);
                 WriteString(w, l.LineColor);
                 WriteOffsetLengthList(w, l.Dashes);
-                w.Write(l.DashOnLength);
+                w.Write(l.DashIntervalLength);
                 WriteCoordinateList(w, l.CoordinatesOverride);
                 break;
 
@@ -224,7 +224,7 @@ public static class DrawingInstructionSerializer
             LineWidth = r.ReadDouble(),
             LineColor = ReadString(r),
             Dashes = ReadOffsetLengthList(r),
-            DashOnLength = r.ReadDouble(),
+            DashIntervalLength = r.ReadDouble(),
             CoordinatesOverride = ReadCoordinateList(r),
         };
     }
