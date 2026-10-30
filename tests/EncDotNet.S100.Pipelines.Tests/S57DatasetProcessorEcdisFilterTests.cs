@@ -61,6 +61,77 @@ public class S57DatasetProcessorEcdisFilterTests
             $"Expected DisplayBase ({displayBase}) to filter out content present in All ({all}).");
     }
 
+    [Fact]
+    public async Task DisplayStateChange_RefiltersCachedRuleOutput_WithoutRerunningRules()
+    {
+        var fixturePath = ResolveFixturePath(FixtureFile);
+        Assert.SkipUnless(File.Exists(fixturePath),
+            $"S-57 fixture not found at expected path: {fixturePath}");
+
+        var ct = TestContext.Current.CancellationToken;
+        var processor = CreateProcessor(fixturePath);
+
+        // Display category, viewing groups and display planes only filter the
+        // rule output, so toggling them must not re-run the Lua rules.
+        var hiddenVg = new EcdisDisplaySettings
+        {
+            Category = EcdisDisplayCategory.All,
+            HiddenViewingGroups = new Dictionary<string, IReadOnlySet<int>> { ["S-101"] = new HashSet<int> { 27010 } },
+        };
+        var settings = new[]
+        {
+            new EcdisDisplaySettings { Category = EcdisDisplayCategory.All },
+            new EcdisDisplaySettings { Category = EcdisDisplayCategory.DisplayBase },
+            hiddenVg,
+            new EcdisDisplaySettings
+            {
+                Category = EcdisDisplayCategory.Standard,
+                HiddenDisplayPlanes = new HashSet<EncDotNet.S100.Pipelines.Vector.DisplayPlane> { EncDotNet.S100.Pipelines.Vector.DisplayPlane.OverRadar },
+            },
+        };
+
+        var cachedCounts = new List<int>();
+        foreach (var ecdis in settings)
+        {
+            cachedCounts.Add(InstructionCount(await processor.BuildVectorPortrayalAsync(
+                new RenderContext { EcdisDisplay = ecdis }, ct)));
+        }
+
+        Assert.Equal(1, processor.RuleRunCount);
+
+        // Each re-filtered result matches a fresh processor rendering that
+        // display state from scratch.
+        for (var i = 0; i < settings.Length; i++)
+        {
+            var fresh = InstructionCount(await CreateProcessor(fixturePath).BuildVectorPortrayalAsync(
+                new RenderContext { EcdisDisplay = settings[i] }, ct));
+            Assert.Equal(fresh, cachedCounts[i]);
+        }
+
+        Assert.True(cachedCounts[1] < cachedCounts[0], "DisplayBase should filter out content present in All.");
+
+        // A mariner setting is a rule input, so changing it re-runs the rules.
+        await processor.BuildVectorPortrayalAsync(
+            new RenderContext
+            {
+                EcdisDisplay = settings[0],
+                Mariner = MarinerSettings.Default with { SimplifiedSymbols = !MarinerSettings.Default.SimplifiedSymbols },
+            },
+            ct);
+        Assert.Equal(2, processor.RuleRunCount);
+    }
+
+    private static S57DatasetProcessor CreateProcessor(string fixturePath)
+    {
+        var catalogueManager = new PortrayalCatalogueManager();
+        catalogueManager.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
+        return new S57DatasetProcessor(
+            fixturePath,
+            catalogueManager,
+            new MoonSharpLuaEngine(),
+            new FeatureCatalogueManager(spec => Specification.TryOpenFeatureCatalogue(spec)));
+    }
+
     private static string ResolveFixturePath(string fileName)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

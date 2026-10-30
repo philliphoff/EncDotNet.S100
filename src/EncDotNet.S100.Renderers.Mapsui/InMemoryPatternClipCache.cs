@@ -12,7 +12,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// still capturing the dominant reuse pattern — repeatedly re-rendering the
 /// <em>same</em> dataset under different palettes. It mirrors the
 /// <c>S101DatasetProcessor</c>'s existing single-entry
-/// <c>_cachedPortrayalInstructions</c> cache, which is keyed the same way.
+/// <c>_cachedPortrayalInstructions</c> cache of the rule output.
 /// </para>
 /// <para>
 /// The disk-backed <see cref="DiskPatternClipCache"/> retains multiple cells

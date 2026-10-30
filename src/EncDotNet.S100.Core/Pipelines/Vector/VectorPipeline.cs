@@ -94,64 +94,18 @@ public class VectorPipeline
 
         try
         {
+            var sorted = await ExecuteRulesCoreAsync(source, catalogue, viewport, mariner, activity, cancellationToken)
+                .ConfigureAwait(false);
+
             cancellationToken.ThrowIfCancellationRequested();
-            var marinerSettings = mariner ?? new MarinerSettings();
+            var filtered = ApplyDisplayFilters(sorted, catalogue);
 
-            // XSLT rule execution (S-100 Part 9 §9.4). The built-in executor
-            // owns FeatureXML acquisition, rule selection, transformation, and
-            // display-list assembly; its internal telemetry spans cover those
-            // sub-stages. It is render-bound, so it is constructed per call.
-            var xsltExecutor = new XsltRuleExecutor(source, catalogue, viewport);
-            var instructions = (await xsltExecutor.ExecuteAsync(marinerSettings, cancellationToken).ConfigureAwait(false)).ToList();
-            activity?.SetTag("s100.pipeline.feature_types.count", xsltExecutor.LastFeatureTypeCount);
-            activity?.SetTag("s100.pipeline.rules.count", xsltExecutor.LastRuleCount);
-
-            // Lua rule execution (S-100 Part 9A). The optional injected executor
-            // produces typed drawing instructions directly; append them to the
-            // XSLT output before viewing-group filtering and priority sorting.
-            if (_luaExecutor is not null)
-            {
-                using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.lua"))
-                {
-                    var stageStart = Stopwatch.GetTimestamp();
-                    instructions.AddRange(await _luaExecutor.ExecuteAsync(marinerSettings, cancellationToken).ConfigureAwait(false));
-                    RecordStageDuration(stageStart, "lua");
-                    PipelineMetrics.StageInstructionsCount.Record(
-                        instructions.Count,
-                        new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, "lua"));
-                }
-            }
-
-            // Post-processing — viewing group filter + display plane filter + priority sort
-            IReadOnlyList<DrawingInstruction> sorted;
-            using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.viewing_groups"))
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var stageStart = Stopwatch.GetTimestamp();
-                var filtered = ApplyViewingGroups(instructions, catalogue.ViewingGroups);
-                var planeFiltered = ApplyDisplayPlanes(filtered, catalogue.DisplayPlanes);
-                RecordStageDuration(stageStart, "viewing_groups");
-                PipelineMetrics.StageInstructionsCount.Record(
-                    planeFiltered.Count,
-                    new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, "viewing_groups"));
-
-                using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.sort"))
-                {
-                    var sortStart = Stopwatch.GetTimestamp();
-                    sorted = SortByPriority(planeFiltered);
-                    RecordStageDuration(sortStart, "sort");
-                    PipelineMetrics.StageInstructionsCount.Record(
-                        sorted.Count,
-                        new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, "sort"));
-                }
-            }
-
-            PipelineMetrics.InstructionsOut.Record(sorted.Count, stageTag);
-            activity?.SetTag("s100.pipeline.instructions.count", sorted.Count);
+            PipelineMetrics.InstructionsOut.Record(filtered.Count, stageTag);
+            activity?.SetTag("s100.pipeline.instructions.count", filtered.Count);
 
             IVectorLayer layer = new DefaultVectorLayer
             {
-                Instructions = sorted,
+                Instructions = filtered,
             };
 
             return layer;
@@ -170,6 +124,166 @@ public class VectorPipeline
             PipelineMetrics.Duration.Record(
                 (Stopwatch.GetTimestamp() - start) * 1000.0 / Stopwatch.Frequency,
                 stageTag);
+        }
+    }
+
+    /// <summary>
+    /// Runs the portrayal rules for <paramref name="source"/> and returns the
+    /// priority-sorted display list <em>before</em> viewing-group and
+    /// display-plane filtering.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Filtering is a pure function of the rule output and the catalogue's
+    /// <see cref="IVectorPortrayalCatalogue.ViewingGroups"/> and
+    /// <see cref="IVectorPortrayalCatalogue.DisplayPlanes"/> state, so a host
+    /// can keep this list and pass it to <see cref="ApplyDisplayFilters"/>
+    /// when only the ECDIS display state changes (display category, viewing
+    /// groups, display planes) instead of running the rules again.
+    /// <c>ApplyDisplayFilters(await ExecuteRulesAsync(…), catalogue)</c>
+    /// equals the instructions <see cref="ProcessAsync"/> returns.
+    /// </para>
+    /// <para>
+    /// The XSLT rules receive the active display mode as a parameter, so when
+    /// <see cref="RuleOutputDependsOnDisplayMode"/> is <see langword="true"/>
+    /// the list is only reusable under the same display mode.
+    /// </para>
+    /// </remarks>
+    /// <param name="source">Supplies the dataset's FeatureXML to the XSLT rules.</param>
+    /// <param name="catalogue">The portrayal catalogue supplying the rules.</param>
+    /// <param name="viewport">
+    /// Optional display area; when supplied its
+    /// <see cref="Viewport.ScaleDenominator"/> is passed to the XSLT rules as
+    /// the <c>displayScale</c> parameter.
+    /// </param>
+    /// <param name="mariner">
+    /// Mariner display preferences passed to the rule executors; when
+    /// <see langword="null"/> a default <see cref="MarinerSettings"/> is used.
+    /// </param>
+    /// <param name="cancellationToken">Signals that the render has been cancelled.</param>
+    /// <returns>
+    /// The merged XSLT and Lua instructions, sorted by display plane, drawing
+    /// priority and instruction type, with nothing filtered out.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="source"/> or <paramref name="catalogue"/> is <see langword="null"/>.
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> was cancelled.
+    /// </exception>
+    public async Task<IReadOnlyList<DrawingInstruction>> ExecuteRulesAsync(
+        IFeatureXmlSource source,
+        IVectorPortrayalCatalogue catalogue,
+        Viewport? viewport = null,
+        MarinerSettings? mariner = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(catalogue);
+        using var activity = Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.execute_rules");
+        activity?.SetTag(TelemetryTags.PipelineStage, "portray");
+        return await ExecuteRulesCoreAsync(source, catalogue, viewport, mariner, activity, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Applies the catalogue's current viewing-group and display-plane state
+    /// to a display list from <see cref="ExecuteRulesAsync"/>, keeping its
+    /// order.
+    /// </summary>
+    /// <param name="instructions">The unfiltered, priority-sorted rule output.</param>
+    /// <param name="catalogue">
+    /// The catalogue whose <see cref="IVectorPortrayalCatalogue.ViewingGroups"/>
+    /// and <see cref="IVectorPortrayalCatalogue.DisplayPlanes"/> decide what is shown.
+    /// </param>
+    /// <returns>The visible instructions, in their original order.</returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="instructions"/> or <paramref name="catalogue"/> is <see langword="null"/>.
+    /// </exception>
+    public static IReadOnlyList<DrawingInstruction> ApplyDisplayFilters(
+        IReadOnlyList<DrawingInstruction> instructions,
+        IVectorPortrayalCatalogue catalogue)
+    {
+        ArgumentNullException.ThrowIfNull(instructions);
+        ArgumentNullException.ThrowIfNull(catalogue);
+
+        using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.viewing_groups"))
+        {
+            var stageStart = Stopwatch.GetTimestamp();
+            var filtered = ApplyViewingGroups(instructions, catalogue.ViewingGroups);
+            var planeFiltered = ApplyDisplayPlanes(filtered, catalogue.DisplayPlanes);
+            RecordStageDuration(stageStart, "viewing_groups");
+            PipelineMetrics.StageInstructionsCount.Record(
+                planeFiltered.Count,
+                new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, "viewing_groups"));
+            return planeFiltered;
+        }
+    }
+
+    /// <summary>
+    /// Returns whether the output of <see cref="ExecuteRulesAsync"/> for
+    /// <paramref name="catalogue"/> can depend on the active display mode. Only
+    /// XSLT rules receive it (as the <c>displayMode</c> parameter); Lua rules
+    /// don't, so a Lua-only catalogue such as S-101's yields the same rule
+    /// output in every display mode.
+    /// </summary>
+    /// <param name="catalogue">The portrayal catalogue.</param>
+    /// <returns><see langword="true"/> when the catalogue has any XSLT rule.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="catalogue"/> is <see langword="null"/>.</exception>
+    public static bool RuleOutputDependsOnDisplayMode(IVectorPortrayalCatalogue catalogue)
+    {
+        ArgumentNullException.ThrowIfNull(catalogue);
+        return catalogue.Rules.Any(static r => r.Type == PortrayalRuleType.Xslt);
+    }
+
+    private async Task<IReadOnlyList<DrawingInstruction>> ExecuteRulesCoreAsync(
+        IFeatureXmlSource source,
+        IVectorPortrayalCatalogue catalogue,
+        Viewport? viewport,
+        MarinerSettings? mariner,
+        Activity? activity,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var marinerSettings = mariner ?? new MarinerSettings();
+
+        // XSLT rule execution (S-100 Part 9 §9.4). The built-in executor
+        // owns FeatureXML acquisition, rule selection, transformation, and
+        // display-list assembly; its internal telemetry spans cover those
+        // sub-stages. It is render-bound, so it is constructed per call.
+        var xsltExecutor = new XsltRuleExecutor(source, catalogue, viewport);
+        var instructions = (await xsltExecutor.ExecuteAsync(marinerSettings, cancellationToken).ConfigureAwait(false)).ToList();
+        activity?.SetTag("s100.pipeline.feature_types.count", xsltExecutor.LastFeatureTypeCount);
+        activity?.SetTag("s100.pipeline.rules.count", xsltExecutor.LastRuleCount);
+
+        // Lua rule execution (S-100 Part 9A). The optional injected executor
+        // produces typed drawing instructions directly; append them to the
+        // XSLT output before priority sorting.
+        if (_luaExecutor is not null)
+        {
+            using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.lua"))
+            {
+                var stageStart = Stopwatch.GetTimestamp();
+                instructions.AddRange(await _luaExecutor.ExecuteAsync(marinerSettings, cancellationToken).ConfigureAwait(false));
+                RecordStageDuration(stageStart, "lua");
+                PipelineMetrics.StageInstructionsCount.Record(
+                    instructions.Count,
+                    new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, "lua"));
+            }
+        }
+
+        // Priority sort. Filtering keeps order, so sorting before it gives the
+        // same list as sorting after it, and lets the unfiltered list be reused.
+        cancellationToken.ThrowIfCancellationRequested();
+        using (Telemetry.ActivitySource.StartActivity("s100.pipeline.vector.stage.sort"))
+        {
+            var sortStart = Stopwatch.GetTimestamp();
+            var sorted = SortByPriority(instructions);
+            RecordStageDuration(sortStart, "sort");
+            PipelineMetrics.StageInstructionsCount.Record(
+                sorted.Count,
+                new KeyValuePair<string, object?>(TelemetryTags.PipelineStage, "sort"));
+            return sorted;
         }
     }
 
