@@ -52,13 +52,13 @@ they drift.
 |---|---|---|---|---|---|---|---|---|
 | 2 | Catalogue and dataset loading and updating | 70 | 5 | 0 | 10 | 34 | 21 | 0 |
 | 3 | Chart display | 61 | 7 | 0 | 31 | 18 | 4 | 1 |
-| 4 | Chart related functions | 47 | 4 | 2 | 0 | 29 | 10 | 2 |
+| 4 | Chart related functions | 47 | 5 | 1 | 0 | 29 | 10 | 2 |
 | 5 | Navigational hazards | 6 | 1 | 1 | 0 | 0 | 4 | 0 |
 | 6 | Areas with special conditions | 5 | 1 | 2 | 0 | 0 | 2 | 0 |
 | 7 | Safety contour | 6 | 1 | 0 | 0 | 3 | 2 | 0 |
 | 8 | S-57 testing | 0 | — | — | — | — | — | — |
 | 9 | Dual fuel mode and SECOM | 17 | 0 | 0 | 2 | 9 | 6 | 0 |
-| | **Total** | **212** | **19** | **5** | **43** | **93** | **49** | **3** |
+| | **Total** | **212** | **20** | **4** | **43** | **93** | **49** | **3** |
 
 Part 8 has no tests of its own in 2.0.1. It points S-57 testing at the
 existing S-64 datasets, which a later slice covers.
@@ -171,7 +171,7 @@ doesn't try to close them.
 | 2 | **Done.** `tests/EncDotNet.S100.S164.Tests`: the v2.0.0 release pinned by SHA-256 in `s164-v2.0.0.json`, downloaded on demand into a cache, cached in CI, and skipped cleanly without it. A smoke test opens every exchange set, opens every dataset in it, and verifies every signature. | 1 |
 | 3 | **Done for updates and catalogue signatures.** S-164 tests apply the update sets to the `X01SW` cell across exchange sets (SequentialUpdates, InvalidSequence, NewerEditionUpdate, OlderEditionUpdate) and check every `CATALOG.SIGN` (MissingCatalogueSignature, InvalidCatalogueSignature). The applicator now rejects updates for another edition, and the library checks `CATALOG.SIGN`. The rest of finding 3 (authorities for exchange sets, a refuse-untrusted setting, protected data) stays with #1128; cross-set updates in the apps stay with #1129. | 2 |
 | 4 | **Done.** S-164 tests portray every cell in the display sets and Chart 1 at the tests' mariner settings: no portrayal rule fails, and DBASE, STNDR and OTHER features fall in their display categories. The safety contour (#1126) and chart text (#1140) tests failed at first and pass since those fixes; symbolised boundaries (#1141) were found from headless renders compared with the reference plots by eye. | 2 |
-| 5 | **Done for pick reports.** S-164 tests pick features in the PowerUp, InitialPowerUp, Settings and Chart 1 cells with `identify_features` and check the pick report the viewer shows and `describe_feature`. Names, listed values, repeated and complex values ([#1156](https://github.com/philliphoff/EncDotNet.S100/issues/1156)), associations ([#1157](https://github.com/philliphoff/EncDotNet.S100/issues/1157)) and Chart 1 interrogation pass; value formatting ([#1158](https://github.com/philliphoff/EncDotNet.S100/issues/1158)) and priority order ([#1159](https://github.com/philliphoff/EncDotNet.S100/issues/1159)) are skipped tests (§6.4). Accuracy1–15 wait on ellipsoidal geodesy (finding 5). | 2 |
+| 5 | **Done for pick reports.** S-164 tests pick features in the PowerUp, InitialPowerUp, Settings and Chart 1 cells with `identify_features` and check the pick report the viewer shows and `describe_feature`. Names, listed values, repeated and complex values ([#1156](https://github.com/philliphoff/EncDotNet.S100/issues/1156)), associations ([#1157](https://github.com/philliphoff/EncDotNet.S100/issues/1157)), value formatting ([#1158](https://github.com/philliphoff/EncDotNet.S100/issues/1158)) and Chart 1 interrogation pass; priority order ([#1159](https://github.com/philliphoff/EncDotNet.S100/issues/1159)) is a skipped test (§6.4). Accuracy1–15 wait on ellipsoidal geodesy (finding 5). | 2 |
 | 6 | **Done.** S-164 tests run `RouteChecker` over the NavigationalHazards, SpecialConditions and SafetyContour routes, alone and with NavigationalHazardsOverview for the largest-scale tests, and compare the findings with the reference plots and the S-101 portrayal catalogue's alert references. Danger depths now come from `defaultClearanceDepth` when there's no `valueOfSounding`. Dangers are judged against the safety contour wherever they lie (#1151). The other differences are skipped tests linked to #1127 (§6.3). Dual-fuel tests follow when that data is released. | 2 |
 | 7 | S-64 for the S-57 path (Part 8). | 2 |
 
@@ -321,9 +321,15 @@ viewer's pick panel shows.
   follow. `identify_features` reads linked file references into
   `referencedTexts`. `describe_feature` inlines the linked records'
   attributes but still doesn't read the text file.
-- **Value formatting** ([#1158](https://github.com/philliphoff/EncDotNet.S100/issues/1158)).
-  Only depths carry a unit, reals keep their encoded padding (`010`), and
-  dates read as encoded (`20120816`, not `16-AUG-2012`).
+- **Value formatting** ([#1158](https://github.com/philliphoff/EncDotNet.S100/issues/1158), fixed).
+  Only depths carried a unit, reals kept their encoded padding (`010`), and
+  dates read as encoded (`20120816`, not `16-AUG-2012`). Values are now
+  formatted by their feature-catalogue value type: reals and integers without
+  padding and followed by the catalogue's unit (`5 s`, `10°`), and dates,
+  truncated ones included, as `16-AUG-2012`, `AUG-2012` or `MAR`. This
+  applies to every product the shared builder serves. Dates are calendar
+  dates with no time zone, so the Local/UTC preference doesn't apply to them;
+  depths still follow the depth-unit setting.
 - **Order** ([#1159](https://github.com/philliphoff/EncDotNet.S100/issues/1159)).
   `identify_features` ranks by geometry, then distance or area, not by
   drawing priority. It also lists features with no drawing instruction, such
@@ -487,7 +493,7 @@ viewer's pick panel shows.
 | NonNorthUp | — | — | Partial | `src/EncDotNet.S100.Rendering.Scene/RotatedViewport.cs` | Free rotation with correct symbol frames; no course-up or head-up. |
 | ScaleBar | S-98 12.10.1 | PowerUp | Partial | `src/EncDotNet.S100.Viewer/Views/ScaleBarView.axaml` | Horizontal bar at top-centre, not the S-52 vertical bar. |
 | LatitudeBar | S-98 12.10.1 | PowerUp | Gap | — | No latitude bar. |
-| FeatureInformation1 | S-98 15.1 | PowerUp | Fails | `tests/EncDotNet.S100.S164.Tests/Part4FeatureInformationTests.cs` | Every feature under the cursor, with full names and listed-value names, every value of a repeated attribute and nested complex attributes ([#1156](https://github.com/philliphoff/EncDotNet.S100/issues/1156)), and linked information types and features ([#1157](https://github.com/philliphoff/EncDotNet.S100/issues/1157)). Units, padding and dates aren't as S-98 asks ([#1158](https://github.com/philliphoff/EncDotNet.S100/issues/1158)). |
+| FeatureInformation1 | S-98 15.1 | PowerUp | Passes | `tests/EncDotNet.S100.S164.Tests/Part4FeatureInformationTests.cs` | Every feature under the cursor, with full names and listed-value names, every value of a repeated attribute and nested complex attributes ([#1156](https://github.com/philliphoff/EncDotNet.S100/issues/1156)), and linked information types and features ([#1157](https://github.com/philliphoff/EncDotNet.S100/issues/1157)). Numbers carry their unit and no padding, and dates read DD-MMM-YYYY ([#1158](https://github.com/philliphoff/EncDotNet.S100/issues/1158)). |
 | FeatureInformation2 | S-98 15.1 | PowerUp | Fails | `tests/EncDotNet.S100.S164.Tests/Part4FeatureInformationTests.cs` | Ranked by geometry, not drawing priority ([#1159](https://github.com/philliphoff/EncDotNet.S100/issues/1159)). No plain-language symbol explanations or attribute definitions; not configurable. |
 | FeatureInformation3 | S-98 15.2.2 | — | Gap | — | Pick report content isn't configurable. |
 | FeatureInformation4 | S-98 15.1 | — | Gap | `src/EncDotNet.S100.Viewer/Tools/PickTool.cs` | Optional. No hover pick. |
