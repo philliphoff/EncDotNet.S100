@@ -52,6 +52,28 @@ public class S101PortrayalCatalogueDisplayModeTests
     }
 
     [Fact]
+    public async Task ChartText_IsVisibleInEveryDisplayMode()
+    {
+        // The PC's text layer groups belong to no display mode (#1140).
+        using var pcSource = Specification.CreatePortrayalCatalogueSource("S-101");
+        var provider = await PortrayalCatalogueProvider.OpenAsync(pcSource, cancellationToken: TestContext.Current.CancellationToken);
+        var catalogue = new S101PortrayalCatalogue(provider);
+
+        var chartText = DisplayModeMembership.ResolveChartText(provider.Catalogue);
+        Assert.Equal([11, 21, 23, 24, 25, 26, 27, 28, 29, 30, 32], chartText.Order());
+
+        foreach (var mode in new[] { "DisplayBase", "StandardDisplay", "OtherInformation" })
+        {
+            catalogue.DisplayModes.SetActive(mode);
+            Assert.DoesNotContain(26, catalogue.ViewingGroups.ActiveModeMembership!);
+            Assert.All(chartText, id => Assert.True(catalogue.ViewingGroups.IsVisible(id), $"{id} in {mode}"));
+        }
+
+        // Accuracy and the other independent overlays stay off.
+        Assert.False(catalogue.ViewingGroups.IsVisible(90010));
+    }
+
+    [Fact]
     public async Task StandardDisplay_IsSupersetOf_DisplayBase()
     {
         using var pcSource = Specification.CreatePortrayalCatalogueSource("S-101");

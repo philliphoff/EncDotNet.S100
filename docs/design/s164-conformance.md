@@ -51,14 +51,14 @@ they drift.
 | Part | Area | Tests | Passes | Fails | Supported | Partial | Gap | N/A |
 |---|---|---|---|---|---|---|---|---|
 | 2 | Catalogue and dataset loading and updating | 70 | 5 | 0 | 10 | 34 | 21 | 0 |
-| 3 | Chart display | 61 | 0 | 5 | 25 | 24 | 6 | 1 |
+| 3 | Chart display | 61 | 1 | 4 | 25 | 24 | 6 | 1 |
 | 4 | Chart related functions | 47 | 0 | 0 | 2 | 32 | 11 | 2 |
 | 5 | Navigational hazards | 6 | 0 | 0 | 1 | 1 | 4 | 0 |
 | 6 | Areas with special conditions | 5 | 0 | 0 | 2 | 1 | 2 | 0 |
 | 7 | Safety contour | 6 | 0 | 0 | 1 | 3 | 2 | 0 |
 | 8 | S-57 testing | 0 | — | — | — | — | — | — |
 | 9 | Dual fuel mode and SECOM | 17 | 0 | 0 | 2 | 9 | 6 | 0 |
-| | **Total** | **212** | **5** | **5** | **43** | **104** | **52** | **3** |
+| | **Total** | **212** | **6** | **4** | **43** | **104** | **52** | **3** |
 
 Part 8 has no tests of its own in 2.0.1. It points S-57 testing at the
 existing S-64 datasets, which a later slice covers.
@@ -117,13 +117,12 @@ issue.
    position, no check symbol, no colour differentiation diagram and no
    scale-boundary line. Each is small. Affects Parts 3 and 4.
 
-9. **Chart text hidden by the display category.** ([#1140](https://github.com/philliphoff/EncDotNet.S100/issues/1140)) S-101 text has its own viewing
-   groups in the *Chart text* layers, which no display mode lists. The
-   viewing-group filter hides anything outside the active mode unless
-   something turns it on, and only hiding is ever applied, so every name,
-   light description and other label is dropped whenever an ECDIS category
-   is set. SoundCharts always sets one. Affects DisplayBase, DisplayStandard,
-   DisplayOther and TextGrouping.
+9. **Chart text hidden by the display category.** ([#1140](https://github.com/philliphoff/EncDotNet.S100/issues/1140), fixed) S-101 text has its own
+   viewing groups in the *Chart text* layers, which no display mode lists,
+   and the viewing-group filter hid everything outside the active mode, so
+   every label was dropped whenever an ECDIS category was set. The *Chart
+   text* groups are now independent of the display mode: they show unless
+   the mariner's text switches hide them.
 10. **Complex line styles.** ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141)) Line styles are read as pen and dash only, and
     ignored when the instruction also names a colour, so symbolised
     boundaries draw as plain lines and some dashes come out solid. Affects
@@ -155,7 +154,7 @@ doesn't try to close them.
 | 1 | This note: the matrix, findings and differences. | — |
 | 2 | **Done.** `tests/EncDotNet.S100.S164.Tests`: the v2.0.0 release pinned by SHA-256 in `s164-v2.0.0.json`, downloaded on demand into a cache, cached in CI, and skipped cleanly without it. A smoke test opens every exchange set, opens every dataset in it, and verifies every signature. | 1 |
 | 3 | **Done for updates and catalogue signatures.** S-164 tests apply the update sets to the `X01SW` cell across exchange sets (SequentialUpdates, InvalidSequence, NewerEditionUpdate, OlderEditionUpdate) and check every `CATALOG.SIGN` (MissingCatalogueSignature, InvalidCatalogueSignature). The applicator now rejects updates for another edition, and the library checks `CATALOG.SIGN`. The rest of finding 3 (authorities for exchange sets, a refuse-untrusted setting, protected data) stays with #1128; cross-set updates in the apps stay with #1129. | 2 |
-| 4 | **Done.** S-164 tests portray every cell in the display sets and Chart 1 at the tests' mariner settings: no portrayal rule fails, and DBASE, STNDR and OTHER features fall in their display categories. The safety contour (#1126) and chart text (#1140) tests fail and are skipped; symbolised boundaries (#1141) were found from headless renders compared with the reference plots by eye. | 2 |
+| 4 | **Done.** S-164 tests portray every cell in the display sets and Chart 1 at the tests' mariner settings: no portrayal rule fails, and DBASE, STNDR and OTHER features fall in their display categories. The safety contour test (#1126) fails and is skipped; the chart text test passes since #1140 was fixed; symbolised boundaries (#1141) were found from headless renders compared with the reference plots by eye. | 2 |
 | 5 | Part 4 tests: pick report checks, and Accuracy1–15 as unit tests once ellipsoidal geodesy (finding 5) lands. | 2 |
 | 6 | Parts 5–7 tests: route checks over the NavigationalHazards, SpecialConditions and SafetyContour exchange sets, compared with the expected findings. Dual-fuel tests follow when that data is released. | 2 |
 | 7 | S-64 for the S-57 path (Part 8). | 2 |
@@ -221,8 +220,8 @@ output and compares headless renders with the plots by eye, locally:
   and depth-dependent dangers, are Other information only. At SoundCharts'
   default 30 m safety contour the same dangers are shallow-water dangers
   instead, as the portrayal catalogue intends.
-- Three things differ from the plots: the safety contour outline (#1126),
-  missing chart text (#1140) and plain boundaries (#1141).
+- Three things differed from the plots: the safety contour outline (#1126),
+  missing chart text (#1140, since fixed) and plain boundaries (#1141).
 - Dock and lock areas in DBASE belong to Standard Display, so with Display
   Base selected they leave an unfilled hole in the land area; the plot shows
   them filled. Not filed: the plot alone doesn't settle which is right.
@@ -310,12 +309,12 @@ output and compares headless renders with the plots by eye, locally:
 |---|---|---|---|---|---|
 | Dataset Selection | S-98 Appendix E | — | Partial | `src/EncDotNet.S100.Renderers.Mapsui/OverlapSuppression.cs` | Cells ranked by minimum display scale, finer clip coarser; not the S-98 Appendix E selection. The S-164 test is still TODO. |
 | DatasetRendering | S-98 Appendix E | — | Partial | `src/EncDotNet.S100.Renderers.Mapsui/CoverageClip.cs` | Coarser cells clipped to finer coverage; not the Appendix E algorithm. The S-164 test is still TODO. |
-| DisplayBase | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayBase | Fails | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | No rule fails and the dangers are Display Base at the test settings; the safety contour outline ([#1126](https://github.com/philliphoff/EncDotNet.S100/issues/1126)) and chart text ([#1140](https://github.com/philliphoff/EncDotNet.S100/issues/1140)) differ from the plot (§6.2). |
-| DisplayStandard | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayStandard | Fails | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Every feature draws in Standard Display; boundaries are plain ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141)) and chart text is missing ([#1140](https://github.com/philliphoff/EncDotNet.S100/issues/1140)). |
-| DisplayOther | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayOther | Fails | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Features draw as Other information; chart text is missing ([#1140](https://github.com/philliphoff/EncDotNet.S100/issues/1140)) and boundaries and some dashes are plain ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141)). |
+| DisplayBase | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayBase | Fails | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | No rule fails and the dangers are Display Base at the test settings; the safety contour outline ([#1126](https://github.com/philliphoff/EncDotNet.S100/issues/1126)) differs from the plot (§6.2). |
+| DisplayStandard | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayStandard | Fails | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Every feature draws in Standard Display; boundaries are plain ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141)). |
+| DisplayOther | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayOther | Fails | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Features draw as Other information, with their text; boundaries and some dashes are plain ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141)). |
 | ViewingGroupsStandard | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayStandard | Partial | `src/EncDotNet.S100.Viewer/Services/EcdisDisplayState.cs` | Viewing groups toggle individually; the PC's named viewing-group layers aren't the UI. |
 | ViewingGroupsOther | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayOther | Partial | `src/EncDotNet.S100.Viewer/Services/EcdisDisplayState.cs` | As above. |
-| TextGrouping | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayBase | Fails | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Important / other text toggles exist, but chart text is hidden whenever a display category is set ([#1140](https://github.com/philliphoff/EncDotNet.S100/issues/1140)). |
+| TextGrouping | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayBase | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Chart text shows in every display category; Important / other text toggles hide it ([#1140](https://github.com/philliphoff/EncDotNet.S100/issues/1140)). |
 | InvalidFeaturesA | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Specifications/content/S101/pc/Rules/main.lua` | Unknown classes fall back to the PC default rule. |
 | InvalidFeaturesB | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Specifications/content/S101/pc/Rules/main.lua` | PC rules; not compared with the reference plot. |
 | InvalidFeaturesPickA | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Viewer/Services/PickService.cs` | Pick report from drawn hits; unknown names fall back to codes. |

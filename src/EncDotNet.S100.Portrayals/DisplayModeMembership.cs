@@ -53,6 +53,38 @@ public static class DisplayModeMembership
     }
 
     /// <summary>
+    /// Resolves the viewing groups of the catalogue's <c>Chart text</c>
+    /// layer: the text groups no display mode lists, which the mariner
+    /// switches on and off independently (the S-101 portrayal catalogue's
+    /// "text layer groups"). Empty when the catalogue has no such layer.
+    /// </summary>
+    /// <param name="catalogue">The parsed portrayal catalogue.</param>
+    public static IReadOnlySet<int> ResolveChartText(PortrayalCatalogue catalogue)
+    {
+        ArgumentNullException.ThrowIfNull(catalogue);
+
+        var ids = new HashSet<int>();
+        foreach (var layer in catalogue.ViewingGroupLayers)
+        {
+            if (!string.Equals(layer.Description.Name, ChartTextLayerName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            foreach (var raw in layer.ViewingGroupIds)
+            {
+                if (int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
+                {
+                    ids.Add(id);
+                }
+            }
+        }
+
+        return ids;
+    }
+
+    /// <summary>The S-101 portrayal catalogue's name for its text layer.</summary>
+    private const string ChartTextLayerName = "Chart text";
+
+    /// <summary>
     /// Wires <paramref name="displayModes"/> to keep
     /// <paramref name="viewingGroups"/> in sync with the active display
     /// mode declared in <paramref name="catalogue"/>. The wiring
@@ -79,6 +111,11 @@ public static class DisplayModeMembership
             .Select(m => m.Id)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         displayModes.SetDeclaredModeIds(declaredIds);
+
+        // Chart text isn't part of any display mode; the mariner's text
+        // switches (user overrides) alone decide whether it shows.
+        var chartText = ResolveChartText(catalogue);
+        viewingGroups.SetModeIndependentGroups(chartText.Count > 0 ? chartText : null);
 
         Action handler = () =>
         {
