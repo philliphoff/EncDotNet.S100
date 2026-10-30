@@ -13,7 +13,8 @@ namespace EncDotNet.S100.Datasets.S101;
 /// seams: an <see cref="S101LuaDataProvider"/> host bridge, the S-101 context
 /// parameter bindings (mapping <see cref="MarinerSettings"/> onto the declared
 /// catalogue parameters), a feature-anchor provider for augmented line
-/// tessellation, and the SAFCON contour-label post-parse transform.
+/// tessellation, a spatial-reference resolver for edge lines, and the SAFCON
+/// contour-label post-parse transform.
 /// </summary>
 /// <remarks>
 /// This is a thin wrapper that preserves the historic S-101 construction
@@ -48,7 +49,8 @@ public sealed class S101LuaRuleExecutor : ILuaVectorRuleExecutor
             "S-101",
             S101ContextParameterBindings.Build(),
             new S101FeatureAnchorProvider(dataset),
-            [new S101SafconTransform()]);
+            [new S101SafconTransform()],
+            new S101SpatialReferenceResolver(dataset));
     }
 
     /// <inheritdoc/>
@@ -103,6 +105,17 @@ internal sealed class S101FeatureAnchorProvider : IFeatureAnchorProvider
             return null;
         return geom.Coordinates[0];
     }
+}
+
+/// <summary>
+/// Resolves the curves S-101 portrayal rules name with <c>SpatialReference</c>
+/// (spatial ids <c>RCNM:RCID</c>) from the dataset's curve records, so edge
+/// lines such as the safety contour follow just those edges.
+/// </summary>
+internal sealed class S101SpatialReferenceResolver(S101Dataset dataset) : ISpatialReferenceResolver
+{
+    public IReadOnlyList<GeoPosition>? ResolveCurve(string spatialId) =>
+        S101VectorSource.ResolveSpatialCurve(dataset.Document, spatialId);
 }
 
 /// <summary>

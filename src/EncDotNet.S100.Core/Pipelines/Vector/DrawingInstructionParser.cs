@@ -32,10 +32,18 @@ public static class DrawingInstructionParser
     /// <c>ArcByRadius</c> / <c>AugmentedPath</c> augmented line geometry.
     /// When <see langword="null"/>, augmented line geometry is silently skipped.
     /// </param>
+    /// <param name="spatialReferences">
+    /// Optional resolver for <c>SpatialReference</c> commands. With it, a line
+    /// instruction that follows spatial references is drawn along each
+    /// referenced curve only (one <see cref="LineInstruction"/> per curve, via
+    /// <see cref="LineInstruction.CoordinatesOverride"/>). Without it, spatial
+    /// references are ignored and lines follow the feature's whole geometry.
+    /// </param>
     public static List<DrawingInstruction> Parse(
         string featureRef,
         string instructionString,
-        GeoPosition? featureAnchor = null)
+        GeoPosition? featureAnchor = null,
+        ISpatialReferenceResolver? spatialReferences = null)
     {
         if (string.IsNullOrEmpty(instructionString))
             return [];
@@ -88,6 +96,10 @@ public static class DrawingInstructionParser
         // Resolved augmented line coordinates ready to attach to the next
         // LineInstruction.  Set by the AugmentedPath command.
         IReadOnlyList<GeoPosition>? augmentedLineCoords = null;
+
+        // Spatial objects named by SpatialReference since the last
+        // ClearGeometry (S-100 Part 9a §9a-11.2.4), with their direction.
+        var spatialRefs = new List<(string Id, bool Forward)>();
 
         var segments = instructionString.Split(';');
 
@@ -263,22 +275,40 @@ public static class DrawingInstructionParser
                         augmentedLineSegments.Clear();
                     }
 
-                    results.Add(new LineInstruction
                     {
-                        FeatureReference = featureRef,
-                        LineStyleReference = string.IsNullOrEmpty(value) ? lineStyleRef : value,
-                        ViewingGroup = viewingGroup,
-                        AdditionalViewingGroups = additionalViewingGroups,
-                        DrawingPriority = drawingPriority,
-                        Plane = displayPlane,
-                        LineWidth = lineWidth,
-                        LineColor = lineColor,
-                        Dashes = dashes.Count > 0 ? new List<(double, double)>(dashes) : null,
-                        DashOnLength = dashOnLengthMm,
-                        CoordinatesOverride = augmentedLineCoords,
-                        ScaleMinimum = scaleMinimum,
-                        ScaleMaximum = scaleMaximum,
-                    });
+                        LineInstruction Line(IReadOnlyList<GeoPosition>? coordinates) => new()
+                        {
+                            FeatureReference = featureRef,
+                            LineStyleReference = string.IsNullOrEmpty(value) ? lineStyleRef : value,
+                            ViewingGroup = viewingGroup,
+                            AdditionalViewingGroups = additionalViewingGroups,
+                            DrawingPriority = drawingPriority,
+                            Plane = displayPlane,
+                            LineWidth = lineWidth,
+                            LineColor = lineColor,
+                            Dashes = dashes.Count > 0 ? new List<(double, double)>(dashes) : null,
+                            DashOnLength = dashOnLengthMm,
+                            CoordinatesOverride = coordinates,
+                            ScaleMinimum = scaleMinimum,
+                            ScaleMaximum = scaleMaximum,
+                        };
+
+                        if (augmentedLineCoords is null && spatialRefs.Count > 0 && spatialReferences is not null)
+                        {
+                            // Draw along the referenced curves only; a reference
+                            // the dataset can't resolve draws nothing.
+                            foreach (var (id, forward) in spatialRefs)
+                            {
+                                if (spatialReferences.ResolveCurve(id) is not { Count: >= 2 } curve)
+                                    continue;
+                                results.Add(Line(forward ? curve : curve.Reverse().ToList()));
+                            }
+                        }
+                        else
+                        {
+                            results.Add(Line(augmentedLineCoords));
+                        }
+                    }
                     dashes.Clear();
                     lineStyleRef = null;
                     // NOTE: augmentedLineCoords is NOT cleared here — the Lua
@@ -365,9 +395,23 @@ public static class DrawingInstructionParser
                     }
                     break;
 
+                case "SpatialReference":
+                    {
+                        // SpatialReference:id[,false] — false draws against the
+                        // curve's direction.
+                        var srParts = value.Split(',');
+                        var id = DefDecode(srParts[0]);
+                        if (id.Length > 0)
+                        {
+                            var forward = srParts.Length < 2
+                                || !string.Equals(srParts[1], "false", StringComparison.OrdinalIgnoreCase);
+                            spatialRefs.Add((id, forward));
+                        }
+                    }
+                    break;
+
                 case "AlertReference":
                 case "Hover":
-                case "SpatialReference":
                 case "AreaPlacement":
                 case "AreaCRS":
                 case "Date":
@@ -382,6 +426,7 @@ public static class DrawingInstructionParser
                     augmentedAnchor = null;
                     augmentedLineSegments.Clear();
                     augmentedLineCoords = null;
+                    spatialRefs.Clear();
                     break;
 
                 case "AugmentedPoint":
