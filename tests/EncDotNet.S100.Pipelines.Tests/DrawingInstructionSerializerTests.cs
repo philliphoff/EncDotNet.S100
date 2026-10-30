@@ -45,7 +45,7 @@ public class DrawingInstructionSerializerTests
         LineWidth = 0.32,
         LineColor = "CHBLK",
         Dashes = [(0.0, 1.0), (1.0, 2.0)],
-        DashOnLength = 1.0,
+        DashIntervalLength = 1.0,
         CoordinatesOverride = [new GeoPosition(50.1, -1.1), new GeoPosition(50.2, -1.2), new GeoPosition(50.3, -1.3)],
     };
 
@@ -197,7 +197,7 @@ public class DrawingInstructionSerializerTests
                 Assert.Equal(e.LineWidth, al.LineWidth);
                 Assert.Equal(e.LineColor, al.LineColor);
                 Assert.Equal(e.Dashes, al.Dashes);
-                Assert.Equal(e.DashOnLength, al.DashOnLength);
+                Assert.Equal(e.DashIntervalLength, al.DashIntervalLength);
                 Assert.Equal(e.CoordinatesOverride, al.CoordinatesOverride);
                 break;
 

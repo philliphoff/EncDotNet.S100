@@ -51,14 +51,14 @@ they drift.
 | Part | Area | Tests | Passes | Fails | Supported | Partial | Gap | N/A |
 |---|---|---|---|---|---|---|---|---|
 | 2 | Catalogue and dataset loading and updating | 70 | 5 | 0 | 10 | 34 | 21 | 0 |
-| 3 | Chart display | 61 | 3 | 2 | 25 | 24 | 6 | 1 |
+| 3 | Chart display | 61 | 5 | 0 | 27 | 23 | 5 | 1 |
 | 4 | Chart related functions | 47 | 0 | 0 | 2 | 32 | 11 | 2 |
 | 5 | Navigational hazards | 6 | 0 | 0 | 1 | 1 | 4 | 0 |
 | 6 | Areas with special conditions | 5 | 0 | 0 | 2 | 1 | 2 | 0 |
 | 7 | Safety contour | 6 | 0 | 0 | 1 | 3 | 2 | 0 |
 | 8 | S-57 testing | 0 | — | — | — | — | — | — |
 | 9 | Dual fuel mode and SECOM | 17 | 0 | 0 | 2 | 9 | 6 | 0 |
-| | **Total** | **212** | **8** | **2** | **43** | **104** | **52** | **3** |
+| | **Total** | **212** | **10** | **0** | **45** | **103** | **51** | **3** |
 
 Part 8 has no tests of its own in 2.0.1. It points S-57 testing at the
 existing S-64 datasets, which a later slice covers.
@@ -125,10 +125,11 @@ issue.
    every label was dropped whenever an ECDIS category was set. The *Chart
    text* groups are now independent of the display mode: they show unless
    the mariner's text switches hide them.
-10. **Complex line styles.** ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141)) Line styles are read as pen and dash only, and
-    ignored when the instruction also names a colour, so symbolised
-    boundaries draw as plain lines and some dashes come out solid. Affects
-    DisplayStandard, DisplayOther, Symbolisedboundaries and AreaBorders.
+10. **Complex line styles.** ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141), fixed) Line styles were read as pen and dash only,
+    and ignored when the instruction also named a colour, so symbolised
+    boundaries drew as plain lines and some dashes came out solid. Named
+    styles now win, with their interval, dashes, symbols along the line and
+    composite parts, and simple dashes repeat over their interval.
 
 ## 5. Deliberate differences
 
@@ -222,9 +223,8 @@ output and compares headless renders with the plots by eye, locally:
   and depth-dependent dangers, are Other information only. At SoundCharts'
   default 30 m safety contour the same dangers are shallow-water dangers
   instead, as the portrayal catalogue intends.
-- Three things differed from the plots: the safety contour outline (#1126,
-  since fixed), missing chart text (#1140, since fixed) and plain boundaries
-  (#1141).
+- Three things differed from the plots, all since fixed: the safety contour
+  outline (#1126), missing chart text (#1140) and plain boundaries (#1141).
 - Dock and lock areas in DBASE belong to Standard Display, so with Display
   Base selected they leave an unfilled hole in the land area; the plot shows
   them filled. Not filed: the plot alone doesn't settle which is right.
@@ -313,8 +313,8 @@ output and compares headless renders with the plots by eye, locally:
 | Dataset Selection | S-98 Appendix E | — | Partial | `src/EncDotNet.S100.Renderers.Mapsui/OverlapSuppression.cs` | Cells ranked by minimum display scale, finer clip coarser; not the S-98 Appendix E selection. The S-164 test is still TODO. |
 | DatasetRendering | S-98 Appendix E | — | Partial | `src/EncDotNet.S100.Renderers.Mapsui/CoverageClip.cs` | Coarser cells clipped to finer coverage; not the Appendix E algorithm. The S-164 test is still TODO. |
 | DisplayBase | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayBase | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | No rule fails, the dangers are Display Base at the test settings, and the safety contour follows its edges ([#1126](https://github.com/philliphoff/EncDotNet.S100/issues/1126)). Dock and lock areas leave holes in Display Base (§6.2). |
-| DisplayStandard | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayStandard | Fails | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Every feature draws in Standard Display; boundaries are plain ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141)). |
-| DisplayOther | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayOther | Fails | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Features draw as Other information, with their text; boundaries and some dashes are plain ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141)). |
+| DisplayStandard | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayStandard | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Every feature draws in Standard Display, with symbolised boundaries ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141)). |
+| DisplayOther | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayOther | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Features draw as Other information, with their text and line styles. |
 | ViewingGroupsStandard | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayStandard | Partial | `src/EncDotNet.S100.Viewer/Services/EcdisDisplayState.cs` | Viewing groups toggle individually; the PC's named viewing-group layers aren't the UI. |
 | ViewingGroupsOther | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayOther | Partial | `src/EncDotNet.S100.Viewer/Services/EcdisDisplayState.cs` | As above. |
 | TextGrouping | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayBase | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Chart text shows in every display category; Important / other text toggles hide it ([#1140](https://github.com/philliphoff/EncDotNet.S100/issues/1140)). |
@@ -327,7 +327,7 @@ output and compares headless renders with the plots by eye, locally:
 | SimplifiedSymbolsFalse | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Core/Pipelines/MarinerSettings.cs` | SimplifiedSymbols context parameter. |
 | SimplifiedSymbolsTrue | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Core/Pipelines/MarinerSettings.cs` | As above. |
 | PlainBoundaries | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Core/Pipelines/MarinerSettings.cs` | PlainBoundaries context parameter. |
-| Symbolisedboundaries | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Gap | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | The PC asks for symbolised boundaries but complex line styles draw as plain lines ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141)). |
+| Symbolisedboundaries | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | Complex line styles draw their dashes and symbols along the boundary ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141)). |
 | FixedDateRange | S-98 12.8.1 | — | Partial | `src/EncDotNet.S100.Core/Pipelines/Vector/DrawingInstructionParser.cs` | PC adds the date-dependent highlight, but Date/TimeValid instructions are skipped so S-101 features aren't filtered by view date; the not-real-time stamp only counts S-124. |
 | PeriodicDateRange | S-98 12.8.1 | — | Partial | `src/EncDotNet.S100.Core/Pipelines/Vector/DrawingInstructionParser.cs` | As above. |
 | SafetyContourDisplay | S-98 12.6.1 | DisplayBase | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | The safety contour is drawn only on the depth-area edges at the safety depth ([#1126](https://github.com/philliphoff/EncDotNet.S100/issues/1126)). |
@@ -347,7 +347,7 @@ output and compares headless renders with the plots by eye, locally:
 | LineSuppression | S-101PC | — | Gap | `src/EncDotNet.S100.Core/Pipelines/Vector/DrawingInstructionParser.cs` | LineInstructionUnsuppressed is treated as a plain line; no shared-edge suppression. |
 | ManualUpdates | S-98 12.12.1 | — | N/A | — | Mariner chart corrections are ECDIS chart maintenance. |
 | TextDisplay1 | — | — | Supported | `src/EncDotNet.S100.Renderers.Skia/Scene/LabelDeclutterer.cs` | Text placed and decluttered. |
-| AreaBorders | S-101PC | — | Partial | `src/EncDotNet.S100.Core/Pipelines/Vector/DrawingInstructionParser.cs` | Plain and edge-specific borders work; symbolised borders draw plain ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141)). |
+| AreaBorders | S-101PC | — | Supported | `src/EncDotNet.S100.Core/Pipelines/Vector/DrawingInstructionParser.cs` | Plain, symbolised and edge-specific borders all draw. |
 | UnknownSymbols | S-101PC | — | Partial | `src/EncDotNet.S100.Renderers.Mapsui/MapsuiDisplayListRenderer.cs` | A missing symbol draws as a dot, not the unknown-symbol glyph. |
 | BoundaryDisplay1 | S-98 9.1.1 | — | Partial | `src/EncDotNet.S100.Renderers.Mapsui/S100DatasetExtentIndicatorLayer.cs` | Extents outlined only when out of scale. |
 | BoundaryDisplay2 | S-98 12.3.1 | — | Gap | — | No scale-boundary line between areas of different scale. |

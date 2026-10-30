@@ -124,11 +124,12 @@ public sealed class InstructionBuilderTests
         Assert.Equal("LINK", solid.LineColor);
         Assert.Equal(0.32, solid.LineWidth);
         Assert.Null(solid.Dashes);
-        Assert.Equal(0, solid.DashOnLength);
+        Assert.Equal(0, solid.DashIntervalLength);
 
         var dashed = Builder.Line("f", "LINK", 0.32, dashLength: 1.9, gapLength: 0.96);
-        Assert.Equal(new[] { (Offset: 0.0, Length: 0.96) }, dashed.Dashes!);
-        Assert.Equal(1.9, dashed.DashOnLength);
+        // A 1.9 mm dash at the start of each 2.86 mm interval (#1141).
+        Assert.Equal(new[] { (Offset: 0.0, Length: 1.9) }, dashed.Dashes!);
+        Assert.Equal(2.86, dashed.DashIntervalLength, 6);
     }
 
     [Fact]

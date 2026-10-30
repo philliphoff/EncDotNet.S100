@@ -68,7 +68,37 @@ public sealed class LineStyle
     /// millimetres, or <see langword="null"/> for a solid line.
     /// </summary>
     public float[]? DashPattern { get; init; }
+
+    /// <summary>
+    /// Length of the repeating pattern of dashes and symbols, in millimetres,
+    /// or <c>0</c> when the file gives none.
+    /// </summary>
+    public float IntervalLength { get; init; }
+
+    /// <summary>
+    /// Whether the style draws a pen at all. A style without a
+    /// <c>&lt;pen&gt;</c> places only its symbols.
+    /// </summary>
+    public bool HasPen { get; init; } = true;
+
+    /// <summary>
+    /// Symbols placed along the line in each interval, at their position from
+    /// the start of the interval (S-100 Part 9 line styles, for example the
+    /// T-marks of a restricted-area boundary).
+    /// </summary>
+    public IReadOnlyList<LineStyleSymbol> Symbols { get; init; } = [];
+
+    /// <summary>
+    /// The line styles of a composite line style, drawn one over the other in
+    /// order; empty for a simple line style.
+    /// </summary>
+    public IReadOnlyList<LineStyle> Components { get; init; } = [];
 }
+
+/// <summary>A symbol a line style places along the line.</summary>
+/// <param name="Reference">The symbol's catalogue name.</param>
+/// <param name="Position">Its distance from the start of each interval, in millimetres.</param>
+public sealed record LineStyleSymbol(string Reference, float Position);
 
 /// <summary>
 /// An S-100 Part 9 area fill: a solid colour and/or a symbol pattern tiled

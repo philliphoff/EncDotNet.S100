@@ -626,7 +626,9 @@ public sealed class MapsuiDisplayListRenderer
 
     private static IFeature? CreateLineFeature(Scene.LinePaintOp op)
     {
-        if (op.World.Count < 2)
+        // A line style with no pen only places symbols, which this path
+        // doesn't draw; the tile renderer does.
+        if (op.World.Count < 2 || !op.Stroke)
             return null;
 
         var coords = new Coordinate[op.World.Count];

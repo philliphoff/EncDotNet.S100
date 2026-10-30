@@ -191,16 +191,18 @@ public sealed class LineInstruction : DrawingInstruction
     public string? LineColor { get; init; }
 
     /// <summary>
-    /// Optional dash pattern as a sequence of (offset-mm, length-mm) pairs.
+    /// Optional dashes as (start, length) pairs in millimetres within each
+    /// <see cref="DashIntervalLength"/> (S-100 Part 9 <c>Dash:start,length</c>).
     /// </summary>
     public IReadOnlyList<(double Offset, double Length)>? Dashes { get; init; }
 
     /// <summary>
-    /// Dash "on" length in millimetres, from the LineStyle second parameter.
-    /// Used with <see cref="Dashes"/> to form the full [on, gap] dash array.
-    /// Zero means no explicit dash-on length was specified.
+    /// Length in millimetres of the interval the <see cref="Dashes"/> repeat
+    /// over: the second parameter of <c>LineStyle:_simple_,interval,width,colour</c>
+    /// (S-100 Part 9). Zero when none was given, in which case each dash is
+    /// followed by a gap as long as itself.
     /// </summary>
-    public double DashOnLength { get; init; }
+    public double DashIntervalLength { get; init; }
 
     /// <summary>
     /// Optional explicit coordinate sequence that overrides the feature's

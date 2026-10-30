@@ -140,10 +140,10 @@ public sealed record InstructionBuilder
             LineStyleReference = LineInstruction.SimpleLineStyleReference,
             LineColor = colorToken,
             LineWidth = width,
-            // The renderers read the gap from the dash entry and the dash from
-            // DashOnLength, as the S-101 Lua portrayal emits them.
-            Dashes = dashed ? [(0.0, gapLength)] : null,
-            DashOnLength = dashed ? dashLength : 0,
+            // A dash at the start of each dash-plus-gap interval, as the S-101
+            // Lua portrayal emits them (Dash:0,dash;LineStyle:_simple_,interval).
+            Dashes = dashed ? [(0.0, dashLength)] : null,
+            DashIntervalLength = dashed ? dashLength + gapLength : 0,
             Plane = Plane,
             ViewingGroup = ViewingGroup,
             DrawingPriority = DrawingPriority,

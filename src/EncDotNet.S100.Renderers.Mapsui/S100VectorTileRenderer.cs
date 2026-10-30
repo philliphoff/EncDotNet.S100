@@ -1622,6 +1622,10 @@ public static class S100VectorTileRenderer
             switch (op)
             {
                 case LinePaintOp line:
+                    // Live drawing strokes plain lines only; symbols along a
+                    // line (S-100 Part 9 line styles) need the tile renderer.
+                    if (line.Symbols.Count > 0 || !line.Stroke)
+                        return false;
                     vertices += line.World.Count;
                     break;
                 case AreaPaintOp area:

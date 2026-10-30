@@ -495,11 +495,18 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
         // Pad the bbox by half the stroke width so a wide line whose centreline
         // sits just outside the cull rectangle (but whose stroke would still
         // paint inside it) is not wrongly culled. Round joins/caps stay within
-        // half the stroke width of the geometry.
-        float pad = width * 0.5f;
+        // half the stroke width of the geometry. Symbols along the line reach
+        // further, by up to their own size.
+        float pad = op.Symbols.Count > 0 ? Math.Max(width * 0.5f, LineSymbolMarginPx) : width * 0.5f;
         if (maxX + pad < cullBounds.Left || minX - pad > cullBounds.Right ||
             maxY + pad < cullBounds.Top || minY - pad > cullBounds.Bottom)
         {
+            return;
+        }
+
+        if (!op.Stroke)
+        {
+            DrawLineSymbols(canvas, op, points.AsSpan(0, count), cullBounds);
             return;
         }
 
@@ -535,12 +542,96 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
         {
             path.Rewind();
             path.AddPoly(points.AsSpan(0, count), close: false);
-            paint.PathEffect = dashPattern is null ? null : scratch.DashFor(dashPattern, 0f);
+            paint.PathEffect = dashPattern is null ? null : scratch.DashFor(dashPattern, (float)op.DashPhasePx);
             canvas.DrawPath(path, paint);
-            return;
+        }
+        else
+        {
+            DrawClippedLine(canvas, points.AsSpan(0, count), clip, dashPattern, paint, scratch, op.DashPhasePx);
         }
 
-        DrawClippedLine(canvas, points.AsSpan(0, count), clip, dashPattern, paint, scratch);
+        // Symbols sit on top of the stroke.
+        DrawLineSymbols(canvas, op, points.AsSpan(0, count), cullBounds);
+    }
+
+    /// <summary>
+    /// How far, in pixels, a line's symbols may reach past its centreline:
+    /// the cull pad for lines that carry them.
+    /// </summary>
+    private const float LineSymbolMarginPx = 24f;
+
+    /// <summary>
+    /// Draws the symbols a line style repeats along the projected polyline
+    /// <paramref name="points"/>: each at its position within every interval,
+    /// pivot on the line and rotated to the segment's direction (S-100 Part 9).
+    /// Only segments near <paramref name="cullBounds"/> are walked, so a long
+    /// line zoomed in costs only its visible part.
+    /// </summary>
+    private static void DrawLineSymbols(SKCanvas canvas, LinePaintOp op, ReadOnlySpan<SKPoint> points, SKRect cullBounds)
+    {
+        var interval = op.SymbolIntervalPx;
+        if (interval <= 0.5)
+            return;
+
+        var near = new SKRect(
+            cullBounds.Left - LineSymbolMarginPx, cullBounds.Top - LineSymbolMarginPx,
+            cullBounds.Right + LineSymbolMarginPx, cullBounds.Bottom + LineSymbolMarginPx);
+
+        double along = 0;
+        for (int i = 0; i + 1 < points.Length; i++)
+        {
+            var a = points[i];
+            var b = points[i + 1];
+            double dx = b.X - a.X;
+            double dy = b.Y - a.Y;
+            double length = Math.Sqrt(dx * dx + dy * dy);
+            if (length <= 0)
+                continue;
+
+            var segmentEnd = along + length;
+            if (Math.Max(a.X, b.X) >= near.Left && Math.Min(a.X, b.X) <= near.Right
+                && Math.Max(a.Y, b.Y) >= near.Top && Math.Min(a.Y, b.Y) <= near.Bottom)
+            {
+                float angle = (float)(Math.Atan2(dy, dx) * 180.0 / Math.PI);
+                foreach (var placed in op.Symbols)
+                {
+                    // Every k with along ≤ k·interval + position < segmentEnd.
+                    var first = Math.Ceiling((along - placed.PositionPx) / interval);
+                    for (var k = Math.Max(first, 0); k * interval + placed.PositionPx < segmentEnd; k++)
+                    {
+                        var t = (k * interval + placed.PositionPx - along) / length;
+                        float x = (float)(a.X + dx * t);
+                        float y = (float)(a.Y + dy * t);
+                        if (near.Contains(x, y))
+                            DrawLineSymbol(canvas, placed.Symbol, x, y, angle);
+                    }
+                }
+            }
+
+            along = segmentEnd;
+        }
+    }
+
+    private static void DrawLineSymbol(SKCanvas canvas, ResolvedSymbol symbol, float x, float y, float angle)
+    {
+        var picture = GetSymbolPicture(symbol.ProcessedSvg);
+        if (picture is null)
+            return;
+
+        // The same pivot placement as a point symbol (see DrawPoint), rotated
+        // to the line.
+        var bounds = picture.CullRect;
+        float scale = (float)symbol.Scale;
+        float pivotPicX = bounds.Left + bounds.Width / 2f - (float)(symbol.PivotRelativeX * bounds.Width);
+        float pivotPicY = bounds.Top + bounds.Height / 2f - (float)(symbol.PivotRelativeY * bounds.Height);
+
+        canvas.Save();
+        canvas.Translate(x, y);
+        canvas.RotateDegrees(angle);
+        canvas.Scale(scale);
+        canvas.Translate(-pivotPicX, -pivotPicY);
+        canvas.DrawPicture(picture);
+        canvas.Restore();
     }
 
     /// <summary>
@@ -557,7 +648,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     /// </summary>
     private static void DrawClippedLine(
         SKCanvas canvas, ReadOnlySpan<SKPoint> points, SKRect clip, float[]? dashPattern,
-        SKPaint paint, LineDrawScratch scratch)
+        SKPaint paint, LineDrawScratch scratch, double dashPhase = 0)
     {
         double patternLength = 0;
         if (dashPattern is not null)
@@ -570,7 +661,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
         path.Rewind();
         var runOpen = false;
         double runStart = 0;
-        double along = 0;
+        double along = dashPhase;
 
         for (int i = 0; i + 1 < points.Length; i++)
         {
