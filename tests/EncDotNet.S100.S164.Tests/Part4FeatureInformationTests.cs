@@ -33,7 +33,6 @@ public sealed class Part4FeatureInformationTests
     /// <summary>A yellow-and-black south cardinal buoy, S Skerries, whose light is feature 66.</summary>
     private const string SouthSkerries = "1791";
 
-    private const string Associations = "#1157: the S-101 pick report doesn't show information or feature associations.";
     private const string ValueFormat = "#1158: pick report values have no units, keep their padding and show dates as encoded.";
     private const string PriorityOrder = "#1159: picks are ranked by geometry, not by drawing priority.";
 
@@ -99,7 +98,7 @@ public sealed class Part4FeatureInformationTests
         Assert.False(string.IsNullOrWhiteSpace(text));
     }
 
-    [Fact(Skip = Associations)]
+    [Fact]
     public async Task FeatureInformation1_IncludesInformationAssociations()
     {
         var pick = await OpenAsync();
@@ -111,7 +110,7 @@ public sealed class Part4FeatureInformationTests
         Assert.Contains(S164Pick.Rows(pick.Report(area.Id)), r => (r.DisplayValue ?? r.RawValue) == text);
     }
 
-    [Fact(Skip = Associations)]
+    [Fact]
     public async Task FeatureInformation1_IncludesFeatureAssociations()
     {
         var pick = await OpenAsync();
@@ -212,7 +211,7 @@ public sealed class Part4FeatureInformationTests
 
     // ── SupplementaryFile2 and PictorialRepresentation (S-98 15.2.2) ──
 
-    [Fact(Skip = Associations)]
+    [Fact]
     public async Task SupplementaryFile2_ShowsTheNoteText()
     {
         // A caution area whose note is a support file, through an
@@ -224,11 +223,14 @@ public sealed class Part4FeatureInformationTests
 
         var picked = await pick.PickAsync(S164Pick.PositionOf(area));
 
-        Assert.Contains(picked, m => m.FeatureId == area.Id);
+        var match = Assert.Single(picked, m => m.FeatureId == area.Id);
         Assert.Contains(S164Pick.Rows(pick.Report(area.Id)), r => r.ExternalText?.Trim() == text.Trim());
+
+        // identify_features' referencedTexts follows the association too.
+        Assert.Contains(match.ReferencedTexts ?? [], t => t.FileName == note && t.Text.Trim() == text.Trim());
     }
 
-    [Fact(Skip = Associations)]
+    [Fact]
     public async Task PictorialRepresentation_NamesThePicture()
     {
         // The information area whose picture is 10100AAX4000T.TIF. The
