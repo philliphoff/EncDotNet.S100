@@ -101,6 +101,13 @@ public static class DrawingInstructionParser
         // ClearGeometry (S-100 Part 9a §9a-11.2.4), with their direction.
         var spatialRefs = new List<(string Id, bool Forward)>();
 
+        // Time state (S-100 Part 9a §9a-11.2.6). Date/Time/DateTime set the
+        // pending bounds; each TimeValid adds an interval from them to the
+        // following instructions' timeValid, until ClearTime empties it. The
+        // list is replaced, never changed, so instructions can share it.
+        (PortrayalTimeKind Kind, string? Begin, string? End)? pendingTime = null;
+        IReadOnlyList<PortrayalTimeInterval> timeValid = [];
+
         var segments = instructionString.Split(';');
 
         foreach (var segment in segments)
@@ -246,6 +253,7 @@ public static class DrawingInstructionParser
                         CoordinateOverride = augmentedAnchor,
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
+                        TimeValid = timeValid,
                     });
                     // Reset per-instruction style state. The augmented anchor is
                     // a spatial-geometry context (S-100 Part 9 §11.5), not a
@@ -291,6 +299,7 @@ public static class DrawingInstructionParser
                             CoordinatesOverride = coordinates,
                             ScaleMinimum = scaleMinimum,
                             ScaleMaximum = scaleMaximum,
+                            TimeValid = timeValid,
                         };
 
                         if (augmentedLineCoords is null && spatialRefs.Count > 0 && spatialReferences is not null)
@@ -331,6 +340,7 @@ public static class DrawingInstructionParser
                             double.TryParse(cfParts[1], CultureInfo.InvariantCulture, out var tr) ? tr : null,
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
+                        TimeValid = timeValid,
                     });
                     break;
 
@@ -345,6 +355,7 @@ public static class DrawingInstructionParser
                         Plane = displayPlane,
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
+                        TimeValid = timeValid,
                     });
                     break;
 
@@ -370,6 +381,7 @@ public static class DrawingInstructionParser
                         CoordinateOverride = augmentedAnchor,
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
+                        TimeValid = timeValid,
                     });
                     // Reset per-instruction text state so the next label
                     // doesn't inherit alignment / offset from this one. The
@@ -410,15 +422,47 @@ public static class DrawingInstructionParser
                     }
                     break;
 
+                case "Date":
+                case "Time":
+                case "DateTime":
+                    {
+                        // Date:begin,end — either bound may be empty (unbounded).
+                        var tParts = value.Split(',');
+                        var begin = DefDecode(tParts[0].Trim());
+                        var end = tParts.Length > 1 ? DefDecode(tParts[1].Trim()) : "";
+                        pendingTime = (
+                            key switch
+                            {
+                                "Date" => PortrayalTimeKind.Date,
+                                "Time" => PortrayalTimeKind.Time,
+                                _ => PortrayalTimeKind.DateTime,
+                            },
+                            begin.Length > 0 ? begin : null,
+                            end.Length > 0 ? end : null);
+                    }
+                    break;
+
+                case "TimeValid":
+                    // TimeValid:closure — adds the pending bounds as one more
+                    // interval; an instruction is drawn in any of them.
+                    if (pendingTime is { } pending
+                        && PortrayalTimeInterval.TryParseClosure(value, out var closure))
+                    {
+                        var interval = new PortrayalTimeInterval(pending.Kind, pending.Begin, pending.End, closure);
+                        if (!timeValid.Contains(interval))
+                            timeValid = [.. timeValid, interval];
+                    }
+                    break;
+
+                case "ClearTime":
+                    pendingTime = null;
+                    timeValid = [];
+                    break;
+
                 case "AlertReference":
                 case "Hover":
                 case "AreaPlacement":
                 case "AreaCRS":
-                case "Date":
-                case "Time":
-                case "DateTime":
-                case "TimeValid":
-                case "ClearTime":
                     // Recognised but not yet handled — skip silently
                     break;
 

@@ -438,6 +438,26 @@ internal sealed class DatasetEntry : ViewModelBase
         }
     }
 
+    private PortrayalTime? _portrayalTime;
+    /// <summary>
+    /// The time the map draws this dataset's date-dependent instructions at
+    /// (S-101 fixed and periodic date ranges), or <c>null</c> to draw them
+    /// all. Like <see cref="HiddenFeatures"/> it isn't a user setting:
+    /// <c>DateDependentDrawingService</c> sets it from the view time.
+    /// Changing it re-renders the dataset.
+    /// </summary>
+    public PortrayalTime? PortrayalTime
+    {
+        get => _mapDataset is { } dataset ? dataset.PortrayalTime : _portrayalTime;
+        set
+        {
+            if (Equals(PortrayalTime, value)) return;
+            _portrayalTime = value;
+            UpdateMapDataset();
+            OnPropertyChanged();
+        }
+    }
+
     private static bool SameFeatures(IReadOnlySet<string>? a, IReadOnlySet<string>? b) =>
         a is null ? b is null : b is not null && a.Count == b.Count && a.SetEquals(b);
 
@@ -849,7 +869,8 @@ internal sealed class DatasetEntry : ViewModelBase
         _validation,
         _versionAssessment,
         _viewingGroups,
-        _hiddenFeatures);
+        _hiddenFeatures,
+        _portrayalTime);
 
     private void ReconcileSubLayerProjectionSubscriptions()
     {

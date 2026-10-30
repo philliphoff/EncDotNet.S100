@@ -7,6 +7,7 @@ using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S101;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Diagnostics;
@@ -701,6 +702,12 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     public void SetHiddenFeaturesOnLoad(Func<DatasetEntry, IDatasetProcessor, IReadOnlySet<string>?>? policy) =>
         _hiddenFeaturesOnLoad = policy;
 
+    private Func<DatasetEntry, IDatasetProcessor, PortrayalTime?>? _portrayalTimeOnLoad;
+
+    /// <inheritdoc />
+    public void SetPortrayalTimeOnLoad(Func<DatasetEntry, IDatasetProcessor, PortrayalTime?>? policy) =>
+        _portrayalTimeOnLoad = policy;
+
     private void ApplyPostRegistrationPolicies(
         DatasetEntry entry,
         IDatasetProcessor processor,
@@ -709,6 +716,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     {
         if (_hiddenFeaturesOnLoad is { } hiddenFeatures)
             entry.HiddenFeatures = hiddenFeatures(entry, processor);
+        if (_portrayalTimeOnLoad is { } portrayalTime)
+            entry.PortrayalTime = portrayalTime(entry, processor);
 
         // Collapse duplicate coverage products: S-111/S-104 exchange sets
         // routinely bundle several variants of the same cell (e.g. neap /
@@ -1223,7 +1232,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     private void OnEntryPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (sender is not DatasetEntry entry) return;
-        if (e.PropertyName is nameof(DatasetEntry.ViewingGroups) or nameof(DatasetEntry.HiddenFeatures))
+        if (e.PropertyName is nameof(DatasetEntry.ViewingGroups) or nameof(DatasetEntry.HiddenFeatures)
+            or nameof(DatasetEntry.PortrayalTime))
         {
             ApplyEntryState(entry);
             _ = RenderViewingGroupsAsync(entry);
@@ -1237,9 +1247,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         ApplyEntryState(entry);
     }
 
-    // A dataset's own viewing groups and hidden features change what its
-    // portrayal draws (Check route keeps only a received route's action
-    // points; S-124 parts not in force aren't drawn), so unlike the eye or
+    // A dataset's own viewing groups, hidden features and portrayal time
+    // change what its portrayal draws (Check route keeps only a received
+    // route's action points; S-124 parts not in force and S-101 features out
+    // of their dates aren't drawn), so unlike the eye or
     // opacity the dataset re-renders. A failed render keeps the old
     // layers.
     private async Task RenderViewingGroupsAsync(DatasetEntry entry)

@@ -59,6 +59,20 @@ public sealed record RenderContext
     public IReadOnlySet<string>? HiddenFeatures { get; init; }
 
     /// <summary>
+    /// The time the map shows, for drawing instructions valid only at some
+    /// times (S-100 Part 9 <c>timeValid</c>), or <c>null</c> to draw every
+    /// instruction whatever its time intervals. A host sets it from
+    /// <see cref="MapDataset.PortrayalTime"/>.
+    /// </summary>
+    /// <remarks>
+    /// Honoured by S-101 and S-401 (see <see cref="IDateDependentDatasetProcessor"/>),
+    /// which filter the portrayed display list without running the portrayal
+    /// rules again (<see cref="PortrayalTimeFilter.Apply"/>). Other products
+    /// ignore it.
+    /// </remarks>
+    public PortrayalTime? PortrayalTime { get; init; }
+
+    /// <summary>
     /// Mariner-configurable display preferences (S-100 Part 9 §4.2 —
     /// safety/shallow/deep contours, S-101 boolean toggles, depth display
     /// unit, etc.). When <c>null</c> processors fall back to

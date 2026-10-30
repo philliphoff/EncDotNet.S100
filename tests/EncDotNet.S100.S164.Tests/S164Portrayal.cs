@@ -56,10 +56,11 @@ internal static class S164Portrayal
     /// <summary>
     /// Portrays <c>S100_ROOT/S-101/DATASET_FILES/<paramref name="cell"/></c> from the
     /// exchange set <paramref name="exchangeSet"/> with every display category on
-    /// and the mariner settings <paramref name="mariner"/>.
+    /// and the mariner settings <paramref name="mariner"/>, drawing date-dependent
+    /// features at <paramref name="time"/> (all of them when <see langword="null"/>).
     /// </summary>
     public static async Task<(S101DatasetProcessor Processor, IReadOnlyList<DrawingInstruction> Instructions)> PortrayAsync(
-        string exchangeSet, string cell, MarinerSettings mariner, CancellationToken cancellationToken)
+        string exchangeSet, string cell, MarinerSettings mariner, CancellationToken cancellationToken, PortrayalTime? time = null)
     {
         var zip = await S164TestData.GetExchangeSetAsync(exchangeSet, cancellationToken);
         var source = ZipAssetSource.Create(zip, "S100_ROOT/");
@@ -77,6 +78,7 @@ internal static class S164Portrayal
             {
                 EcdisDisplay = new EcdisDisplaySettings { Category = EcdisDisplayCategory.OtherInformation },
                 Mariner = mariner,
+                PortrayalTime = time,
             },
             cancellationToken);
         return (processor, result.SubLayers.SelectMany(l => l.Instructions).ToList());

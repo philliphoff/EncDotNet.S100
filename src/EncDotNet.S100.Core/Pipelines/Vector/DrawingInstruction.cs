@@ -96,6 +96,15 @@ public abstract class DrawingInstruction
     public double? ScaleMaximum { get; init; }
 
     /// <summary>
+    /// The time intervals the instruction is drawn in, or empty when it is
+    /// always drawn (S-100 Part 9 <c>timeValid</c>; set by the
+    /// <c>Date</c>/<c>Time</c>/<c>DateTime</c> and <c>TimeValid</c> commands of
+    /// Part 9a §9a-11.2.6). The instruction is drawn when the time the map
+    /// shows falls in any of them; see <see cref="PortrayalTimeFilter"/>.
+    /// </summary>
+    public IReadOnlyList<PortrayalTimeInterval> TimeValid { get; init; } = [];
+
+    /// <summary>
     /// Returns a numeric type order for S-100 Part 9 intra-priority sorting:
     /// areas (0) → lines (1) → points (2) → text (3).
     /// </summary>

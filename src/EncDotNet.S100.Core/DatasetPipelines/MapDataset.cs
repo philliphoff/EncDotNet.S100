@@ -50,6 +50,9 @@ public sealed class MapDataset
     /// <param name="hiddenFeatures">
     /// Ids of this dataset's features the host doesn't want drawn, or <c>null</c>.
     /// </param>
+    /// <param name="portrayalTime">
+    /// The time date-dependent instructions are drawn at, or <c>null</c> to draw them all.
+    /// </param>
     /// <exception cref="ArgumentException">
     /// <paramref name="id"/> is the default value, or <paramref name="name"/>
     /// is empty or consists only of white-space characters.
@@ -73,7 +76,8 @@ public sealed class MapDataset
         ValidationReport? validation = null,
         SpecVersionAssessment? versionAssessment = null,
         ViewingGroupFilter? viewingGroups = null,
-        IReadOnlySet<string>? hiddenFeatures = null)
+        IReadOnlySet<string>? hiddenFeatures = null,
+        PortrayalTime? portrayalTime = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id.Value, nameof(id));
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -95,6 +99,7 @@ public sealed class MapDataset
         VersionAssessment = versionAssessment;
         ViewingGroups = viewingGroups;
         HiddenFeatures = hiddenFeatures is { Count: > 0 } ? hiddenFeatures : null;
+        PortrayalTime = portrayalTime;
     }
 
     /// <summary>Stable identity assigned by the host.</summary>
@@ -155,6 +160,14 @@ public sealed class MapDataset
     /// features aren't picked either.
     /// </summary>
     public IReadOnlySet<string>? HiddenFeatures { get; }
+
+    /// <summary>
+    /// The time the dataset's date-dependent instructions are drawn at, or
+    /// <c>null</c> to draw them all. Like <see cref="HiddenFeatures"/>,
+    /// changing it needs a re-render of the dataset (see
+    /// <see cref="RenderContext.PortrayalTime"/>).
+    /// </summary>
+    public PortrayalTime? PortrayalTime { get; }
 
     /// <summary>
     /// Validation report, or <c>null</c> when no rule pack exists for the

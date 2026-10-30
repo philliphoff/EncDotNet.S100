@@ -1,5 +1,6 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
 
@@ -129,6 +130,18 @@ internal interface IDatasetLoaderService
     /// </summary>
     /// <param name="policy">The entry and its processor in, the features to hide out.</param>
     void SetHiddenFeaturesOnLoad(Func<DatasetEntry, IDatasetProcessor, IReadOnlySet<string>?>? policy)
+    {
+    }
+
+    /// <summary>
+    /// Sets what decides, before a dataset's first render, the time its
+    /// date-dependent instructions are drawn at
+    /// (<see cref="DatasetEntry.PortrayalTime"/>); <see langword="null"/>
+    /// draws them all. S-101 date ranges use it so a feature out of its dates
+    /// never flashes up.
+    /// </summary>
+    /// <param name="policy">The entry and its processor in, the time out.</param>
+    void SetPortrayalTimeOnLoad(Func<DatasetEntry, IDatasetProcessor, PortrayalTime?>? policy)
     {
     }
 
