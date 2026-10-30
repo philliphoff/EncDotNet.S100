@@ -41,6 +41,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 {
     private readonly S102Dataset _dataset;
     private readonly S102CoverageSource _source;
+    private readonly int? _cellMinimumDisplayScale;
     private readonly S102PortrayalCatalogue _catalogue;
     private readonly ICrsTransformFactory _crsTransformFactory;
     private readonly string _fileName;
@@ -182,6 +183,12 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         }
         _source = new S102CoverageSource(_dataset);
 
+        // Read before any overview level is selected: the cutoff follows the
+        // full-resolution grid.
+        _cellMinimumDisplayScale = GridDisplayScale.FromGrid(
+            _source.Metadata.GridMetadata,
+            geographic: (_dataset.HorizontalCRS ?? 4326) == 4326);
+
         Spec = HdfDeclaredSpec.Resolve(_dataset.DeclaredProductSpecification, "S-102");
 
         var provider = catalogueManager.GetProvider("S-102");
@@ -291,6 +298,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     SourceDatasetId = _fileName,
                     Info = info,
                     CoverageExtent = ResolveCoverageExtent(),
+                    CellMinimumDisplayScale = _cellMinimumDisplayScale,
                 };
             }
             catch

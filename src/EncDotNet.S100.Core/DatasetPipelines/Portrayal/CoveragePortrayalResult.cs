@@ -431,4 +431,14 @@ public sealed class CoveragePortrayalResult
     /// and nowhere else (S-98 Part A §A-6.9.1).
     /// </summary>
     public GeographicBounds? CoverageExtent { get; init; }
+
+    /// <summary>
+    /// The scale denominator beyond which the whole dataset is hidden as you
+    /// zoom out, as <see cref="VectorPortrayalResult.CellMinimumDisplayScale"/>
+    /// is for a vector cell, or <see langword="null"/> for no cutoff. A gridded
+    /// product that declares no display scale derives it from its grid spacing
+    /// (<see cref="EncDotNet.S100.Pipelines.Coverage.GridDisplayScale"/>). Left
+    /// ungated, so the viewer applies its own <c>IgnoreScaleMinimum</c> setting.
+    /// </summary>
+    public int? CellMinimumDisplayScale { get; init; }
 }

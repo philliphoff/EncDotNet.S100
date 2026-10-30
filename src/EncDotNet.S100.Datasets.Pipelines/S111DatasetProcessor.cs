@@ -471,6 +471,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             SourceDatasetId = _fileName,
             Info = info,
             LayerNames = new[] { "s111.arrows" },
+            CellMinimumDisplayScale = GridDisplayScale.FromGrid(metadata.GridMetadata, geographic: crs == 4326),
         };
     }
 
