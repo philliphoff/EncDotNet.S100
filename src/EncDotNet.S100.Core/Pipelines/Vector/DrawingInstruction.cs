@@ -222,6 +222,15 @@ public sealed class LineInstruction : DrawingInstruction
     /// </summary>
     public IReadOnlyList<GeoPosition>? CoordinatesOverride { get; init; }
 
+    /// <summary>
+    /// Whether line suppression applies (S-100 Part 9): where a line from
+    /// another feature with a higher drawing priority covers the same edge,
+    /// this line isn't drawn there, and this line suppresses lower ones in
+    /// turn. <see langword="false"/> for <c>LineInstructionUnsuppressed</c>,
+    /// which always draws in full and suppresses nothing.
+    /// </summary>
+    public bool Suppression { get; init; } = true;
+
     internal override int TypeSortOrder => 1;
 }
 

@@ -297,6 +297,7 @@ public static class DrawingInstructionParser
                             Dashes = dashes.Count > 0 ? new List<(double, double)>(dashes) : null,
                             DashIntervalLength = dashIntervalMm,
                             CoordinatesOverride = coordinates,
+                            Suppression = key == "LineInstruction",
                             ScaleMinimum = scaleMinimum,
                             ScaleMaximum = scaleMaximum,
                             TimeValid = timeValid,

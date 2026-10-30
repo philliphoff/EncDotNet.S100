@@ -177,6 +177,17 @@ public sealed class VectorSceneBuilder
             })
             .ToList();
 
+        // Where lines of different features share an edge, the one drawn last
+        // hides the others there (S-100 Part 9 line suppression).
+        var suppressed = LineSuppression.Apply(sorted, line =>
+        {
+            if (line.CoordinatesOverride is { } coordinates)
+                return [coordinates];
+            if (geometryProvider.GetGeometry(line.FeatureReference) is not { Coordinates.Count: > 0 } lineGeometry)
+                return null;
+            return lineGeometry.Parts.Count > 1 ? lineGeometry.Parts : [lineGeometry.Coordinates];
+        });
+
         var ops = new List<PaintOp>(sorted.Count);
         var patternPriorities = new List<(PatternAreaPaintOp Op, int Priority)>();
         HashSet<string>? featuresWithPatterns = null;
@@ -189,6 +200,13 @@ public sealed class VectorSceneBuilder
             // a pattern exclusion area.
             if (instruction is AreaInstruction { AreaFillReference: not null })
                 (featuresWithPatterns ??= new(StringComparer.Ordinal)).Add(instruction.FeatureReference);
+
+            if (instruction is LineInstruction keptLine && suppressed.TryGetValue(keptLine, out var keptPolylines))
+            {
+                foreach (var polyline in keptPolylines)
+                    ops.AddRange(BuildLine(keptLine, polyline));
+                continue;
+            }
 
             var geom = geometryProvider.GetGeometry(instruction.FeatureReference);
 

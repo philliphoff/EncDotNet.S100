@@ -471,4 +471,25 @@ public class S101DrawingInstructionParserTests
 
         Assert.Null(Assert.Single(parsed.OfType<LineInstruction>()).CoordinatesOverride);
     }
+
+    // ── Line suppression (#1126) ───────────────────────────────────────
+
+    [Fact]
+    public void LineInstruction_IsSuppressible()
+    {
+        var parsed = DrawingInstructionParser.Parse("F1", "LineInstruction:_simple_");
+
+        Assert.True(Assert.Single(parsed.OfType<LineInstruction>()).Suppression);
+    }
+
+    [Fact]
+    public void LineInstructionUnsuppressed_TurnsSuppressionOff()
+    {
+        var parsed = DrawingInstructionParser.Parse("F1", "LineInstructionUnsuppressed:CHRVID02;LineInstruction:_simple_");
+
+        var lines = parsed.OfType<LineInstruction>().ToList();
+        Assert.Equal("CHRVID02", lines[0].LineStyleReference);
+        Assert.False(lines[0].Suppression);
+        Assert.True(lines[1].Suppression);
+    }
 }

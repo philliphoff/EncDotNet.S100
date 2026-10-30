@@ -39,8 +39,9 @@ public static class DrawingInstructionSerializer
     /// <see cref="TextInstruction.FontProportion"/>, <see cref="TextInstruction.HaloColor"/>
     /// and <see cref="TextInstruction.HaloWidth"/>.
     /// v5: the base fields carry <see cref="DrawingInstruction.TimeValid"/>.
+    /// v6: line instructions carry <see cref="LineInstruction.Suppression"/>.
     /// </remarks>
-    public const int FormatVersion = 5;
+    public const int FormatVersion = 6;
 
     private const byte TagPoint = 1;
     private const byte TagLine = 2;
@@ -130,6 +131,7 @@ public static class DrawingInstructionSerializer
                 WriteOffsetLengthList(w, l.Dashes);
                 w.Write(l.DashIntervalLength);
                 WriteCoordinateList(w, l.CoordinatesOverride);
+                w.Write(l.Suppression);
                 break;
 
             case AreaInstruction a:
@@ -229,6 +231,7 @@ public static class DrawingInstructionSerializer
             Dashes = ReadOffsetLengthList(r),
             DashIntervalLength = r.ReadDouble(),
             CoordinatesOverride = ReadCoordinateList(r),
+            Suppression = r.ReadBoolean(),
         };
     }
 
