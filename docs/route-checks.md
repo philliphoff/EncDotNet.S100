@@ -94,9 +94,13 @@ These checks use the safety contour and safety depth.
 
 A danger is a `Wreck`, an `Obstruction` or an `UnderwaterAwashRock`:
 
+- Its depth is its `valueOfSounding` (VALSOU). Without one, it's the
+  `defaultClearanceDepth` S-101 2.0 gives instead, as the portrayal's
+  `OBSTRN07` and `WRECKS05` take it, unless the danger reaches the surface.
+  The S-57 translation fills that attribute in for hazards without VALSOU.
 - One without a charted depth (above water, covering and uncovering, awash,
   or of unknown depth) always counts.
-- One with a depth (VALSOU) counts when it's shallower than the safety depth,
+- One with a depth counts when it's shallower than the safety depth,
   or, on a leg with a draft, than that leg's draft + squat + required UKC.
   The meta line names the threshold that fired, the draft one when both do.
 - Only isolated dangers count. A danger inside water already shallower than
