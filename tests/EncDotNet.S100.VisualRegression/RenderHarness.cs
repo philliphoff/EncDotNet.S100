@@ -157,7 +157,15 @@ public sealed class RenderHarness : IDisposable
         var symScale = options.SymbolScale;
         var txtScale = options.TextScale;
         var ecdis = options.DisplayCategory is { } category
-            ? new EcdisDisplaySettings { Category = category }
+            ? new EcdisDisplaySettings
+            {
+                Category = category,
+                // Products portrayed through the S-101 rules (S-125 aids, S-57
+                // cells) apply the S-101 catalogue's groups too.
+                HiddenViewingGroups = options.HiddenViewingGroups is { } hidden
+                    ? new Dictionary<string, IReadOnlySet<int>> { [processor.Spec.Name] = hidden, ["S-101"] = hidden }
+                    : new Dictionary<string, IReadOnlySet<int>>(),
+            }
             : null;
 
         // Time-series specs need a DateTime resolved from the time-step index.

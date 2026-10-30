@@ -49,6 +49,15 @@ public sealed class HarnessOptions
     /// </summary>
     public IReadOnlySet<string>? HiddenFeatures { get; init; }
 
+    /// <summary>
+    /// Viewing groups to hide for the dataset's product (and for the S-101
+    /// portrayal catalogue, which S-125 aids and S-57 cells use), as the viewer's
+    /// ECDIS panel and text switches do
+    /// (<see cref="EcdisDisplaySettings.HiddenViewingGroups"/>). Applies only
+    /// with a <see cref="DisplayCategory"/>. Default: none.
+    /// </summary>
+    public IReadOnlySet<int>? HiddenViewingGroups { get; init; }
+
     /// <summary>Text scale factor. Default: 1.0.</summary>
     public double TextScale { get; init; } = 1.0;
 

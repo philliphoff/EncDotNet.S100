@@ -11,6 +11,9 @@ namespace EncDotNet.S100.VisualRegression.Tests;
 /// </summary>
 public sealed class S125RenderingTests
 {
+    /// <summary>The S-101 portrayal catalogue's <c>Chart text</c> viewing groups.</summary>
+    private static readonly HashSet<int> ChartTextGroups = [11, 21, 23, 24, 25, 26, 27, 28, 29, 30, 32];
+
     [Theory]
     [InlineData("aton_point.gml", 100)]
     [InlineData("aton_curve.gml", 200)]
@@ -25,10 +28,15 @@ public sealed class S125RenderingTests
         Assert.SkipUnless(File.Exists(path), $"S-125 test dataset not present: {path}");
 
         using var harness = new RenderHarness();
+        // Light descriptions and names are drawn too, but each platform's
+        // fallback font lays them out differently; the goldens guard the
+        // aids' symbology, so chart text is switched off as the viewer's
+        // text toolbar does.
         var bitmap = harness.Render(path, new HarnessOptions
         {
             Width = 600,
             Height = 600,
+            HiddenViewingGroups = ChartTextGroups,
         });
 
         // Guard against approving a blank render (the S-125 snapshots once
