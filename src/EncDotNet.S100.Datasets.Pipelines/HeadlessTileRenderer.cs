@@ -83,7 +83,9 @@ public sealed class HeadlessTile : IDisposable
 /// Prepare the scene with <see cref="HeadlessCompositeOptions.HonorScaleVisibility"/>
 /// on, so each zoom level shows only what is visible at its scale, and
 /// <see cref="HeadlessCompositeOptions.EnableSeamWrap"/> off, because this
-/// renderer draws the data on either side of the antimeridian itself.
+/// renderer draws the data on either side of the antimeridian itself, and
+/// <see cref="HeadlessCompositeOptions.KeepAreaSymbolsInView"/> off, so a
+/// surface across several tiles keeps one symbol rather than one per tile.
 /// </para>
 /// <para>
 /// Tiles are rendered in blocks (<see cref="TileBlock"/>) and cut apart. The

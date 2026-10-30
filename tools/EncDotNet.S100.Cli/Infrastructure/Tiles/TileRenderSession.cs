@@ -273,6 +273,7 @@ internal sealed class TileRenderSession : IDisposable
             Basemap = basemap,
             HonorScaleVisibility = true,
             EnableSeamWrap = false,
+            KeepAreaSymbolsInView = false,
         };
 
         return new TileScene(_processors, inputs, vectorResults, hasCoverage, compositor, options, ContextFor, _portrayGate);

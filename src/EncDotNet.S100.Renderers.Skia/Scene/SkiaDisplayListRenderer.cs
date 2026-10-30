@@ -65,6 +65,17 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     public bool EnableSeamWrap { get; set; } = true;
 
     /// <summary>
+    /// Whether point symbols and text placed in the visible parts of a surface
+    /// (S-100 Part 9 <c>AreaPlacement:VisibleParts</c>, see
+    /// <see cref="PlacementArea"/>) move into the part of the surface in the
+    /// viewport when their anchor is outside it. Defaults to
+    /// <see langword="true"/>, for a viewport that is the whole display. A
+    /// caller that draws a display in pieces, such as tiles, sets it to
+    /// <see langword="false"/>, so each piece doesn't place its own copy.
+    /// </summary>
+    public bool KeepAreaSymbolsInView { get; set; } = true;
+
+    /// <summary>
     /// Process-wide cache of parsed symbol pictures keyed by the resolved SVG
     /// content (<see cref="ResolvedSymbol.ProcessedSvg"/>). Parsing an SVG into
     /// an <see cref="SKPicture"/> via <see cref="SKSvg.CreateFromSvg(string)"/>
@@ -308,6 +319,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
 
         var transform = WorldToScreen.Create(viewport, EnableSeamWrap);
         double denom = viewport.ScaleDenominator;
+        ViewExtent? view = KeepAreaSymbolsInView ? ViewExtent.Of(viewport) : null;
 
         var cullBounds = options.PointCullBounds ?? new SKRect(
             -PointCullMarginPx,
@@ -358,7 +370,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
                         DrawLine(canvas, line, transform, cullBounds, lineScratch);
                         break;
                     case PointPaintOp point when options.DrawPoints:
-                        DrawPoint(canvas, point, transform, cullBounds,
+                        DrawPoint(canvas, point, view?.Anchor(point) ?? point.World, transform, cullBounds,
                             options.UseSymbolAtlas, options.DeviceScale,
                             anchorRotationDeg, centerX, centerY);
                         break;
@@ -366,7 +378,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
                         if (suppressed is not null && suppressed.Contains(text))
                             break;
                         textScratch ??= new TextDrawScratch();
-                        DrawText(canvas, text, transform, cullBounds, textScratch,
+                        DrawText(canvas, text, view?.Anchor(text) ?? text.World, transform, cullBounds, textScratch,
                             anchorRotationDeg, centerX, centerY);
                         break;
                 }
@@ -767,7 +779,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
         return true;
     }
 
-    private static void DrawPoint(SKCanvas canvas, PointPaintOp op, WorldToScreen t, SKRect cullBounds,
+    private static void DrawPoint(SKCanvas canvas, PointPaintOp op, (double X, double Y) world, WorldToScreen t, SKRect cullBounds,
         bool useAtlas, float deviceScale, double anchorRotationDeg, float centerX, float centerY)
     {
         // Under a rotated viewport the anchor turns about the screen centre with
@@ -775,7 +787,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
         // screen-relative (PortrayalCRS) symbol keeps its angle, and only a
         // north-relative (GeographicCRS) one turns by the display rotation
         // (issue #652). North-up (deg == 0) is a no-op.
-        var (px, py) = t.Project(op.World);
+        var (px, py) = t.Project(world);
         var (cx, cy) = RotateAbout(px, py, centerX, centerY, anchorRotationDeg);
         double? rotation = ScreenRotation(op, anchorRotationDeg);
         cx += (float)op.OffsetXpx;
@@ -919,10 +931,10 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
     }
 
     private static void DrawText(
-        SKCanvas canvas, TextPaintOp op, WorldToScreen t, SKRect cullBounds, TextDrawScratch scratch,
+        SKCanvas canvas, TextPaintOp op, (double X, double Y) world, WorldToScreen t, SKRect cullBounds, TextDrawScratch scratch,
         double anchorRotationDeg, float centerX, float centerY)
     {
-        var (ax, ay) = t.Project(op.World);
+        var (ax, ay) = t.Project(world);
 
         // Upright-under-rotation: rotate the label *anchor* about the screen
         // centre to match where the rotated base/point passes place the feature,
