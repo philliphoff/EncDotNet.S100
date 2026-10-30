@@ -1027,7 +1027,12 @@ public partial class App : Application
                 (entry, _) => datasets.RequestLoadAsync(entry),
                 loader.UnloadEntry,
                 logger: sp.GetService<ILogger<
-                    EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetLazyLoadCoordinator>>());
+                    EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetLazyLoadCoordinator>>(),
+                marshal: action =>
+                {
+                    if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) action();
+                    else Avalonia.Threading.Dispatcher.UIThread.Post(action);
+                });
         });
 
         // Own-ship dynamic source. The steerable driver dead-reckons a

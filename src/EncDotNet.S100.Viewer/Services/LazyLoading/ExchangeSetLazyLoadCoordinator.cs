@@ -75,6 +75,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     private readonly Action<DatasetEntry> _unload;
     private readonly LazyLoadOptions _options;
     private readonly ILogger _logger;
+    private readonly Action<Action>? _marshal;
 
     private readonly object _lock = new();
     private readonly HashSet<DatasetEntry> _deferred = new();
@@ -100,12 +101,22 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     /// </param>
     /// <param name="options">Tunables; defaults when <see langword="null"/>.</param>
     /// <param name="logger">Optional logger.</param>
+    /// <param name="marshal">
+    /// Runs the debounced evaluation on the UI thread (the viewer passes the
+    /// Avalonia dispatcher). Mapsui raises viewport changes from its animation
+    /// callbacks, where there is no synchronisation context to capture, so
+    /// without this the evaluation and every load it starts ran on the thread
+    /// pool and raced on the view-models. When <see langword="null"/>, the
+    /// context captured at the viewport change is used, else the evaluation
+    /// runs inline.
+    /// </param>
     public ExchangeSetLazyLoadCoordinator(
         IMapViewportNotifier notifier,
         Func<DatasetEntry, CancellationToken, Task> loadAsync,
         Action<DatasetEntry> unload,
         LazyLoadOptions? options = null,
-        ILogger<ExchangeSetLazyLoadCoordinator>? logger = null)
+        ILogger<ExchangeSetLazyLoadCoordinator>? logger = null,
+        Action<Action>? marshal = null)
     {
         ArgumentNullException.ThrowIfNull(notifier);
         ArgumentNullException.ThrowIfNull(loadAsync);
@@ -116,6 +127,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         _unload = unload;
         _options = options ?? new LazyLoadOptions();
         _logger = logger ?? NullLogger<ExchangeSetLazyLoadCoordinator>.Instance;
+        _marshal = marshal;
         _gate = new SemaphoreSlim(Math.Max(1, _options.MaxConcurrency));
 
         _notifier.ViewportChanged += OnViewportChanged;
@@ -236,7 +248,9 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
 
             if (t.IsCanceled || _disposed) return;
 
-            if (uiContext is not null)
+            if (_marshal is not null)
+                _marshal(() => { if (!_disposed) Evaluate(snapshot); });
+            else if (uiContext is not null)
                 uiContext.Post(_ => { if (!_disposed) Evaluate(snapshot); }, null);
             else
                 Evaluate(snapshot);
@@ -318,6 +332,16 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             _ = PumpLoadAsync(entry);
     }
 
+    private static bool WantedBy(DatasetEntry entry, MapViewportSnapshot snapshot) =>
+        LazyCellGate.ShouldBeLoaded(
+            entry.GeographicBounds, entry.UsageBand,
+            LazyCellGate.ScaleDenominator(
+                snapshot.MercatorResolution,
+                (snapshot.MinLatitude + snapshot.MaxLatitude) / 2.0),
+            snapshot.MinLatitude, snapshot.MinLongitude,
+            snapshot.MaxLatitude, snapshot.MaxLongitude,
+            entry.MinimumDisplayScale);
+
     // Mirror of the LRU membership for enumeration: the LRU is the authority for
     // ordering / eviction; this set answers "is this entry currently loaded?"
     // and is kept in lockstep with the LRU under _lock.
@@ -352,6 +376,16 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             {
                 if (_disposed || !_loading.Contains(entry))
                     return;
+
+                // A load queued for an earlier view (zoomed out over a whole
+                // country, say) must not hold up the cells of the view the
+                // user has since moved to. Return it to the deferred pool; the
+                // next evaluation that wants it queues it again.
+                if (_notifier.Current is { } current && !WantedBy(entry, current))
+                {
+                    _loading.Remove(entry);
+                    return;
+                }
             }
 
             await _loadAsync(entry, CancellationToken.None).ConfigureAwait(true);
