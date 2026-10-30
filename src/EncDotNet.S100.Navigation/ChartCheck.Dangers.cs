@@ -18,19 +18,17 @@ namespace EncDotNet.S100.Navigation;
 //    or awash (5) reach the surface; anything else is of unknown depth. A
 //    danger whose depth is unknown is always a danger: nothing shows that
 //    there's water over it.
-// 2. A danger with a depth is a danger to the route when it's shallower
-//    than the safety depth, or, with a draft, shallower than draft + squat +
-//    required UKC on the static charted depth. Its details name the
-//    threshold that fired: the keel one when both do, since it's the one
-//    the vessel would touch.
-// 3. Only isolated dangers count: one that lies in water already shallower
-//    than the safety contour (in a depth, dredged or drying area whose DRVAL1
-//    is below it) is inside water the safety-contour check reports, as the
-//    portrayal draws no isolated-danger symbol there.
-// 4. Only the finest cell counts (#947): a danger is used when its cell is in
-//    the finest band of the cells that cover it, and so is the area that
-//    decides rule 3.
-// 5. Distance is the true distance from the leg's centreline to the danger
+// 2. A danger with a depth is a danger to the route when it's no deeper
+//    than the safety contour, as UDWHAZ05 judges it (#1151), or, with a
+//    draft, shallower than draft + squat + required UKC on the static
+//    charted depth. Its details name the threshold that fired: the keel one
+//    when both do, since it's the one the vessel would touch.
+//    A danger counts wherever it lies, in deep water or inside water already
+//    shallower than the safety contour: UDWHAZ05 raises its NavHazard alert
+//    either way, and leaves the surrounding depth to choose the symbol.
+// 3. Only the finest cell counts (#947): a danger is used when its cell is in
+//    the finest band of the cells that cover it.
+// 4. Distance is the true distance from the leg's centreline to the danger
 //    (zero when the track runs over it), on its side. Inside that side's
 //    cross-track limit it must be reviewed; within DangerNearbyMeters beyond
 //    it, it's worth checking. A danger near the turn between two legs is
@@ -93,16 +91,6 @@ public sealed partial class ChartCheck
         private void CheckDangers(IReadOnlyList<RouteChartFeature> features, LegDepths depths)
         {
             var nearby = Math.Max(0, _run.Options.DangerNearbyMeters);
-            var areas = new List<RouteChartFeature>();
-            foreach (var feature in features)
-            {
-                if (feature.Kind is RouteChartFeatureKind.DepthArea or RouteChartFeatureKind.DredgedArea or RouteChartFeatureKind.DryingArea
-                    && feature.DepthMeters is not null)
-                {
-                    areas.Add(feature);
-                }
-            }
-
             foreach (var feature in features)
             {
                 if (feature.Kind != RouteChartFeatureKind.Danger)
@@ -120,11 +108,6 @@ public sealed partial class ChartCheck
                 var limit = projection.Offset > 0 ? _port : _starboard;
                 var offset = Math.Abs(projection.Offset);
                 if (offset > limit + nearby || !InBand(_cellIndex[feature.Cell], Band(position)))
-                {
-                    continue;
-                }
-
-                if (SurroundingDepth(position, areas) is { } around && around < depths.SafetyContourMeters)
                 {
                     continue;
                 }
@@ -158,30 +141,12 @@ public sealed partial class ChartCheck
                 return (RouteFindingThreshold.Keel, keel);
             }
 
-            return depth < depths.SafetyDepthMeters
-                ? (RouteFindingThreshold.SafetyDepth, depths.SafetyDepthMeters)
+            return depth <= depths.SafetyContourMeters
+                ? (RouteFindingThreshold.SafetyContour, depths.SafetyContourMeters)
                 : null;
         }
 
-        // Rule 3: the least depth of the finest cell's areas containing the point.
-        private double? SurroundingDepth(GeoPosition position, List<RouteChartFeature> areas)
-        {
-            IReadOnlyList<int>? band = null;
-            double? least = null;
-            foreach (var area in areas)
-            {
-                if ((least is null || area.DepthMeters < least)
-                    && PlanarGeometry.Contains(area.Surfaces, position)
-                    && InBand(_cellIndex[area.Cell], band ??= Band(position)))
-                {
-                    least = area.DepthMeters;
-                }
-            }
-
-            return least;
-        }
-
-        // Rule 5: the danger's point nearest the track, and where it is from
+        // Rule 4: the danger's point nearest the track, and where it is from
         // the track. A line or area the track passes through is on the track.
         private (Projection Projection, GeoPosition Position) Nearest(RouteChartFeature danger)
         {

@@ -721,6 +721,7 @@ namespace EncDotNet.S100.Navigation
         public System.Globalization.CultureInfo Culture { get; }
         protected virtual string DangerInCorridorFormat { get; }
         protected virtual string DangerNearRouteFormat { get; }
+        protected virtual string DangerSafetyContourFormat { get; }
         protected virtual string DatumMismatch { get; }
         protected virtual string DatumUnconfirmed { get; }
         protected virtual string DatumUnconfirmedMetaFormat { get; }

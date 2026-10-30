@@ -100,11 +100,13 @@ A danger is a `Wreck`, an `Obstruction` or an `UnderwaterAwashRock`:
   The S-57 translation fills that attribute in for hazards without VALSOU.
 - One without a charted depth (above water, covering and uncovering, awash,
   or of unknown depth) always counts.
-- One with a depth counts when it's shallower than the safety depth,
-  or, on a leg with a draft, than that leg's draft + squat + required UKC.
+- One with a depth counts when it's no deeper than the safety contour, as
+  the portrayal's `UDWHAZ05` judges it, or, on a leg with a draft, when
+  it's shallower than that leg's draft + squat + required UKC.
   The meta line names the threshold that fired, the draft one when both do.
-- Only isolated dangers count. A danger inside water already shallower than
-  the safety contour is covered by the safety-contour finding there.
+- A danger counts wherever it lies, also inside water already shallower
+  than the safety contour, where the safety-contour finding covers the
+  stretch: `UDWHAZ05` raises its alert either way.
 
 A danger finding is located at the danger itself, and its distance is the
 point on the route nearest to it. A danger near a turn is reported once, on

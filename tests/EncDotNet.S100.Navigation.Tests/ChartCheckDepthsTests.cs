@@ -53,7 +53,7 @@ public class ChartCheckDepthsTests
         };
 
     [Fact]
-    public void A_wreck_on_the_track_shallower_than_the_safety_depth_must_be_reviewed()
+    public void A_wreck_on_the_track_shallower_than_the_safety_contour_must_be_reviewed()
     {
         var finding = Assert.Single(Check([Danger("Wreck", "5", 0.004, 0, 3.2)]).Findings);
 
@@ -62,7 +62,7 @@ public class ChartCheckDepthsTests
         Assert.Equal(RouteFindingGroup.MustReview, finding.Group);
         Assert.Equal(RouteFindingCategory.Depth, finding.Category);
         Assert.Equal("Wreck in the corridor", finding.Title);
-        Assert.Equal("Leg 1 → 2 · Wreck · on the track · 3.2 m · shallower than safety depth 10 m", finding.Meta);
+        Assert.Equal("Leg 1 → 2 · Wreck · on the track · 3.2 m · no deeper than safety contour 10 m", finding.Meta);
         Assert.Equal(0.004 * M, finding.Distance!.Value.TotalMetres, 3);
         Assert.True(finding.Location!.IsPoint);
         Assert.Equal(0.004, finding.Location.Path[0].Longitude, 9);
@@ -104,15 +104,35 @@ public class ChartCheckDepthsTests
     }
 
     [Fact]
-    public void A_danger_deeper_than_the_safety_depth_isnt_reported()
+    public void A_danger_deeper_than_the_safety_contour_isnt_reported()
     {
         Assert.Empty(Check([Danger("Wreck", "1", 0.005, 0, 12.5)]).Findings);
+    }
+
+    [Theory]
+    // UDWHAZ05 (#1151): the safety contour decides, a danger at it counts,
+    // and the safety depth plays no part.
+    [InlineData(10, 30, 20.1, false)]
+    [InlineData(30, 10, 20.1, true)]
+    [InlineData(10, 30, 10.0, true)]
+    public void Dangers_are_judged_against_the_safety_contour(double contour, double safetyDepth, double depth, bool reported)
+    {
+        var settings = new RouteCheckSettings
+        {
+            At = Fixture.Departure,
+            SafetyContour = Depth.FromMetres(contour),
+            SafetyDepth = Depth.FromMetres(safetyDepth),
+        };
+
+        var findings = Checks.Chart(new FakeCharts([Harbour], [Danger("Wreck", "1", 0.005, 0, depth)]), new PassagePlan([East]), settings).Findings;
+
+        Assert.Equal(reported ? 1 : 0, findings.Count);
     }
 
     [Fact]
     public void A_draft_also_flags_dangers_shallower_than_draft_squat_and_ukc()
     {
-        // 12,5 m clears the 10 m safety depth, but not 11 + 0,5 + 1,5 = 13 m.
+        // 12,5 m clears the 10 m safety contour, but not 11 + 0,5 + 1,5 = 13 m.
         var wreck = Danger("Wreck", "1", 0.005, 0, 12.5);
         var withDraft = EastWithKeel(11, 0.5, 1.5);
 
@@ -127,12 +147,12 @@ public class ChartCheckDepthsTests
     {
         var shallowDraft = EastWithKeel(2, 0.2, 0.5);
 
-        // 2 m is below both 10 m and 2,7 m; 5 m only below the safety depth.
+        // 2 m is below both 10 m and 2,7 m; 5 m only below the safety contour.
         var findings = Check([Danger("Wreck", "1", 0.003, 0, 2), Danger("Wreck", "2", 0.006, 0, 5)], legs: shallowDraft).Findings;
 
         Assert.Equal(2, findings.Count);
         Assert.EndsWith("shallower than draft + squat + UKC (2.7 m)", findings[0].Meta, StringComparison.Ordinal);
-        Assert.EndsWith("shallower than safety depth 10 m", findings[1].Meta, StringComparison.Ordinal);
+        Assert.EndsWith("no deeper than safety contour 10 m", findings[1].Meta, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -150,16 +170,19 @@ public class ChartCheckDepthsTests
     }
 
     [Fact]
-    public void A_danger_in_water_already_shallower_than_the_safety_contour_isnt_isolated()
+    public void A_danger_counts_in_water_already_shallower_than_the_safety_contour_too()
     {
-        // The 5 m area north of the track holds a 3 m wreck; the 20 m area south of it a 3 m obstruction.
+        // UDWHAZ05 (#1151): the 5 m area north of the track holds a 3 m
+        // wreck, the 20 m area south of it a 3 m obstruction; both are alerts.
         var shallow = Area(RouteChartFeatureKind.DepthArea, "20", 5, 0, 0.01, south: 80 / M, north: 0.003);
         var deep = Area(RouteChartFeatureKind.DepthArea, "21", 20, 0, 0.01, south: -0.003, north: 80 / M);
 
         var findings = Check([shallow, deep, Danger("Wreck", "1", 0.005, 120, 3), Danger("Obstruction", "2", 0.005, -120, 3)]).Findings;
 
-        var danger = Assert.Single(findings, f => f.Code == RouteFindingCodes.DangerInCorridor || f.Code == RouteFindingCodes.DangerNearRoute);
-        Assert.Equal("2", danger.Feature!.FeatureId);
+        Assert.Equal(
+            ["1", "2"],
+            findings.Where(f => f.Code == RouteFindingCodes.DangerInCorridor || f.Code == RouteFindingCodes.DangerNearRoute)
+                .Select(f => f.Feature!.FeatureId).Order());
     }
 
     [Fact]
@@ -316,7 +339,7 @@ public class ChartCheckDepthsTests
     {
         // The same 12,5 m wreck beside each leg: under the deep leg's
         // 11 + 0,5 + 1,5 = 13 m keel it's a danger; under the shallow leg's
-        // 5 m keel, and the 10 m safety depth, it isn't.
+        // 5 m keel, and the 10 m safety contour, it isn't.
         var deep = EastWithKeel(11, 0.5, 1.5);
         var shallow = Fixture.Leg([new GeoPosition(0, 0.01), new GeoPosition(0, 0.02)], 4, squat: 0.5, required: 0.5);
 

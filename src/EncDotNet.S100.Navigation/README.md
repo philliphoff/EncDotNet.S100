@@ -303,10 +303,11 @@ only the finest cell at a place counts (`CellScaleRanking`), so a coarse cell's
 generalised land doesn't fire where a finer cell charts water.
 
 The depth checks run only when the settings have both a safety contour and a
-safety depth. Dangers are judged against the safety depth and, on a leg with
-a draft, against that leg's draft + squat + required UKC on the static
-charted depth; the meta line names the threshold that fired. A danger counts only when it's isolated: one inside water already
-shallower than the safety contour is left to the safety-contour finding.
+safety depth. Dangers are judged against the safety contour, as the S-101
+portrayal's `UDWHAZ05` judges them, and, on a leg with a draft, against that
+leg's draft + squat + required UKC on the static charted depth; the meta line
+names the threshold that fired. A danger counts wherever it lies, also inside
+water already shallower than the safety contour.
 Adjacent shallow areas, soundings and S-102 cells merge into one span, so a
 long bank is one finding. `ChartCheck.Dangers.cs` writes out the rules.
 

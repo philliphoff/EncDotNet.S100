@@ -45,8 +45,9 @@ public sealed record ChartCheckOptions
 /// draft.
 /// </summary>
 /// <remarks>
-/// Dangers are judged against <see cref="SafetyDepthMeters"/>, as an ECDIS
-/// judges them. With a draft they're also judged against
+/// Dangers are judged against <see cref="SafetyContourMeters"/>, counting
+/// one at the contour, as the S-101 portrayal's <c>UDWHAZ05</c> judges them.
+/// With a draft they're also judged against
 /// <see cref="KeelMeters"/> on the static charted depth, without the tide;
 /// the finding's meta line names the threshold that fired, the keel one when
 /// both do. Depth, dredged and drying areas are judged against

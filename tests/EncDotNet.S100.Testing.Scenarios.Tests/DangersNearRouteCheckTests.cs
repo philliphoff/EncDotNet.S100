@@ -35,24 +35,23 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
     [Fact]
     public void Without_a_draft_the_dangers_are_the_ones_the_world_model_expects()
     {
-        var truth = RouteHazards.For(Definition, Spec, ChartCheckOptions.Default.DangerNearbyMeters, Contour, Contour, keelMeters: null);
+        var truth = RouteHazards.For(Definition, Spec, ChartCheckOptions.Default.DangerNearbyMeters, Contour, keelMeters: null);
 
         AssertDangers(truth, Check());
 
         // The scenario covers each case.
-        Assert.Contains(truth, t => t.Expected && t.Relation == HazardRouteRelation.InCorridor && t.Threshold == HazardThreshold.SafetyDepth);
+        Assert.Contains(truth, t => t.Expected && t.Relation == HazardRouteRelation.InCorridor && t.Threshold == HazardThreshold.SafetyContour);
         Assert.Contains(truth, t => t.Expected && t.Relation == HazardRouteRelation.InCorridor && t.Threshold == HazardThreshold.NoDepth);
         Assert.Contains(truth, t => t.Expected && t.Relation == HazardRouteRelation.Near);
         Assert.Contains(truth, t => t.Threshold != HazardThreshold.None && t.Relation == HazardRouteRelation.Off);
-        Assert.Contains(truth, t => t.Threshold != HazardThreshold.None && !t.Isolated && t.Relation == HazardRouteRelation.InCorridor);
         Assert.Contains(truth, t => t.Threshold == HazardThreshold.None && t.Relation == HazardRouteRelation.InCorridor);
     }
 
     [Fact]
     public void With_the_draft_the_keel_threshold_fires_too()
     {
-        var without = RouteHazards.For(Definition, Spec, ChartCheckOptions.Default.DangerNearbyMeters, Contour, Contour, keelMeters: null);
-        var with = RouteHazards.For(Definition, Spec, ChartCheckOptions.Default.DangerNearbyMeters, Contour, Contour, Keel);
+        var without = RouteHazards.For(Definition, Spec, ChartCheckOptions.Default.DangerNearbyMeters, Contour, keelMeters: null);
+        var with = RouteHazards.For(Definition, Spec, ChartCheckOptions.Default.DangerNearbyMeters, Contour, Keel);
         Assert.Equal(12, Keel, 9);
 
         var findings = AssertDangers(with, Check(withDraft: true));
@@ -159,7 +158,7 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
             Assert.EndsWith(t.Threshold switch
             {
                 HazardThreshold.Keel => string.Format(CultureInfo.InvariantCulture, "shallower than draft + squat + UKC ({0:0.#} m)", Keel),
-                HazardThreshold.SafetyDepth => "shallower than safety depth 10 m",
+                HazardThreshold.SafetyContour => "no deeper than safety contour 10 m",
                 _ => t.Hazard.WaterLevelEffect == 5 ? "awash" : "depth unknown",
             }, finding.Meta, StringComparison.Ordinal);
         }
