@@ -27,7 +27,7 @@ internal static class PickFeaturesMcpAdapter
         "capture, ALSO pass imageWidth/imageHeight set to the width/height that tool echoed back — the pick " +
         "is then resolved with the capture's exact fit geometry, so it is a faithful inverse at any image " +
         "size or aspect ratio. Omit imageWidth/imageHeight to interpret x/y in the live on-screen viewport's " +
-        "pixel space instead. Matches are ranked most-specific first (point before curve before area), " +
+        "pixel space instead. Matches are ranked by drawing priority, then most-specific first (point before curve before area), " +
         "identical in shape to identify_features. Read-only by default; pass select=true to also show the " +
         "pick on the live viewer (populates the Object Information panel and draws a pick highlight — marker " +
         "plus selected-feature outline — exactly like a user click). Viewer-injected tool — not available " +

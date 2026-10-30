@@ -33,7 +33,6 @@ public sealed class Part4FeatureInformationTests
     /// <summary>A yellow-and-black south cardinal buoy, S Skerries, whose light is feature 66.</summary>
     private const string SouthSkerries = "1791";
 
-    private const string PriorityOrder = "#1159: picks are ranked by geometry, not by drawing priority.";
 
     private static Task<S164Pick> OpenAsync(string exchangeSet = PowerUp) =>
         S164Pick.OpenAsync(exchangeSet, Cell, TestContext.Current.CancellationToken);
@@ -168,18 +167,23 @@ public sealed class Part4FeatureInformationTests
 
     // ── FeatureInformation2: descriptions and sorting (S-98 15.1) ──
 
-    [Fact(Skip = PriorityOrder)]
+    [Fact]
     public async Task FeatureInformation2_SortedByDrawingPriority()
     {
         // Highest drawing priority first; at equal priority points, then
         // curves, then surfaces. Features with no drawing instruction aren't
-        // drawn, so they aren't ranked here.
+        // drawn, so they come after every drawn one.
         var pick = await OpenAsync();
         var priorities = pick.Instructions
             .GroupBy(i => i.FeatureReference)
             .ToDictionary(g => g.Key, g => g.Max(i => i.DrawingPriority));
 
-        var ranked = (await pick.PickAsync(BuoyAndLight, radiusMeters: 100))
+        var picked = await pick.PickAsync(BuoyAndLight, radiusMeters: 100);
+        var drawn = picked.Select(m => priorities.ContainsKey(m.FeatureId)).ToList();
+        Assert.Contains(false, drawn);
+        Assert.Equal(drawn.OrderByDescending(d => d), drawn);
+
+        var ranked = picked
             .Where(m => priorities.ContainsKey(m.FeatureId))
             .Select(m => (m.FeatureType, Priority: priorities[m.FeatureId], Geometry: GeometryRank(m.Geometry)))
             .ToList();

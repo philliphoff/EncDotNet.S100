@@ -56,7 +56,16 @@ public abstract record LoadedDatasetData;
 public sealed record S101DatasetData(
     S101Dataset Dataset,
     Func<string, string?>? ExternalTextResolver = null,
-    int? CompilationScale = null) : LoadedDatasetData;
+    int? CompilationScale = null) : LoadedDatasetData
+{
+    /// <summary>
+    /// A feature's highest drawing priority in the cell's latest portrayal,
+    /// by feature id, or <c>null</c> when it isn't drawn; ranks
+    /// <c>identify_features</c> matches as S-98 15.1 asks. <c>null</c> when
+    /// the cell was loaded without a portrayal, which keeps the geometric order.
+    /// </summary>
+    public Func<string, int?>? DrawingPriority { get; init; }
+}
 
 /// <summary>S-122 Marine Protected Areas typed model.</summary>
 public sealed record S122DatasetData(S122Dataset Model) : LoadedDatasetData;

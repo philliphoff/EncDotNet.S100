@@ -262,7 +262,8 @@ internal static class S100McpServerToolFactory
     {
         var description =
             "Identifies the vector features at a geographic point — the ECDIS cursor-pick — ranked " +
-            "most-specific first (point features before curves before areas; within a primitive the " +
+            "by drawing priority where the dataset was portrayed (S-98 15.1), then most-specific " +
+            "first (point features before curves before areas; within a primitive the " +
             "smaller/nearer feature wins). The feature-aware complement to find_at (which only " +
             "answers which datasets' bounds cover the point). Area features use exact point-in-" +
             "polygon containment (interior-ring holes honoured); point and curve features match " +
