@@ -92,12 +92,13 @@ public sealed class SurfacePartsTests
             [new TextInstruction { FeatureReference = "1", Text = "Sound" }],
             Provider());
 
-        // Ring A's vertex centroid, (1, 1); the joined rings' would be
-        // (0.6, 3.1), between the two surfaces.
+        // Inside surface A and clear of its hole; the joined rings' centre,
+        // (0.6, 3.1), would be between the two surfaces.
         var text = Assert.IsType<TextPaintOp>(Assert.Single(scene.Ops));
-        var expected = WebMercator.FromLonLat(1, 1);
-        Assert.Equal(expected.X, text.World.X, 6);
-        Assert.Equal(expected.Y, text.World.Y, 6);
+        var (lon, lat) = WebMercator.ToLonLat(text.World.X, text.World.Y, clampLatitude: false);
+        Assert.InRange(lat, 0, 2);
+        Assert.InRange(lon, 0, 2);
+        Assert.False(lat is > 0.5 and < 1 && lon is > 0.5 and < 1, $"In the hole: {lat}, {lon}");
     }
 
     private static VectorSceneBuilder Builder() => new()

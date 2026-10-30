@@ -31,6 +31,7 @@ public class DrawingInstructionSerializerTests
         LocalOffsetY = -2.5,
         LinePlacementPosition = 0.5,
         CoordinateOverride = new GeoPosition(50.5, -1.25),
+        AreaPlacement = AreaPlacementMode.Geographic,
         TimeValid =
         [
             new PortrayalTimeInterval(PortrayalTimeKind.Date, "----03--", "----10--", TimeIntervalClosure.ClosedInterval),
@@ -52,6 +53,7 @@ public class DrawingInstructionSerializerTests
         Dashes = [(0.0, 1.0), (1.0, 2.0)],
         DashIntervalLength = 1.0,
         CoordinatesOverride = [new GeoPosition(50.1, -1.1), new GeoPosition(50.2, -1.2), new GeoPosition(50.3, -1.3)],
+        Suppression = false,
     };
 
     private static AreaInstruction FullArea() => new()
@@ -98,6 +100,7 @@ public class DrawingInstructionSerializerTests
         FontProportion = TextFontProportion.MonoSpaced,
         HaloColor = "S104HALO",
         HaloWidth = 0.96,
+        AreaPlacement = AreaPlacementMode.Geographic,
     };
 
     // Minimal variants: every optional / nullable left at its default so the
@@ -195,6 +198,7 @@ public class DrawingInstructionSerializerTests
                 Assert.Equal(e.LocalOffsetY, ap.LocalOffsetY);
                 Assert.Equal(e.LinePlacementPosition, ap.LinePlacementPosition);
                 Assert.Equal(e.CoordinateOverride, ap.CoordinateOverride);
+                Assert.Equal(e.AreaPlacement, ap.AreaPlacement);
                 break;
 
             case LineInstruction e:
@@ -205,6 +209,7 @@ public class DrawingInstructionSerializerTests
                 Assert.Equal(e.Dashes, al.Dashes);
                 Assert.Equal(e.DashIntervalLength, al.DashIntervalLength);
                 Assert.Equal(e.CoordinatesOverride, al.CoordinatesOverride);
+                Assert.Equal(e.Suppression, al.Suppression);
                 break;
 
             case AreaInstruction e:
@@ -238,6 +243,7 @@ public class DrawingInstructionSerializerTests
                 Assert.Equal(e.FontProportion, at.FontProportion);
                 Assert.Equal(e.HaloColor, at.HaloColor);
                 Assert.Equal(e.HaloWidth, at.HaloWidth);
+                Assert.Equal(e.AreaPlacement, at.AreaPlacement);
                 break;
 
             default:

@@ -39,8 +39,11 @@ public static class DrawingInstructionSerializer
     /// <see cref="TextInstruction.FontProportion"/>, <see cref="TextInstruction.HaloColor"/>
     /// and <see cref="TextInstruction.HaloWidth"/>.
     /// v5: the base fields carry <see cref="DrawingInstruction.TimeValid"/>.
+    /// v6: line instructions carry <see cref="LineInstruction.Suppression"/>.
+    /// v7: point and text instructions carry <see cref="PointInstruction.AreaPlacement"/>
+    /// and <see cref="TextInstruction.AreaPlacement"/>.
     /// </remarks>
-    public const int FormatVersion = 5;
+    public const int FormatVersion = 7;
 
     private const byte TagPoint = 1;
     private const byte TagLine = 2;
@@ -119,6 +122,7 @@ public static class DrawingInstructionSerializer
                 w.Write(p.LocalOffsetY);
                 WriteNullableDouble(w, p.LinePlacementPosition);
                 WriteNullableCoordinate(w, p.CoordinateOverride);
+                w.Write((byte)p.AreaPlacement);
                 break;
 
             case LineInstruction l:
@@ -130,6 +134,7 @@ public static class DrawingInstructionSerializer
                 WriteOffsetLengthList(w, l.Dashes);
                 w.Write(l.DashIntervalLength);
                 WriteCoordinateList(w, l.CoordinatesOverride);
+                w.Write(l.Suppression);
                 break;
 
             case AreaInstruction a:
@@ -165,6 +170,7 @@ public static class DrawingInstructionSerializer
                 w.Write((int)t.FontProportion);
                 WriteString(w, t.HaloColor);
                 w.Write(t.HaloWidth);
+                w.Write((byte)t.AreaPlacement);
                 break;
 
             default:
@@ -207,6 +213,7 @@ public static class DrawingInstructionSerializer
             LocalOffsetY = r.ReadDouble(),
             LinePlacementPosition = ReadNullableDouble(r),
             CoordinateOverride = ReadNullableCoordinate(r),
+            AreaPlacement = (AreaPlacementMode)r.ReadByte(),
         };
     }
 
@@ -229,6 +236,7 @@ public static class DrawingInstructionSerializer
             Dashes = ReadOffsetLengthList(r),
             DashIntervalLength = r.ReadDouble(),
             CoordinatesOverride = ReadCoordinateList(r),
+            Suppression = r.ReadBoolean(),
         };
     }
 
@@ -286,6 +294,7 @@ public static class DrawingInstructionSerializer
             FontProportion = (TextFontProportion)r.ReadInt32(),
             HaloColor = ReadString(r),
             HaloWidth = r.ReadDouble(),
+            AreaPlacement = (AreaPlacementMode)r.ReadByte(),
         };
     }
 

@@ -51,14 +51,14 @@ they drift.
 | Part | Area | Tests | Passes | Fails | Supported | Partial | Gap | N/A |
 |---|---|---|---|---|---|---|---|---|
 | 2 | Catalogue and dataset loading and updating | 70 | 5 | 0 | 10 | 34 | 21 | 0 |
-| 3 | Chart display | 61 | 7 | 0 | 28 | 20 | 5 | 1 |
+| 3 | Chart display | 61 | 7 | 0 | 31 | 18 | 4 | 1 |
 | 4 | Chart related functions | 47 | 1 | 5 | 0 | 29 | 10 | 2 |
 | 5 | Navigational hazards | 6 | 1 | 1 | 0 | 0 | 4 | 0 |
 | 6 | Areas with special conditions | 5 | 1 | 2 | 0 | 0 | 2 | 0 |
 | 7 | Safety contour | 6 | 1 | 0 | 0 | 3 | 2 | 0 |
 | 8 | S-57 testing | 0 | — | — | — | — | — | — |
 | 9 | Dual fuel mode and SECOM | 17 | 0 | 0 | 2 | 9 | 6 | 0 |
-| | **Total** | **212** | **16** | **8** | **40** | **95** | **50** | **3** |
+| | **Total** | **212** | **16** | **8** | **43** | **93** | **49** | **3** |
 
 Part 8 has no tests of its own in 2.0.1. It points S-57 testing at the
 existing S-64 datasets, which a later slice covers.
@@ -70,7 +70,7 @@ issue.
 
 1. **Portrayal instructions that are skipped.** ([#1126](https://github.com/philliphoff/EncDotNet.S100/issues/1126)) `DrawingInstructionParser`
    recognised `SpatialReference`, `AreaPlacement`, `Date`, `TimeValid` and
-   `AlertReference` but did nothing with them, and treats
+   `AlertReference` but did nothing with them, and treated
    `LineInstructionUnsuppressed` as a plain line. `VectorSceneBuilder` sorted
    by geometry type before drawing priority, where S-100 Part 9 puts
    priority first. Edge-specific lines (the safety contour on depth areas,
@@ -82,8 +82,14 @@ issue.
    ops now draw in Part 9 order (plane, priority, then area, pattern, line,
    point, text). The time commands (`Date`, `Time`, `DateTime`, `TimeValid`,
    `ClearTime`) now set each instruction's time intervals, and S-101 and S-401
-   draw only what is valid at the view time. Line suppression and
-   `AreaPlacement` remain. Part 3 tests affected: SafetyContourDisplay,
+   draw only what is valid at the view time. Line suppression is honoured:
+   where lines of different features share an edge, only the one drawn last
+   draws there, and `LineInstructionUnsuppressed` opts out. `AreaPlacement`
+   is honoured too: area symbols and text, which were drawn at the area's
+   first vertex or the mean of its vertices, now go at a point inside the
+   area, and `VisibleParts` moves them into the visible part as the view
+   moves (tile exports keep them fixed). `AreaCRS`, `AlertReference` and
+   `Hover` are still skipped. Part 3 tests affected: SafetyContourDisplay,
    AreaBorders, ComplexPortrayal, DifferentPriority, LineSuppression,
    FixedDateRange, PeriodicDateRange, CentredSymbols1.
 2. **Route checks use their own rules, not the S-101 alert catalogue.** ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)) The
@@ -434,7 +440,7 @@ viewer's pick panel shows.
 | LanguagePacks | S-98 15.1 | InitialPowerUp | Gap | — | No language packs. |
 | DifferentPriority | S-101PC | — | Supported | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | Ops draw by plane, then drawing priority, then geometry. The v2.0.0 data has no features for this test, so it can't run yet. |
 | SamePriority | S-101PC | — | Supported | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | Equal priority draws area, line, point, text. |
-| LineSuppression | S-101PC | — | Gap | `src/EncDotNet.S100.Core/Pipelines/Vector/DrawingInstructionParser.cs` | LineInstructionUnsuppressed is treated as a plain line; no shared-edge suppression. |
+| LineSuppression | S-101PC | — | Supported | `src/EncDotNet.S100.Rendering.Scene/LineSuppression.cs` | Where lines of different features share an edge, only the one drawn last in Part 9 order draws there; `LineInstructionUnsuppressed` always draws. The v2.0.0 data has no features for this test. |
 | ManualUpdates | S-98 12.12.1 | — | N/A | — | Mariner chart corrections are ECDIS chart maintenance. |
 | TextDisplay1 | — | — | Supported | `src/EncDotNet.S100.Renderers.Skia/Scene/LabelDeclutterer.cs` | Text placed and decluttered. |
 | AreaBorders | S-101PC | — | Supported | `src/EncDotNet.S100.Core/Pipelines/Vector/DrawingInstructionParser.cs` | Plain, symbolised and edge-specific borders all draw. |
@@ -442,8 +448,8 @@ viewer's pick panel shows.
 | BoundaryDisplay1 | S-98 9.1.1 | — | Partial | `src/EncDotNet.S100.Renderers.Mapsui/S100DatasetExtentIndicatorLayer.cs` | Extents outlined only when out of scale. |
 | BoundaryDisplay2 | S-98 12.3.1 | — | Gap | — | No scale-boundary line between areas of different scale. |
 | OverscalePattern1 | S-98 12.3.2 | — | Supported | `src/EncDotNet.S100.Renderers.Mapsui/OverscaleCurtain.cs` | Overscale pattern over overscaled coverage. |
-| ComplexPortrayal | S-101PC | — | Partial | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | SpatialReference and priority order are honoured; line suppression is not. The v2.0.0 data has no features for this test. |
-| CentredSymbols1 | S-101PC | Settings | Partial | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | Fixed centroid; not re-centred in the visible part. AreaPlacement skipped. |
+| ComplexPortrayal | S-101PC | — | Supported | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | SpatialReference, priority order and line suppression are honoured. The v2.0.0 data has no features for this test. |
+| CentredSymbols1 | S-101PC | Settings | Supported | `src/EncDotNet.S100.Rendering.Scene/PlacementArea.cs` | Area symbols and text go at a point inside the area and, with `AreaPlacement:VisibleParts`, move into the largest visible part when that point leaves the view. Not compared with the reference plot. |
 | OverscaleIndication1 | S-98 12.3 | PowerUp | Supported | `src/EncDotNet.S100.Renderers.Mapsui/OverscaleEvaluator.cs` | Status-bar overscale pill with factor. |
 | LargerScaleData | S-98 12.3.3 | PowerUp | Partial | `src/EncDotNet.S100.Renderers.Mapsui/S100DatasetExtentIndicatorLayer.cs` | Outlines hint at larger-scale data; no explicit indication. |
 | ScaleBoundary | S-98 12.3.1 | PowerUp | Partial | `src/EncDotNet.S100.Renderers.Mapsui/OverscaleCurtain.cs` | Overscale shown; scale-boundary line missing. |

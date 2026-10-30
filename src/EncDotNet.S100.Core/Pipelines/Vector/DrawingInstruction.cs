@@ -166,6 +166,15 @@ public sealed class PointInstruction : DrawingInstruction
     /// </summary>
     public GeoPosition? CoordinateOverride { get; init; }
 
+    /// <summary>
+    /// Where the anchor goes on a surface (S-100 Part 9 <c>AreaPlacement</c>):
+    /// a representative point inside the area, kept in the visible part of the
+    /// area as the view moves (<see cref="AreaPlacementMode.VisibleParts"/>,
+    /// the default) or fixed (<see cref="AreaPlacementMode.Geographic"/>).
+    /// Ignored for points, curves and an explicit <c>CoordinateOverride</c>.
+    /// </summary>
+    public AreaPlacementMode AreaPlacement { get; init; }
+
     internal override int TypeSortOrder => 2;
 }
 
@@ -221,6 +230,15 @@ public sealed class LineInstruction : DrawingInstruction
     /// and all-around-light circles.
     /// </summary>
     public IReadOnlyList<GeoPosition>? CoordinatesOverride { get; init; }
+
+    /// <summary>
+    /// Whether line suppression applies (S-100 Part 9): where a line from
+    /// another feature with a higher drawing priority covers the same edge,
+    /// this line isn't drawn there, and this line suppresses lower ones in
+    /// turn. <see langword="false"/> for <c>LineInstructionUnsuppressed</c>,
+    /// which always draws in full and suppresses nothing.
+    /// </summary>
+    public bool Suppression { get; init; } = true;
 
     internal override int TypeSortOrder => 1;
 }
@@ -334,6 +352,15 @@ public sealed class TextInstruction : DrawingInstruction
     /// in <c>GeographicCRS</c> mode).
     /// </summary>
     public GeoPosition? CoordinateOverride { get; init; }
+
+    /// <summary>
+    /// Where the anchor goes on a surface (S-100 Part 9 <c>AreaPlacement</c>):
+    /// a representative point inside the area, kept in the visible part of the
+    /// area as the view moves (<see cref="AreaPlacementMode.VisibleParts"/>,
+    /// the default) or fixed (<see cref="AreaPlacementMode.Geographic"/>).
+    /// Ignored for points, curves and an explicit <c>CoordinateOverride</c>.
+    /// </summary>
+    public AreaPlacementMode AreaPlacement { get; init; }
 
     /// <summary>
     /// Font weight (S-100 Part 9 <c>FontCharacteristics.weight</c>). Defaults to
@@ -460,6 +487,27 @@ public enum SymbolRotationCrs
     /// <summary>
     /// <c>GeographicCRS</c>: clockwise from true north, so the symbol turns with
     /// the chart on a rotated display (orientation arrows, light flares).
+    /// </summary>
+    Geographic,
+}
+
+/// <summary>
+/// Where a point symbol or text goes on a surface (S-100 Part 9
+/// <c>AreaPlacementMode</c>).
+/// </summary>
+public enum AreaPlacementMode
+{
+    /// <summary>
+    /// <c>VisibleParts</c> (the default): in the visible part of the area. The
+    /// anchor is a representative point inside the area; when that point is
+    /// out of view, the symbol moves into the largest part of the area that is
+    /// in view.
+    /// </summary>
+    VisibleParts,
+
+    /// <summary>
+    /// <c>Geographic</c>: at a fixed representative point inside the area,
+    /// wherever the view is.
     /// </summary>
     Geographic,
 }

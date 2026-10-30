@@ -106,6 +106,16 @@ public sealed class HeadlessCompositeOptions
     /// copies itself (see <see cref="HeadlessCompositeScene.Draw"/>).
     /// </summary>
     public bool EnableSeamWrap { get; init; } = true;
+
+    /// <summary>
+    /// Whether point symbols and text placed in the visible parts of a surface
+    /// (S-100 Part 9 <c>AreaPlacement:VisibleParts</c>) move into the part of
+    /// the surface in the viewport. Defaults to <see langword="true"/>, for a
+    /// viewport that is the whole picture. Tiled rendering turns it off, so a
+    /// surface across several tiles keeps one symbol at its representative
+    /// point instead of one per tile.
+    /// </summary>
+    public bool KeepAreaSymbolsInView { get; init; } = true;
 }
 
 /// <summary>
@@ -367,6 +377,7 @@ public sealed class HeadlessCompositor
                         lowered.Add(new VectorCompositeLayer(scene, options.HonorScaleVisibility)
                         {
                             EnableSeamWrap = options.EnableSeamWrap,
+                            KeepAreaSymbolsInView = options.KeepAreaSymbolsInView,
                             // The whole cell stops at its minimum display scale
                             // unless the mariner asks to ignore it (S-101 FC §3.1.1).
                             MinimumDisplayScale = (options.Mariner?.IgnoreScaleMinimum ?? false)
@@ -581,6 +592,7 @@ public sealed class HeadlessCompositor
                         PointGlyphHeadlessAdapter.BuildScene(vector, options.HiddenCategories), options.HonorScaleVisibility)
                     {
                         EnableSeamWrap = options.EnableSeamWrap,
+                        KeepAreaSymbolsInView = options.KeepAreaSymbolsInView,
                     };
                     var (w, s) = WebMercator.ToLonLat(extent.MinX, extent.MinY, clampLatitude: false);
                     var (e, n) = WebMercator.ToLonLat(extent.MaxX, extent.MaxY, clampLatitude: false);

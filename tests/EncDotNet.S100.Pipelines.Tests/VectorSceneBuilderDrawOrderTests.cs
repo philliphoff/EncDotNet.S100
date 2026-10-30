@@ -11,7 +11,10 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// </summary>
 public sealed class VectorSceneBuilderDrawOrderTests
 {
-    /// <summary>The same square for every feature, except "pattern5", which is twice as wide.</summary>
+    /// <summary>
+    /// The same square for every feature, except "pattern5", which is twice as
+    /// wide. Lines share its edges, so they turn suppression off to all draw.
+    /// </summary>
     private sealed class Square : IFeatureGeometryProvider
     {
         public FeatureGeometry? GetGeometry(string featureReference)
@@ -49,7 +52,7 @@ public sealed class VectorSceneBuilderDrawOrderTests
             ["line", "area"],
             Order(
                 new AreaInstruction { FeatureReference = "area", FillColor = "DEPDW", DrawingPriority = 9 },
-                new LineInstruction { FeatureReference = "line", LineColor = "CHBLK", DrawingPriority = 3 }));
+                new LineInstruction { FeatureReference = "line", LineColor = "CHBLK", Suppression = false, DrawingPriority = 3 }));
     }
 
     [Fact]
@@ -60,7 +63,7 @@ public sealed class VectorSceneBuilderDrawOrderTests
             Order(
                 new TextInstruction { FeatureReference = "text", Text = "T", DrawingPriority = 5 },
                 new PointInstruction { FeatureReference = "point", SymbolReference = "S", DrawingPriority = 5 },
-                new LineInstruction { FeatureReference = "line", LineColor = "CHBLK", DrawingPriority = 5 },
+                new LineInstruction { FeatureReference = "line", LineColor = "CHBLK", Suppression = false, DrawingPriority = 5 },
                 new AreaInstruction { FeatureReference = "pattern", AreaFillReference = "P", DrawingPriority = 5 },
                 new AreaInstruction { FeatureReference = "area", FillColor = "DEPDW", DrawingPriority = 5 }));
     }
@@ -71,8 +74,8 @@ public sealed class VectorSceneBuilderDrawOrderTests
         Assert.Equal(
             ["under", "over"],
             Order(
-                new LineInstruction { FeatureReference = "over", LineColor = "CHBLK", DrawingPriority = 1, Plane = DisplayPlane.OverRadar },
-                new LineInstruction { FeatureReference = "under", LineColor = "CHBLK", DrawingPriority = 9 }));
+                new LineInstruction { FeatureReference = "over", LineColor = "CHBLK", Suppression = false, DrawingPriority = 1, Plane = DisplayPlane.OverRadar },
+                new LineInstruction { FeatureReference = "under", LineColor = "CHBLK", Suppression = false, DrawingPriority = 9 }));
     }
 
     [Fact]
@@ -82,9 +85,9 @@ public sealed class VectorSceneBuilderDrawOrderTests
             ["line3", "pattern5", "line8", "pattern9"],
             Order(
                 new AreaInstruction { FeatureReference = "pattern9", AreaFillReference = "HIGH", DrawingPriority = 9 },
-                new LineInstruction { FeatureReference = "line8", LineColor = "CHBLK", DrawingPriority = 8 },
+                new LineInstruction { FeatureReference = "line8", LineColor = "CHBLK", Suppression = false, DrawingPriority = 8 },
                 new AreaInstruction { FeatureReference = "pattern5", AreaFillReference = "LOW", DrawingPriority = 5 },
-                new LineInstruction { FeatureReference = "line3", LineColor = "CHBLK", DrawingPriority = 3 }));
+                new LineInstruction { FeatureReference = "line3", LineColor = "CHBLK", Suppression = false, DrawingPriority = 3 }));
     }
 
     [Fact]
@@ -93,7 +96,7 @@ public sealed class VectorSceneBuilderDrawOrderTests
         Assert.Equal(
             ["first", "second"],
             Order(
-                new LineInstruction { FeatureReference = "first", LineColor = "CHBLK", DrawingPriority = 4 },
-                new LineInstruction { FeatureReference = "second", LineColor = "CHBLK", DrawingPriority = 4 }));
+                new LineInstruction { FeatureReference = "first", LineColor = "CHBLK", Suppression = false, DrawingPriority = 4 },
+                new LineInstruction { FeatureReference = "second", LineColor = "CHBLK", Suppression = false, DrawingPriority = 4 }));
     }
 }

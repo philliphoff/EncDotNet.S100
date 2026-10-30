@@ -272,13 +272,9 @@ internal sealed class BaseSpatialIndex
         switch (op)
         {
             case PointPaintOp point when indexAnchors:
-                (minX, minY) = point.World;
-                (maxX, maxY) = point.World;
-                return true;
+                return AnchorBounds(point.World, point.PlacementArea, out minX, out minY, out maxX, out maxY);
             case TextPaintOp text when indexAnchors:
-                (minX, minY) = text.World;
-                (maxX, maxY) = text.World;
-                return true;
+                return AnchorBounds(text.World, text.PlacementArea, out minX, out minY, out maxX, out maxY);
             case AreaPaintOp a:
                 return TryRingBounds(a.WorldShell, out minX, out minY, out maxX, out maxY);
             case PatternAreaPaintOp p:
@@ -289,6 +285,24 @@ internal sealed class BaseSpatialIndex
                 minX = minY = maxX = maxY = 0;
                 return false;
         }
+    }
+
+    // An anchor, widened to its surface when it is kept in the visible part
+    // of it (it can then be drawn anywhere in the surface).
+    private static bool AnchorBounds(
+        (double X, double Y) anchor, PlacementArea? area,
+        out double minX, out double minY, out double maxX, out double maxY)
+    {
+        (minX, minY) = anchor;
+        (maxX, maxY) = anchor;
+        if (area is not null)
+        {
+            minX = Math.Min(minX, area.MinX);
+            minY = Math.Min(minY, area.MinY);
+            maxX = Math.Max(maxX, area.MaxX);
+            maxY = Math.Max(maxY, area.MaxY);
+        }
+        return true;
     }
 
     private static bool TryRingBounds(

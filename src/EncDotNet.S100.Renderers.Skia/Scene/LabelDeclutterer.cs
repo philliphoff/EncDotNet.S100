@@ -106,6 +106,7 @@ public sealed class LabelDeclutterer : IDisposable
         _index.Clear();
         var suppressed = _suppressed;
         var transform = WorldToScreen.Create(viewport);
+        var view = ViewExtent.Of(viewport);
         double denom = viewport.ScaleDenominator;
         var index = _index;
 
@@ -122,7 +123,8 @@ public sealed class LabelDeclutterer : IDisposable
             if (honorScaleVisibility && !ScaleVisibility.IsVisibleAtScale(text, denom))
                 continue;
 
-            var (ax, ay) = transform.Project(text.World);
+            // Where the overlay draws it: an area label may be kept in view.
+            var (ax, ay) = transform.Project(view.Anchor(text));
             (ax, ay) = SkiaDisplayListRenderer.RotateAbout(ax, ay, centerX, centerY, anchorRotationDegrees);
             if (!cullBounds.Contains(ax + (float)text.OffsetXpx, ay + (float)text.OffsetYpx))
                 continue;

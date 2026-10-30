@@ -77,6 +77,7 @@ public static class DrawingInstructionParser
         string? fontBackgroundColor = null;
         double? fontBackgroundTransparency = null;
         double? linePlacementPosition = null;
+        var areaPlacement = AreaPlacementMode.VisibleParts;
         TextHorizontalAlignment textHAlign = TextHorizontalAlignment.Center;
         TextVerticalAlignment textVAlign = TextVerticalAlignment.Center;
 
@@ -251,6 +252,7 @@ public static class DrawingInstructionParser
                         LocalOffsetY = localOffsetY,
                         LinePlacementPosition = linePlacementPosition,
                         CoordinateOverride = augmentedAnchor,
+                        AreaPlacement = areaPlacement,
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
                         TimeValid = timeValid,
@@ -297,6 +299,7 @@ public static class DrawingInstructionParser
                             Dashes = dashes.Count > 0 ? new List<(double, double)>(dashes) : null,
                             DashIntervalLength = dashIntervalMm,
                             CoordinatesOverride = coordinates,
+                            Suppression = key == "LineInstruction",
                             ScaleMinimum = scaleMinimum,
                             ScaleMaximum = scaleMaximum,
                             TimeValid = timeValid,
@@ -379,6 +382,7 @@ public static class DrawingInstructionParser
                         OffsetX = localOffsetX != 0 ? localOffsetX : null,
                         OffsetY = localOffsetY != 0 ? localOffsetY : null,
                         CoordinateOverride = augmentedAnchor,
+                        AreaPlacement = areaPlacement,
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
                         TimeValid = timeValid,
@@ -459,9 +463,15 @@ public static class DrawingInstructionParser
                     timeValid = [];
                     break;
 
+                case "AreaPlacement":
+                    // AreaPlacement:VisibleParts|Geographic — applies to the
+                    // point and text instructions that follow, until changed.
+                    if (Enum.TryParse<AreaPlacementMode>(value.Trim(), ignoreCase: true, out var placement))
+                        areaPlacement = placement;
+                    break;
+
                 case "AlertReference":
                 case "Hover":
-                case "AreaPlacement":
                 case "AreaCRS":
                     // Recognised but not yet handled — skip silently
                     break;

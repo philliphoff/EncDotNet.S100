@@ -22,6 +22,7 @@ public class HeadlessTileRendererTests
     {
         HonorScaleVisibility = true,
         EnableSeamWrap = false,
+        KeepAreaSymbolsInView = false,
     };
 
     [Fact]
