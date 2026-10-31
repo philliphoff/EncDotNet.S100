@@ -125,7 +125,6 @@ internal sealed class PassageCheckService : IDisposable
     private readonly Func<IEnumerable<IRouteCheck>> _checks;
     private readonly Action<Action> _post;
     private readonly object _gate = new();
-    private readonly Lock _inline = new();
 
     private CancellationTokenSource? _pending;
     private Task _idle = Task.CompletedTask;
@@ -143,6 +142,11 @@ internal sealed class PassageCheckService : IDisposable
     /// <summary>Creates the service.</summary>
     /// <param name="routes">The routes and check mode.</param>
     /// <param name="catalog">The loaded datasets.</param>
+    /// <param name="post">
+    /// Delivers results and <see cref="Changed"/> on the thread that owns the
+    /// service's state (the UI dispatcher in the app). Results finish on the
+    /// thread pool, so it must not run them there concurrently with edits.
+    /// </param>
     /// <param name="sources">The route-check sources, shared with other checks, or <c>null</c> for its own over ProjNet.</param>
     /// <param name="warnings">The panel's warnings, or <c>null</c> to check the loaded S-124 datasets' own.</param>
     /// <param name="mariner">The mariner's safety contour and depth for the chart check's depth checks, or <c>null</c> to skip them.</param>
@@ -153,23 +157,20 @@ internal sealed class PassageCheckService : IDisposable
     /// The window sweep uses the <see cref="ClearanceCheck"/> among them.
     /// </param>
     /// <param name="debounce">The delay before a recompute, or <c>null</c> for <see cref="DefaultDebounce"/>.</param>
-    /// <param name="post">
-    /// Delivers results and <see cref="Changed"/> (the UI dispatcher in the app),
-    /// or <c>null</c> to run them inline, one at a time.
-    /// </param>
     public PassageCheckService(
         RoutesService routes,
         IDatasetCatalog catalog,
+        Action<Action> post,
         RouteCheckSourceCache? sources = null,
         PanelRouteWarningSource? warnings = null,
         IMarinerSettingsProvider? mariner = null,
         RouteCheckOptions? options = null,
         Func<IEnumerable<IRouteCheck>>? checks = null,
-        TimeSpan? debounce = null,
-        Action<Action>? post = null)
+        TimeSpan? debounce = null)
     {
         ArgumentNullException.ThrowIfNull(routes);
         ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(post);
         _routes = routes;
         _catalog = catalog;
         _sources = sources ?? new RouteCheckSourceCache(new ProjNetCrsTransformFactory());
@@ -178,7 +179,7 @@ internal sealed class PassageCheckService : IDisposable
         _options = options;
         _checks = checks ?? BuiltInChecks;
         Debounce = debounce ?? DefaultDebounce;
-        _post = post ?? RunInline;
+        _post = post;
 
         _routes.CheckModeChanged += OnInputsChanged;
         _routes.Routes.Changed += OnInputsChanged;
@@ -333,15 +334,6 @@ internal sealed class PassageCheckService : IDisposable
             _mariner.Changed -= OnMarinerChanged;
         _pending?.Cancel();
         _windowPending?.Cancel();
-    }
-
-    // Without a dispatcher, a result lands on a pool thread while an edit
-    // reschedules on the caller's: one at a time, so a cancelled result can't
-    // slip in after the cancel and listeners never run concurrently.
-    private void RunInline(Action action)
-    {
-        lock (_inline)
-            action();
     }
 
     private void OnInputsChanged(object? sender, EventArgs e) => _post(Schedule);

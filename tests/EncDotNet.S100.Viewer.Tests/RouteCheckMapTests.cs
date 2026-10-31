@@ -247,7 +247,7 @@ public sealed class RouteCheckMapTests(WarningsScenarioFixture fixture) : IClass
         route.AppendWaypoint(new GeoPosition(50, -0.9));
         routes.Routes.Add(route);
         routes.Routes.SetActiveRoute(route);
-        using var check = new PassageCheckService(routes, new PassageCheckFixture.FixedCatalog([]), debounce: TimeSpan.Zero);
+        using var check = new PassageCheckService(routes, new PassageCheckFixture.FixedCatalog([]), PassageCheckFixture.SerialPost, debounce: TimeSpan.Zero);
         var state = new RouteCheckLegendState();
         using var legend = new RouteCheckLegendViewModel(routes, check, null, state);
         using var host = ViewHost.Show(new RouteCheckLegendView { DataContext = legend }, width: 400, height: 400);
@@ -286,7 +286,7 @@ public sealed class RouteCheckMapTests(WarningsScenarioFixture fixture) : IClass
         route.SetPassageValue(RoutePassageField.Draft, 5);
         routes.Routes.Add(route);
         routes.Routes.SetActiveRoute(route);
-        using var check = new PassageCheckService(routes, new PassageCheckFixture.FixedCatalog([]), debounce: TimeSpan.Zero);
+        using var check = new PassageCheckService(routes, new PassageCheckFixture.FixedCatalog([]), PassageCheckFixture.SerialPost, debounce: TimeSpan.Zero);
         using var legend = new RouteCheckLegendViewModel(routes, check, null, new RouteCheckLegendState());
         using var host = ViewHost.Show(new RouteCheckLegendView { DataContext = legend }, width: 400, height: 400);
         routes.IsCheckModeActive = true;
