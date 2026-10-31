@@ -1,7 +1,11 @@
 # Logs panel design pass
 
-> Status: **Proposed** (2026-10-30). Nothing here is built yet. Follows the
-> Logs tab shipped for
+> Status: **Built** (2026-10-31). All four slices in §4 have merged:
+> [#1178](https://github.com/philliphoff/EncDotNet.S100/pull/1178),
+> [#1179](https://github.com/philliphoff/EncDotNet.S100/pull/1179),
+> [#1181](https://github.com/philliphoff/EncDotNet.S100/pull/1181) and
+> [#1182](https://github.com/philliphoff/EncDotNet.S100/pull/1182).
+> Proposed 2026-10-30. Follows the Logs tab shipped for
 > [#1080](https://github.com/philliphoff/EncDotNet.S100/issues/1080)
 > (`LogsView.axaml`, `LogsViewModel.cs`, `LogsToolbarPanel.cs`).
 
