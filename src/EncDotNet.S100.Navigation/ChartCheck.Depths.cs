@@ -3,7 +3,7 @@ using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Navigation;
 
-// The safety-contour and safety-depth checks (#955).
+// The safety-contour checks (#955, #1127).
 public sealed partial class ChartCheck
 {
     private sealed partial class LegSweep
@@ -13,6 +13,7 @@ public sealed partial class ChartCheck
         private void CheckDepths(IReadOnlyList<RouteChartFeature> features, LegDepths depths)
         {
             var shallow = CheckSafetyContour(features, depths);
+            CheckSafetyContourFeatures(features);
             CheckSoundings(features, depths, shallow);
             CheckBathymetry(depths);
             CheckDangers(features, depths);
@@ -52,20 +53,62 @@ public sealed partial class ChartCheck
             return shallow;
         }
 
-        // Soundings shallower than the safety depth inside the cross-track
-        // limits, from the finest cell where they are. A sounding inside an
-        // area already shallower than the safety contour adds nothing to
+        // The other features whose S-101 portrayal raises the SafetyContour
+        // alert (#1127): floating docks, hulks, pontoons, shoreline
+        // constructions, unsurveyed areas, and land charted as points or
+        // curves. The track must not pass them, so each is its own crossing
+        // or corridor finding: an area as the shallow areas are, a point or
+        // curve on the track when it's within the track clearance of it.
+        private void CheckSafetyContourFeatures(IReadOnlyList<RouteChartFeature> features)
+        {
+            foreach (var feature in features)
+            {
+                if (feature.Kind != RouteChartFeatureKind.Alerted
+                    || !feature.Alerts.Any(a => a.Alert == RouteFindingAlert.SafetyContour))
+                {
+                    continue;
+                }
+
+                _cancellationToken.ThrowIfCancellationRequested();
+                if (feature.Surfaces.Count > 0)
+                {
+                    CheckAreas([feature], RouteChartFeatureKind.Alerted, RouteFindingCodes.CrossesSafetyContour, RouteFindingCodes.SafetyContourInCorridor);
+                    continue;
+                }
+
+                var (projection, position) = Nearest(feature);
+                var offset = Math.Abs(projection.Offset);
+                if (offset > (projection.Offset > 0 ? _port : _starboard) || !InBand(_cellIndex[feature.Cell], Band(position)))
+                {
+                    continue;
+                }
+
+                _findings.Add(
+                    offset <= _trackClearance ? RouteFindingCodes.CrossesSafetyContour : RouteFindingCodes.SafetyContourInCorridor,
+                    _legIndex,
+                    projection.Distance,
+                    RouteFindingLocation.Point(position, projection.Distance),
+                    feature);
+            }
+        }
+
+        // Soundings no deeper than the safety contour inside the cross-track
+        // limits, from the finest cell where they are: the soundings the
+        // S-101 portrayal's SOUNDG03 raises NavHazard for. A sounding inside
+        // an area already shallower than the safety contour adds nothing to
         // that area's finding, so only soundings in deeper water count.
         // Soundings closer together along the route than
-        // ShoalMergeGapMeters make one finding.
+        // ShoalMergeGapMeters make one finding, which notes when its least
+        // depth is also shallower than the safety depth.
         private void CheckSoundings(IReadOnlyList<RouteChartFeature> features, LegDepths depths, List<RouteChartFeature> shallow)
         {
+            var contour = depths.SafetyContourMeters;
             var safetyDepth = depths.SafetyDepthMeters;
             var hits = new List<(double Distance, RouteChartFeature Feature)>();
             foreach (var feature in features)
             {
                 if (feature.Kind != RouteChartFeatureKind.Sounding || feature.Points.Count == 0
-                    || feature.DepthMeters is not { } depth || !(depth < safetyDepth))
+                    || feature.DepthMeters is not { } depth || !(depth <= contour))
                 {
                     continue;
                 }
@@ -86,15 +129,17 @@ public sealed partial class ChartCheck
                 var start = group[0].Distance;
                 var end = group[^1].Distance;
                 var least = group.MinBy(h => h.Feature.DepthMeters!.Value).Feature;
-                _findings.Add(RouteFindingCodes.SoundingsBelowSafetyDepth, _legIndex, start,
+                var leastDepth = least.DepthMeters!.Value;
+                _findings.Add(RouteFindingCodes.SoundingsBelowSafetyContour, _legIndex, start,
                     group.Count == 1 ? RouteFindingLocation.Point(least.Points[0], start) : Location(start, end),
                     least,
                     new ShoalDetails
                     {
-                        LeastDepth = Depth.FromMetres(least.DepthMeters!.Value),
-                        ThresholdKind = RouteFindingThreshold.SafetyDepth,
-                        Threshold = Depth.FromMetres(safetyDepth),
+                        LeastDepth = Depth.FromMetres(leastDepth),
+                        ThresholdKind = RouteFindingThreshold.SafetyContour,
+                        Threshold = Depth.FromMetres(contour),
                         SoundingCount = group.Count,
+                        BelowSafetyDepth = leastDepth < safetyDepth ? Depth.FromMetres(safetyDepth) : null,
                     });
             }
         }

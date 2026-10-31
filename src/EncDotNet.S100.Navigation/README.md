@@ -303,9 +303,9 @@ leg's limits with one half-width.
 | `route_check.structure_on_track` | MustReview | A structure that raises `NavHazard` within `RouteCheckSettings.TrackClearance` (default 30 m) of the track line |
 | `route_check.structure_in_corridor` | Check | Such a structure elsewhere inside the limits (Info in the near band) |
 | `route_check.overhead_on_route` | Check | A bridge, span, overhead cable or pipeline, or conveyor inside the limits (Info in the near band) |
-| `route_check.crosses_safety_contour` | MustReview | The track crosses depth, dredged or drying areas shallower than the safety contour |
+| `route_check.crosses_safety_contour` | MustReview | The track crosses depth, dredged or drying areas shallower than the safety contour, or another feature that raises the `SafetyContour` alert |
 | `route_check.safety_contour_in_corridor` | Check | Such areas reach inside the limits, but the track doesn't cross them |
-| `route_check.soundings_below_safety_depth` | Check | Soundings inside the limits, in deeper areas, are shallower than the safety depth |
+| `route_check.soundings_below_safety_contour` | Check | Soundings inside the limits, in deeper areas, are no deeper than the safety contour (S-101 `SOUNDG03`) |
 | `route_check.crosses_s102_shoal` | MustReview | The track crosses S-102 cells shallower than the safety contour |
 | `route_check.s102_shoal_in_corridor` | Check | S-102 cells shallower than the safety contour inside the limits, off the track |
 

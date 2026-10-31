@@ -88,8 +88,12 @@ public static class RouteFindingCodes
     /// <summary>Areas shallower than the safety contour reach into the corridor, but the track doesn't cross them. CHECK.</summary>
     public static RouteFindingCode SafetyContourInCorridor { get; } = new("route_check.safety_contour_in_corridor", RouteFindingCategory.Depth, RouteFindingGroup.Check);
 
-    /// <summary>Soundings shallower than the safety depth inside the cross-track limits. CHECK.</summary>
-    public static RouteFindingCode SoundingsBelowSafetyDepth { get; } = new("route_check.soundings_below_safety_depth", RouteFindingCategory.Depth, RouteFindingGroup.Check);
+    /// <summary>
+    /// Soundings no deeper than the safety contour inside the cross-track
+    /// limits, outside water already shallower than it: the soundings the
+    /// S-101 portrayal's <c>SOUNDG03</c> raises <c>NavHazard</c> for (#1127). CHECK.
+    /// </summary>
+    public static RouteFindingCode SoundingsBelowSafetyContour { get; } = new("route_check.soundings_below_safety_contour", RouteFindingCategory.Depth, RouteFindingGroup.Check);
 
     /// <summary>The track crosses S-102 cells shallower than the safety contour. MUST REVIEW.</summary>
     public static RouteFindingCode CrossesS102Shoal { get; } = new("route_check.crosses_s102_shoal", RouteFindingCategory.Depth, RouteFindingGroup.MustReview);
@@ -183,7 +187,7 @@ public static class RouteFindingCodes
         CrossesLand, LandInCorridor, CrossesDrying, DryingInCorridor,
         DangerInCorridor, DangerNearRoute, AidToNavigation, StructureOnTrack, StructureInCorridor, OverheadOnRoute,
         CrossesSafetyContour, SafetyContourInCorridor,
-        SoundingsBelowSafetyDepth, CrossesS102Shoal, S102ShoalInCorridor,
+        SoundingsBelowSafetyContour, CrossesS102Shoal, S102ShoalInCorridor,
         EntersProhibitedArea, ProhibitedAreaInCorridor, RestrictedArea, CautionArea,
         TrafficArea, AnchorageArea, ProtectedArea, AreaNotInForce,
         WarningOnRoute, WarningNearRoute, WarningNotInForce, WarningCancelled,

@@ -44,7 +44,8 @@ public sealed record CheckRouteDetails(
             s.SoundingCount,
             s.Uncertainty?.TotalMetres,
             s.DatasetId,
-            s.Cell)),
+            s.Cell,
+            s.BelowSafetyDepth?.TotalMetres)),
         AreaDetails a => new(Area: new CheckRouteAreaDetails(
             a.Product == RouteAreaProduct.S122 ? "S-122" : "S-101",
             Snake(a.Kind.ToString()),
@@ -117,12 +118,13 @@ public sealed record CheckRouteHazardDetails(
 /// <summary>Shoal water behind a finding.</summary>
 public sealed record CheckRouteShoalDetails(
     [property: Description("The least depth in the span, metres.")] double LeastDepthMeters,
-    [property: Description("The setting it's shallower than: safety_contour or safety_depth.")] string Threshold,
+    [property: Description("The setting it's judged against: safety_contour (shallower than it, or for soundings no deeper than it, as S-101 SOUNDG03 judges them).")] string Threshold,
     [property: Description("The setting in metres.")] double ThresholdMeters,
     [property: Description("How many soundings the finding stands for, or null when it isn't about soundings.")] int? SoundingCount,
     [property: Description("For an S-102 shoal, the uncertainty of the least depth in metres, or null.")] double? UncertaintyMeters,
     [property: Description("For an S-102 shoal, the dataset of the least depth, or null.")] string? DatasetId,
-    [property: Description("For an S-102 shoal, the grid cell of the least depth (\"row,col\"), or null.")] string? Cell);
+    [property: Description("For an S-102 shoal, the grid cell of the least depth (\"row,col\"), or null.")] string? Cell,
+    [property: Description("For soundings, the safety depth when the least depth is also shallower than it (the soundings the chart draws in bold), or null.")] double? BelowSafetyDepthMeters = null);
 
 /// <summary>A regulated area behind a finding.</summary>
 public sealed record CheckRouteAreaDetails(

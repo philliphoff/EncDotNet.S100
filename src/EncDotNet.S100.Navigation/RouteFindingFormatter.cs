@@ -225,8 +225,8 @@ public class RouteFindingFormatter
     /// <summary>The title of <see cref="RouteFindingCodes.SafetyContourInCorridor"/>.</summary>
     protected virtual string SafetyContourInCorridor => "Shallower than the safety contour inside the cross-track limits";
 
-    /// <summary>The title of <see cref="RouteFindingCodes.SoundingsBelowSafetyDepth"/>.</summary>
-    protected virtual string SoundingsBelowSafetyDepth => "Soundings shallower than the safety depth";
+    /// <summary>The title of <see cref="RouteFindingCodes.SoundingsBelowSafetyContour"/>.</summary>
+    protected virtual string SoundingsBelowSafetyContour => "Soundings no deeper than the safety contour";
 
     /// <summary>The title of <see cref="RouteFindingCodes.CrossesS102Shoal"/>.</summary>
     protected virtual string CrossesS102Shoal => "Crosses S-102 depths shallower than the safety contour";
@@ -313,7 +313,7 @@ public class RouteFindingFormatter
             "data.outside_chart_coverage" => OutsideChartCoverage,
             "route_check.crosses_safety_contour" => CrossesSafetyContour,
             "route_check.safety_contour_in_corridor" => SafetyContourInCorridor,
-            "route_check.soundings_below_safety_depth" => SoundingsBelowSafetyDepth,
+            "route_check.soundings_below_safety_contour" => SoundingsBelowSafetyContour,
             "route_check.crosses_s102_shoal" => CrossesS102Shoal,
             "route_check.s102_shoal_in_corridor" => S102ShoalInCorridor,
             _ => code.Value,
@@ -393,7 +393,20 @@ public class RouteFindingFormatter
                 }
 
                 parts.Add(Format(LeastDepthFormat, FormatDepth(shoal.LeastDepth)));
-                parts.Add(Below(shoal.ThresholdKind, shoal.Threshold));
+                if (shoal.SoundingCount is not null && shoal.ThresholdKind == RouteFindingThreshold.SafetyContour)
+                {
+                    // SOUNDG03 counts a sounding at the contour too.
+                    parts.Add(Format(DangerSafetyContourFormat, FormatSetting(shoal.Threshold)));
+                    if (shoal.BelowSafetyDepth is { } safetyDepth)
+                    {
+                        parts.Add(Below(RouteFindingThreshold.SafetyDepth, safetyDepth));
+                    }
+                }
+                else
+                {
+                    parts.Add(Below(shoal.ThresholdKind, shoal.Threshold));
+                }
+
                 break;
         }
 

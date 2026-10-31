@@ -54,11 +54,11 @@ they drift.
 | 3 | Chart display | 61 | 7 | 0 | 31 | 18 | 4 | 1 |
 | 4 | Chart related functions | 47 | 2 | 4 | 0 | 29 | 10 | 2 |
 | 5 | Navigational hazards | 6 | 2 | 0 | 0 | 0 | 4 | 0 |
-| 6 | Areas with special conditions | 5 | 1 | 2 | 0 | 0 | 2 | 0 |
+| 6 | Areas with special conditions | 5 | 2 | 1 | 0 | 0 | 2 | 0 |
 | 7 | Safety contour | 6 | 1 | 0 | 0 | 3 | 2 | 0 |
 | 8 | S-57 testing | 0 | — | — | — | — | — | — |
 | 9 | Dual fuel mode and SECOM | 17 | 0 | 0 | 2 | 9 | 6 | 0 |
-| | **Total** | **212** | **18** | **6** | **43** | **93** | **49** | **3** |
+| | **Total** | **212** | **19** | **5** | **43** | **93** | **49** | **3** |
 
 Part 8 has no tests of its own in 2.0.1. It points S-57 testing at the
 existing S-64 datasets, which a later slice covers.
@@ -98,9 +98,10 @@ issue.
    `AlertReference`, and the route check's chart source portrays the
    corridor's features and tags each with its alerts. Every `NavHazard`
    feature is now reported (aids to navigation, structures, overhead
-   features). The `SafetyContour` features (docks, hulks, pontoons, land
-   points and curves), soundings and `ProhAre` areas still follow the
-   check's own rules: eight area kinds plus S-122. Affects Parts 5–7 and 9.
+   features), so is every `SafetyContour` feature (docks, hulks, pontoons,
+   unsurveyed areas, land points and curves), and soundings follow
+   `SOUNDG03`. `ProhAre` areas still follow the check's own rules: eight
+   area kinds plus S-122. Affects Parts 5–7 and 9.
    Slice 6 confirmed this against the data (§6.3). Dangers are now judged
    against the safety contour, as the catalogue judges them, wherever they
    lie ([#1151](https://github.com/philliphoff/EncDotNet.S100/issues/1151)).
@@ -293,7 +294,10 @@ the S-101 portrayal catalogue, which settles what a plot leaves unclear.
   contour match every plot from 0 m to 43 m. The plots also indicate the
   floating docks, hulks, pontoons, shoreline constructions, unsurveyed
   areas and land charted as points or curves on the route; the route check
-  reports only land areas.
+  reported only land areas. It now treats every feature that raises the
+  `SafetyContour` alert as safety-contour ground, and finds them all. Its
+  soundings follow `SOUNDG03` (no deeper than the safety contour) instead
+  of the safety depth.
 - **Largest scale.** In all three largest-scale tests no finding comes from
   the overview cell inside the large-scale cell. The manual's plots for
   these tests are still to be drawn, so the tests check that rule only.
@@ -533,7 +537,7 @@ viewer's pick panel shows.
 
 | Test | Reference | v2.0.0 data | Status | Evidence | Note |
 |---|---|---|---|---|---|
-| NavigationalHazards | S-98 12.10.6 | NavigationalHazards | Passes | `tests/EncDotNet.S100.S164.Tests/Part5NavigationalHazardsTests.cs` | Route, danger depths and the safety-contour threshold pass ([#1151](https://github.com/philliphoff/EncDotNet.S100/issues/1151)), and every NavHazard feature type the plots indicate is found ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)). Soundings are still judged against the safety depth (#1127, slice 4). |
+| NavigationalHazards | S-98 12.10.6 | NavigationalHazards | Passes | `tests/EncDotNet.S100.S164.Tests/Part5NavigationalHazardsTests.cs` | Route, danger depths and the safety-contour threshold pass ([#1151](https://github.com/philliphoff/EncDotNet.S100/issues/1151)), and every NavHazard feature type the plots indicate is found ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)). Soundings follow `SOUNDG03`. |
 | UserSelectionProhibited Areas | — | — | Gap | — | Area kinds are fixed in code. |
 | NavigationalHazardsLS | S-98 12.10.6 | NavigationalHazards, NavigationalHazardsOverview | Passes | `tests/EncDotNet.S100.S164.Tests/Part5NavigationalHazardsTests.cs` | No overview finding inside NAVHZ. The manual's plots are TBD. |
 | NavigationalHazardsMon | — | — | Gap | `src/EncDotNet.S100.Viewer/Services/DynamicSources/OwnShip/SteerableOwnShipPositionProvider.cs` | A simulated own ship exists; no monitoring look-ahead or alarm. |
@@ -548,7 +552,7 @@ viewer's pick panel shows.
 | SpecialConditionsLS | S-98 12.10.7 | NavigationalHazardsOverview | Passes | `tests/EncDotNet.S100.S164.Tests/Part6SpecialConditionsTests.cs` | Areas from ARSPC only. The manual's plot is TBD. |
 | SpecialConditionsMon | S-98 12.10.7 | — | Gap | — | No monitoring mode. |
 | SpecialConditionsMonLS | S-98 12.10.7 | — | Gap | — | No monitoring mode. |
-| SafetyContour | S-98 12.10.9 | SafetyContour | Fails | `tests/EncDotNet.S100.S164.Tests/Part7SafetyContourTests.cs` | Crossings match every plot; docks, hulks, pontoons, shoreline constructions, unsurveyed areas and point or curve land aren't indicated (#1127). |
+| SafetyContour | S-98 12.10.9 | SafetyContour | Passes | `tests/EncDotNet.S100.S164.Tests/Part7SafetyContourTests.cs` | Crossings match every plot, and the docks, hulks, pontoons, shoreline constructions, unsurveyed areas and point or curve land that raise the `SafetyContour` alert are indicated ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)). |
 
 ### Part 7 — Safety contour
 

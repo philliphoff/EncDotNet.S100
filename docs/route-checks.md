@@ -80,17 +80,29 @@ is found at cross-sections every 10 m.
 
 ## Depths and charted dangers
 
-These checks use the safety contour and safety depth.
+These checks run when the safety contour and safety depth are both set.
 
 | Code | Group | When |
 |---|---|---|
-| `route_check.crosses_safety_contour` | Must review | The track crosses depth, dredged or drying areas shallower than the safety contour. |
-| `route_check.safety_contour_in_corridor` | Check | Such areas inside the limits, off the track. |
-| `route_check.soundings_below_safety_depth` | Check | Soundings shallower than the safety depth inside the limits. |
+| `route_check.crosses_safety_contour` | Must review | The track crosses depth, dredged or drying areas shallower than the safety contour, or another feature that raises the `SafetyContour` alert. |
+| `route_check.safety_contour_in_corridor` | Check | Such areas or features inside the limits, off the track. |
+| `route_check.soundings_below_safety_contour` | Check | Soundings no deeper than the safety contour inside the limits, outside water already shallower than it. |
 | `route_check.crosses_s102_shoal` | Must review | The track crosses S-102 cells shallower than the safety contour. |
 | `route_check.s102_shoal_in_corridor` | Check | Such S-102 cells inside the limits, off the track. |
 | `route_check.danger_in_corridor` | Must review | A wreck, obstruction or rock shallower than the threshold, awash, or of unknown depth, inside the cross-track limits. |
 | `route_check.danger_near_route` | Check | Such a danger within 0.1 NM beyond the limits. |
+
+Besides depth areas, every feature whose S-101 portrayal raises the
+`SafetyContour` alert is safety-contour ground: floating docks, hulks,
+pontoons, shoreline constructions, unsurveyed areas, and land charted as
+points or curves. An area is crossed or in the corridor as the depth areas
+are; a point or curve is crossed when the track passes within the track
+clearance (30 m) of it.
+
+Soundings follow the portrayal's `SOUNDG03`: a sounding counts when it's no
+deeper than the safety contour. The safety depth only decides how the chart
+draws a sounding (bold when shallower), so a soundings finding notes it when
+its least depth is also shallower than the safety depth.
 
 A danger is a `Wreck`, an `Obstruction` or an `UnderwaterAwashRock`:
 

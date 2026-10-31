@@ -5290,8 +5290,8 @@
   <data name="RouteCheck_SafetyContourInCorridor" xml:space="preserve">
     <value>Shallower than the safety contour inside the cross-track limits</value>
   </data>
-  <data name="RouteCheck_SoundingsBelowSafetyDepth" xml:space="preserve">
-    <value>Soundings shallower than the safety depth</value>
+  <data name="RouteCheck_SoundingsBelowSafetyContour" xml:space="preserve">
+    <value>Soundings no deeper than the safety contour</value>
   </data>
   <data name="RouteCheck_CrossesS102Shoal" xml:space="preserve">
     <value>Crosses S-102 depths shallower than the safety contour</value>

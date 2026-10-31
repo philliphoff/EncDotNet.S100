@@ -136,7 +136,7 @@ public sealed class DangerDetails : RouteFindingDetails
 
 /// <summary>
 /// Water shallower than a safety setting: depth areas across or inside the
-/// safety contour, soundings shallower than the safety depth, and S-102
+/// safety contour, soundings no deeper than the safety contour, and S-102
 /// shoals (<see cref="RouteFindingCodes.CrossesSafetyContour"/> and the like).
 /// </summary>
 public sealed class ShoalDetails : RouteFindingDetails
@@ -152,6 +152,12 @@ public sealed class ShoalDetails : RouteFindingDetails
 
     /// <summary>How many soundings the finding stands for, or <c>null</c> when it isn't about soundings.</summary>
     public int? SoundingCount { get; init; }
+
+    /// <summary>
+    /// For soundings, the safety depth when the least depth is also shallower
+    /// than it (the soundings the chart draws in bold), or <c>null</c>.
+    /// </summary>
+    public Depth? BelowSafetyDepth { get; init; }
 
     /// <summary>For an S-102 shoal, the uncertainty of the least depth, when the dataset gives one.</summary>
     public Depth? Uncertainty { get; init; }

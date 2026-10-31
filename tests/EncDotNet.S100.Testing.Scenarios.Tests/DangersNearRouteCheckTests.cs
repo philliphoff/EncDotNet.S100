@@ -97,19 +97,17 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
     }
 
     [Fact]
-    public void Shoal_soundings_count_only_shallower_than_the_safety_depth_and_inside_the_limits()
+    public void Soundings_inside_water_shallower_than_the_contour_are_left_to_its_finding()
     {
-        // At 14 m the route's 13–14 m soundings count; at 10 m none does.
-        var findings = Check(safetyDepth: 14).Where(f => f.Code == RouteFindingCodes.SoundingsBelowSafetyDepth).ToList();
+        // SOUNDG03 (#1127): at a 14 m contour the route's 13–14 m soundings
+        // are no deeper than it, but they lie in the 10–15 m depth area,
+        // which is now shallower than the contour too, so its safety-contour
+        // finding stands for them. The safety depth doesn't decide.
+        var findings = Check(contour: 14);
 
-        Assert.NotEmpty(findings);
-        Assert.All(findings, f =>
-        {
-            Assert.Equal(RouteFindingGroup.Check, f.Group);
-            Assert.Equal(Harbour, f.Feature!.DatasetId);
-            Assert.Contains("shallower than safety depth 14 m", f.Meta, StringComparison.Ordinal);
-        });
-        Assert.DoesNotContain(Check(), f => f.Code == RouteFindingCodes.SoundingsBelowSafetyDepth);
+        Assert.DoesNotContain(findings, f => f.Code == RouteFindingCodes.SoundingsBelowSafetyContour);
+        Assert.Contains(findings, f => f.Code == RouteFindingCodes.CrossesSafetyContour && f.Meta.EndsWith("shallower than safety contour 14 m", StringComparison.Ordinal));
+        Assert.DoesNotContain(Check(safetyDepth: 14), f => f.Code == RouteFindingCodes.SoundingsBelowSafetyContour);
     }
 
     // #947: the coastal cell charts a wreck the harbour cell doesn't, and
@@ -120,7 +118,7 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
     {
         var coastalWreck = Definition.Hazards.Single(h => h.Cells is not null);
         var withBoth = Check();
-        var coastalOnly = Check(Contour, false, Coastal);
+        var coastalOnly = Check(Contour, false, Contour, Coastal);
 
         Assert.All(withBoth.Where(f => f.Feature is not null), f => Assert.Equal(Harbour, f.Feature!.DatasetId));
         Assert.DoesNotContain(withBoth, f => Near(f, coastalWreck));
@@ -177,12 +175,12 @@ public sealed class DangersNearRouteCheckTests(DangersNearRouteFixture fixture) 
         return Math.Abs(location.Path[0].Latitude - position.Latitude) < 1e-6 && Math.Abs(location.Path[0].Longitude - position.Longitude) < 1e-6;
     }
 
-    private IReadOnlyList<RouteFinding> Check(double safetyDepth = Contour, bool withDraft = false, params string[] only)
+    private IReadOnlyList<RouteFinding> Check(double safetyDepth = Contour, bool withDraft = false, double contour = Contour, params string[] only)
     {
         var sources = only.Length == 0
             ? _sources
             : CatalogRouteCheckSources.FromDatasets(ScenarioLoading.Catalog(fixture.Scenario).Datasets.Where(d => only.Contains(d.Id.Value)), new ProjNetCrsTransformFactory());
-        return ScenarioChecks.Chart(sources, new PassagePlan(Legs(withDraft)), PassageLegs.Settings(new DateTimeOffset(Spec.Departure, TimeSpan.Zero), Contour, safetyDepth)).Findings;
+        return ScenarioChecks.Chart(sources, new PassagePlan(Legs(withDraft)), PassageLegs.Settings(new DateTimeOffset(Spec.Departure, TimeSpan.Zero), contour, safetyDepth)).Findings;
     }
 
     private List<PassageLeg> Legs(bool withDraft)
