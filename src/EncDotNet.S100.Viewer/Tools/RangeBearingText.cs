@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text;
-using EncDotNet.S100.Geodesy;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.Geodesy;
 using EncDotNet.S100.Viewer.Resources;
@@ -26,10 +25,9 @@ internal static class RangeBearingText
 
     /// <summary>
     /// The earth model the tool uses, for the card's footer:
-    /// <c>Sphere · R 6,371 km</c> (D17).
+    /// <c>WGS-84 ellipsoid</c> (D17).
     /// </summary>
-    public static string Model() => string.Format(CultureInfo.CurrentCulture, Strings.RangeBearing_Model,
-        GeodesicHelper.EarthRadiusMetres / 1000.0);
+    public static string Model() => Strings.RangeBearing_Model;
 
     /// <summary>
     /// The result as text for the clipboard (D8, D20): origin, geometry, range

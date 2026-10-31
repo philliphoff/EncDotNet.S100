@@ -408,7 +408,7 @@ public class RangeBearingToolTests
 
         Assert.Contains(MeasureFormat.Distance(33193.554, DistanceUnit.NauticalMiles), text);
         Assert.Contains(MeasureFormat.OtherDistance(33193.554, DistanceUnit.NauticalMiles), text);
-        Assert.Contains("Sphere", text);
+        Assert.Contains("WGS-84 ellipsoid", text);
         Assert.Contains("End: ", text);
     }
 

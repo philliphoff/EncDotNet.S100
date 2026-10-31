@@ -2,7 +2,6 @@ using System.ComponentModel;
 using System.Text.Json;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
-using EncDotNet.S100.Geodesy;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Tools;
@@ -28,9 +27,8 @@ internal sealed record MeasureDto(
 /// <summary>The earth model (D17).</summary>
 [Description("The earth model distances and bearings use.")]
 internal sealed record MeasureEarthModelDto(
-    [property: Description("sphere (WGS-84 is #1189).")] string Name,
-    [property: Description("The sphere's radius in metres.")] double RadiusMetres,
-    [property: Description("As the card's footer shows it, e.g. \"Sphere · R 6,371 km\".")] string Text);
+    [property: Description("wgs84: geodesics and rhumb lines on the WGS-84 ellipsoid.")] string Name,
+    [property: Description("As the card's footer shows it: \"WGS-84 ellipsoid\".")] string Text);
 
 /// <summary>A position.</summary>
 [Description("A position.")]
@@ -96,7 +94,7 @@ internal sealed class GetMeasureTool
         return new MeasureDto(
             session.IsActive,
             GeometryName(state.Geometry),
-            new MeasureEarthModelDto("sphere", GeodesicHelper.EarthRadiusMetres, MeasureSession.EarthModelText),
+            new MeasureEarthModelDto("wgs84", MeasureSession.EarthModelText),
             state.Phase switch
             {
                 MeasurePathState.MeasurePhase.Drawing => "drawing",

@@ -20,7 +20,8 @@ geodesy the viewer already has. Moving to the WGS-84 ellipsoid is
 own licensing decision, so no decision here depends on it. The sphere is
 already within the S-164 tolerance: 1% or 30 m, whichever is greater, for
 distance and 1° for bearing. It's off by 0.04–0.12% on distance and about 0.2°
-on bearing across Accuracy1–9.
+on bearing across Accuracy1–9. (#1189 has since moved the tools to the
+ellipsoid; see §6.5 of the [S-164 conformance review](s164-conformance.md).)
 
 The mock for this round is the **Measure & range/bearing · design pass**
 artboard on the *Navigation & time* page of the SoundCharts design canvas
@@ -191,7 +192,8 @@ range at its northern point.
 `Sphere · R 6,371 km`, with a tooltip: "Distances and bearings use a
 spherical earth. That's within the S-164 accuracy tolerance. WGS-84 is
 tracked in #1189." It changes to `WGS-84` when #1189 lands. One radius
-constant replaces the two (A10).
+constant replaces the two (A10). *Since #1189 the footer reads
+`WGS-84 ellipsoid`, and both tools measure on it.*
 
 **D18. Long lines and circles are densified by length.** Great-circle lines,
 geodesic circles and the bearing line are split into segments of at most

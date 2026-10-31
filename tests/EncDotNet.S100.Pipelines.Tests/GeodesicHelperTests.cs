@@ -3,7 +3,7 @@ using EncDotNet.S100.Geodesy;
 namespace EncDotNet.S100.Pipelines.Tests;
 
 /// <summary>
-/// Tests for the spherical geodesic helpers used by augmented line geometry
+/// Tests for the geodesic helpers used by augmented line geometry
 /// tessellation.
 /// </summary>
 public class GeodesicHelperTests
@@ -132,8 +132,8 @@ public class GeodesicHelperTests
         var (lat, lon) = GeodesicHelper.RhumbDirectProblem(45.0, 10.0, 90.0, 100_000.0);
 
         Assert.Equal(45.0, lat, 9);
-        // Along a parallel: 100 km is 100 km / (R cos 45°) of longitude.
-        var expected = 10.0 + 100_000.0 / (GeodesicHelper.EarthRadiusMetres * Math.Cos(Math.PI / 4)) * 180.0 / Math.PI;
+        // Along a parallel: 100 km is 100 km / (N cos 45°) of longitude.
+        var expected = 10.0 + 100_000.0 / Wgs84Geodesy.MetresPerDegree(45.0).East;
         Assert.Equal(expected, lon, 9);
     }
 

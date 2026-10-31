@@ -6,6 +6,25 @@ license text appears at the end of this file.
 
 ---
 
+## GeographicLib.NET (library) — MIT License
+
+- **License:** MIT License (full text below).
+- **Copyright:**
+  - Copyright (c) 2008-2023, Charles Karney (GeographicLib, the original
+    C++ library and its algorithms).
+  - Copyright (c) 2021-2024, GeographicLib.NET contributors (the C# port).
+- **Source:** https://github.com/noelex/GeographicLib.NET (a pure C# port of
+  GeographicLib, https://geographiclib.sourceforge.io/). Version 2.3.2, from
+  NuGet as `GeographicLib.NET`.
+- **Used by:** the **EncDotNet.S100.Core** package (a NuGet dependency, so
+  it's restored alongside Core) for geodesics and rhumb lines on the WGS-84
+  ellipsoid (`EncDotNet.S100.Geodesy.Wgs84Geodesy`, issue #1189). The
+  SoundCharts viewer and the `s100` CLI ship `GeographicLib.dll` in their
+  application bundles.
+- **References:** C. F. F. Karney, "Algorithms for geodesics", *J. Geodesy*
+  87, 43–55 (2013), https://doi.org/10.1007/s00190-012-0578-z; C. F. F.
+  Karney, "The area of rhumb polygons", *Stud. Geophys. Geod.* (2024).
+
 ---
 
 ## Natural Earth 1:10m land (vector data) — Public Domain
@@ -271,3 +290,30 @@ WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+---
+
+## MIT License — full text (GeographicLib.NET)
+
+MIT License
+
+Copyright (c) 2008-2023, Charles Karney
+Copyright (c) 2021-2024, GeographicLib.NET contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

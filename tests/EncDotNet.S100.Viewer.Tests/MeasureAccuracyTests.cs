@@ -6,15 +6,19 @@ using EncDotNet.S100.Viewer.Geodesy;
 namespace EncDotNet.S100.Viewer.Tests;
 
 /// <summary>
-/// The S-164 Part 4 Accuracy1–15 checks on the measure maths: distances to
-/// within 1% or 30 m (whichever is greater) and bearings to within 1°.
-/// Accuracy10–15 check that long great circles, rhumb lines and the
-/// 2,000,000 m geodesic circle pass close enough to a sample of the
-/// positions S-164 lists for them, which it computes on the WGS-84 ellipsoid.
+/// The S-164 Part 4 Accuracy1–15 checks on the measure maths. S-164 asks for
+/// distances within 1% or 30 m (whichever is greater) and bearings within 1°;
+/// on the WGS-84 ellipsoid the tools agree with its values to a metre and
+/// 0.001°, so that's what these check. Accuracy10–15 check that long great
+/// circles, rhumb lines and the 2,000,000 m geodesic circle pass through a
+/// sample of the positions S-164 lists for them.
 /// </summary>
 public class MeasureAccuracyTests
 {
-    private const double BearingToleranceDegrees = 1.0;
+    // S-164 gives distances to the millimetre, bearings to 0.001° and
+    // positions to 0.0001' (about 0.2 m).
+    private const double DistanceToleranceMetres = 1.0;
+    private const double BearingToleranceDegrees = 0.001;
 
     // Positions from the S-164 PowerUp exchange set, in degrees and minutes.
     private static readonly GeoPosition Viking = Dm(32, 35.224, 'S', 61, 17.710, 'E');
@@ -50,7 +54,7 @@ public class MeasureAccuracyTests
 
         var distance = MarineGeodesy.DistanceMetres(geometry, a, b);
 
-        Assert.True(Math.Abs(distance - metres) <= DistanceTolerance(metres), $"{test}: {distance:F1} m vs {metres} m");
+        Assert.True(Math.Abs(distance - metres) <= DistanceToleranceMetres, $"{test}: {distance:F3} m vs {metres} m");
         AssertBearing(test, forward, MarineGeodesy.InitialBearingDegrees(geometry, a, b));
         AssertBearing(test, reverse, MarineGeodesy.ReverseBearingDegrees(geometry, a, b));
     }
@@ -62,7 +66,7 @@ public class MeasureAccuracyTests
         var end = MarineGeodesy.Destination(LegGeometry.GreatCircle, Position(origin), bearing, metres);
 
         var miss = MarineGeodesy.DistanceMetres(LegGeometry.GreatCircle, end, Position(expected));
-        Assert.True(miss <= DistanceTolerance(metres), $"{test}: end is {miss:F1} m from the listed position");
+        Assert.True(miss <= DistanceToleranceMetres, $"{test}: end is {miss:F3} m from the listed position");
     }
 
     [Theory]
@@ -70,8 +74,8 @@ public class MeasureAccuracyTests
     [InlineData(LegGeometry.Rhumb)]
     public void Measuring_then_running_the_direct_problem_returns_to_the_point(LegGeometry geometry)
     {
-        // One earth radius for both directions: measure a leg, then lay the
-        // same range and bearing off from its start, and land on its end.
+        // Measure a leg, then lay the same range and bearing off from its
+        // start, and land on its end.
         var distance = MarineGeodesy.DistanceMetres(geometry, Viking, CorundCape);
         var bearing = MarineGeodesy.InitialBearingDegrees(geometry, Viking, CorundCape);
 
@@ -165,18 +169,27 @@ public class MeasureAccuracyTests
         var b = Parse(end);
         var point = Parse(listed);
 
-        // The line as the overlay draws it: a rhumb line is straight in
-        // Mercator, a great circle is densified. Sample it finely.
-        const int samples = 20_000;
-        var miss = double.MaxValue;
-        for (var i = 0; i <= samples; i++)
+        // The closest approach of the line: sample it, then narrow down
+        // around the nearest sample.
+        double Miss(double fraction) =>
+            MarineGeodesy.DistanceMetres(LegGeometry.GreatCircle, PassageGeodesy.Interpolate(a, b, fraction, geometry), point);
+        const int samples = 1_000;
+        var nearest = Enumerable.Range(0, samples + 1).MinBy(i => Miss((double)i / samples));
+        var low = Math.Max(0, nearest - 1) / (double)samples;
+        var high = Math.Min(samples, nearest + 1) / (double)samples;
+        var golden = (Math.Sqrt(5) - 1) / 2;
+        for (var k = 0; k < 60; k++)
         {
-            var onLine = PassageGeodesy.Interpolate(a, b, (double)i / samples, geometry);
-            miss = Math.Min(miss, MarineGeodesy.DistanceMetres(LegGeometry.GreatCircle, onLine, point));
+            var x1 = high - golden * (high - low);
+            var x2 = low + golden * (high - low);
+            if (Miss(x1) < Miss(x2))
+                high = x2;
+            else
+                low = x1;
         }
 
-        var along = MarineGeodesy.DistanceMetres(geometry, a, point);
-        Assert.True(miss <= DistanceTolerance(along), $"{test}: line passes {miss:F0} m from {listed}");
+        var miss = Miss((low + high) / 2);
+        Assert.True(miss <= DistanceToleranceMetres, $"{test}: line passes {miss:F3} m from {listed}");
     }
 
     [Theory]
@@ -192,7 +205,7 @@ public class MeasureAccuracyTests
         var drawn = MarineGeodesy.Destination(LegGeometry.GreatCircle, c, bearing, radius);
 
         var miss = MarineGeodesy.DistanceMetres(LegGeometry.GreatCircle, drawn, point);
-        Assert.True(miss <= DistanceTolerance(radius), $"{test}: circle passes {miss:F0} m from {listed}");
+        Assert.True(miss <= DistanceToleranceMetres, $"{test}: circle passes {miss:F3} m from {listed}");
         Assert.All(circle, p => Assert.Equal(radius, MarineGeodesy.DistanceMetres(LegGeometry.GreatCircle, c, p), 3));
     }
 
@@ -204,8 +217,6 @@ public class MeasureAccuracyTests
         var lon = int.Parse(parts[3], CultureInfo.InvariantCulture) + double.Parse(parts[4], CultureInfo.InvariantCulture) / 60.0;
         return new GeoPosition(parts[2] == "S" ? -lat : lat, parts[5] == "W" ? -lon : lon);
     }
-
-    private static double DistanceTolerance(double metres) => Math.Max(0.01 * metres, 30.0);
 
     private static void AssertBearing(string test, double expected, double actual)
     {

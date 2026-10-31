@@ -1,6 +1,7 @@
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Geodesy;
 using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Navigation;
@@ -21,6 +22,10 @@ internal static class RouteCorridor
 {
     // The most positions in a span's path.
     private const int MaxPathPoints = 64;
+
+    // The fewest metres in a degree anywhere (a degree of latitude at the
+    // equator), so a reach in degrees is never short.
+    private static readonly double MinimumMetresPerDegree = Wgs84Geodesy.MetresPerDegree(0).North;
 
     /// <summary>Measures every piece of the track against every set of shapes it may reach.</summary>
     /// <param name="track">The track.</param>
@@ -323,7 +328,7 @@ internal static class RouteCorridor
         /// <returns>One box per leg, in route order.</returns>
         public IEnumerable<BoundingBox> LegExtents(double reach)
         {
-            var pad = reach / PassageGeodesy.MetersPerDegreeLatitude + 1e-6;
+            var pad = reach / MinimumMetresPerDegree + 1e-6;
             foreach (var group in Samples.GroupBy(s => s.Leg))
             {
                 var south = group.Min(s => s.Position.Latitude);
@@ -470,7 +475,7 @@ internal static class RouteCorridor
                 return false;
             }
 
-            var latitudeReach = reach / PassageGeodesy.MetersPerDegreeLatitude;
+            var latitudeReach = reach / MinimumMetresPerDegree;
             if (Math.Max(a.Latitude, b.Latitude) < _south - latitudeReach || Math.Min(a.Latitude, b.Latitude) > _north + latitudeReach)
             {
                 return false;
@@ -554,14 +559,17 @@ internal static class RouteCorridor
         }
     }
 
-    /// <summary>An equirectangular plane in metres, centred on one position.</summary>
+    /// <summary>
+    /// An equirectangular plane in metres, centred on one position and scaled
+    /// to the WGS-84 ellipsoid there.
+    /// </summary>
     internal readonly struct LocalFrame(GeoPosition origin)
     {
-        private readonly double _cos = Math.Cos(origin.Latitude * Math.PI / 180);
+        private readonly (double North, double East) _scale = Wgs84Geodesy.MetresPerDegree(origin.Latitude);
 
         public (double X, double Y) ToLocal(GeoPosition p) => (
-            Wrap(p.Longitude - origin.Longitude) * _cos * PassageGeodesy.MetersPerDegreeLatitude,
-            (p.Latitude - origin.Latitude) * PassageGeodesy.MetersPerDegreeLatitude);
+            Wrap(p.Longitude - origin.Longitude) * _scale.East,
+            (p.Latitude - origin.Latitude) * _scale.North);
 
         public static double Wrap(double degrees) =>
             degrees > 180 ? degrees - 360 : degrees < -180 ? degrees + 360 : degrees;

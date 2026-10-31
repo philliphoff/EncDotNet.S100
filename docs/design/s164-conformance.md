@@ -121,17 +121,17 @@ issue.
    well as a break in the sequence. Re-issues,
    cancellations and later update sets don't change what was loaded before.
    Affects §2.2–2.5 and the S-128 status reports.
-5. **Spherical geodesy.** ([#1130](https://github.com/philliphoff/EncDotNet.S100/issues/1130), fixed for the tests;
-   WGS-84 is [#1189](https://github.com/philliphoff/EncDotNet.S100/issues/1189)) The measure tool, route legs and
-   `GeodesicHelper` use a sphere. This was rated as failing the accuracy
+5. **Spherical geodesy.** ([#1130](https://github.com/philliphoff/EncDotNet.S100/issues/1130) and
+   [#1189](https://github.com/philliphoff/EncDotNet.S100/issues/1189), fixed) The measure tool, route legs and
+   `GeodesicHelper` used a sphere. This was rated as failing the accuracy
    tests, but their tolerance is 1% or 30 m (whichever is greater) and 1°,
-   and the sphere is well inside it (§6.5). What was missing was tools: the
+   and the sphere was well inside it (§6.5). What was missing was tools: the
    measure tool was rhumb line only, to 0.1 NM and whole degrees, with no
    reverse bearing, and nothing turned a range and bearing into a position
    or drew a geodesic circle. The measure card and the Range & bearing tool
-   ([design](measure-range-bearing.md)) add those. Moving to the WGS-84
-   ellipsoid would make the results match the manual's to the metre; it
-   needs a source and a licensing review of its own (#1189).
+   ([design](measure-range-bearing.md)) add those. Since #1189 all of them
+   work on the WGS-84 ellipsoid (`Wgs84Geodesy`, built on GeographicLib), so
+   the results match the manual's to well under a metre.
 6. **No route monitoring.** ([#1131](https://github.com/philliphoff/EncDotNet.S100/issues/1131)) A steerable simulated own ship exists, but
    nothing looks ahead from it for hazards, areas or the safety contour.
    The 12 monitoring-mode tests are rated Gap rather than N/A because the
@@ -187,7 +187,7 @@ doesn't try to close them.
 | 2 | **Done.** `tests/EncDotNet.S100.S164.Tests`: the v2.0.0 release pinned by SHA-256 in `s164-v2.0.0.json`, downloaded on demand into a cache, cached in CI, and skipped cleanly without it. A smoke test opens every exchange set, opens every dataset in it, and verifies every signature. | 1 |
 | 3 | **Done for updates and catalogue signatures.** S-164 tests apply the update sets to the `X01SW` cell across exchange sets (SequentialUpdates, InvalidSequence, NewerEditionUpdate, OlderEditionUpdate) and check every `CATALOG.SIGN` (MissingCatalogueSignature, InvalidCatalogueSignature). The applicator now rejects updates for another edition, and the library checks `CATALOG.SIGN`. The rest of finding 3 (authorities for exchange sets, a refuse-untrusted setting, protected data) stays with #1128; cross-set updates in the apps stay with #1129. | 2 |
 | 4 | **Done.** S-164 tests portray every cell in the display sets and Chart 1 at the tests' mariner settings: no portrayal rule fails, and DBASE, STNDR and OTHER features fall in their display categories. The safety contour (#1126) and chart text (#1140) tests failed at first and pass since those fixes; symbolised boundaries (#1141) were found from headless renders compared with the reference plots by eye. | 2 |
-| 5 | **Done for pick reports.** S-164 tests pick features in the PowerUp, InitialPowerUp, Settings and Chart 1 cells with `identify_features` and check the pick report the viewer shows and `describe_feature`. Names, listed values, repeated and complex values ([#1156](https://github.com/philliphoff/EncDotNet.S100/issues/1156)), associations ([#1157](https://github.com/philliphoff/EncDotNet.S100/issues/1157)), value formatting ([#1158](https://github.com/philliphoff/EncDotNet.S100/issues/1158)), priority order ([#1159](https://github.com/philliphoff/EncDotNet.S100/issues/1159)) and Chart 1 interrogation pass (§6.4). Accuracy1–15 pass on the sphere with the measure and Range & bearing tools (§6.5, finding 5). | 2 |
+| 5 | **Done for pick reports.** S-164 tests pick features in the PowerUp, InitialPowerUp, Settings and Chart 1 cells with `identify_features` and check the pick report the viewer shows and `describe_feature`. Names, listed values, repeated and complex values ([#1156](https://github.com/philliphoff/EncDotNet.S100/issues/1156)), associations ([#1157](https://github.com/philliphoff/EncDotNet.S100/issues/1157)), value formatting ([#1158](https://github.com/philliphoff/EncDotNet.S100/issues/1158)), priority order ([#1159](https://github.com/philliphoff/EncDotNet.S100/issues/1159)) and Chart 1 interrogation pass (§6.4). Accuracy1–15 pass on the WGS-84 ellipsoid with the measure and Range & bearing tools, to under a metre and 0.001° (§6.5, finding 5). | 2 |
 | 6 | **Done.** S-164 tests run `RouteChecker` over the NavigationalHazards, SpecialConditions and SafetyContour routes, alone and with NavigationalHazardsOverview for the largest-scale tests, and compare the findings with the reference plots and the S-101 portrayal catalogue's alert references. Danger depths now come from `defaultClearanceDepth` when there's no `valueOfSounding`. Dangers are judged against the safety contour wherever they lie (#1151). Since #1127 every Part 5–7 route-planning test runs and passes (§6.3). Dual-fuel tests follow when that data is released. | 2 |
 | 7 | S-64 for the S-57 path (Part 8). | 2 |
 
@@ -375,16 +375,17 @@ Accuracy1–15 name the PowerUp exchange set but test positions the manual
 lists, so `MeasureAccuracyTests` runs them on those positions, through the
 same `MarineGeodesy` calls the measure card and the Range & bearing tool
 use. The tolerance is 1% or 30 m, whichever is greater, and 1° for
-bearings. The manual computes its values on the WGS-84 ellipsoid; the
-viewer uses a sphere of radius 6,371,008.8 m.
+bearings. The manual computes its values on the WGS-84 ellipsoid. The
+viewer first ran them on a sphere of radius 6,371,008.8 m; since #1189 it
+uses the ellipsoid too, and the tests check to 1 m and 0.001°.
 
-| Tests | What they check | Sphere vs listed values |
-|---|---|---|
-| Accuracy1–3 | Great-circle distance, forward and reverse bearing | −39 m to +9 m (0.04–0.12%); bearings 0.11–0.13° |
-| Accuracy4–6 | Position from a range and bearing | Ends 26–86 m from the listed position |
-| Accuracy7–9 | Rhumb-line distance and bearings | As Accuracy1–3; reverse is forward ± 180° |
-| Accuracy10–12 | Long great circles and the 2,000,000 m geodesic circle | Lines pass within 70–570 m of the listed points; the circle's listed points are 1.9–10.6 km off 2,000 km (up to 0.53%, on the equator) |
-| Accuracy13–15 | Long rhumb lines | Lines pass within 40–830 m of the listed points |
+| Tests | What they check | Sphere vs listed values | WGS-84 vs listed values |
+|---|---|---|---|
+| Accuracy1–3 | Great-circle distance, forward and reverse bearing | −39 m to +9 m (0.04–0.12%); bearings 0.11–0.13° | Under 5 cm; bearings under 0.001° |
+| Accuracy4–6 | Position from a range and bearing | Ends 26–86 m from the listed position | Ends within 0.23 m (the rounding of the listed inputs) |
+| Accuracy7–9 | Rhumb-line distance and bearings | As Accuracy1–3; reverse is forward ± 180° | As Accuracy1–3 |
+| Accuracy10–12 | Long great circles and the 2,000,000 m geodesic circle | Lines pass within 70–570 m of the listed points; the circle's listed points are 1.9–10.6 km off 2,000 km (up to 0.53%, on the equator) | Lines within 0.11 m; circle points within 0.14 m |
+| Accuracy13–15 | Long rhumb lines | Lines pass within 40–830 m of the listed points | Lines within 0.08 m |
 
 Run through the viewer's MCP tools (`set_measure`, `set_range_bearing`)
 with PowerUp loaded, the cards show the same values at their display

@@ -1,6 +1,4 @@
-using System.Globalization;
 using EncDotNet.S100.DataModel;
-using EncDotNet.S100.Geodesy;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Tools;
@@ -64,11 +62,10 @@ internal sealed class MeasureSession
     }
 
     /// <summary>
-    /// The earth model the card's footer names (D17), e.g.
-    /// <c>Sphere · R 6,371 km</c>.
+    /// The earth model the card's footer names (D17):
+    /// <c>WGS-84 ellipsoid</c>.
     /// </summary>
-    public static string EarthModelText => string.Format(
-        CultureInfo.CurrentCulture, Strings.Measure_Model, GeodesicHelper.EarthRadiusMetres / 1000.0);
+    public static string EarthModelText => Strings.Measure_Model;
 
     /// <summary>Sets the geometry and remembers it (D3).</summary>
     public void SetGeometry(LegGeometry geometry)

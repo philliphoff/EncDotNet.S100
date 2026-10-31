@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Geodesy;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Geodesy;
@@ -208,22 +209,11 @@ internal sealed record RouteCheckMap(
         for (var k = 0; k < path.Count; k++)
         {
             var (a, b) = k + 1 < path.Count ? (path[k], path[k + 1]) : (path[k - 1], path[k]);
-            var bearing = Geodesy.MarineGeodesy.RhumbBearingDegrees(a.Latitude, a.Longitude, b.Latitude, b.Longitude);
-            result[k] = Move(path[k], bearing + 90, meters);
+            var bearing = MarineGeodesy.RhumbBearingDegrees(a.Latitude, a.Longitude, b.Latitude, b.Longitude);
+            result[k] = Wgs84Geodesy.GeodesicDestination(path[k], bearing + 90, meters);
         }
 
         return result;
-    }
-
-    // A point `meters` from `p` on `bearingDegrees` (short distances, spherical).
-    private static GeoPosition Move(GeoPosition p, double bearingDegrees, double meters)
-    {
-        const double earthRadius = 6371008.8;
-        var theta = bearingDegrees * Math.PI / 180;
-        var dLat = meters * Math.Cos(theta) / earthRadius * 180 / Math.PI;
-        var cosLat = Math.Max(1e-6, Math.Cos(p.Latitude * Math.PI / 180));
-        var dLon = meters * Math.Sin(theta) / (earthRadius * cosLat) * 180 / Math.PI;
-        return new GeoPosition(p.Latitude + dLat, p.Longitude + dLon);
     }
 
     /// <summary>The route's legs by distance from departure, as the route checks measure them.</summary>

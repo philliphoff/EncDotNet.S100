@@ -166,10 +166,11 @@ public class MarineGeodesyTests
     }
 
     [Fact]
-    public void GreatCircleIntermediatePoints_CoincidentPoints_ReturnsEndpoints()
+    public void GreatCircleIntermediatePoints_CoincidentPoints_AllSitOnThePoint()
     {
         var pts = MarineGeodesy.GreatCircleIntermediatePoints(12.0, 34.0, 12.0, 34.0, 5);
-        Assert.Equal(2, pts.Count);
+        Assert.Equal(6, pts.Count);
+        Assert.All(pts, p => Assert.Equal(new GeoPosition(12.0, 34.0), p));
     }
 
     [Fact]

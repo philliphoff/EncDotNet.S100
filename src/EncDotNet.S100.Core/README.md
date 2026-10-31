@@ -230,6 +230,17 @@ edition with the editions the application supports.
   `DatasetIdentificationInformation/productEdition` (S-100 GML 5.0 or the
   legacy 1.0 profile).
 
+### Geodesy
+
+`Wgs84Geodesy` (namespace `EncDotNet.S100.Geodesy`) measures distances and
+bearings, solves the direct problem, and places points along geodesics and
+rhumb lines on the WGS-84 ellipsoid. `GeodesicHelper` uses it to draw the
+arcs and rays of augmented line geometry (S-100 Part 9A §11.5).
+
+Both are built on [GeographicLib.NET](https://github.com/noelex/GeographicLib.NET),
+a C# port of Charles Karney's [GeographicLib](https://geographiclib.sourceforge.io/)
+(MIT; see [THIRD-PARTY-NOTICES.md](../../THIRD-PARTY-NOTICES.md)).
+
 ### Shared types
 
 - `IPortrayalCatalogue`, `ICrsTransform`, `ICrsTransformFactory`, `Viewport`,

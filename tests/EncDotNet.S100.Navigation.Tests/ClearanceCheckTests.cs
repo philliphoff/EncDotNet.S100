@@ -1,4 +1,5 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Geodesy;
 
 namespace EncDotNet.S100.Navigation.Tests;
 
@@ -148,7 +149,7 @@ public class ClearanceCheckTests
         Assert.Equal(PassageStretchKind.ChartedDepthFromS101, stretch.Kind);
         Assert.Equal(0, stretch.FirstSample);
         Assert.Equal(0, stretch.StartDistanceMeters);
-        var edgeMeters = edge * PassageGeodesy.MetersPerDegreeLatitude;
+        var edgeMeters = edge * Wgs84Geodesy.MetresPerDegree(0).East;
         Assert.InRange(stretch.EndDistanceMeters, edgeMeters - 5, edgeMeters + 5);
 
         foreach (var s in result.Samples)
@@ -196,7 +197,7 @@ public class ClearanceCheckTests
 
         var fallback = Assert.Single(result.LowConfidence);
         Assert.Equal(PassageStretchKind.ChartedDepthFromS101, fallback.Kind);
-        var metersPerDegree = PassageGeodesy.MetersPerDegreeLatitude;
+        var metersPerDegree = Wgs84Geodesy.MetresPerDegree(0).East;
         Assert.InRange(fallback.StartDistanceMeters, 0.02 * metersPerDegree - 30, 0.02 * metersPerDegree + 5);
         Assert.InRange(fallback.EndDistanceMeters, 0.0392 * metersPerDegree - 5, 0.04 * metersPerDegree + 30);
 
@@ -388,7 +389,7 @@ public class ClearanceCheckTests
         Assert.Equal(PassageVerdict.IncompleteData, result.Verdict);
 
         var gap = result.Gaps.Single(g => g.Kind == PassageStretchKind.NoChartedDepth);
-        Assert.InRange(gap.StartDistanceMeters, 0.05 * PassageGeodesy.MetersPerDegreeLatitude - 60, 0.05 * PassageGeodesy.MetersPerDegreeLatitude + 60);
+        Assert.InRange(gap.StartDistanceMeters, 0.05 * Wgs84Geodesy.MetresPerDegree(0).East - 60, 0.05 * Wgs84Geodesy.MetresPerDegree(0).East + 60);
         Assert.All(result.Samples.Where(s => s.Depth is null), s => Assert.Equal(UkcState.NoData, s.State));
     }
 

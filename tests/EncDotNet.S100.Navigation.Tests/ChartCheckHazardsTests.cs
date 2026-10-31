@@ -1,4 +1,5 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Geodesy;
 using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Navigation.Tests;
@@ -10,7 +11,10 @@ namespace EncDotNet.S100.Navigation.Tests;
 /// </summary>
 public sealed class ChartCheckHazardsTests
 {
-    private static readonly double M = PassageGeodesy.MetersPerDegreeLatitude;
+    // Metres per degree on the WGS-84 ellipsoid at the equator: east (along
+    // the track) and north (across it).
+    private static readonly double E = Wgs84Geodesy.MetresPerDegree(0).East;
+    private static readonly double N = Wgs84Geodesy.MetresPerDegree(0).North;
 
     // East along the equator; 50 m limits either side.
     private static readonly PassageLeg East = Fixture.Leg([new GeoPosition(0, 0), new GeoPosition(0, 0.01)]);
@@ -33,7 +37,7 @@ public sealed class ChartCheckHazardsTests
     private static RouteChartFeature Hazard(string type, string id, double northMeters, bool alert = true) =>
         new(RouteChartFeatureKind.Alerted, Harbour, id, type, [], [])
         {
-            Points = [new GeoPosition(northMeters / M, 0.005)],
+            Points = [new GeoPosition(northMeters / N, 0.005)],
             Alerts = alert ? [new RouteChartAlert(RouteFindingAlert.NavHazard)] : [new RouteChartAlert(RouteFindingAlert.SafetyContour)],
         };
 

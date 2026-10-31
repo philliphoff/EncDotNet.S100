@@ -41,7 +41,7 @@ internal sealed record RangeBearingDto(
     [property: Description("The end: range from the origin on the bearing along the geometry; null until all three are known.")] RangeBearingPositionDto? End,
     [property: Description("The true bearing at the end back to the origin in degrees; on a great circle this isn't bearing + 180.")] double? ReverseBearingDegrees,
     [property: Description("The range rings.")] RangeBearingRingsDto Rings,
-    [property: Description("The earth model, as the card's footer shows it: \"Sphere · R 6,371 km\".")] string EarthModel,
+    [property: Description("The earth model, as the card's footer shows it: \"WGS-84 ellipsoid\".")] string EarthModel,
     [property: Description("The sphere's radius in metres.")] double EarthRadiusMetres);
 
 /// <summary>Reads the Range &amp; bearing tool.</summary>
