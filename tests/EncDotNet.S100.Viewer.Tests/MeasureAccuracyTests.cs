@@ -1,3 +1,4 @@
+using System.Globalization;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.Geodesy;
@@ -5,8 +6,11 @@ using EncDotNet.S100.Viewer.Geodesy;
 namespace EncDotNet.S100.Viewer.Tests;
 
 /// <summary>
-/// The S-164 Part 4 Accuracy1–9 checks on the measure maths: distances to
+/// The S-164 Part 4 Accuracy1–15 checks on the measure maths: distances to
 /// within 1% or 30 m (whichever is greater) and bearings to within 1°.
+/// Accuracy10–15 check that long great circles, rhumb lines and the
+/// 2,000,000 m geodesic circle pass close enough to a sample of the
+/// positions S-164 lists for them, which it computes on the WGS-84 ellipsoid.
 /// </summary>
 public class MeasureAccuracyTests
 {
@@ -95,6 +99,110 @@ public class MeasureAccuracyTests
         var reverse = MarineGeodesy.ReverseBearingDegrees(LegGeometry.GreatCircle, from, to);
 
         Assert.True(Math.Abs(((forward + 180.0) % 360.0) - reverse) > 10.0);
+    }
+
+    // Long lines: test, geometry, start, end, a listed position on the line.
+    // Positions read "deg min hemisphere deg min hemisphere".
+    public static TheoryData<string, LegGeometry, string, string, string> LongLines => new()
+    {
+        { "Accuracy10 set 2", LegGeometry.GreatCircle, "30 0 N 60 0 W", "60 0 N 30 0 W", "38 6.0926 N 55 8.5692 W" },
+        { "Accuracy10 set 2", LegGeometry.GreatCircle, "30 0 N 60 0 W", "60 0 N 30 0 W", "45 56.5257 N 49 5.7067 W" },
+        { "Accuracy10 set 2", LegGeometry.GreatCircle, "30 0 N 60 0 W", "60 0 N 30 0 W", "53 20.9554 N 41 7.1195 W" },
+        { "Accuracy10 set 3", LegGeometry.GreatCircle, "30 0 N 30 0 W", "60 0 N 60 0 W", "38 6.0926 N 34 51.4308 W" },
+        { "Accuracy10 set 3", LegGeometry.GreatCircle, "30 0 N 30 0 W", "60 0 N 60 0 W", "53 20.9554 N 48 52.8805 W" },
+        { "Accuracy10 set 4", LegGeometry.GreatCircle, "45 0 N 60 0 W", "45 0 N 30 0 W", "45 44.7022 N 52 33.9908 W" },
+        { "Accuracy10 set 4", LegGeometry.GreatCircle, "45 0 N 60 0 W", "45 0 N 30 0 W", "45 59.7767 N 45 0 W" },
+        { "Accuracy10 set 5", LegGeometry.GreatCircle, "30 0 N 45 0 W", "60 0 N 45 0 W", "45 0 N 45 0 W" },
+        { "Accuracy11 set 7", LegGeometry.GreatCircle, "15 0 N 60 0 W", "15 0 S 30 0 W", "7 33.9393 N 52 22.2057 W" },
+        { "Accuracy11 set 7", LegGeometry.GreatCircle, "15 0 N 60 0 W", "15 0 S 30 0 W", "0 0 N 45 0 W" },
+        { "Accuracy11 set 8", LegGeometry.GreatCircle, "15 0 N 30 0 W", "15 0 S 60 0 W", "7 33.9393 S 52 22.2058 W" },
+        { "Accuracy11 set 9", LegGeometry.GreatCircle, "0 0 N 60 0 W", "0 0 N 30 0 W", "0 0 N 45 0 W" },
+        { "Accuracy11 set 10", LegGeometry.GreatCircle, "15 0 S 45 0 W", "15 0 N 45 0 W", "0 0 N 45 0 W" },
+        { "Accuracy12 set 12", LegGeometry.GreatCircle, "30 0 S 60 0 W", "60 0 S 30 0 W", "45 56.5257 S 49 5.7067 W" },
+        { "Accuracy12 set 13", LegGeometry.GreatCircle, "30 0 S 30 0 W", "60 0 S 60 0 W", "53 20.9554 S 48 52.8805 W" },
+        { "Accuracy12 set 14", LegGeometry.GreatCircle, "45 0 S 60 0 W", "45 0 S 30 0 W", "45 59.7767 S 45 0 W" },
+        { "Accuracy12 set 15", LegGeometry.GreatCircle, "30 0 S 45 0 W", "60 0 S 45 0 W", "45 0 S 45 0 W" },
+        { "Accuracy13 set 2", LegGeometry.Rhumb, "30 0 N 30 0 W", "60 0 N 60 0 W", "37 30.8656 N 36 9.8628 W" },
+        { "Accuracy13 set 2", LegGeometry.Rhumb, "30 0 N 30 0 W", "60 0 N 60 0 W", "45 1.1601 N 42 58.9871 W" },
+        { "Accuracy13 set 2", LegGeometry.Rhumb, "30 0 N 30 0 W", "60 0 N 60 0 W", "52 30.8645 N 50 45.6910 W" },
+        { "Accuracy13 set 3", LegGeometry.Rhumb, "60 0 N 30 0 W", "30 0 N 60 0 W", "45 1.1601 N 47 1.0129 W" },
+        { "Accuracy13 set 4", LegGeometry.Rhumb, "45 0 N 60 0 W", "45 0 N 30 0 W", "45 0 N 45 0 W" },
+        { "Accuracy13 set 5", LegGeometry.Rhumb, "30 0 N 45 0 W", "60 0 N 45 0 W", "45 0 N 45 0 W" },
+        { "Accuracy14 set 6", LegGeometry.Rhumb, "15 0 N 60 0 W", "15 0 S 30 0 W", "7 30.0761 N 52 26.1306 W" },
+        { "Accuracy14 set 6", LegGeometry.Rhumb, "15 0 N 60 0 W", "15 0 S 30 0 W", "7 30.0761 S 37 33.8694 W" },
+        { "Accuracy14 set 7", LegGeometry.Rhumb, "15 0 N 30 0 W", "15 0 S 60 0 W", "7 30.0761 N 37 33.8694 W" },
+        { "Accuracy14 set 8", LegGeometry.Rhumb, "0 0 N 60 0 W", "0 0 N 30 0 W", "0 0 N 45 0 W" },
+        { "Accuracy14 set 9", LegGeometry.Rhumb, "15 0 S 45 0 W", "15 0 N 45 0 W", "0 0 N 45 0 W" },
+        { "Accuracy15 set 10", LegGeometry.Rhumb, "30 0 S 30 0 W", "60 0 S 60 0 W", "45 1.1601 S 42 58.9871 W" },
+        { "Accuracy15 set 11", LegGeometry.Rhumb, "60 0 S 30 0 W", "30 0 S 60 0 W", "37 30.8656 S 53 50.1372 W" },
+        { "Accuracy15 set 12", LegGeometry.Rhumb, "45 0 S 60 0 W", "45 0 S 30 0 W", "45 0 S 45 0 W" },
+        { "Accuracy15 set 13", LegGeometry.Rhumb, "30 0 S 45 0 W", "60 0 S 45 0 W", "45 0 S 45 0 W" },
+    };
+
+    // Geodesic circles of 2,000,000 m: test, centre, a listed position on the circle.
+    public static TheoryData<string, string, string> CirclePoints => new()
+    {
+        { "Accuracy10 set 6", "45 0 N 45 0 W", "62 58.1482 N 45 0 W" },
+        { "Accuracy10 set 6", "45 0 N 45 0 W", "42 16.1548 N 20 24.1958 W" },
+        { "Accuracy10 set 6", "45 0 N 45 0 W", "26 58.5455 N 45 0 W" },
+        { "Accuracy10 set 6", "45 0 N 45 0 W", "42 16.1548 N 69 35.8042 W" },
+        { "Accuracy11 set 11", "0 0 N 45 0 W", "18 4.8887 N 45 0 W" },
+        { "Accuracy11 set 11", "0 0 N 45 0 W", "0 0 N 27 2.0217 W" },
+        { "Accuracy11 set 11", "0 0 N 45 0 W", "18 4.8887 S 45 0 W" },
+        { "Accuracy11 set 11", "0 0 N 45 0 W", "0 0 N 62 57.9783 W" },
+        { "Accuracy12 set 16", "45 0 S 45 0 W", "62 58.1482 S 45 0 W" },
+        { "Accuracy12 set 16", "45 0 S 45 0 W", "42 16.1548 S 20 24.1958 W" },
+        { "Accuracy12 set 16", "45 0 S 45 0 W", "26 58.5455 S 45 0 W" },
+        { "Accuracy12 set 16", "45 0 S 45 0 W", "42 16.1548 S 69 35.8042 W" },
+    };
+
+    [Theory]
+    [MemberData(nameof(LongLines))]
+    public void Long_lines_pass_close_to_the_listed_positions(
+        string test, LegGeometry geometry, string start, string end, string listed)
+    {
+        var a = Parse(start);
+        var b = Parse(end);
+        var point = Parse(listed);
+
+        // The line as the overlay draws it: a rhumb line is straight in
+        // Mercator, a great circle is densified. Sample it finely.
+        const int samples = 20_000;
+        var miss = double.MaxValue;
+        for (var i = 0; i <= samples; i++)
+        {
+            var onLine = PassageGeodesy.Interpolate(a, b, (double)i / samples, geometry);
+            miss = Math.Min(miss, MarineGeodesy.DistanceMetres(LegGeometry.GreatCircle, onLine, point));
+        }
+
+        var along = MarineGeodesy.DistanceMetres(geometry, a, point);
+        Assert.True(miss <= DistanceTolerance(along), $"{test}: line passes {miss:F0} m from {listed}");
+    }
+
+    [Theory]
+    [MemberData(nameof(CirclePoints))]
+    public void Geodesic_circle_passes_close_to_the_listed_positions(string test, string centre, string listed)
+    {
+        const double radius = 2_000_000;
+        var c = Parse(centre);
+        var point = Parse(listed);
+
+        var circle = MarineGeodesy.GeodesicCircle(c, radius);
+        var bearing = MarineGeodesy.InitialBearingDegrees(LegGeometry.GreatCircle, c, point);
+        var drawn = MarineGeodesy.Destination(LegGeometry.GreatCircle, c, bearing, radius);
+
+        var miss = MarineGeodesy.DistanceMetres(LegGeometry.GreatCircle, drawn, point);
+        Assert.True(miss <= DistanceTolerance(radius), $"{test}: circle passes {miss:F0} m from {listed}");
+        Assert.All(circle, p => Assert.Equal(radius, MarineGeodesy.DistanceMetres(LegGeometry.GreatCircle, c, p), 3));
+    }
+
+    // "deg min N deg min W" → decimal degrees.
+    private static GeoPosition Parse(string text)
+    {
+        var parts = text.Split(' ');
+        var lat = int.Parse(parts[0], CultureInfo.InvariantCulture) + double.Parse(parts[1], CultureInfo.InvariantCulture) / 60.0;
+        var lon = int.Parse(parts[3], CultureInfo.InvariantCulture) + double.Parse(parts[4], CultureInfo.InvariantCulture) / 60.0;
+        return new GeoPosition(parts[2] == "S" ? -lat : lat, parts[5] == "W" ? -lon : lon);
     }
 
     private static double DistanceTolerance(double metres) => Math.Max(0.01 * metres, 30.0);
