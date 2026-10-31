@@ -554,8 +554,8 @@
     <comment>Logs panel column header (#1080).</comment>
   </data>
   <data name="Logs_Filter_All" xml:space="preserve">
-    <value>All levels</value>
-    <comment>Logs panel level filter: show everything, Debug included (#1080).</comment>
+    <value>Everything, Debug included</value>
+    <comment>Logs panel level filter: show everything and also capture Debug messages from now on (#1172).</comment>
   </data>
   <data name="Logs_Filter_Information" xml:space="preserve">
     <value>Info and above</value>
@@ -566,7 +566,7 @@
     <comment>Logs panel level filter (#1080).</comment>
   </data>
   <data name="Logs_Filter_Error" xml:space="preserve">
-    <value>Errors only</value>
+    <value>Errors</value>
     <comment>Logs panel level filter (#1080).</comment>
   </data>
   <data name="Label_LogsLevelFilter" xml:space="preserve">
@@ -574,8 +574,8 @@
     <comment>Accessible name of the Logs panel's level filter (#1080).</comment>
   </data>
   <data name="Tooltip_LogsLevelFilter" xml:space="preserve">
-    <value>Show only entries at this level and above</value>
-    <comment>Tooltip of the Logs panel's level filter (#1080).</comment>
+    <value>Show only entries at this level and above. Everything also records Debug messages, from the moment you choose it</value>
+    <comment>Tooltip of the Logs panel's level filter (#1080, #1172).</comment>
   </data>
   <data name="Label_LogsSearch" xml:space="preserve">
     <value>Search logs</value>
@@ -585,17 +585,29 @@
     <value>Filter by message or area…</value>
     <comment>Placeholder of the Logs panel's search box (#1080).</comment>
   </data>
-  <data name="Logs_Verbose" xml:space="preserve">
-    <value>Verbose</value>
-    <comment>Logs panel toggle that also records Debug messages (#1080).</comment>
+  <data name="Logs_CapturingDebug" xml:space="preserve">
+    <value>Capturing Debug</value>
+    <comment>Logs panel hint next to the level filter while Debug messages are recorded (#1172).</comment>
   </data>
-  <data name="Tooltip_LogsVerbose" xml:space="preserve">
-    <value>Also record Debug messages. Changes only this panel and feedback reports</value>
-    <comment>Tooltip of the Logs panel's Verbose toggle (#1080).</comment>
+  <data name="Label_LogsErrorsChipFormat" xml:space="preserve">
+    <value>Errors: {0}. Show errors only</value>
+    <comment>Accessible name of the Logs panel's errors count chip; {0} is how many errors the panel holds (#1172).</comment>
+  </data>
+  <data name="Label_LogsWarningsChipFormat" xml:space="preserve">
+    <value>Warnings: {0}. Show warnings and errors</value>
+    <comment>Accessible name of the Logs panel's warnings count chip; {0} is how many warnings the panel holds (#1172).</comment>
+  </data>
+  <data name="Tooltip_LogsErrorsChip" xml:space="preserve">
+    <value>Show only errors. Click again to go back</value>
+    <comment>Tooltip of the Logs panel's errors count chip (#1172).</comment>
+  </data>
+  <data name="Tooltip_LogsWarningsChip" xml:space="preserve">
+    <value>Show warnings and errors. Click again to go back</value>
+    <comment>Tooltip of the Logs panel's warnings count chip (#1172).</comment>
   </data>
   <data name="Logs_Copy" xml:space="preserve">
-    <value>Copy</value>
-    <comment>Logs panel button (#1080).</comment>
+    <value>Copy all</value>
+    <comment>Logs panel button that copies every entry shown (#1080, #1172).</comment>
   </data>
   <data name="Tooltip_LogsCopy" xml:space="preserve">
     <value>Copy the entries shown to the clipboard</value>
@@ -606,7 +618,7 @@
     <comment>Logs panel button (#1080).</comment>
   </data>
   <data name="Tooltip_LogsClear" xml:space="preserve">
-    <value>Remove every entry from the list</value>
+    <value>Remove every entry, also from the logs a feedback report would include</value>
     <comment>Tooltip of the Logs panel's Clear button (#1080).</comment>
   </data>
   <data name="Logs_SendFeedback" xml:space="preserve">

@@ -78,7 +78,7 @@ internal static class ViewerObservability
             "1", StringComparison.OrdinalIgnoreCase);
 
         // The Logs panel's in-memory buffer (#1080) always runs, with its own
-        // minimum level so the panel's Verbose toggle leaves OTLP alone.
+        // minimum level so the panel's Everything level leaves OTLP alone.
         var logBuffer = new LogBuffer(minimumLevel: verbose ? LogLevel.Debug : LogLevel.Information);
         services.AddSingleton(logBuffer);
 
