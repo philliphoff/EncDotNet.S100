@@ -122,6 +122,50 @@ Only the first three rows ship with #1191. The `Adjusted*`,
 `NoWaterLevelAt*` and `DatumMismatch` strings are added by #1132; they
 are listed here so the vocabulary is settled once.
 
+#### 2.2.1 Fitting a narrow status bar
+
+The status bar is one line, so the pill can't wrap. The right-hand
+cluster in `MainWindow.axaml` is a horizontal `StackPanel` that doesn't
+shrink, and at the window's 800 px minimum width the longest values
+(**Charted · water level not applied**, **+ water level 14:20 · part of
+view**) don't fit beside the cursor position, scale and OVERSCALE.
+
+An ellipsis isn't safe here: "Charted · water lev…" or "+ water level
+14:20 · par…" can be read as a different state. So the pill never
+truncates. Each state has three whole forms, and the pill shows the
+longest one that fits:
+
+| State | Full | Short | Compact |
+|---|---|---|---|
+| Charted | **Charted** | same | same |
+| Charted, water level not applied | **Charted · water level not applied** | **Charted · not applied** | **Charted** + info icon |
+| Adjusted *(#1132)* | **+ water level 14:20** | same | **Adjusted 14:20** |
+| Adjusted, part of view *(#1132)* | **+ water level 14:20 · part of view** | **Part adjusted 14:20** | same as Short |
+| No water level *(#1132)* | **Charted · no water level at 23:40** | **Charted · no water level** | **Charted** + caution icon |
+| Datum mismatch *(#1132)* | **Charted · datum mismatch** | same | **Charted** + caution icon |
+
+Rules:
+
+- Every form is a true statement on its own. Only the qualifier is
+  dropped; the **DEPTHS** label, the accent and the state's icon stay,
+  and Compact always shows the icon so the state doesn't rest on colour.
+- Shrink order: the left-hand status message ellipsizes first (it isn't
+  safety information), then the pill steps Full → Short → Compact.
+  OVERSCALE and DEPTHS are never hidden.
+- The Full form is always available: it is the pill's tooltip, its
+  accessible name (with `Label_DepthBasis`) and the flyout's first line,
+  whatever form is drawn.
+- Each form is its own `Strings.resx` entry (`…_Short`, `…_Compact`
+  suffixes on the keys above), so a translation picks a form that fits
+  instead of being cut.
+- `DepthBasisText` returns all three forms; the view picks one by
+  measuring, so the evaluator and its tests stay independent of layout.
+  The pill's `TextBlock` sets `TextWrapping="NoWrap"` and
+  `TextTrimming="None"`.
+
+The mock is part A8 of the **Depth Basis Indicator · design pass**
+artboard.
+
 ### 2.3 The flyout
 
 The flyout answers three questions: what are the depths relative to,
