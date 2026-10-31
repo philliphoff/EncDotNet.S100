@@ -61,6 +61,15 @@ public sealed class RouteCheckSettings
     public Length? NearbyDistance { get; init; }
 
     /// <summary>
+    /// The kinds of prohibited area and area with special conditions whose
+    /// indication is off (<see cref="RouteAreaKinds"/>; S-164
+    /// UserSelectionProhibited Areas). The areas of these kinds aren't
+    /// reported; one <see cref="RouteFindingCodes.AreaKindOff"/> finding per
+    /// kind says the route meets them. Empty by default: every kind is on.
+    /// </summary>
+    public IReadOnlyCollection<int> AreaKindsOff { get; init; } = [];
+
+    /// <summary>
     /// Departures to sweep for the clearance check, or <c>null</c> for none.
     /// The sweep is in <see cref="RouteCheckReport.Departures"/>.
     /// </summary>

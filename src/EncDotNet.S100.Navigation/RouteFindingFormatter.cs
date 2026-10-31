@@ -84,6 +84,7 @@ public class RouteFindingFormatter
         return finding.Category switch
         {
             RouteFindingCategory.Area when finding.Details is AreaDetails area => AreaTitle(finding, area),
+            RouteFindingCategory.Area when finding.Details is AreaKindOffDetails => AreaKindOff,
             RouteFindingCategory.Warning when finding.Details is WarningDetails warning => WarningTitle(finding, warning),
             RouteFindingCategory.Clearance or RouteFindingCategory.Confidence => ClearanceTitle(finding),
             RouteFindingCategory.Data when finding.Code != RouteFindingCodes.OutsideChartCoverage => ClearanceTitle(finding),
@@ -100,6 +101,7 @@ public class RouteFindingFormatter
         return finding.Category switch
         {
             RouteFindingCategory.Area when finding.Details is AreaDetails area => AreaMeta(finding, area),
+            RouteFindingCategory.Area when finding.Details is AreaKindOffDetails off => AreaKindOffMeta(finding, off),
             RouteFindingCategory.Warning when finding.Details is WarningDetails warning => WarningMeta(warning),
             RouteFindingCategory.Clearance or RouteFindingCategory.Confidence => ClearanceMeta(finding),
             RouteFindingCategory.Data when finding.Code != RouteFindingCodes.OutsideChartCoverage => ClearanceMeta(finding),
@@ -225,8 +227,8 @@ public class RouteFindingFormatter
     /// <summary>The title of <see cref="RouteFindingCodes.SafetyContourInCorridor"/>.</summary>
     protected virtual string SafetyContourInCorridor => "Shallower than the safety contour inside the cross-track limits";
 
-    /// <summary>The title of <see cref="RouteFindingCodes.SoundingsBelowSafetyDepth"/>.</summary>
-    protected virtual string SoundingsBelowSafetyDepth => "Soundings shallower than the safety depth";
+    /// <summary>The title of <see cref="RouteFindingCodes.SoundingsBelowSafetyContour"/>.</summary>
+    protected virtual string SoundingsBelowSafetyContour => "Soundings no deeper than the safety contour";
 
     /// <summary>The title of <see cref="RouteFindingCodes.CrossesS102Shoal"/>.</summary>
     protected virtual string CrossesS102Shoal => "Crosses S-102 depths shallower than the safety contour";
@@ -313,7 +315,7 @@ public class RouteFindingFormatter
             "data.outside_chart_coverage" => OutsideChartCoverage,
             "route_check.crosses_safety_contour" => CrossesSafetyContour,
             "route_check.safety_contour_in_corridor" => SafetyContourInCorridor,
-            "route_check.soundings_below_safety_depth" => SoundingsBelowSafetyDepth,
+            "route_check.soundings_below_safety_contour" => SoundingsBelowSafetyContour,
             "route_check.crosses_s102_shoal" => CrossesS102Shoal,
             "route_check.s102_shoal_in_corridor" => S102ShoalInCorridor,
             _ => code.Value,
@@ -393,7 +395,20 @@ public class RouteFindingFormatter
                 }
 
                 parts.Add(Format(LeastDepthFormat, FormatDepth(shoal.LeastDepth)));
-                parts.Add(Below(shoal.ThresholdKind, shoal.Threshold));
+                if (shoal.SoundingCount is not null && shoal.ThresholdKind == RouteFindingThreshold.SafetyContour)
+                {
+                    // SOUNDG03 counts a sounding at the contour too.
+                    parts.Add(Format(DangerSafetyContourFormat, FormatSetting(shoal.Threshold)));
+                    if (shoal.BelowSafetyDepth is { } safetyDepth)
+                    {
+                        parts.Add(Below(RouteFindingThreshold.SafetyDepth, safetyDepth));
+                    }
+                }
+                else
+                {
+                    parts.Add(Below(shoal.ThresholdKind, shoal.Threshold));
+                }
+
                 break;
         }
 
@@ -491,8 +506,54 @@ public class RouteFindingFormatter
         RouteAreaKind.PrecautionaryArea => "precautionary area",
         RouteAreaKind.InshoreTrafficZone => "inshore traffic zone",
         RouteAreaKind.SubmarineTransitLane => "submarine transit lane",
+        RouteAreaKind.OffshoreProductionArea => "offshore production area",
+        RouteAreaKind.SeaplaneLandingArea => "seaplane landing area",
+        RouteAreaKind.MarineFarm => "marine farm",
+        RouteAreaKind.Other => "area with special conditions",
         _ => "marine protected area",
     };
+
+    /// <summary>
+    /// The title of <see cref="RouteFindingCodes.AreaKindOff"/>: the S-101
+    /// alert catalogue's <c>ProhAreHighlightOffMsg</c>.
+    /// </summary>
+    protected virtual string AreaKindOff => "Indication of some prohibited areas or areas with special conditions is Off";
+
+    /// <summary>The meta line's count of areas of a kind that's off ({0}: the kind; {1}: how many).</summary>
+    protected virtual string AreaKindOffFormat => "{0} · {1} on the route";
+
+    /// <summary>A kind of prohibited area or area with special conditions (<see cref="RouteAreaKinds"/>), in words.</summary>
+    /// <param name="kind">The kind.</param>
+    /// <returns>The label.</returns>
+    protected virtual string AlertAreaKindLabel(int kind) => kind switch
+    {
+        RouteAreaKinds.TrafficSeparationZone => "traffic separation zone",
+        RouteAreaKinds.InshoreTrafficZone => "inshore traffic zone",
+        RouteAreaKinds.RestrictedArea => "restricted area",
+        RouteAreaKinds.AreaToBeAvoided => "area to be avoided",
+        RouteAreaKinds.ParticularlySensitiveSeaArea => "particularly sensitive sea area",
+        RouteAreaKinds.CautionArea => "caution area",
+        RouteAreaKinds.OffshoreProductionArea => "offshore production area",
+        RouteAreaKinds.UserAreaToBeAvoided => "user area to be avoided",
+        RouteAreaKinds.MilitaryPracticeArea => "military practice area",
+        RouteAreaKinds.SeaplaneLandingArea => "seaplane landing area",
+        RouteAreaKinds.SubmarineTransitLane => "submarine transit lane",
+        RouteAreaKinds.AnchorageArea => "anchorage area",
+        RouteAreaKinds.MarineFarm => "marine farm",
+        _ => kind.ToString(CultureInfo.InvariantCulture),
+    };
+
+    /// <summary>The meta line of <see cref="RouteFindingCodes.AreaKindOff"/>: the leg, the kind and how many areas of it.</summary>
+    /// <param name="finding">The finding.</param>
+    /// <param name="off">Its details.</param>
+    /// <returns>The meta line.</returns>
+    protected virtual string AreaKindOffMeta(RouteFinding finding, AreaKindOffDetails off)
+    {
+        var label = AlertAreaKindLabel(off.AreaKind);
+        var kind = label.Length == 0 ? label : char.ToUpper(label[0], Culture) + label[1..];
+        var text = Format(AreaKindOffFormat, kind, off.Count);
+        return finding.LegIndex is { } leg ? LegLabel(leg, leg) + Separator + text : text;
+    }
 
     /// <summary>A <c>restriction</c> code's label (from the S-101 Edition 2.0.0 Feature Catalogue).</summary>
     /// <param name="code">The code.</param>

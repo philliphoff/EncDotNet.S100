@@ -86,6 +86,17 @@ internal sealed class CatalogRouteAreaSource : IRouteAreaSource
     };
 
     /// <summary>An S-101 area, with its attributes read from its feature record.</summary>
+    // The kind of an area of no type Classify knows that raises ProhAre (#1127).
+    internal static RouteAreaKind ClassifyOther(string featureType) => featureType switch
+    {
+        "OffshoreProductionArea" => RouteAreaKind.OffshoreProductionArea,
+        "SeaplaneLandingArea" => RouteAreaKind.SeaplaneLandingArea,
+        "MarineFarmCulture" => RouteAreaKind.MarineFarm,
+        "DiscolouredWater" => RouteAreaKind.CautionArea,
+        "MooringArea" => RouteAreaKind.AnchorageArea,
+        _ => RouteAreaKind.Other,
+    };
+
     internal static RouteArea S101Area(
         RouteAreaKind kind,
         string featureType,

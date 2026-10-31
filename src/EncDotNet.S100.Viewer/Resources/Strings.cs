@@ -1911,7 +1911,7 @@ internal static partial class Strings
     public static string RouteCheck_Rock => Get(nameof(RouteCheck_Rock));
     public static string RouteCheck_CrossesSafetyContour => Get(nameof(RouteCheck_CrossesSafetyContour));
     public static string RouteCheck_SafetyContourInCorridor => Get(nameof(RouteCheck_SafetyContourInCorridor));
-    public static string RouteCheck_SoundingsBelowSafetyDepth => Get(nameof(RouteCheck_SoundingsBelowSafetyDepth));
+    public static string RouteCheck_SoundingsBelowSafetyContour => Get(nameof(RouteCheck_SoundingsBelowSafetyContour));
     public static string RouteCheck_CrossesS102Shoal => Get(nameof(RouteCheck_CrossesS102Shoal));
     public static string RouteCheck_S102ShoalInCorridor => Get(nameof(RouteCheck_S102ShoalInCorridor));
     public static string RouteCheck_ToPortFormat => Get(nameof(RouteCheck_ToPortFormat));

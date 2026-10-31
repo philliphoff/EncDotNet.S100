@@ -13,6 +13,7 @@ public sealed record CheckRouteDetails(
     [property: Description("Water shallower than a safety setting: depth areas, soundings and S-102 shoals.")] CheckRouteShoalDetails? Shoal = null,
     [property: Description("A regulated area: what it is, what it restricts and when it's in force.")] CheckRouteAreaDetails? Area = null,
     [property: Description("A finding of the clearance check: a stretch below your UKC setting, of lower confidence or of missing data.")] CheckRouteClearanceDetails? Clearance = null,
+    [property: Description("Areas of a kind whose indication is off (route_check.area_kind_off): the kind and how many the route meets.")] CheckRouteAreaKindOffDetails? AreaKindOff = null,
     [property: Description("A navigational hazard other than a danger: an aid to navigation, structure or overhead feature whose S-101 portrayal raises the NavHazard alert (route_check.aid_to_navigation, route_check.structure_on_track, route_check.structure_in_corridor, route_check.overhead_on_route).")] CheckRouteHazardDetails? Hazard = null)
 {
     /// <summary>
@@ -44,7 +45,8 @@ public sealed record CheckRouteDetails(
             s.SoundingCount,
             s.Uncertainty?.TotalMetres,
             s.DatasetId,
-            s.Cell)),
+            s.Cell,
+            s.BelowSafetyDepth?.TotalMetres)),
         AreaDetails a => new(Area: new CheckRouteAreaDetails(
             a.Product == RouteAreaProduct.S122 ? "S-122" : "S-101",
             Snake(a.Kind.ToString()),
@@ -59,7 +61,11 @@ public sealed record CheckRouteDetails(
             a.InForce,
             a.From.ToUniversalTime(),
             a.Until.ToUniversalTime(),
-            a.AtEta)),
+            a.AtEta,
+            a.AreaKind is { } areaKind && RouteAreaKinds.Names.TryGetValue(areaKind, out var kindName) ? kindName : null)),
+        AreaKindOffDetails o => new(AreaKindOff: new CheckRouteAreaKindOffDetails(
+            RouteAreaKinds.Names.TryGetValue(o.AreaKind, out var offName) ? offName : o.AreaKind.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            o.Count)),
         ClearanceDetails c => new(Clearance: new CheckRouteClearanceDetails(
             c.Stretch is { } stretch ? Snake(stretch.ToString()) : "below_setting",
             c.FirstLegIndex,
@@ -117,17 +123,18 @@ public sealed record CheckRouteHazardDetails(
 /// <summary>Shoal water behind a finding.</summary>
 public sealed record CheckRouteShoalDetails(
     [property: Description("The least depth in the span, metres.")] double LeastDepthMeters,
-    [property: Description("The setting it's shallower than: safety_contour or safety_depth.")] string Threshold,
+    [property: Description("The setting it's judged against: safety_contour (shallower than it, or for soundings no deeper than it, as S-101 SOUNDG03 judges them).")] string Threshold,
     [property: Description("The setting in metres.")] double ThresholdMeters,
     [property: Description("How many soundings the finding stands for, or null when it isn't about soundings.")] int? SoundingCount,
     [property: Description("For an S-102 shoal, the uncertainty of the least depth in metres, or null.")] double? UncertaintyMeters,
     [property: Description("For an S-102 shoal, the dataset of the least depth, or null.")] string? DatasetId,
-    [property: Description("For an S-102 shoal, the grid cell of the least depth (\"row,col\"), or null.")] string? Cell);
+    [property: Description("For an S-102 shoal, the grid cell of the least depth (\"row,col\"), or null.")] string? Cell,
+    [property: Description("For soundings, the safety depth when the least depth is also shallower than it (the soundings the chart draws in bold), or null.")] double? BelowSafetyDepthMeters = null);
 
 /// <summary>A regulated area behind a finding.</summary>
 public sealed record CheckRouteAreaDetails(
     [property: Description("The product: S-101 or S-122.")] string Product,
-    [property: Description("What it is: restricted_area, military_practice_area, caution_area, anchorage_area, separation_zone, precautionary_area, inshore_traffic_zone, submarine_transit_lane or marine_protected_area.")] string Kind,
+    [property: Description("What it is: restricted_area, military_practice_area, caution_area, anchorage_area, separation_zone, precautionary_area, inshore_traffic_zone, submarine_transit_lane, offshore_production_area, seaplane_landing_area, marine_farm, other or marine_protected_area.")] string Kind,
     [property: Description("Its feature type, e.g. RestrictedArea.")] string FeatureType,
     [property: Description("Its name, or null.")] string? Name,
     [property: Description("Its restriction codes (S-101/S-122 Feature Catalogue), e.g. 7 entry prohibited, 14 area to be avoided.")] IReadOnlyList<int> Restrictions,
@@ -139,7 +146,13 @@ public sealed record CheckRouteAreaDetails(
     [property: Description("Whether it's in force while the vessel is there.")] bool InForce,
     [property: Description("When the vessel reaches it, ISO 8601 UTC: the ETA, or the check time when atEta is false.")] DateTimeOffset From,
     [property: Description("When the vessel leaves it, ISO 8601 UTC.")] DateTimeOffset Until,
-    [property: Description("True when from and until are ETAs.")] bool AtEta);
+    [property: Description("True when from and until are ETAs.")] bool AtEta,
+    [property: Description("Its kind in the S-101 alert catalogue, which areaKindsOff names: traffic_separation_zone, inshore_traffic_zone, restricted_area, area_to_be_avoided, particularly_sensitive_sea_area, caution_area, offshore_production_area, user_area_to_be_avoided, military_practice_area, seaplane_landing_area, submarine_transit_lane, anchorage_area or marine_farm; null when it raises no ProhAre alert (S-122 areas, precautionary areas).")] string? AreaKind = null);
+
+/// <summary>Areas of a kind whose indication is off, behind a finding (#1127).</summary>
+public sealed record CheckRouteAreaKindOffDetails(
+    [property: Description("The kind, as areaKindsOff names it.")] string AreaKind,
+    [property: Description("How many areas of the kind the route meets.")] int Count);
 
 /// <summary>An S-100 date range, as the dataset writes it.</summary>
 public sealed record CheckRouteDateRange(

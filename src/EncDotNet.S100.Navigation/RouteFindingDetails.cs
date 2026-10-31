@@ -136,7 +136,7 @@ public sealed class DangerDetails : RouteFindingDetails
 
 /// <summary>
 /// Water shallower than a safety setting: depth areas across or inside the
-/// safety contour, soundings shallower than the safety depth, and S-102
+/// safety contour, soundings no deeper than the safety contour, and S-102
 /// shoals (<see cref="RouteFindingCodes.CrossesSafetyContour"/> and the like).
 /// </summary>
 public sealed class ShoalDetails : RouteFindingDetails
@@ -152,6 +152,12 @@ public sealed class ShoalDetails : RouteFindingDetails
 
     /// <summary>How many soundings the finding stands for, or <c>null</c> when it isn't about soundings.</summary>
     public int? SoundingCount { get; init; }
+
+    /// <summary>
+    /// For soundings, the safety depth when the least depth is also shallower
+    /// than it (the soundings the chart draws in bold), or <c>null</c>.
+    /// </summary>
+    public Depth? BelowSafetyDepth { get; init; }
 
     /// <summary>For an S-102 shoal, the uncertainty of the least depth, when the dataset gives one.</summary>
     public Depth? Uncertainty { get; init; }
@@ -171,6 +177,9 @@ public sealed class AreaDetails : RouteFindingDetails
 {
     /// <summary>The product it comes from.</summary>
     public required RouteAreaProduct Product { get; init; }
+
+    /// <summary>Its alert-catalogue kind (<see cref="RouteArea.AreaKind"/>), or <c>null</c>.</summary>
+    public int? AreaKind { get; init; }
 
     /// <summary>What it is.</summary>
     public required RouteAreaKind Kind { get; init; }
@@ -295,4 +304,18 @@ public sealed class ClearanceDetails : RouteFindingDetails
 
     /// <summary>The state of the stretch: <see cref="UkcState.BelowSetting"/> for a finding below your UKC setting, otherwise <c>null</c>.</summary>
     public UkcState? State { get; init; }
+}
+
+/// <summary>
+/// Areas of a kind the settings turn off (<see cref="RouteCheckSettings.AreaKindsOff"/>)
+/// that the route meets (<see cref="RouteFindingCodes.AreaKindOff"/>, #1127):
+/// their indication is off, so the mariner is told so.
+/// </summary>
+public sealed class AreaKindOffDetails : RouteFindingDetails
+{
+    /// <summary>The kind (<see cref="RouteAreaKinds"/>).</summary>
+    public required int AreaKind { get; init; }
+
+    /// <summary>How many areas of the kind the route meets.</summary>
+    public required int Count { get; init; }
 }

@@ -52,7 +52,7 @@ internal sealed class ViewerFindingFormatter : RouteFindingFormatter
     protected override string Rock => Strings.RouteCheck_Rock;
     protected override string CrossesSafetyContour => Strings.RouteCheck_CrossesSafetyContour;
     protected override string SafetyContourInCorridor => Strings.RouteCheck_SafetyContourInCorridor;
-    protected override string SoundingsBelowSafetyDepth => Strings.RouteCheck_SoundingsBelowSafetyDepth;
+    protected override string SoundingsBelowSafetyContour => Strings.RouteCheck_SoundingsBelowSafetyContour;
     protected override string CrossesS102Shoal => Strings.RouteCheck_CrossesS102Shoal;
     protected override string S102ShoalInCorridor => Strings.RouteCheck_S102ShoalInCorridor;
     protected override string ToPortFormat => Strings.RouteCheck_ToPortFormat;
@@ -89,7 +89,8 @@ internal sealed class ViewerFindingFormatter : RouteFindingFormatter
         RouteAreaKind.PrecautionaryArea => Strings.RouteArea_PrecautionaryArea,
         RouteAreaKind.InshoreTrafficZone => Strings.RouteArea_InshoreTrafficZone,
         RouteAreaKind.SubmarineTransitLane => Strings.RouteArea_SubmarineTransitLane,
-        _ => Strings.RouteArea_MarineProtectedArea,
+        RouteAreaKind.MarineProtectedArea => Strings.RouteArea_MarineProtectedArea,
+        _ => base.AreaKindLabel(kind),
     };
 
     protected override string WarningInsideAreaFormat => Strings.Findings_WarningInsideFormat;

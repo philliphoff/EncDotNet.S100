@@ -266,7 +266,9 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
         // The alerts the features raise at the query's depths, by feature id;
         // empty without a portrayal. The portrayal is asynchronous only to
         // load the rules, which it does once per set of depths.
-        public IReadOnlyDictionary<string, IReadOnlyList<RouteChartAlert>> AlertsOf(IEnumerable<string> featureIds, RouteChartQuery query)
+        // A null query keeps the depths of the last portrayal, for alerts that
+        // don't depend on them (ProhAre), so it doesn't open another session.
+        public IReadOnlyDictionary<string, IReadOnlyList<RouteChartAlert>> AlertsOf(IEnumerable<string> featureIds, RouteChartQuery? query)
         {
             var ids = featureIds.ToList();
             if (Alerts is null || ids.Count == 0)
@@ -274,7 +276,7 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
                 return new Dictionary<string, IReadOnlyList<RouteChartAlert>>();
             }
 
-            var mariner = MarinerSettings.Default with
+            var mariner = query is null ? null : MarinerSettings.Default with
             {
                 SafetyContour = query.SafetyContourMeters is { } contour ? Quantities.Depth.FromMetres(contour) : MarinerSettings.Default.SafetyContour,
                 SafetyDepth = query.SafetyDepthMeters is { } depth ? Quantities.Depth.FromMetres(depth) : MarinerSettings.Default.SafetyDepth,
@@ -311,34 +313,72 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
             }
         }
 
-        // Adds the restricted, caution, anchorage and traffic areas in a box,
-        // read from their feature records, which keep every value of a
-        // multi-valued or complex attribute.
+        // Adds the regulated areas in a box: the restricted, caution,
+        // anchorage and traffic areas, and every other area whose portrayal
+        // raises the ProhAre alert (#1127), each with its kind. Areas charted
+        // as points count too. The attributes are read from the feature
+        // records, which keep every value of a multi-valued or complex
+        // attribute.
         public void AddAreas(BoundingBox extent, List<RouteArea> result)
         {
+            var found = new List<(Feature Feature, RouteAreaKind? Kind)>();
             foreach (var feature in Index.Query(extent))
             {
-                if (feature.GeometryType != GeometryType.Surface || CatalogRouteAreaSource.Classify(feature.FeatureType) is not { } kind)
+                if (feature.GeometryType is GeometryType.Surface or GeometryType.Point)
+                {
+                    found.Add((feature, CatalogRouteAreaSource.Classify(feature.FeatureType)));
+                }
+            }
+
+            // ProhAre doesn't depend on the depths, so the check's session serves.
+            var alerts = AlertsOf(found.Select(f => Id(f.Feature)), query: null);
+            foreach (var (feature, classified) in found)
+            {
+                var prohAre = alerts.TryGetValue(Id(feature), out var raised) ? raised.FirstOrDefault(a => a.Alert == RouteFindingAlert.ProhAre) : null;
+                if (classified is null && prohAre is null)
                 {
                     continue;
                 }
 
                 IS100Feature geometry = feature;
-                if (geometry.Surfaces.Count == 0)
+                var surfaces = geometry.Surfaces.Count > 0 ? geometry.Surfaces : geometry.Points.Select(PointArea).ToList();
+                if (surfaces.Count == 0)
                 {
                     continue;
                 }
 
                 _records.Value.TryGetValue((uint)feature.Id, out var record);
-                result.Add(CatalogRouteAreaSource.S101Area(
-                    kind,
+                var area = CatalogRouteAreaSource.S101Area(
+                    classified ?? CatalogRouteAreaSource.ClassifyOther(feature.FeatureType),
                     feature.FeatureType,
-                    geometry.Surfaces,
-                    new RouteFindingFeature(DatasetId, feature.Id.ToString(CultureInfo.InvariantCulture)),
+                    surfaces,
+                    new RouteFindingFeature(DatasetId, Id(feature)),
                     this,
                     _dataset.Document,
-                    record));
+                    record);
+                result.Add(area with
+                {
+                    AreaKind = prohAre?.AreaKind ?? RouteAreaKinds.Of(area.FeatureType, area.Restrictions, area.Categories),
+                });
             }
+        }
+
+        // An area charted as a point (S-164 SpecialConditions): a square
+        // two metres across, so the track over it enters it.
+        private static SurfacePart PointArea(GeoPosition point)
+        {
+            const double halfMetres = 1;
+            var lat = halfMetres / PassageGeodesy.MetersPerDegreeLatitude;
+            var lon = lat / Math.Max(0.01, Math.Cos(point.Latitude * Math.PI / 180));
+            return new SurfacePart(
+            [
+                new GeoPosition(point.Latitude - lat, point.Longitude - lon),
+                new GeoPosition(point.Latitude - lat, point.Longitude + lon),
+                new GeoPosition(point.Latitude + lat, point.Longitude + lon),
+                new GeoPosition(point.Latitude + lat, point.Longitude - lon),
+                new GeoPosition(point.Latitude - lat, point.Longitude - lon),
+            ],
+            []);
         }
 
         public override bool Covers(GeoPosition position)

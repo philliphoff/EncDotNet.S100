@@ -87,6 +87,10 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         [Description("How far beyond the cross-track limits, in metres, a danger or hazard counts as near the route. Default 185.2 (0.1 NM).")]
         public double? NearbyMeters { get; init; }
 
+        [CommandOption("--areas-off <KINDS>")]
+        [Description("Comma-separated kinds of prohibited area and area with special conditions to turn off, e.g. anchorage_area,marine_farm (the S-101 alert catalogue's ProhAre kinds). One finding per kind says the route meets them.")]
+        public string? AreasOff { get; init; }
+
         [CommandOption("--window")]
         [Description("Also sweep departures across the S-104 time range that covers the route, to find the departure window. Needs a draft.")]
         [DefaultValue(false)]
@@ -109,6 +113,11 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         [CommandOption("--debug")]
         [Description("Show full stack traces on error.")]
         public bool Debug { get; init; }
+
+        // The kinds --areas-off names, each with the kind it parses to, or null.
+        internal static IEnumerable<(string Name, int? Kind)> AreaKindsOff(string? text) =>
+            (text ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(name => (name, RouteAreaKinds.Parse(name)));
 
         public override ValidationResult Validate()
         {
@@ -134,6 +143,8 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
                     return ValidationResult.Error($"{name} must be {(allowZero ? "zero or more" : "a positive number")}.");
             }
 
+            if (AreaKindsOff(AreasOff).FirstOrDefault(k => k.Kind is null) is { Name: { } unknown })
+                return ValidationResult.Error($"--areas-off: '{unknown}' isn't a kind: {string.Join(", ", RouteAreaKinds.Names.Values)}.");
             if (Departure is not null && !TryParseTime(Departure, out _))
                 return ValidationResult.Error("--departure must be an ISO 8601 time.");
             if (ParseFailLevel(FailOn) is null)
@@ -200,6 +211,7 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
                 CorridorOverride = settings.CorridorMeters is { } corridor ? Length.FromMetres(corridor) : null,
                 TrackClearance = settings.TrackClearanceMeters is { } clearance ? Length.FromMetres(clearance) : null,
                 NearbyDistance = settings.NearbyMeters is { } nearby ? Length.FromMetres(nearby) : null,
+                AreaKindsOff = Settings.AreaKindsOff(settings.AreasOff).Select(k => k.Kind!.Value).ToList(),
                 DepartureWindow = settings.Window ? DepartureRange.WaterLevelData(WindowStep) : null,
             };
 
@@ -351,6 +363,8 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         Add("corridorHalfWidthMeters", settings.CorridorMeters);
         Add("trackClearanceMeters", settings.TrackClearanceMeters);
         Add("nearbyDistanceMeters", settings.NearbyMeters);
+        if (settings.AreasOff is { Length: > 0 } areasOff)
+            settingsNode["areaKindsOff"] = new JsonArray(Settings.AreaKindsOff(areasOff).Select(k => (JsonNode?)k.Name).ToArray());
         Add("draftMeters", settings.DraftMeters);
         Add("squatMeters", settings.SquatMeters);
         Add("speedKnots", settings.SpeedKnots);
