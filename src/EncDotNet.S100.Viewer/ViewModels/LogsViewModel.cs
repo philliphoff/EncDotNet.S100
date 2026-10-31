@@ -5,6 +5,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels.Activities;
 using Microsoft.Extensions.Logging;
 
@@ -37,6 +38,11 @@ internal sealed record LogLevelFilterOption(LogLevel Level, string Label)
 /// is reading in place and <see cref="NewEntriesCount"/> counts the rows below.
 /// The new-entries pill, <c>End</c> or scrolling back to the bottom resumes.
 /// </para>
+/// <para>
+/// Times follow the user's Local/UTC preference (#1174, D14): the machine's
+/// zone or UTC, never a zone of the data. When the shown rows span more than
+/// one day, the first row of each day carries a date divider.
+/// </para>
 /// </remarks>
 internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivityTabShown, IDisposable
 {
@@ -46,7 +52,10 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
     private readonly LogBuffer _buffer;
     private readonly Action? _showFeedback;
     private readonly Action<Action> _post;
+    private readonly ITimeFormatProvider? _timeFormat;
+    private readonly TimeZoneInfo _localZone;
     private readonly List<LogRowViewModel> _all = [];
+    private LogSearchQuery _query = LogSearchQuery.Empty;
     private long _lastSequence;
     private int _refreshPosted;
     private long _problemsSeen;
@@ -61,12 +70,21 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
     /// Runs an action on the UI thread; defaults to posting to Avalonia's
     /// dispatcher, or running inline when no Avalonia app is running.
     /// </param>
-    public LogsViewModel(LogBuffer buffer, Action? showFeedback = null, Action<Action>? post = null)
+    /// <param name="timeFormat">The Local/UTC preference; times are local without it.</param>
+    /// <param name="time">The clock whose zone is "local"; defaults to the machine's.</param>
+    public LogsViewModel(
+        LogBuffer buffer,
+        Action? showFeedback = null,
+        Action<Action>? post = null,
+        ITimeFormatProvider? timeFormat = null,
+        TimeProvider? time = null)
     {
         ArgumentNullException.ThrowIfNull(buffer);
         _buffer = buffer;
         _showFeedback = showFeedback;
         _post = post ?? PostToUiThread;
+        _timeFormat = timeFormat;
+        _localZone = (time ?? TimeProvider.System).LocalTimeZone;
 
         LevelFilters =
         [
@@ -82,12 +100,17 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         SendFeedbackCommand = new RelayCommand(() => _showFeedback?.Invoke(), () => _showFeedback is not null);
         CloseDetailsCommand = new RelayCommand(() => SelectedEntry = null);
         CopySelectedEntryCommand = new RelayCommand(CopySelectedEntry, () => _selectedEntry is not null);
+        CopySelectedMessageCommand = new RelayCommand(CopySelectedMessage, () => _selectedEntry is not null);
+        ShowOnlySelectedAreaCommand = new RelayCommand(() => AddSelectedAreaToken(hide: false), () => _selectedEntry is not null);
+        HideSelectedAreaCommand = new RelayCommand(() => AddSelectedAreaToken(hide: true), () => _selectedEntry is not null);
         ResumeFollowingCommand = new RelayCommand(ResumeFollowing);
 
         // _problemsSeen starts at 0, so warnings logged at startup, before the
         // panel existed, show on the badge too.
         _buffer.Changed += OnBufferChanged;
         _buffer.MinimumLevelChanged += OnMinimumLevelChanged;
+        if (_timeFormat is not null)
+            _timeFormat.TimeFormatChanged += OnTimeFormatChanged;
         Apply(_buffer.Snapshot());
     }
 
@@ -117,7 +140,11 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
     }
 
     private string _searchText = string.Empty;
-    /// <summary>Shows only entries whose message, area, category or exception contains this text (case-insensitive).</summary>
+    /// <summary>
+    /// Shows only entries whose message, area, category or exception contains
+    /// this text (case-insensitive). <c>area:Name</c> and <c>-area:Name</c>
+    /// tokens show only or hide an area (see <see cref="LogSearchQuery"/>).
+    /// </summary>
     public string SearchText
     {
         get => _searchText;
@@ -125,9 +152,13 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         {
             if (!SetProperty(ref _searchText, value ?? string.Empty))
                 return;
+            _query = LogSearchQuery.Parse(_searchText);
             Refilter();
         }
     }
+
+    /// <summary>Whether times show in UTC rather than the machine's zone.</summary>
+    public bool IsUtc => _timeFormat?.Current == TimeFormat.Utc;
 
     private bool _isFollowing = true;
     /// <summary>
@@ -201,7 +232,12 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
             if (!SetProperty(ref _selectedEntry, value))
                 return;
             OnPropertyChanged(nameof(HasSelectedEntry));
+            OnPropertyChanged(nameof(ShowOnlySelectedAreaText));
+            OnPropertyChanged(nameof(HideSelectedAreaText));
             ((RelayCommand)CopySelectedEntryCommand).NotifyCanExecuteChanged();
+            ((RelayCommand)CopySelectedMessageCommand).NotifyCanExecuteChanged();
+            ((RelayCommand)ShowOnlySelectedAreaCommand).NotifyCanExecuteChanged();
+            ((RelayCommand)HideSelectedAreaCommand).NotifyCanExecuteChanged();
             // A selection pins the view, so the row stays where the user picked it.
             if (value is not null && !_restoringSelection)
                 StopFollowing();
@@ -212,6 +248,14 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
 
     /// <summary>Whether a row is selected.</summary>
     public bool HasSelectedEntry => _selectedEntry is not null;
+
+    /// <summary>"Show only Datasets", the row menu item for the selected row's area.</summary>
+    public string ShowOnlySelectedAreaText => string.Format(
+        CultureInfo.CurrentCulture, Strings.Logs_Menu_ShowOnlyAreaFormat, _selectedEntry?.AreaText ?? string.Empty);
+
+    /// <summary>"Hide Datasets", the row menu item for the selected row's area.</summary>
+    public string HideSelectedAreaText => string.Format(
+        CultureInfo.CurrentCulture, Strings.Logs_Menu_HideAreaFormat, _selectedEntry?.AreaText ?? string.Empty);
 
     /// <summary>Whether the buffer holds any entries, filtered out or not.</summary>
     public bool HasAnyEntries => _all.Count > 0;
@@ -238,6 +282,15 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
 
     /// <summary>Copies the selected entry as text, home directory redacted like Copy.</summary>
     public ICommand CopySelectedEntryCommand { get; }
+
+    /// <summary>Copies the selected entry's message, home directory redacted (the row menu).</summary>
+    public ICommand CopySelectedMessageCommand { get; }
+
+    /// <summary>Adds <c>area:</c> for the selected row's area to the search, replacing other <c>area:</c> tokens (the row menu).</summary>
+    public ICommand ShowOnlySelectedAreaCommand { get; }
+
+    /// <summary>Adds <c>-area:</c> for the selected row's area to the search (the row menu).</summary>
+    public ICommand HideSelectedAreaCommand { get; }
 
     /// <summary>Scrolls to the newest row and follows the tail again (the new-entries pill, <c>End</c>).</summary>
     public ICommand ResumeFollowingCommand { get; }
@@ -326,6 +379,9 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         ? string.Empty
         : LogEntry.ToText([_selectedEntry.Entry], HomePathRedactor.Redact);
 
+    /// <summary>The text Copy message puts on the clipboard: the selected entry's message, home directory redacted, or empty.</summary>
+    internal string CopySelectedMessageText() => _selectedEntry?.DetailsMessage ?? string.Empty;
+
     /// <summary>Applies the buffer's current state now (tests; the app refreshes on <see cref="LogBuffer.Changed"/>).</summary>
     internal void Refresh()
     {
@@ -344,6 +400,19 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
 
     private void OnMinimumLevelChanged(object? sender, EventArgs e) =>
         _post(() => OnPropertyChanged(nameof(IsVerbose)));
+
+    private void OnTimeFormatChanged(TimeFormat format) => _post(() =>
+    {
+        if (_disposed)
+            return;
+        var zone = Zone;
+        foreach (var row in _all)
+            row.SetTimeZone(zone, IsUtc);
+        OnPropertyChanged(nameof(IsUtc));
+        UpdateDayDividers();
+    });
+
+    private TimeZoneInfo Zone => IsUtc ? TimeZoneInfo.Utc : _localZone;
 
     private void Apply(IReadOnlyList<LogEntry> snapshot)
     {
@@ -378,11 +447,13 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         }
 
         var added = new List<LogRowViewModel>();
+        var zone = Zone;
+        var isUtc = IsUtc;
         foreach (var entry in snapshot)
         {
             if (entry.Sequence <= _lastSequence)
                 continue;
-            var row = new LogRowViewModel(entry);
+            var row = new LogRowViewModel(entry, zone, isUtc);
             _all.Add(row);
             _lastSequence = entry.Sequence;
             if (Matches(row))
@@ -411,6 +482,7 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
             foreach (var row in added)
                 Entries.Add(row);
         }
+        UpdateDayDividers();
         RestoreSelection(selected);
         RaiseListState();
         RaiseNewEntries();
@@ -424,6 +496,7 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         foreach (var row in _all)
             row.IsShown = Matches(row);
         RebuildEntries();
+        UpdateDayDividers();
         RestoreSelection(selected);
         RaiseListState();
         RaiseNewEntries();
@@ -452,11 +525,32 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         }
     }
 
+    /// <summary>
+    /// Marks the first shown row of each day with a date divider, when the
+    /// shown rows span more than one day; the oldest row then gets one too,
+    /// so every day is labelled. Rows are in time order, so the span is the
+    /// first row's day against the last's.
+    /// </summary>
+    private void UpdateDayDividers()
+    {
+        var spansDays = Entries.Count > 1 && Entries[0].Day != Entries[^1].Day;
+        DateOnly? previous = null;
+        foreach (var row in Entries)
+        {
+            row.ShowsDayDivider = spansDays && row.Day != previous;
+            previous = row.Day;
+        }
+    }
+
     private bool Matches(LogRowViewModel row)
     {
         if (row.Level < _selectedLevelFilter.Level)
             return false;
-        var search = _searchText.Trim();
+        if (_query.IsEmpty)
+            return true;
+        if (!_query.MatchesArea(row.AreaText, row.Entry.Area))
+            return false;
+        var search = _query.Text;
         if (search.Length == 0)
             return true;
         var entry = row.Entry;
@@ -478,6 +572,19 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         var text = CopySelectedEntryText();
         if (text.Length > 0)
             CopyRequested?.Invoke(this, text);
+    }
+
+    private void CopySelectedMessage()
+    {
+        var text = CopySelectedMessageText();
+        if (text.Length > 0)
+            CopyRequested?.Invoke(this, text);
+    }
+
+    private void AddSelectedAreaToken(bool hide)
+    {
+        if (_selectedEntry is { } row)
+            SearchText = LogSearchQuery.WithAreaToken(_searchText, row.AreaText, hide);
     }
 
     private void Clear()
@@ -528,6 +635,8 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         _disposed = true;
         _buffer.Changed -= OnBufferChanged;
         _buffer.MinimumLevelChanged -= OnMinimumLevelChanged;
+        if (_timeFormat is not null)
+            _timeFormat.TimeFormatChanged -= OnTimeFormatChanged;
     }
 }
 
@@ -535,14 +644,18 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
 internal sealed class LogRowViewModel : ViewModelBase
 {
     /// <summary>Creates a row for <paramref name="entry"/>.</summary>
-    public LogRowViewModel(LogEntry entry)
+    /// <param name="entry">The buffered entry.</param>
+    /// <param name="zone">The zone its times show in; the machine's when omitted.</param>
+    /// <param name="isUtc">Whether <paramref name="zone"/> is the UTC preference, which the full time spells out.</param>
+    public LogRowViewModel(LogEntry entry, TimeZoneInfo? zone = null, bool isUtc = false)
     {
         ArgumentNullException.ThrowIfNull(entry);
         _entry = entry;
         AreaText = Strings.LogAreaName(entry.Area);
         LevelText = Strings.LogLevelName(entry.Level);
         LevelShortText = Strings.LogLevelShortName(entry.Level);
-        TimeText = entry.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff", CultureInfo.CurrentCulture);
+        _zone = zone ?? TimeZoneInfo.Local;
+        _isUtc = isUtc;
         var newline = entry.Message.IndexOfAny(['\r', '\n']);
         Summary = newline < 0 ? entry.Message : entry.Message[..newline] + " …";
     }
@@ -557,8 +670,46 @@ internal sealed class LogRowViewModel : ViewModelBase
     /// <summary>The entry's level.</summary>
     public LogLevel Level => _entry.Level;
 
-    /// <summary>The local time of the entry's first message.</summary>
-    public string TimeText { get; }
+    private TimeZoneInfo _zone;
+    private bool _isUtc;
+
+    /// <summary>The time of the entry's first message, <c>HH:mm:ss.fff</c> in the panel's zone.</summary>
+    public string TimeText => Time(_entry.Timestamp).ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The full time of the entry's first message with its date,
+    /// <c>2026-10-30 16:29:52.795</c> in the panel's zone and "UTC" after it in
+    /// UTC, for the row tooltip and the details header.
+    /// </summary>
+    public string FullTimeText
+    {
+        get
+        {
+            var text = Time(_entry.Timestamp).ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
+            return _isUtc ? text + " " + Strings.Time_Utc_Suffix : text;
+        }
+    }
+
+    /// <summary>The day of the entry's first message in the panel's zone.</summary>
+    public DateOnly Day => DateOnly.FromDateTime(Time(_entry.Timestamp));
+
+    /// <summary>The day divider's text: the day in the culture's long form, "UTC" after it in UTC.</summary>
+    public string DayText
+    {
+        get
+        {
+            var text = Time(_entry.Timestamp).ToString("D", CultureInfo.CurrentCulture);
+            return _isUtc ? text + " " + Strings.Time_Utc_Suffix : text;
+        }
+    }
+
+    private bool _showsDayDivider;
+    /// <summary>Whether a date divider shows above the row: it starts a day, and the shown rows span more than one.</summary>
+    public bool ShowsDayDivider
+    {
+        get => _showsDayDivider;
+        internal set => SetProperty(ref _showsDayDivider, value);
+    }
 
     /// <summary>The localized level name, for the details pane and the accessible name.</summary>
     public string LevelText { get; }
@@ -617,7 +768,7 @@ internal sealed class LogRowViewModel : ViewModelBase
             CultureInfo.CurrentCulture,
             Strings.Logs_Details_Repeated,
             _entry.Count,
-            _entry.LastTimestamp.ToLocalTime().ToString("HH:mm:ss.fff", CultureInfo.CurrentCulture))
+            Time(_entry.LastTimestamp).ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture))
         : string.Empty;
 
     /// <summary>Whether the entry is a warning.</summary>
@@ -646,6 +797,23 @@ internal sealed class LogRowViewModel : ViewModelBase
         var newline = text.IndexOfAny(['\r', '\n']);
         return newline < 0 ? (text, string.Empty) : (text[..newline], text[newline..]);
     }
+
+    /// <summary>Shows the row's times in <paramref name="zone"/> (the Local/UTC preference changed).</summary>
+    internal void SetTimeZone(TimeZoneInfo zone, bool isUtc)
+    {
+        ArgumentNullException.ThrowIfNull(zone);
+        if (ReferenceEquals(zone, _zone) && isUtc == _isUtc)
+            return;
+        _zone = zone;
+        _isUtc = isUtc;
+        OnPropertyChanged(nameof(TimeText));
+        OnPropertyChanged(nameof(FullTimeText));
+        OnPropertyChanged(nameof(Day));
+        OnPropertyChanged(nameof(DayText));
+        OnPropertyChanged(nameof(RepeatedText));
+    }
+
+    private DateTime Time(DateTimeOffset value) => TimeZoneInfo.ConvertTime(value, _zone).DateTime;
 
     /// <summary>Takes a newer copy of the same entry (a repeat was collapsed into it).</summary>
     internal void Update(LogEntry entry)

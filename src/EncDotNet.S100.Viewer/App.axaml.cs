@@ -1571,7 +1571,9 @@ public partial class App : Application
         // the Timeline and Clearance. Always visible; it never opens by itself.
         services.AddSingleton(sp => new LogsViewModel(
             sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.LogBuffer>(),
-            showFeedback: () => sp.GetRequiredService<MainViewModel>().ShowFeedbackCommand.Execute(null)));
+            showFeedback: () => sp.GetRequiredService<MainViewModel>().ShowFeedbackCommand.Execute(null),
+            timeFormat: sp.GetService<ITimeFormatProvider>(),
+            time: sp.GetRequiredService<TimeProvider>()));
         services.AddActivityTab<LogsViewModel, LogsView>(
             id: MainViewModel.LogsTabId,
             order: 30,

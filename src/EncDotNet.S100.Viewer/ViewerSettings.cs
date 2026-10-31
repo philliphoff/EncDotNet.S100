@@ -782,6 +782,12 @@ public sealed class PanelSizes
     /// the user has dragged its splitter; <c>null</c> sizes the list to its routes.
     /// </summary>
     public double? RoutesListHeight { get; set; }
+
+    /// <summary>
+    /// Width of the Logs-tab details pane, in device-independent pixels, once
+    /// its splitter is dragged (#1174); <c>null</c> is the default 380.
+    /// </summary>
+    public double? LogsDetailsWidth { get; set; }
 }
 
 /// <summary>

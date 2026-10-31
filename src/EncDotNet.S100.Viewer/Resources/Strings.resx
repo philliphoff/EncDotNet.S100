@@ -669,6 +669,34 @@
     <value>Close the entry details</value>
     <comment>Tooltip of the Logs panel details pane's close button (#1080).</comment>
   </data>
+  <data name="Label_LogsCopyEntry" xml:space="preserve">
+    <value>Copy entry</value>
+    <comment>Accessible name of the Logs panel details pane's Copy entry button (#1174).</comment>
+  </data>
+  <data name="Tooltip_LogsCopyEntry" xml:space="preserve">
+    <value>Copy this entry to the clipboard, home folder shown as ~</value>
+    <comment>Tooltip of the Logs panel details pane's Copy entry button (#1174).</comment>
+  </data>
+  <data name="Label_LogsDetailsSplitter" xml:space="preserve">
+    <value>Resize entry details</value>
+    <comment>Accessible name of the splitter on the Logs panel details pane's left edge (#1174).</comment>
+  </data>
+  <data name="Logs_Menu_CopyMessage" xml:space="preserve">
+    <value>Copy message</value>
+    <comment>Logs panel row context menu: copies the entry's message (#1174).</comment>
+  </data>
+  <data name="Logs_Menu_CopyEntry" xml:space="preserve">
+    <value>Copy entry</value>
+    <comment>Logs panel row context menu: copies the whole entry, as Copy does (#1174).</comment>
+  </data>
+  <data name="Logs_Menu_ShowOnlyAreaFormat" xml:space="preserve">
+    <value>Show only {0}</value>
+    <comment>Logs panel row context menu: {0} is the row's area, e.g. "Datasets". Adds an area: token to the search (#1174).</comment>
+  </data>
+  <data name="Logs_Menu_HideAreaFormat" xml:space="preserve">
+    <value>Hide {0}</value>
+    <comment>Logs panel row context menu: {0} is the row's area, e.g. "Datasets". Adds an -area: token to the search (#1174).</comment>
+  </data>
   <data name="Label_LogsEntries" xml:space="preserve">
     <value>Log entries</value>
     <comment>Accessible name of the Logs panel's list (#1080).</comment>

@@ -56,6 +56,31 @@
         <Style Selector="TextBlock.logsCell.debug">
             <Setter Property="Opacity" Value="0.65" />
         </Style>
+        <!-- The details header's level and area line, in the level colour (#1174). -->
+        <Style Selector="StackPanel.logsDetailsLevel">
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource MutedColor}" />
+        </Style>
+        <Style Selector="StackPanel.logsDetailsLevel.warning">
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource WarningColor}" />
+        </Style>
+        <Style Selector="StackPanel.logsDetailsLevel.error">
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+        <Style Selector="Button.logsDetailsTool">
+            <Setter Property="Width" Value="22" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <!-- Mirror of the main window's `GridSplitter.PaneSplitter` style;
+             UserControls don't inherit window-scoped styles. -->
+        <Style Selector="GridSplitter.PaneSplitter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="GridSplitter.PaneSplitter:pointerover, GridSplitter.PaneSplitter:pressed">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
     </UserControl.Styles>
 
     <Grid RowDefinitions="Auto,Auto,*">
@@ -152,7 +177,17 @@
             <TextBlock Grid.Column="3" Classes="logsHeader" Text="{x:Static loc:Strings.Logs_Column_Message}" />
         </Grid>
 
-        <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
+        <!--
+            The list, and the details pane on the right behind a splitter
+            (#1174, D13). Code-behind sizes the details column: 0 with nothing
+            selected, else the dragged width (380 by default), 280 to 60%.
+        -->
+        <Grid x:Name="LogsBody" Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="0" />
+            </Grid.ColumnDefinitions>
             <Panel Grid.Column="0">
                 <TextBlock Text="{Binding EmptyText}"
                            IsVisible="{Binding IsEmpty}"
@@ -172,6 +207,29 @@
                          Background="Transparent"
                          Padding="0"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <!--
+                        Row menu (#1174, D16). The list selects a row on
+                        right-press, so the menu acts on the selection, as the
+                        Library tree's does. The area items add a search token,
+                        so the filter stays visible and editable.
+                    -->
+                    <ListBox.ContextMenu>
+                        <ContextMenu AutomationProperties.AutomationId="Logs.RowMenu">
+                            <MenuItem AutomationProperties.AutomationId="Logs.RowMenu.CopyMessage"
+                                      Header="{x:Static loc:Strings.Logs_Menu_CopyMessage}"
+                                      Command="{Binding CopySelectedMessageCommand}" />
+                            <MenuItem AutomationProperties.AutomationId="Logs.RowMenu.CopyEntry"
+                                      Header="{x:Static loc:Strings.Logs_Menu_CopyEntry}"
+                                      Command="{Binding CopySelectedEntryCommand}" />
+                            <Separator />
+                            <MenuItem AutomationProperties.AutomationId="Logs.RowMenu.ShowOnlyArea"
+                                      Header="{Binding ShowOnlySelectedAreaText}"
+                                      Command="{Binding ShowOnlySelectedAreaCommand}" />
+                            <MenuItem AutomationProperties.AutomationId="Logs.RowMenu.HideArea"
+                                      Header="{Binding HideSelectedAreaText}"
+                                      Command="{Binding HideSelectedAreaCommand}" />
+                        </ContextMenu>
+                    </ListBox.ContextMenu>
                     <ListBox.Styles>
                         <!-- Rows are named after their entry, not LogRowViewModel (#784). -->
                         <Style Selector="ListBoxItem" x:DataType="vm:LogRowViewModel">
@@ -180,12 +238,35 @@
                     </ListBox.Styles>
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:LogRowViewModel">
-                            <Grid ColumnDefinitions="96,44,92,*" Background="Transparent" TextElement.FontWeight="Normal">
+                            <Grid ColumnDefinitions="96,44,92,*" RowDefinitions="Auto,Auto" Background="Transparent" TextElement.FontWeight="Normal">
+                                <!--
+                                    Date divider (#1174, D14): above the first
+                                    row of each day while the shown rows span
+                                    more than one.
+                                -->
+                                <DockPanel Grid.Row="0"
+                                           Grid.ColumnSpan="4"
+                                           AutomationProperties.AutomationId="Logs.DayDivider"
+                                           IsVisible="{Binding ShowsDayDivider}"
+                                           Margin="0,4,0,3">
+                                    <TextBlock DockPanel.Dock="Left"
+                                               Text="{Binding DayText}"
+                                               FontSize="10.5"
+                                               Foreground="{DynamicResource MutedColor}"
+                                               VerticalAlignment="Center"
+                                               Margin="0,0,8,0" />
+                                    <Border Height="1"
+                                            VerticalAlignment="Center"
+                                            Background="{DynamicResource BorderColor}" />
+                                </DockPanel>
                                 <TextBlock Grid.Column="0"
+                                           Grid.Row="1"
                                            Classes="logsCell muted"
                                            Classes.debug="{Binding IsDebug}"
-                                           Text="{Binding TimeText}" />
+                                           Text="{Binding TimeText}"
+                                           ToolTip.Tip="{Binding FullTimeText}" />
                                 <TextBlock Grid.Column="1"
+                                           Grid.Row="1"
                                            Classes="logsCell logsLevel"
                                            Classes.debug="{Binding IsDebug}"
                                            Classes.info="{Binding IsInformation}"
@@ -193,11 +274,14 @@
                                            Classes.error="{Binding IsError}"
                                            Text="{Binding LevelShortText}" />
                                 <TextBlock Grid.Column="2"
+                                           Grid.Row="1"
                                            Classes="logsCell muted"
                                            Classes.debug="{Binding IsDebug}"
                                            Text="{Binding AreaText}"
                                            ToolTip.Tip="{Binding Category}" />
-                                <DockPanel Grid.Column="3" LastChildFill="True">
+                                <DockPanel Grid.Column="3"
+                                           Grid.Row="1"
+                                           LastChildFill="True">
                                     <Border DockPanel.Dock="Right"
                                             IsVisible="{Binding IsRepeated}"
                                             Background="{DynamicResource MutedBackgroundColor}"
@@ -246,9 +330,20 @@
                         FontSize="11.5" />
             </Panel>
 
+            <GridSplitter x:Name="DetailsSplitter"
+                          Grid.Column="1"
+                          AutomationProperties.AutomationId="Logs.Details.Splitter"
+                          AutomationProperties.Name="{x:Static loc:Strings.Label_LogsDetailsSplitter}"
+                          Classes="PaneSplitter"
+                          Width="4"
+                          IsVisible="{Binding HasSelectedEntry}"
+                          ResizeDirection="Columns"
+                          ResizeBehavior="PreviousAndNext"
+                          DragCompleted="OnDetailsSplitterDragCompleted" />
+
             <!-- Details of the selected entry: the full message and the exception. -->
-            <Border Grid.Column="1"
-                    Width="380"
+            <Border Grid.Column="2"
+                    AutomationProperties.AutomationId="Logs.Details"
                     IsVisible="{Binding HasSelectedEntry}"
                     BorderBrush="{DynamicResource BorderColor}"
                     BorderThickness="1,0,0,0"
@@ -256,26 +351,61 @@
                 <DockPanel DataContext="{Binding SelectedEntry}"
                            x:DataType="vm:LogRowViewModel"
                            LastChildFill="True">
-                    <DockPanel DockPanel.Dock="Top" LastChildFill="True">
-                        <Button DockPanel.Dock="Right"
-                                Classes="Ghost"
-                                AutomationProperties.AutomationId="Logs.CloseDetails"
-                                AutomationProperties.Name="{x:Static loc:Strings.Label_LogsCloseDetails}"
-                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_LogsCloseDetails}"
-                                Command="{Binding $parent[UserControl].((vm:LogsViewModel)DataContext).CloseDetailsCommand}"
-                                Width="22" Height="22" MinHeight="0" Padding="0">
-                            <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="12" />
-                        </Button>
-                        <TextBlock FontSize="11.5"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis">
-                            <Run Text="{Binding LevelText}" />
-                            <Run Text=" · " />
-                            <Run Text="{Binding AreaText}" />
-                            <Run Text=" · " />
-                            <Run Text="{Binding TimeText}" />
-                        </TextBlock>
+                    <!--
+                        Header (#1174, D11): level and area in the level
+                        colour, the full time with its date in the Local/UTC
+                        preference, then Copy entry and close.
+                    -->
+                    <DockPanel DockPanel.Dock="Top" LastChildFill="True" Margin="0,6,0,2">
+                        <StackPanel DockPanel.Dock="Right"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Top"
+                                    Spacing="2">
+                            <Button Classes="Ghost logsDetailsTool"
+                                    AutomationProperties.AutomationId="Logs.Details.CopyEntry"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Label_LogsCopyEntry}"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_LogsCopyEntry}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_LogsCopyEntry}"
+                                    Command="{Binding $parent[UserControl].((vm:LogsViewModel)DataContext).CopySelectedEntryCommand}">
+                                <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="13" />
+                            </Button>
+                            <Button Classes="Ghost logsDetailsTool"
+                                    AutomationProperties.AutomationId="Logs.CloseDetails"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Label_LogsCloseDetails}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_LogsCloseDetails}"
+                                    Command="{Binding $parent[UserControl].((vm:LogsViewModel)DataContext).CloseDetailsCommand}">
+                                <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="12" />
+                            </Button>
+                        </StackPanel>
+                        <StackPanel Spacing="2" VerticalAlignment="Center">
+                            <StackPanel Classes="logsDetailsLevel"
+                                        Classes.warning="{Binding IsWarning}"
+                                        Classes.error="{Binding IsError}"
+                                        Orientation="Horizontal"
+                                        Spacing="5">
+                                <ic:FluentIcon Icon="DismissCircle" IconVariant="Regular" FontSize="13"
+                                               VerticalAlignment="Center" IsVisible="{Binding IsError}" />
+                                <ic:FluentIcon Icon="Warning" IconVariant="Regular" FontSize="13"
+                                               VerticalAlignment="Center" IsVisible="{Binding IsWarning}" />
+                                <ic:FluentIcon Icon="Info" IconVariant="Regular" FontSize="13"
+                                               VerticalAlignment="Center" IsVisible="{Binding IsInformation}" />
+                                <ic:FluentIcon Icon="Bug" IconVariant="Regular" FontSize="13"
+                                               VerticalAlignment="Center" IsVisible="{Binding IsDebug}" />
+                                <TextBlock AutomationProperties.AutomationId="Logs.Details.Level"
+                                           FontSize="11.5"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis">
+                                    <Run Text="{Binding LevelText}" />
+                                    <Run Text="·" />
+                                    <Run Text="{Binding AreaText}" />
+                                </TextBlock>
+                            </StackPanel>
+                            <SelectableTextBlock AutomationProperties.AutomationId="Logs.Details.Time"
+                                                 Classes="logsDetailsMono"
+                                                 Foreground="{DynamicResource MutedColor}"
+                                                 Text="{Binding FullTimeText}" />
+                        </StackPanel>
                     </DockPanel>
                     <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                                   VerticalScrollBarVisibility="Auto">
