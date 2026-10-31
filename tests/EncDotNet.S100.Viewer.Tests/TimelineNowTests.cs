@@ -79,7 +79,8 @@ public sealed class TimelineNowTests
         // Live is now itself, not the step nearest it (#713 A1).
         Assert.Equal(Run.AddHours(9).AddMinutes(10), service.CurrentTime);
         Assert.Equal("now", timeline.OffsetText);
-        Assert.StartsWith("LIVE · ", timeline.StampText, StringComparison.Ordinal);
+        // Read as the Time HUD reads: time, then offset (design note time-overlays D3).
+        Assert.EndsWith(" · now", timeline.StampText, StringComparison.Ordinal);
         Assert.Equal((9 + 10 / 60.0) / 48, timeline.NowPosition, 3);
         Assert.False(timeline.HasStatusMessage);
         Assert.False(timeline.NowCommand.CanExecute(null));
@@ -296,7 +297,7 @@ public sealed class TimelineNowTests
 
         // Live is real time.
         Assert.False(timeline.IsNotRealTime);
-        Assert.StartsWith("LIVE · ", timeline.StampText, StringComparison.Ordinal);
+        Assert.EndsWith(" · now", timeline.StampText, StringComparison.Ordinal);
 
         var raised = new List<string?>();
         timeline.PropertyChanged += (_, e) => raised.Add(e.PropertyName);

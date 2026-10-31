@@ -20,10 +20,10 @@ namespace EncDotNet.S100.Viewer.Services.Depth;
 /// is S-102 bathymetry; <c>null</c> otherwise.
 /// </param>
 /// <param name="DatumsNotReconciled">
-/// <c>true</c> when the base (S-102) and selected tide (S-104) vertical datums
-/// could not be confirmed as the same datum, so the absolute baseline carries
-/// a caveat (the curve shape remains valid). Always <c>false</c> when there is
-/// no S-102 base or no selected tide.
+/// <c>true</c> when the base (S-102, or S-101 through its <c>SoundingDatum</c>)
+/// and selected tide (S-104) vertical datums could not be confirmed as the same
+/// datum, so the absolute baseline carries a caveat (the curve shape remains
+/// valid). Always <c>false</c> when there is no selected tide.
 /// </param>
 internal sealed record LocationDepthResult(
     BaseDepthResult Base,

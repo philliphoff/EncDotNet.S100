@@ -600,7 +600,7 @@ internal sealed class PassageCheckLegRowViewModel : ViewModelBase
     }
 
     private string _chipText = string.Empty;
-    /// <summary>The leg's min UKC, or "no tide" / "no data".</summary>
+    /// <summary>The leg's min UKC, or "no water level" / "no data".</summary>
     public string ChipText
     {
         get => _chipText;

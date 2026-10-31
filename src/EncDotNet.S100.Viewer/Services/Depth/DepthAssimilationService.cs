@@ -19,7 +19,7 @@ namespace EncDotNet.S100.Viewer.Services.Depth;
 /// the finest resolution, breaking ties by the latest issuance. The
 /// tide-adjusted depth is <c>base + tide(t)</c> in metres (total available
 /// water depth). A datum caveat is raised — per the "assume + warn" policy —
-/// when the S-102 base and S-104 tide datums cannot be confirmed identical;
+/// when the base (S-102 or S-101) and S-104 tide datums cannot be confirmed identical;
 /// the curve shape stays valid, only the absolute baseline is caveated.
 /// </para>
 /// </remarks>
@@ -95,7 +95,7 @@ internal sealed class DepthAssimilationService
 
     /// <summary>
     /// Builds the tide-less (static) result: the base depth stands alone with
-    /// no time series, so the card shows "DEPTH (STATIC)" and the no-tide
+    /// no time series, so the card shows the charted depth and the no-tide
     /// info-bar. Used both when no S-104 grid overlaps and when the overlapping
     /// grid yields only NODATA at the picked cell.
     /// </summary>
@@ -145,17 +145,12 @@ internal sealed class DepthAssimilationService
             incumbent.SpacingDegrees, incumbent.IssueDate, incumbent.DatasetId) < 0;
 
     /// <summary>
-    /// Applies the "assume + warn" datum policy: a mismatch is flagged only for
-    /// an S-102 base, when the base and tide datums cannot be confirmed as the
-    /// same known register code.
+    /// Applies the "assume + warn" datum policy: a mismatch is flagged when the
+    /// base (S-102, or S-101 through its <c>SoundingDatum</c>) and tide datums
+    /// cannot be confirmed as the same known register code.
     /// </summary>
     private static bool IsDatumMismatch(BaseDepthResult baseDepth, S104TideCandidate tide)
     {
-        if (baseDepth.Source != BaseDepthSource.Bathymetry)
-        {
-            return false;
-        }
-
         // Warn when either datum is unknown (cannot confirm alignment) or the
         // known codes differ; the comparison is shared with the passage check.
         return VerticalDatumCheck.Compare(baseDepth.VerticalDatumCode, tide.VerticalDatumCode) != DatumAgreement.Same;

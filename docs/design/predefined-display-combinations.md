@@ -1,8 +1,10 @@
 # Predefined display combinations — Design Note
 
-> Status: **Proposed**
-> ([#1192](https://github.com/philliphoff/EncDotNet.S100/issues/1192)). Nothing
-> here is built yet. The note sets out what a display combination is in
+> Status: **Built**, except Interoperability Catalogue combinations (§3.5),
+> which wait for a catalogue loader
+> ([#1192](https://github.com/philliphoff/EncDotNet.S100/issues/1192)). Steps
+> 1–6 of §8 shipped together; §9 records where the build settled what this
+> note left open. The note sets out what a display combination is in
 > SoundCharts, what it changes and what it never changes, how it is stored,
 > and the order to build it in. It takes the "Predefined Combinations UI" row
 > off the deferred list in
@@ -374,3 +376,31 @@ Each step is a PR that builds and passes on its own.
 6. **S-98 note.** Move "Predefined Combinations UI" and "Pre-defined
    Combination switching UX" out of §3.5 and link here.
 7. **Later, with the IC loader:** IC combinations (§3.5), after Q3.
+
+## 9. As built
+
+Where the build settled what the note left open:
+
+- **Viewing groups.** A combination also lists the viewing groups it *shows*
+  (`ShownViewingGroups`), so **Charted only** can turn Important Text on as
+  well as Other Text off. Applying hides and shows only the groups it names;
+  the rest keep their state. The S-101 ids are Important Text `11` and Other
+  Text `21, 23–30, 32` (viewing-group layers 101 and 102).
+- **Everything loaded** puts every product in and sets nothing else.
+- **Toolbar.** The display pills were folded into the **Display Settings**
+  button before this was built, so the **View ▾** pill sits on its own at the
+  top right of the map, left of the map tools.
+- **Sub-layers at load.** Sub-layers exist only after a dataset's first
+  render, so `IDatasetLoaderService.SetSubLayerVisibilityOnLoad` decides each
+  one the first time the dataset produces it, alongside `SetActiveOnLoad`.
+  Both apply on a dataset's first load in the session only, so a lazy reload
+  keeps what the mariner set since.
+- **Save current view** is a form inline in the View list (pill flyout and
+  panel), not a separate dialog. It lists what's saved and what isn't (D).
+- **Open questions.** Q1: a combination doesn't change what the route check
+  uses. Q2: the built-ins follow §2, so only **Pilotage**, **Passage
+  planning** and **Everything loaded** include S-124, and a user combination
+  may leave it out; the map-wide Navigational warnings switch is never
+  touched. Q3 waits for the IC loader. Q4: S-111 thinning is unchanged. Q5:
+  product-level rules only, with the modified marker. Q6: a fresh install
+  starts in **Everything loaded**.

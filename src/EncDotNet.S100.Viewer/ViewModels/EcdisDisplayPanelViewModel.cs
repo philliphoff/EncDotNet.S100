@@ -38,7 +38,8 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         PortrayalCatalogueManager catalogueManager,
         DatasetsViewModel datasets,
         EcdisLabelOverrideProvider? labelOverrides = null,
-        DisplayModeToolbarViewModel? displayModeToolbar = null)
+        DisplayModeToolbarViewModel? displayModeToolbar = null,
+        DisplayCombinationsViewModel? displayCombinations = null)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(catalogueManager);
@@ -49,6 +50,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         _datasets = datasets;
         _labelOverrides = labelOverrides ?? new EcdisLabelOverrideProvider();
         _displayModeToolbar = displayModeToolbar;
+        DisplayCombinations = displayCombinations;
 
         ResetAllOverridesCommand = new RelayCommand(() => _state.ClearAllOverrides());
         SetDisplayBaseCommand = new RelayCommand(() => ActiveCategory = EcdisDisplayCategory.DisplayBase);
@@ -63,6 +65,22 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
 
         RebuildSpecs();
     }
+
+    /// <summary>
+    /// The display combinations shown in the panel's View section, above
+    /// Display Category; <see langword="null"/> where they aren't wired.
+    /// </summary>
+    public DisplayCombinationsViewModel? DisplayCombinations { get; }
+
+    /// <summary>True when the panel shows its View section.</summary>
+    public bool HasDisplayCombinations => DisplayCombinations is not null;
+
+    /// <summary>
+    /// True when the panel is otherwise empty but still shows its View
+    /// section, above the empty state: a view chosen now applies to what
+    /// loads later.
+    /// </summary>
+    public bool ShowsViewAboveEmptyState => IsEmpty && HasDisplayCombinations;
 
     /// <summary>Per-spec sections shown in the panel.</summary>
     public ObservableCollection<EcdisSpecViewModel> Specs { get; } = new();
@@ -257,6 +275,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
             HasWeatherData = hasWeather;
             OnPropertyChanged(nameof(HasWeatherData));
             OnPropertyChanged(nameof(IsEmpty));
+            OnPropertyChanged(nameof(ShowsViewAboveEmptyState));
         }
 
         // Determine which portrayal specs are currently loaded. An S-57 entry
@@ -295,6 +314,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         }
 
         OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(ShowsViewAboveEmptyState));
     }
 
     public void Dispose()

@@ -260,7 +260,7 @@
                 Padding="8,4"
                 Height="30"
                 IsVisible="{Binding IsStatusBarVisible}">
-            <DockPanel LastChildFill="False">
+            <DockPanel x:Name="StatusBarDock" LastChildFill="False">
                 <DockPanel.Styles>
                     <!-- Shared vertical divider between status-bar items. Each
                          item carries a *leading* separator bound to the same
@@ -281,7 +281,8 @@
                      overscale pill) and the MCP readout sit to the right of the
                      cursor lat/lon so they don't shift when the cursor leaves
                      the map. -->
-                <StackPanel DockPanel.Dock="Right"
+                <StackPanel x:Name="StatusRightCluster"
+                            DockPanel.Dock="Right"
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
 
@@ -403,6 +404,12 @@
                             </Flyout>
                         </Button.Flyout>
                     </Button>
+
+                    <!-- Depth basis (#1191): what the chart's depths are relative
+                         to. Never hidden while depths are drawn; steps down to a
+                         shorter whole form when the status bar is narrow. -->
+                    <views:DepthBasisIndicatorView x:Name="DepthBasisIndicator"
+                                                   DataContext="{Binding DepthBasis}" />
 
                     <!-- MCP server -->
                     <Border Classes="StatusSeparator" IsVisible="{Binding IsMcpRunning}" />
@@ -628,8 +635,8 @@
                                     VerticalAlignment="Top"
                                     Margin="0,4,0,0" />
                 <!-- Time HUD (#712, handoff Part F): the Timeline's controls at the
-                     bottom centre of the map while its dock is closed (or the
-                     window is too narrow for the dock). -->
+                     bottom centre of the map while the Timeline tab isn't shown
+                     (dock closed, on another tab, or the window too narrow). -->
                 <views:TimeHudView DataContext="{Binding Timeline}"
                                    IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsTimeHudVisible}"
                                    DockCommand="{Binding $parent[Window].((vm:MainViewModel)DataContext).ToggleTimelineDockCommand}"
@@ -644,11 +651,13 @@
                                             VerticalAlignment="Bottom"
                                             Margin="12,0,0,60" />
                 <!-- Map stamp (#713 B4): the view time over the map while the
-                     Timeline dock is shown, so the map (and any screenshot of
-                     it) says which time it shows. Green dot Live, accent Pinned.
-                     With navigational warnings loaded and the time pinned it
-                     starts "Display Not Real Time" and stays shown (S-98
-                     §12.7.2; #993). -->
+                     Timeline tab is shown in the dock, so the map (and any
+                     screenshot of it) says which time it shows; the Time HUD
+                     takes over otherwise, never both (design note
+                     time-overlays D1). Green dot Live, accent Pinned. With
+                     date-dependent data loaded and the time pinned it starts
+                     "Display Not Real Time" (S-98 §12.7.2; #993), as the HUD
+                     does. -->
                 <Panel HorizontalAlignment="Left"
                        VerticalAlignment="Top"
                        Margin="12,12,0,0"
@@ -747,6 +756,47 @@
                                    VerticalAlignment="Center" />
                     </StackPanel>
                 </Border>
+                <!-- View pill (#1192): the active display combination, left
+                     of the map tools. Its flyout lists the combinations (built-ins,
+                     then the mariner's own), with Reapply, Save as and Manage. -->
+                <Button x:Name="DisplayCombinationButton"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Margin="0,14,60,0"
+                        Padding="10,4"
+                        CornerRadius="14"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        Background="{DynamicResource MapOverlaySurfaceBrush}"
+                        Foreground="{DynamicResource ForegroundColor}"
+                        IsVisible="{Binding DisplayCombinations, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        AutomationProperties.AutomationId="Map.View"
+                        AutomationProperties.Name="{x:Static loc:Strings.Label_DisplayCombination_Pill}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayCombination_Pill}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayCombination_Pill}">
+                    <TextBlock Text="{Binding DisplayCombinations.PillLabel, FallbackValue=''}"
+                               FontSize="12"
+                               FontWeight="Medium"
+                               MaxWidth="260"
+                               TextTrimming="CharacterEllipsis" />
+                    <Button.Flyout>
+                        <Flyout Placement="BottomEdgeAlignedRight">
+                            <Border Padding="14,12,14,12" Background="Transparent">
+                                <StackPanel Width="340" Spacing="8">
+                                    <views:DisplayCombinationsView DataContext="{Binding DisplayCombinations}" />
+                                    <Button Classes="Ghost"
+                                            HorizontalAlignment="Left"
+                                            Padding="8,4"
+                                            AutomationProperties.AutomationId="Map.View.Manage"
+                                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayCombination_Manage}"
+                                            Content="{x:Static loc:Strings.DisplayCombination_Manage}"
+                                            Command="{Binding DisplayCombinations.ManageCommand, FallbackValue={x:Null}}"
+                                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayCombination_Manage}" />
+                                </StackPanel>
+                            </Border>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
                 <StackPanel Orientation="Vertical"
                             Spacing="2"
                             HorizontalAlignment="Right"

@@ -215,7 +215,7 @@
         "group": "check",
         "category": "data",
         "title": "Outside water-level coverage",
-        "meta": "Leg 1 \u2192 2 \u00B7 2.9 NM \u00B7 tide not applied",
+        "meta": "Leg 1 \u2192 2 \u00B7 2.9 NM \u00B7 water level not applied",
         "legIndex": 0,
         "distanceNm": 1.4569,
         "location": {

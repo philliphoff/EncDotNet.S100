@@ -11,7 +11,9 @@ internal sealed record CaptureAppScreenshotResult(
     [property: Description("Captured image width in pixels (decoded from the PNG header), or 0 when unknown.")] int Width,
     [property: Description("Captured image height in pixels (decoded from the PNG header), or 0 when unknown.")] int Height,
     [property: Description("Image format identifier; always \"png\" in v1.")] string ImageFormat,
-    [property: Description("PNG-encoded image bytes; surfaced separately as a MCP ImageContentBlock with mimeType image/png at the wire layer.")] byte[] ImageBytes);
+    [property: Description("PNG-encoded image bytes; surfaced separately as a MCP ImageContentBlock with mimeType image/png at the wire layer.")] byte[] ImageBytes,
+    [property: Description("Id of the display combination the map shows (the View pill), as list_display_combinations reports it; null for Custom.")] string? DisplayCombinationId = null,
+    [property: Description("True when a setting the display combination covers has changed since it was applied ('Pilotage (modified)').")] bool DisplayCombinationModified = false);
 
 /// <summary>
 /// Captures a PNG snapshot of the whole viewer application window —
@@ -50,15 +52,21 @@ internal sealed class CaptureAppScreenshotTool
 
     private readonly IAppScreenshotProvider _provider;
     private readonly IViewerUiControllerAccessor? _panels;
+    private readonly Func<(string? Id, bool Modified)>? _displayCombination;
 
     /// <summary>Creates a new <see cref="CaptureAppScreenshotTool"/>.</summary>
     /// <param name="provider">Renders the window, or one region of it.</param>
     /// <param name="panels">Resolves a panel id to its dock for the <c>panel</c> crop; null accepts only 'map'.</param>
-    public CaptureAppScreenshotTool(IAppScreenshotProvider provider, IViewerUiControllerAccessor? panels = null)
+    /// <param name="displayCombination">The active display combination's id and modified marker, recorded with each capture; null records none.</param>
+    public CaptureAppScreenshotTool(
+        IAppScreenshotProvider provider,
+        IViewerUiControllerAccessor? panels = null,
+        Func<(string? Id, bool Modified)>? displayCombination = null)
     {
         ArgumentNullException.ThrowIfNull(provider);
         _provider = provider;
         _panels = panels;
+        _displayCombination = displayCombination;
     }
 
     /// <summary>Executes the tool for the whole window.</summary>
@@ -130,8 +138,9 @@ internal sealed class CaptureAppScreenshotTool
         }
 
         var (width, height) = TryReadPngSize(bytes);
+        var (combinationId, modified) = _displayCombination?.Invoke() ?? (null, false);
         return ToolResult<CaptureAppScreenshotResult>.Ok(
-            new CaptureAppScreenshotResult(width, height, "png", bytes));
+            new CaptureAppScreenshotResult(width, height, "png", bytes, combinationId, modified));
     }
 
     /// <summary>Maps a <c>panel</c> value to the region that shows it.</summary>

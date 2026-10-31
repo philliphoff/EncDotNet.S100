@@ -749,9 +749,9 @@
                 Location depth-assimilation card. Shown for water-based picks
                 that resolve a base depth (S-102 bathymetry, an S-101 depth /
                 dredged area, or the nearest sounding). A prominent headline
-                readout shows the tide-adjusted depth ("DEPTH NOW") when an
-                overlapping S-104 grid is found, or the static base depth
-                ("DEPTH (STATIC)") otherwise; that headline stays visible even
+                readout shows the adjusted depth ("ADJUSTED DEPTH AT SELECTED
+                TIME") when an overlapping S-104 grid is found, or the charted
+                depth ("CHARTED DEPTH · WATER LEVEL NOT APPLIED") otherwise; that headline stays visible even
                 when the detail region is collapsed. Expanding reveals the
                 base/tide breakdown, the depth-over-time chart, and any
                 datum-reconciliation caveat.
@@ -867,10 +867,19 @@
                         </Panel>
                     </Border>
 
+                    <!-- How the chart relates to this depth (#1191): "The chart
+                         shows charted depths". -->
+                    <TextBlock Text="{Binding ChartBasisLine}"
+                               IsVisible="{Binding HasChartBasisLine}"
+                               FontSize="12"
+                               Opacity="0.75"
+                               TextWrapping="Wrap"
+                               Margin="0,2,0,0" />
+
                     <!--
                         Prominent headline readout. Always visible (even when
-                        collapsed). Shows the tide-adjusted "DEPTH AT SELECTED
-                        TIME" or the "DEPTH (STATIC)" base depth. The top margin
+                        collapsed). Shows the "ADJUSTED DEPTH AT SELECTED TIME"
+                        or the charted depth with water level not applied. The top margin
                         separates it from the tappable header bar above.
                     -->
                     <Border Background="{DynamicResource AccentSubtleBrush}"
@@ -937,7 +946,7 @@
                             </Grid>
                         </StackPanel>
 
-                        <!-- Tide-adjusted depth over time (only when an S-104 grid overlaps). -->
+                        <!-- Adjusted depth over time (only when an S-104 grid overlaps). -->
                         <lvc:CartesianChart IsVisible="{Binding HasTide}"
                                             MinHeight="200"
                                             Series="{Binding DepthSeries}"

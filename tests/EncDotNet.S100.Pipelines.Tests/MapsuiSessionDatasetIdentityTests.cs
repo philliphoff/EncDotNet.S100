@@ -34,8 +34,9 @@ public sealed class MapsuiSessionDatasetIdentityTests
         // The default loader id is the file name; the second open picks its own.
         var first = AddS102(session, owner, manager, Path.GetFileName(S102File), opacity: 1.0);
         var second = AddS102(session, owner, manager, "second-copy", opacity: 0.4);
-        var firstLayer = Assert.Single((await session.RenderAsync(first, MapPresentationState.Default, ct))!.Layers);
-        var secondLayer = Assert.Single((await session.RenderAsync(second, MapPresentationState.Default, ct))!.Layers);
+        // The S-102 surface layer; the safety contour and coverage limit come with it.
+        var firstLayer = Assert.Single((await session.RenderAsync(first, MapPresentationState.Default, ct))!.Layers, IsSurface);
+        var secondLayer = Assert.Single((await session.RenderAsync(second, MapPresentationState.Default, ct))!.Layers, IsSurface);
         Assert.NotSame(firstLayer, secondLayer);
 
         AssertOwnEntries(session, first, firstLayer, 1.0);
@@ -58,11 +59,13 @@ public sealed class MapsuiSessionDatasetIdentityTests
     private static void AssertOwnEntries(
         MapsuiDatasetLayerSession session, MapDatasetId id, ILayer expected, double opacity)
     {
-        var entry = Assert.Single(session.GetLayerStackEntries(), e => e.SourceDatasetId == id.Value);
+        var entry = Assert.Single(session.GetLayerStackEntries(), e => e.SourceDatasetId == id.Value && IsSurface(e.Layer));
         Assert.Same(expected, entry.Layer);
         Assert.Equal(opacity, entry.Layer.Opacity, 3);
         Assert.Contains(expected, session.GetStackedLayers());
     }
+
+    private static bool IsSurface(ILayer layer) => layer.Name.StartsWith("S-102: ", StringComparison.Ordinal);
 
     private static MapDataset Dataset(MapsuiDatasetLayerSession session, MapDatasetId id, bool isVisible)
     {

@@ -78,6 +78,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
 
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
     private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage)? _cellExtent;
+    private IReadOnlyList<SoundingDatumArea>? _soundingDatums;
     private Dictionary<long, S101FeatureRecord>? _featureRecords;
     private FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
@@ -1157,6 +1158,27 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     /// <returns>The nearest sounding sample, or <c>null</c>.</returns>
     public S101SoundingSample? SampleNearestSounding(double latitude, double longitude)
         => S101SoundingSampler.SampleNearest(_dataset.Document, latitude, longitude);
+
+    /// <inheritdoc/>
+    public int? SoundingDatumAt(double latitude, double longitude) =>
+        SoundingDatumResolver.At(SoundingDatumAreas, latitude, longitude);
+
+    /// <inheritdoc/>
+    public int? SoundingDatum => SoundingDatumResolver.Predominant(SoundingDatumAreas);
+
+    private IReadOnlyList<SoundingDatumArea> SoundingDatumAreas
+    {
+        get
+        {
+            if (_soundingDatums is { } areas)
+                return areas;
+
+            _featureIndex ??= BuildFeatureIndex();
+            areas = SoundingDatumResolver.Resolve(_featureIndex.Values);
+            _soundingDatums = areas;
+            return areas;
+        }
+    }
 
     /// <summary>
     /// The cell's scale rank against overlapping cells (see

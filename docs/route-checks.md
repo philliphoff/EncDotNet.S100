@@ -257,7 +257,7 @@ findings:
 | `clearance.below_setting` | Must review | A stretch where UKC is below the required UKC. |
 | `confidence.charted_depth_from_s101` | Check | A stretch where the charted depth is from S-101 because no S-102 covers it. |
 | `confidence.datum_unconfirmed` | Check | A stretch where a depth or water-level datum isn't declared, so they can't be confirmed to match. |
-| `data.water_level_ends` | Check | The water-level data ends before the vessel reaches a stretch, so the tide isn't applied there. |
+| `data.water_level_ends` | Check | The water-level data ends before the vessel reaches a stretch, so the water level isn't applied there. |
 | `data.water_level_starts_late` | Check | The water-level data starts after the vessel passes a stretch. |
 | `data.no_water_level_coverage` | Check | A stretch outside every water-level dataset's coverage. |
 | `data.water_level_no_data` | Check | A stretch inside water-level coverage where the data has no value. |
