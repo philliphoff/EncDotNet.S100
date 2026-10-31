@@ -591,6 +591,7 @@ internal static partial class Strings
     public static string TimelinePanel_PresetAllLoaded => Get(nameof(TimelinePanel_PresetAllLoaded));
     public static string TimelinePanel_PresetCustom => Get(nameof(TimelinePanel_PresetCustom));
     public static string TimeHud_Live => Get(nameof(TimeHud_Live));
+    public static string Tooltip_TimeHudLive => Get(nameof(Tooltip_TimeHudLive));
     public static string Tooltip_TimeHudOpenTimeline => Get(nameof(Tooltip_TimeHudOpenTimeline));
     public static string Timeline_ViewTime => Get(nameof(Timeline_ViewTime));
     public static string Tooltip_TimeHudTime => Get(nameof(Tooltip_TimeHudTime));
