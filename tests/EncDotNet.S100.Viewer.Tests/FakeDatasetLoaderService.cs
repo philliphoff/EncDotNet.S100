@@ -53,17 +53,15 @@ internal sealed class FakeDatasetLoaderService : IDatasetLoaderService
     public IReadOnlyList<ILayer> CurrentStackedLayers => Array.Empty<ILayer>();
     public IReadOnlyList<LayerStackEntry> CurrentStackEntries => Array.Empty<LayerStackEntry>();
     public event Action? LayerStackChanged { add { } remove { } }
-    private readonly Dictionary<string, bool> _active = new(StringComparer.Ordinal);
+    /// <summary>Dataset ids whose Active flag is off; every other id is active.</summary>
+    public HashSet<string> Inactive { get; } = new(StringComparer.Ordinal);
 
-    /// <summary>Unknown ids are active, as the production loader's are.</summary>
-    public bool GetActive(string datasetId) =>
-        !_active.TryGetValue(datasetId, out var active) || active;
+    public bool GetActive(string datasetId) => !Inactive.Contains(datasetId);
 
     public void SetActive(string datasetId, bool active)
     {
-        if (GetActive(datasetId) == active) return;
-        _active[datasetId] = active;
-        ActiveChanged?.Invoke(datasetId);
+        if (active ? Inactive.Remove(datasetId) : Inactive.Add(datasetId))
+            ActiveChanged?.Invoke(datasetId);
     }
 
     /// <summary>The policy last passed to <see cref="SetHiddenFeaturesOnLoad"/>.</summary>

@@ -47,28 +47,36 @@ internal sealed class BaseDepthResolver
     /// Display name of the S-101 dataset that supplied
     /// <paramref name="nearestSounding"/>, or <c>null</c>.
     /// </param>
+    /// <param name="chartDatumAt">
+    /// The vertical datum of an S-101 (or S-57) source at the pick, by its
+    /// dataset display name: the S-100 code of the cell's <c>SoundingDatum</c>
+    /// area there, or <c>null</c> when the cell declares none. The route check
+    /// reads the same areas. Omitted, S-101 depths carry no datum.
+    /// </param>
     /// <returns>The chosen <see cref="BaseDepthResult"/>, or <c>null</c>.</returns>
     public BaseDepthResult? Resolve(
         S102DepthSample? bathymetry,
         IReadOnlyList<PickHit> hits,
         S101SoundingSample? nearestSounding,
         string? bathymetryDatasetId = null,
-        string? soundingDatasetId = null)
+        string? soundingDatasetId = null,
+        Func<string?, int?>? chartDatumAt = null)
     {
         ArgumentNullException.ThrowIfNull(hits);
+        int? ChartDatum(string? datasetId) => chartDatumAt?.Invoke(datasetId);
 
         var chosen = ChartedDepthResolver.Resolve(
             bathymetry is { } bathy
                 ? new ChartedDepth(bathy.DepthMeters, ChartedDepthKind.Bathymetry, bathy.UncertaintyMeters, bathy.VerticalDatumCode, bathymetryDatasetId)
                 : null,
             TryReadAreaMinimumDepth(hits, "DredgedArea") is { } dredged
-                ? new ChartedDepth(dredged.Depth, ChartedDepthKind.DredgedArea, DatasetId: dredged.DatasetId)
+                ? new ChartedDepth(dredged.Depth, ChartedDepthKind.DredgedArea, VerticalDatum: ChartDatum(dredged.DatasetId), DatasetId: dredged.DatasetId)
                 : null,
             TryReadAreaMinimumDepth(hits, "DepthArea") is { } area
-                ? new ChartedDepth(area.Depth, ChartedDepthKind.DepthArea, DatasetId: area.DatasetId)
+                ? new ChartedDepth(area.Depth, ChartedDepthKind.DepthArea, VerticalDatum: ChartDatum(area.DatasetId), DatasetId: area.DatasetId)
                 : null,
             nearestSounding is { } sounding
-                ? new ChartedDepth(sounding.DepthMeters, ChartedDepthKind.Sounding, DatasetId: soundingDatasetId, SoundingDistanceMeters: sounding.DistanceMeters)
+                ? new ChartedDepth(sounding.DepthMeters, ChartedDepthKind.Sounding, VerticalDatum: ChartDatum(soundingDatasetId), DatasetId: soundingDatasetId, SoundingDistanceMeters: sounding.DistanceMeters)
                 : null);
 
         return chosen is null

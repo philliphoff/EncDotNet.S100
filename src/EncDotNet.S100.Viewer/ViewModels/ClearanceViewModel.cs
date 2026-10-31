@@ -255,7 +255,7 @@ internal sealed class ClearanceViewModel : ViewModelBase
     }
 
     private string? _waterLevelSource;
-    /// <summary><c>S-104 · {station} · {step}</c>, or "No S-104 at this ETA · tide not applied".</summary>
+    /// <summary><c>S-104 · {station} · {step}</c>, or "No S-104 at this ETA · water level not applied".</summary>
     public string? WaterLevelSource
     {
         get => _waterLevelSource;

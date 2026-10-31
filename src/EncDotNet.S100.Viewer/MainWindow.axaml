@@ -257,7 +257,7 @@
                 Padding="8,4"
                 Height="30"
                 IsVisible="{Binding IsStatusBarVisible}">
-            <DockPanel LastChildFill="False">
+            <DockPanel x:Name="StatusBarDock" LastChildFill="False">
                 <DockPanel.Styles>
                     <!-- Shared vertical divider between status-bar items. Each
                          item carries a *leading* separator bound to the same
@@ -278,7 +278,8 @@
                      overscale pill) and the MCP readout sit to the right of the
                      cursor lat/lon so they don't shift when the cursor leaves
                      the map. -->
-                <StackPanel DockPanel.Dock="Right"
+                <StackPanel x:Name="StatusRightCluster"
+                            DockPanel.Dock="Right"
                             Orientation="Horizontal"
                             VerticalAlignment="Center">
 
@@ -400,6 +401,12 @@
                             </Flyout>
                         </Button.Flyout>
                     </Button>
+
+                    <!-- Depth basis (#1191): what the chart's depths are relative
+                         to. Never hidden while depths are drawn; steps down to a
+                         shorter whole form when the status bar is narrow. -->
+                    <views:DepthBasisIndicatorView x:Name="DepthBasisIndicator"
+                                                   DataContext="{Binding DepthBasis}" />
 
                     <!-- MCP server -->
                     <Border Classes="StatusSeparator" IsVisible="{Binding IsMcpRunning}" />

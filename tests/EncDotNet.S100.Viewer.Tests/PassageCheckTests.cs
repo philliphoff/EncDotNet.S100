@@ -115,7 +115,7 @@ public sealed class PassageCheckTests : IDisposable
         var tail = Overlay(f).Segments[^1];
         Assert.Equal(UkcState.NoData, tail.State);
         Assert.Same(RouteOverlayRenderer.NoDataDash, RouteOverlayRenderer.CheckDash(tail.State, tail.IsLowConfidence));
-        Assert.Equal("no tide", vm.Check.Legs[^1].ChipText);
+        Assert.Equal("no water level", vm.Check.Legs[^1].ChipText);
     }
 
     [Fact]

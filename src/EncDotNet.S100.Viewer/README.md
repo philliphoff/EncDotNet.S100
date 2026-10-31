@@ -597,6 +597,34 @@ When you zoom in past a chart's finest compilation scale, the status bar shows
 in view. With **Settings** > **Chart display** > **Overscale indication** on,
 the overscaled area also has the S-52 vertical-line pattern as a caution.
 
+### Depth basis indication
+
+Whenever an S-101, S-57 or S-102 dataset is loaded and active, the status bar
+shows **DEPTHS** next to **OVERSCALE**. It says what the depths, depth shading
+and safety contour on the chart are relative to:
+
+- **Charted**: charted depths, relative to each dataset's vertical datum.
+- **Charted · water level not applied**: an active S-104 dataset covers the
+  view, but its water level isn't added to the chart. The pill is highlighted
+  and has an information icon.
+
+The chart always draws charted depths. S-104 water level is applied in two
+places: the **Depth** card in Object information, and the clearance in
+**Check route**. Moving the Timeline doesn't change the depths on the chart.
+
+On a narrow window the value shortens to **Charted · not applied**, then
+**Charted** with the information icon. It never cuts off part of a word. The
+full text stays in the tooltip.
+
+Select the pill to see:
+
+- **Depths on the chart**: the vertical datum of the depth sources in view
+  (or "Several datums in view", with the datasets on each) and the sources
+  themselves.
+- **Water level**: each S-104 dataset in view, with its kind (grid or
+  station), run and time range, or "No S-104 water level loaded."
+- **Where water level is applied**: the Depth card and the route check.
+
 ## Control the layer stack
 
 The **Layer stack** panel lists every visible layer in its S-98 display
@@ -780,10 +808,17 @@ Turn on **Pick Mode** (the cross-hair button on the map toolbar, **View** >
   and S-421 route topology.
 - A time-series chart for a fixed-station observation (S-104 and S-111
   stations, data coding format 8).
-- A **Depth** chart where depth data is available: the base depth from S-102
-  bathymetry or S-101 depth areas, dredged areas or soundings, adjusted by
-  S-104 water levels over time when they cover the point. With no water-level
-  data, the depth is static.
+- A **Depth** card where depth data is available: the **Charted depth** from
+  S-102 bathymetry or S-101 depth areas, dredged areas or soundings, and the
+  **Water level** from S-104 when it covers the point. The headline is the
+  **ADJUSTED DEPTH AT SELECTED TIME** (charted depth plus water level), with
+  an **Adjusted depth** chart over time. With no water-level data, the
+  headline is **CHARTED DEPTH · WATER LEVEL NOT APPLIED**. A line under the
+  card's title says "The chart shows charted depths", so you can tell how the
+  value relates to what the chart draws. When the charted depth's vertical
+  datum (S-102 `verticalDatum`, or the S-101 `SoundingDatum` at the point)
+  can't be confirmed to match the water level's, the card says "Datums not
+  reconciled — absolute baseline approximate".
 - A **Warning card** for an S-124 navigational warning part. Its header has
   the series and number (such as "NAVAREA X 106/26"), the warning type, and
   whether the warning is **In force**, **Not yet in force** or **Ended** at

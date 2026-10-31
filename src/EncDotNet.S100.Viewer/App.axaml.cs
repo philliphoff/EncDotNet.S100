@@ -1227,6 +1227,7 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState>(),
             sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.LogBuffer>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService>()));
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
@@ -1297,17 +1298,37 @@ public partial class App : Application
         services.AddSingleton<ViewerPresentationCoordinator>();
         services.AddSingleton<PresentationRevealCoordinator>();
         services.AddSingleton<ITimeFormatProvider, TimeFormatProvider>();
-        services.AddSingleton<PickReportViewModel>(sp => new PickReportViewModel(
-            sp.GetService<ITimeFormatProvider>(),
-            sp.GetService<IMarinerSettingsProvider>(),
-            sp.GetService<IUrlOpener>(),
-            sp.GetService<IS100ExaminerLinkBuilder>(),
-            sp.GetService<EncDotNet.S100.Viewer.Services.IViewTime>()));
+        services.AddSingleton<PickReportViewModel>(sp =>
+        {
+            var pick = new PickReportViewModel(
+                sp.GetService<ITimeFormatProvider>(),
+                sp.GetService<IMarinerSettingsProvider>(),
+                sp.GetService<IUrlOpener>(),
+                sp.GetService<IS100ExaminerLinkBuilder>(),
+                sp.GetService<EncDotNet.S100.Viewer.Services.IViewTime>());
+            // The depth card's "The chart shows charted depths" line (#1191).
+            if (sp.GetService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>() is { } depthBasis)
+            {
+                pick.SetDepthBasis(depthBasis.Current);
+                depthBasis.Changed += (_, _) => pick.SetDepthBasis(depthBasis.Current);
+            }
+            return pick;
+        });
         services.AddSingleton<IForecastRunRefresher>(sp => new LibraryForecastRunRefresher(sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>()));
         services.AddSingleton<TimelineMapScope>(sp => new TimelineMapScope(
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
             sp.GetRequiredService<DatasetsViewModel>()));
         services.AddSingleton<ITimelineMapScope>(sp => sp.GetRequiredService<TimelineMapScope>());
+        // Depth basis indicator (#1191). Chart water level adjustment (#1132)
+        // replaces the always-off state with its own.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentState>(
+            EncDotNet.S100.Viewer.Services.Depth.NoWaterLevelAdjustment.Instance);
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Depth.DepthBasisService(
+            sp.GetRequiredService<IDatasetLoaderService>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IViewTime>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentState>(),
+            sp.GetRequiredService<ITimelineMapScope>()));
         services.AddSingleton<TimelineViewModel>(sp =>
         {
             var timeline = Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<TimelineViewModel>(sp);

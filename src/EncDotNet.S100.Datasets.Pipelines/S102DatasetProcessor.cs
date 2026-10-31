@@ -106,6 +106,13 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     public DateTime? IssueTime => S100IssueTime.Parse(_dataset.IssueDate, _dataset.IssueTime);
 
     /// <summary>
+    /// The vertical datum the surface's depths are relative to: the root
+    /// <c>verticalDatum</c> as an S-100 vertical datum code (S-102 Ed 3.0.0
+    /// §10.2.1), or <see langword="null"/> when it isn't declared.
+    /// </summary>
+    public int? VerticalDatum => _dataset.VerticalDatum;
+
+    /// <summary>
     /// Initializes a new <see cref="S102DatasetProcessor"/> by reading and
     /// parsing the HDF5 dataset file at <paramref name="path"/>. The file is
     /// read in full and closed before the constructor returns.
