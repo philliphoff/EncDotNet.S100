@@ -112,8 +112,10 @@
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.Styles>
                     <!-- Rows are named after their catalogue or region, not their view model (#784). -->
+                    <!-- ShadUI's ListBoxItem theme sets FontWeight Medium; rows are body text (#1171). -->
                     <Style Selector="ListBoxItem" x:DataType="vm:CatalogueEntryViewModel">
                         <Setter Property="AutomationProperties.Name" Value="{Binding AccessibleName}" />
+                        <Setter Property="FontWeight" Value="Normal" />
                     </Style>
                 </ListBox.Styles>
                 <ListBox.ItemTemplate>

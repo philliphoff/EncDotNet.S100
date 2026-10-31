@@ -300,10 +300,16 @@
           row's primary/title TextBlock with Classes="accentListTitle" so
           it picks up the accent colour on selection. Per-row padding can be
           tuned by overriding ListBoxItem Padding in a list-scoped style.
+
+          ShadUI's ListBoxItem theme sets FontWeight Medium on the item, and
+          every TextBlock in the row inherits it, so rows rendered semibold
+          (#1171). Rows are body text: reset the weight here, and give a
+          row's title its weight on the TextBlock itself.
         -->
         <Style Selector="ListBox.accentList ListBoxItem">
             <Setter Property="Padding" Value="8,5" />
             <Setter Property="Margin" Value="0,1" />
+            <Setter Property="FontWeight" Value="Normal" />
             <!-- MinHeight matches the effective height of the datasets list rows
                  (a 36px ShadUI Icon button + 2x5px vertical padding) so every
                  accent list shares the same vertical rhythm regardless of whether
@@ -337,16 +343,12 @@
         </Style>
         <!--
           Dense rows for long text-only lists, such as the Logs tab (#1080).
-          ShadUI's ListBoxItem theme sets FontWeight Medium (and FontSize 14)
-          on the item, and every TextBlock in the row inherits it, so log rows
-          rendered semibold (#1171). Dense rows are plain text: reset the
-          weight here; the row template sets its own sizes.
+          The row template sets its own sizes.
         -->
         <Style Selector="ListBox.accentList.dense ListBoxItem">
             <Setter Property="Padding" Value="8,1" />
             <Setter Property="Margin" Value="0" />
             <Setter Property="MinHeight" Value="22" />
-            <Setter Property="FontWeight" Value="Normal" />
         </Style>
         <Style Selector="ListBox.accentList ListBoxItem:pointerover /template/ Border#PART_Tint">
             <Setter Property="Opacity" Value="0.06" />
