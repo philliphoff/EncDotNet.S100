@@ -107,7 +107,7 @@ public sealed class AreaCheck : IRouteCheck<AreaCheckResult>
             }
         }
 
-        var (matches, findings) = Check(track, areas, cells, context.Schedule, context.Options.Formatter, cancellationToken);
+        var (matches, findings) = Check(track, areas, cells, context.Schedule, context.Options.Formatter, context.Settings.AreaKindsOff, cancellationToken);
         return RouteCheckOutcome<AreaCheckResult>.Ran(findings, new AreaCheckResult(matches));
     }
 
@@ -224,6 +224,7 @@ public sealed class AreaCheck : IRouteCheck<AreaCheckResult>
         IReadOnlyList<RouteChartCell> cells,
         PassageSchedule schedule,
         RouteFindingFormatter formatter,
+        IReadOnlyCollection<int> kindsOff,
         CancellationToken cancellationToken)
     {
         var shapes = areas
@@ -243,14 +244,39 @@ public sealed class AreaCheck : IRouteCheck<AreaCheckResult>
 
         var matches = new List<RouteAreaMatch>(areas.Count);
         var findings = new List<RouteFinding>();
+        var off = new SortedDictionary<int, (RouteAreaMatch First, int Count)>();
         for (var i = 0; i < areas.Count; i++)
         {
             var match = Match(areas[i], i, accumulators[i], track, ranked, schedule, formatter);
+
+            // An area of a kind that's off isn't reported; its kind is (#1127).
+            if (areas[i].AreaKind is { } kind && kindsOff.Contains(kind))
+            {
+                match = match with { Finding = null };
+                if (match.Relation != RouteAreaRelation.Off)
+                {
+                    off[kind] = off.TryGetValue(kind, out var seen)
+                        ? (seen.First.StartDistanceMeters <= match.StartDistanceMeters ? seen.First : match, seen.Count + 1)
+                        : (match, 1);
+                }
+            }
+
             matches.Add(match);
             if (match.Finding is { } finding)
             {
                 findings.Add(finding);
             }
+        }
+
+        foreach (var (kind, (first, count)) in off)
+        {
+            findings.Add(formatter.Render(new RouteFinding($"{RouteFindingCodes.AreaKindOff.Value}.{kind}", RouteFindingCodes.AreaKindOff)
+            {
+                LegIndex = first.LegIndex,
+                Distance = Length.FromMetres(first.StartDistanceMeters),
+                Location = RouteCorridor.Location(track, first.StartDistanceMeters, first.EndDistanceMeters),
+                Details = new AreaKindOffDetails { AreaKind = kind, Count = count },
+            }));
         }
 
         return (matches, RouteFinding.Sort(findings));
@@ -315,6 +341,7 @@ public sealed class AreaCheck : IRouteCheck<AreaCheckResult>
             Details = new AreaDetails
             {
                 Product = area.Product,
+                AreaKind = area.AreaKind,
                 Kind = area.Kind,
                 FeatureType = area.FeatureType,
                 Name = area.Name,
@@ -351,8 +378,20 @@ public sealed class AreaCheck : IRouteCheck<AreaCheckResult>
             return (RouteFindingCodes.EntersProhibitedArea, RouteFindingGroup.MustReview);
         }
 
+        // Entering a traffic separation zone or an area to be avoided is a
+        // decision the mariner has to make (#1127).
+        switch (area.AreaKind)
+        {
+            case RouteAreaKinds.TrafficSeparationZone:
+                return (RouteFindingCodes.TrafficArea, RouteFindingGroup.MustReview);
+            case RouteAreaKinds.AreaToBeAvoided:
+                return (RouteFindingCodes.RestrictedArea, RouteFindingGroup.MustReview);
+        }
+
         return area.Kind switch
         {
+            RouteAreaKind.OffshoreProductionArea or RouteAreaKind.SeaplaneLandingArea or RouteAreaKind.MarineFarm or RouteAreaKind.Other
+                => (RouteFindingCodes.RestrictedArea, RouteFindingGroup.Check),
             RouteAreaKind.RestrictedArea => (RouteFindingCodes.RestrictedArea,
                 bears || area.Categories.Any(HazardCategories.Contains) ? RouteFindingGroup.Check : RouteFindingGroup.Info),
             RouteAreaKind.MilitaryPracticeArea => (RouteFindingCodes.RestrictedArea, RouteFindingGroup.Check),

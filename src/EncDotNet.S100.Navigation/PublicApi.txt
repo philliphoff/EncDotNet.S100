@@ -15,6 +15,7 @@ namespace EncDotNet.S100.Navigation
     public sealed class AreaDetails : EncDotNet.S100.Navigation.RouteFindingDetails
     {
         public AreaDetails() { }
+        public int? AreaKind { get; init; }
         public bool AtEta { get; init; }
         public System.Collections.Generic.IReadOnlyList<int> Categories { get; init; }
         public int? CategoryOfMarineProtectedArea { get; init; }
@@ -29,6 +30,12 @@ namespace EncDotNet.S100.Navigation
         public EncDotNet.S100.Navigation.RouteAreaRelation Relation { get; init; }
         public System.Collections.Generic.IReadOnlyList<int> Restrictions { get; init; }
         public System.DateTimeOffset Until { get; init; }
+    }
+    public sealed class AreaKindOffDetails : EncDotNet.S100.Navigation.RouteFindingDetails
+    {
+        public AreaKindOffDetails() { }
+        public required int AreaKind { get; init; }
+        public required int Count { get; init; }
     }
     public sealed class ChartCheck : EncDotNet.S100.Navigation.IRouteCheck, EncDotNet.S100.Navigation.IRouteCheck<EncDotNet.S100.Navigation.ChartCheckResult>
     {
@@ -387,6 +394,7 @@ namespace EncDotNet.S100.Navigation
     public sealed class RouteArea : System.IEquatable<EncDotNet.S100.Navigation.RouteArea>
     {
         public RouteArea(EncDotNet.S100.Navigation.RouteAreaProduct Product, EncDotNet.S100.Navigation.RouteAreaKind Kind, string FeatureType, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Features.SurfacePart> Surfaces, EncDotNet.S100.Navigation.RouteFindingFeature? Feature = null) { }
+        public int? AreaKind { get; init; }
         public System.Collections.Generic.IReadOnlyList<int> Categories { get; init; }
         public int? CategoryOfMarineProtectedArea { get; init; }
         public EncDotNet.S100.Navigation.RouteChartCell? Cell { get; init; }
@@ -418,7 +426,30 @@ namespace EncDotNet.S100.Navigation
         PrecautionaryArea = 5,
         InshoreTrafficZone = 6,
         SubmarineTransitLane = 7,
-        MarineProtectedArea = 8,
+        OffshoreProductionArea = 8,
+        SeaplaneLandingArea = 9,
+        MarineFarm = 10,
+        Other = 11,
+        MarineProtectedArea = 12,
+    }
+    public static class RouteAreaKinds
+    {
+        public const int AnchorageArea = 53023;
+        public const int AreaToBeAvoided = 53015;
+        public const int CautionArea = 53017;
+        public const int InshoreTrafficZone = 53013;
+        public const int MarineFarm = 53024;
+        public const int MilitaryPracticeArea = 53020;
+        public const int OffshoreProductionArea = 53018;
+        public const int ParticularlySensitiveSeaArea = 53016;
+        public const int RestrictedArea = 53014;
+        public const int SeaplaneLandingArea = 53021;
+        public const int SubmarineTransitLane = 53022;
+        public const int TrafficSeparationZone = 53012;
+        public const int UserAreaToBeAvoided = 53019;
+        public static System.Collections.Generic.IReadOnlyDictionary<int, string> Names { get; }
+        public static int? Of(string featureType, System.Collections.Generic.IReadOnlyCollection<int> restrictions, System.Collections.Generic.IReadOnlyCollection<int> categories) { }
+        public static int? Parse(string name) { }
     }
     public sealed class RouteAreaMatch : System.IEquatable<EncDotNet.S100.Navigation.RouteAreaMatch>
     {
@@ -577,6 +608,7 @@ namespace EncDotNet.S100.Navigation
     public sealed class RouteCheckSettings
     {
         public RouteCheckSettings() { }
+        public System.Collections.Generic.IReadOnlyCollection<int> AreaKindsOff { get; init; }
         public required System.DateTimeOffset At { get; init; }
         public bool ChecksDepths { get; }
         public EncDotNet.S100.Quantities.Length? CorridorOverride { get; init; }
@@ -681,6 +713,7 @@ namespace EncDotNet.S100.Navigation
         public static EncDotNet.S100.Navigation.RouteFindingCode AidToNavigation { get; }
         public static System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFindingCode> All { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode AnchorageArea { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode AreaKindOff { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode AreaNotInForce { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode BelowSetting { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode CautionArea { get; }
@@ -741,6 +774,8 @@ namespace EncDotNet.S100.Navigation
         protected virtual string AreaCrossesFormat { get; }
         protected virtual string AreaEntersFormat { get; }
         protected virtual string AreaInCorridorFormat { get; }
+        protected virtual string AreaKindOff { get; }
+        protected virtual string AreaKindOffFormat { get; }
         protected virtual string AreaNotInForceAtFormat { get; }
         protected virtual string AreaNotInForceFormat { get; }
         protected virtual string Awash { get; }
@@ -824,7 +859,9 @@ namespace EncDotNet.S100.Navigation
         protected virtual string WaterLevelStartsLate { get; }
         protected virtual string Wreck { get; }
         public static EncDotNet.S100.Navigation.RouteFindingFormatter Default { get; }
+        protected virtual string AlertAreaKindLabel(int kind) { }
         protected virtual string AreaKindLabel(EncDotNet.S100.Navigation.RouteAreaKind kind) { }
+        protected virtual string AreaKindOffMeta(EncDotNet.S100.Navigation.RouteFinding finding, EncDotNet.S100.Navigation.AreaKindOffDetails off) { }
         protected virtual string AreaMeta(EncDotNet.S100.Navigation.RouteFinding finding, EncDotNet.S100.Navigation.AreaDetails area) { }
         protected virtual string AreaTitle(EncDotNet.S100.Navigation.RouteFinding finding, EncDotNet.S100.Navigation.AreaDetails area) { }
         protected virtual string CategoryLabel(EncDotNet.S100.Navigation.RouteAreaKind kind, int code) { }

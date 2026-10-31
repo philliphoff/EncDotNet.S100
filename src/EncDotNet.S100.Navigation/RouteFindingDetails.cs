@@ -178,6 +178,9 @@ public sealed class AreaDetails : RouteFindingDetails
     /// <summary>The product it comes from.</summary>
     public required RouteAreaProduct Product { get; init; }
 
+    /// <summary>Its alert-catalogue kind (<see cref="RouteArea.AreaKind"/>), or <c>null</c>.</summary>
+    public int? AreaKind { get; init; }
+
     /// <summary>What it is.</summary>
     public required RouteAreaKind Kind { get; init; }
 
@@ -301,4 +304,18 @@ public sealed class ClearanceDetails : RouteFindingDetails
 
     /// <summary>The state of the stretch: <see cref="UkcState.BelowSetting"/> for a finding below your UKC setting, otherwise <c>null</c>.</summary>
     public UkcState? State { get; init; }
+}
+
+/// <summary>
+/// Areas of a kind the settings turn off (<see cref="RouteCheckSettings.AreaKindsOff"/>)
+/// that the route meets (<see cref="RouteFindingCodes.AreaKindOff"/>, #1127):
+/// their indication is off, so the mariner is told so.
+/// </summary>
+public sealed class AreaKindOffDetails : RouteFindingDetails
+{
+    /// <summary>The kind (<see cref="RouteAreaKinds"/>).</summary>
+    public required int AreaKind { get; init; }
+
+    /// <summary>How many areas of the kind the route meets.</summary>
+    public required int Count { get; init; }
 }

@@ -44,6 +44,62 @@ public class AreaCheckTests
             plan ?? new PassagePlan([EastPassage], Departure),
             Fixture.Settings(at ?? Departure));
 
+    [Theory]
+    // #1127: entering a traffic separation zone or an area to be avoided is a
+    // decision to make; only reaching into the corridor is worth checking.
+    [InlineData(RouteAreaKind.SeparationZone, RouteAreaKinds.TrafficSeparationZone, "route_check.traffic_area")]
+    [InlineData(RouteAreaKind.RestrictedArea, RouteAreaKinds.AreaToBeAvoided, "route_check.restricted_area")]
+    public void Entering_a_separation_zone_or_area_to_be_avoided_must_be_reviewed(RouteAreaKind kind, int areaKind, string code)
+    {
+        var enters = Assert.Single(Check(Area(kind, 0.004, 0.006) with { AreaKind = areaKind }).Findings);
+        var near = Assert.Single(Check(Area(kind, 0.004, 0.006, south: 0.0002, north: 0.001) with { AreaKind = areaKind }).Findings);
+
+        Assert.Equal((code, RouteFindingGroup.MustReview), (enters.Code.Value, enters.Group));
+        Assert.Equal((code, RouteFindingGroup.Check), (near.Code.Value, near.Group));
+    }
+
+    [Fact]
+    public void An_area_of_a_new_kind_is_worth_checking()
+    {
+        var finding = Assert.Single(Check(Area(RouteAreaKind.MarineFarm, 0.004, 0.006) with { AreaKind = RouteAreaKinds.MarineFarm }).Findings);
+
+        Assert.Equal((RouteFindingCodes.RestrictedArea, RouteFindingGroup.Check), (finding.Code, finding.Group));
+        Assert.Equal("Crosses marine farm", finding.Title);
+        Assert.Equal(RouteAreaKinds.MarineFarm, ((AreaDetails)finding.Details!).AreaKind);
+    }
+
+    [Fact]
+    public void Areas_of_a_kind_thats_off_make_one_finding_that_says_so()
+    {
+        var anchorages = new[]
+        {
+            Area(RouteAreaKind.AnchorageArea, 0.002, 0.003) with { AreaKind = RouteAreaKinds.AnchorageArea },
+            Area(RouteAreaKind.AnchorageArea, 0.006, 0.007) with { AreaKind = RouteAreaKinds.AnchorageArea },
+        };
+        var caution = Area(RouteAreaKind.CautionArea, 0.008, 0.009) with { AreaKind = RouteAreaKinds.CautionArea };
+        var settings = new RouteCheckSettings { At = Departure, AreaKindsOff = [RouteAreaKinds.AnchorageArea] };
+
+        var findings = Checks.Areas(new FakeAreas([.. anchorages, caution]), new PassagePlan([EastPassage], Departure), settings).Findings;
+
+        var off = Assert.Single(findings, f => f.Code == RouteFindingCodes.AreaKindOff);
+        Assert.Equal(RouteFindingGroup.Info, off.Group);
+        Assert.Equal("Indication of some prohibited areas or areas with special conditions is Off", off.Title);
+        Assert.Equal("Leg 1 → 2 · Anchorage area · 2 on the route", off.Meta);
+        Assert.Null(off.Feature);
+        Assert.Equal(0.002 * M, off.Location!.StartDistanceMeters, 1.0);
+        Assert.Single(findings, f => f.Code == RouteFindingCodes.CautionArea);
+        Assert.Equal(2, findings.Count);
+    }
+
+    [Theory]
+    [InlineData("RestrictedArea", new int[0], new int[0], RouteAreaKinds.RestrictedArea)]
+    [InlineData("RestrictedArea", new[] { 14 }, new int[0], RouteAreaKinds.AreaToBeAvoided)]
+    [InlineData("RestrictedArea", new int[0], new[] { 28 }, RouteAreaKinds.ParticularlySensitiveSeaArea)]
+    [InlineData("MooringArea", new int[0], new int[0], RouteAreaKinds.AnchorageArea)]
+    [InlineData("PrecautionaryArea", new int[0], new int[0], null)]
+    public void Area_kinds_follow_the_S101_rules(string featureType, int[] restrictions, int[] categories, int? kind) =>
+        Assert.Equal(kind, RouteAreaKinds.Of(featureType, restrictions, categories));
+
     [Fact]
     public void Entering_an_entry_prohibited_area_must_be_reviewed()
     {

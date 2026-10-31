@@ -31,6 +31,7 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// <param name="WindowStepMinutes">Minutes between swept departures.</param>
 /// <param name="TrackClearanceMeters">How close to the track line an aid, structure or overhead feature counts as on the track; default 30 m.</param>
 /// <param name="NearbyDistanceMeters">How far beyond the cross-track limits a danger or hazard is near the route; default 185.2 m.</param>
+/// <param name="AreaKindsOff">The kinds of prohibited area and area with special conditions whose indication is off, by name.</param>
 public sealed record CheckRouteRequest(
     [property: Description("Id of a host route to check (viewer only). Omit, with no polyline, for the active route.")] string? RouteId = null,
     [property: Description("A route given directly: each pair of consecutive vertices is a leg. Takes precedence over routeId. Its corridorWidthMeters, when set, is the half-width either side of the track.")] GeoPolyline? Polyline = null,
@@ -51,7 +52,8 @@ public sealed record CheckRouteRequest(
     [property: Description("With includeWindow and windowFrom, the last departure of the sweep (inclusive).")] DateTimeOffset? WindowTo = null,
     [property: Description("Minutes between swept departures (default 5).")] int WindowStepMinutes = 5,
     [property: Description("How close to the track line, in metres, an aid to navigation, structure or overhead feature counts as on the track (default 30). A structure on the track is must review.")] double? TrackClearanceMeters = null,
-    [property: Description("How far beyond the cross-track limits, in metres, a danger or hazard counts as near the route (default 185.2, 0.1 NM).")] double? NearbyDistanceMeters = null);
+    [property: Description("How far beyond the cross-track limits, in metres, a danger or hazard counts as near the route (default 185.2, 0.1 NM).")] double? NearbyDistanceMeters = null,
+    [property: Description("Kinds of prohibited area and area with special conditions to turn off (S-101 alert catalogue ProhAre kinds): traffic_separation_zone, inshore_traffic_zone, restricted_area, area_to_be_avoided, particularly_sensitive_sea_area, caution_area, offshore_production_area, user_area_to_be_avoided, military_practice_area, seaplane_landing_area, submarine_transit_lane, anchorage_area, marine_farm. Their areas aren't reported; one route_check.area_kind_off finding per kind says the route meets them. Default: every kind on.")] IReadOnlyList<string>? AreaKindsOff = null);
 
 /// <summary>
 /// Checks a route with <see cref="RouteChecker"/> against the loaded data:
@@ -176,6 +178,7 @@ public sealed class CheckRouteTool
             CorridorOverride = request.CorridorHalfWidthMeters is { } corridor ? Length.FromMetres(corridor) : null,
             TrackClearance = request.TrackClearanceMeters is { } clearance ? Length.FromMetres(clearance) : null,
             NearbyDistance = request.NearbyDistanceMeters is { } nearby ? Length.FromMetres(nearby) : null,
+            AreaKindsOff = request.AreaKindsOff is { } off ? off.Select(name => RouteAreaKinds.Parse(name)!.Value).ToList() : [],
             DepartureWindow = !request.IncludeWindow ? null
                 : request.WindowFrom is { } from && request.WindowTo is { } to ? DepartureRange.Between(from, to, TimeSpan.FromMinutes(request.WindowStepMinutes))
                 : DepartureRange.WaterLevelData(TimeSpan.FromMinutes(request.WindowStepMinutes), MaxWindowDepartures),
@@ -225,6 +228,8 @@ public sealed class CheckRouteTool
         if (Bad(request.CorridorHalfWidthMeters)) return new InvalidArgument("corridorHalfWidthMeters", "must be zero or more metres");
         if (Bad(request.TrackClearanceMeters)) return new InvalidArgument("trackClearanceMeters", "must be zero or more metres");
         if (Bad(request.NearbyDistanceMeters)) return new InvalidArgument("nearbyDistanceMeters", "must be zero or more metres");
+        if (request.AreaKindsOff?.FirstOrDefault(name => RouteAreaKinds.Parse(name) is null) is { } unknown)
+            return new InvalidArgument("areaKindsOff", $"'{unknown}' isn't a kind: {string.Join(", ", RouteAreaKinds.Names.Values)}");
         if ((request.SafetyContourMeters is null) != (request.SafetyDepthMeters is null)) return new InvalidArgument("safetyDepthMeters", "safetyContourMeters and safetyDepthMeters go together");
         if (Bad(request.SafetyContourMeters)) return new InvalidArgument("safetyContourMeters", "must be zero or more metres");
         if (Bad(request.SafetyDepthMeters)) return new InvalidArgument("safetyDepthMeters", "must be zero or more metres");

@@ -89,18 +89,20 @@ public sealed class S101AlertPortrayal : IDisposable
     /// <param name="featureIds">The features' record ids, as strings.</param>
     /// <param name="mariner">
     /// The settings the rules see. A route check sets the safety contour and
-    /// safety depth; the rest keep their defaults.
+    /// safety depth; the rest keep their defaults. <see langword="null"/>
+    /// keeps the settings of the last call (else the defaults), for alerts
+    /// that don't depend on them, such as <c>ProhAre</c>.
     /// </param>
     /// <param name="cancellationToken">Cancels the portrayal.</param>
     /// <returns>Each feature's alerts, distinct and in emission order; empty for a feature that raises none.</returns>
     public async Task<IReadOnlyDictionary<string, IReadOnlyList<FeatureAlert>>> AlertsAsync(
-        IReadOnlyCollection<string> featureIds, MarinerSettings mariner, CancellationToken cancellationToken = default)
+        IReadOnlyCollection<string> featureIds, MarinerSettings? mariner, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(featureIds);
-        ArgumentNullException.ThrowIfNull(mariner);
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            mariner ??= _mariner ?? MarinerSettings.Default;
             if (_session is null || !Equals(_mariner, mariner))
             {
                 _session?.Dispose();

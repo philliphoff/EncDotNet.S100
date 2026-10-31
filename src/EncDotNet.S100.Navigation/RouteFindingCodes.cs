@@ -142,6 +142,12 @@ public static class RouteFindingCodes
     /// <summary>The track or corridor meets an area that isn't in force while the vessel is there. INFO.</summary>
     public static RouteFindingCode AreaNotInForce { get; } = new("route_check.area_not_in_force", RouteFindingCategory.Area, RouteFindingGroup.Info, 2);
 
+    /// <summary>
+    /// The route meets areas of a kind whose indication is off
+    /// (<see cref="RouteCheckSettings.AreaKindsOff"/>, #1127). INFO.
+    /// </summary>
+    public static RouteFindingCode AreaKindOff { get; } = new("route_check.area_kind_off", RouteFindingCategory.Area, RouteFindingGroup.Info, 2);
+
     /// <summary>An S-124 warning's line or area crosses the corridor, and it is in force while the vessel is there. MUST REVIEW.</summary>
     public static RouteFindingCode WarningOnRoute { get; } = new("s124.on_route", RouteFindingCategory.Warning, RouteFindingGroup.MustReview, 5);
 
@@ -189,7 +195,7 @@ public static class RouteFindingCodes
         CrossesSafetyContour, SafetyContourInCorridor,
         SoundingsBelowSafetyContour, CrossesS102Shoal, S102ShoalInCorridor,
         EntersProhibitedArea, ProhibitedAreaInCorridor, RestrictedArea, CautionArea,
-        TrafficArea, AnchorageArea, ProtectedArea, AreaNotInForce,
+        TrafficArea, AnchorageArea, ProtectedArea, AreaNotInForce, AreaKindOff,
         WarningOnRoute, WarningNearRoute, WarningNotInForce, WarningCancelled,
         BelowSetting,
         ChartedDepthFromS101, DatumUnconfirmed,
