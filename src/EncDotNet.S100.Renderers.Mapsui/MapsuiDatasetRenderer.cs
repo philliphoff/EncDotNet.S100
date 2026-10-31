@@ -735,8 +735,10 @@ public sealed class MapsuiDatasetRenderer
     {
         if (bounds is not { } b)
             return null;
-        var (minX, minY) = SphericalMercator.FromLonLat(b.MinLongitude, b.MinLatitude);
-        var (maxX, maxY) = SphericalMercator.FromLonLat(b.MaxLongitude, b.MaxLatitude);
+        // Clamp to the projection limit: a global grid's ±90° rows would
+        // otherwise give an infinite extent.
+        var (minX, minY) = SphericalMercator.FromLonLat(b.MinLongitude, Math.Max(b.MinLatitude, -Rendering.Scene.WebMercator.MaxLatitude));
+        var (maxX, maxY) = SphericalMercator.FromLonLat(b.MaxLongitude, Math.Min(b.MaxLatitude, Rendering.Scene.WebMercator.MaxLatitude));
         return new MRect(minX, minY, maxX, maxY);
     }
 

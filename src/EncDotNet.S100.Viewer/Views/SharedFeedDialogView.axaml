@@ -12,7 +12,7 @@
             <TextBlock Text="{x:Static loc:Strings.Library_SharedFeedDescription}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
             <Border Background="{DynamicResource MutedBackgroundColor}" CornerRadius="4" Padding="8,4">
                 <SelectableTextBlock Text="{Binding ServeCommand}" FontSize="12"
-                                     FontFamily="Cascadia Mono,Consolas,Menlo,monospace" />
+                                     FontFamily="{StaticResource MonoFontFamily}" />
             </Border>
             <TextBlock Text="{x:Static loc:Strings.Library_SharedFeedHint}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
         </StackPanel>

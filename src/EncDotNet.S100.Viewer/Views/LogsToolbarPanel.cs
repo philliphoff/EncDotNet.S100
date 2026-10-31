@@ -5,7 +5,8 @@ namespace EncDotNet.S100.Viewer.Views;
 
 /// <summary>
 /// Lays out the Logs tab's toolbar (#1080): its two children are the filters
-/// (level and search, left) and the actions (Pause … Send feedback, right).
+/// (level, search and counts, left) and the actions (Copy all … Send
+/// feedback, right).
 /// The two never overlap. When they fit side by side, the filters get every
 /// pixel the actions leave, so the search box can grow; when they don't, the
 /// actions move to a second line, still right-aligned, rather than being drawn
@@ -41,6 +42,9 @@ internal sealed class LogsToolbarPanel : Panel
         if (!IsActionsWrapped)
             return new Size(oneLine, Math.Max(filters.DesiredSize.Height, actions.DesiredSize.Height));
 
+        // On their own line the filters get the full width, measured against it
+        // so a stretching search box gives back what it can't have.
+        filters.Measure(new Size(width, availableSize.Height));
         actions.Measure(new Size(width, double.PositiveInfinity));
         return new Size(
             Math.Min(width, Math.Max(filters.DesiredSize.Width, actions.DesiredSize.Width)),

@@ -109,6 +109,11 @@ public static class DrawingInstructionParser
         (PortrayalTimeKind Kind, string? Begin, string? End)? pendingTime = null;
         IReadOnlyList<PortrayalTimeInterval> timeValid = [];
 
+        // Alert state (S-100 Part 9a §9a-11.2.2.9): AlertReference applies to
+        // the drawing instructions that follow, until another one replaces or
+        // clears it.
+        PortrayalAlertReference? alertReference = null;
+
         var segments = instructionString.Split(';');
 
         foreach (var segment in segments)
@@ -256,6 +261,7 @@ public static class DrawingInstructionParser
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
                         TimeValid = timeValid,
+                        AlertReference = alertReference,
                     });
                     // Reset per-instruction style state. The augmented anchor is
                     // a spatial-geometry context (S-100 Part 9 §11.5), not a
@@ -303,6 +309,7 @@ public static class DrawingInstructionParser
                             ScaleMinimum = scaleMinimum,
                             ScaleMaximum = scaleMaximum,
                             TimeValid = timeValid,
+                            AlertReference = alertReference,
                         };
 
                         if (augmentedLineCoords is null && spatialRefs.Count > 0 && spatialReferences is not null)
@@ -344,6 +351,7 @@ public static class DrawingInstructionParser
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
                         TimeValid = timeValid,
+                        AlertReference = alertReference,
                     });
                     break;
 
@@ -359,6 +367,7 @@ public static class DrawingInstructionParser
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
                         TimeValid = timeValid,
+                        AlertReference = alertReference,
                     });
                     break;
 
@@ -386,6 +395,7 @@ public static class DrawingInstructionParser
                         ScaleMinimum = scaleMinimum,
                         ScaleMaximum = scaleMaximum,
                         TimeValid = timeValid,
+                        AlertReference = alertReference,
                     });
                     // Reset per-instruction text state so the next label
                     // doesn't inherit alignment / offset from this one. The
@@ -471,6 +481,9 @@ public static class DrawingInstructionParser
                     break;
 
                 case "AlertReference":
+                    alertReference = PortrayalAlertReference.Parse(value);
+                    break;
+
                 case "Hover":
                 case "AreaCRS":
                     // Recognised but not yet handled — skip silently

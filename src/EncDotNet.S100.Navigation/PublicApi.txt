@@ -15,6 +15,7 @@ namespace EncDotNet.S100.Navigation
     public sealed class AreaDetails : EncDotNet.S100.Navigation.RouteFindingDetails
     {
         public AreaDetails() { }
+        public int? AreaKind { get; init; }
         public bool AtEta { get; init; }
         public System.Collections.Generic.IReadOnlyList<int> Categories { get; init; }
         public int? CategoryOfMarineProtectedArea { get; init; }
@@ -29,6 +30,12 @@ namespace EncDotNet.S100.Navigation
         public EncDotNet.S100.Navigation.RouteAreaRelation Relation { get; init; }
         public System.Collections.Generic.IReadOnlyList<int> Restrictions { get; init; }
         public System.DateTimeOffset Until { get; init; }
+    }
+    public sealed class AreaKindOffDetails : EncDotNet.S100.Navigation.RouteFindingDetails
+    {
+        public AreaKindOffDetails() { }
+        public required int AreaKind { get; init; }
+        public required int Count { get; init; }
     }
     public sealed class ChartCheck : EncDotNet.S100.Navigation.IRouteCheck, EncDotNet.S100.Navigation.IRouteCheck<EncDotNet.S100.Navigation.ChartCheckResult>
     {
@@ -179,6 +186,15 @@ namespace EncDotNet.S100.Navigation
                 "Last"})]
         public System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.DateTimeOffset, System.DateTimeOffset>> Windows() { }
     }
+    public sealed class HazardDetails : EncDotNet.S100.Navigation.RouteFindingDetails
+    {
+        public HazardDetails() { }
+        public required string FeatureType { get; init; }
+        public required EncDotNet.S100.Navigation.RouteHazardClass HazardClass { get; init; }
+        public EncDotNet.S100.Quantities.Length Offset { get; init; }
+        public required EncDotNet.S100.Navigation.RouteFindingPosition Position { get; init; }
+        public EncDotNet.S100.Navigation.RouteFindingSide Side { get; init; }
+    }
     public interface IChartedDepthSource
     {
         double? FinestGridSpacingMeters(EncDotNet.S100.Pipelines.BoundingBox extent);
@@ -193,7 +209,7 @@ namespace EncDotNet.S100.Navigation
     public interface IRouteChartSource
     {
         System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteChartCell> CellsNear(EncDotNet.S100.Pipelines.BoundingBox extent);
-        System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteChartFeature> FeaturesInCorridor(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition> corridor, EncDotNet.S100.Pipelines.BoundingBox extent);
+        System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteChartFeature> FeaturesInCorridor(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition> corridor, EncDotNet.S100.Pipelines.BoundingBox extent, EncDotNet.S100.Navigation.RouteChartQuery query);
     }
     public interface IRouteCheck
     {
@@ -378,6 +394,7 @@ namespace EncDotNet.S100.Navigation
     public sealed class RouteArea : System.IEquatable<EncDotNet.S100.Navigation.RouteArea>
     {
         public RouteArea(EncDotNet.S100.Navigation.RouteAreaProduct Product, EncDotNet.S100.Navigation.RouteAreaKind Kind, string FeatureType, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Features.SurfacePart> Surfaces, EncDotNet.S100.Navigation.RouteFindingFeature? Feature = null) { }
+        public int? AreaKind { get; init; }
         public System.Collections.Generic.IReadOnlyList<int> Categories { get; init; }
         public int? CategoryOfMarineProtectedArea { get; init; }
         public EncDotNet.S100.Navigation.RouteChartCell? Cell { get; init; }
@@ -409,7 +426,30 @@ namespace EncDotNet.S100.Navigation
         PrecautionaryArea = 5,
         InshoreTrafficZone = 6,
         SubmarineTransitLane = 7,
-        MarineProtectedArea = 8,
+        OffshoreProductionArea = 8,
+        SeaplaneLandingArea = 9,
+        MarineFarm = 10,
+        Other = 11,
+        MarineProtectedArea = 12,
+    }
+    public static class RouteAreaKinds
+    {
+        public const int AnchorageArea = 53023;
+        public const int AreaToBeAvoided = 53015;
+        public const int CautionArea = 53017;
+        public const int InshoreTrafficZone = 53013;
+        public const int MarineFarm = 53024;
+        public const int MilitaryPracticeArea = 53020;
+        public const int OffshoreProductionArea = 53018;
+        public const int ParticularlySensitiveSeaArea = 53016;
+        public const int RestrictedArea = 53014;
+        public const int SeaplaneLandingArea = 53021;
+        public const int SubmarineTransitLane = 53022;
+        public const int TrafficSeparationZone = 53012;
+        public const int UserAreaToBeAvoided = 53019;
+        public static System.Collections.Generic.IReadOnlyDictionary<int, string> Names { get; }
+        public static int? Of(string featureType, System.Collections.Generic.IReadOnlyCollection<int> restrictions, System.Collections.Generic.IReadOnlyCollection<int> categories) { }
+        public static int? Parse(string name) { }
     }
     public sealed class RouteAreaMatch : System.IEquatable<EncDotNet.S100.Navigation.RouteAreaMatch>
     {
@@ -440,6 +480,13 @@ namespace EncDotNet.S100.Navigation
         InCorridor = 1,
         Off = 2,
     }
+    public sealed class RouteChartAlert : System.IEquatable<EncDotNet.S100.Navigation.RouteChartAlert>
+    {
+        public RouteChartAlert(EncDotNet.S100.Navigation.RouteFindingAlert Alert, int? AreaKind = default, EncDotNet.S100.DataModel.GeoPosition? Position = default) { }
+        public EncDotNet.S100.Navigation.RouteFindingAlert Alert { get; init; }
+        public int? AreaKind { get; init; }
+        public EncDotNet.S100.DataModel.GeoPosition? Position { get; init; }
+    }
     public abstract class RouteChartCell
     {
         protected RouteChartCell(string datasetId) { }
@@ -450,6 +497,7 @@ namespace EncDotNet.S100.Navigation
     public sealed class RouteChartFeature : System.IEquatable<EncDotNet.S100.Navigation.RouteChartFeature>
     {
         public RouteChartFeature(EncDotNet.S100.Navigation.RouteChartFeatureKind Kind, EncDotNet.S100.Navigation.RouteChartCell Cell, string FeatureId, string FeatureType, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Features.SurfacePart> Surfaces, System.Collections.Generic.IReadOnlyList<System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition>> Curves) { }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteChartAlert> Alerts { get; init; }
         public EncDotNet.S100.Navigation.RouteChartCell Cell { get; init; }
         public System.Collections.Generic.IReadOnlyList<System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition>> Curves { get; init; }
         public double? DepthMeters { get; init; }
@@ -469,6 +517,14 @@ namespace EncDotNet.S100.Navigation
         DredgedArea = 4,
         Danger = 5,
         Sounding = 6,
+        Alerted = 7,
+    }
+    public sealed class RouteChartQuery : System.IEquatable<EncDotNet.S100.Navigation.RouteChartQuery>
+    {
+        public RouteChartQuery(double? SafetyContourMeters = default, double? SafetyDepthMeters = default) { }
+        public double? SafetyContourMeters { get; init; }
+        public double? SafetyDepthMeters { get; init; }
+        public static EncDotNet.S100.Navigation.RouteChartQuery Default { get; }
     }
     public sealed class RouteCheckContext
     {
@@ -552,12 +608,15 @@ namespace EncDotNet.S100.Navigation
     public sealed class RouteCheckSettings
     {
         public RouteCheckSettings() { }
+        public System.Collections.Generic.IReadOnlyCollection<int> AreaKindsOff { get; init; }
         public required System.DateTimeOffset At { get; init; }
         public bool ChecksDepths { get; }
         public EncDotNet.S100.Quantities.Length? CorridorOverride { get; init; }
         public EncDotNet.S100.Navigation.DepartureRange? DepartureWindow { get; init; }
+        public EncDotNet.S100.Quantities.Length? NearbyDistance { get; init; }
         public EncDotNet.S100.Quantities.Depth? SafetyContour { get; init; }
         public EncDotNet.S100.Quantities.Depth? SafetyDepth { get; init; }
+        public EncDotNet.S100.Quantities.Length? TrackClearance { get; init; }
         public static EncDotNet.S100.Navigation.RouteCheckSettings FromMarinerSettings(EncDotNet.S100.Pipelines.MarinerSettings settings, System.DateTimeOffset at) { }
     }
     public sealed class RouteCheckSources
@@ -623,6 +682,12 @@ namespace EncDotNet.S100.Navigation
         public EncDotNet.S100.Navigation.RouteFinding WithText(string title, string meta) { }
         public static System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFinding> Sort(System.Collections.Generic.IEnumerable<EncDotNet.S100.Navigation.RouteFinding> findings) { }
     }
+    public enum RouteFindingAlert
+    {
+        SafetyContour = 0,
+        ProhAre = 1,
+        NavHazard = 2,
+    }
     public enum RouteFindingCategory
     {
         Chart = 0,
@@ -645,8 +710,10 @@ namespace EncDotNet.S100.Navigation
     public static class RouteFindingCodes
     {
         public const int LastRank = 6;
+        public static EncDotNet.S100.Navigation.RouteFindingCode AidToNavigation { get; }
         public static System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFindingCode> All { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode AnchorageArea { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode AreaKindOff { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode AreaNotInForce { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode BelowSetting { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode CautionArea { get; }
@@ -665,12 +732,15 @@ namespace EncDotNet.S100.Navigation
         public static EncDotNet.S100.Navigation.RouteFindingCode NoChartedDepth { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode NoWaterLevelCoverage { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode OutsideChartCoverage { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode OverheadOnRoute { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode ProhibitedAreaInCorridor { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode ProtectedArea { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode RestrictedArea { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode S102ShoalInCorridor { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode SafetyContourInCorridor { get; }
-        public static EncDotNet.S100.Navigation.RouteFindingCode SoundingsBelowSafetyDepth { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode SoundingsBelowSafetyContour { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode StructureInCorridor { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode StructureOnTrack { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode TrafficArea { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode WarningCancelled { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode WarningNearRoute { get; }
@@ -704,6 +774,8 @@ namespace EncDotNet.S100.Navigation
         protected virtual string AreaCrossesFormat { get; }
         protected virtual string AreaEntersFormat { get; }
         protected virtual string AreaInCorridorFormat { get; }
+        protected virtual string AreaKindOff { get; }
+        protected virtual string AreaKindOffFormat { get; }
         protected virtual string AreaNotInForceAtFormat { get; }
         protected virtual string AreaNotInForceFormat { get; }
         protected virtual string Awash { get; }
@@ -729,6 +801,9 @@ namespace EncDotNet.S100.Navigation
         protected virtual string DepthUnknown { get; }
         protected virtual string DryingInCorridor { get; }
         protected virtual string FromFormat { get; }
+        protected virtual string HazardInCorridorFormat { get; }
+        protected virtual string HazardNearRouteFormat { get; }
+        protected virtual string HazardOnTrackFormat { get; }
         protected virtual string IucnCategoryFormat { get; }
         protected virtual string LandInCorridor { get; }
         protected virtual string LeastDepthFormat { get; }
@@ -746,6 +821,7 @@ namespace EncDotNet.S100.Navigation
         protected virtual string OnTrack { get; }
         protected virtual string OutsideChartCoverage { get; }
         protected virtual string OutsideS102Format { get; }
+        protected virtual string OverheadOverTrackFormat { get; }
         protected virtual string RangeFormat { get; }
         protected virtual string Rock { get; }
         protected virtual string S102CellFormat { get; }
@@ -754,7 +830,7 @@ namespace EncDotNet.S100.Navigation
         protected virtual string SafetyContourInCorridor { get; }
         protected virtual string Separator { get; }
         protected virtual string SoundingCountFormat { get; }
-        protected virtual string SoundingsBelowSafetyDepth { get; }
+        protected virtual string SoundingsBelowSafetyContour { get; }
         protected virtual string StretchFromFormat { get; }
         protected virtual string StretchLengthFormat { get; }
         protected virtual string TideNotApplied { get; }
@@ -783,7 +859,9 @@ namespace EncDotNet.S100.Navigation
         protected virtual string WaterLevelStartsLate { get; }
         protected virtual string Wreck { get; }
         public static EncDotNet.S100.Navigation.RouteFindingFormatter Default { get; }
+        protected virtual string AlertAreaKindLabel(int kind) { }
         protected virtual string AreaKindLabel(EncDotNet.S100.Navigation.RouteAreaKind kind) { }
+        protected virtual string AreaKindOffMeta(EncDotNet.S100.Navigation.RouteFinding finding, EncDotNet.S100.Navigation.AreaKindOffDetails off) { }
         protected virtual string AreaMeta(EncDotNet.S100.Navigation.RouteFinding finding, EncDotNet.S100.Navigation.AreaDetails area) { }
         protected virtual string AreaTitle(EncDotNet.S100.Navigation.RouteFinding finding, EncDotNet.S100.Navigation.AreaDetails area) { }
         protected virtual string CategoryLabel(EncDotNet.S100.Navigation.RouteAreaKind kind, int code) { }
@@ -799,6 +877,7 @@ namespace EncDotNet.S100.Navigation
         protected virtual string FormatEta(System.DateTimeOffset time) { }
         protected virtual string FormatSetting(EncDotNet.S100.Quantities.Depth depth) { }
         protected virtual string FormatTime(System.DateTimeOffset time) { }
+        protected virtual string HazardKind(string featureType) { }
         protected virtual string LegLabel(int firstLeg, int lastLeg) { }
         public virtual string Meta(EncDotNet.S100.Navigation.RouteFinding finding) { }
         public EncDotNet.S100.Navigation.RouteFinding Render(EncDotNet.S100.Navigation.RouteFinding finding) { }
@@ -823,6 +902,12 @@ namespace EncDotNet.S100.Navigation
         public double StartDistanceMeters { get; init; }
         public static EncDotNet.S100.Navigation.RouteFindingLocation Point(EncDotNet.S100.DataModel.GeoPosition position, double distanceMeters) { }
     }
+    public enum RouteFindingPosition
+    {
+        OnTrack = 0,
+        InCorridor = 1,
+        Near = 2,
+    }
     public enum RouteFindingSide
     {
         OnTrack = 0,
@@ -834,6 +919,17 @@ namespace EncDotNet.S100.Navigation
         SafetyContour = 0,
         SafetyDepth = 1,
         Keel = 2,
+    }
+    public enum RouteHazardClass
+    {
+        Danger = 0,
+        AidToNavigation = 1,
+        Structure = 2,
+        Overhead = 3,
+    }
+    public static class RouteHazardClasses
+    {
+        public static EncDotNet.S100.Navigation.RouteHazardClass Of(string featureType) { }
     }
     public sealed class RouteTrack
     {
@@ -904,6 +1000,7 @@ namespace EncDotNet.S100.Navigation
     public sealed class ShoalDetails : EncDotNet.S100.Navigation.RouteFindingDetails
     {
         public ShoalDetails() { }
+        public EncDotNet.S100.Quantities.Depth? BelowSafetyDepth { get; init; }
         public string? Cell { get; init; }
         public string? DatasetId { get; init; }
         public required EncDotNet.S100.Quantities.Depth LeastDepth { get; init; }

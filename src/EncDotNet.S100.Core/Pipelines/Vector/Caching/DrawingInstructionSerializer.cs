@@ -42,8 +42,9 @@ public static class DrawingInstructionSerializer
     /// v6: line instructions carry <see cref="LineInstruction.Suppression"/>.
     /// v7: point and text instructions carry <see cref="PointInstruction.AreaPlacement"/>
     /// and <see cref="TextInstruction.AreaPlacement"/>.
+    /// v8: the base fields carry <see cref="DrawingInstruction.AlertReference"/>.
     /// </remarks>
-    public const int FormatVersion = 7;
+    public const int FormatVersion = 8;
 
     private const byte TagPoint = 1;
     private const byte TagLine = 2;
@@ -194,7 +195,7 @@ public static class DrawingInstructionSerializer
 
     private static PointInstruction ReadPoint(BinaryReader r)
     {
-        var (featureRef, plane, vg, extraVg, priority, scaleMin, scaleMax, timeValid) = ReadBase(r);
+        var (featureRef, plane, vg, extraVg, priority, scaleMin, scaleMax, timeValid, alert) = ReadBase(r);
         return new PointInstruction
         {
             FeatureReference = featureRef,
@@ -205,6 +206,7 @@ public static class DrawingInstructionSerializer
             ScaleMinimum = scaleMin,
             ScaleMaximum = scaleMax,
             TimeValid = timeValid,
+            AlertReference = alert,
             SymbolReference = ReadString(r),
             SymbolScale = r.ReadDouble(),
             Rotation = ReadNullableDouble(r),
@@ -219,7 +221,7 @@ public static class DrawingInstructionSerializer
 
     private static LineInstruction ReadLine(BinaryReader r)
     {
-        var (featureRef, plane, vg, extraVg, priority, scaleMin, scaleMax, timeValid) = ReadBase(r);
+        var (featureRef, plane, vg, extraVg, priority, scaleMin, scaleMax, timeValid, alert) = ReadBase(r);
         return new LineInstruction
         {
             FeatureReference = featureRef,
@@ -230,6 +232,7 @@ public static class DrawingInstructionSerializer
             ScaleMinimum = scaleMin,
             ScaleMaximum = scaleMax,
             TimeValid = timeValid,
+            AlertReference = alert,
             LineStyleReference = ReadString(r),
             LineWidth = r.ReadDouble(),
             LineColor = ReadString(r),
@@ -242,7 +245,7 @@ public static class DrawingInstructionSerializer
 
     private static AreaInstruction ReadArea(BinaryReader r)
     {
-        var (featureRef, plane, vg, extraVg, priority, scaleMin, scaleMax, timeValid) = ReadBase(r);
+        var (featureRef, plane, vg, extraVg, priority, scaleMin, scaleMax, timeValid, alert) = ReadBase(r);
         return new AreaInstruction
         {
             FeatureReference = featureRef,
@@ -253,6 +256,7 @@ public static class DrawingInstructionSerializer
             ScaleMinimum = scaleMin,
             ScaleMaximum = scaleMax,
             TimeValid = timeValid,
+            AlertReference = alert,
             AreaFillReference = ReadString(r),
             FillColor = ReadString(r),
             Transparency = ReadNullableDouble(r),
@@ -262,7 +266,7 @@ public static class DrawingInstructionSerializer
 
     private static TextInstruction ReadText(BinaryReader r)
     {
-        var (featureRef, plane, vg, extraVg, priority, scaleMin, scaleMax, timeValid) = ReadBase(r);
+        var (featureRef, plane, vg, extraVg, priority, scaleMin, scaleMax, timeValid, alert) = ReadBase(r);
         return new TextInstruction
         {
             FeatureReference = featureRef,
@@ -273,6 +277,7 @@ public static class DrawingInstructionSerializer
             ScaleMinimum = scaleMin,
             ScaleMaximum = scaleMax,
             TimeValid = timeValid,
+            AlertReference = alert,
             Text = r.ReadString(),
             FontReference = ReadString(r),
             FontSize = r.ReadDouble(),
@@ -317,12 +322,20 @@ public static class DrawingInstructionSerializer
             WriteString(w, interval.End);
             w.Write((byte)interval.Closure);
         }
+
+        var alert = instruction.AlertReference;
+        WriteString(w, alert?.Reference);
+        if (alert is not null)
+        {
+            WriteNullableInt(w, alert.PlanViewingGroup);
+            WriteNullableInt(w, alert.MonitorViewingGroup);
+        }
     }
 
     private static (string FeatureReference, DisplayPlane Plane, int ViewingGroup,
         IReadOnlyList<int> AdditionalViewingGroups, int DrawingPriority,
         double? ScaleMinimum, double? ScaleMaximum,
-        IReadOnlyList<PortrayalTimeInterval> TimeValid) ReadBase(BinaryReader r)
+        IReadOnlyList<PortrayalTimeInterval> TimeValid, PortrayalAlertReference? AlertReference) ReadBase(BinaryReader r)
     {
         var featureRef = r.ReadString();
         var plane = (DisplayPlane)r.ReadInt32();
@@ -360,7 +373,11 @@ public static class DrawingInstructionSerializer
             timeValid = intervals;
         }
 
-        return (featureRef, plane, vg, extraVg, priority, scaleMin, scaleMax, timeValid);
+        var alert = ReadString(r) is { } reference
+            ? new PortrayalAlertReference(reference, ReadNullableInt(r), ReadNullableInt(r))
+            : null;
+
+        return (featureRef, plane, vg, extraVg, priority, scaleMin, scaleMax, timeValid, alert);
     }
 
     private static void WriteString(BinaryWriter w, string? value)

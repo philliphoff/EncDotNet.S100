@@ -48,6 +48,62 @@ public enum RouteFindingSide
 }
 
 /// <summary>
+/// What kind of navigational hazard a feature is (#1127): what the mariner
+/// asks about it. A feature type <see cref="RouteHazardClasses"/> doesn't
+/// know is a <see cref="Structure"/>, so no hazard is lost.
+/// </summary>
+public enum RouteHazardClass
+{
+    /// <summary>A wreck, obstruction or rock: is there water over it for the keel?</summary>
+    Danger,
+
+    /// <summary>A buoy, beacon, daymark, light float or vessel, or AIS aid: is it passed on the right side?</summary>
+    AidToNavigation,
+
+    /// <summary>A pile, dolphin, platform, turbine, fishing facility and the like: is it kept clear of?</summary>
+    Structure,
+
+    /// <summary>A bridge, span, overhead cable or pipeline, or conveyor: does the vessel fit under it?</summary>
+    Overhead,
+}
+
+/// <summary>Where something lies from the track (#1127).</summary>
+public enum RouteFindingPosition
+{
+    /// <summary>Within the track clearance (<see cref="RouteCheckSettings.TrackClearance"/>) of the track line.</summary>
+    OnTrack,
+
+    /// <summary>Inside the cross-track limits.</summary>
+    InCorridor,
+
+    /// <summary>Beyond the limits, within the near band (<see cref="RouteCheckSettings.NearbyDistance"/>).</summary>
+    Near,
+}
+
+/// <summary>
+/// A charted navigational hazard other than a danger in or near the corridor:
+/// an aid to navigation, a structure or an overhead feature whose S-101
+/// portrayal raises the <c>NavHazard</c> alert (#1127).
+/// </summary>
+public sealed class HazardDetails : RouteFindingDetails
+{
+    /// <summary>The feature type, such as <c>LateralBuoy</c> or <c>Pile</c>.</summary>
+    public required string FeatureType { get; init; }
+
+    /// <summary>Its hazard class.</summary>
+    public required RouteHazardClass HazardClass { get; init; }
+
+    /// <summary>Where it lies from the track.</summary>
+    public required RouteFindingPosition Position { get; init; }
+
+    /// <summary>Which side of the track it's on.</summary>
+    public RouteFindingSide Side { get; init; }
+
+    /// <summary>How far it is from the track (zero on the track).</summary>
+    public Length Offset { get; init; }
+}
+
+/// <summary>
 /// A charted danger in or near the corridor (<see cref="RouteFindingCodes.DangerInCorridor"/>,
 /// <see cref="RouteFindingCodes.DangerNearRoute"/>).
 /// </summary>
@@ -80,7 +136,7 @@ public sealed class DangerDetails : RouteFindingDetails
 
 /// <summary>
 /// Water shallower than a safety setting: depth areas across or inside the
-/// safety contour, soundings shallower than the safety depth, and S-102
+/// safety contour, soundings no deeper than the safety contour, and S-102
 /// shoals (<see cref="RouteFindingCodes.CrossesSafetyContour"/> and the like).
 /// </summary>
 public sealed class ShoalDetails : RouteFindingDetails
@@ -96,6 +152,12 @@ public sealed class ShoalDetails : RouteFindingDetails
 
     /// <summary>How many soundings the finding stands for, or <c>null</c> when it isn't about soundings.</summary>
     public int? SoundingCount { get; init; }
+
+    /// <summary>
+    /// For soundings, the safety depth when the least depth is also shallower
+    /// than it (the soundings the chart draws in bold), or <c>null</c>.
+    /// </summary>
+    public Depth? BelowSafetyDepth { get; init; }
 
     /// <summary>For an S-102 shoal, the uncertainty of the least depth, when the dataset gives one.</summary>
     public Depth? Uncertainty { get; init; }
@@ -115,6 +177,9 @@ public sealed class AreaDetails : RouteFindingDetails
 {
     /// <summary>The product it comes from.</summary>
     public required RouteAreaProduct Product { get; init; }
+
+    /// <summary>Its alert-catalogue kind (<see cref="RouteArea.AreaKind"/>), or <c>null</c>.</summary>
+    public int? AreaKind { get; init; }
 
     /// <summary>What it is.</summary>
     public required RouteAreaKind Kind { get; init; }
@@ -239,4 +304,18 @@ public sealed class ClearanceDetails : RouteFindingDetails
 
     /// <summary>The state of the stretch: <see cref="UkcState.BelowSetting"/> for a finding below your UKC setting, otherwise <c>null</c>.</summary>
     public UkcState? State { get; init; }
+}
+
+/// <summary>
+/// Areas of a kind the settings turn off (<see cref="RouteCheckSettings.AreaKindsOff"/>)
+/// that the route meets (<see cref="RouteFindingCodes.AreaKindOff"/>, #1127):
+/// their indication is off, so the mariner is told so.
+/// </summary>
+public sealed class AreaKindOffDetails : RouteFindingDetails
+{
+    /// <summary>The kind (<see cref="RouteAreaKinds"/>).</summary>
+    public required int AreaKind { get; init; }
+
+    /// <summary>How many areas of the kind the route meets.</summary>
+    public required int Count { get; init; }
 }

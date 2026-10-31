@@ -64,14 +64,36 @@ public static class RouteFindingCodes
     /// </summary>
     public static RouteFindingCode DangerNearRoute { get; } = new("route_check.danger_near_route", RouteFindingCategory.Depth, RouteFindingGroup.Check);
 
+    /// <summary>
+    /// An aid to navigation whose portrayal raises <c>NavHazard</c>, in the
+    /// corridor (CHECK) or near the route (INFO) (#1127).
+    /// </summary>
+    public static RouteFindingCode AidToNavigation { get; } = new("route_check.aid_to_navigation", RouteFindingCategory.Chart, RouteFindingGroup.Check);
+
+    /// <summary>A structure within the track clearance of the track line (#1127). MUST REVIEW.</summary>
+    public static RouteFindingCode StructureOnTrack { get; } = new("route_check.structure_on_track", RouteFindingCategory.Chart, RouteFindingGroup.MustReview, 3);
+
+    /// <summary>A structure elsewhere in the corridor (CHECK) or near the route (INFO) (#1127).</summary>
+    public static RouteFindingCode StructureInCorridor { get; } = new("route_check.structure_in_corridor", RouteFindingCategory.Chart, RouteFindingGroup.Check);
+
+    /// <summary>
+    /// A bridge, span, overhead cable or pipeline or conveyor in the corridor
+    /// (CHECK) or near the route (INFO) (#1127).
+    /// </summary>
+    public static RouteFindingCode OverheadOnRoute { get; } = new("route_check.overhead_on_route", RouteFindingCategory.Chart, RouteFindingGroup.Check);
+
     /// <summary>The track crosses depth, dredged or drying areas shallower than the safety contour. MUST REVIEW.</summary>
     public static RouteFindingCode CrossesSafetyContour { get; } = new("route_check.crosses_safety_contour", RouteFindingCategory.Depth, RouteFindingGroup.MustReview);
 
     /// <summary>Areas shallower than the safety contour reach into the corridor, but the track doesn't cross them. CHECK.</summary>
     public static RouteFindingCode SafetyContourInCorridor { get; } = new("route_check.safety_contour_in_corridor", RouteFindingCategory.Depth, RouteFindingGroup.Check);
 
-    /// <summary>Soundings shallower than the safety depth inside the cross-track limits. CHECK.</summary>
-    public static RouteFindingCode SoundingsBelowSafetyDepth { get; } = new("route_check.soundings_below_safety_depth", RouteFindingCategory.Depth, RouteFindingGroup.Check);
+    /// <summary>
+    /// Soundings no deeper than the safety contour inside the cross-track
+    /// limits, outside water already shallower than it: the soundings the
+    /// S-101 portrayal's <c>SOUNDG03</c> raises <c>NavHazard</c> for (#1127). CHECK.
+    /// </summary>
+    public static RouteFindingCode SoundingsBelowSafetyContour { get; } = new("route_check.soundings_below_safety_contour", RouteFindingCategory.Depth, RouteFindingGroup.Check);
 
     /// <summary>The track crosses S-102 cells shallower than the safety contour. MUST REVIEW.</summary>
     public static RouteFindingCode CrossesS102Shoal { get; } = new("route_check.crosses_s102_shoal", RouteFindingCategory.Depth, RouteFindingGroup.MustReview);
@@ -120,6 +142,12 @@ public static class RouteFindingCodes
     /// <summary>The track or corridor meets an area that isn't in force while the vessel is there. INFO.</summary>
     public static RouteFindingCode AreaNotInForce { get; } = new("route_check.area_not_in_force", RouteFindingCategory.Area, RouteFindingGroup.Info, 2);
 
+    /// <summary>
+    /// The route meets areas of a kind whose indication is off
+    /// (<see cref="RouteCheckSettings.AreaKindsOff"/>, #1127). INFO.
+    /// </summary>
+    public static RouteFindingCode AreaKindOff { get; } = new("route_check.area_kind_off", RouteFindingCategory.Area, RouteFindingGroup.Info, 2);
+
     /// <summary>An S-124 warning's line or area crosses the corridor, and it is in force while the vessel is there. MUST REVIEW.</summary>
     public static RouteFindingCode WarningOnRoute { get; } = new("s124.on_route", RouteFindingCategory.Warning, RouteFindingGroup.MustReview, 5);
 
@@ -163,10 +191,11 @@ public static class RouteFindingCodes
     public static IReadOnlyList<RouteFindingCode> All { get; } =
     [
         CrossesLand, LandInCorridor, CrossesDrying, DryingInCorridor,
-        DangerInCorridor, DangerNearRoute, CrossesSafetyContour, SafetyContourInCorridor,
-        SoundingsBelowSafetyDepth, CrossesS102Shoal, S102ShoalInCorridor,
+        DangerInCorridor, DangerNearRoute, AidToNavigation, StructureOnTrack, StructureInCorridor, OverheadOnRoute,
+        CrossesSafetyContour, SafetyContourInCorridor,
+        SoundingsBelowSafetyContour, CrossesS102Shoal, S102ShoalInCorridor,
         EntersProhibitedArea, ProhibitedAreaInCorridor, RestrictedArea, CautionArea,
-        TrafficArea, AnchorageArea, ProtectedArea, AreaNotInForce,
+        TrafficArea, AnchorageArea, ProtectedArea, AreaNotInForce, AreaKindOff,
         WarningOnRoute, WarningNearRoute, WarningNotInForce, WarningCancelled,
         BelowSetting,
         ChartedDepthFromS101, DatumUnconfirmed,

@@ -65,6 +65,13 @@ public sealed record S101DatasetData(
     /// the cell was loaded without a portrayal, which keeps the geometric order.
     /// </summary>
     public Func<string, int?>? DrawingPriority { get; init; }
+
+    /// <summary>
+    /// Runs the cell's portrayal rules for chosen features and reports the
+    /// alerts they raise, for route checks (#1127); <c>null</c> when the
+    /// payload was read without a portrayal catalogue.
+    /// </summary>
+    public S101AlertPortrayal? Alerts { get; init; }
 }
 
 /// <summary>S-122 Marine Protected Areas typed model.</summary>

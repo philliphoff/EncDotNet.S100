@@ -246,6 +246,55 @@ public class ChartCheckDepthsTests
         Assert.Empty(Check([Area(RouteChartFeatureKind.DepthArea, "1", 10, 0, 0.01)]).Findings);
     }
 
+    // A feature whose portrayal raises the SafetyContour alert (#1127).
+    private static RouteChartFeature SafetyContourFeature(RouteChartFeature feature) =>
+        feature with { Kind = RouteChartFeatureKind.Alerted, Alerts = [new RouteChartAlert(RouteFindingAlert.SafetyContour)] };
+
+    [Fact]
+    public void An_area_that_raises_the_SafetyContour_alert_is_safety_contour_ground()
+    {
+        var pontoon = SafetyContourFeature(Area(RouteChartFeatureKind.Land, "9", 0, 0.004, 0.005) with { FeatureType = "Pontoon", DepthMeters = null });
+
+        var finding = Assert.Single(Check([pontoon]).Findings);
+
+        Assert.Equal(RouteFindingCodes.CrossesSafetyContour, finding.Code);
+        Assert.Equal("Pontoon", finding.Feature!.FeatureType);
+        Assert.Equal(0.004 * M, finding.Location!.StartDistanceMeters, 1);
+    }
+
+    [Theory]
+    // Track clearance 30 m, port limit 50 m.
+    [InlineData(20.0, "route_check.crosses_safety_contour")]
+    [InlineData(40.0, "route_check.safety_contour_in_corridor")]
+    [InlineData(80.0, null)]
+    public void A_point_that_raises_the_SafetyContour_alert_is_crossed_within_the_track_clearance(double northMeters, string? code)
+    {
+        var land = SafetyContourFeature(Danger("LandArea", "14", 0.005, northMeters, null));
+
+        var findings = Check([land]).Findings;
+
+        if (code is null)
+        {
+            Assert.Empty(findings);
+            return;
+        }
+
+        var finding = Assert.Single(findings);
+        Assert.Equal(code, finding.Code.Value);
+        Assert.Equal("14", finding.Feature!.FeatureId);
+        Assert.True(finding.Location!.IsPoint);
+    }
+
+    [Fact]
+    public void SafetyContour_features_need_the_depth_settings()
+    {
+        var land = SafetyContourFeature(Danger("LandArea", "14", 0.005, 0, null));
+
+        var result = Checks.Chart(new FakeCharts([Harbour], [land]), new PassagePlan([East]), new RouteCheckSettings { At = Fixture.Departure });
+
+        Assert.Empty(result.Findings);
+    }
+
     [Fact]
     public void Shoal_soundings_close_together_make_one_finding()
     {
@@ -255,20 +304,23 @@ public class ChartCheckDepthsTests
             Sounding("7", 0.0033, -20, 4.2),
             Sounding("7", 0.0036, 5, 8.0),
             Sounding("7", 0.008, 0, 9.9),
-            // Outside the limits, deeper than the safety depth, and inside a shallow area.
-            Sounding("7", 0.005, 70, 2.0),
+            // At the 10 m contour: it counts, as SOUNDG03 counts it.
             Sounding("7", 0.005, 0, 10.0),
+            // Outside the limits, deeper than the contour, and inside a shallow area.
+            Sounding("7", 0.005, 70, 2.0),
+            Sounding("7", 0.006, 0, 10.1),
             Sounding("7", 0.0095, 0, 1.0),
             Area(RouteChartFeatureKind.DepthArea, "8", 2, 0.009, 0.0098),
-        ]).Findings.Where(f => f.Code == RouteFindingCodes.SoundingsBelowSafetyDepth).ToList();
+        ]).Findings.Where(f => f.Code == RouteFindingCodes.SoundingsBelowSafetyContour).ToList();
 
-        Assert.Equal(2, findings.Count);
+        Assert.Equal(3, findings.Count);
         Assert.All(findings, f => Assert.Equal(RouteFindingGroup.Check, f.Group));
         Assert.Equal(0.003 * M, findings[0].Location!.StartDistanceMeters, 1);
         Assert.Equal(0.0036 * M, findings[0].Location!.EndDistanceMeters, 1);
-        Assert.Contains("3 soundings · least 4.2 m · shallower than safety depth 10 m", findings[0].Meta, StringComparison.Ordinal);
-        Assert.True(findings[1].Location!.IsPoint);
-        Assert.EndsWith(" · Sounding · least 9.9 m · shallower than safety depth 10 m", findings[1].Meta, StringComparison.Ordinal);
+        Assert.Contains("3 soundings · least 4.2 m · no deeper than safety contour 10 m · shallower than safety depth 10 m", findings[0].Meta, StringComparison.Ordinal);
+        Assert.EndsWith(" · Sounding · least 10.0 m · no deeper than safety contour 10 m", findings[1].Meta, StringComparison.Ordinal);
+        Assert.True(findings[2].Location!.IsPoint);
+        Assert.EndsWith(" · Sounding · least 9.9 m · no deeper than safety contour 10 m · shallower than safety depth 10 m", findings[2].Meta, StringComparison.Ordinal);
     }
 
     [Fact]

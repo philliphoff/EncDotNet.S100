@@ -53,12 +53,12 @@ they drift.
 | 2 | Catalogue and dataset loading and updating | 70 | 5 | 0 | 10 | 34 | 21 | 0 |
 | 3 | Chart display | 61 | 7 | 0 | 31 | 18 | 4 | 1 |
 | 4 | Chart related functions | 47 | 6 | 0 | 0 | 29 | 10 | 2 |
-| 5 | Navigational hazards | 6 | 1 | 1 | 0 | 0 | 4 | 0 |
-| 6 | Areas with special conditions | 5 | 1 | 2 | 0 | 0 | 2 | 0 |
+| 5 | Navigational hazards | 6 | 3 | 0 | 0 | 0 | 3 | 0 |
+| 6 | Areas with special conditions | 5 | 3 | 0 | 0 | 0 | 2 | 0 |
 | 7 | Safety contour | 6 | 1 | 0 | 0 | 3 | 2 | 0 |
 | 8 | S-57 testing | 0 | — | — | — | — | — | — |
 | 9 | Dual fuel mode and SECOM | 17 | 0 | 0 | 2 | 9 | 6 | 0 |
-| | **Total** | **212** | **21** | **3** | **43** | **93** | **49** | **3** |
+| | **Total** | **212** | **25** | **0** | **43** | **93** | **48** | **3** |
 
 Part 8 has no tests of its own in 2.0.1. It points S-57 testing at the
 existing S-64 datasets, which a later slice covers.
@@ -88,15 +88,21 @@ issue.
    is honoured too: area symbols and text, which were drawn at the area's
    first vertex or the mean of its vertices, now go at a point inside the
    area, and `VisibleParts` moves them into the visible part as the view
-   moves (tile exports keep them fixed). `AreaCRS`, `AlertReference` and
-   `Hover` are still skipped. Part 3 tests affected: SafetyContourDisplay,
+   moves (tile exports keep them fixed). `AlertReference` is kept on each
+   instruction for the route checks (finding 2). `AreaCRS` and `Hover` are
+   still skipped. Part 3 tests affected: SafetyContourDisplay,
    AreaBorders, ComplexPortrayal, DifferentPriority, LineSuppression,
    FixedDateRange, PeriodicDateRange, CentredSymbols1.
-2. **Route checks use their own rules, not the S-101 alert catalogue.** ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)) The
-   portrayal catalogue reader finds the alert catalogue but nothing loads
-   it, and `AlertReference` is skipped (finding 1). The checks cover wrecks,
-   obstructions and rocks, and eight area kinds plus S-122, so other
-   NavHazard and ProhAre features aren't checked. Affects Parts 5–7 and 9.
+2. **Route checks used their own rules, not the S-101 alert catalogue.** ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)) Done
+   for route planning. The alert catalogue is read, each drawing
+   instruction keeps its `AlertReference`, and the route check portrays the
+   corridor's features and follows their alerts: every `NavHazard` feature
+   (dangers, aids to navigation, structures, overhead features), every
+   `SafetyContour` feature (docks, hulks, pontoons, unsurveyed areas, land
+   points and curves), soundings as `SOUNDG03` judges them, and every
+   `ProhAre` area in its kind, each kind of which can be turned off. Route
+   monitoring (Parts 5–7 "Mon" tests) and the viewer's switch for the kinds
+   remain.
    Slice 6 confirmed this against the data (§6.3). Dangers are now judged
    against the safety contour, as the catalogue judges them, wherever they
    lie ([#1151](https://github.com/philliphoff/EncDotNet.S100/issues/1151)).
@@ -172,7 +178,7 @@ doesn't try to close them.
 | 3 | **Done for updates and catalogue signatures.** S-164 tests apply the update sets to the `X01SW` cell across exchange sets (SequentialUpdates, InvalidSequence, NewerEditionUpdate, OlderEditionUpdate) and check every `CATALOG.SIGN` (MissingCatalogueSignature, InvalidCatalogueSignature). The applicator now rejects updates for another edition, and the library checks `CATALOG.SIGN`. The rest of finding 3 (authorities for exchange sets, a refuse-untrusted setting, protected data) stays with #1128; cross-set updates in the apps stay with #1129. | 2 |
 | 4 | **Done.** S-164 tests portray every cell in the display sets and Chart 1 at the tests' mariner settings: no portrayal rule fails, and DBASE, STNDR and OTHER features fall in their display categories. The safety contour (#1126) and chart text (#1140) tests failed at first and pass since those fixes; symbolised boundaries (#1141) were found from headless renders compared with the reference plots by eye. | 2 |
 | 5 | **Done for pick reports.** S-164 tests pick features in the PowerUp, InitialPowerUp, Settings and Chart 1 cells with `identify_features` and check the pick report the viewer shows and `describe_feature`. Names, listed values, repeated and complex values ([#1156](https://github.com/philliphoff/EncDotNet.S100/issues/1156)), associations ([#1157](https://github.com/philliphoff/EncDotNet.S100/issues/1157)), value formatting ([#1158](https://github.com/philliphoff/EncDotNet.S100/issues/1158)), priority order ([#1159](https://github.com/philliphoff/EncDotNet.S100/issues/1159)) and Chart 1 interrogation pass (§6.4). Accuracy1–15 wait on ellipsoidal geodesy (finding 5). | 2 |
-| 6 | **Done.** S-164 tests run `RouteChecker` over the NavigationalHazards, SpecialConditions and SafetyContour routes, alone and with NavigationalHazardsOverview for the largest-scale tests, and compare the findings with the reference plots and the S-101 portrayal catalogue's alert references. Danger depths now come from `defaultClearanceDepth` when there's no `valueOfSounding`. Dangers are judged against the safety contour wherever they lie (#1151). The other differences are skipped tests linked to #1127 (§6.3). Dual-fuel tests follow when that data is released. | 2 |
+| 6 | **Done.** S-164 tests run `RouteChecker` over the NavigationalHazards, SpecialConditions and SafetyContour routes, alone and with NavigationalHazardsOverview for the largest-scale tests, and compare the findings with the reference plots and the S-101 portrayal catalogue's alert references. Danger depths now come from `defaultClearanceDepth` when there's no `valueOfSounding`. Dangers are judged against the safety contour wherever they lie (#1151). Since #1127 every Part 5–7 route-planning test runs and passes (§6.3). Dual-fuel tests follow when that data is released. | 2 |
 | 7 | S-64 for the S-57 path (Part 8). | 2 |
 
 Slices 3–7 are independent of each other once slice 2 lands. Gaps found in
@@ -275,19 +281,26 @@ the S-101 portrayal catalogue, which settles what a plot leaves unclear.
   10 m and 51 m plots.
 - **NavHazard features** (#1127). The plots indicate 29 other feature types
   on the NAVHZ route, such as buoys, beacons, piles, platforms, bridges and
-  overhead cables. The route check covers only wrecks, obstructions and
-  rocks.
+  overhead cables. The route check covered only wrecks, obstructions and
+  rocks. It now runs the portrayal on the corridor's features and reports
+  every one that raises `NavHazard`, as an aid to navigation, structure or
+  overhead finding, and finds all 29.
 - **ProhAre areas** (#1127). Of the 12 kinds the SpecialConditions test
   selects, the area check finds the traffic separation zone, inshore traffic
   zone, restricted area, caution area, area to be avoided, military practice
-  area, submarine transit lane, anchorage and PSSA. It doesn't check
+  area, submarine transit lane, anchorage and PSSA. It didn't check
   offshore production areas, seaplane landing areas or marine farms, nor
-  any area charted as a point.
+  any area charted as a point. It now reads every area whose portrayal
+  raises `ProhAre`, points included, and finds all of them; each kind can
+  be turned off.
 - **SafetyContour features** (#1127). The route's crossings of the safety
   contour match every plot from 0 m to 43 m. The plots also indicate the
   floating docks, hulks, pontoons, shoreline constructions, unsurveyed
   areas and land charted as points or curves on the route; the route check
-  reports only land areas.
+  reported only land areas. It now treats every feature that raises the
+  `SafetyContour` alert as safety-contour ground, and finds them all. Its
+  soundings follow `SOUNDG03` (no deeper than the safety contour) instead
+  of the safety depth.
 - **Largest scale.** In all three largest-scale tests no finding comes from
   the overview cell inside the large-scale cell. The manual's plots for
   these tests are still to be drawn, so the tests check that rule only.
@@ -545,8 +558,8 @@ viewer's pick panel shows.
 
 | Test | Reference | v2.0.0 data | Status | Evidence | Note |
 |---|---|---|---|---|---|
-| NavigationalHazards | S-98 12.10.6 | NavigationalHazards | Fails | `tests/EncDotNet.S100.S164.Tests/Part5NavigationalHazardsTests.cs` | Route, danger depths and the safety-contour threshold pass ([#1151](https://github.com/philliphoff/EncDotNet.S100/issues/1151)); only wrecks, obstructions and rocks are checked (#1127). |
-| UserSelectionProhibited Areas | — | — | Gap | — | Area kinds are fixed in code. |
+| NavigationalHazards | S-98 12.10.6 | NavigationalHazards | Passes | `tests/EncDotNet.S100.S164.Tests/Part5NavigationalHazardsTests.cs` | Route, danger depths and the safety-contour threshold pass ([#1151](https://github.com/philliphoff/EncDotNet.S100/issues/1151)), and every NavHazard feature type the plots indicate is found ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)). Soundings follow `SOUNDG03`. |
+| UserSelectionProhibited Areas | — | SpecialConditions | Passes | `tests/EncDotNet.S100.S164.Tests/Part6SpecialConditionsTests.cs` | Each of the 13 alert-catalogue kinds can be turned off (`RouteCheckSettings.AreaKindsOff`, MCP `areaKindsOff`, `s100 route check --areas-off`); a kind that's off says so in one finding ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)). SoundCharts has no switch for it yet. |
 | NavigationalHazardsLS | S-98 12.10.6 | NavigationalHazards, NavigationalHazardsOverview | Passes | `tests/EncDotNet.S100.S164.Tests/Part5NavigationalHazardsTests.cs` | No overview finding inside NAVHZ. The manual's plots are TBD. |
 | NavigationalHazardsMon | — | — | Gap | `src/EncDotNet.S100.Viewer/Services/DynamicSources/OwnShip/SteerableOwnShipPositionProvider.cs` | A simulated own ship exists; no monitoring look-ahead or alarm. |
 | NavigationalHazardsMonLS | — | NavigationalHazards, NavigationalHazardsOverview | Gap | — | No monitoring mode. |
@@ -556,11 +569,11 @@ viewer's pick panel shows.
 
 | Test | Reference | v2.0.0 data | Status | Evidence | Note |
 |---|---|---|---|---|---|
-| SpecialConditions | S-98 12.10.7 | SpecialConditions | Fails | `tests/EncDotNet.S100.S164.Tests/Part6SpecialConditionsTests.cs` | 9 of 12 kinds found; offshore production, seaplane landing and marine farm areas, and areas charted as points, aren't checked (#1127). No per-kind selection. |
+| SpecialConditions | S-98 12.10.7 | SpecialConditions | Passes | `tests/EncDotNet.S100.S164.Tests/Part6SpecialConditionsTests.cs` | Every area the plots box is found, of all 12 kinds and those charted as points, from the areas whose portrayal raises `ProhAre` ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)). |
 | SpecialConditionsLS | S-98 12.10.7 | NavigationalHazardsOverview | Passes | `tests/EncDotNet.S100.S164.Tests/Part6SpecialConditionsTests.cs` | Areas from ARSPC only. The manual's plot is TBD. |
 | SpecialConditionsMon | S-98 12.10.7 | — | Gap | — | No monitoring mode. |
 | SpecialConditionsMonLS | S-98 12.10.7 | — | Gap | — | No monitoring mode. |
-| SafetyContour | S-98 12.10.9 | SafetyContour | Fails | `tests/EncDotNet.S100.S164.Tests/Part7SafetyContourTests.cs` | Crossings match every plot; docks, hulks, pontoons, shoreline constructions, unsurveyed areas and point or curve land aren't indicated (#1127). |
+| SafetyContour | S-98 12.10.9 | SafetyContour | Passes | `tests/EncDotNet.S100.S164.Tests/Part7SafetyContourTests.cs` | Crossings match every plot, and the docks, hulks, pontoons, shoreline constructions, unsurveyed areas and point or curve land that raise the `SafetyContour` alert are indicated ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)). |
 
 ### Part 7 — Safety contour
 
@@ -583,7 +596,7 @@ viewer's pick panel shows.
 | NavigationalHazardsDFLS | S-101PC | — | Partial | `src/EncDotNet.S100.Datasets.Pipelines/Navigation/CatalogRouteChartSource.cs` | S-57 (CSCL) and S-101 ranked together; no product preference at equal scale. |
 | NavigationalHazardsDFMon | — | — | Gap | — | No monitoring mode. |
 | NavigationalHazardsDFMonLS | — | — | Gap | — | No monitoring mode. |
-| SpecialConditionsDF | — | — | Partial | `src/EncDotNet.S100.Datasets.Pipelines/Navigation/CatalogRouteAreaSource.cs` | S-57 areas read from translated cells; same limited set. |
+| SpecialConditionsDF | — | — | Partial | `src/EncDotNet.S100.Datasets.Pipelines/Navigation/CatalogRouteAreaSource.cs` | S-57 areas read from translated cells, through the same S-101 rules; untested on mixed data. |
 | SpecialConditionsDFLS | — | — | Partial | `src/EncDotNet.S100.Navigation/AreaCheck.cs` | Finest-cell rule spans products; untested on mixed data. |
 | SpecialConditionsMonDF | — | — | Gap | — | No monitoring mode. |
 | SpecialConditionsDFLSMon | — | — | Gap | — | No monitoring mode. |

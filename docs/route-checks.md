@@ -80,17 +80,29 @@ is found at cross-sections every 10 m.
 
 ## Depths and charted dangers
 
-These checks use the safety contour and safety depth.
+These checks run when the safety contour and safety depth are both set.
 
 | Code | Group | When |
 |---|---|---|
-| `route_check.crosses_safety_contour` | Must review | The track crosses depth, dredged or drying areas shallower than the safety contour. |
-| `route_check.safety_contour_in_corridor` | Check | Such areas inside the limits, off the track. |
-| `route_check.soundings_below_safety_depth` | Check | Soundings shallower than the safety depth inside the limits. |
+| `route_check.crosses_safety_contour` | Must review | The track crosses depth, dredged or drying areas shallower than the safety contour, or another feature that raises the `SafetyContour` alert. |
+| `route_check.safety_contour_in_corridor` | Check | Such areas or features inside the limits, off the track. |
+| `route_check.soundings_below_safety_contour` | Check | Soundings no deeper than the safety contour inside the limits, outside water already shallower than it. |
 | `route_check.crosses_s102_shoal` | Must review | The track crosses S-102 cells shallower than the safety contour. |
 | `route_check.s102_shoal_in_corridor` | Check | Such S-102 cells inside the limits, off the track. |
 | `route_check.danger_in_corridor` | Must review | A wreck, obstruction or rock shallower than the threshold, awash, or of unknown depth, inside the cross-track limits. |
 | `route_check.danger_near_route` | Check | Such a danger within 0.1 NM beyond the limits. |
+
+Besides depth areas, every feature whose S-101 portrayal raises the
+`SafetyContour` alert is safety-contour ground: floating docks, hulks,
+pontoons, shoreline constructions, unsurveyed areas, and land charted as
+points or curves. An area is crossed or in the corridor as the depth areas
+are; a point or curve is crossed when the track passes within the track
+clearance (30 m) of it.
+
+Soundings follow the portrayal's `SOUNDG03`: a sounding counts when it's no
+deeper than the safety contour. The safety depth only decides how the chart
+draws a sounding (bold when shallower), so a soundings finding notes it when
+its least depth is also shallower than the safety depth.
 
 A danger is a `Wreck`, an `Obstruction` or an `UnderwaterAwashRock`:
 
@@ -113,6 +125,28 @@ point on the route nearest to it. A danger near a turn is reported once, on
 the closer leg. Shoal soundings or S-102 cells less than 100 m apart along the
 route make one finding.
 
+## Navigational hazards
+
+Buoys, beacons, piles, platforms, bridges and other features whose S-101
+portrayal raises the `NavHazard` alert are reported by where they lie from the
+track. These checks need no depth settings.
+
+| Code | Group | When |
+|---|---|---|
+| `route_check.aid_to_navigation` | Check or Info | An aid to navigation (a buoy, beacon, daymark, light float or vessel, or AIS aid) inside the cross-track limits; Info within 0.1 NM beyond them. |
+| `route_check.structure_on_track` | Must review | A structure, such as a pile, dolphin, platform or fishing facility, within the track clearance (30 m) of the track line. |
+| `route_check.structure_in_corridor` | Check or Info | A structure elsewhere inside the limits; Info within 0.1 NM beyond them. |
+| `route_check.overhead_on_route` | Check or Info | A bridge, span, overhead cable or pipeline, or conveyor inside the limits; Info within 0.1 NM beyond them. |
+
+The route check runs the S-101 portrayal rules on the features in each leg's
+corridor, at the check's safety contour, and keeps the alerts they raise, so a
+hazard counts exactly when an ECDIS would raise the alert for it. Wrecks,
+obstructions and rocks are the dangers above. A feature type the check
+doesn't know is treated as a structure. The track clearance and the 0.1 NM
+near band are settings (`--track-clearance` and `--nearby` in
+`s100 route check`, `trackClearanceMeters` and `nearbyDistanceMeters` in
+`check_route`). Overhead features aren't judged against an air draft yet.
+
 ## Regulated and protected areas
 
 These checks need no draft. An area's date range or season is judged at the
@@ -122,12 +156,26 @@ ETAs where it meets the route.
 |---|---|---|
 | `route_check.enters_prohibited_area` | Must review | The track enters an S-101 area where entry is prohibited or restricted. |
 | `route_check.prohibited_area_in_corridor` | Check | Such an area inside the limits, off the track. |
-| `route_check.restricted_area` | Check or Info | Another S-101 restricted or military practice area; Info when its restrictions don't bear on a passage, such as fishing or anchoring prohibited. |
+| `route_check.restricted_area` | Check, Info or Must review | Another S-101 restricted or military practice area, offshore production area, seaplane landing area or marine farm; Info when its restrictions don't bear on a passage, such as fishing or anchoring prohibited; Must review when the track enters an area to be avoided. |
 | `route_check.caution_area` | Check | A caution area. |
-| `route_check.traffic_area` | Check or Info | A separation zone, precautionary area or submarine transit lane; Info for an inshore traffic zone. |
+| `route_check.traffic_area` | Check, Info or Must review | A precautionary area or submarine transit lane; Info for an inshore traffic zone; Must review when the track enters a traffic separation zone. |
 | `route_check.anchorage_area` | Check | An anchorage area. |
 | `route_check.protected_area` | Check or Info | An S-122 marine protected or restricted area. It's never Must review. |
 | `route_check.area_not_in_force` | Info | The area's date range or season doesn't cover the ETAs. |
+| `route_check.area_kind_off` | Info | The route meets areas of a kind whose indication is turned off; one finding per kind. |
+
+The S-101 areas are the ones whose portrayal raises the `ProhAre` alert, in
+the 13 kinds of the S-101 alert catalogue, plus precautionary areas. Areas
+charted as points count too. Each kind can be turned off (`--areas-off` in
+`s100 route check`, `areaKindsOff` in `check_route`; S-164 calls this the
+user selection of prohibited areas). The areas of a kind that's off aren't
+reported; instead one finding, worded as the catalogue words it, says the
+indication of some areas is off, with the kind and how many the route meets.
+The kinds are `traffic_separation_zone`, `inshore_traffic_zone`,
+`restricted_area`, `area_to_be_avoided`, `particularly_sensitive_sea_area`,
+`caution_area`, `offshore_production_area`, `user_area_to_be_avoided`,
+`military_practice_area`, `seaplane_landing_area`, `submarine_transit_lane`,
+`anchorage_area` and `marine_farm`.
 
 ## S-124 navigational warnings
 

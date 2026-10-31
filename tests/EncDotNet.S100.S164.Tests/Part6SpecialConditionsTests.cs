@@ -20,8 +20,6 @@ public sealed class Part6SpecialConditionsTests
 {
     private const string Cell = "10100AA_ARSPC.000";
     private const string Overview = "101AA00AA2OVRVU.000";
-    private const string NotChecked = "#1127: the area check doesn't check this kind of area.";
-    private const string PointArea = "#1127: the area check reads only surfaces, not areas charted as points.";
 
     private static readonly GeoPosition[] Waypoints =
     [
@@ -38,18 +36,18 @@ public sealed class Part6SpecialConditionsTests
         new("Inshore traffic zone", "6"),
         new("Restricted area", "7"),
         new("Caution area", "8"),
-        new("Caution area (point)", "9") { Skip = PointArea },
-        new("Offshore production area", "10") { Skip = NotChecked },
+        new("Caution area (point)", "9"),
+        new("Offshore production area", "10"),
         new("Area to be avoided", "11"),
         new("Military practice area", "12"),
-        new("Military practice area (point)", "13") { Skip = PointArea },
-        new("Seaplane landing area", "14") { Skip = NotChecked },
-        new("Seaplane landing area (point)", "15") { Skip = NotChecked },
+        new("Military practice area (point)", "13"),
+        new("Seaplane landing area", "14"),
+        new("Seaplane landing area (point)", "15"),
         new("Submarine transit lane", "16"),
         new("Anchorage area", "17"),
-        new("Anchorage area (point)", "18") { Skip = PointArea },
-        new("Marine farm/aquaculture", "19") { Skip = NotChecked },
-        new("Marine farm/aquaculture (point)", "20") { Skip = NotChecked },
+        new("Anchorage area (point)", "18"),
+        new("Marine farm/aquaculture", "19"),
+        new("Marine farm/aquaculture (point)", "20"),
         new("PSSA", "22"),
     ];
 
@@ -66,6 +64,35 @@ public sealed class Part6SpecialConditionsTests
         Assert.True(
             report.Findings.Any(f => f.Category == RouteFindingCategory.Area && f.Feature?.FeatureId == featureId),
             $"{selection}: no area finding for feature {featureId}.");
+    }
+
+    [Fact]
+    public async Task UserSelectionProhibitedAreas_AKindThatsOffIsNotIndicated()
+    {
+        // S-164 lets the mariner select the kinds; with anchorage areas off,
+        // their areas (17, and 18 charted as a point) aren't reported, and one
+        // finding says that the indication of the kind is off.
+        var ct = TestContext.Current.CancellationToken;
+        var datasets = await S164RouteCheck.LoadAsync(ct, "SpecialConditions");
+        var settings = S164RouteCheck.Settings(0, 30, S164RouteCheck.TenthOfAMile);
+
+        var report = S164RouteCheck.Checker(datasets).Check(
+            S164RouteCheck.Plan(Waypoints),
+            new RouteCheckSettings
+            {
+                At = settings.At,
+                SafetyContour = settings.SafetyContour,
+                SafetyDepth = settings.SafetyDepth,
+                CorridorOverride = settings.CorridorOverride,
+                AreaKindsOff = [RouteAreaKinds.AnchorageArea],
+            },
+            ct);
+
+        Assert.DoesNotContain(report.Findings, f => f.Feature?.FeatureId is "17" or "18");
+        var off = Assert.Single(report.Findings, f => f.Code == RouteFindingCodes.AreaKindOff);
+        Assert.Equal(RouteAreaKinds.AnchorageArea, ((AreaKindOffDetails)off.Details!).AreaKind);
+        Assert.Equal(RouteFindingGroup.Info, off.Group);
+        Assert.Contains(report.Findings, f => f.Feature?.FeatureId == "8");
     }
 
     [Fact]

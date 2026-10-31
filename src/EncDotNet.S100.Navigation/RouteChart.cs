@@ -45,6 +45,54 @@ public enum RouteChartFeatureKind
     /// depth in <see cref="RouteChartFeature.DepthMeters"/> (#955).
     /// </summary>
     Sounding,
+
+    /// <summary>
+    /// Any other feature whose portrayal raises a <c>NavHazard</c> or
+    /// <c>SafetyContour</c> alert (<see cref="RouteChartFeature.Alerts"/>),
+    /// such as a buoy, a pile or a pontoon (#1127).
+    /// </summary>
+    Alerted,
+}
+
+/// <summary>
+/// An alert in the S-101 alert catalogue: what a feature's portrayal says a
+/// route crossing it should raise (S-100 Part 9 <c>alertReference</c>,
+/// S-98 §12.10).
+/// </summary>
+public enum RouteFindingAlert
+{
+    /// <summary><c>SafetyContour</c>: water no deeper than the safety contour, or something that stands in it.</summary>
+    SafetyContour,
+
+    /// <summary><c>ProhAre</c>: a prohibited area or an area with special conditions.</summary>
+    ProhAre,
+
+    /// <summary><c>NavHazard</c>: a danger or aid to navigation to pass close to.</summary>
+    NavHazard,
+}
+
+/// <summary>An alert a charted feature's portrayal raises (#1127).</summary>
+/// <param name="Alert">The alert.</param>
+/// <param name="AreaKind">
+/// For <see cref="RouteFindingAlert.ProhAre"/>, the kind of area: the viewing
+/// group of its highlight (53012–53024 in S-101), or <c>null</c>.
+/// </param>
+/// <param name="Position">
+/// Where it's raised, when that's one point of the feature (an S-101
+/// sounding raises one per depth); <c>null</c> for the whole feature.
+/// </param>
+public sealed record RouteChartAlert(RouteFindingAlert Alert, int? AreaKind = null, GeoPosition? Position = null);
+
+/// <summary>
+/// What a chart source needs to know to portray a corridor's features as
+/// the check sees them: the depths the S-101 alert rules compare against.
+/// </summary>
+/// <param name="SafetyContourMeters">The safety contour, or <c>null</c> for the portrayal's default.</param>
+/// <param name="SafetyDepthMeters">The safety depth, or <c>null</c> for the portrayal's default.</param>
+public sealed record RouteChartQuery(double? SafetyContourMeters = null, double? SafetyDepthMeters = null)
+{
+    /// <summary>The portrayal's defaults.</summary>
+    public static RouteChartQuery Default { get; } = new();
 }
 
 /// <summary>
@@ -113,6 +161,13 @@ public sealed record RouteChartFeature(
     /// floating), or <c>null</c> when it isn't given.
     /// </summary>
     public int? WaterLevelEffect { get; init; }
+
+    /// <summary>
+    /// The alerts the feature's portrayal raises at the query's depths
+    /// (#1127), in emission order; empty when it raises none or the source
+    /// can't portray it.
+    /// </summary>
+    public IReadOnlyList<RouteChartAlert> Alerts { get; init; } = [];
 }
 
 /// <summary>
@@ -130,12 +185,14 @@ public interface IRouteChartSource
 
     /// <summary>
     /// The features of the kinds in <see cref="RouteChartFeatureKind"/> whose
-    /// geometry truly intersects a leg's corridor, from every cell. The
-    /// check applies the finest-cell rule itself, so a source returns the
-    /// features of every overlapping cell.
+    /// geometry truly intersects a leg's corridor, from every cell, with the
+    /// alerts their portrayal raises at the query's depths. The check applies
+    /// the finest-cell rule itself, so a source returns the features of every
+    /// overlapping cell.
     /// </summary>
     /// <param name="corridor">The corridor's closed ring, in WGS-84.</param>
     /// <param name="extent">The ring's bounding box.</param>
+    /// <param name="query">The depths the alerts are judged at.</param>
     /// <returns>The features.</returns>
-    IReadOnlyList<RouteChartFeature> FeaturesInCorridor(IReadOnlyList<GeoPosition> corridor, BoundingBox extent);
+    IReadOnlyList<RouteChartFeature> FeaturesInCorridor(IReadOnlyList<GeoPosition> corridor, BoundingBox extent, RouteChartQuery query);
 }

@@ -517,4 +517,37 @@ public class S101DrawingInstructionParserTests
         Assert.Equal(AreaPlacementMode.Geographic, Assert.Single(parsed.OfType<TextInstruction>()).AreaPlacement);
         Assert.Equal(AreaPlacementMode.VisibleParts, points[1].AreaPlacement);
     }
+
+    // ── AlertReference (#1127) ─────────────────────────────────────────
+
+    [Fact]
+    public void AlertReference_AppliesToFollowingInstructionsUntilCleared()
+    {
+        var parsed = DrawingInstructionParser.Parse(
+            "F1",
+            "PointInstruction:A;AlertReference:NavHazard;ViewingGroup:14010;PointInstruction:B;LineInstruction:_simple_;AlertReference;TextInstruction:C");
+
+        Assert.Null(parsed[0].AlertReference);
+        Assert.Equal(new PortrayalAlertReference("NavHazard"), parsed[1].AlertReference);
+        Assert.Equal(new PortrayalAlertReference("NavHazard"), parsed[2].AlertReference);
+        Assert.Null(parsed[3].AlertReference);
+    }
+
+    [Fact]
+    public void AlertReference_CarriesThePlanAndMonitorViewingGroups()
+    {
+        // S-101 AnchorageArea: the ProhAre highlight's viewing group for anchorages.
+        var parsed = DrawingInstructionParser.Parse("F1", "AlertReference:ProhAre,53023,53024;ColorFill:CHMGD");
+
+        Assert.Equal(new PortrayalAlertReference("ProhAre", 53023, 53024), Assert.Single(parsed).AlertReference);
+    }
+
+    [Theory]
+    [InlineData("", null)]
+    [InlineData("SafetyContour", "SafetyContour")]
+    [InlineData(" ProhAre , 53017 ", "ProhAre")]
+    public void AlertReference_Parse(string value, string? reference)
+    {
+        Assert.Equal(reference, PortrayalAlertReference.Parse(value)?.Reference);
+    }
 }

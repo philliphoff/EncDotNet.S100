@@ -179,7 +179,7 @@
                                             <TextBlock Text="{Binding Note}" IsVisible="{Binding HasNote}" FontSize="12.5"
                                                        TextWrapping="Wrap" />
                                             <TextBlock Text="{Binding CatalogUrl}" Classes="muted" FontSize="11.5"
-                                                       FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
+                                                       FontFamily="{StaticResource MonoFontFamily}"
                                                        TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding CatalogUrl}" />
                                             <StackPanel Orientation="Horizontal" Spacing="14">
                                                 <Button Classes="link" Content="{Binding FixText}"

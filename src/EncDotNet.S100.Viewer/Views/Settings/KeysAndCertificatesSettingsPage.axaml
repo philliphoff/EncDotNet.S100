@@ -14,7 +14,6 @@
       certificate says and the reference id.
     -->
     <UserControl.Resources>
-        <FontFamily x:Key="KeysMonoFont">Cascadia Mono,Consolas,Menlo,monospace</FontFamily>
 
         <!-- B4 row anatomy, shared by identities and authorities. -->
         <DataTemplate x:Key="KeysRowTemplate" x:DataType="keys:KeysRow">
@@ -66,14 +65,14 @@
                             </StackPanel>
                         </Grid>
                         <SelectableTextBlock Text="{Binding Mono}" IsVisible="{Binding HasMono}"
-                                             FontFamily="{StaticResource KeysMonoFont}" FontSize="12" TextWrapping="Wrap" />
+                                             FontFamily="{StaticResource MonoFontFamily}" FontSize="12" TextWrapping="Wrap" />
                         <TextBlock Classes="keysSub" Text="{Binding Sub}" />
                         <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding HasReference}">
                             <TextBlock Classes="keysSub" FontSize="11" VerticalAlignment="Center"
                                        Text="{x:Static loc:Strings.Keys_ReferenceLabel}" />
                             <Border Classes="keysRef">
                                 <SelectableTextBlock Text="{Binding Reference}"
-                                                     FontFamily="{StaticResource KeysMonoFont}" FontSize="11" />
+                                                     FontFamily="{StaticResource MonoFontFamily}" FontSize="11" />
                             </Border>
                         </StackPanel>
                         <!-- E3: which sources use it, and how. -->
@@ -167,7 +166,7 @@
             <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
         </Style>
         <Style Selector="TextBlock.keysCount">
-            <Setter Property="FontFamily" Value="{StaticResource KeysMonoFont}" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
             <Setter Property="FontSize" Value="11" />
             <Setter Property="FontWeight" Value="Normal" />
             <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />

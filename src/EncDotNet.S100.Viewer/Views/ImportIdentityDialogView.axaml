@@ -40,7 +40,7 @@
             <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
         <Style Selector="SelectableTextBlock.fieldValue.mono">
-            <Setter Property="FontFamily" Value="Cascadia Mono,Consolas,Menlo,monospace" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
         </Style>
     </UserControl.Styles>
 
@@ -78,7 +78,7 @@
                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" Margin="12,11">
                         <ic:FluentIcon Icon="Document" IconVariant="Regular" FontSize="16" Opacity="0.65" VerticalAlignment="Center" />
                         <StackPanel Grid.Column="1">
-                            <TextBlock Text="{Binding FileName}" FontFamily="Cascadia Mono,Consolas,Menlo,monospace"
+                            <TextBlock Text="{Binding FileName}" FontFamily="{StaticResource MonoFontFamily}"
                                        FontSize="12.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                             <TextBlock Text="{Binding FileKind}" FontSize="11" Opacity="0.65" />
                         </StackPanel>
@@ -183,7 +183,7 @@
                 <StackPanel Orientation="Horizontal" Spacing="6">
                     <TextBlock Text="{x:Static loc:Strings.Keys_ReferenceLabel}" FontSize="11" Opacity="0.65" VerticalAlignment="Center" />
                     <Border Background="{DynamicResource MutedBackgroundColor}" CornerRadius="3" Padding="5,0">
-                        <SelectableTextBlock Text="{Binding Reference}" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" FontSize="11" />
+                        <SelectableTextBlock Text="{Binding Reference}" FontFamily="{StaticResource MonoFontFamily}" FontSize="11" />
                     </Border>
                 </StackPanel>
             </StackPanel>

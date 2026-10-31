@@ -83,7 +83,7 @@ public sealed class Part7SafetyContourTests
             + string.Join("; ", crossings.Select(c => $"{c.Path[0].Longitude:F4} to {c.Path[^1].Longitude:F4}")));
     }
 
-    [Fact(Skip = "#1127: only land areas, depth, dredged and drying areas are checked, not every SafetyContour feature the alert catalogue lists.")]
+    [Fact]
     public async Task SafetyContour_IndicatesTheAlertCatalogueFeatures()
     {
         // At a 0 m safety contour the plot boxes the features on the route

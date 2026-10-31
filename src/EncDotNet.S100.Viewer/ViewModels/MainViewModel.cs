@@ -508,6 +508,21 @@ internal sealed class MainViewModel : ViewModelBase
         }
     }
 
+    private double? _logsDetailsWidth;
+    /// <summary>Persisted width of the Logs-tab details pane once its splitter is dragged; <c>null</c> is the default (#1174).</summary>
+    public double? LogsDetailsWidth
+    {
+        get => _logsDetailsWidth;
+        set
+        {
+            if (SetProperty(ref _logsDetailsWidth, value) && _settingsInitialized)
+            {
+                _settings.Panels.LogsDetailsWidth = value;
+                _sizeSaver.RequestSave();
+            }
+        }
+    }
+
     private double? _vesselsInnerSplit;
     /// <summary>Persisted fraction <c>[0,1]</c> of the Vessels-tab master/detail splitter.</summary>
     public double? VesselsInnerSplit
@@ -1648,6 +1663,7 @@ internal sealed class MainViewModel : ViewModelBase
         _catalogInnerSplit = settings.Panels.CatalogInnerSplit;
         _vesselsInnerSplit = settings.Panels.VesselsInnerSplit;
         _routesListHeight = settings.Panels.RoutesListHeight;
+        _logsDetailsWidth = settings.Panels.LogsDetailsWidth;
 
         // Enable persistence write-backs only after hydration is complete.
         // Setters check this flag to avoid writing during initial assignment.

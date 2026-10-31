@@ -1525,8 +1525,15 @@ errors arrived since you last looked.
   only when they're warnings or errors, so their request-by-request messages
   don't fill the list.
 - Type in the search box to show only messages that contain the text.
-- **Pause** stops the list moving while you read, and **Auto-scroll** keeps
-  the newest message in view.
+- The list follows new messages while it's scrolled to the bottom. Scroll
+  up, select a message or click in the search box, and the list stays where
+  it is while messages keep arriving below, even when the oldest ones drop
+  off. A **↓ 12 new** button at the bottom of the list shows how many
+  arrived; click it, or press `End`, to jump to the newest and follow again.
+- Keys, while the Logs tab has focus: `Cmd+F` (`Ctrl+F`) goes to the search
+  box, `Esc` clears the selection and then the search, `Cmd+C` (`Ctrl+C`)
+  copies the selected message, `End` follows new messages again, and `↑`/`↓`
+  move the selection.
 - **Copy** copies the messages shown, **Clear** empties the list and **Send
   feedback** opens the **Report Feedback** dialog, whose report includes
   these logs.

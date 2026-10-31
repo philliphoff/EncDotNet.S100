@@ -158,6 +158,25 @@ public sealed class PortrayalCatalogueProvider : IDisposable
         return _source.OpenAsync(ResolvePath(fileName, "Rules"), cancellationToken);
     }
 
+    /// <summary>
+    /// Reads the catalogue's alert catalogue (<see cref="PortrayalCatalogue.AlertCatalog"/>),
+    /// which sits beside the catalogue XML.
+    /// </summary>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>The alert catalogue, or <see langword="null"/> when the catalogue declares none.</returns>
+    public async Task<AlertCatalogue?> ReadAlertCatalogueAsync(CancellationToken cancellationToken = default)
+    {
+        if (Catalogue.AlertCatalog is not { } item)
+        {
+            return null;
+        }
+
+        var folder = Path.GetDirectoryName(_cataloguePath)?.Replace('\\', '/');
+        var path = string.IsNullOrEmpty(folder) || item.FileName.Contains('/') ? item.FileName : $"{folder}/{item.FileName}";
+        using var stream = await _source.OpenAsync(path, cancellationToken).ConfigureAwait(false);
+        return AlertCatalogueReader.Read(stream);
+    }
+
     /// <inheritdoc />
     public void Dispose() => _source.Dispose();
 

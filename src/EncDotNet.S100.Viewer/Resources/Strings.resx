@@ -554,8 +554,8 @@
     <comment>Logs panel column header (#1080).</comment>
   </data>
   <data name="Logs_Filter_All" xml:space="preserve">
-    <value>All levels</value>
-    <comment>Logs panel level filter: show everything, Debug included (#1080).</comment>
+    <value>Everything, Debug included</value>
+    <comment>Logs panel level filter: show everything and also capture Debug messages from now on (#1172).</comment>
   </data>
   <data name="Logs_Filter_Information" xml:space="preserve">
     <value>Info and above</value>
@@ -566,7 +566,7 @@
     <comment>Logs panel level filter (#1080).</comment>
   </data>
   <data name="Logs_Filter_Error" xml:space="preserve">
-    <value>Errors only</value>
+    <value>Errors</value>
     <comment>Logs panel level filter (#1080).</comment>
   </data>
   <data name="Label_LogsLevelFilter" xml:space="preserve">
@@ -574,8 +574,8 @@
     <comment>Accessible name of the Logs panel's level filter (#1080).</comment>
   </data>
   <data name="Tooltip_LogsLevelFilter" xml:space="preserve">
-    <value>Show only entries at this level and above</value>
-    <comment>Tooltip of the Logs panel's level filter (#1080).</comment>
+    <value>Show only entries at this level and above. Everything also records Debug messages, from the moment you choose it</value>
+    <comment>Tooltip of the Logs panel's level filter (#1080, #1172).</comment>
   </data>
   <data name="Label_LogsSearch" xml:space="preserve">
     <value>Search logs</value>
@@ -585,33 +585,29 @@
     <value>Filter by message or area…</value>
     <comment>Placeholder of the Logs panel's search box (#1080).</comment>
   </data>
-  <data name="Logs_Pause" xml:space="preserve">
-    <value>Pause</value>
-    <comment>Logs panel toggle that freezes the list (#1080).</comment>
+  <data name="Logs_CapturingDebug" xml:space="preserve">
+    <value>Capturing Debug</value>
+    <comment>Logs panel hint next to the level filter while Debug messages are recorded (#1172).</comment>
   </data>
-  <data name="Tooltip_LogsPause" xml:space="preserve">
-    <value>Stop adding new entries to the list while you read; they are still recorded</value>
-    <comment>Tooltip of the Logs panel's Pause toggle (#1080).</comment>
+  <data name="Label_LogsErrorsChipFormat" xml:space="preserve">
+    <value>Errors: {0}. Show errors only</value>
+    <comment>Accessible name of the Logs panel's errors count chip; {0} is how many errors the panel holds (#1172).</comment>
   </data>
-  <data name="Logs_AutoScroll" xml:space="preserve">
-    <value>Auto-scroll</value>
-    <comment>Logs panel toggle that keeps the newest entry in view (#1080).</comment>
+  <data name="Label_LogsWarningsChipFormat" xml:space="preserve">
+    <value>Warnings: {0}. Show warnings and errors</value>
+    <comment>Accessible name of the Logs panel's warnings count chip; {0} is how many warnings the panel holds (#1172).</comment>
   </data>
-  <data name="Tooltip_LogsAutoScroll" xml:space="preserve">
-    <value>Keep the newest entry in view</value>
-    <comment>Tooltip of the Logs panel's Auto-scroll toggle (#1080).</comment>
+  <data name="Tooltip_LogsErrorsChip" xml:space="preserve">
+    <value>Show only errors. Click again to go back</value>
+    <comment>Tooltip of the Logs panel's errors count chip (#1172).</comment>
   </data>
-  <data name="Logs_Verbose" xml:space="preserve">
-    <value>Verbose</value>
-    <comment>Logs panel toggle that also records Debug messages (#1080).</comment>
-  </data>
-  <data name="Tooltip_LogsVerbose" xml:space="preserve">
-    <value>Also record Debug messages. Changes only this panel and feedback reports</value>
-    <comment>Tooltip of the Logs panel's Verbose toggle (#1080).</comment>
+  <data name="Tooltip_LogsWarningsChip" xml:space="preserve">
+    <value>Show warnings and errors. Click again to go back</value>
+    <comment>Tooltip of the Logs panel's warnings count chip (#1172).</comment>
   </data>
   <data name="Logs_Copy" xml:space="preserve">
-    <value>Copy</value>
-    <comment>Logs panel button (#1080).</comment>
+    <value>Copy all</value>
+    <comment>Logs panel button that copies every entry shown (#1080, #1172).</comment>
   </data>
   <data name="Tooltip_LogsCopy" xml:space="preserve">
     <value>Copy the entries shown to the clipboard</value>
@@ -622,7 +618,7 @@
     <comment>Logs panel button (#1080).</comment>
   </data>
   <data name="Tooltip_LogsClear" xml:space="preserve">
-    <value>Remove every entry from the list</value>
+    <value>Remove every entry, also from the logs a feedback report would include</value>
     <comment>Tooltip of the Logs panel's Clear button (#1080).</comment>
   </data>
   <data name="Logs_SendFeedback" xml:space="preserve">
@@ -641,9 +637,17 @@
     <value>No entries match the filter.</value>
     <comment>Logs panel empty state while the level filter or search hides every entry (#1080).</comment>
   </data>
-  <data name="Logs_PausedFormat" xml:space="preserve">
-    <value>Paused · {0} new</value>
-    <comment>Logs panel status while paused; {0} is how many messages arrived since (#1080).</comment>
+  <data name="Logs_NewEntriesFormat" xml:space="preserve">
+    <value>↓ {0} new</value>
+    <comment>Logs panel pill at the list's bottom edge while it isn't following new entries; {0} is how many shown entries arrived below (#1173).</comment>
+  </data>
+  <data name="Label_LogsNewEntriesFormat" xml:space="preserve">
+    <value>{0} new entries, show the newest</value>
+    <comment>Accessible name of the Logs panel's new-entries pill; {0} is how many shown entries arrived below (#1173).</comment>
+  </data>
+  <data name="Tooltip_LogsNewEntries" xml:space="preserve">
+    <value>Scroll to the newest entry and keep following new ones (End)</value>
+    <comment>Tooltip of the Logs panel's new-entries pill (#1173).</comment>
   </data>
   <data name="Logs_RepeatFormat" xml:space="preserve">
     <value>×{0}</value>
@@ -677,6 +681,34 @@
     <value>Close the entry details</value>
     <comment>Tooltip of the Logs panel details pane's close button (#1080).</comment>
   </data>
+  <data name="Label_LogsCopyEntry" xml:space="preserve">
+    <value>Copy entry</value>
+    <comment>Accessible name of the Logs panel details pane's Copy entry button (#1174).</comment>
+  </data>
+  <data name="Tooltip_LogsCopyEntry" xml:space="preserve">
+    <value>Copy this entry to the clipboard, home folder shown as ~</value>
+    <comment>Tooltip of the Logs panel details pane's Copy entry button (#1174).</comment>
+  </data>
+  <data name="Label_LogsDetailsSplitter" xml:space="preserve">
+    <value>Resize entry details</value>
+    <comment>Accessible name of the splitter on the Logs panel details pane's left edge (#1174).</comment>
+  </data>
+  <data name="Logs_Menu_CopyMessage" xml:space="preserve">
+    <value>Copy message</value>
+    <comment>Logs panel row context menu: copies the entry's message (#1174).</comment>
+  </data>
+  <data name="Logs_Menu_CopyEntry" xml:space="preserve">
+    <value>Copy entry</value>
+    <comment>Logs panel row context menu: copies the whole entry, as Copy does (#1174).</comment>
+  </data>
+  <data name="Logs_Menu_ShowOnlyAreaFormat" xml:space="preserve">
+    <value>Show only {0}</value>
+    <comment>Logs panel row context menu: {0} is the row's area, e.g. "Datasets". Adds an area: token to the search (#1174).</comment>
+  </data>
+  <data name="Logs_Menu_HideAreaFormat" xml:space="preserve">
+    <value>Hide {0}</value>
+    <comment>Logs panel row context menu: {0} is the row's area, e.g. "Datasets". Adds an -area: token to the search (#1174).</comment>
+  </data>
   <data name="Label_LogsEntries" xml:space="preserve">
     <value>Log entries</value>
     <comment>Accessible name of the Logs panel's list (#1080).</comment>
@@ -704,6 +736,30 @@
   <data name="LogLevel_Critical" xml:space="preserve">
     <value>Critical</value>
     <comment>Log level name in the Logs panel (#1080).</comment>
+  </data>
+  <data name="LogLevelShort_Trace" xml:space="preserve">
+    <value>Trace</value>
+    <comment>Short log level label in the Logs panel's 44 px level column; at most five characters (#1171).</comment>
+  </data>
+  <data name="LogLevelShort_Debug" xml:space="preserve">
+    <value>Debug</value>
+    <comment>Short log level label in the Logs panel's 44 px level column; at most five characters (#1171).</comment>
+  </data>
+  <data name="LogLevelShort_Information" xml:space="preserve">
+    <value>Info</value>
+    <comment>Short log level label in the Logs panel's 44 px level column; at most five characters (#1171).</comment>
+  </data>
+  <data name="LogLevelShort_Warning" xml:space="preserve">
+    <value>Warn</value>
+    <comment>Short log level label in the Logs panel's 44 px level column; at most five characters (#1171).</comment>
+  </data>
+  <data name="LogLevelShort_Error" xml:space="preserve">
+    <value>Error</value>
+    <comment>Short log level label in the Logs panel's 44 px level column; at most five characters (#1171).</comment>
+  </data>
+  <data name="LogLevelShort_Critical" xml:space="preserve">
+    <value>Crit</value>
+    <comment>Short log level label in the Logs panel's 44 px level column; at most five characters (#1171).</comment>
   </data>
   <data name="LogArea_App" xml:space="preserve">
     <value>App</value>
@@ -5290,8 +5346,8 @@
   <data name="RouteCheck_SafetyContourInCorridor" xml:space="preserve">
     <value>Shallower than the safety contour inside the cross-track limits</value>
   </data>
-  <data name="RouteCheck_SoundingsBelowSafetyDepth" xml:space="preserve">
-    <value>Soundings shallower than the safety depth</value>
+  <data name="RouteCheck_SoundingsBelowSafetyContour" xml:space="preserve">
+    <value>Soundings no deeper than the safety contour</value>
   </data>
   <data name="RouteCheck_CrossesS102Shoal" xml:space="preserve">
     <value>Crosses S-102 depths shallower than the safety contour</value>

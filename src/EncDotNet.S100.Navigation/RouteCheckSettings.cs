@@ -46,6 +46,30 @@ public sealed class RouteCheckSettings
     public Length? CorridorOverride { get; init; }
 
     /// <summary>
+    /// How close to the track line an aid to navigation, structure or
+    /// overhead feature counts as on the track (#1127), or <c>null</c> for
+    /// 30 m. A structure on the track must be reviewed; one elsewhere in the
+    /// corridor is worth checking.
+    /// </summary>
+    public Length? TrackClearance { get; init; }
+
+    /// <summary>
+    /// How far beyond a side's cross-track limit a danger or hazard is still
+    /// near the route, or <c>null</c> for <see cref="ChartCheckOptions.DangerNearbyMeters"/>
+    /// (0,1 NM by default).
+    /// </summary>
+    public Length? NearbyDistance { get; init; }
+
+    /// <summary>
+    /// The kinds of prohibited area and area with special conditions whose
+    /// indication is off (<see cref="RouteAreaKinds"/>; S-164
+    /// UserSelectionProhibited Areas). The areas of these kinds aren't
+    /// reported; one <see cref="RouteFindingCodes.AreaKindOff"/> finding per
+    /// kind says the route meets them. Empty by default: every kind is on.
+    /// </summary>
+    public IReadOnlyCollection<int> AreaKindsOff { get; init; } = [];
+
+    /// <summary>
     /// Departures to sweep for the clearance check, or <c>null</c> for none.
     /// The sweep is in <see cref="RouteCheckReport.Departures"/>.
     /// </summary>
@@ -68,6 +92,12 @@ public sealed class RouteCheckSettings
             SafetyDepth = settings.SafetyDepth,
         };
     }
+
+    /// <summary>The track clearance, in metres.</summary>
+    internal double TrackClearanceMeters => Math.Max(0, TrackClearance?.TotalMetres ?? 30);
+
+    /// <summary>The near band beyond the limits, in metres: the setting, or <paramref name="defaultMeters"/>.</summary>
+    internal double NearbyMeters(double defaultMeters) => Math.Max(0, NearbyDistance?.TotalMetres ?? defaultMeters);
 
     /// <summary>The port half-width of a leg, in metres: the override, the leg's limit, or <paramref name="defaultMeters"/>.</summary>
     internal double PortMeters(PassageLeg leg, double defaultMeters) =>

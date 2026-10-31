@@ -103,7 +103,7 @@
             <Setter Property="Opacity" Value="0.55" />
         </Style>
         <Style Selector="SelectableTextBlock.mono">
-            <Setter Property="FontFamily" Value="{DynamicResource LibraryMonoFont}" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
         </Style>
         <Style Selector="SelectableTextBlock.copyable">
             <Setter Property="Cursor" Value="Hand" />
@@ -123,7 +123,7 @@
             <Setter Property="BorderBrush" Value="Transparent" />
         </Style>
         <Style Selector="Border.libraryKindTag > TextBlock">
-            <Setter Property="FontFamily" Value="{DynamicResource LibraryMonoFont}" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
             <Setter Property="FontSize" Value="10.5" />
             <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
             <Setter Property="Opacity" Value="0.7" />
@@ -168,7 +168,7 @@
 
         <!-- Rows: dataset codes in monospace; datasets of an unpacked package indented. -->
         <Style Selector="TextBlock.libraryRowName.mono">
-            <Setter Property="FontFamily" Value="{DynamicResource LibraryMonoFont}" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
         </Style>
         <Style Selector="Border.libraryRow.groupChild">
             <Setter Property="Margin" Value="20,0,0,0" />
@@ -263,7 +263,6 @@
     </UserControl.Styles>
 
     <UserControl.Resources>
-        <FontFamily x:Key="LibraryMonoFont">Cascadia Mono,Consolas,Menlo,monospace</FontFamily>
         <!-- Sizes that differ from the ShadUI defaults (14 px body text, 36 px controls). -->
         <x:Double x:Key="LibrarySecondaryFontSize">13</x:Double>
         <x:Double x:Key="LibraryTagHeight">22</x:Double>
@@ -603,7 +602,7 @@
                                 <Run Text="{Binding LocationCoverText}" />
                             </TextBlock>
                             <TextBlock Grid.Column="2" Text="{Binding LocationPositionText}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6"
-                                       FontFamily="{StaticResource LibraryMonoFont}" VerticalAlignment="Center" />
+                                       FontFamily="{StaticResource MonoFontFamily}" VerticalAlignment="Center" />
                             <Button Grid.Column="3" Classes="Ghost" Padding="6,0" FontSize="{StaticResource LibrarySecondaryFontSize}"
                                     AutomationProperties.AutomationId="Library.Location.Next"
                                     Content="{x:Static loc:Strings.Library_LocationNext}"
@@ -802,7 +801,7 @@
                                                      Height="4" MinHeight="4" VerticalAlignment="Center" />
                                         <TextBlock Grid.Column="1" Text="{Binding DownloadProgressText}"
                                                    FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.65"
-                                                   FontFamily="{StaticResource LibraryMonoFont}" VerticalAlignment="Center" />
+                                                   FontFamily="{StaticResource MonoFontFamily}" VerticalAlignment="Center" />
                                         <Button Grid.Column="2" Classes="Ghost" Padding="6,0" Height="24" MinHeight="0"
                                                 AutomationProperties.AutomationId="Library.Row.CancelDownload"
                                                 FontSize="{StaticResource LibrarySecondaryFontSize}"
@@ -840,7 +839,7 @@
                                 <views:LibrarySwatch Grid.Column="0" State="{Binding SelectedItem.PrimaryAvailability, FallbackValue=Listed}"
                                                      Width="18" VerticalAlignment="Center" />
                                 <SelectableTextBlock Grid.Column="1" Text="{Binding SelectedItem.Name}"
-                                                     FontFamily="{StaticResource LibraryMonoFont}"
+                                                     FontFamily="{StaticResource MonoFontFamily}"
                                                      FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
                                                      VerticalAlignment="Center" />
                                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
@@ -952,7 +951,7 @@
                                 AutomationProperties.HelpText="{x:Static loc:Strings.Secom_Details_Help}">
                         <StackPanel Spacing="1">
                             <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                            <SelectableTextBlock Text="{Binding Host}" FontFamily="{StaticResource LibraryMonoFont}"
+                            <SelectableTextBlock Text="{Binding Host}" FontFamily="{StaticResource MonoFontFamily}"
                                                  FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.65" />
                         </StackPanel>
                         <StackPanel Spacing="6">

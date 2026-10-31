@@ -7,6 +7,7 @@ using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Quantities;
+using EncDotNet.S100.Scripting.MoonSharp;
 
 namespace EncDotNet.S100.S164.Tests;
 
@@ -29,6 +30,9 @@ internal static class S164RouteCheck
     /// <summary>The user-specified distance the largest-scale (LS) tests set: 0.5 NM.</summary>
     public static Length HalfAMile { get; } = Length.FromMetres(926);
 
+    /// <summary>The engine the cells portray their alerts with (#1127).</summary>
+    public static MoonSharpLuaEngine LuaEngine { get; } = new();
+
     /// <summary>The checker's datasets: every S-101 base cell in the exchange sets.</summary>
     public static async Task<IReadOnlyList<LoadedDataset>> LoadAsync(CancellationToken cancellationToken, params string[] exchangeSets)
     {
@@ -49,7 +53,7 @@ internal static class S164RouteCheck
                 }
 
                 buffer.Position = 0;
-                var dataset = LoadedDatasetProjector.Project(new DatasetId(entry.Name), "S-101", buffer, transforms: transforms)
+                var dataset = LoadedDatasetProjector.Project(new DatasetId(entry.Name), "S-101", buffer, transforms: transforms, luaEngine: LuaEngine)
                     ?? throw new InvalidOperationException($"'{exchangeSet}' cell {entry.Name} didn't load.");
                 datasets.Add(dataset);
             }

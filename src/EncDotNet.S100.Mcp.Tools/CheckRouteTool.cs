@@ -16,7 +16,7 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// <param name="CorridorHalfWidthMeters">The corridor's half-width either side of the track, overriding every leg's cross-track limits.</param>
 /// <param name="GreatCircle">For a polyline, run legs as great circles instead of rhumb lines.</param>
 /// <param name="SafetyContourMeters">The safety contour for the depth checks; with <paramref name="SafetyDepthMeters"/>, turns them on.</param>
-/// <param name="SafetyDepthMeters">The safety depth for the danger and sounding checks.</param>
+/// <param name="SafetyDepthMeters">The safety depth for the sounding check.</param>
 /// <param name="DraftMeters">A draft for every leg; with one, the clearance check runs and dangers are also judged against each leg's keel.</param>
 /// <param name="SpeedKnots">A speed over ground for every leg; speeds give the ETAs.</param>
 /// <param name="SquatMeters">A fixed squat allowance for every leg.</param>
@@ -29,13 +29,16 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// <param name="WindowFrom">With <paramref name="WindowTo"/>, the first departure of the sweep.</param>
 /// <param name="WindowTo">The last departure of the sweep.</param>
 /// <param name="WindowStepMinutes">Minutes between swept departures.</param>
+/// <param name="TrackClearanceMeters">How close to the track line an aid, structure or overhead feature counts as on the track; default 30 m.</param>
+/// <param name="NearbyDistanceMeters">How far beyond the cross-track limits a danger or hazard is near the route; default 185.2 m.</param>
+/// <param name="AreaKindsOff">The kinds of prohibited area and area with special conditions whose indication is off, by name.</param>
 public sealed record CheckRouteRequest(
     [property: Description("Id of a host route to check (viewer only). Omit, with no polyline, for the active route.")] string? RouteId = null,
     [property: Description("A route given directly: each pair of consecutive vertices is a leg. Takes precedence over routeId. Its corridorWidthMeters, when set, is the half-width either side of the track.")] GeoPolyline? Polyline = null,
     [property: Description("The corridor's HALF-width in metres: how far it reaches to port, and to starboard, of the track (so the corridor is twice this wide). Overrides every leg's cross-track limits. Without it a route uses each leg's port/starboard XTD, and anything unset uses 50 m.")] double? CorridorHalfWidthMeters = null,
     [property: Description("For a polyline, run legs as great circles instead of rhumb lines.")] bool GreatCircle = false,
     [property: Description("Safety contour in metres. With safetyDepthMeters, turns on the depth checks: depth, dredged and drying areas and S-102 cells shallower than it, and charted dangers. SoundCharts' findings list uses the mariner's settings (get_mariner_settings).")] double? SafetyContourMeters = null,
-    [property: Description("Safety depth in metres, for charted dangers and soundings. Goes with safetyContourMeters.")] double? SafetyDepthMeters = null,
+    [property: Description("Safety depth in metres, for soundings. Goes with safetyContourMeters.")] double? SafetyDepthMeters = null,
     [property: Description("Draft in metres, for every leg (a route's own otherwise). With a draft on every leg the clearance check runs, and each leg's dangers are also judged against its draft + squat + required UKC.")] double? DraftMeters = null,
     [property: Description("Speed over ground in knots, for every leg (a route's own otherwise). Speeds give the ETAs that warnings, seasonal areas and S-104 water levels are judged at. S-111 currents are not applied.")] double? SpeedKnots = null,
     [property: Description("Fixed squat allowance in metres, for every leg (a route's own otherwise; default 0).")] double? SquatMeters = null,
@@ -47,7 +50,10 @@ public sealed record CheckRouteRequest(
     [property: Description("Sweep departures for the departure window (clearance.window): from windowFrom to windowTo when given, else across the whole S-104 time range that covers the route, as SoundCharts' departure band does (over a long forecast the step widens to keep the sweep under 2000 departures). Needs a draft.")] bool IncludeWindow = false,
     [property: Description("With includeWindow and windowTo, the first departure of the sweep.")] DateTimeOffset? WindowFrom = null,
     [property: Description("With includeWindow and windowFrom, the last departure of the sweep (inclusive).")] DateTimeOffset? WindowTo = null,
-    [property: Description("Minutes between swept departures (default 5).")] int WindowStepMinutes = 5);
+    [property: Description("Minutes between swept departures (default 5).")] int WindowStepMinutes = 5,
+    [property: Description("How close to the track line, in metres, an aid to navigation, structure or overhead feature counts as on the track (default 30). A structure on the track is must review.")] double? TrackClearanceMeters = null,
+    [property: Description("How far beyond the cross-track limits, in metres, a danger or hazard counts as near the route (default 185.2, 0.1 NM).")] double? NearbyDistanceMeters = null,
+    [property: Description("Kinds of prohibited area and area with special conditions to turn off (S-101 alert catalogue ProhAre kinds): traffic_separation_zone, inshore_traffic_zone, restricted_area, area_to_be_avoided, particularly_sensitive_sea_area, caution_area, offshore_production_area, user_area_to_be_avoided, military_practice_area, seaplane_landing_area, submarine_transit_lane, anchorage_area, marine_farm. Their areas aren't reported; one route_check.area_kind_off finding per kind says the route meets them. Default: every kind on.")] IReadOnlyList<string>? AreaKindsOff = null);
 
 /// <summary>
 /// Checks a route with <see cref="RouteChecker"/> against the loaded data:
@@ -170,6 +176,9 @@ public sealed class CheckRouteTool
             SafetyContour = request.SafetyContourMeters is { } contour ? Depth.FromMetres(contour) : null,
             SafetyDepth = request.SafetyDepthMeters is { } safetyDepth ? Depth.FromMetres(safetyDepth) : null,
             CorridorOverride = request.CorridorHalfWidthMeters is { } corridor ? Length.FromMetres(corridor) : null,
+            TrackClearance = request.TrackClearanceMeters is { } clearance ? Length.FromMetres(clearance) : null,
+            NearbyDistance = request.NearbyDistanceMeters is { } nearby ? Length.FromMetres(nearby) : null,
+            AreaKindsOff = request.AreaKindsOff is { } off ? off.Select(name => RouteAreaKinds.Parse(name)!.Value).ToList() : [],
             DepartureWindow = !request.IncludeWindow ? null
                 : request.WindowFrom is { } from && request.WindowTo is { } to ? DepartureRange.Between(from, to, TimeSpan.FromMinutes(request.WindowStepMinutes))
                 : DepartureRange.WaterLevelData(TimeSpan.FromMinutes(request.WindowStepMinutes), MaxWindowDepartures),
@@ -217,6 +226,10 @@ public sealed class CheckRouteTool
             v is { } x && (!double.IsFinite(x) || x < 0 || (!allowZero && x == 0));
 
         if (Bad(request.CorridorHalfWidthMeters)) return new InvalidArgument("corridorHalfWidthMeters", "must be zero or more metres");
+        if (Bad(request.TrackClearanceMeters)) return new InvalidArgument("trackClearanceMeters", "must be zero or more metres");
+        if (Bad(request.NearbyDistanceMeters)) return new InvalidArgument("nearbyDistanceMeters", "must be zero or more metres");
+        if (request.AreaKindsOff?.FirstOrDefault(name => RouteAreaKinds.Parse(name) is null) is { } unknown)
+            return new InvalidArgument("areaKindsOff", $"'{unknown}' isn't a kind: {string.Join(", ", RouteAreaKinds.Names.Values)}");
         if ((request.SafetyContourMeters is null) != (request.SafetyDepthMeters is null)) return new InvalidArgument("safetyDepthMeters", "safetyContourMeters and safetyDepthMeters go together");
         if (Bad(request.SafetyContourMeters)) return new InvalidArgument("safetyContourMeters", "must be zero or more metres");
         if (Bad(request.SafetyDepthMeters)) return new InvalidArgument("safetyDepthMeters", "must be zero or more metres");
