@@ -103,18 +103,25 @@ A new pure model in `EncDotNet.S100.Navigation`, next to `IWaterLevelSource`:
 public interface IWaterLevelField
 {
     // The water level to apply at a point, or null where nothing applies.
-    WaterLevelSample? Sample(GeoPosition position);
+    AppliedWaterLevel? Sample(GeoPosition position);
+
+    // The same, for a depth on a given datum, with the reason when none applies.
+    WaterLevelAtPoint Resolve(GeoPosition position, int? depthDatum);
 
     // The area where the field applies, for the adjusted-area boundary.
-    IReadOnlyList<GeoPolygon> Footprint { get; }
+    IReadOnlyList<CoverageArea> Footprint { get; }
 
     // What was applied: the time or period, and each contributing source.
     WaterLevelBasis Basis { get; }
 }
 
-public readonly record struct WaterLevelSample(
-    double HeightMeters, double? UncertaintyMeters, WaterLevelSourceInfo Source);
+public readonly record struct AppliedWaterLevel(
+    double HeightMeters, double? UncertaintyMeters, WaterLevelSourceInfo Source, DateTime StepTime);
 ```
+
+As built, the sample type is `AppliedWaterLevel`, since
+`EncDotNet.S100.Datasets.Pipelines.Query.WaterLevelSample` already exists,
+and the footprint uses the existing `CoverageArea`.
 
 Two implementations:
 

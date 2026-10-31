@@ -516,7 +516,7 @@ or period, built on an `IWaterLevelSource`:
   Appendix D-2.5).
 
 `Resolve(position, depthDatum)` returns a `WaterLevelAtPoint` with a
-`WaterLevelStatus`, the `WaterLevelSample` read (height above the datum,
+`WaterLevelStatus`, the `AppliedWaterLevel` read (height above the datum,
 uncertainty, source and step) and the `DatumAgreement`. `Sample(position)`
 returns the height to apply, or `null`. `Basis` names the time or period and
 the datasets, and `Footprint` the areas the source covers.

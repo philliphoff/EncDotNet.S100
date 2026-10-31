@@ -39,7 +39,7 @@ internal sealed record LocationDepthResult(
     /// </summary>
     /// <param name="utc">The time (UTC).</param>
     /// <returns>The water level, or <c>null</c>.</returns>
-    public WaterLevelSample? WaterLevelAt(DateTime utc) =>
+    public AppliedWaterLevel? WaterLevelAt(DateTime utc) =>
         Tide is { Series.Count: > 0 } tide
         && WaterLevelSnapshot.Resolve(tide.Series, utc, Base.VerticalDatumCode) is { Status: WaterLevelStatus.Applied, Sample: { } sample }
             ? sample

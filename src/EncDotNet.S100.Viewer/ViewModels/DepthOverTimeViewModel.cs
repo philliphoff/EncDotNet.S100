@@ -335,7 +335,7 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
         UncertaintyText = FormatUncertainty(Result.UncertaintyMeters, water);
     }
 
-    private string FormatUncertainty(double? charted, WaterLevelSample? water)
+    private string FormatUncertainty(double? charted, AppliedWaterLevel? water)
     {
         string F(double metres) => DepthFormatting.Format(metres, _depthUnit);
 

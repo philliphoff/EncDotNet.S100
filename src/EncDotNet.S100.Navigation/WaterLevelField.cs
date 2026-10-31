@@ -11,7 +11,7 @@ namespace EncDotNet.S100.Navigation;
 /// <param name="UncertaintyMeters">The uncertainty of the height (a ± value), or <c>null</c> when the S-104 dataset doesn't carry one.</param>
 /// <param name="Source">The series the height was read from.</param>
 /// <param name="StepTime">The time step nearest the time the height is for.</param>
-public readonly record struct WaterLevelSample(
+public readonly record struct AppliedWaterLevel(
     double HeightMeters,
     double? UncertaintyMeters,
     WaterLevelSourceInfo Source,
@@ -37,7 +37,7 @@ public readonly record struct WaterLevelSample(
 public sealed record WaterLevelAtPoint(
     WaterLevelStatus Status,
     WaterLevelSourceInfo? Source = null,
-    WaterLevelSample? Sample = null,
+    AppliedWaterLevel? Sample = null,
     DatumAgreement? Datum = null);
 
 /// <summary>Which time a <see cref="IWaterLevelField"/> is for.</summary>
@@ -91,7 +91,7 @@ public interface IWaterLevelField
     /// </summary>
     /// <param name="position">The point, in WGS-84.</param>
     /// <returns>The water level, or <c>null</c>.</returns>
-    WaterLevelSample? Sample(GeoPosition position);
+    AppliedWaterLevel? Sample(GeoPosition position);
 
     /// <summary>
     /// The water level at a point for a depth on <paramref name="depthDatum"/>,
@@ -143,7 +143,7 @@ public sealed class WaterLevelSnapshot : IWaterLevelField
     public WaterLevelBasis Basis { get; }
 
     /// <inheritdoc />
-    public WaterLevelSample? Sample(GeoPosition position) =>
+    public AppliedWaterLevel? Sample(GeoPosition position) =>
         Resolve(position, depthDatum: null) is { Status: WaterLevelStatus.Applied, Sample: { } sample } ? sample : null;
 
     /// <inheritdoc />
@@ -178,7 +178,7 @@ public sealed class WaterLevelSnapshot : IWaterLevelField
         return new WaterLevelAtPoint(
             choice.Chosen is null ? WaterLevelStatus.DatumMismatch : WaterLevelStatus.Applied,
             used.Source,
-            new WaterLevelSample(reading.HeightMeters, reading.UncertaintyMeters, used.Source, reading.StepTime),
+            new AppliedWaterLevel(reading.HeightMeters, reading.UncertaintyMeters, used.Source, reading.StepTime),
             VerticalDatumCheck.Compare(depthDatum, used.Source.VerticalDatum));
     }
 }
@@ -232,7 +232,7 @@ public sealed class WaterLevelPeriodMinimum : IWaterLevelField
     public WaterLevelBasis Basis { get; }
 
     /// <inheritdoc />
-    public WaterLevelSample? Sample(GeoPosition position) =>
+    public AppliedWaterLevel? Sample(GeoPosition position) =>
         Resolve(position, depthDatum: null) is { Status: WaterLevelStatus.Applied, Sample: { } sample } ? sample : null;
 
     /// <inheritdoc />
@@ -275,7 +275,7 @@ public sealed class WaterLevelPeriodMinimum : IWaterLevelField
         return new WaterLevelAtPoint(
             choice.Chosen is null ? WaterLevelStatus.DatumMismatch : WaterLevelStatus.Applied,
             used.Source,
-            new WaterLevelSample(min.HeightMeters, min.UncertaintyMeters, used.Source, min.StepTime),
+            new AppliedWaterLevel(min.HeightMeters, min.UncertaintyMeters, used.Source, min.StepTime),
             VerticalDatumCheck.Compare(depthDatum, used.Source.VerticalDatum));
     }
 
