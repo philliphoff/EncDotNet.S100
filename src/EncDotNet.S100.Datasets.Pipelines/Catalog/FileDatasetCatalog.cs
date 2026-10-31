@@ -1,5 +1,6 @@
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Scripting;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Catalog;
 
@@ -85,12 +86,17 @@ public sealed class FileDatasetCatalog : IDatasetCatalog
     /// point-in-bounds test used when sampling; when null a naive fallback is
     /// used, which leaves projected-tile bounds in native metres.
     /// </param>
+    /// <param name="luaEngine">
+    /// A Lua engine, so route checks over the catalog can portray S-101 cells
+    /// for their alerts (#1127); see <see cref="LoadedDatasetProjector.Project(DatasetId, string, Stream, Func{string, string?}?, ICrsTransformFactory?, ProductRegistry?, ILuaEngine?)"/>.
+    /// </param>
     /// <returns>An immutable catalog whose <see cref="Datasets"/> holds every
     /// successfully projected input and whose <see cref="Warnings"/> reports
     /// the rest.</returns>
     public static FileDatasetCatalog Build(
         IEnumerable<FileDatasetInput> inputs,
-        ICrsTransformFactory? transforms = null)
+        ICrsTransformFactory? transforms = null,
+        ILuaEngine? luaEngine = null)
     {
         ArgumentNullException.ThrowIfNull(inputs);
 
@@ -115,7 +121,7 @@ public sealed class FileDatasetCatalog : IDatasetCatalog
             {
                 using var stream = File.OpenRead(input.Path);
                 projected = LoadedDatasetProjector.Project(
-                    input.Id, input.Spec, stream, input.ExternalTextResolver, transforms);
+                    input.Id, input.Spec, stream, input.ExternalTextResolver, transforms, luaEngine: luaEngine);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException
                 or FormatException or NotSupportedException or S100DatasetSchemaException)

@@ -188,13 +188,83 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         return dict;
     }
 
+    /// <summary>
+    /// Opens a Lua portrayal session: one Lua state, set up with the
+    /// catalogue's rules and <paramref name="mariner"/>'s context parameters,
+    /// that portrays chosen features on demand
+    /// (<see cref="LuaPortrayalSession.Portray"/>). Setting up the state is
+    /// most of the cost of portraying a few features, so a caller that
+    /// portrays features in batches, such as a route check leg by leg, keeps
+    /// one session.
+    /// </summary>
+    /// <param name="mariner">The mariner settings, for the context parameters.</param>
+    /// <param name="cancellationToken">Cancels loading the rules.</param>
+    /// <returns>The session; the caller disposes it.</returns>
+    public async Task<LuaPortrayalSession> OpenSessionAsync(
+        MarinerSettings mariner, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(mariner);
+        cancellationToken.ThrowIfCancellationRequested();
+        var luaSources = await LoadLuaSourcesAsync(cancellationToken).ConfigureAwait(false);
+        var provider = _providerFactory.Create(mariner);
+        var lua = _luaEngine.CreateContext();
+        try
+        {
+            Prepare(lua, provider, mariner, luaSources);
+        }
+        catch
+        {
+            lua.Dispose();
+            throw;
+        }
+
+        return new LuaPortrayalSession(lua, provider, _productTag, _anchorProvider, _spatialReferences);
+    }
+
     private (IReadOnlyList<EmittedInstruction> Emitted, ILuaDataProvider Provider) ExecuteRawCore(
         MarinerSettings mariner, IReadOnlyDictionary<string, string> luaSources)
     {
         var provider = _providerFactory.Create(mariner);
 
         using var lua = _luaEngine.CreateContext();
+        Prepare(lua, provider, mariner, luaSources);
 
+        // 7. Run portrayal.
+        try
+        {
+            lua.Call("PortrayalMain");
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"{_productTag} Lua portrayal failed: {lua.DescribeError(ex)}", ex);
+        }
+
+        return (Deduplicate(provider.EmittedInstructions, 0), provider);
+    }
+
+    // 8. Collect + dedup. PortrayalModel.lua AddFeature() stores items under
+    //    both array append and feature-ID index, so ipairs() may visit some
+    //    twice; dedup by (FeatureRef, InstructionString).
+    internal static List<EmittedInstruction> Deduplicate(IReadOnlyList<EmittedInstruction> emitted, int from)
+    {
+        var seen = new HashSet<(string, string)>();
+        var results = new List<EmittedInstruction>();
+        for (var i = from; i < emitted.Count; i++)
+        {
+            var e = emitted[i];
+            if (seen.Add((e.FeatureRef, e.InstructionString)))
+            {
+                results.Add(e);
+            }
+        }
+
+        return results;
+    }
+
+    // Steps 1–6: a Lua state ready for PortrayalMain.
+    private void Prepare(ILuaContext lua, ILuaDataProvider provider, MarinerSettings mariner, IReadOnlyDictionary<string, string> luaSources)
+    {
         // 1. Resolve require() modules from the pre-loaded snapshot.
         //    Normalise the module name here (MoonSharp may pass it bare or with
         //    a .lua extension) so each catalogue need not repeat the logic.
@@ -230,32 +300,6 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         // 6. Override context parameters from MarinerSettings via the product's
         //    bindings, restricted to parameters the catalogue actually declares.
         ApplyContextParameters(lua, mariner);
-
-        // 7. Run portrayal.
-        try
-        {
-            lua.Call("PortrayalMain");
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException(
-                $"{_productTag} Lua portrayal failed: {lua.DescribeError(ex)}", ex);
-        }
-
-        // 8. Collect + dedup. PortrayalModel.lua AddFeature() stores items under
-        //    both array append and feature-ID index, so ipairs() may visit some
-        //    twice; dedup by (FeatureRef, InstructionString).
-        var seen = new HashSet<(string, string)>();
-        var results = new List<EmittedInstruction>();
-        foreach (var e in provider.EmittedInstructions)
-        {
-            if (seen.Add((e.FeatureRef, e.InstructionString)))
-            {
-                results.Add(e);
-            }
-        }
-
-        return (results, provider);
     }
 
     private void RecordPerFeatureTypeCardinality(

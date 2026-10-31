@@ -247,7 +247,16 @@ extent of the loaded charts, and, given the mariner's depths, against charted
 dangers and the safety contour. It reads charted features through
 `IRouteChartSource` (`sources.Charts`), and S-102 through the same
 `IChartedDepthSource` the clearance check uses (`sources.Depth`), reading only
-its S-102 surfaces (`SampleBathymetry`):
+its S-102 surfaces (`SampleBathymetry`).
+
+The chart source also portrays the corridor's features at the check's safety
+contour and safety depth, and each feature keeps the S-101 alerts its
+portrayal raises (`RouteChartFeature.Alerts`: `NavHazard`, `ProhAre` with
+its kind of area, `SafetyContour`). Features of no other kind that raise one,
+such as buoys and piles, come back as `RouteChartFeatureKind.Alerted`. A
+source built from processors (the viewer, `s100 mcp serve`) can always
+portray; `FileDatasetCatalog.Build` and `LoadedDatasetProjector.Project` need
+a Lua engine for it. The checks start using the alerts with #1127.
 
 ```csharp
 var sources = CatalogRouteCheckSources.FromDatasets(catalog.Datasets, new ProjNetCrsTransformFactory());

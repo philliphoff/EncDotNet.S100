@@ -122,7 +122,23 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
 
     /// <inheritdoc />
     public LoadedDatasetData CreateLoadedData() =>
-        new S101DatasetData(_translatedDataset, CompilationScale: S57Dataset.ResolveCompilationScale(_rawS57Document));
+        new S101DatasetData(_translatedDataset, CompilationScale: S57Dataset.ResolveCompilationScale(_rawS57Document)) { Alerts = AlertPortrayal };
+
+    private S101AlertPortrayal? _alertPortrayal;
+
+    // One per processor, over the translated cell, as S101DatasetProcessor (#1127).
+    private S101AlertPortrayal? AlertPortrayal
+    {
+        get
+        {
+            if (_alertPortrayal is null && _featureCatalogueManager.GetCatalogue(_target.Spec) is { } fc)
+            {
+                Interlocked.CompareExchange(ref _alertPortrayal, new S101AlertPortrayal(_luaEngine, _translatedDataset, _catalogue, fc), null);
+            }
+
+            return _alertPortrayal;
+        }
+    }
 
     /// <summary>
     /// Initializes a new <see cref="S57DatasetProcessor"/> by reading the S-57

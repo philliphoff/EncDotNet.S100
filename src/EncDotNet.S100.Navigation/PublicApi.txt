@@ -193,7 +193,7 @@ namespace EncDotNet.S100.Navigation
     public interface IRouteChartSource
     {
         System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteChartCell> CellsNear(EncDotNet.S100.Pipelines.BoundingBox extent);
-        System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteChartFeature> FeaturesInCorridor(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition> corridor, EncDotNet.S100.Pipelines.BoundingBox extent);
+        System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteChartFeature> FeaturesInCorridor(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition> corridor, EncDotNet.S100.Pipelines.BoundingBox extent, EncDotNet.S100.Navigation.RouteChartQuery query);
     }
     public interface IRouteCheck
     {
@@ -440,6 +440,13 @@ namespace EncDotNet.S100.Navigation
         InCorridor = 1,
         Off = 2,
     }
+    public sealed class RouteChartAlert : System.IEquatable<EncDotNet.S100.Navigation.RouteChartAlert>
+    {
+        public RouteChartAlert(EncDotNet.S100.Navigation.RouteFindingAlert Alert, int? AreaKind = default, EncDotNet.S100.DataModel.GeoPosition? Position = default) { }
+        public EncDotNet.S100.Navigation.RouteFindingAlert Alert { get; init; }
+        public int? AreaKind { get; init; }
+        public EncDotNet.S100.DataModel.GeoPosition? Position { get; init; }
+    }
     public abstract class RouteChartCell
     {
         protected RouteChartCell(string datasetId) { }
@@ -450,6 +457,7 @@ namespace EncDotNet.S100.Navigation
     public sealed class RouteChartFeature : System.IEquatable<EncDotNet.S100.Navigation.RouteChartFeature>
     {
         public RouteChartFeature(EncDotNet.S100.Navigation.RouteChartFeatureKind Kind, EncDotNet.S100.Navigation.RouteChartCell Cell, string FeatureId, string FeatureType, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Features.SurfacePart> Surfaces, System.Collections.Generic.IReadOnlyList<System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition>> Curves) { }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteChartAlert> Alerts { get; init; }
         public EncDotNet.S100.Navigation.RouteChartCell Cell { get; init; }
         public System.Collections.Generic.IReadOnlyList<System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition>> Curves { get; init; }
         public double? DepthMeters { get; init; }
@@ -469,6 +477,14 @@ namespace EncDotNet.S100.Navigation
         DredgedArea = 4,
         Danger = 5,
         Sounding = 6,
+        Alerted = 7,
+    }
+    public sealed class RouteChartQuery : System.IEquatable<EncDotNet.S100.Navigation.RouteChartQuery>
+    {
+        public RouteChartQuery(double? SafetyContourMeters = default, double? SafetyDepthMeters = default) { }
+        public double? SafetyContourMeters { get; init; }
+        public double? SafetyDepthMeters { get; init; }
+        public static EncDotNet.S100.Navigation.RouteChartQuery Default { get; }
     }
     public sealed class RouteCheckContext
     {
@@ -622,6 +638,12 @@ namespace EncDotNet.S100.Navigation
         public override string ToString() { }
         public EncDotNet.S100.Navigation.RouteFinding WithText(string title, string meta) { }
         public static System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFinding> Sort(System.Collections.Generic.IEnumerable<EncDotNet.S100.Navigation.RouteFinding> findings) { }
+    }
+    public enum RouteFindingAlert
+    {
+        SafetyContour = 0,
+        ProhAre = 1,
+        NavHazard = 2,
     }
     public enum RouteFindingCategory
     {

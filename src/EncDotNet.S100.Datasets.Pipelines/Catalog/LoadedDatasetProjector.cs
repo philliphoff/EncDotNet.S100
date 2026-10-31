@@ -4,6 +4,7 @@ using EncDotNet.S100.Datasets.S104;
 using EncDotNet.S100.Datasets.S111;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Scripting;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Catalog;
 
@@ -15,7 +16,7 @@ namespace EncDotNet.S100.Datasets.Pipelines.Catalog;
 /// <para>
 /// There are two ways in: from the raw <see cref="Stream"/> of a dataset already
 /// detected as a known product specification
-/// (<see cref="Project(DatasetId, string, Stream, System.Func{string, string?}?, ICrsTransformFactory?, ProductRegistry?)"/>),
+/// (<see cref="Project(DatasetId, string, Stream, System.Func{string, string?}?, ICrsTransformFactory?, ProductRegistry?, ILuaEngine?)"/>),
 /// used by the loose-file / exchange-set catalogues; and from an
 /// <em>already-parsed</em> <see cref="IDatasetProcessor"/>
 /// (<see cref="Project(DatasetId, IDatasetProcessor, System.Func{string, string?}?, ICrsTransformFactory?)"/>),
@@ -82,6 +83,12 @@ public static class LoadedDatasetProjector
     /// The products to open the dataset with; <see langword="null"/> for
     /// <see cref="ProductRegistry.Default"/>.
     /// </param>
+    /// <param name="luaEngine">
+    /// A Lua engine for the alert portrayal route checks use (#1127): with it,
+    /// an S-101, S-401 or translated S-57 cell's payload can portray its
+    /// features over the bundled catalogues (<see cref="S101DatasetData.Alerts"/>);
+    /// without it, it can't.
+    /// </param>
     /// <returns>
     /// The projected dataset, or <c>null</c> when <paramref name="spec"/> is
     /// not a registered product with an <see cref="ProductRegistration.OpenData"/>
@@ -93,7 +100,8 @@ public static class LoadedDatasetProjector
         Stream stream,
         Func<string, string?>? externalTextResolver = null,
         ICrsTransformFactory? transforms = null,
-        ProductRegistry? registry = null)
+        ProductRegistry? registry = null,
+        ILuaEngine? luaEngine = null)
     {
         ArgumentNullException.ThrowIfNull(spec);
         ArgumentNullException.ThrowIfNull(stream);
@@ -105,6 +113,12 @@ public static class LoadedDatasetProjector
         }
 
         var loaded = BuildFromData(id, open(stream, externalTextResolver), transforms);
+        if (luaEngine is not null
+            && loaded.Data is S101DatasetData { Alerts: null } s101
+            && BundledAlertPortrayal.For(luaEngine, s101.Dataset, loaded.Spec.Name) is { } alerts)
+        {
+            loaded = loaded with { Data = s101 with { Alerts = alerts } };
+        }
 
         // A product portrayed through another specification carries that
         // specification's payload — a translated S-57 cell is an

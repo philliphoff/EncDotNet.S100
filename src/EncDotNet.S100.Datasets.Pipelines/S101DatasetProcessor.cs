@@ -194,7 +194,25 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     public DatasetMetadata Metadata => _metadata ??= _dataset.ReadMetadata();
 
     /// <inheritdoc />
-    public LoadedDatasetData CreateLoadedData() => new S101DatasetData(_dataset, _externalTextResolver);
+    public LoadedDatasetData CreateLoadedData() =>
+        new S101DatasetData(_dataset, _externalTextResolver) { Alerts = AlertPortrayal };
+
+    private S101AlertPortrayal? _alertPortrayal;
+
+    // One per processor, shared by every payload: it keeps a Lua state per
+    // set of route-check depths (#1127).
+    private S101AlertPortrayal? AlertPortrayal
+    {
+        get
+        {
+            if (_alertPortrayal is null && _featureCatalogueManager.GetCatalogue(_catalogueSpec) is { } fc)
+            {
+                Interlocked.CompareExchange(ref _alertPortrayal, new S101AlertPortrayal(_luaEngine, _dataset, _catalogue, fc), null);
+            }
+
+            return _alertPortrayal;
+        }
+    }
 
     /// <inheritdoc/>
     public SpecVersionAssessment? VersionAssessment { get; }
