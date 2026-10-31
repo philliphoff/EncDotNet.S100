@@ -3,6 +3,7 @@ using Avalonia;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Viewer.Geodesy;
 using EncDotNet.S100.Viewer.Routing;
 using EncDotNet.S100.Viewer.ViewModels;
 using SkiaSharp;
@@ -250,13 +251,9 @@ internal sealed record RouteCheckMap(
         public IReadOnlyList<GeoPosition> LegPath(int index)
         {
             var leg = _legs[index];
-            if (leg.Geometry != LegGeometry.GreatCircle)
-                return leg.Points;
-            var steps = RouteOverlayScene.GeodesicSegments;
-            var path = new GeoPosition[steps + 1];
-            for (var k = 0; k <= steps; k++)
-                path[k] = PassageGeodesy.Interpolate(leg.Points[0], leg.Points[^1], (double)k / steps, leg.Geometry);
-            return path;
+            return leg.Geometry == LegGeometry.GreatCircle
+                ? MarineGeodesy.DensifyGreatCircle(leg.Points[0], leg.Points[^1])
+                : leg.Points;
         }
 
         // The earlier leg at a waypoint, as the route checks do.

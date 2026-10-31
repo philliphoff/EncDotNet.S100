@@ -304,9 +304,9 @@ namespace EncDotNet.S100.Navigation
     }
     public static class PassageGeodesy
     {
-        public const double EarthRadiusMeters = 6371000.38D;
-        public const double EarthRadiusNauticalMiles = 3440.065D;
-        public const double MetersPerDegreeLatitude = 111194.9332768099D;
+        public const double EarthRadiusMeters = 6371008.8D;
+        public const double EarthRadiusNauticalMiles = 3440.069546436285D;
+        public const double MetersPerDegreeLatitude = 111195.08023353292D;
         public const double MetersPerNauticalMile = 1852D;
         public static double DistanceMeters(EncDotNet.S100.DataModel.GeoPosition from, EncDotNet.S100.DataModel.GeoPosition to, EncDotNet.S100.Navigation.LegGeometry geometry) { }
         public static double GreatCircleDistanceMeters(EncDotNet.S100.DataModel.GeoPosition from, EncDotNet.S100.DataModel.GeoPosition to) { }

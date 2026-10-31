@@ -64,7 +64,7 @@
         "location": {
           "kind": "span",
           "startNm": 0.382,
-          "endNm": 0.5393,
+          "endNm": 0.5394,
           "path": [
             [
               -40.98301,
@@ -212,10 +212,10 @@
         "title": "Crosses the safety contour",
         "meta": "Leg 2 \u2192 3 \u00B7 0.65 NM \u00B7 DepthArea \u00B7 least -3.7 m \u00B7 shallower than safety contour 5 m",
         "legIndex": 1,
-        "distanceNm": 0.5393,
+        "distanceNm": 0.5394,
         "location": {
           "kind": "span",
-          "startNm": 0.5393,
+          "startNm": 0.5394,
           "endNm": 1.1867,
           "path": [
             [
@@ -847,11 +847,11 @@
             "firstLegIndex": 1,
             "lastLegIndex": 1,
             "lengthNm": 0.2428,
-            "startTime": "2026-03-01T06:07:33.0820523\u002B00:00",
+            "startTime": "2026-03-01T06:07:33.0826511\u002B00:00",
             "minimumClearanceMeters": -5.05113,
             "requiredUkcMeters": 0.5,
             "marginMeters": -5.55113,
-            "minimumTime": "2026-03-01T06:08:54.0022865\u002B00:00",
+            "minimumTime": "2026-03-01T06:08:54.0029922\u002B00:00",
             "minutesBelow": 2.4
           }
         }
@@ -1503,11 +1503,11 @@
             "firstLegIndex": 2,
             "lastLegIndex": 2,
             "lengthNm": 0.4585,
-            "startTime": "2026-03-01T06:12:40.5686135\u002B00:00",
+            "startTime": "2026-03-01T06:12:40.5696187\u002B00:00",
             "minimumClearanceMeters": -5.04851,
             "requiredUkcMeters": 0.5,
             "marginMeters": -5.54851,
-            "minimumTime": "2026-03-01T06:16:27.0970691\u002B00:00",
+            "minimumTime": "2026-03-01T06:16:27.0983736\u002B00:00",
             "minutesBelow": 4.6
           }
         }
@@ -1745,7 +1745,7 @@
             "firstLegIndex": 2,
             "lastLegIndex": 2,
             "lengthNm": 0.1214,
-            "startTime": "2026-03-01T06:17:15.638881\u002B00:00"
+            "startTime": "2026-03-01T06:17:15.6402496\u002B00:00"
           }
         }
       }
@@ -1754,13 +1754,13 @@
       {
         "index": 0,
         "startNm": 0,
-        "distanceNm": 0.5393,
+        "distanceNm": 0.5394,
         "portMeters": 100,
         "starboardMeters": 100
       },
       {
         "index": 1,
-        "startNm": 0.5393,
+        "startNm": 0.5394,
         "distanceNm": 0.6474,
         "portMeters": 100,
         "starboardMeters": 100
@@ -1775,7 +1775,7 @@
     ],
     "clearance": {
       "departure": "2026-03-01T06:00:00\u002B00:00",
-      "arrival": "2026-03-01T06:18:20.3612968\u002B00:00",
+      "arrival": "2026-03-01T06:18:20.362751\u002B00:00",
       "verdict": "below_setting",
       "verdictTitle": "Below your UKC setting in 2 places",
       "confidence": [
@@ -1788,7 +1788,7 @@
         "latitude": -40.98563,
         "longitude": -134.9637,
         "distanceNm": 0.89,
-        "time": "2026-03-01T06:08:54.0022865\u002B00:00",
+        "time": "2026-03-01T06:08:54.0029922\u002B00:00",
         "hasEta": true,
         "ukcMeters": -5.05,
         "requiredUkcMeters": 0.5,
@@ -1809,8 +1809,8 @@
           "lastLeg": 2,
           "startNm": 1.7126,
           "endNm": 1.8339,
-          "from": "2026-03-01T06:17:15.638881\u002B00:00",
-          "to": "2026-03-01T06:18:16.3161458\u002B00:00"
+          "from": "2026-03-01T06:17:15.6402496\u002B00:00",
+          "to": "2026-03-01T06:18:16.3175947\u002B00:00"
         }
       ],
       "lowConfidence": [
@@ -1823,7 +1823,7 @@
           "startNm": 0,
           "endNm": 1.7126,
           "from": "2026-03-01T06:00:00\u002B00:00",
-          "to": "2026-03-01T06:16:59.458277\u002B00:00"
+          "to": "2026-03-01T06:16:59.4596243\u002B00:00"
         }
       ],
       "sources": {
