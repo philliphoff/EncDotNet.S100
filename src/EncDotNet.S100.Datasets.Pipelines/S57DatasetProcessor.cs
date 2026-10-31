@@ -12,6 +12,7 @@ using EncDotNet.S100.Features;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Pipelines.Vector.Caching;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Scripting;
@@ -79,6 +80,24 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// output and doesn't count. Test seam.
     /// </summary>
     internal int RuleRunCount { get; private set; }
+
+    // Cross-load cache of the unfiltered rule output (see
+    // S101DatasetProcessor._instructionCache). The single slot above only
+    // serves re-renders of this processor; this one lets a fresh processor for
+    // a cell portrayed before (a restart, or a cell the map loads again as it
+    // pans) skip the Part 9A Lua run, which dominates an S-57 load. Keyed by
+    // GetPortrayalContentHashAsync plus the rule key. Guarded by _renderGate.
+    private readonly IPortrayalInstructionCache _instructionCache;
+
+    // Memoized prefix of the cross-load instruction-cache key; see
+    // GetPortrayalContentHashAsync.
+    private string? _portrayalContentHash;
+
+    // Bump when the portrayal-content hash composition changes so persisted
+    // instruction-cache entries under the old composition are not reused.
+    private const int PortrayalContentFormatVersion = 1;
+
+    internal long SharedInstructionCacheHits => _instructionCache.Hits;
 
     // Memoized prefix of the pattern-clip cache key; see GetPatternClipScopeAsync.
     private string? _patternClipScope;
@@ -154,13 +173,20 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// Supplies the feature catalogue used to decode feature and attribute
     /// names in feature info.
     /// </param>
+    /// <param name="sharedInstructionCache">
+    /// Cross-load cache of the Lua rule output, shared by every processor the
+    /// host creates (typically a <see cref="EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache"/>),
+    /// so reopening a cell skips the Part 9A rules. <see langword="null"/>
+    /// uses a cache private to this processor.
+    /// </param>
     /// <exception cref="ArgumentException"><paramref name="path"/> is <see langword="null"/> or empty.</exception>
     public S57DatasetProcessor(
         string path,
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
-        FeatureCatalogueManager featureCatalogueManager)
-        : this(OpenFromFile(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueManager)
+        FeatureCatalogueManager featureCatalogueManager,
+        IPortrayalInstructionCache? sharedInstructionCache = null)
+        : this(OpenFromFile(path), Path.GetFileName(path), catalogueManager, luaEngine, featureCatalogueManager, sharedInstructionCache)
     {
     }
 
@@ -174,13 +200,15 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         string relativePath,
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
-        FeatureCatalogueManager featureCatalogueManager)
+        FeatureCatalogueManager featureCatalogueManager,
+        IPortrayalInstructionCache? sharedInstructionCache = null)
         : this(
             OpenFromSource(source, relativePath),
             AssetSourceHelpers.GetFileName(relativePath),
             catalogueManager,
             luaEngine,
-            featureCatalogueManager)
+            featureCatalogueManager,
+            sharedInstructionCache)
     {
     }
 
@@ -204,13 +232,15 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         IReadOnlyList<string> updateRelativePaths,
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
-        FeatureCatalogueManager featureCatalogueManager)
+        FeatureCatalogueManager featureCatalogueManager,
+        IPortrayalInstructionCache? sharedInstructionCache = null)
         : this(
             OpenFromSource(source, baseRelativePath, updateRelativePaths),
             AssetSourceHelpers.GetFileName(baseRelativePath),
             catalogueManager,
             luaEngine,
-            featureCatalogueManager)
+            featureCatalogueManager,
+            sharedInstructionCache)
     {
     }
 
@@ -219,7 +249,8 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         string fileName,
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
-        FeatureCatalogueManager featureCatalogueManager)
+        FeatureCatalogueManager featureCatalogueManager,
+        IPortrayalInstructionCache? sharedInstructionCache)
     {
         var s57 = opened.Dataset;
         ArgumentNullException.ThrowIfNull(s57);
@@ -230,6 +261,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         _provider = catalogueManager.GetProvider(_target.Spec);
         _catalogue = new S101PortrayalCatalogue(_provider, _luaEngine);
         _featureCatalogueManager = featureCatalogueManager;
+        _instructionCache = sharedInstructionCache ?? new InMemoryPortrayalInstructionCache();
 
         // Retain the raw S-57 document so the pre-translation
         // validation pack (S57PreTranslationRules) can run against
@@ -450,17 +482,52 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
 
         if (_cachedRuleOutput is null || !string.Equals(_cachedRuleKey, ruleKey, StringComparison.Ordinal))
         {
-            var executor = new S101LuaRuleExecutor(_luaEngine, _translatedDataset, s101Cat, fc);
-            var featureSource = new S101FeatureXmlSource(_translatedDataset);
-            _cachedRuleOutput = await new VectorPipeline(executor)
-                .ExecuteRulesAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: cancellationToken)
-                .ConfigureAwait(false);
+            var instructionKey = $"{await GetPortrayalContentHashAsync(cancellationToken).ConfigureAwait(false)}|{ruleKey}";
+            _cachedRuleOutput = await _instructionCache.GetOrComputeAsync(instructionKey, async ct =>
+            {
+                var executor = new S101LuaRuleExecutor(_luaEngine, _translatedDataset, s101Cat, fc);
+                var featureSource = new S101FeatureXmlSource(_translatedDataset);
+                var output = await new VectorPipeline(executor)
+                    .ExecuteRulesAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: ct)
+                    .ConfigureAwait(false);
+                RuleRunCount++;
+                Console.WriteLine($"[S57] Pipeline produced {output.Count} drawing instructions");
+                return output;
+            }, cancellationToken).ConfigureAwait(false);
             _cachedRuleKey = ruleKey;
-            RuleRunCount++;
-            Console.WriteLine($"[S57] Pipeline produced {_cachedRuleOutput.Count} drawing instructions");
         }
 
         return (VectorPipeline.ApplyDisplayFilters(_cachedRuleOutput, s101Cat), _cachedRuleOutput, ruleKey);
+    }
+
+    /// <summary>
+    /// Computes (once, then memoizes) the prefix of this cell's cross-load
+    /// instruction-cache key. It covers every input of the rule output other
+    /// than the mariner and display-mode state in the rule key: the pattern-clip
+    /// scope (cell and update bytes, translation target, portrayal catalogue
+    /// content, and the translator, pipeline and Lua engine assemblies), the
+    /// target's feature catalogue content, and the instruction serializer
+    /// format.
+    /// </summary>
+    private async ValueTask<string> GetPortrayalContentHashAsync(CancellationToken cancellationToken)
+    {
+        if (_portrayalContentHash is not null)
+            return _portrayalContentHash;
+
+        var c = System.Globalization.CultureInfo.InvariantCulture;
+        var sb = new StringBuilder("s57pcf:");
+        sb.Append(PortrayalContentFormatVersion.ToString(c));
+        sb.Append("|dlfmt:").Append(DrawingInstructionSerializer.FormatVersion.ToString(c));
+        sb.Append("|scope:").Append(await GetPatternClipScopeAsync(cancellationToken).ConfigureAwait(false));
+        sb.Append("|fc:").Append(
+            await _featureCatalogueManager.GetCatalogueHashAsync(PortrayalSpec, cancellationToken).ConfigureAwait(false) ?? "none");
+        sb.Append("|asm:");
+        S101DatasetProcessor.AppendModuleVersion(sb, typeof(FeatureCatalogue).Assembly);               // Features (FC decode)
+
+        _portrayalContentHash = Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())))
+            .ToLowerInvariant();
+        return _portrayalContentHash;
     }
 
     /// <summary>

@@ -807,7 +807,8 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
             updateRelativePaths,
             _services.CatalogueManager,
             _services.LuaEngine,
-            _services.FeatureCatalogueManager);
+            _services.FeatureCatalogueManager,
+            _services.SharedInstructionCache);
     }
 
     /// <summary>

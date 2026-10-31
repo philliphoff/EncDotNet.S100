@@ -805,7 +805,7 @@ public partial class App : Application
         });
         services.AddSingleton<EncDotNet.S100.Pipelines.Vector.Caching.IPortrayalInstructionCache>(sp =>
         {
-            // One process-wide disk cache shared by every S-101 processor so a
+            // One process-wide disk cache shared by every S-101 and S-57 processor so a
             // fresh open of a previously-portrayed cell skips the multi-second
             // MoonSharp Part 9A Lua run, even across restarts. The cache key is
             // the portrayal-content hash (dataset bytes + FC/PC content +

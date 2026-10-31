@@ -111,10 +111,11 @@ public static class S100Products
     {
         Spec = "S-57",
         CreateFromPath = (s, path) => new S57DatasetProcessor(
-            path, s.CatalogueManager, s.LuaEngine, s.FeatureCatalogueManager),
+            path, s.CatalogueManager, s.LuaEngine, s.FeatureCatalogueManager,
+            s.SharedInstructionCache),
         CreateFromSource = (s, r) => new S57DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.LuaEngine,
-            s.FeatureCatalogueManager),
+            s.FeatureCatalogueManager, s.SharedInstructionCache),
         // S-57 shares the ISO 8211 .000 extension with S-101 and S-401 but
         // declares no S-100 PRSP product identifier (its PRSP is a numeric S-57
         // code); it is instead identified by the S-57-only DSPM field in its DDR.
