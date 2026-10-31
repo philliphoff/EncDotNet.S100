@@ -197,6 +197,7 @@ internal sealed class MainViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsTimelineTabSelected));
                 OnPropertyChanged(nameof(IsClearanceTabSelected));
                 OnPropertyChanged(nameof(IsTimeHudVisible));
+                OnPropertyChanged(nameof(IsMapStampVisible));
                 UpdateBottomTabsShown();
 
                 if (_settingsInitialized)
@@ -364,7 +365,7 @@ internal sealed class MainViewModel : ViewModelBase
         }
     }
 
-    /// <summary>The map's width, which the Time HUD fits (it drops the offset, then the PINNED label).</summary>
+    /// <summary>The map's width, which the Time HUD fits (it drops the offset, then shortens Go live to an icon).</summary>
     public double MapWidth
     {
         get => _mapWidth;
@@ -387,10 +388,12 @@ internal sealed class MainViewModel : ViewModelBase
     public bool IsTimeHudVisible => Timeline.IsActive && !(IsBottomDockShown && IsTimelineTabSelected);
 
     /// <summary>
-    /// True when the map stamp is on the map: while the Timeline dock is shown
-    /// (#713 B4), and always while the display isn't real time (#993).
+    /// True when the map stamp is on the map: while the Timeline tab is shown
+    /// in the dock (#713 B4). It's the exact complement of
+    /// <see cref="IsTimeHudVisible"/>, so the map has one time surface at a
+    /// time, and whichever is shown says "Display Not Real Time" (#993).
     /// </summary>
-    public bool IsMapStampVisible => Timeline.IsNotRealTime || (Timeline.IsActive && IsBottomDockShown);
+    public bool IsMapStampVisible => Timeline.IsActive && IsBottomDockShown && IsTimelineTabSelected;
 
     /// <summary>Opens or closes the Timeline dock from the Time HUD; unavailable in a narrow window.</summary>
     public ICommand ToggleTimelineDockCommand { get; private set; } = null!;
@@ -1401,9 +1404,10 @@ internal sealed class MainViewModel : ViewModelBase
         Timeline.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(TimelineViewModel.IsActive))
+            {
                 OnPropertyChanged(nameof(IsTimeHudVisible));
-            if (e.PropertyName is nameof(TimelineViewModel.IsActive) or nameof(TimelineViewModel.IsNotRealTime))
                 OnPropertyChanged(nameof(IsMapStampVisible));
+            }
         };
         // "No data … for N of M layers" opens the dataset list on that layer (#709, handoff D4).
         Timeline.ShowLayerRequested += ShowLayer;

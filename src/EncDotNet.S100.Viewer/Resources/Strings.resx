@@ -4191,6 +4191,10 @@
   <data name="TimeHud_Live" xml:space="preserve">
     <value>Live</value>
   </data>
+  <data name="Tooltip_TimeHudLive" xml:space="preserve">
+    <value>Showing now and keeping up with it.</value>
+    <comment>Time HUD Live toggle tooltip while the view time follows now.</comment>
+  </data>
   <data name="Tooltip_TimeHudOpenTimeline" xml:space="preserve">
     <value>Open timeline (T)</value>
   </data>

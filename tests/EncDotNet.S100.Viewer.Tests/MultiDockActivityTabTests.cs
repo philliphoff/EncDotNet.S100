@@ -281,6 +281,56 @@ public sealed class MultiDockActivityTabTests : IDisposable
         Assert.True(vm.IsBottomDockShown);
     }
 
+    [Fact]
+    public void TheMapHasOneTimeSurfaceAtATime()
+    {
+        // Design note time-overlays D1: the stamp while the Timeline tab is
+        // shown, the HUD otherwise, never both (the Logs tab used to show both).
+        var time = new GlobalTimeService();
+        var timeline = new TimelineViewModel(time, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), action => action());
+        var timelineTab = new FakeTab { Id = "Timeline", Order = 10, Dock = TabDock.Bottom };
+        var logsTab = new FakeTab { Id = "Logs", Order = 20, Dock = TabDock.Bottom };
+        var vm = CreateViewModel(new IActivityTab[] { timelineTab, logsTab }, timeline: timeline);
+        vm.WindowWidth = 1200;
+        var t0 = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+        time.ApplySnapshot(new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimeSnapshot
+        {
+            Minimum = t0,
+            Maximum = t0.AddHours(2),
+            Current = t0,
+            Samples = [t0, t0.AddHours(1), t0.AddHours(2)],
+            CoverageSegments = [new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimeSegment(t0, t0.AddHours(2))],
+            Datasets = [new EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimedDataset("x", t0, t0.AddHours(2))],
+        });
+        void AssertOne(bool stamp)
+        {
+            Assert.Equal(stamp, vm.IsMapStampVisible);
+            Assert.Equal(!stamp, vm.IsTimeHudVisible);
+        }
+
+        AssertOne(stamp: false);
+        vm.ToggleTimelineDockCommand.Execute(null);
+        Assert.True(vm.IsTimelineTabSelected);
+        AssertOne(stamp: true);
+
+        var raised = new List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        vm.SelectTabCommand.Execute(logsTab);
+        Assert.Contains(nameof(MainViewModel.IsMapStampVisible), raised);
+        AssertOne(stamp: false);
+
+        // Pinned with date-dependent data: the HUD says Display Not Real Time, so the stamp stays away.
+        timeline.HasDateDependentData = true;
+        timeline.NextStepCommand.Execute(null);
+        Assert.True(timeline.IsNotRealTime);
+        AssertOne(stamp: false);
+
+        vm.SelectTabCommand.Execute(timelineTab);
+        AssertOne(stamp: true);
+        vm.WindowWidth = 850;
+        AssertOne(stamp: false);
+    }
+
     [Avalonia.Headless.XUnit.AvaloniaFact]
     public async Task PanelState_ReportsBottomPanelNotShowingWhileTheWindowIsTooNarrow()
     {
