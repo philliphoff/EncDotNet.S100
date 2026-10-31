@@ -196,6 +196,58 @@ public class S102PortrayalCatalogue : ICoverageStyle, IPortrayalCatalogue
     /// <remarks>Always empty: the S-102 catalogue defines depth-band fills only.</remarks>
     public IReadOnlyList<ContourStyle> Contours => [];
 
+    /// <summary>
+    /// The S-102 safety contour: the depth isoline at the mariner's safety
+    /// contour, traced from the grid (S-164 UserSelectedSafetyContour; S-98
+    /// Part A §A-6.9.1 NOTE allows OEM safety contour functions). It is drawn
+    /// as S-101 draws its safety contour (DEPARE03: solid, 0.64 mm,
+    /// <c>DEPSC</c>), unlabelled, in the active palette.
+    /// </summary>
+    /// <remarks>
+    /// The value is the safety contour the depth bands use, so the line runs
+    /// along the boundary between the safe and unsafe shades. It is not
+    /// adjusted for water level.
+    /// </remarks>
+    /// <param name="settings">The mariner settings.</param>
+    /// <returns>The contour style, in metres.</returns>
+    public ContourStyle SafetyContourStyle(MarinerSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        return new ContourStyle
+        {
+            Value = ClampParameters(settings).Safety,
+            Unit = "m",
+            LineWidth = SafetyContourLineWidth,
+            Color = ActivePalette.Resolve(SafetyContourColorToken),
+        };
+    }
+
+    /// <summary>
+    /// The border drawn along the limit of the S-102 data, where the
+    /// grid's values give way to no-data and the S-101 depth areas and
+    /// contours take over (S-98 Part A §A-6.9.1): a dashed 0.32 mm line in
+    /// <c>CHGRD</c>, as S-101 draws an area boundary of lower importance.
+    /// <see cref="ContourStyle.Value"/> is unused.
+    /// </summary>
+    public ContourStyle CoverageLimitStyle => new()
+    {
+        Value = 0.5,
+        Unit = "1",
+        LineWidth = CoverageLimitLineWidth,
+        Color = ActivePalette.Resolve(CoverageLimitColorToken),
+        DashPattern = [4, 3],
+    };
+
+    /// <summary>The S-101 safety contour colour token (DEPARE03).</summary>
+    public const string SafetyContourColorToken = "DEPSC";
+
+    /// <summary>The coverage-limit border's colour token.</summary>
+    public const string CoverageLimitColorToken = "CHGRD";
+
+    // S-100 line widths are in units of 0.32 mm, one device-independent pixel.
+    private const float SafetyContourLineWidth = 0.64f / 0.32f;
+    private const float CoverageLimitLineWidth = 0.32f / 0.32f;
+
     // ── Palettes ───────────────────────────────────────────────────────
 
     /// <summary>
