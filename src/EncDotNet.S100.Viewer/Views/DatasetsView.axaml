@@ -661,6 +661,7 @@
                                             Opacity="{Binding RowOpacity}">
                                     <TextBlock Text="{Binding DisplayName}"
                                                Classes="accentListTitle"
+                                               FontWeight="SemiBold"
                                                TextTrimming="CharacterEllipsis" />
                                     <TextBlock Text="{Binding ProductSpec}"
                                                FontSize="11"

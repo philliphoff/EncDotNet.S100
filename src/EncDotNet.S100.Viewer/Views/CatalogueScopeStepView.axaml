@@ -48,9 +48,11 @@
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="0" />
         </Style>
+        <!-- Region rows are body text: undo ShadUI's Medium item weight (#1171). -->
         <Style Selector="ListBox.regionList ListBoxItem">
             <Setter Property="Padding" Value="10,0" />
             <Setter Property="MinHeight" Value="30" />
+            <Setter Property="FontWeight" Value="Normal" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <ControlTemplate>
