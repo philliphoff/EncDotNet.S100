@@ -1,9 +1,10 @@
 # Measure and range & bearing design pass
 
-> Status: **Proposed** (2026-10-31), for
-> [#1130](https://github.com/philliphoff/EncDotNet.S100/issues/1130). Nothing
-> here is built yet. Follows finding 5 of the
-> [S-164 conformance review](s164-conformance.md).
+> Status: **Built** (2026-10-31), for
+> [#1130](https://github.com/philliphoff/EncDotNet.S100/issues/1130): slices
+> 1–3 in #1197, #1201 and #1202; slice 4's results are in §6.5 of the
+> [S-164 conformance review](s164-conformance.md), whose finding 5 this
+> follows.
 
 The S-164 Part 4 accuracy tests (Accuracy1–15) ask an ECDIS to measure
 between typed positions, to give the position at a typed range and bearing,
