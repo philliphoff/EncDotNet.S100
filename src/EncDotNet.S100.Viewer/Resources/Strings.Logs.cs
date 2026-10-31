@@ -43,6 +43,13 @@ internal static partial class Strings
     public static string Logs_Details_Repeated => Get(nameof(Logs_Details_Repeated));
     public static string Label_LogsCloseDetails => Get(nameof(Label_LogsCloseDetails));
     public static string Tooltip_LogsCloseDetails => Get(nameof(Tooltip_LogsCloseDetails));
+    public static string Label_LogsCopyEntry => Get(nameof(Label_LogsCopyEntry));
+    public static string Tooltip_LogsCopyEntry => Get(nameof(Tooltip_LogsCopyEntry));
+    public static string Label_LogsDetailsSplitter => Get(nameof(Label_LogsDetailsSplitter));
+    public static string Logs_Menu_CopyMessage => Get(nameof(Logs_Menu_CopyMessage));
+    public static string Logs_Menu_CopyEntry => Get(nameof(Logs_Menu_CopyEntry));
+    public static string Logs_Menu_ShowOnlyAreaFormat => Get(nameof(Logs_Menu_ShowOnlyAreaFormat));
+    public static string Logs_Menu_HideAreaFormat => Get(nameof(Logs_Menu_HideAreaFormat));
     public static string Label_LogsEntries => Get(nameof(Label_LogsEntries));
     public static string Feedback_RawLogsHeader => Get(nameof(Feedback_RawLogsHeader));
 

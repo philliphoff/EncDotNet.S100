@@ -22,6 +22,11 @@ namespace EncDotNet.S100.Viewer.Views;
 /// focuses the search, <c>Esc</c> clears the selection and then the search,
 /// <c>Cmd/Ctrl+C</c> copies the selected entry, <c>End</c> resumes following
 /// and <c>↑</c>/<c>↓</c> move the selection.
+/// <para>
+/// The details pane opens at the width its splitter was last dragged to
+/// (#1174, D13), kept between <see cref="MinDetailsWidth"/> and
+/// <see cref="MaxDetailsShare"/> of the panel.
+/// </para>
 /// </remarks>
 public partial class LogsView : UserControl
 {
@@ -30,6 +35,15 @@ public partial class LogsView : UserControl
 
     /// <summary>How many layout passes an anchor correction may take before it gives up.</summary>
     private const int MaxAnchorAttempts = 6;
+
+    /// <summary>The details pane's width until its splitter is dragged.</summary>
+    internal const double DefaultDetailsWidth = 380;
+
+    /// <summary>The narrowest the details pane goes.</summary>
+    internal const double MinDetailsWidth = 280;
+
+    /// <summary>The widest the details pane goes, as a share of the panel.</summary>
+    internal const double MaxDetailsShare = 0.6;
 
     private LogsViewModel? _subscribed;
     private ListBox? _list;
@@ -42,6 +56,10 @@ public partial class LogsView : UserControl
     private LogRowViewModel? _anchorRow;
     private double _anchorTop;
     private int _anchorAttempts;
+
+    private readonly Grid? _body;
+    private readonly ColumnDefinition? _detailsColumn;
+    private double _detailsWidth = DefaultDetailsWidth;
 
     public LogsView()
     {
@@ -60,6 +78,10 @@ public partial class LogsView : UserControl
             _list.TemplateApplied += (_, _) => AttachScrollViewer();
             _list.LayoutUpdated += OnListLayoutUpdated;
         }
+        _body = this.FindControl<Grid>("LogsBody");
+        _detailsColumn = _body?.ColumnDefinitions.Count == 3 ? _body.ColumnDefinitions[2] : null;
+        if (_body is not null)
+            _body.SizeChanged += (_, _) => UpdateDetailsColumn();
     }
 
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
@@ -74,6 +96,9 @@ public partial class LogsView : UserControl
     {
         base.OnAttachedToVisualTree(e);
         Subscribe(DataContext as LogsViewModel);
+        if (Main?.LogsDetailsWidth is { } width)
+            _detailsWidth = width;
+        UpdateDetailsColumn();
         AttachScrollViewer();
         OnScrollToNewestRequested(this, EventArgs.Empty);
     }
@@ -85,6 +110,8 @@ public partial class LogsView : UserControl
     }
 
     private bool IsAttached => TopLevel.GetTopLevel(this) is not null;
+
+    private MainViewModel? Main => TopLevel.GetTopLevel(this)?.DataContext as MainViewModel;
 
     private void Subscribe(LogsViewModel? viewModel)
     {
@@ -106,6 +133,7 @@ public partial class LogsView : UserControl
             _subscribed.Entries.CollectionChanged += OnEntriesChanged;
             _subscribed.PropertyChanged += OnViewModelPropertyChanged;
         }
+        UpdateDetailsColumn();
     }
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -114,6 +142,40 @@ public partial class LogsView : UserControl
         // is focused, so take the rows in view as the anchor now.
         if (e.PropertyName == nameof(LogsViewModel.IsFollowing) && _subscribed is { IsFollowing: false })
             CaptureAnchor();
+        else if (e.PropertyName == nameof(LogsViewModel.HasSelectedEntry))
+            UpdateDetailsColumn();
+    }
+
+    /// <summary>
+    /// Sizes the details column: nothing without a selection, else the
+    /// remembered width clamped to the pane's limits for the panel's width.
+    /// </summary>
+    private void UpdateDetailsColumn()
+    {
+        if (_detailsColumn is null || _body is null)
+            return;
+        if (_subscribed is not { HasSelectedEntry: true })
+        {
+            _detailsColumn.MinWidth = 0;
+            _detailsColumn.MaxWidth = double.PositiveInfinity;
+            _detailsColumn.Width = new GridLength(0);
+            return;
+        }
+        var max = _body.Bounds.Width > 0
+            ? Math.Max(MinDetailsWidth, _body.Bounds.Width * MaxDetailsShare)
+            : double.PositiveInfinity;
+        _detailsColumn.MinWidth = MinDetailsWidth;
+        _detailsColumn.MaxWidth = max;
+        _detailsColumn.Width = new GridLength(Math.Clamp(_detailsWidth, MinDetailsWidth, max));
+    }
+
+    private void OnDetailsSplitterDragCompleted(object? sender, VectorEventArgs e)
+    {
+        if (_detailsColumn is null || _detailsColumn.ActualWidth <= 0)
+            return;
+        _detailsWidth = _detailsColumn.ActualWidth;
+        if (Main is { } main)
+            main.LogsDetailsWidth = _detailsWidth;
     }
 
     private void AttachScrollViewer()
