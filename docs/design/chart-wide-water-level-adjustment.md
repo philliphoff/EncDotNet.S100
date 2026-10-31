@@ -309,8 +309,12 @@ the trial found most confusing.
 ## 7. State reported to the depth basis indicator
 
 The [Depth basis indicator](depth-basis-indicator.md) owns how the state is
-shown. This note owns what the state is. `ChartWaterLevelAdjustmentService`
-publishes:
+shown, and defines the seam this note plugs into:
+`IWaterLevelAdjustmentState`, whose only implementation until this lands is
+`NoWaterLevelAdjustment`. This note owns what the state is.
+`ChartWaterLevelAdjustmentService` implements `IWaterLevelAdjustmentState`,
+replaces the stub registration, raises `Changed` when the setting or the
+applied result changes, and exposes the current result as:
 
 ```csharp
 internal sealed record ChartAdjustmentState(
@@ -318,13 +322,17 @@ internal sealed record ChartAdjustmentState(
     DateTime? AppliedTime,                   // the time the drawn layers are for
     (DateTime Start, DateTime End)? Period,
     IReadOnlyList<WaterLevelSourceInfo> Sources,
-    IReadOnlyList<AdjustmentRefusal> Refusals,   // area, reason (datum, time range)
-    bool AdjustedAreaInView,
-    bool WaterLevelAvailableButOff);
+    IReadOnlyList<AdjustmentRefusal> Refusals,   // area, reason (WaterLevelStatus / DatumAgreement)
+    bool AdjustedAreaInView);
 ```
 
-The same record goes into the MCP `capture_view` result and the pick report,
-so all of them use one vocabulary.
+`DepthBasisEvaluator` turns this record, with the loaded datasets and the
+view, into the indicator's `DepthBasis`. Whether S-104 is loaded but not
+applied is the evaluator's decision, not this record's, so the two can't
+disagree. Refusal reasons use the existing `WaterLevelStatus` and
+`DatumAgreement` enums, as the indicator does. The MCP `get_depth_basis`
+tool and the pick report read the resulting `DepthBasis`, so all of them
+use one vocabulary.
 
 ## 8. Alternatives rejected
 
