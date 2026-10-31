@@ -15,6 +15,20 @@ month. For package versions and release assets, see
   (Ctrl+C or ⌘C) puts the measurement on the clipboard. A great-circle
   measurement promoted to a route keeps geodesic legs. The `set_measure` and
   `get_measure` MCP tools drive and read it with unrounded values (#1130).
+- **What the chart's depths are relative to.** SoundCharts' status bar now
+  shows **DEPTHS** next to **OVERSCALE** whenever an S-101, S-57 or S-102
+  dataset is loaded: **Charted**, or **Charted · water level not applied**
+  when S-104 water level covers the view but isn't added to the chart. Select
+  it for the vertical datum and sources in view, the S-104 datasets, and where
+  water level is applied (the Depth card and the route check). On a narrow
+  window it shortens to whole words, never an ellipsis. The Depth card, the
+  Clearance readout and route findings now share one vocabulary: **Charted
+  depth**, **Water level**, **Adjusted depth** and "water level not applied"
+  replace Base, Tide, "tide-adjusted" and "tide not applied", in the CLI's
+  route-check findings too. The Depth card reads the S-101 `SoundingDatum` at
+  the point, so it warns when an S-101 depth and the water level can't be
+  confirmed on the same datum. A new MCP tool, `get_depth_basis`, returns the
+  indicator's state, and `get_check_state` adds it as `depthBasis` (#1191).
 - **S-101 features follow their dates.** A buoy, traffic separation scheme or
   other S-101 feature with a fixed or periodic date range is now drawn only
   at the dates it applies, as S-100 Part 9 asks. The parser turns the

@@ -409,14 +409,19 @@ rather than a product pair).
 
 ### 3.5 Deferred — explicit non-goals for v1
 
+The mariner-facing side of predefined combinations (Annex A §11, Part B
+§B-3.1.2) and switching between them (Annex A §15.4) is built as SoundCharts'
+own display combinations: see
+[Predefined display combinations](predefined-display-combinations.md)
+(#1192). Combinations from an Interoperability Catalogue
+(`S100_IC_PredefinedCombination`) still wait for the catalogue loader (§5.2).
+
 | Rule family | Why deferred |
 |---|---|
-| Predefined Combinations UI (`S100_IC_PredefinedCombination`) | Annex A §11 / Part B §B-3.1.2 — large UX surface; needs a layer-controls panel (gated on PR-L3). Proposed in [Predefined display combinations](predefined-display-combinations.md) (#1192). |
 | Hybrid Feature / Portrayal Catalogues | Annex A §4.4.4 — *"should not be implemented in Interoperability Catalogues created from this Specification"*. |
 | Spatial operations (Level 4) | Annex A §4.4.5 — *"Support for this level is not fully elaborated"*. |
 | Skin-of-the-earth adjusting (geometry edits) | Annex A §8.4.2 — Level 3/4 only. |
 | Safety-contour synthesis from S-102 + S-104 | Annex A §A-6.9.1 NOTE — *"OEMs are permitted to add additional safety contour functions"* — explicitly optional; significant new pipeline. Proposed in [Chart-wide water level adjustment](chart-wide-water-level-adjustment.md) (#1132). |
-| Pre-defined Combination switching UX | Annex A §15.4. Tied to layer-controls UI PR-L3. |
 | Alerts triggered by interop result | Annex A §7.3 (Main) + Annex A §11.7. Needs alert engine. |
 | Colour set-aside arbitration | S-98 Main §10.3 + Part 16 — needs palette-aware rule input. |
 

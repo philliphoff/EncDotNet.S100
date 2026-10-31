@@ -1231,6 +1231,8 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState>(),
             sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.LogBuffer>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MeasureSession>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel>()));
         services.AddSingleton(sp => new ViewerLibraryController(
@@ -1302,17 +1304,37 @@ public partial class App : Application
         services.AddSingleton<ViewerPresentationCoordinator>();
         services.AddSingleton<PresentationRevealCoordinator>();
         services.AddSingleton<ITimeFormatProvider, TimeFormatProvider>();
-        services.AddSingleton<PickReportViewModel>(sp => new PickReportViewModel(
-            sp.GetService<ITimeFormatProvider>(),
-            sp.GetService<IMarinerSettingsProvider>(),
-            sp.GetService<IUrlOpener>(),
-            sp.GetService<IS100ExaminerLinkBuilder>(),
-            sp.GetService<EncDotNet.S100.Viewer.Services.IViewTime>()));
+        services.AddSingleton<PickReportViewModel>(sp =>
+        {
+            var pick = new PickReportViewModel(
+                sp.GetService<ITimeFormatProvider>(),
+                sp.GetService<IMarinerSettingsProvider>(),
+                sp.GetService<IUrlOpener>(),
+                sp.GetService<IS100ExaminerLinkBuilder>(),
+                sp.GetService<EncDotNet.S100.Viewer.Services.IViewTime>());
+            // The depth card's "The chart shows charted depths" line (#1191).
+            if (sp.GetService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>() is { } depthBasis)
+            {
+                pick.SetDepthBasis(depthBasis.Current);
+                depthBasis.Changed += (_, _) => pick.SetDepthBasis(depthBasis.Current);
+            }
+            return pick;
+        });
         services.AddSingleton<IForecastRunRefresher>(sp => new LibraryForecastRunRefresher(sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>()));
         services.AddSingleton<TimelineMapScope>(sp => new TimelineMapScope(
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
             sp.GetRequiredService<DatasetsViewModel>()));
         services.AddSingleton<ITimelineMapScope>(sp => sp.GetRequiredService<TimelineMapScope>());
+        // Depth basis indicator (#1191). Chart water level adjustment (#1132)
+        // replaces the always-off state with its own.
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentState>(
+            EncDotNet.S100.Viewer.Services.Depth.NoWaterLevelAdjustment.Instance);
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Depth.DepthBasisService(
+            sp.GetRequiredService<IDatasetLoaderService>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IViewTime>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentState>(),
+            sp.GetRequiredService<ITimelineMapScope>()));
         services.AddSingleton<TimelineViewModel>(sp =>
         {
             var timeline = Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<TimelineViewModel>(sp);
@@ -1326,6 +1348,17 @@ public partial class App : Application
         services.AddSingleton<TextGroupToolbarViewModel>();
         services.AddSingleton<DisplayModeToolbarViewModel>();
         services.AddSingleton<EcdisLabelOverrideProvider>();
+        // Predefined display combinations (#1192): the View pill and the
+        // Display controls' View section.
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService(
+            sp.GetRequiredService<EcdisDisplayState>(),
+            sp.GetRequiredService<IDatasetLoaderService>(),
+            sp.GetRequiredService<DatasetsViewModel>(),
+            sp.GetRequiredService<ViewerSettings>(),
+            action => Avalonia.Threading.Dispatcher.UIThread.Post(action)));
+        services.AddSingleton(sp => new DisplayCombinationsViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService>(),
+            sp.GetRequiredService<IViewerUiControllerAccessor>()));
         services.AddSingleton<EcdisDisplayPanelViewModel>();
         services.AddSingleton<HelmViewModel>();
         services.AddSingleton<RoutesPanelViewModel>();

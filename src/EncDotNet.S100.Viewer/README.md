@@ -597,6 +597,34 @@ When you zoom in past a chart's finest compilation scale, the status bar shows
 in view. With **Settings** > **Chart display** > **Overscale indication** on,
 the overscaled area also has the S-52 vertical-line pattern as a caution.
 
+### Depth basis indication
+
+Whenever an S-101, S-57 or S-102 dataset is loaded and active, the status bar
+shows **DEPTHS** next to **OVERSCALE**. It says what the depths, depth shading
+and safety contour on the chart are relative to:
+
+- **Charted**: charted depths, relative to each dataset's vertical datum.
+- **Charted · water level not applied**: an active S-104 dataset covers the
+  view, but its water level isn't added to the chart. The pill is highlighted
+  and has an information icon.
+
+The chart always draws charted depths. S-104 water level is applied in two
+places: the **Depth** card in Object information, and the clearance in
+**Check route**. Moving the Timeline doesn't change the depths on the chart.
+
+On a narrow window the value shortens to **Charted · not applied**, then
+**Charted** with the information icon. It never cuts off part of a word. The
+full text stays in the tooltip.
+
+Select the pill to see:
+
+- **Depths on the chart**: the vertical datum of the depth sources in view
+  (or "Several datums in view", with the datasets on each) and the sources
+  themselves.
+- **Water level**: each S-104 dataset in view, with its kind (grid or
+  station), run and time range, or "No S-104 water level loaded."
+- **Where water level is applied**: the Depth card and the route check.
+
 ## Control the layer stack
 
 The **Layer stack** panel lists every visible layer in its S-98 display
@@ -631,9 +659,9 @@ beneath the chart. See
 
 ## Change the display
 
-Use the pill buttons on the map toolbar (**Display: Standard ▾** or the
-current category, **Text ▾** and **Palette ▾**) or the **Display controls**
-panel:
+Use the **View** pill on the map toolbar to choose a whole picture at once
+(see [Choose a view](#choose-a-view)). For single settings, use the **Display
+Settings** button on the map toolbar or the **Display controls** panel:
 
 - **Display category**: **Display Base**, **Standard**, **Other Information**
   or **All**. Changing it redraws every vector dataset.
@@ -686,6 +714,57 @@ groups, so you can hide or show particular symbol families:
 
 All of these choices are saved between sessions.
 
+### Choose a view
+
+A view is a named display combination: which products are in the picture and
+how they're shown. The **View** pill on the map toolbar shows the current one,
+for example **View: Pilotage ▾**. Choose another from its menu, or from the
+**View** section at the top of the **Display controls** panel.
+
+| View | Products | Display |
+|---|---|---|
+| **Charted only** | S-101 (and S-57 and S-401 cells) | **Standard**. Important text on, other text off. |
+| **Chart + bathymetry** | S-101, S-102 | As **Charted only**. |
+| **Pilotage** | S-101, S-102, S-104, S-111, S-124, S-125, S-201 | **Standard**. S-104 isolines off and stations on, S-111 arrows on and station arrows off, weather layers off. |
+| **Passage planning** | Every product but S-111 and weather | **Other Information**. S-104 isolines on. |
+| **Everything loaded** | Every product | Leaves the display settings as they are. |
+
+The first three are listed under **Build up the picture**, in order: the chart,
+then bathymetry, then water level, currents, warnings and aids to navigation.
+Use them to bring in one product at a time. A new installation starts in
+**Everything loaded**, which shows everything you load.
+
+A view changes these settings:
+
+- Products it leaves out are made inactive, not only hidden, so they're out of
+  the S-98 rules and picking. For example, **Charted only** makes S-102
+  inactive, so the ENC's own depth areas and contours draw again. Their
+  **Datasets** rows say **Not in Charted only**, and so does the tooltip of
+  their **Active** toggle in the **Layer stack**. Products it includes are made
+  active, and keep their visibility.
+- The display category, the viewing groups it names, product display modes,
+  the **Weather** switches, and sub-layers such as S-104 isolines.
+
+A view never changes your mariner settings (safety contour and depths), the
+**Navigational warnings** switch, display planes, the palette, own ship, AIS
+or routes. Route checks and the depth readout still use every loaded dataset.
+
+The menu lists each view's products. A product that isn't loaded is dimmed,
+and choosing the view doesn't load it. If you load it later, it comes in active
+or inactive as the current view says.
+
+When you change a setting the view covers, it stays selected and shows
+**(modified)**, for example **View: Pilotage (modified) ▾**. The **Display
+controls** panel says what changed, such as **Changed: Display category
+Standard → All.** **Reapply** puts the view's settings back. Settings a view
+doesn't cover, and a dataset's eye in **Datasets**, never mark it modified.
+
+To keep the current picture, choose **Save as…** and give it a name. Your
+views are listed under **My views**, where you can rename or delete them.
+The save form lists what's saved and what isn't. **Manage…** in the pill's menu
+opens the **Display controls** panel. Your views and the current view are
+saved between sessions.
+
 ### Mariner settings
 
 **Settings** > **Chart display** > **Mariner Settings** sets the S-101 and
@@ -729,10 +808,17 @@ Turn on **Pick Mode** (the cross-hair button on the map toolbar, **View** >
   and S-421 route topology.
 - A time-series chart for a fixed-station observation (S-104 and S-111
   stations, data coding format 8).
-- A **Depth** chart where depth data is available: the base depth from S-102
-  bathymetry or S-101 depth areas, dredged areas or soundings, adjusted by
-  S-104 water levels over time when they cover the point. With no water-level
-  data, the depth is static.
+- A **Depth** card where depth data is available: the **Charted depth** from
+  S-102 bathymetry or S-101 depth areas, dredged areas or soundings, and the
+  **Water level** from S-104 when it covers the point. The headline is the
+  **ADJUSTED DEPTH AT SELECTED TIME** (charted depth plus water level), with
+  an **Adjusted depth** chart over time. With no water-level data, the
+  headline is **CHARTED DEPTH · WATER LEVEL NOT APPLIED**. A line under the
+  card's title says "The chart shows charted depths", so you can tell how the
+  value relates to what the chart draws. When the charted depth's vertical
+  datum (S-102 `verticalDatum`, or the S-101 `SoundingDatum` at the point)
+  can't be confirmed to match the water level's, the card says "Datums not
+  reconciled — absolute baseline approximate".
 - A **Warning card** for an S-124 navigational warning part. Its header has
   the series and number (such as "NAVAREA X 106/26"), the warning type, and
   whether the warning is **In force**, **Not yet in force** or **Ended** at
@@ -1491,6 +1577,7 @@ folder in your per-user application-data folder. Saved settings include:
   runs, and runs that turn on MCP from the command line, use a fixed 1100×700
   window and leave the saved placement alone.
 - Palette and display category.
+- Your saved views and the current view.
 - Hidden viewing groups, display-plane toggles and the ice display mode.
 - Mariner settings, depth and distance units.
 - The own-ship overlay, its visibility, vessel dimensions and any AIS target

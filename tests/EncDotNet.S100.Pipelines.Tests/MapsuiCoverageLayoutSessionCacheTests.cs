@@ -87,7 +87,7 @@ public sealed class MapsuiCoverageLayoutSessionCacheTests
         using var processor = new S102DatasetProcessor(S102File, manager, new MoonSharpLuaEngine(), Factory);
         var portrayal = await processor.BuildCoveragePortrayalAsync(
             cancellationToken: TestContext.Current.CancellationToken);
-        var grid = Assert.IsType<GridCoverageSubLayer>(Assert.Single(portrayal.SubLayers));
+        var grid = Assert.Single(portrayal.SubLayers.OfType<GridCoverageSubLayer>());
         var renderer = new MapsuiDatasetRenderer(Factory);
         var cache = new CoverageLayoutCache();
 

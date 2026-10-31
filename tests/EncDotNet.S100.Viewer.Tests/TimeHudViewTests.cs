@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Renderers.Mapsui;
@@ -40,7 +41,12 @@ public sealed class TimeHudViewTests
         return (service, timeline);
     }
 
-    private static ViewHost Show(TimeHudView hud) => ViewHost.Show(hud, width: 900, height: 200);
+    /// <summary>Shows the HUD anchored at the bottom, as the map has it.</summary>
+    private static ViewHost Show(TimeHudView hud)
+    {
+        hud.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom;
+        return ViewHost.Show(hud, width: 900, height: 200);
+    }
 
     [AvaloniaFact]
     public void Stepping_pins_the_time_and_live_returns_to_now()
@@ -50,23 +56,66 @@ public sealed class TimeHudViewTests
         using var host = Show(new TimeHudView { DataContext = timeline, MapWidth = 1200 });
         Assert.True(timeline.IsLive);
         var now = service.CurrentTime;
-        Assert.False(host.IsShown("TimeHud.Live"));
-        Assert.False(host.IsShown("TimeHud.PinnedPill"));
+        var live = host.Find<Button>("TimeHud.Live");
+        Assert.True(host.IsShown("TimeHud.Live"));
+        Assert.Equal(Strings.TimeHud_Live, timeline.LiveToggleText);
+
+        // Live while live does nothing.
+        host.Click(live);
+        Assert.True(timeline.IsLive);
+        Assert.Equal(now, service.CurrentTime);
 
         host.Click(host.Find<Button>("TimeHud.Next"));
         Assert.False(timeline.IsLive);
         Assert.True(service.CurrentTime > now);
-        Assert.True(host.IsShown("TimeHud.PinnedPill"));
+        Assert.Equal(Strings.TimelinePanel_GoLive, timeline.LiveToggleText);
         Assert.Equal(timeline.CurrentTimeLabel, host.Find<Button>("TimeHud.Time").Content);
 
         host.Click(host.Find<Button>("TimeHud.Previous"));
         Assert.Equal(now, service.CurrentTime);
 
+        host.Click(live);
+        Assert.True(timeline.IsLive);
+        Assert.Equal(Strings.TimeHud_Live, timeline.LiveToggleText);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(1200)]
+    [InlineData(600)]
+    [InlineData(500)]
+    public void The_controls_stay_put_while_stepping_and_going_live(double mapWidth)
+    {
+        // Design note time-overlays D4: the bar's slots have fixed widths, so a
+        // second click on › lands on › again, never on ‹ or Go live.
+        var (_, timeline) = CreateTimeline();
+        timeline.NowCommand.Execute(null);
+        timeline.HasDateDependentData = true;
+        using var host = Show(new TimeHudView { DataContext = timeline, MapWidth = mapWidth });
+        string[] ids = ["TimeHud.Previous", "TimeHud.Next", "TimeHud.Live", "TimeHud.DockToggle"];
+        Rect[] Bounds() => ids.Select(id => Screen(host, host.Find<Button>(id))).ToArray();
+        var live = Bounds();
+        // D5/D10: Live is 64 px wide, 28 px (an icon) on a tiny map, never sized by the theme.
+        Assert.Equal(mapWidth < TimeHudView.TinyWidth ? 28 : 64, live[2].Width);
+        Assert.Equal(28, live[2].Height);
+
+        // Live → pinned (and not real time) → further out, past "in 9 h" → back → live.
+        host.Click(host.Find<Button>("TimeHud.Next"));
+        Assert.True(timeline.IsNotRealTime);
+        Assert.True(host.IsShown("TimeHud.NotRealTime"));
+        Assert.Equal(live, Bounds());
+        for (var i = 0; i < 12; i++)
+            host.Click(host.Find<Button>("TimeHud.Next"));
+        Assert.Equal(live, Bounds());
+        host.Click(host.Find<Button>("TimeHud.Previous"));
+        Assert.Equal(live, Bounds());
         host.Click(host.Find<Button>("TimeHud.Live"));
         Assert.True(timeline.IsLive);
-        Assert.False(host.IsShown("TimeHud.Live"));
-        Assert.False(host.IsShown("TimeHud.PinnedPill"));
+        Assert.False(host.IsShown("TimeHud.NotRealTime"));
+        Assert.Equal(live, Bounds());
     }
+
+    private static Rect Screen(ViewHost host, Control control) =>
+        new(control.TranslatePoint(default, host.Window)!.Value, control.Bounds.Size);
 
     [AvaloniaFact]
     public void The_panel_button_opens_the_dock()

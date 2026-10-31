@@ -310,6 +310,74 @@ internal sealed class EcdisDisplayState
     }
 
     /// <summary>
+    /// Applies the display part of a display combination in one step and
+    /// raises <see cref="Changed"/> once when anything differs. Only the
+    /// values given change: hidden display planes and the navigational-warnings
+    /// switch are never touched, and a viewing group the combination doesn't
+    /// name keeps its state.
+    /// </summary>
+    /// <param name="category">The category to set, or <see langword="null"/> to keep the current one.</param>
+    /// <param name="hide">Viewing-group ids to hide, per product.</param>
+    /// <param name="show">Viewing-group ids to show, per product.</param>
+    /// <param name="displayModes">Display-mode ids to select, per product.</param>
+    /// <param name="layerVisibility">Map-wide optional-layer switches to set.</param>
+    public void ApplyPicture(
+        EcdisDisplayCategory? category,
+        IReadOnlyDictionary<string, IReadOnlySet<int>> hide,
+        IReadOnlyDictionary<string, IReadOnlySet<int>> show,
+        IReadOnlyDictionary<string, string> displayModes,
+        IReadOnlyDictionary<string, bool> layerVisibility)
+    {
+        ArgumentNullException.ThrowIfNull(hide);
+        ArgumentNullException.ThrowIfNull(show);
+        ArgumentNullException.ThrowIfNull(displayModes);
+        ArgumentNullException.ThrowIfNull(layerVisibility);
+
+        var changed = false;
+        lock (_gate)
+        {
+            if (category is { } c && _category != c)
+            {
+                _category = c;
+                changed = true;
+            }
+            foreach (var (spec, ids) in hide)
+            {
+                if (ids.Count == 0) continue;
+                if (!_hidden.TryGetValue(spec, out var set))
+                {
+                    set = new HashSet<int>();
+                    _hidden[spec] = set;
+                }
+                foreach (var id in ids)
+                    changed |= set.Add(id);
+            }
+            foreach (var (spec, ids) in show)
+            {
+                if (!_hidden.TryGetValue(spec, out var set)) continue;
+                foreach (var id in ids)
+                    changed |= set.Remove(id);
+                if (set.Count == 0) _hidden.Remove(spec);
+            }
+            foreach (var (spec, mode) in displayModes)
+            {
+                if (string.IsNullOrEmpty(mode)) continue;
+                _displayModes.TryGetValue(spec, out var current);
+                if (string.Equals(current, mode, StringComparison.Ordinal)) continue;
+                _displayModes[spec] = mode;
+                changed = true;
+            }
+            foreach (var (key, visible) in layerVisibility)
+            {
+                if (_layerVisibility.TryGetValue(key, out var current) && current == visible) continue;
+                _layerVisibility[key] = visible;
+                changed = true;
+            }
+        }
+        if (changed) Changed?.Invoke();
+    }
+
+    /// <summary>
     /// Replaces the entire state from a hydrated settings record
     /// (used on viewer startup to restore the persisted category,
     /// per-spec overrides, explicit display-mode selections and the

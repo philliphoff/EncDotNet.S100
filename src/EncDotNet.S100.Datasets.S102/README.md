@@ -93,6 +93,25 @@ with the active palette's `NODTA` colour through
 Do this when S-102 is drawn over another layer, such as an S-101 ENC, so the
 unsurveyed part of the rectangular grid doesn't hide the chart underneath.
 
+### Safety contour and coverage limit
+
+S-102 Edition 3.0.0 defines depth-band fills only. SoundCharts adds two lines
+traced from the grid (S-98 Part A §A-6.9.1 NOTE allows OEM safety contour
+functions; S-164 UserSelectedSafetyContour):
+
+- `SafetyContourStyle(settings)` is the depth isoline at the mariner's
+  `SafetyContour`, drawn as S-101 draws its safety contour: solid, 0.64 mm,
+  `DEPSC`, unlabelled. It runs along the boundary between the safe and unsafe
+  shades and is not adjusted for water level.
+- `CoverageLimitStyle` is the border along the limit of the S-102 data, where
+  S-101 depth areas and contours take over: dashed, 0.32 mm, `CHGRD`.
+
+`S102DepthLines` in `EncDotNet.S100.Datasets.Pipelines` traces both through
+the sampled grid, and `S102DatasetProcessor` returns them as two isoline
+sub-layers on the `BaseChartOver` plane, next to the surface. The safety
+contour stops at no-data. The limit is drawn half way between the last valid
+node and the first no-data one, and not along the edges of the sampled grid.
+
 ## Downsampling
 
 When `S102CoverageSource` draws a grid at a smaller scale, it reduces blocks of

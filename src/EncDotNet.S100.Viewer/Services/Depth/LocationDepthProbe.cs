@@ -103,8 +103,23 @@ internal sealed class LocationDepthProbe
         var depthHits = finest is null
             ? hits
             : hits.Where(h => h.OwningProcessor is not IChartDepthCell cell || finest.Contains(cell)).ToList();
+        var chartCells = new Dictionary<string, IChartDepthCell>(StringComparer.Ordinal);
+        foreach (var (entry, processor) in entries)
+        {
+            if (processor is IChartDepthCell cell)
+                chartCells.TryAdd(entry.DisplayName, cell);
+        }
+        foreach (var hit in depthHits)
+        {
+            if (hit is { DatasetFileName: { } name, OwningProcessor: IChartDepthCell cell })
+                chartCells.TryAdd(name, cell);
+        }
+
         var baseDepth = _baseResolver.Resolve(
-            bathymetry, depthHits, nearestSounding, bathymetryDatasetId, soundingDatasetId);
+            bathymetry, depthHits, nearestSounding, bathymetryDatasetId, soundingDatasetId,
+            datasetId => datasetId is not null && chartCells.TryGetValue(datasetId, out var cell)
+                ? SafeSoundingDatum(cell, latitude, longitude)
+                : null);
         var result = _assimilation.Assimilate(baseDepth, tideCandidates);
 
         return new Probe(waterLand, result);
@@ -161,6 +176,19 @@ internal sealed class LocationDepthProbe
         }
         catch
         {
+            return null;
+        }
+    }
+
+    private static int? SafeSoundingDatum(IChartDepthCell cell, double latitude, double longitude)
+    {
+        try
+        {
+            return cell.SoundingDatumAt(latitude, longitude);
+        }
+        catch
+        {
+            // A cell whose features can't be read declares no datum.
             return null;
         }
     }

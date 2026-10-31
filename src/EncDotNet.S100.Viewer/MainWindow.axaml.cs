@@ -501,6 +501,9 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
             App.Services.GetRequiredService<SettingsViewModel>());
+        // Depth basis indicator (#1191): what the chart's depths are relative to.
+        InitializeDepthBasis();
+
         // Disable Mapsui's built-in LoggingWidget — it can throw "minX > maxX" on
         // narrow viewports during resize, and the exception is raised on the
         // render thread where we cannot intercept it.
@@ -524,7 +527,10 @@ public partial class MainWindow : ShadUI.Window
             _viewModel,
             _pickService,
             _loader,
-            App.Services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicSourcePickService>());
+            App.Services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicSourcePickService>())
+        {
+            DepthBasis = App.Services.GetService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>(),
+        };
         interactionController.Attach(MapControl, ZoomInButton, ZoomOutButton, ZoomToExtentButton, ScaleBar, CompassRose);
         interactionController.PlainTapped += (_, tap) => _libraryCoverageController?.HandleTap(tap);
 
@@ -1696,5 +1702,41 @@ public partial class MainWindow : ShadUI.Window
                 return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// Feeds the status bar's depth basis pill from <see cref="EncDotNet.S100.Viewer.Services.Depth.DepthBasisService"/>
+    /// and keeps it to a whole form that fits the status bar (#1191).
+    /// </summary>
+    private void InitializeDepthBasis()
+    {
+        if (App.Services.GetService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>() is not { } depthBasis)
+            return;
+
+        var timeFormat = App.Services.GetService<ITimeFormatProvider>();
+        void Push() => _viewModel.UpdateDepthBasis(
+            depthBasis.Current, depthBasis.WaterLevelLoaded, timeFormat?.Current ?? TimeFormat.Utc);
+        depthBasis.Changed += (_, _) => Push();
+        if (timeFormat is not null)
+            timeFormat.TimeFormatChanged += _ => Dispatcher.UIThread.Post(Push);
+
+        // The pill draws the longest whole form that fits: the room is the
+        // status bar's width less every other item in the right-hand cluster.
+        void FitDepthBasis()
+        {
+            if (StatusBarDock is not { } dock || StatusRightCluster is not { } cluster || DepthBasisIndicator is not { } pill)
+                return;
+            var room = dock.Bounds.Width - (cluster.DesiredSize.Width - pill.DesiredSize.Width);
+            pill.Fit(room);
+        }
+        StatusBarDock.SizeChanged += (_, _) => FitDepthBasis();
+        StatusRightCluster.SizeChanged += (_, _) => FitDepthBasis();
+        _viewModel.DepthBasis.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DepthBasisIndicatorViewModel.FormTexts))
+                Dispatcher.UIThread.Post(FitDepthBasis, DispatcherPriority.Render);
+        };
+
+        depthBasis.Invalidate();
     }
 }

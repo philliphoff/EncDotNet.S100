@@ -126,7 +126,7 @@ public sealed class RouteFindingsTests : IDisposable
         Assert.Equal(("Confidence", RouteFindingIcon.Waves, CheckTone.Neutral), (s101.Tag, s101.Icon, s101.Tone));
 
         Assert.Equal("Water-level data ends before arrival", ends.Title);
-        Assert.Contains("tide not applied for", ends.Meta);
+        Assert.Contains("water level not applied for", ends.Meta);
         Assert.Equal(RouteFindingGroup.Check, ends.Finding.Group);
         Assert.Equal(("Data", RouteFindingIcon.Triangle, CheckTone.Warning), (ends.Tag, ends.Icon, ends.Tone));
 

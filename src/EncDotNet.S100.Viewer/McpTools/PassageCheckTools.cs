@@ -58,6 +58,10 @@ internal sealed record CheckStateDto(
     /// <summary>The footer.</summary>
     [Description("The verdict card's one footer, \"Not for navigation · computed from S-101, S-124 for your settings\" (every product the checks used).")]
     public string? Footer { get; init; }
+
+    /// <summary>What the chart's depths are relative to.</summary>
+    [Description("What the depths on the chart the user is looking at are relative to, as get_depth_basis returns it (kind 'charted' or 'adjusted', display, sources and datums), so a reported clearance says whether the chart beside it is adjusted; null in hosts without a map.")]
+    public DepthBasisDto? DepthBasis { get; init; }
 }
 
 /// <summary>A verdict-card summary row (#959, B3).</summary>
@@ -66,7 +70,7 @@ internal sealed record CheckSummaryRowDto(
     [property: Description("Which row, and the findings filter clicking it sets: clearance, route or warnings.")] string Key,
     [property: Description("The row's label, e.g. \"Clearance\".")] string Label,
     [property: Description("The row's value, e.g. \"min 0.4 m · required 1.0 m\", \"2 to review · 1 to check\", \"2 in force on route · 1 near\", \"Nothing found\" or \"Not checked\".")] string Text,
-    [property: Description("The chip, e.g. \"2 below\", \"tight\", \"meets\", \"no tide\" or a count; null when none.")] string? Chip,
+    [property: Description("The chip, e.g. \"2 below\", \"tight\", \"meets\", \"no water level\" or a count; null when none.")] string? Chip,
     [property: Description("The chip's tone: destructive, warning, success or neutral; null without a chip.")] string? ChipTone,
     [property: Description("The link at the end of the row, \"+ Add draft\" on the clearance row without a draft; null otherwise.")] string? Link);
 
@@ -126,6 +130,9 @@ internal abstract class PassageCheckToolBase : RouteToolBase
 
     protected PassageCheckService Check { get; }
 
+    /// <summary>The depth basis indicator's service, reported as <see cref="CheckStateDto.DepthBasis"/>; null without one.</summary>
+    internal Services.Depth.DepthBasisService? DepthBasis { get; init; }
+
     /// <summary>The findings list, which the verdict and summary rows count; <c>null</c> without one.</summary>
     protected RouteFindingsService? RouteFindings { get; }
 
@@ -154,7 +161,16 @@ internal abstract class PassageCheckToolBase : RouteToolBase
     }
 
     protected Task<ToolResult<CheckStateDto>> StateAsync() =>
-        Invoker.InvokeAsync(() => ToolResult<CheckStateDto>.Ok(State(Routes, Check, RouteFindings)));
+        Invoker.InvokeAsync(() =>
+        {
+            var state = State(Routes, Check, RouteFindings);
+            if (DepthBasis is { } basis)
+            {
+                basis.Refresh();
+                state = state with { DepthBasis = GetDepthBasisTool.ToDto(basis.Current) };
+            }
+            return ToolResult<CheckStateDto>.Ok(state);
+        });
 
     internal static CheckStateDto State(RoutesService routes, PassageCheckService check, RouteFindingsService? findings = null)
     {
@@ -579,7 +595,7 @@ internal sealed record ClearanceStateDto(
     [property: Description("Charted depth, formatted.")] string? Depth,
     [property: Description("Charted depth source, e.g. \"S-102 · {cell} · ±0.3 m\" or \"S-101 DepthArea · lower confidence\".")] string? DepthSource,
     [property: Description("Water level, formatted.")] string? WaterLevel,
-    [property: Description("Water level source, e.g. \"S-104 · {station} · {step}\" or \"No S-104 at this ETA · tide not applied\".")] string? WaterLevelSource,
+    [property: Description("Water level source, e.g. \"S-104 · {station} · {step}\" or \"No S-104 at this ETA · water level not applied\".")] string? WaterLevelSource,
     [property: Description("Draft + squat, formatted.")] string? DraftSquat,
     [property: Description("UKC at the readout, formatted.")] string? Ukc,
     [property: Description("The verdict words for the readout's state, with \" · lower confidence\" when the sample is, e.g. \"Meets your settings · lower confidence\".")] string? State,

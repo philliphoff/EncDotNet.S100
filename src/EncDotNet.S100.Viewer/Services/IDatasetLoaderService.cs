@@ -145,6 +145,32 @@ internal interface IDatasetLoaderService
     {
     }
 
+    /// <summary>
+    /// Sets what decides, before a dataset's first render in the session,
+    /// whether it is active for S-98 composition
+    /// (<see cref="DatasetEntry.IsActive"/>); <see langword="null"/> from the
+    /// policy leaves it. The active display combination uses it so a product it
+    /// leaves out loads inactive and never paints for a frame (design note
+    /// <c>predefined-display-combinations.md</c> §3.3).
+    /// </summary>
+    /// <param name="policy">The entry and its processor in, the Active flag out.</param>
+    void SetActiveOnLoad(Func<DatasetEntry, IDatasetProcessor, bool?>? policy)
+    {
+    }
+
+    /// <summary>
+    /// Sets what decides a sub-layer's visibility the first time the dataset
+    /// produces it (<see cref="DatasetSubLayer.IsVisible"/>);
+    /// <see langword="null"/> from the policy leaves the processor's default.
+    /// Setting a policy starts afresh, so every dataset's sub-layers are
+    /// decided once more when they next appear. The active display combination
+    /// uses it for keys such as <c>"s104.isolines"</c>.
+    /// </summary>
+    /// <param name="policy">The entry and the sub-layer key in, the visibility out.</param>
+    void SetSubLayerVisibilityOnLoad(Func<DatasetEntry, string, bool?>? policy)
+    {
+    }
+
     /// <summary>Read-only view of the layers each entry currently owns.</summary>
     IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers { get; }
 
