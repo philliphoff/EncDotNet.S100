@@ -125,6 +125,7 @@ internal sealed class PassageCheckService : IDisposable
     private readonly Func<IEnumerable<IRouteCheck>> _checks;
     private readonly Action<Action> _post;
     private readonly object _gate = new();
+    private readonly Lock _inline = new();
 
     private CancellationTokenSource? _pending;
     private Task _idle = Task.CompletedTask;
@@ -152,7 +153,10 @@ internal sealed class PassageCheckService : IDisposable
     /// The window sweep uses the <see cref="ClearanceCheck"/> among them.
     /// </param>
     /// <param name="debounce">The delay before a recompute, or <c>null</c> for <see cref="DefaultDebounce"/>.</param>
-    /// <param name="post">Delivers results and <see cref="Changed"/> (the UI dispatcher in the app), or <c>null</c> to run inline.</param>
+    /// <param name="post">
+    /// Delivers results and <see cref="Changed"/> (the UI dispatcher in the app),
+    /// or <c>null</c> to run them inline, one at a time.
+    /// </param>
     public PassageCheckService(
         RoutesService routes,
         IDatasetCatalog catalog,
@@ -174,7 +178,7 @@ internal sealed class PassageCheckService : IDisposable
         _options = options;
         _checks = checks ?? BuiltInChecks;
         Debounce = debounce ?? DefaultDebounce;
-        _post = post ?? (action => action());
+        _post = post ?? RunInline;
 
         _routes.CheckModeChanged += OnInputsChanged;
         _routes.Routes.Changed += OnInputsChanged;
@@ -329,6 +333,15 @@ internal sealed class PassageCheckService : IDisposable
             _mariner.Changed -= OnMarinerChanged;
         _pending?.Cancel();
         _windowPending?.Cancel();
+    }
+
+    // Without a dispatcher, a result lands on a pool thread while an edit
+    // reschedules on the caller's: one at a time, so a cancelled result can't
+    // slip in after the cancel and listeners never run concurrently.
+    private void RunInline(Action action)
+    {
+        lock (_inline)
+            action();
     }
 
     private void OnInputsChanged(object? sender, EventArgs e) => _post(Schedule);
