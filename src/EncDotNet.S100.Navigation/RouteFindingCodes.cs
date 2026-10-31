@@ -64,6 +64,24 @@ public static class RouteFindingCodes
     /// </summary>
     public static RouteFindingCode DangerNearRoute { get; } = new("route_check.danger_near_route", RouteFindingCategory.Depth, RouteFindingGroup.Check);
 
+    /// <summary>
+    /// An aid to navigation whose portrayal raises <c>NavHazard</c>, in the
+    /// corridor (CHECK) or near the route (INFO) (#1127).
+    /// </summary>
+    public static RouteFindingCode AidToNavigation { get; } = new("route_check.aid_to_navigation", RouteFindingCategory.Chart, RouteFindingGroup.Check);
+
+    /// <summary>A structure within the track clearance of the track line (#1127). MUST REVIEW.</summary>
+    public static RouteFindingCode StructureOnTrack { get; } = new("route_check.structure_on_track", RouteFindingCategory.Chart, RouteFindingGroup.MustReview, 3);
+
+    /// <summary>A structure elsewhere in the corridor (CHECK) or near the route (INFO) (#1127).</summary>
+    public static RouteFindingCode StructureInCorridor { get; } = new("route_check.structure_in_corridor", RouteFindingCategory.Chart, RouteFindingGroup.Check);
+
+    /// <summary>
+    /// A bridge, span, overhead cable or pipeline or conveyor in the corridor
+    /// (CHECK) or near the route (INFO) (#1127).
+    /// </summary>
+    public static RouteFindingCode OverheadOnRoute { get; } = new("route_check.overhead_on_route", RouteFindingCategory.Chart, RouteFindingGroup.Check);
+
     /// <summary>The track crosses depth, dredged or drying areas shallower than the safety contour. MUST REVIEW.</summary>
     public static RouteFindingCode CrossesSafetyContour { get; } = new("route_check.crosses_safety_contour", RouteFindingCategory.Depth, RouteFindingGroup.MustReview);
 
@@ -163,7 +181,8 @@ public static class RouteFindingCodes
     public static IReadOnlyList<RouteFindingCode> All { get; } =
     [
         CrossesLand, LandInCorridor, CrossesDrying, DryingInCorridor,
-        DangerInCorridor, DangerNearRoute, CrossesSafetyContour, SafetyContourInCorridor,
+        DangerInCorridor, DangerNearRoute, AidToNavigation, StructureOnTrack, StructureInCorridor, OverheadOnRoute,
+        CrossesSafetyContour, SafetyContourInCorridor,
         SoundingsBelowSafetyDepth, CrossesS102Shoal, S102ShoalInCorridor,
         EntersProhibitedArea, ProhibitedAreaInCorridor, RestrictedArea, CautionArea,
         TrafficArea, AnchorageArea, ProtectedArea, AreaNotInForce,

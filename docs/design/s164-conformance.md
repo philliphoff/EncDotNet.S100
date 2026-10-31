@@ -53,12 +53,12 @@ they drift.
 | 2 | Catalogue and dataset loading and updating | 70 | 5 | 0 | 10 | 34 | 21 | 0 |
 | 3 | Chart display | 61 | 7 | 0 | 31 | 18 | 4 | 1 |
 | 4 | Chart related functions | 47 | 2 | 4 | 0 | 29 | 10 | 2 |
-| 5 | Navigational hazards | 6 | 1 | 1 | 0 | 0 | 4 | 0 |
+| 5 | Navigational hazards | 6 | 2 | 0 | 0 | 0 | 4 | 0 |
 | 6 | Areas with special conditions | 5 | 1 | 2 | 0 | 0 | 2 | 0 |
 | 7 | Safety contour | 6 | 1 | 0 | 0 | 3 | 2 | 0 |
 | 8 | S-57 testing | 0 | — | — | — | — | — | — |
 | 9 | Dual fuel mode and SECOM | 17 | 0 | 0 | 2 | 9 | 6 | 0 |
-| | **Total** | **212** | **17** | **7** | **43** | **93** | **49** | **3** |
+| | **Total** | **212** | **18** | **6** | **43** | **93** | **49** | **3** |
 
 Part 8 has no tests of its own in 2.0.1. It points S-57 testing at the
 existing S-64 datasets, which a later slice covers.
@@ -96,10 +96,11 @@ issue.
 2. **Route checks use their own rules, not the S-101 alert catalogue.** ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)) The
    alert catalogue can now be read, each drawing instruction keeps its
    `AlertReference`, and the route check's chart source portrays the
-   corridor's features and tags each with its alerts, but the checks don't
-   use them yet. They cover wrecks,
-   obstructions and rocks, and eight area kinds plus S-122, so other
-   NavHazard and ProhAre features aren't checked. Affects Parts 5–7 and 9.
+   corridor's features and tags each with its alerts. Every `NavHazard`
+   feature is now reported (aids to navigation, structures, overhead
+   features). The `SafetyContour` features (docks, hulks, pontoons, land
+   points and curves), soundings and `ProhAre` areas still follow the
+   check's own rules: eight area kinds plus S-122. Affects Parts 5–7 and 9.
    Slice 6 confirmed this against the data (§6.3). Dangers are now judged
    against the safety contour, as the catalogue judges them, wherever they
    lie ([#1151](https://github.com/philliphoff/EncDotNet.S100/issues/1151)).
@@ -278,8 +279,10 @@ the S-101 portrayal catalogue, which settles what a plot leaves unclear.
   10 m and 51 m plots.
 - **NavHazard features** (#1127). The plots indicate 29 other feature types
   on the NAVHZ route, such as buoys, beacons, piles, platforms, bridges and
-  overhead cables. The route check covers only wrecks, obstructions and
-  rocks.
+  overhead cables. The route check covered only wrecks, obstructions and
+  rocks. It now runs the portrayal on the corridor's features and reports
+  every one that raises `NavHazard`, as an aid to navigation, structure or
+  overhead finding, and finds all 29.
 - **ProhAre areas** (#1127). Of the 12 kinds the SpecialConditions test
   selects, the area check finds the traffic separation zone, inshore traffic
   zone, restricted area, caution area, area to be avoided, military practice
@@ -530,7 +533,7 @@ viewer's pick panel shows.
 
 | Test | Reference | v2.0.0 data | Status | Evidence | Note |
 |---|---|---|---|---|---|
-| NavigationalHazards | S-98 12.10.6 | NavigationalHazards | Fails | `tests/EncDotNet.S100.S164.Tests/Part5NavigationalHazardsTests.cs` | Route, danger depths and the safety-contour threshold pass ([#1151](https://github.com/philliphoff/EncDotNet.S100/issues/1151)); only wrecks, obstructions and rocks are checked (#1127). |
+| NavigationalHazards | S-98 12.10.6 | NavigationalHazards | Passes | `tests/EncDotNet.S100.S164.Tests/Part5NavigationalHazardsTests.cs` | Route, danger depths and the safety-contour threshold pass ([#1151](https://github.com/philliphoff/EncDotNet.S100/issues/1151)), and every NavHazard feature type the plots indicate is found ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)). Soundings are still judged against the safety depth (#1127, slice 4). |
 | UserSelectionProhibited Areas | — | — | Gap | — | Area kinds are fixed in code. |
 | NavigationalHazardsLS | S-98 12.10.6 | NavigationalHazards, NavigationalHazardsOverview | Passes | `tests/EncDotNet.S100.S164.Tests/Part5NavigationalHazardsTests.cs` | No overview finding inside NAVHZ. The manual's plots are TBD. |
 | NavigationalHazardsMon | — | — | Gap | `src/EncDotNet.S100.Viewer/Services/DynamicSources/OwnShip/SteerableOwnShipPositionProvider.cs` | A simulated own ship exists; no monitoring look-ahead or alarm. |

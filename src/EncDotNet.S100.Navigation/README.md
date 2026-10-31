@@ -298,7 +298,11 @@ leg's limits with one half-width.
 | `route_check.drying_in_corridor` | Check | The same for drying ground |
 | `data.outside_chart_coverage` | Check | The track leaves the `DataCoverage` of every loaded cell |
 | `route_check.danger_in_corridor` | MustReview | A wreck, obstruction or rock inside the limits is shallower than the threshold, or of unknown depth |
-| `route_check.danger_near_route` | Check | The same within `DangerNearbyMeters` (default 0,1 NM) beyond the limits |
+| `route_check.danger_near_route` | Check | The same within the near band (`RouteCheckSettings.NearbyDistance`, default 0,1 NM) beyond the limits |
+| `route_check.aid_to_navigation` | Check | An aid to navigation whose portrayal raises `NavHazard`, inside the limits (Info in the near band) |
+| `route_check.structure_on_track` | MustReview | A structure that raises `NavHazard` within `RouteCheckSettings.TrackClearance` (default 30 m) of the track line |
+| `route_check.structure_in_corridor` | Check | Such a structure elsewhere inside the limits (Info in the near band) |
+| `route_check.overhead_on_route` | Check | A bridge, span, overhead cable or pipeline, or conveyor inside the limits (Info in the near band) |
 | `route_check.crosses_safety_contour` | MustReview | The track crosses depth, dredged or drying areas shallower than the safety contour |
 | `route_check.safety_contour_in_corridor` | Check | Such areas reach inside the limits, but the track doesn't cross them |
 | `route_check.soundings_below_safety_depth` | Check | Soundings inside the limits, in deeper areas, are shallower than the safety depth |
@@ -316,7 +320,9 @@ safety depth. Dangers are judged against the safety contour, as the S-101
 portrayal's `UDWHAZ05` judges them, and, on a leg with a draft, against that
 leg's draft + squat + required UKC on the static charted depth; the meta line
 names the threshold that fired. A danger counts wherever it lies, also inside
-water already shallower than the safety contour.
+water already shallower than the safety contour. Aids to navigation, structures and
+overhead features (`HazardDetails`, classed by `RouteHazardClasses`) come from
+the alerts the chart source tags them with, and need no depth settings.
 Adjacent shallow areas, soundings and S-102 cells merge into one span, so a
 long bank is one finding. `ChartCheck.Dangers.cs` writes out the rules.
 

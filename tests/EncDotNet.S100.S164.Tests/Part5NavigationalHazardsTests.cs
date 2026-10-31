@@ -65,7 +65,7 @@ public sealed class Part5NavigationalHazardsTests
         Assert.Empty(dangers.Intersect(notIndicated));
     }
 
-    [Fact(Skip = "#1127: only wrecks, obstructions and rocks are checked, not every NavHazard the alert catalogue lists.")]
+    [Fact]
     public async Task NavigationalHazards_IndicatesTheAlertCatalogueHazards()
     {
         // Every feature type here draws AlertReference:NavHazard in the S-101

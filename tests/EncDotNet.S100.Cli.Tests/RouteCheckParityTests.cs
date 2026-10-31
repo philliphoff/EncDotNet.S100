@@ -9,6 +9,7 @@ using EncDotNet.S100.Datasets.S421.DataModel;
 using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Quantities;
+using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Testing.Scenarios;
 
 namespace EncDotNet.S100.Cli.Tests;
@@ -38,7 +39,7 @@ public sealed class RouteCheckParityTests : IDisposable
         var inputs = DatasetInputResolver.Resolve(null, [], scenario.Root, null, warnings, out var resolution);
         using var exchangeSet = resolution;
         var transforms = new ProjNetCrsTransformFactory();
-        var catalog = FileDatasetCatalog.Build(inputs, transforms);
+        var catalog = FileDatasetCatalog.Build(inputs, transforms, new MoonSharpLuaEngine());
         var sources = new RouteCheckSourceCache(transforms);
 
         // SDK.

@@ -113,6 +113,28 @@ point on the route nearest to it. A danger near a turn is reported once, on
 the closer leg. Shoal soundings or S-102 cells less than 100 m apart along the
 route make one finding.
 
+## Navigational hazards
+
+Buoys, beacons, piles, platforms, bridges and other features whose S-101
+portrayal raises the `NavHazard` alert are reported by where they lie from the
+track. These checks need no depth settings.
+
+| Code | Group | When |
+|---|---|---|
+| `route_check.aid_to_navigation` | Check or Info | An aid to navigation (a buoy, beacon, daymark, light float or vessel, or AIS aid) inside the cross-track limits; Info within 0.1 NM beyond them. |
+| `route_check.structure_on_track` | Must review | A structure, such as a pile, dolphin, platform or fishing facility, within the track clearance (30 m) of the track line. |
+| `route_check.structure_in_corridor` | Check or Info | A structure elsewhere inside the limits; Info within 0.1 NM beyond them. |
+| `route_check.overhead_on_route` | Check or Info | A bridge, span, overhead cable or pipeline, or conveyor inside the limits; Info within 0.1 NM beyond them. |
+
+The route check runs the S-101 portrayal rules on the features in each leg's
+corridor, at the check's safety contour, and keeps the alerts they raise, so a
+hazard counts exactly when an ECDIS would raise the alert for it. Wrecks,
+obstructions and rocks are the dangers above. A feature type the check
+doesn't know is treated as a structure. The track clearance and the 0.1 NM
+near band are settings (`--track-clearance` and `--nearby` in
+`s100 route check`, `trackClearanceMeters` and `nearbyDistanceMeters` in
+`check_route`). Overhead features aren't judged against an air draft yet.
+
 ## Regulated and protected areas
 
 These checks need no draft. An area's date range or season is judged at the

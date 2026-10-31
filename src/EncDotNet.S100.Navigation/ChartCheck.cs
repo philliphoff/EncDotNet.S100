@@ -104,6 +104,8 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
                 && last.Settings.SafetyContour == settings.SafetyContour
                 && last.Settings.SafetyDepth == settings.SafetyDepth
                 && last.Settings.CorridorOverride == settings.CorridorOverride
+                && last.Settings.TrackClearance == settings.TrackClearance
+                && last.Settings.NearbyDistance == settings.NearbyDistance
                 && PassageLegs.Same(last.Legs, context.Plan.Legs))
             {
                 reuse = (last.Findings, last.Result);
@@ -144,6 +146,7 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
         var findings = new FindingList(run.Formatter);
         var corridors = new List<RouteCheckCorridor>(legs.Count);
         var dangers = new DangerList();
+        var hazards = new HazardList();
         var offset = 0.0;
         for (var i = 0; i < legs.Count; i++)
         {
@@ -157,13 +160,14 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
             var depths = settings is { SafetyContour: { } contour, SafetyDepth: { } safety }
                 ? new LegDepths(contour.TotalMetres, safety.TotalMetres, leg.KeelMetres)
                 : null;
-            var sweep = new LegSweep(run, i, leg, settings, depths, offset, findings, dangers, cancellationToken);
+            var sweep = new LegSweep(run, i, leg, settings, depths, offset, findings, dangers, hazards, cancellationToken);
             sweep.Run();
             corridors.Add(sweep.Corridor);
             offset = sweep.EndDistance;
         }
 
         dangers.AddTo(findings);
+        hazards.AddTo(findings);
 
         return (findings.Sorted(), new ChartCheckResult(corridors));
     }
@@ -205,12 +209,18 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
         private List<RouteChartCell> _cells = [];
         private Dictionary<RouteChartCell, int> _cellIndex = new(ReferenceEqualityComparer.Instance);
         private readonly RouteChartQuery _query;
+        private readonly HazardList _hazards;
+        private readonly double _nearby;
+        private readonly double _trackClearance;
         private IReadOnlyList<int>[] _centreBands = [];
         private IReadOnlyList<int>?[] _portBands = [];
         private IReadOnlyList<int>?[] _starboardBands = [];
 
-        public LegSweep(ChartRun run, int legIndex, PassageLeg leg, RouteCheckSettings settings, LegDepths? depths, double offset, FindingList findings, DangerList dangers, CancellationToken cancellationToken)
+        public LegSweep(ChartRun run, int legIndex, PassageLeg leg, RouteCheckSettings settings, LegDepths? depths, double offset, FindingList findings, DangerList dangers, HazardList hazards, CancellationToken cancellationToken)
         {
+            _hazards = hazards;
+            _nearby = settings.NearbyMeters(run.Options.DangerNearbyMeters);
+            _trackClearance = settings.TrackClearanceMeters;
             _run = run;
             _legIndex = legIndex;
             _leg = leg;
@@ -233,12 +243,12 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
 
         public void Run()
         {
-            // The depth checks look for dangers beyond the limits too, so one
+            // The danger and hazard checks look beyond the limits too, so one
             // wider query serves every check; the corridor checks test
             // geometry against the corridor itself, so the extra features
             // change nothing for them.
             var depths = _depths;
-            var (ring, extent) = depths is null ? (_ring, _extent) : WideRing(Math.Max(0, _run.Options.DangerNearbyMeters));
+            var (ring, extent) = WideRing(_nearby);
             var features = _run.Charts.FeaturesInCorridor(ring, extent, _query);
             _cells = new List<RouteChartCell>(_run.Charts.CellsNear(extent));
             foreach (var cell in _cells)
@@ -272,6 +282,8 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
             {
                 CheckDepths(features, depths);
             }
+
+            CheckHazards(features);
         }
 
         private void CheckCoverage()
@@ -881,11 +893,12 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
             double distance,
             RouteFindingLocation location,
             RouteChartFeature? feature,
-            RouteFindingDetails? details = null)
+            RouteFindingDetails? details = null,
+            RouteFindingGroup? group = null)
         {
             _counts.TryGetValue(code.Value, out var n);
             _counts[code.Value] = n + 1;
-            _findings.Add(formatter.Render(new RouteFinding($"{code.Value}.{n}", code)
+            _findings.Add(formatter.Render(new RouteFinding($"{code.Value}.{n}", code, group)
             {
                 LegIndex = legIndex,
                 Distance = Length.FromMetres(distance),

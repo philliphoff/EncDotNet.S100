@@ -99,8 +99,11 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
             var found = new List<(Feature Feature, RouteChartFeatureKind? Kind)>();
             foreach (var feature in cell.Index.Query(extent))
             {
+                // Soundings come one point at a time (AddSoundings), with the
+                // alerts raised at each point.
                 var kind = Classify(feature);
-                if ((kind is null && !portrays) || !GeometryIntersection.Intersects(feature, ring))
+                if ((kind is null && (!portrays || string.Equals(feature.FeatureType, S101SoundingSampler.SoundingFeatureType, StringComparison.OrdinalIgnoreCase)))
+                    || !GeometryIntersection.Intersects(feature, ring))
                 {
                     continue;
                 }

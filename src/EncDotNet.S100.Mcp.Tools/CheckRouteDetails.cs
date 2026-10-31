@@ -12,7 +12,8 @@ public sealed record CheckRouteDetails(
     [property: Description("A charted danger in or near the corridor (route_check.danger_in_corridor, route_check.danger_near_route).")] CheckRouteDangerDetails? Danger = null,
     [property: Description("Water shallower than a safety setting: depth areas, soundings and S-102 shoals.")] CheckRouteShoalDetails? Shoal = null,
     [property: Description("A regulated area: what it is, what it restricts and when it's in force.")] CheckRouteAreaDetails? Area = null,
-    [property: Description("A finding of the clearance check: a stretch below your UKC setting, of lower confidence or of missing data.")] CheckRouteClearanceDetails? Clearance = null)
+    [property: Description("A finding of the clearance check: a stretch below your UKC setting, of lower confidence or of missing data.")] CheckRouteClearanceDetails? Clearance = null,
+    [property: Description("A navigational hazard other than a danger: an aid to navigation, structure or overhead feature whose S-101 portrayal raises the NavHazard alert (route_check.aid_to_navigation, route_check.structure_on_track, route_check.structure_in_corridor, route_check.overhead_on_route).")] CheckRouteHazardDetails? Hazard = null)
 {
     /// <summary>
     /// Projects a finding's details, or returns <c>null</c> when it has none
@@ -28,13 +29,14 @@ public sealed record CheckRouteDetails(
             d.WaterLevelEffect,
             d.ThresholdKind is { } kind ? Threshold(kind) : null,
             d.Threshold?.TotalMetres,
-            d.Side switch
-            {
-                RouteFindingSide.Port => "port",
-                RouteFindingSide.Starboard => "starboard",
-                _ => "on_track",
-            },
+            Side(d.Side),
             Math.Round(d.Offset.TotalMetres, 1))),
+        HazardDetails h => new(Hazard: new CheckRouteHazardDetails(
+            h.FeatureType,
+            Snake(h.HazardClass.ToString()),
+            Snake(h.Position.ToString()),
+            Side(h.Side),
+            Math.Round(h.Offset.TotalMetres, 1))),
         ShoalDetails s => new(Shoal: new CheckRouteShoalDetails(
             s.LeastDepth.TotalMetres,
             Threshold(s.ThresholdKind),
@@ -72,6 +74,13 @@ public sealed record CheckRouteDetails(
         _ => null,
     };
 
+    private static string Side(RouteFindingSide side) => side switch
+    {
+        RouteFindingSide.Port => "port",
+        RouteFindingSide.Starboard => "starboard",
+        _ => "on_track",
+    };
+
     private static string Threshold(RouteFindingThreshold kind) => kind switch
     {
         RouteFindingThreshold.Keel => "keel",
@@ -92,8 +101,16 @@ public sealed record CheckRouteDangerDetails(
     [property: Description("Its feature type: Wreck, Obstruction or UnderwaterAwashRock.")] string FeatureType,
     [property: Description("Its charted depth (valueOfSounding) in metres, or null when unknown.")] double? DepthMeters,
     [property: Description("Its waterLevelEffect code when its depth is unknown (1 or 2 above water, 4 covers and uncovers, 5 awash), or null.")] int? WaterLevelEffect,
-    [property: Description("The threshold its depth is shallower than: safety_depth or keel (the leg's draft + squat + required UKC); null when its depth is unknown, which is always a danger.")] string? Threshold,
+    [property: Description("The threshold that made it a danger: safety_contour (its depth is no deeper than the safety contour) or keel (shallower than the leg's draft + squat + required UKC); null when its depth is unknown, which is always a danger.")] string? Threshold,
     [property: Description("The threshold in metres, or null.")] double? ThresholdMeters,
+    [property: Description("Which side of the track it's on: on_track, port or starboard.")] string Side,
+    [property: Description("How far it is from the track, metres.")] double OffsetMeters);
+
+/// <summary>A navigational hazard other than a danger behind a finding (#1127).</summary>
+public sealed record CheckRouteHazardDetails(
+    [property: Description("Its S-101 feature type, such as LateralBuoy, Pile or CableOverhead.")] string FeatureType,
+    [property: Description("Its hazard class: aid_to_navigation, structure or overhead.")] string HazardClass,
+    [property: Description("Where it lies: on_track (within the track clearance of the track line), in_corridor (inside the cross-track limits) or near (within the near band beyond them).")] string Position,
     [property: Description("Which side of the track it's on: on_track, port or starboard.")] string Side,
     [property: Description("How far it is from the track, metres.")] double OffsetMeters);
 

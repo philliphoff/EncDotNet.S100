@@ -48,6 +48,62 @@ public enum RouteFindingSide
 }
 
 /// <summary>
+/// What kind of navigational hazard a feature is (#1127): what the mariner
+/// asks about it. A feature type <see cref="RouteHazardClasses"/> doesn't
+/// know is a <see cref="Structure"/>, so no hazard is lost.
+/// </summary>
+public enum RouteHazardClass
+{
+    /// <summary>A wreck, obstruction or rock: is there water over it for the keel?</summary>
+    Danger,
+
+    /// <summary>A buoy, beacon, daymark, light float or vessel, or AIS aid: is it passed on the right side?</summary>
+    AidToNavigation,
+
+    /// <summary>A pile, dolphin, platform, turbine, fishing facility and the like: is it kept clear of?</summary>
+    Structure,
+
+    /// <summary>A bridge, span, overhead cable or pipeline, or conveyor: does the vessel fit under it?</summary>
+    Overhead,
+}
+
+/// <summary>Where something lies from the track (#1127).</summary>
+public enum RouteFindingPosition
+{
+    /// <summary>Within the track clearance (<see cref="RouteCheckSettings.TrackClearance"/>) of the track line.</summary>
+    OnTrack,
+
+    /// <summary>Inside the cross-track limits.</summary>
+    InCorridor,
+
+    /// <summary>Beyond the limits, within the near band (<see cref="RouteCheckSettings.NearbyDistance"/>).</summary>
+    Near,
+}
+
+/// <summary>
+/// A charted navigational hazard other than a danger in or near the corridor:
+/// an aid to navigation, a structure or an overhead feature whose S-101
+/// portrayal raises the <c>NavHazard</c> alert (#1127).
+/// </summary>
+public sealed class HazardDetails : RouteFindingDetails
+{
+    /// <summary>The feature type, such as <c>LateralBuoy</c> or <c>Pile</c>.</summary>
+    public required string FeatureType { get; init; }
+
+    /// <summary>Its hazard class.</summary>
+    public required RouteHazardClass HazardClass { get; init; }
+
+    /// <summary>Where it lies from the track.</summary>
+    public required RouteFindingPosition Position { get; init; }
+
+    /// <summary>Which side of the track it's on.</summary>
+    public RouteFindingSide Side { get; init; }
+
+    /// <summary>How far it is from the track (zero on the track).</summary>
+    public Length Offset { get; init; }
+}
+
+/// <summary>
 /// A charted danger in or near the corridor (<see cref="RouteFindingCodes.DangerInCorridor"/>,
 /// <see cref="RouteFindingCodes.DangerNearRoute"/>).
 /// </summary>
