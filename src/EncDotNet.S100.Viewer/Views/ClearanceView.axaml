@@ -15,7 +15,7 @@
         </Style>
         <Style Selector="TextBlock.readoutValue">
             <Setter Property="FontSize" Value="12" />
-            <Setter Property="FontFamily" Value="{DynamicResource LibraryMonoFont}" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
         </Style>
         <Style Selector="TextBlock.readoutMuted">
             <Setter Property="FontSize" Value="12" />
@@ -25,7 +25,7 @@
         <Style Selector="TextBlock.bandLabel">
             <Setter Property="FontSize" Value="9.5" />
             <Setter Property="Opacity" Value="0.6" />
-            <Setter Property="FontFamily" Value="{DynamicResource LibraryMonoFont}" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
         </Style>
         <Style Selector="Panel.success TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource SuccessColor}" /></Style>
         <Style Selector="Panel.warning TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource WarningColor}" /></Style>
@@ -76,7 +76,7 @@
                            Text="{Binding DepartureText}"
                            FontSize="12"
                            FontWeight="SemiBold"
-                           FontFamily="{DynamicResource LibraryMonoFont}"
+                           FontFamily="{StaticResource MonoFontFamily}"
                            MinWidth="44"
                            VerticalAlignment="Top"
                            Margin="0,2,10,0" />

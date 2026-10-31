@@ -25,10 +25,10 @@
                         <TextBlock Text="{Binding ServiceName}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap" />
                         <TextBlock FontSize="12" TextTrimming="CharacterEllipsis">
                             <Run Text="{Binding ProtocolText}" Foreground="{DynamicResource MutedColor}" /><Run
-                                 Text="{Binding Host}" FontFamily="{DynamicResource LibraryMonoFont}" />
+                                 Text="{Binding Host}" FontFamily="{StaticResource MonoFontFamily}" />
                         </TextBlock>
                         <SelectableTextBlock Text="{Binding Mrn}" IsVisible="{Binding HasMrn}" FontSize="11"
-                                             FontFamily="{DynamicResource LibraryMonoFont}"
+                                             FontFamily="{StaticResource MonoFontFamily}"
                                              Foreground="{DynamicResource MutedColor}" TextWrapping="Wrap" />
                     </StackPanel>
                     <Border Grid.Column="2" Classes="secomTag" VerticalAlignment="Top"

@@ -22,7 +22,6 @@
         <SolidColorBrush x:Key="DepthSuccessSubtleBrush" Color="{DynamicResource SuccessColor}" Opacity="0.14" />
         <SolidColorBrush x:Key="DepthWarningBrush" Color="{DynamicResource WarningColor}" />
         <SolidColorBrush x:Key="DepthSuccessBrush" Color="{DynamicResource SuccessColor}" />
-        <FontFamily x:Key="WarningMonoFont">Cascadia Mono,Consolas,Menlo,monospace</FontFamily>
     </UserControl.Resources>
 
     <UserControl.Styles>
@@ -31,7 +30,7 @@
             <Setter Property="LineHeight" Value="18" />
         </Style>
         <Style Selector="SelectableTextBlock.longText.mono">
-            <Setter Property="FontFamily" Value="{StaticResource WarningMonoFont}" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
             <Setter Property="FontSize" Value="11" />
             <Setter Property="LineHeight" Value="17" />
         </Style>
@@ -70,7 +69,7 @@
                     <SelectableTextBlock Grid.Column="0"
                                          AutomationProperties.AutomationId="Routes.Check.Finding.WarningCard.Label"
                                          Text="{Binding Label}"
-                                         FontFamily="{StaticResource WarningMonoFont}"
+                                         FontFamily="{StaticResource MonoFontFamily}"
                                          FontSize="12.5"
                                          FontWeight="SemiBold"
                                          TextWrapping="Wrap"
@@ -147,7 +146,7 @@
                                IsVisible="{Binding HasIssued}" />
                     <TextBlock Grid.Row="2" Grid.Column="2" FontSize="11" TextWrapping="Wrap" Margin="0,1"
                                IsVisible="{Binding HasIssued}">
-                        <Run Text="{Binding IssuedText}" FontFamily="{StaticResource WarningMonoFont}" FontSize="10.5" />
+                        <Run Text="{Binding IssuedText}" FontFamily="{StaticResource MonoFontFamily}" FontSize="10.5" />
                         <Run Text="{Binding IssuerSuffix}" Foreground="{DynamicResource MutedColor}" />
                     </TextBlock>
                 </Grid>

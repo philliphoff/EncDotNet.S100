@@ -189,7 +189,7 @@
         </Style>
         <Style Selector="TextBox.wpCoords">
             <Setter Property="FontSize" Value="11" />
-            <Setter Property="FontFamily" Value="Menlo,Consolas,Courier New,monospace" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
             <Setter Property="Opacity" Value="0.7" />
         </Style>
         <Style Selector="TextBox.wpCoords:focus-within">
@@ -280,7 +280,7 @@
             <Setter Property="MinHeight" Value="0" />
             <Setter Property="Height" Value="26" />
             <Setter Property="FontSize" Value="12" />
-            <Setter Property="FontFamily" Value="{DynamicResource LibraryMonoFont}" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
         <Style Selector="TextBox.routeField:pointerover /template/ Border#PART_BorderElement">
@@ -672,7 +672,7 @@
                                            Text="{Binding CountLabel}"
                                            IsVisible="{Binding IsMerged}"
                                            FontSize="11"
-                                           FontFamily="{DynamicResource LibraryMonoFont}"
+                                           FontFamily="{StaticResource MonoFontFamily}"
                                            Opacity="0.7"
                                            VerticalAlignment="Center" />
                                 <Border Classes="findingTag"
@@ -1586,7 +1586,7 @@
                                         <Grid ColumnDefinitions="22,*,Auto,Auto" ColumnSpacing="6">
                                             <TextBlock Grid.Column="0"
                                                        Text="{Binding Number}"
-                                                       FontFamily="{DynamicResource LibraryMonoFont}"
+                                                       FontFamily="{StaticResource MonoFontFamily}"
                                                        FontSize="11"
                                                        Opacity="0.7"
                                                        VerticalAlignment="Center" />
@@ -1616,7 +1616,7 @@
                                                     <ic:FluentIcon Classes="toneInk" Icon="Warning" IconVariant="Regular" FontSize="12" IsVisible="{Binding IsBadgeCheck}" />
                                                     <TextBlock Classes="toneInk"
                                                                Text="{Binding BadgeText}"
-                                                               FontFamily="{DynamicResource LibraryMonoFont}"
+                                                               FontFamily="{StaticResource MonoFontFamily}"
                                                                FontSize="11"
                                                                VerticalAlignment="Center" />
                                                 </StackPanel>
@@ -1641,7 +1641,7 @@
                                                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_CheckLowConfidence}" />
                                                 <TextBlock Classes="toneInk"
                                                            Text="{Binding ChipText}"
-                                                           FontFamily="{DynamicResource LibraryMonoFont}"
+                                                           FontFamily="{StaticResource MonoFontFamily}"
                                                            FontSize="11"
                                                            Margin="8,0"
                                                            HorizontalAlignment="Center"
@@ -1718,7 +1718,7 @@
                                                                    IsVisible="{Binding HasEta}"
                                                                    ToolTip.Tip="{Binding EtaTooltip}"
                                                                    FontSize="11"
-                                                                   FontFamily="{DynamicResource LibraryMonoFont}"
+                                                                   FontFamily="{StaticResource MonoFontFamily}"
                                                                    Opacity="0.7"
                                                                    Margin="6,0,0,0"
                                                                    VerticalAlignment="Center" />
@@ -1825,7 +1825,7 @@
                                                             <TextBlock AutomationProperties.AutomationId="Routes.Leg.Overrides"
                                                                        Text="{Binding OverrideText}"
                                                                        FontSize="11"
-                                                                       FontFamily="{DynamicResource LibraryMonoFont}"
+                                                                       FontFamily="{StaticResource MonoFontFamily}"
                                                                        Foreground="{DynamicResource AccentBrush}"
                                                                        VerticalAlignment="Center" />
                                                         </StackPanel>

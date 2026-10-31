@@ -9,7 +9,7 @@
     <!-- Add a trusted authority from a PEM file (#845 F1). -->
     <UserControl.Styles>
         <Style Selector="SelectableTextBlock.mono">
-            <Setter Property="FontFamily" Value="Cascadia Mono,Consolas,Menlo,monospace" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
         </Style>
     </UserControl.Styles>
     <Grid RowDefinitions="Auto,*,Auto" Margin="18,14,18,14" RowSpacing="12">
@@ -19,7 +19,7 @@
         </StackPanel>
 
         <StackPanel Grid.Row="1" Spacing="12">
-            <TextBlock Text="{Binding FileName}" FontFamily="Cascadia Mono,Consolas,Menlo,monospace" FontSize="12.5" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding FileName}" FontFamily="{StaticResource MonoFontFamily}" FontSize="12.5" FontWeight="SemiBold" />
             <Border Background="{DynamicResource MutedBackgroundColor}" BorderBrush="{DynamicResource BorderColor}"
                     BorderThickness="1" CornerRadius="6" Padding="12,11" IsVisible="{Binding HasCertificate}">
                 <ItemsControl ItemsSource="{Binding Fields}">

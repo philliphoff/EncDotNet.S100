@@ -79,7 +79,6 @@
     </UserControl.Styles>
 
     <UserControl.Resources>
-        <FontFamily x:Key="ScopeMonoFont">Cascadia Mono,Consolas,Menlo,monospace</FontFamily>
         <!-- The check box stretches over the label; the detail sits right-aligned beside it.
              A collection-manifest group shows its first path (and "+N") instead, and "Not found"
              when a path is missing. -->
@@ -99,7 +98,7 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
                             IsVisible="{Binding HasPaths}" ToolTip.Tip="{Binding PathsTooltip}">
                     <TextBlock Text="{Binding PathText}" Classes="muted" FontSize="12"
-                               FontFamily="{StaticResource ScopeMonoFont}" MaxWidth="220"
+                               FontFamily="{StaticResource MonoFontFamily}" MaxWidth="220"
                                TextTrimming="{x:Static TextTrimming.PrefixCharacterEllipsis}" VerticalAlignment="Center" />
                     <TextBlock Text="{Binding MorePathsText}" Classes="muted" FontSize="12"
                                IsVisible="{Binding HasMorePaths}" VerticalAlignment="Center" />

@@ -430,6 +430,7 @@ internal sealed class LogRowViewModel : ViewModelBase
         _entry = entry;
         AreaText = Strings.LogAreaName(entry.Area);
         LevelText = Strings.LogLevelName(entry.Level);
+        LevelShortText = Strings.LogLevelShortName(entry.Level);
         TimeText = entry.Timestamp.ToLocalTime().ToString("HH:mm:ss.fff", CultureInfo.CurrentCulture);
         var newline = entry.Message.IndexOfAny(['\r', '\n']);
         Summary = newline < 0 ? entry.Message : entry.Message[..newline] + " …";
@@ -448,8 +449,11 @@ internal sealed class LogRowViewModel : ViewModelBase
     /// <summary>The local time of the entry's first message.</summary>
     public string TimeText { get; }
 
-    /// <summary>The localized level name.</summary>
+    /// <summary>The localized level name, for the details pane and the accessible name.</summary>
     public string LevelText { get; }
+
+    /// <summary>The short level label for the row's narrow level column ("Warn", "Crit").</summary>
+    public string LevelShortText { get; }
 
     /// <summary>The localized area name.</summary>
     public string AreaText { get; }
@@ -465,6 +469,22 @@ internal sealed class LogRowViewModel : ViewModelBase
 
     /// <summary>The exception text, or <see langword="null"/>.</summary>
     public string? Exception => _entry.Exception;
+
+    /// <summary>The full message with the home directory shown as <c>~</c>, for the details pane.</summary>
+    public string DetailsMessage => HomePathRedactor.Redact(_entry.Message);
+
+    /// <summary>
+    /// The exception's first line (type and message) with the home directory
+    /// shown as <c>~</c>, for the details pane, or empty.
+    /// </summary>
+    public string ExceptionHeadline => SplitException().Headline;
+
+    /// <summary>
+    /// The rest of the exception (the stack frames and any inner exceptions),
+    /// starting with its line break, with the home directory shown as <c>~</c>,
+    /// for the details pane, or empty.
+    /// </summary>
+    public string ExceptionFrames => SplitException().Frames;
 
     /// <summary>Whether the entry carries an exception.</summary>
     public bool HasException => _entry.Exception is not null;
@@ -498,11 +518,23 @@ internal sealed class LogRowViewModel : ViewModelBase
     /// <summary>Whether the entry is Debug or Trace.</summary>
     public bool IsDebug => _entry.Level <= LogLevel.Debug;
 
+    /// <summary>Whether the entry is Information, the baseline level the row mutes.</summary>
+    public bool IsInformation => _entry.Level == LogLevel.Information;
+
     /// <summary>The accessible name of the row: level, area and message.</summary>
     public string AccessibleName => string.Format(CultureInfo.CurrentCulture, Strings.Logs_RowNameFormat, LevelText, AreaText, Summary);
 
     /// <summary>Whether the row passes the panel's filter.</summary>
     internal bool IsShown { get; set; }
+
+    private (string Headline, string Frames) SplitException()
+    {
+        if (_entry.Exception is not { } exception)
+            return (string.Empty, string.Empty);
+        var text = HomePathRedactor.Redact(exception);
+        var newline = text.IndexOfAny(['\r', '\n']);
+        return newline < 0 ? (text, string.Empty) : (text[..newline], text[newline..]);
+    }
 
     /// <summary>Takes a newer copy of the same entry (a repeat was collapsed into it).</summary>
     internal void Update(LogEntry entry)
