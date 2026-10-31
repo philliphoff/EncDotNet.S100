@@ -161,7 +161,7 @@
                                        Text="{Binding Code}"
                                        MaxWidth="120"
                                        TextTrimming="CharacterEllipsis"
-                                       FontFamily="Menlo, Consolas, monospace"
+                                       FontFamily="{StaticResource MonoFontFamily}"
                                        FontSize="12"
                                        FontWeight="SemiBold"
                                        VerticalAlignment="Center" />
@@ -195,7 +195,7 @@
                             <TextBlock Classes="LaneTime"
                                        Classes.warning="{Binding IsHidden}"
                                        Text="{Binding LayerTime}"
-                                       FontFamily="Menlo, Consolas, monospace"
+                                       FontFamily="{StaticResource MonoFontFamily}"
                                        FontSize="10.5"
                                        TextTrimming="CharacterEllipsis" />
                         </Button>
@@ -306,7 +306,7 @@
                                Margin="10,0,0,0"
                                FontSize="13"
                                FontWeight="SemiBold"
-                               FontFamily="Menlo, Consolas, monospace"
+                               FontFamily="{StaticResource MonoFontFamily}"
                                VerticalAlignment="Center" />
                     <TextBlock Grid.Column="2"
                                Text="{Binding OffsetText}"
@@ -581,7 +581,7 @@
                                                     <TextBlock Text="{x:Static loc:Strings.Timeline_PassageLane}" FontSize="12" FontWeight="SemiBold" />
                                                     <TextBlock AutomationProperties.AutomationId="Timeline.PassageLane.Times"
                                                                Text="{Binding PassageSub}"
-                                                               FontFamily="Menlo, Consolas, monospace"
+                                                               FontFamily="{StaticResource MonoFontFamily}"
                                                                FontSize="10.5"
                                                                Opacity="0.65"
                                                                TextTrimming="CharacterEllipsis" />
@@ -609,7 +609,7 @@
                                                     <TextBlock Text="{x:Static loc:Strings.Timeline_WindowLane}" FontSize="12" FontWeight="SemiBold" />
                                                     <TextBlock AutomationProperties.AutomationId="Timeline.WindowLane.Windows"
                                                                Text="{Binding WindowSub}"
-                                                               FontFamily="Menlo, Consolas, monospace"
+                                                               FontFamily="{StaticResource MonoFontFamily}"
                                                                FontSize="10.5"
                                                                Opacity="0.65"
                                                                TextTrimming="CharacterEllipsis" />

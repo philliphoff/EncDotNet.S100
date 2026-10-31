@@ -262,7 +262,7 @@ public sealed class LogsPanelTests
 
         Assert.Same(panel.Entries[1], panel.SelectedEntry);
         var exception = host.Find<SelectableTextBlock>("Logs.Details.Exception");
-        Assert.Contains("System.InvalidOperationException: boom", exception.Text);
+        Assert.Contains("System.InvalidOperationException: boom", string.Concat(exception.Inlines!.OfType<Avalonia.Controls.Documents.Run>().Select(r => r.Text)));
 
         host.Click(host.Find<Button>("Logs.CloseDetails"));
         Assert.Null(panel.SelectedEntry);

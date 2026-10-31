@@ -25,18 +25,33 @@
             <Setter Property="Opacity" Value="0.7" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
+        <!--
+            Rows read as a log (#1171): every cell in the shared monospace
+            face at regular weight, so columns, numbers and repeated message
+            shapes line up. The message is full ink; the time, the area and
+            Info's level are muted, so the eye lands on the message.
+        -->
         <Style Selector="TextBlock.logsCell">
-            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
+            <Setter Property="FontSize" Value="{StaticResource MonoFontSize}" />
+            <Setter Property="FontWeight" Value="Normal" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         </Style>
+        <Style Selector="TextBlock.logsCell.muted, TextBlock.logsLevel.info">
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+        </Style>
         <Style Selector="TextBlock.logsLevel.warning">
             <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
-            <Setter Property="FontWeight" Value="SemiBold" />
         </Style>
         <Style Selector="TextBlock.logsLevel.error">
             <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
-            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <!-- Details pane text: the message and the exception in the row's
+             monospace face; labels stay in the UI font. -->
+        <Style Selector="SelectableTextBlock.logsDetailsMono">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
+            <Setter Property="FontSize" Value="{StaticResource MonoFontSize}" />
         </Style>
         <Style Selector="TextBlock.logsCell.debug">
             <Setter Property="Opacity" Value="0.65" />
@@ -146,7 +161,7 @@
 
         <!-- Column headers; widths match the row template. -->
         <Grid Grid.Row="1"
-              ColumnDefinitions="96,64,92,*"
+              ColumnDefinitions="96,44,92,*"
               Margin="16,0,8,2">
             <TextBlock Grid.Column="0" Classes="logsHeader" Text="{x:Static loc:Strings.Logs_Column_Time}" />
             <TextBlock Grid.Column="1" Classes="logsHeader" Text="{x:Static loc:Strings.Logs_Column_Level}" />
@@ -182,21 +197,20 @@
                     </ListBox.Styles>
                     <ListBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:LogRowViewModel">
-                            <Grid ColumnDefinitions="96,64,92,*" Background="Transparent">
+                            <Grid ColumnDefinitions="96,44,92,*" Background="Transparent" TextElement.FontWeight="Normal">
                                 <TextBlock Grid.Column="0"
-                                           Classes="logsCell"
+                                           Classes="logsCell muted"
                                            Classes.debug="{Binding IsDebug}"
-                                           FontFamily="Menlo,Consolas,Courier New,monospace"
-                                           FontSize="11"
                                            Text="{Binding TimeText}" />
                                 <TextBlock Grid.Column="1"
                                            Classes="logsCell logsLevel"
                                            Classes.debug="{Binding IsDebug}"
+                                           Classes.info="{Binding IsInformation}"
                                            Classes.warning="{Binding IsWarning}"
                                            Classes.error="{Binding IsError}"
-                                           Text="{Binding LevelText}" />
+                                           Text="{Binding LevelShortText}" />
                                 <TextBlock Grid.Column="2"
-                                           Classes="logsCell"
+                                           Classes="logsCell muted"
                                            Classes.debug="{Binding IsDebug}"
                                            Text="{Binding AreaText}"
                                            ToolTip.Tip="{Binding Category}" />
@@ -263,27 +277,48 @@
                                   VerticalScrollBarVisibility="Auto">
                         <StackPanel Spacing="6" Margin="0,4,10,0">
                             <SelectableTextBlock AutomationProperties.AutomationId="Logs.Details.Message"
-                                                 Text="{Binding Message}"
-                                                 TextWrapping="Wrap"
-                                                 FontSize="11.5" />
+                                                 Classes="logsDetailsMono"
+                                                 Text="{Binding DetailsMessage}"
+                                                 TextWrapping="Wrap" />
                             <TextBlock Text="{Binding RepeatedText}"
                                        IsVisible="{Binding IsRepeated}"
                                        FontSize="11"
                                        Opacity="0.75" />
-                            <StackPanel Spacing="1">
-                                <TextBlock Classes="logsHeader" Text="{x:Static loc:Strings.Logs_Details_Category}" />
-                                <SelectableTextBlock Text="{Binding Category}"
-                                                     TextWrapping="Wrap"
-                                                     FontSize="11" />
-                            </StackPanel>
-                            <StackPanel Spacing="1" IsVisible="{Binding HasException}">
+                            <!--
+                                The exception doesn't wrap, so a stack frame never
+                                breaks mid-identifier: it scrolls sideways in its
+                                own code box. The first line (type and message) is
+                                full ink, the frames muted (#1171).
+                            -->
+                            <StackPanel Spacing="2" IsVisible="{Binding HasException}">
                                 <TextBlock Classes="logsHeader" Text="{x:Static loc:Strings.Logs_Details_Exception}" />
-                                <SelectableTextBlock AutomationProperties.AutomationId="Logs.Details.Exception"
-                                                     Text="{Binding Exception}"
-                                                     TextWrapping="Wrap"
-                                                     FontSize="10.5"
-                                                     FontFamily="Menlo,Consolas,Courier New,monospace" />
+                                <Border Background="{DynamicResource MutedBackgroundColor}"
+                                        CornerRadius="4"
+                                        Padding="8,6,8,4">
+                                    <ScrollViewer AutomationProperties.AutomationId="Logs.Details.ExceptionScroll"
+                                                  HorizontalScrollBarVisibility="Auto"
+                                                  VerticalScrollBarVisibility="Disabled">
+                                        <SelectableTextBlock AutomationProperties.AutomationId="Logs.Details.Exception"
+                                                             Classes="logsDetailsMono"
+                                                             TextWrapping="NoWrap"
+                                                             Margin="0,0,0,8">
+                                            <Run Text="{Binding ExceptionHeadline}" /><Run
+                                                 Text="{Binding ExceptionFrames}"
+                                                 Foreground="{DynamicResource MutedColor}" />
+                                        </SelectableTextBlock>
+                                    </ScrollViewer>
+                                </Border>
                             </StackPanel>
+                            <!-- The logger category, as a quiet key/value line. -->
+                            <SelectableTextBlock AutomationProperties.AutomationId="Logs.Details.Category"
+                                                 FontSize="11"
+                                                 Foreground="{DynamicResource MutedColor}"
+                                                 TextWrapping="Wrap">
+                                <Run Text="{x:Static loc:Strings.Logs_Details_Category}" /><Run
+                                     Text="  " /><Run
+                                     Text="{Binding Category}"
+                                     FontFamily="{StaticResource MonoFontFamily}" />
+                            </SelectableTextBlock>
                         </StackPanel>
                     </ScrollViewer>
                 </DockPanel>

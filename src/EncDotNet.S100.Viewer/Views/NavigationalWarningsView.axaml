@@ -249,7 +249,7 @@
                     </StackPanel>
                 </Border>
                 <TextBlock Text="{Binding ViewTimeText}"
-                           FontFamily="Menlo, Consolas, monospace"
+                           FontFamily="{StaticResource MonoFontFamily}"
                            FontSize="11"
                            VerticalAlignment="Center" />
             </StackPanel>
@@ -447,7 +447,7 @@
                                 <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
                                     <StackPanel Orientation="Horizontal" Spacing="7">
                                         <TextBlock Text="{Binding Number}" Classes="accentListTitle"
-                                                   FontFamily="Menlo, Consolas, monospace"
+                                                   FontFamily="{StaticResource MonoFontFamily}"
                                                    FontSize="11.5" FontWeight="SemiBold" />
                                         <TextBlock Text="{Binding TypeText}" FontSize="12" FontWeight="Medium"
                                                    TextTrimming="CharacterEllipsis" />

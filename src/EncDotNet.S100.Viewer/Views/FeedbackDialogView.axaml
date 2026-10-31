@@ -95,7 +95,7 @@
                                          Margin="2,8,0,0"
                                          FontSize="11"
                                          TextWrapping="Wrap"
-                                         FontFamily="Menlo,Consolas,Courier New,monospace" />
+                                         FontFamily="{StaticResource MonoFontFamily}" />
                     <!-- #1080: the recent logs, written to logs.txt in the bundle
                          and left out of the issue text. -->
                     <StackPanel Spacing="4"
@@ -113,7 +113,7 @@
                                              AutomationProperties.AutomationId="Feedback.RawLogs"
                                              FontSize="11"
                                              TextWrapping="Wrap"
-                                             FontFamily="Menlo,Consolas,Courier New,monospace" />
+                                             FontFamily="{StaticResource MonoFontFamily}" />
                     </StackPanel>
                 </StackPanel>
             </StackPanel>

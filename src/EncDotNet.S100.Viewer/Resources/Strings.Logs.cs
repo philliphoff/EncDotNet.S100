@@ -56,6 +56,14 @@ internal static partial class Strings
         ResourceManager.GetString("LogLevel_" + level, Culture) ?? level.ToString();
 
     /// <summary>
+    /// The short label of a log level for the Logs panel's narrow level
+    /// column (<c>LogLevelShort_*</c>, #1171), falling back to
+    /// <see cref="LogLevelName"/>.
+    /// </summary>
+    public static string LogLevelShortName(LogLevel level) =>
+        ResourceManager.GetString("LogLevelShort_" + level, Culture) ?? LogLevelName(level);
+
+    /// <summary>
     /// The localized name of a Logs panel area id (see
     /// <c>Diagnostics.LogAreas</c>), or the id itself when it has none (a
     /// category no rule matched shows its type name).

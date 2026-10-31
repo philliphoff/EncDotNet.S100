@@ -705,6 +705,30 @@
     <value>Critical</value>
     <comment>Log level name in the Logs panel (#1080).</comment>
   </data>
+  <data name="LogLevelShort_Trace" xml:space="preserve">
+    <value>Trace</value>
+    <comment>Short log level label in the Logs panel's 44 px level column; at most five characters (#1171).</comment>
+  </data>
+  <data name="LogLevelShort_Debug" xml:space="preserve">
+    <value>Debug</value>
+    <comment>Short log level label in the Logs panel's 44 px level column; at most five characters (#1171).</comment>
+  </data>
+  <data name="LogLevelShort_Information" xml:space="preserve">
+    <value>Info</value>
+    <comment>Short log level label in the Logs panel's 44 px level column; at most five characters (#1171).</comment>
+  </data>
+  <data name="LogLevelShort_Warning" xml:space="preserve">
+    <value>Warn</value>
+    <comment>Short log level label in the Logs panel's 44 px level column; at most five characters (#1171).</comment>
+  </data>
+  <data name="LogLevelShort_Error" xml:space="preserve">
+    <value>Error</value>
+    <comment>Short log level label in the Logs panel's 44 px level column; at most five characters (#1171).</comment>
+  </data>
+  <data name="LogLevelShort_Critical" xml:space="preserve">
+    <value>Crit</value>
+    <comment>Short log level label in the Logs panel's 44 px level column; at most five characters (#1171).</comment>
+  </data>
   <data name="LogArea_App" xml:space="preserve">
     <value>App</value>
     <comment>Logs panel area: the viewer itself (#1080).</comment>
