@@ -1,13 +1,19 @@
 using Avalonia;
 using Avalonia.Input;
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Viewer.Services;
 using Mapsui.Layers;
+using Mapsui.Projections;
 
 namespace EncDotNet.S100.Viewer.Tools;
 
 /// <summary>
-/// Distance &amp; bearing measure tool. Click adds waypoints; double-click,
-/// Enter, or right-click finalises; Backspace removes the last waypoint;
-/// Esc (handled by the controller) exits the tool.
+/// Distance &amp; bearing measure tool. Click adds waypoints; clicking a
+/// leg's label selects that leg for the card (D9); double-click, Enter, or
+/// right-click finalises; Backspace removes the last waypoint; Esc (handled
+/// by the controller) exits the tool. The path lives in a shared
+/// <see cref="MeasureSession"/> so the measure card and the MCP tools see
+/// the same measurement.
 /// </summary>
 /// <remarks>
 /// Drag detection: a mouse-down followed by a mouse-up within
@@ -22,7 +28,13 @@ internal sealed class MeasureTool : IMapTool
     /// <summary>Click vs. drag threshold (DIPs) for distinguishing pan from waypoint placement.</summary>
     private const double DragThresholdPx = 3.0;
 
-    private readonly MeasurePathState _state = new();
+    /// <summary>Extra room, in DIPs, around a leg label that still counts as clicking it.</summary>
+    private const double LabelHitSlopPx = 4.0;
+
+    /// <summary>Approximate advance of one label character, in DIPs (12 px monospace).</summary>
+    private const double LabelCharWidthPx = 7.3;
+
+    private readonly MeasureSession _session;
     private readonly IMeasureOverlayAppearanceProvider _appearance;
     private MapToolContext? _context;
     private MemoryLayer? _layer;
@@ -36,14 +48,16 @@ internal sealed class MeasureTool : IMapTool
     /// active so accent/theme updates are reflected live, and
     /// unsubscribes on deactivation.
     /// </summary>
-    public MeasureTool(IMeasureOverlayAppearanceProvider appearance)
+    public MeasureTool(IMeasureOverlayAppearanceProvider appearance, MeasureSession session)
     {
         ArgumentNullException.ThrowIfNull(appearance);
+        ArgumentNullException.ThrowIfNull(session);
         _appearance = appearance;
+        _session = session;
     }
 
     /// <summary>Test-only ctor that uses a stub appearance provider returning the default appearance.</summary>
-    internal MeasureTool() : this(new StaticAppearanceProvider(MeasureOverlayAppearance.Default)) { }
+    internal MeasureTool() : this(new StaticAppearanceProvider(MeasureOverlayAppearance.Default), new MeasureSession()) { }
 
     private sealed class StaticAppearanceProvider : IMeasureOverlayAppearanceProvider
     {
@@ -53,7 +67,10 @@ internal sealed class MeasureTool : IMapTool
     }
 
     /// <summary>Exposed for tests.</summary>
-    internal MeasurePathState State => _state;
+    internal MeasurePathState State => _session.State;
+
+    /// <summary>The shared measure state.</summary>
+    internal MeasureSession Session => _session;
 
     public string Id => ToolId;
 
@@ -69,24 +86,49 @@ internal sealed class MeasureTool : IMapTool
         _layer = MeasureOverlayLayer.Create();
         context.AddLayer(_layer);
         _appearance.Changed += OnAppearanceChanged;
-        PushSummary();
+        _session.Changed += OnSessionChanged;
+        _session.PositionCommitted += OnPositionCommitted;
+        _session.IsActive = true;
+        Refresh();
     }
 
     public void OnDeactivated()
     {
         _appearance.Changed -= OnAppearanceChanged;
+        _session.Changed -= OnSessionChanged;
+        _session.PositionCommitted -= OnPositionCommitted;
         if (_context is not null && _layer is not null)
             _context.RemoveLayer(_layer);
         _layer = null;
         _context?.SetStatusSummary(null);
         _context = null;
-        _state.Discard();
         _pressPosition = null;
+        _session.IsActive = false;
+        State.Discard();
+        _session.NotifyChanged();
     }
 
     private void OnAppearanceChanged(object? sender, EventArgs e)
     {
-        if (_layer is not null) Refresh();
+        if (_layer is not null) Redraw();
+    }
+
+    private void OnSessionChanged(object? sender, EventArgs e) => Redraw();
+
+    /// <summary>Pans, without zooming, to a typed position that's off screen (D7).</summary>
+    private void OnPositionCommitted(object? sender, GeoPosition position)
+    {
+        if (_context is null)
+            return;
+        var bounds = _context.MapControl.Bounds;
+        if (_context.LatLonToScreen(position) is { } screen
+            && screen.X >= 0 && screen.Y >= 0 && screen.X <= bounds.Width && screen.Y <= bounds.Height)
+        {
+            return;
+        }
+
+        var (x, y) = SphericalMercator.FromLonLat(position.Longitude, position.Latitude);
+        _context.MapControl.Map.Navigator.CenterOn(x, y);
     }
 
     public bool OnPointerPressed(PointerPressedEventArgs e)
@@ -97,7 +139,7 @@ internal sealed class MeasureTool : IMapTool
         if (props.IsRightButtonPressed)
         {
             // Right-click finalises the current path.
-            if (_state.Finalise())
+            if (State.Finalise())
             {
                 Refresh();
                 return true;
@@ -123,12 +165,12 @@ internal sealed class MeasureTool : IMapTool
         var bounds = _context.MapControl.Bounds;
         if (pos.X < 0 || pos.Y < 0 || pos.X > bounds.Width || pos.Y > bounds.Height)
         {
-            if (_state.Hover(null)) Refresh();
+            if (State.Hover(null)) Refresh();
             return false;
         }
 
         var world = _context.ScreenToLatLon(pos);
-        if (_state.Hover(world)) Refresh();
+        if (State.Hover(world)) Refresh();
         return false; // never suppress — let the lat/long readout update
     }
 
@@ -146,10 +188,17 @@ internal sealed class MeasureTool : IMapTool
         if ((dx * dx + dy * dy) > DragThresholdPx * DragThresholdPx)
             return false; // drag → let Mapsui handle the pan
 
+        if (HitLegLabel(release) is { } legIndex)
+        {
+            if (State.SelectLeg(legIndex))
+                Refresh();
+            return true;
+        }
+
         var world = _context.ScreenToLatLon(release);
         if (world is not { } w) return false;
 
-        if (_state.Click(w.Latitude, w.Longitude))
+        if (State.Click(w.Latitude, w.Longitude))
             Refresh();
         return true;
     }
@@ -160,12 +209,12 @@ internal sealed class MeasureTool : IMapTool
         // already placed a waypoint via OnPointerReleased; the second tap
         // would have placed a duplicate — drop the duplicate and finalise
         // instead.
-        if (_state.Phase == MeasurePathState.MeasurePhase.Drawing && _state.Waypoints.Count >= 2)
+        if (State.Phase == MeasurePathState.MeasurePhase.Drawing && State.Waypoints.Count >= 2)
         {
-            _state.Backstep();
+            State.Backstep();
         }
 
-        if (_state.Finalise())
+        if (State.Finalise())
         {
             Refresh();
         }
@@ -176,25 +225,51 @@ internal sealed class MeasureTool : IMapTool
     {
         bool changed = action switch
         {
-            MapToolAction.Commit => _state.Finalise(),
-            MapToolAction.Backstep => _state.Backstep(),
-            MapToolAction.Discard => _state.Discard(),
+            MapToolAction.Commit => State.Finalise(),
+            MapToolAction.Backstep => State.Backstep(),
+            MapToolAction.Discard => State.Discard(),
             _ => false,
         };
         if (changed) Refresh();
         return changed;
     }
 
-    private void Refresh()
+    /// <summary>
+    /// The one-based index of the placed leg whose map label is under
+    /// <paramref name="screen"/>, or <c>null</c>. The pending rubber-band leg
+    /// isn't selectable: it follows the cursor.
+    /// </summary>
+    private int? HitLegLabel(Point screen)
     {
-        if (_layer is null || _context is null) return;
-        MeasureOverlayLayer.Update(_layer, _state, _appearance.Current);
-        PushSummary();
-        _context.RefreshGraphics();
+        if (_context is null)
+            return null;
+        var legs = State.ComputeLegs();
+        if (legs.Count < 2)
+            return null;
+
+        foreach (var leg in legs)
+        {
+            if (leg.IsRubberBand || _context.LatLonToScreen(MeasureOverlayLayer.LabelAnchor(leg)) is not { } anchor)
+                continue;
+            var text = MeasureOverlayLayer.LegLabelText(leg, _session.Unit);
+            var halfWidth = text.Length * LabelCharWidthPx / 2.0 + LabelHitSlopPx;
+            var halfHeight = MeasureOverlayLayer.LabelFontSize / 2.0 + LabelHitSlopPx;
+            var centreY = anchor.Y + MeasureOverlayLayer.LabelOffsetY;
+            if (Math.Abs(screen.X - anchor.X) <= halfWidth && Math.Abs(screen.Y - centreY) <= halfHeight)
+                return leg.Index;
+        }
+
+        return null;
     }
 
-    private void PushSummary()
+    /// <summary>Tells everyone sharing the session that the path changed.</summary>
+    private void Refresh() => _session.NotifyChanged();
+
+    private void Redraw()
     {
-        _context?.SetStatusSummary(_state.FormatSummary());
+        if (_layer is null || _context is null) return;
+        MeasureOverlayLayer.Update(_layer, State, _appearance.Current, _session.Unit);
+        _context.SetStatusSummary(State.FormatSummary(_session.Unit));
+        _context.RefreshGraphics();
     }
 }

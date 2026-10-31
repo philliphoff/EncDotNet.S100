@@ -176,6 +176,36 @@ public class MainViewModelPickModeTests
     }
 
     [Fact]
+    public void PromoteMeasurement_KeepsGreatCircleGeometry()
+    {
+        var vm = CreateViewModel();
+        vm.ToggleMeasureModeCommand.Execute(null);
+        vm.MeasureSession.SetGeometry(EncDotNet.S100.Navigation.LegGeometry.GreatCircle);
+        vm.MeasureSession.State.SetWaypoints([new(0, 0), new(10, 10), new(20, 0)]);
+        vm.MeasureSession.NotifyChanged();
+        Assert.True(vm.PromoteMeasurementToRouteCommand.CanExecute(null));
+
+        vm.PromoteMeasurementToRouteCommand.Execute(null);
+
+        var route = vm.RoutesService.Routes.Routes[^1];
+        Assert.Equal(2, route.Legs.Count);
+        Assert.All(route.Legs, l => Assert.Equal(Routing.RouteLegGeometryType.Geodesic, l.GeometryType));
+        Assert.True(vm.IsRouteEditModeActive);
+    }
+
+    [Fact]
+    public void MeasureCard_Close_AndActivationRequest_DriveTheTool()
+    {
+        var vm = CreateViewModel();
+
+        vm.MeasureSession.RequestActivation();
+        Assert.True(vm.IsMeasureModeActive);
+
+        vm.MeasureCard.CloseCommand.Execute(null);
+        Assert.False(vm.IsMeasureModeActive);
+    }
+
+    [Fact]
     public void IsToolSummaryVisible_TrueWhileRouteEditing()
     {
         var vm = CreateViewModel();

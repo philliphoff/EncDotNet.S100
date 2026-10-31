@@ -1,5 +1,6 @@
 using System.Globalization;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.Geodesy;
 using Mapsui;
 using Mapsui.Layers;
@@ -65,7 +66,7 @@ internal static class MeasureOverlayLayer
     /// invalidating the map (e.g. via
     /// <see cref="MapToolContext.RefreshGraphics"/>).
     /// </summary>
-    public static void Update(MemoryLayer layer, MeasurePathState state, MeasureOverlayAppearance appearance)
+    public static void Update(MemoryLayer layer, MeasurePathState state, MeasureOverlayAppearance appearance, DistanceUnit unit = DistanceUnit.NauticalMiles)
     {
         var accent = appearance.Accent;
         var borderColor = new MapsuiColor(accent.R, accent.G, accent.B);
@@ -77,38 +78,35 @@ internal static class MeasureOverlayLayer
             // text stays legible over coloured basemap features.
             : (new MapsuiColor(248, 248, 250, 235), new MapsuiColor(20, 20, 24), new MapsuiColor(255, 255, 255, 200));
         var features = new List<IFeature>();
+        var legs = state.ComputeLegs();
 
-        // Build the polyline(s) through finalised + rubber-band waypoints,
-        // splitting at the antimeridian so e.g. Tokyo→Honolulu doesn't
-        // smear across the whole world.
-        var allPoints = new List<GeoPosition>(state.Waypoints);
-        if (state.Phase == MeasurePathState.MeasurePhase.Drawing && state.RubberBand is { } rb)
-            allPoints.Add(rb);
-
-        if (allPoints.Count >= 2)
+        // Solid polyline through the placed legs, then the dashed rubber-band
+        // tail. Great-circle legs are densified so they draw as curves (D2,
+        // D18); each line is split at the antimeridian so e.g.
+        // Tokyo→Honolulu doesn't smear across the whole world.
+        var solidPoints = new List<GeoPosition>();
+        foreach (var leg in legs)
         {
-            var lastIsRubberBand = state.Phase == MeasurePathState.MeasurePhase.Drawing && state.RubberBand is not null;
-
-            // Solid polyline through all placed waypoints (i.e. up to but
-            // not including the rubber-band tail when one is present).
-            var solidPoints = lastIsRubberBand
-                ? allPoints.GetRange(0, allPoints.Count - 1)
-                : allPoints;
-            if (solidPoints.Count >= 2)
-                AddPolyline(features, solidPoints, dashed: false, borderColor);
-
-            if (lastIsRubberBand)
+            if (leg.IsRubberBand)
             {
-                var tailStart = allPoints[^2];
-                var tailEnd = allPoints[^1];
-                AddPolyline(features, new[] { tailStart, tailEnd }, dashed: true, borderColor);
+                AddPolyline(features, LegPath(leg), dashed: true, borderColor);
+                continue;
             }
+
+            var path = LegPath(leg);
+            solidPoints.AddRange(solidPoints.Count == 0 ? path : path.Skip(1));
         }
 
-        // Per-segment midpoint label.
-        foreach (var leg in state.ComputeLegs())
+        if (solidPoints.Count >= 2)
+            AddPolyline(features, solidPoints, dashed: false, borderColor);
+
+        // Per-segment label at the leg's midpoint; the card's leg is bold
+        // when the path has more than one (D9).
+        var current = state.CurrentLeg?.Index;
+        foreach (var leg in legs)
         {
-            AddLegLabel(features, leg, labelBg, labelFg, labelHalo);
+            var selected = legs.Count > 1 && leg.Index == current;
+            AddLegLabel(features, leg, LegLabelText(leg, unit), selected, labelBg, labelFg, labelHalo);
         }
 
         // Waypoint markers with index numbers.
@@ -129,6 +127,47 @@ internal static class MeasureOverlayLayer
         layer.DataHasChanged();
     }
 
+    /// <summary>
+    /// The map label of a leg in the primary unit only (D5, D6):
+    /// <c>17.90 NM · 295.7°</c>.
+    /// </summary>
+    public static string LegLabelText(MeasureLeg leg, DistanceUnit unit) => string.Format(
+        CultureInfo.CurrentCulture,
+        EncDotNet.S100.Viewer.Resources.Strings.Status_MeasureLegLabel,
+        MeasureFormat.Distance(leg.DistanceMetres, unit),
+        MeasureFormat.Bearing(leg.BearingDeg));
+
+    /// <summary>
+    /// Where a leg's label sits: the middle of the great circle, or the
+    /// Mercator midpoint of a rhumb line (visually centred on the drawn
+    /// segment, taking the short way across the antimeridian).
+    /// </summary>
+    public static GeoPosition LabelAnchor(MeasureLeg leg)
+    {
+        if (leg.Geometry == LegGeometry.GreatCircle)
+        {
+            return MarineGeodesy.GreatCircleIntermediatePoints(
+                leg.From.Latitude, leg.From.Longitude, leg.To.Latitude, leg.To.Longitude, 2)[1];
+        }
+
+        var toLon = leg.From.Longitude + NormalizeLongitude(leg.To.Longitude - leg.From.Longitude);
+        var (ax, ay) = SphericalMercator.FromLonLat(leg.From.Longitude, leg.From.Latitude);
+        var (bx, by) = SphericalMercator.FromLonLat(toLon, leg.To.Latitude);
+        var (lon, lat) = SphericalMercator.ToLonLat((ax + bx) / 2.0, (ay + by) / 2.0);
+        return new GeoPosition(lat, NormalizeLongitude(lon));
+    }
+
+    /// <summary>
+    /// The points a leg is drawn through: its ends for a rhumb line (straight
+    /// in Mercator), or its densified great circle.
+    /// </summary>
+    internal static IReadOnlyList<GeoPosition> LegPath(MeasureLeg leg) =>
+        leg.Geometry == LegGeometry.GreatCircle
+            ? MarineGeodesy.DensifyGreatCircle(leg.From, leg.To)
+            : [leg.From, leg.To];
+
+    private static double NormalizeLongitude(double lon) => ((lon + 540.0) % 360.0) - 180.0;
+
     private static void AddPolyline(List<IFeature> features, IReadOnlyList<GeoPosition> points, bool dashed, MapsuiColor strokeColor)
     {
         foreach (var subPath in MarineGeodesy.SplitAtAntimeridian(points))
@@ -142,8 +181,6 @@ internal static class MeasureOverlayLayer
             }
             var line = new LineString(coords);
 
-            // Border first so the bright fill draws on top — uses a darker
-            // yellow tone so the path reads as a single stroked line.
             var feature = new GeometryFeature(line);
             var pen = new Pen { Color = strokeColor, Width = 5.0 };
             if (dashed) pen.PenStyle = PenStyle.Dash;
@@ -156,34 +193,31 @@ internal static class MeasureOverlayLayer
         }
     }
 
-    private static void AddLegLabel(List<IFeature> features, MeasureLeg leg, MapsuiColor backgroundColor, MapsuiColor foregroundColor, MapsuiColor haloColor)
+    private static void AddLegLabel(List<IFeature> features, MeasureLeg leg, string text, bool selected, MapsuiColor backgroundColor, MapsuiColor foregroundColor, MapsuiColor haloColor)
     {
-        // Place the label at the midpoint in Mercator space (visually
-        // centred on the rendered segment, even when geodetic midpoint
-        // would skew toward higher latitudes).
-        var (ax, ay) = SphericalMercator.FromLonLat(leg.FromLon, leg.FromLat);
-        var (bx, by) = SphericalMercator.FromLonLat(leg.ToLon, leg.ToLat);
-        var feature = new GeometryFeature(new Point((ax + bx) / 2.0, (ay + by) / 2.0));
-
-        var text = string.Format(
-            CultureInfo.CurrentCulture,
-            EncDotNet.S100.Viewer.Resources.Strings.Status_MeasureLegLabel,
-            leg.DistanceNm,
-            leg.BearingDeg);
+        var anchor = LabelAnchor(leg);
+        var (mx, my) = SphericalMercator.FromLonLat(anchor.Longitude, anchor.Latitude);
+        var feature = new GeometryFeature(new Point(mx, my));
 
         feature.Styles.Add(new LabelStyle
         {
             Text = text,
-            Font = new Font { FontFamily = "Menlo,Consolas,Courier New,monospace", Size = 12 },
+            Font = new Font { FontFamily = "Menlo,Consolas,Courier New,monospace", Size = LabelFontSize, Bold = selected },
             ForeColor = foregroundColor,
             BackColor = new Brush(backgroundColor),
             Halo = new Pen { Color = haloColor, Width = 2.5 },
             HorizontalAlignment = LabelStyle.HorizontalAlignmentEnum.Center,
             VerticalAlignment = LabelStyle.VerticalAlignmentEnum.Center,
-            Offset = new Offset(0, -14),
+            Offset = new Offset(0, LabelOffsetY),
         });
         features.Add(feature);
     }
+
+    /// <summary>Leg label font size, in DIPs.</summary>
+    internal const double LabelFontSize = 12;
+
+    /// <summary>Leg label offset from its anchor, in DIPs (negative is up).</summary>
+    internal const double LabelOffsetY = -14;
 
     /// <summary>
     /// Adds a numbered waypoint marker (filled disc with index label).
