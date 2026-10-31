@@ -2,6 +2,7 @@ using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Renderers.Mapsui;
 using Mapsui.Layers;
+using SkiaSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -86,6 +87,84 @@ public class MapsuiCoverageRendererCacheTests
         Assert.Equal(1, renderer.LayoutCacheMisses);
         Assert.Equal(1, renderer.LayoutCacheHits);
         Assert.NotEqual(step1, step2);
+    }
+
+    [Fact]
+    public void Render_PoleToPoleGrid_ClampsToMercatorLimit()
+    {
+        // A global GFS-Wave grid has rows at −90° and +90°, where the Web
+        // Mercator northing diverges; the raster must still have a finite,
+        // non-empty extent instead of a zero-height bitmap.
+        var gridMeta = new GridMetadata
+        {
+            NumRows = 7,
+            NumColumns = 12,
+            OriginLatitude = -90,
+            OriginLongitude = -180,
+            SpacingLatitudinal = 30,
+            SpacingLongitudinal = 30,
+        };
+        var depths = new float[gridMeta.NumRows * gridMeta.NumColumns];
+        Array.Fill(depths, 20f);
+        var layer = new StyledCoverageLayer
+        {
+            Coverage = new SampledCoverage
+            {
+                Region = GridRegion.Full,
+                Metadata = gridMeta,
+                Values = new Dictionary<string, float[]> { ["depth"] = depths },
+            },
+            ColorScheme = SchemeA,
+            NoDataValue = float.NaN,
+            Georeferencer = new GridGeoreferencer(gridMeta, "EPSG:4326"),
+        };
+
+        var renderer = new MapsuiCoverageRenderer(new ProjNetCrsTransformFactory());
+        var memoryLayer = Assert.IsType<MemoryLayer>(renderer.Render(layer, DefaultViewport));
+        var feature = memoryLayer.Features.OfType<RasterFeature>().First();
+        var extent = feature.Extent!;
+
+        Assert.NotEmpty(feature.Raster!.Data);
+        Assert.True(double.IsFinite(extent.MinY) && double.IsFinite(extent.MaxY));
+        Assert.True(extent.MaxY > extent.MinY);
+    }
+
+    [Fact]
+    public void Render_HighLatitudeGrid_LeavesNoEmptyRows()
+    {
+        // Web Mercator spaces a regular latitude grid's rows further apart
+        // towards the pole than the raster's average cell, so one pixel per
+        // node would leave transparent stripes between the high rows.
+        var gridMeta = new GridMetadata
+        {
+            NumRows = 81,
+            NumColumns = 4,
+            OriginLatitude = 0,
+            OriginLongitude = 0,
+            SpacingLatitudinal = 1,
+            SpacingLongitudinal = 1,
+        };
+        var depths = new float[gridMeta.NumRows * gridMeta.NumColumns];
+        Array.Fill(depths, 20f);
+        var layer = new StyledCoverageLayer
+        {
+            Coverage = new SampledCoverage
+            {
+                Region = GridRegion.Full,
+                Metadata = gridMeta,
+                Values = new Dictionary<string, float[]> { ["depth"] = depths },
+            },
+            ColorScheme = SchemeA,
+            NoDataValue = float.NaN,
+            Georeferencer = new GridGeoreferencer(gridMeta, "EPSG:4326"),
+        };
+
+        var renderer = new MapsuiCoverageRenderer(new ProjNetCrsTransformFactory());
+        using var bitmap = SKBitmap.Decode(GetPng(renderer.Render(layer, DefaultViewport)));
+
+        for (int y = 0; y < bitmap.Height; y++)
+            for (int x = 0; x < bitmap.Width; x++)
+                Assert.True(bitmap.GetPixel(x, y).Alpha > 0, $"Pixel ({x}, {y}) of {bitmap.Width}×{bitmap.Height} is empty.");
     }
 
     #region Helpers
