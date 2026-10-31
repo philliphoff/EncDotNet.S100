@@ -387,8 +387,7 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
                     case "DepthArea" when MinimumDepth(feature) is { } d:
                         depth.Add(Area.From(feature, d));
                         break;
-                    case "SoundingDatum" when feature.Attributes.TryGetValue("verticalDatum", out var raw)
-                                              && ChartedDepthResolver.TryReadMeters(raw, out var code):
+                    case SoundingDatumResolver.FeatureType when SoundingDatumResolver.TryReadCode(feature, out var code):
                         datums.Add(Area.From(feature, code));
                         break;
                 }

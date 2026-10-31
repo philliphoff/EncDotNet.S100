@@ -85,7 +85,7 @@ public enum WaterLevelStatus
     /// <summary>A water level was found and added to the charted depth.</summary>
     Applied,
 
-    /// <summary>The sample is outside every S-104 dataset's extent ("tide not applied").</summary>
+    /// <summary>The sample is outside every S-104 dataset's extent ("water level not applied").</summary>
     NoCoverage,
 
     /// <summary>The sample's time is before the first S-104 time step.</summary>

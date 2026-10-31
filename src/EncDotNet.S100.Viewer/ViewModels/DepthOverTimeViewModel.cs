@@ -131,6 +131,25 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
     /// <summary>Formatted location label shown on the card.</summary>
     public string LocationLabel { get; }
 
+    private string _chartBasisLine = string.Empty;
+
+    /// <summary>
+    /// How the chart relates to this depth (#1191), from the depth basis
+    /// indicator: "The chart shows charted depths". Empty when unknown.
+    /// </summary>
+    public string ChartBasisLine
+    {
+        get => _chartBasisLine;
+        set
+        {
+            if (SetProperty(ref _chartBasisLine, value ?? string.Empty))
+                OnPropertyChanged(nameof(HasChartBasisLine));
+        }
+    }
+
+    /// <summary>True when <see cref="ChartBasisLine"/> has text.</summary>
+    public bool HasChartBasisLine => _chartBasisLine.Length > 0;
+
     /// <summary>
     /// Series for the chart: the tide-adjusted depth curve, preceded (when an
     /// S-102 uncertainty band applies) by the faint ± boundary lines.
@@ -194,9 +213,9 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
     }
 
     /// <summary>
-    /// Headline label for the prominent depth readout: "DEPTH AT SELECTED TIME"
+    /// Headline label for the prominent depth readout: "ADJUSTED DEPTH AT SELECTED TIME"
     /// when a live tide series drives it (the value follows the selected timeline
-    /// step), or "DEPTH (STATIC)" when only the tide-independent base depth is
+    /// step), or "CHARTED DEPTH · WATER LEVEL NOT APPLIED" when only the charted depth is
     /// available.
     /// </summary>
     public string DepthNowLabel => HasTide

@@ -198,6 +198,35 @@ internal static partial class Strings
     public static string Status_OverscaleFactor => Get(nameof(Status_OverscaleFactor));
     public static string Status_OverscalePopupHeader => Get(nameof(Status_OverscalePopupHeader));
     public static string Tooltip_Overscale => Get(nameof(Tooltip_Overscale));
+    public static string Status_DepthBasisLabel => Get(nameof(Status_DepthBasisLabel));
+    public static string Status_DepthBasis_Charted => Get(nameof(Status_DepthBasis_Charted));
+    public static string Status_DepthBasis_ChartedNotApplied => Get(nameof(Status_DepthBasis_ChartedNotApplied));
+    public static string Status_DepthBasis_ChartedNotApplied_Short => Get(nameof(Status_DepthBasis_ChartedNotApplied_Short));
+    public static string Status_DepthBasis_ChartedNotApplied_Compact => Get(nameof(Status_DepthBasis_ChartedNotApplied_Compact));
+    public static string Status_DepthBasisPopup_DepthsHeader => Get(nameof(Status_DepthBasisPopup_DepthsHeader));
+    public static string Status_DepthBasisPopup_ChartedBasis => Get(nameof(Status_DepthBasisPopup_ChartedBasis));
+    public static string Status_DepthBasisPopup_DatumLabel => Get(nameof(Status_DepthBasisPopup_DatumLabel));
+    public static string Status_DepthBasisPopup_SeveralDatums => Get(nameof(Status_DepthBasisPopup_SeveralDatums));
+    public static string Status_DepthBasisPopup_DatumDatasetsFormat => Get(nameof(Status_DepthBasisPopup_DatumDatasetsFormat));
+    public static string Status_DepthBasisPopup_DatumNotDeclared => Get(nameof(Status_DepthBasisPopup_DatumNotDeclared));
+    public static string Status_DepthBasisPopup_SourcesLabel => Get(nameof(Status_DepthBasisPopup_SourcesLabel));
+    public static string Status_DepthBasisPopup_NoSourcesInView => Get(nameof(Status_DepthBasisPopup_NoSourcesInView));
+    public static string Status_DepthBasisPopup_MoreFormat => Get(nameof(Status_DepthBasisPopup_MoreFormat));
+    public static string Status_DepthBasisPopup_WaterLevelHeader => Get(nameof(Status_DepthBasisPopup_WaterLevelHeader));
+    public static string Status_DepthBasisPopup_NoWaterLevel => Get(nameof(Status_DepthBasisPopup_NoWaterLevel));
+    public static string Status_DepthBasisPopup_NoWaterLevelInView => Get(nameof(Status_DepthBasisPopup_NoWaterLevelInView));
+    public static string Status_DepthBasisPopup_WaterLevelGrid => Get(nameof(Status_DepthBasisPopup_WaterLevelGrid));
+    public static string Status_DepthBasisPopup_WaterLevelStation => Get(nameof(Status_DepthBasisPopup_WaterLevelStation));
+    public static string Status_DepthBasisPopup_WaterLevelSourceFormat => Get(nameof(Status_DepthBasisPopup_WaterLevelSourceFormat));
+    public static string Status_DepthBasisPopup_RunFormat => Get(nameof(Status_DepthBasisPopup_RunFormat));
+    public static string Status_DepthBasisPopup_NotApplied => Get(nameof(Status_DepthBasisPopup_NotApplied));
+    public static string Status_DepthBasisPopup_WhereHeader => Get(nameof(Status_DepthBasisPopup_WhereHeader));
+    public static string Status_DepthBasisPopup_WherePick => Get(nameof(Status_DepthBasisPopup_WherePick));
+    public static string Status_DepthBasisPopup_WhereRoute => Get(nameof(Status_DepthBasisPopup_WhereRoute));
+    public static string Tooltip_DepthBasis => Get(nameof(Tooltip_DepthBasis));
+    public static string Label_DepthBasis => Get(nameof(Label_DepthBasis));
+    public static string Label_DepthBasisStateFormat => Get(nameof(Label_DepthBasisStateFormat));
+    public static string Pick_Depth_ChartBasisCharted => Get(nameof(Pick_Depth_ChartBasisCharted));
 
     // Buttons / actions
     public static string Button_OpenDataset => Get(nameof(Button_OpenDataset));

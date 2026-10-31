@@ -1,0 +1,140 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:depth="using:EncDotNet.S100.Viewer.Services.Depth"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             x:Class="EncDotNet.S100.Viewer.Views.DepthBasisIndicatorView"
+             x:DataType="vm:DepthBasisIndicatorViewModel"
+             IsVisible="{Binding IsVisible}">
+    <!--
+      The status bar's depth basis pill (#1191,
+      docs/design/depth-basis-indicator.md): what the depths and safety contour
+      on the chart are relative to. Shown whenever a depth-bearing dataset is
+      loaded and active. The value is one whole form (Full, Short or Compact,
+      picked by MainWindow from the room the status bar has), never truncated;
+      the full form is always the tooltip, the accessible name and the
+      flyout's first line.
+    -->
+    <UserControl.Styles>
+        <Style Selector="Button#DepthBasisButton">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+        </Style>
+        <Style Selector="Button#DepthBasisButton.info">
+            <Setter Property="Background" Value="{DynamicResource DepthBasisInfoBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource DepthBasisInfoBorderBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource DepthBasisInfoForegroundBrush}" />
+        </Style>
+        <Style Selector="TextBlock.flyoutHeader">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="0.8" />
+            <Setter Property="Opacity" Value="0.7" />
+        </Style>
+        <Style Selector="TextBlock.flyoutLabel">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Opacity" Value="0.7" />
+        </Style>
+        <Style Selector="TextBlock.flyoutLine">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </UserControl.Styles>
+
+    <Button x:Name="DepthBasisButton"
+            AutomationProperties.AutomationId="Map.DepthBasis"
+            AutomationProperties.Name="{Binding AccessibleName}"
+            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DepthBasis}"
+            AutomationProperties.LiveSetting="Polite"
+            Classes.info="{Binding IsInfoTone}"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Center"
+            Margin="10,0,0,0"
+            Padding="8,1"
+            CornerRadius="10"
+            BorderThickness="1"
+            ToolTip.Tip="{Binding FullText}">
+        <StackPanel x:Name="PillContent" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+            <ic:FluentIcon Icon="Info" IconVariant="Regular" FontSize="13"
+                           Foreground="{Binding $parent[Button].Foreground}"
+                           IsVisible="{Binding ShowsIcon}"
+                           VerticalAlignment="Center" />
+            <TextBlock Text="{x:Static loc:Strings.Status_DepthBasisLabel}"
+                       FontSize="11"
+                       FontWeight="SemiBold"
+                       LetterSpacing="0.5"
+                       VerticalAlignment="Center" />
+            <TextBlock x:Name="ValueText"
+                       Text="{Binding DisplayedText}"
+                       FontSize="12"
+                       FontWeight="SemiBold"
+                       TextWrapping="NoWrap"
+                       TextTrimming="None"
+                       VerticalAlignment="Center" />
+        </StackPanel>
+        <Button.Flyout>
+            <Flyout Placement="Top">
+                <Border Padding="14,12" MaxWidth="380">
+                    <StackPanel MinWidth="260" Spacing="6">
+                        <TextBlock Text="{Binding FullText}"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   TextWrapping="Wrap" />
+
+                        <TextBlock Classes="flyoutHeader" Margin="0,6,0,0"
+                                   Text="{x:Static loc:Strings.Status_DepthBasisPopup_DepthsHeader}" />
+                        <TextBlock Classes="flyoutLine" Text="{Binding BasisLine}" />
+
+                        <TextBlock Classes="flyoutLabel"
+                                   Text="{x:Static loc:Strings.Status_DepthBasisPopup_DatumLabel}" />
+                        <TextBlock Classes="flyoutLine"
+                                   Text="{Binding DatumHeading}"
+                                   IsVisible="{Binding HasDatumHeading}" />
+                        <ItemsControl ItemsSource="{Binding DatumLines}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="depth:DepthBasisDatumLine">
+                                    <StackPanel Margin="0,1">
+                                        <TextBlock Classes="flyoutLine" Text="{Binding Label}" FontWeight="SemiBold" />
+                                        <TextBlock Classes="flyoutLine" Text="{Binding Datasets}" Opacity="0.75"
+                                                   IsVisible="{Binding Datasets, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Classes="flyoutLabel"
+                                   Text="{x:Static loc:Strings.Status_DepthBasisPopup_SourcesLabel}" />
+                        <ItemsControl ItemsSource="{Binding SourceLines}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <TextBlock Classes="flyoutLine" Text="{Binding}" Margin="0,1" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Classes="flyoutHeader" Margin="0,6,0,0"
+                                   Text="{x:Static loc:Strings.Status_DepthBasisPopup_WaterLevelHeader}" />
+                        <ItemsControl ItemsSource="{Binding WaterLevelLines}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <TextBlock Classes="flyoutLine" Text="{Binding}" Margin="0,1" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Classes="flyoutHeader" Margin="0,6,0,0"
+                                   Text="{x:Static loc:Strings.Status_DepthBasisPopup_WhereHeader}" />
+                        <ItemsControl ItemsSource="{Binding WhereAppliedLines}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <TextBlock Classes="flyoutLine" Text="{Binding}" Margin="0,1" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </Flyout>
+        </Button.Flyout>
+    </Button>
+</UserControl>

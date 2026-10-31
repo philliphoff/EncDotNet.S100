@@ -27,8 +27,8 @@ public class DepthAssimilationServiceTests
     private static BaseDepthResult Bathy(double depth, double? unc = 0.3, int? datum = 10) =>
         new(depth, BaseDepthSource.Bathymetry, unc, datum, SoundingDistanceMeters: null);
 
-    private static BaseDepthResult Vector(double depth) =>
-        new(depth, BaseDepthSource.DepthArea, null, null, null);
+    private static BaseDepthResult Vector(double depth, int? datum = null) =>
+        new(depth, BaseDepthSource.DepthArea, null, datum, null);
 
     [Fact]
     public void Assimilate_returns_null_when_no_base_depth()
@@ -185,14 +185,35 @@ public class DepthAssimilationServiceTests
     }
 
     [Fact]
-    public void Assimilate_never_flags_for_vector_base()
+    public void Assimilate_does_not_flag_an_s101_base_on_the_tide_datum()
     {
+        // The S-101 base's datum comes from its SoundingDatum area (#1191).
         var result = _service.Assimilate(
-            Vector(7.0),
+            Vector(7.0, datum: 23),
             [new S104TideCandidate("ds1", 0.01, T0, 23, Series((T0, 1.0)))]);
 
         Assert.False(result!.DatumsNotReconciled);
         Assert.Null(result.UncertaintyMeters);
         Assert.Equal(8.0, result.DepthOverTime[0].DepthMeters);
+    }
+
+    [Fact]
+    public void Assimilate_flags_an_s101_base_on_another_datum()
+    {
+        var result = _service.Assimilate(
+            Vector(7.0, datum: 12),
+            [new S104TideCandidate("ds1", 0.01, T0, 23, Series((T0, 1.0)))]);
+
+        Assert.True(result!.DatumsNotReconciled);
+    }
+
+    [Fact]
+    public void Assimilate_flags_an_s101_base_that_declares_no_datum()
+    {
+        var result = _service.Assimilate(
+            Vector(7.0, datum: null),
+            [new S104TideCandidate("ds1", 0.01, T0, 23, Series((T0, 1.0)))]);
+
+        Assert.True(result!.DatumsNotReconciled);
     }
 }

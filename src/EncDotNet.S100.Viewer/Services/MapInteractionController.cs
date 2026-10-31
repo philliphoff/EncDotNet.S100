@@ -58,6 +58,12 @@ internal sealed class MapInteractionController
     private readonly IDatasetLoaderService _loader;
     private readonly IDynamicSourcePickService? _dynamicPickService;
 
+    /// <summary>
+    /// The depth basis indicator's service (#1191), told about each viewport
+    /// change next to the overscale indication; null in hosts without one.
+    /// </summary>
+    public Depth.DepthBasisService? DepthBasis { get; init; }
+
     private MapControl? _mapControl;
     private MapsuiMapNavigator? _mapNavigator;
 
@@ -247,6 +253,7 @@ internal sealed class MapInteractionController
         compassRose.UpdateForViewport(viewport.Rotation);
         _viewModel.MapScaleText = MapScaleFormatter.Format(viewport.Resolution, viewport.CenterY);
         UpdateOverscale(viewport);
+        DepthBasis?.Invalidate();
     }
 
     /// <summary>

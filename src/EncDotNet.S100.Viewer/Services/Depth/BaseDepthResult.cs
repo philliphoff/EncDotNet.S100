@@ -17,9 +17,10 @@ namespace EncDotNet.S100.Viewer.Services.Depth;
 /// <c>null</c> otherwise.
 /// </param>
 /// <param name="VerticalDatumCode">
-/// The source vertical datum as an S-100 register code, when known
-/// (S-102 bathymetry only); <c>null</c> for S-101 vector sources, which
-/// are on the chart's sounding datum.
+/// The source vertical datum as an S-100 register code, when known: the
+/// S-102 root <c>verticalDatum</c>, or for an S-101 (or S-57) source the
+/// <c>SoundingDatum</c> area containing the pick. <c>null</c> when the source
+/// doesn't declare one.
 /// </param>
 /// <param name="SoundingDistanceMeters">
 /// Planar distance in metres from the pick to the chosen sounding —

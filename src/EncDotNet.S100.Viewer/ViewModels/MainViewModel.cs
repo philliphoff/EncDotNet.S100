@@ -907,6 +907,23 @@ internal sealed class MainViewModel : ViewModelBase
         IsOverscaleVisible = true;
     }
 
+    /// <summary>
+    /// The status bar's depth basis pill (#1191): what the depths and safety
+    /// contour on the chart are relative to.
+    /// </summary>
+    public DepthBasisIndicatorViewModel DepthBasis { get; } = new();
+
+    /// <summary>
+    /// Applies a freshly-computed depth <paramref name="basis"/> to the
+    /// status-bar indicator. Called whenever the depth basis service
+    /// recomputes, and when the Local/UTC setting changes.
+    /// </summary>
+    /// <param name="basis">The basis (never <see langword="null"/>).</param>
+    /// <param name="waterLevelLoaded">True when an active S-104 dataset is loaded, in view or not.</param>
+    /// <param name="format">The user's Local/UTC setting.</param>
+    public void UpdateDepthBasis(Services.Depth.DepthBasis basis, bool waterLevelLoaded, TimeFormat format) =>
+        DepthBasis.Update(basis, waterLevelLoaded, format);
+
     private static string FormatOverscaleFactor(double factor)
         => string.Format(
             System.Globalization.CultureInfo.CurrentCulture,
