@@ -226,15 +226,25 @@ namespace EncDotNet.S100.Navigation
         EncDotNet.S100.Datasets.Pipelines.NavigationalWarningSet Set { get; }
         System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteWarning> WarningsNear(EncDotNet.S100.Pipelines.BoundingBox extent);
     }
+    public interface IWaterLevelField
+    {
+        EncDotNet.S100.Navigation.WaterLevelBasis Basis { get; }
+        System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.CoverageArea> Footprint { get; }
+        EncDotNet.S100.Navigation.WaterLevelAtPoint Resolve(EncDotNet.S100.DataModel.GeoPosition position, int? depthDatum);
+        EncDotNet.S100.Navigation.WaterLevelSample? Sample(EncDotNet.S100.DataModel.GeoPosition position);
+    }
     public interface IWaterLevelSeries
     {
         System.DateTime End { get; }
         EncDotNet.S100.Navigation.WaterLevelSourceInfo Source { get; }
         System.DateTime Start { get; }
+        System.Collections.Generic.IReadOnlyList<System.DateTime> StepsWithin(System.DateTime start, System.DateTime end);
         EncDotNet.S100.Navigation.WaterLevelReading? ValueAt(System.DateTime utc);
     }
     public interface IWaterLevelSource
     {
+        System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WaterLevelSourceInfo> Datasets { get; }
+        System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.CoverageArea> Footprint { get; }
         System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.IWaterLevelSeries> Locate(EncDotNet.S100.DataModel.GeoPosition position);
     }
     public enum LegGeometry
@@ -1123,6 +1133,38 @@ namespace EncDotNet.S100.Navigation
         public System.DateTimeOffset Until { get; init; }
         public EncDotNet.S100.Datasets.Pipelines.NavigationalWarningState? Withdrawal { get; init; }
     }
+    public sealed class WaterLevelAtPoint : System.IEquatable<EncDotNet.S100.Navigation.WaterLevelAtPoint>
+    {
+        public WaterLevelAtPoint(EncDotNet.S100.Navigation.WaterLevelStatus Status, EncDotNet.S100.Navigation.WaterLevelSourceInfo? Source = null, EncDotNet.S100.Navigation.WaterLevelSample? Sample = default, EncDotNet.S100.Navigation.DatumAgreement? Datum = default) { }
+        public EncDotNet.S100.Navigation.DatumAgreement? Datum { get; init; }
+        public EncDotNet.S100.Navigation.WaterLevelSample? Sample { get; init; }
+        public EncDotNet.S100.Navigation.WaterLevelSourceInfo? Source { get; init; }
+        public EncDotNet.S100.Navigation.WaterLevelStatus Status { get; init; }
+    }
+    public sealed class WaterLevelBasis : System.IEquatable<EncDotNet.S100.Navigation.WaterLevelBasis>
+    {
+        public WaterLevelBasis(EncDotNet.S100.Navigation.WaterLevelBasisKind Kind, System.DateTime Start, System.DateTime End, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WaterLevelSourceInfo> Sources) { }
+        public System.DateTime End { get; init; }
+        public EncDotNet.S100.Navigation.WaterLevelBasisKind Kind { get; init; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WaterLevelSourceInfo> Sources { get; init; }
+        public System.DateTime Start { get; init; }
+    }
+    public enum WaterLevelBasisKind
+    {
+        AtTime = 0,
+        LowestOverPeriod = 1,
+    }
+    public sealed class WaterLevelPeriodMinimum : EncDotNet.S100.Navigation.IWaterLevelField
+    {
+        public WaterLevelPeriodMinimum(EncDotNet.S100.Navigation.IWaterLevelSource source, System.DateTime start, System.DateTime end) { }
+        public EncDotNet.S100.Navigation.WaterLevelBasis Basis { get; }
+        public System.DateTime End { get; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.CoverageArea> Footprint { get; }
+        public System.DateTime Start { get; }
+        public EncDotNet.S100.Navigation.WaterLevelAtPoint Resolve(EncDotNet.S100.DataModel.GeoPosition position, int? depthDatum) { }
+        public EncDotNet.S100.Navigation.WaterLevelSample? Sample(EncDotNet.S100.DataModel.GeoPosition position) { }
+        public static EncDotNet.S100.Navigation.WaterLevelAtPoint Resolve(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.IWaterLevelSeries> series, System.DateTime start, System.DateTime end, int? depthDatum) { }
+    }
     public static class WaterLevelPreference
     {
         public static int Compare(double spacingA, System.DateTime? issuedA, string idA, double spacingB, System.DateTime? issuedB, string idB) { }
@@ -1132,6 +1174,25 @@ namespace EncDotNet.S100.Navigation
         public WaterLevelReading(double HeightMeters, System.DateTime StepTime) { }
         public double HeightMeters { get; init; }
         public System.DateTime StepTime { get; init; }
+        public double? UncertaintyMeters { get; init; }
+    }
+    public readonly struct WaterLevelSample : System.IEquatable<EncDotNet.S100.Navigation.WaterLevelSample>
+    {
+        public WaterLevelSample(double HeightMeters, double? UncertaintyMeters, EncDotNet.S100.Navigation.WaterLevelSourceInfo Source, System.DateTime StepTime) { }
+        public double HeightMeters { get; init; }
+        public EncDotNet.S100.Navigation.WaterLevelSourceInfo Source { get; init; }
+        public System.DateTime StepTime { get; init; }
+        public double? UncertaintyMeters { get; init; }
+    }
+    public sealed class WaterLevelSnapshot : EncDotNet.S100.Navigation.IWaterLevelField
+    {
+        public WaterLevelSnapshot(EncDotNet.S100.Navigation.IWaterLevelSource source, System.DateTime utc) { }
+        public EncDotNet.S100.Navigation.WaterLevelBasis Basis { get; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.CoverageArea> Footprint { get; }
+        public System.DateTime Time { get; }
+        public EncDotNet.S100.Navigation.WaterLevelAtPoint Resolve(EncDotNet.S100.DataModel.GeoPosition position, int? depthDatum) { }
+        public EncDotNet.S100.Navigation.WaterLevelSample? Sample(EncDotNet.S100.DataModel.GeoPosition position) { }
+        public static EncDotNet.S100.Navigation.WaterLevelAtPoint Resolve(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.IWaterLevelSeries> series, System.DateTime utc, int? depthDatum) { }
     }
     public sealed class WaterLevelSourceInfo : System.IEquatable<EncDotNet.S100.Navigation.WaterLevelSourceInfo>
     {

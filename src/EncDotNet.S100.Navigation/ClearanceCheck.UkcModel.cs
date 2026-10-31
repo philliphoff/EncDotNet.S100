@@ -170,7 +170,7 @@ public sealed partial class ClearanceCheck
                     time,
                     eta is not null,
                     point.Depth,
-                    new UkcWaterLevel(eval.Status, eval.Height, eval.Series?.Source, eval.StepTime, eval.Agreement),
+                    new UkcWaterLevel(eval.Status, eval.Height, eval.Source, eval.StepTime, eval.Agreement),
                     leg.Draft!.Value.TotalMetres,
                     leg.Squat.TotalMetres,
                     eval.Required,
@@ -424,57 +424,14 @@ public sealed partial class ClearanceCheck
             var utc = time.UtcDateTime;
             var depth = point.Depth;
 
-            // Choose the most preferred series that covers the time; among those,
-            // skip one whose datum is known to differ when another covers too.
-            IWaterLevelSeries? chosen = null;
-            IWaterLevelSeries? mismatched = null;
-            DateTime? latest = null;
-            foreach (var series in point.Series)
-            {
-                latest = latest is { } l && l >= series.End ? l : series.End;
-                if (utc < series.Start || utc > series.End)
-                {
-                    continue;
-                }
-
-                if (depth is not null
-                    && VerticalDatumCheck.Compare(depth.VerticalDatum, series.Source.VerticalDatum) == DatumAgreement.Different)
-                {
-                    mismatched ??= series;
-                    continue;
-                }
-
-                chosen = series;
-                break;
-            }
-
-            WaterLevelStatus status;
-            double? height = null;
-            DateTime? stepTime = null;
-            DatumAgreement? agreement = null;
-            var used = chosen ?? mismatched;
-            if (point.Series.Count == 0)
-            {
-                status = WaterLevelStatus.NoCoverage;
-            }
-            else if (used is null)
-            {
-                status = latest is { } last && utc > last ? WaterLevelStatus.AfterEnd : WaterLevelStatus.BeforeStart;
-            }
-            else if (used.ValueAt(utc) is not { } reading)
-            {
-                status = WaterLevelStatus.NoData;
-            }
-            else
-            {
-                height = reading.HeightMeters;
-                stepTime = reading.StepTime;
-                status = chosen is null ? WaterLevelStatus.DatumMismatch : WaterLevelStatus.Applied;
-                if (depth is not null)
-                {
-                    agreement = VerticalDatumCheck.Compare(depth.VerticalDatum, used.Source.VerticalDatum);
-                }
-            }
+            // The series rule is the water-level field's (WaterLevelSnapshot), so the
+            // pick report and the chart give the same height for a point and time.
+            var water = WaterLevelSnapshot.Resolve(point.Series, utc, depth?.VerticalDatum);
+            var status = water.Status;
+            double? height = water.Sample?.HeightMeters;
+            DateTime? stepTime = water.Sample?.StepTime;
+            DatumAgreement? agreement = depth is null ? null : water.Datum;
+            var used = water.Source;
 
             // Confidence is reported alongside the state, never in place of it.
             var confidence = ConfidenceReasons.None;
@@ -731,7 +688,7 @@ public sealed partial class ClearanceCheck
         }
 
         private readonly record struct PointEvaluation(
-            IWaterLevelSeries? Series,
+            WaterLevelSourceInfo? Source,
             WaterLevelStatus Status,
             double? Height,
             DateTime? StepTime,

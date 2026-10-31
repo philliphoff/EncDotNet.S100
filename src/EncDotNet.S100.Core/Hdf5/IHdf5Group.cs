@@ -56,4 +56,19 @@ public interface IHdf5Group
     /// value-struct layouts.
     /// </summary>
     RawCompoundDataset ReadRawCompoundDataset(string name);
+
+    /// <summary>
+    /// Reads one numeric member of every record of an optional compound
+    /// dataset, as <see cref="double"/>. Unlike
+    /// <see cref="ReadRawCompoundDataset"/>, the compound may hold
+    /// variable-length members (such as a name string) besides the one read.
+    /// </summary>
+    /// <param name="datasetName">The dataset's name in this group.</param>
+    /// <param name="memberName">The member to read (case-insensitive).</param>
+    /// <returns>
+    /// The member's values, one per record, or <c>null</c> when the dataset
+    /// or the member is absent or isn't numeric. The default implementation
+    /// returns <c>null</c>.
+    /// </returns>
+    IReadOnlyList<double>? TryReadCompoundMember(string datasetName, string memberName) => null;
 }

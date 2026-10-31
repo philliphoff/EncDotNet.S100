@@ -293,4 +293,59 @@ public class CatalogRouteCheckSourcesTests
 
         Assert.Empty(sources.WaterLevel!.Locate(new GeoPosition(48, -122.0)));
     }
+
+    [Fact]
+    public void S104_uncertainty_is_the_nearest_step_or_the_larger_bracketing_one()
+    {
+        // 0,2 m at 00:00, 0,4 m at 01:00, fill (none) at 02:00.
+        var dataset = S104Synth.Dataset(uncertaintyAtStep: t => t switch { 0 => 0.2f, 1 => 0.4f, _ => -1f });
+        var series = Assert.Single(Sources(LoadedDatasetFactory.S104("104G", source: S104Synth.Source(dataset))).WaterLevel!.Locate(new GeoPosition(0.01, 0.01)));
+
+        Assert.Equal(0.2, series.ValueAt(new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc))!.Value.UncertaintyMeters!.Value, 6);
+        Assert.Equal(0.4, series.ValueAt(new DateTime(2024, 1, 1, 0, 20, 0, DateTimeKind.Utc))!.Value.UncertaintyMeters!.Value, 6);
+        Assert.Equal(0.4, series.ValueAt(new DateTime(2024, 1, 1, 1, 30, 0, DateTimeKind.Utc))!.Value.UncertaintyMeters!.Value, 6);
+        Assert.Null(series.ValueAt(new DateTime(2024, 1, 1, 2, 0, 0, DateTimeKind.Utc))!.Value.UncertaintyMeters);
+    }
+
+    [Fact]
+    public void S104_without_uncertainty_reports_none()
+    {
+        var series = Assert.Single(Sources(LoadedDatasetFactory.S104("104G")).WaterLevel!.Locate(new GeoPosition(0.01, 0.01)));
+
+        Assert.Null(series.ValueAt(new DateTime(2024, 1, 1, 0, 30, 0, DateTimeKind.Utc))!.Value.UncertaintyMeters);
+    }
+
+    [Fact]
+    public void S104_series_list_their_steps_within_a_period()
+    {
+        var series = Assert.Single(Sources(LoadedDatasetFactory.S104("104G")).WaterLevel!.Locate(new GeoPosition(0.01, 0.01)));
+
+        var steps = series.StepsWithin(new DateTime(2024, 1, 1, 0, 30, 0, DateTimeKind.Utc), new DateTime(2024, 1, 1, 2, 0, 0, DateTimeKind.Utc));
+
+        Assert.Equal([new DateTime(2024, 1, 1, 1, 0, 0, DateTimeKind.Utc), new DateTime(2024, 1, 1, 2, 0, 0, DateTimeKind.Utc)], steps);
+    }
+
+    [Fact]
+    public void S104_source_lists_its_datasets_and_footprint()
+    {
+        var water = Sources(LoadedDatasetFactory.S104("104G"), LoadedDatasetFactory.S104Stations("104S", S104Synth.StationSeries())).WaterLevel!;
+
+        Assert.Equal(["104G", "104S"], water.Datasets.Select(d => d.DatasetId));
+        Assert.Equal(3, water.Footprint.Count); // the grid and two station discs
+        Assert.Contains(water.Footprint, a => a.Contains(0.015, 0.015));
+        Assert.Contains(water.Footprint, a => a.Contains(47.05, -122.0));
+        Assert.DoesNotContain(water.Footprint, a => a.Contains(1, 1));
+    }
+
+    [Fact]
+    public void Snapshot_over_the_catalog_matches_the_series()
+    {
+        var water = Sources(LoadedDatasetFactory.S104("104G")).WaterLevel!;
+        var time = new DateTime(2024, 1, 1, 0, 40, 0, DateTimeKind.Utc);
+
+        var sample = new WaterLevelSnapshot(water, time).Sample(new GeoPosition(0.011, 0.019))!.Value;
+
+        Assert.Equal(1.5 + 0.1 * 40 / 60, sample.HeightMeters, 4);
+        Assert.Equal("104G", sample.Source.DatasetId);
+    }
 }

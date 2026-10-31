@@ -34,4 +34,15 @@ public interface IChartDepthCell
     /// <param name="longitude">Longitude in decimal degrees (WGS-84).</param>
     /// <returns>The nearest sounding sample, or <see langword="null"/>.</returns>
     S101SoundingSample? SampleNearestSounding(double latitude, double longitude);
+
+    /// <summary>
+    /// The datum the cell's depths are referred to at a WGS-84 point, as an
+    /// S-100 vertical datum code: the <c>verticalDatum</c> of the cell's
+    /// <c>SoundingDatum</c> meta feature there (S-101 DCEG §3.9), or
+    /// <see langword="null"/> when the cell doesn't declare one.
+    /// </summary>
+    /// <param name="latitude">Latitude in decimal degrees (WGS-84).</param>
+    /// <param name="longitude">Longitude in decimal degrees (WGS-84).</param>
+    /// <returns>The datum code, or <see langword="null"/>.</returns>
+    int? SoundingDatumAt(double latitude, double longitude);
 }

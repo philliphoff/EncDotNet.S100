@@ -37,8 +37,17 @@ internal sealed class FakeSeries(DateTime start, DateTime end, Func<DateTime, do
 
     public DateTime End { get; } = end;
 
+    /// <summary>The series' steps, for the period minimum; none unless set.</summary>
+    public IReadOnlyList<DateTime> Steps { get; init; } = [];
+
+    /// <summary>The uncertainty reported with every reading.</summary>
+    public double? Uncertainty { get; init; }
+
     public WaterLevelReading? ValueAt(DateTime utc) =>
-        heightAt(utc) is { } h ? new WaterLevelReading(h, utc) : null;
+        heightAt(utc) is { } h ? new WaterLevelReading(h, utc) { UncertaintyMeters = Uncertainty } : null;
+
+    public IReadOnlyList<DateTime> StepsWithin(DateTime start, DateTime end) =>
+        Steps.Where(t => t >= start && t <= end).ToList();
 }
 
 /// <summary>A water-level source defined by a function of position.</summary>
