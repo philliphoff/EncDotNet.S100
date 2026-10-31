@@ -301,11 +301,10 @@ capture.
 
 Slices 2 and 3 both depend on 1 and can then go in parallel.
 
-## 6. Open questions for the user
+## 6. Decisions on the open questions
 
-1. Should great circle be the first-run default for Measure (D3)? This note
-   says no: remember the last choice, starting at Rhumb.
-2. Is `Cmd/Ctrl+R` right for Range & bearing (D11)? It's free in the
-   viewer, but some apps use it for reload.
-3. Should the second unit line (D6) always show, or only when the setting
-   is NM?
+1. Great circle isn't the first-run default. Measure remembers the last
+   choice, starting at Rhumb (D3).
+2. `Cmd/Ctrl+R` opens Range & bearing (D11).
+3. The second unit line always shows, on the cards only (D6). Map labels and
+   the status bar show the primary unit, and Copy includes both (D8).

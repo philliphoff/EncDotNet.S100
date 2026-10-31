@@ -28,9 +28,6 @@ internal sealed record RouteOverlayScene(
     RouteOverlayColors Colors,
     RouteCheckOverlay? Check = null)
 {
-    /// <summary>Number of straight segments approximating a great-circle leg.</summary>
-    internal const int GeodesicSegments = 24;
-
     /// <summary>An empty scene.</summary>
     public static RouteOverlayScene Empty { get; } =
         new([], null, null, false, RouteOverlayColors.For(MeasureOverlayAppearance.Default));
@@ -56,7 +53,7 @@ internal sealed record RouteOverlayScene(
                 var a = waypoints[i];
                 var b = waypoints[i + 1];
                 IReadOnlyList<GeoPosition> path = route.Legs[i].GeometryType == RouteLegGeometryType.Geodesic
-                    ? MarineGeodesy.GreatCircleIntermediatePoints(a.Latitude, a.Longitude, b.Latitude, b.Longitude, GeodesicSegments)
+                    ? MarineGeodesy.DensifyGreatCircle(a, b)
                     : [a, b];
                 var metrics = route.ComputeLegMetrics(i);
                 legs[i] = new SceneLeg(path, LegLabel(metrics.DistanceNm, metrics.InitialBearingDegrees, etas!.LegDuration(i)));

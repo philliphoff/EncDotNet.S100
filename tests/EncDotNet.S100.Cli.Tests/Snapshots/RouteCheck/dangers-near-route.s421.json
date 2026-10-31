@@ -402,11 +402,11 @@
             "firstLegIndex": 1,
             "lastLegIndex": 1,
             "lengthNm": 0.1069,
-            "startTime": "2026-03-01T06:14:01.443411\u002B00:00",
+            "startTime": "2026-03-01T06:14:01.444523\u002B00:00",
             "minimumClearanceMeters": -2.08283,
             "requiredUkcMeters": 1.5,
             "marginMeters": -3.58283,
-            "minimumTime": "2026-03-01T06:14:19.474385\u002B00:00",
+            "minimumTime": "2026-03-01T06:14:19.4755208\u002B00:00",
             "minutesBelow": 0.8
           }
         }
@@ -463,7 +463,7 @@
     ],
     "clearance": {
       "departure": "2026-03-01T06:00:00\u002B00:00",
-      "arrival": "2026-03-01T06:20:14.0835394\u002B00:00",
+      "arrival": "2026-03-01T06:20:14.0851439\u002B00:00",
       "verdict": "below_setting",
       "verdictTitle": "Below your UKC setting in 1 place",
       "confidence": [],
@@ -474,7 +474,7 @@
         "latitude": -40.97036,
         "longitude": -134.95192,
         "distanceNm": 1.9099,
-        "time": "2026-03-01T06:14:19.474385\u002B00:00",
+        "time": "2026-03-01T06:14:19.4755208\u002B00:00",
         "hasEta": true,
         "ukcMeters": -2.08,
         "requiredUkcMeters": 1.5,

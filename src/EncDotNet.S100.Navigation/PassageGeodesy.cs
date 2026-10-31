@@ -1,4 +1,5 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Geodesy;
 
 namespace EncDotNet.S100.Navigation;
 
@@ -17,11 +18,11 @@ public static class PassageGeodesy
     /// <summary>Metres in one international nautical mile.</summary>
     public const double MetersPerNauticalMile = 1852.0;
 
-    /// <summary>Mean earth radius in nautical miles.</summary>
-    public const double EarthRadiusNauticalMiles = 3440.065;
+    /// <summary>Mean earth radius in metres (<see cref="GeodesicHelper.EarthRadiusMetres"/>).</summary>
+    public const double EarthRadiusMeters = GeodesicHelper.EarthRadiusMetres;
 
-    /// <summary>Mean earth radius in metres.</summary>
-    public const double EarthRadiusMeters = EarthRadiusNauticalMiles * MetersPerNauticalMile;
+    /// <summary>Mean earth radius in nautical miles.</summary>
+    public const double EarthRadiusNauticalMiles = EarthRadiusMeters / MetersPerNauticalMile;
 
     /// <summary>Metres per degree of latitude on the mean sphere.</summary>
     public const double MetersPerDegreeLatitude = EarthRadiusMeters * Math.PI / 180.0;
