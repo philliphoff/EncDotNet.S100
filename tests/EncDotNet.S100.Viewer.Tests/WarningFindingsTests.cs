@@ -97,7 +97,7 @@ public sealed class WarningFindingsTests(WarningsScenarioFixture fixture) : ICla
         var warnings = new NavigationalWarningsService(loader);
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
         var check = new PassageCheckService(routes, catalog, warnings: new PanelRouteWarningSource(warnings),
-            checks: () => [new WarningCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero);
+            checks: () => [new WarningCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: PassageCheckFixture.SerialPost);
         var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(), warnings: warnings);
         return new Setup(routes, route, check, loader, warnings, findings);
     }

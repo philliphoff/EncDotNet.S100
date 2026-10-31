@@ -879,9 +879,9 @@ public partial class App : Application
             new EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
                 sp.GetRequiredService<ViewerDatasetCatalog>(),
-                sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>(),
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PanelRouteWarningSource>(),
-                sp.GetService<IMarinerSettingsProvider>(),
+                sources: sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>(),
+                warnings: sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PanelRouteWarningSource>(),
+                mariner: sp.GetService<IMarinerSettingsProvider>(),
                 post: action =>
                 {
                     if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
