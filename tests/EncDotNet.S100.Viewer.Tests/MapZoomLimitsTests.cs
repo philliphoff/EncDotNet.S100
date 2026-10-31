@@ -276,6 +276,25 @@ public class MapZoomLimitsTests
         Assert.Equal(MaxResolution, navigator.Viewport.Resolution, 6);
     }
 
+    [Fact]
+    public void Limiter_KeepsPanBoundsWithinTheMercatorWorld()
+    {
+        const double worldMaxY = Rendering.Scene.WebMercator.Circumference / 2.0;
+
+        // A global grid's 90° N row projects to about 2.4×10⁸ m.
+        var clipped = MapZoomLimits.LatitudeAwareLimiter.WithinWorld(new MRect(-1e7, -1.5e7, 1e7, 2.4e8));
+
+        Assert.NotNull(clipped);
+        Assert.Equal(-1.5e7, clipped!.MinY);
+        Assert.Equal(worldMaxY, clipped.MaxY);
+        Assert.Equal(-1e7, clipped.MinX);
+        Assert.Equal(1e7, clipped.MaxX);
+
+        var inside = new MRect(-1e6, -1e6, 1e6, 1e6);
+        Assert.Same(inside, MapZoomLimits.LatitudeAwareLimiter.WithinWorld(inside));
+        Assert.Null(MapZoomLimits.LatitudeAwareLimiter.WithinWorld(null));
+    }
+
     private static double MaxResolution =>
         MapZoomLimits.ResolutionForScale(MapZoomLimits.MaxScaleDenominator);
 }

@@ -119,6 +119,97 @@ public class SymbolThinningTests
     }
 
     [Fact]
+    public void ThinGrid_keeps_its_lattice_while_panning()
+    {
+        // Priorities vary everywhere, as a wind field's speeds do: a seed taken
+        // from the view would move (and the lattice with it) between the views.
+        const int n = 40;
+        var grid = Grid(n, n, spacing: 10);
+        var random = new Random(7);
+        for (int i = 0; i < grid.Priority.Length; i++)
+            grid.Priority[i] = (float)random.NextDouble();
+
+        var west = new List<int>();
+        var east = new List<int>();
+        SymbolThinning.ThinGrid(
+            n, n, grid.X, grid.Y, grid.Scale, grid.Priority,
+            lengthPerScale: 15, new SymbolRect(0, 0, 200, 390), maxRatio: 0.5, west);
+        SymbolThinning.ThinGrid(
+            n, n, grid.X, grid.Y, grid.Scale, grid.Priority,
+            lengthPerScale: 15, new SymbolRect(100, 0, 300, 390), maxRatio: 0.5, east);
+
+        // The cells both views show are drawn the same in each.
+        var overlapWest = west.Where(i => grid.X[i] >= 100).ToList();
+        var overlapEast = east.Where(i => grid.X[i] <= 200).ToList();
+        Assert.NotEmpty(overlapWest);
+        Assert.Equal(overlapWest, overlapEast);
+    }
+
+    [Fact]
+    public void ThinGrid_spaces_a_geographic_grid_evenly_in_Mercator()
+    {
+        // A 0.25° grid from 40° N to 85° N in Web Mercator metres: its cells
+        // grow taller towards the pole (1 / cos(latitude)) but no wider.
+        const double step = 0.25;
+        int rows = (int)((85 - 40) / step) + 1;
+        int cols = 81;
+        int count = rows * cols;
+        var x = new double[count];
+        var y = new double[count];
+        const double radius = 6378137.0;
+        for (int r = 0; r < rows; r++)
+        {
+            double lat = (85 - (r * step)) * Math.PI / 180;
+            for (int c = 0; c < cols; c++)
+            {
+                x[(r * cols) + c] = radius * (c * step) * Math.PI / 180;
+                y[(r * cols) + c] = radius * Math.Log(Math.Tan((Math.PI / 4) + (lat / 2)));
+            }
+        }
+
+        var scale = Enumerable.Repeat(1f, count).ToArray();
+        var priority = Enumerable.Repeat(1f, count).ToArray();
+        // About three columns' width at every latitude.
+        double lengthPerScale = 3 * radius * step * Math.PI / 180 * 0.5 * Math.Sqrt(2) * 0.99;
+        double minimum = lengthPerScale / (0.5 * Math.Sqrt(2));
+
+        var selected = new List<int>();
+        SymbolThinning.ThinGrid(
+            rows, cols, x, y, scale, priority,
+            lengthPerScale, SymbolRect.Everything, maxRatio: 0.5, selected);
+
+        // No two drawn symbols are closer than the S-98 spacing...
+        Assert.True(MinDistance(x, y, selected) >= minimum * (1 - 1e-9));
+        // ... and a row near the pole is thinned along it like one near 40° N,
+        // rather than drawn every column.
+        var byRow = selected.GroupBy(i => i / cols).ToDictionary(g => g.Key, g => g.Count());
+        Assert.Equal(byRow[byRow.Keys.Min()], byRow[byRow.Keys.Max()]);
+        Assert.Equal(27, byRow[byRow.Keys.Min()]); // columns 0, 3, …, 78
+        // Rows are drawn more often near the pole, where they are further apart.
+        var keptRows = byRow.Keys.OrderBy(r => r).ToList();
+        Assert.True(keptRows[1] - keptRows[0] < keptRows[^1] - keptRows[^2]);
+    }
+
+    [Fact]
+    public void ThinGrid_never_draws_cells_without_a_finite_position()
+    {
+        var grid = Grid(5, 5, spacing: 100); // far apart: n = 1
+        for (int c = 0; c < 5; c++)
+        {
+            grid.X[c] = double.NaN;
+            grid.Y[c] = double.NaN;
+        }
+
+        var selected = new List<int>();
+        SymbolThinning.ThinGrid(
+            5, 5, grid.X, grid.Y, grid.Scale, grid.Priority,
+            lengthPerScale: 10, SymbolRect.Everything, maxRatio: 0.5, selected);
+
+        Assert.Equal(20, selected.Count);
+        Assert.All(selected, i => Assert.True(i >= 5));
+    }
+
+    [Fact]
     public void ThinPoints_keeps_the_faster_of_two_close_points()
     {
         double[] x = [0, 5];

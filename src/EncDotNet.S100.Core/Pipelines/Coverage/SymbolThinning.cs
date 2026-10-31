@@ -73,11 +73,15 @@ public static class SymbolThinning
     /// <summary>
     /// Thins a regular grid of symbols with the S-98 Appendix G-1.1 algorithm:
     /// draws every <see cref="GridIncrement"/>th row and column, counted from a
-    /// seed cell that holds the largest symbol in the displayed field.
+    /// seed cell that holds the largest symbol in the grid, with the increment
+    /// set by the largest symbol in the displayed field.
     /// </summary>
     /// <param name="rows">Number of grid rows.</param>
     /// <param name="cols">Number of grid columns.</param>
-    /// <param name="x">Per-cell symbol x position, row-major (<c>rows × cols</c>).</param>
+    /// <param name="x">
+    /// Per-cell symbol x position, row-major (<c>rows × cols</c>). A cell with a
+    /// non-finite position (beyond the Web Mercator latitude limit, say) is never drawn.
+    /// </param>
     /// <param name="y">Per-cell symbol y position, row-major. y may increase up or down.</param>
     /// <param name="scale">
     /// Per-cell symbol scale, row-major. A cell with a NaN or non-positive scale
@@ -94,23 +98,33 @@ public static class SymbolThinning
     /// </param>
     /// <param name="displayed">The displayed field; only cells inside it are considered.</param>
     /// <param name="maxRatio">The ratio <c>Rmax</c>.</param>
-    /// <param name="selected">Receives the row-major indices of the cells to draw (cleared first).</param>
+    /// <param name="selected">Receives the row-major indices of the cells to draw, in ascending order (cleared first).</param>
     /// <remarks>
     /// <para>
-    /// <c>D</c> is the distance between the seed cell and its diagonal neighbour,
-    /// so it reflects the local cell size where the largest symbol is (a
-    /// geographic grid's cells shrink towards the poles in a Mercator display).
+    /// Choice (S-98 G-1.1 lets implementers "adapt the determination of the seed
+    /// point"): the seed is the largest symbol in the whole grid, fastest first,
+    /// not the largest in the displayed field. A seed taken from the view moves
+    /// whenever panning brings a faster current or wind into it, and with it the
+    /// whole drawn lattice, so the symbols jitter over an area that hasn't
+    /// changed. The grid's seed is still "the row and column with the maximum
+    /// vector" S-111 §9.3.2 asks to keep, and it never moves while panning. Only
+    /// the increment depends on the view, through the largest displayed symbol,
+    /// so the lattice changes with zoom (and when a larger symbol enters view)
+    /// but not with panning.
     /// </para>
     /// <para>
-    /// Choice (S-98 G-1.1 lets implementers "adapt the determination of the seed
-    /// point"): the seed is the fastest current among the largest symbols, not
-    /// the first largest symbol in row-major order. S-111 arrows bottom out at
-    /// the <c>Slow</c> size, so in a slow field every cell ties for largest and a
-    /// row-major seed would move — and the drawn lattice would jump — whenever
-    /// panning brought a new top-left cell into view. The fastest current is
-    /// what S-111 §9.3.2 asks to keep ("the row and column with the maximum
-    /// vector") and it only changes when a faster current enters or leaves the
-    /// view.
+    /// Choice: the increment is worked out per axis and per cell rather than once
+    /// from the seed cell's diagonal. A geographic grid's cells are not square in
+    /// a Mercator display, and they grow taller towards the poles (by
+    /// <c>1/cos(latitude)</c>) while their width stays put. One diagonal increment
+    /// for the whole view draws rows near the poles far apart and the symbols
+    /// along each of them nearly touching. Instead, rows are walked out from the
+    /// seed row along the seed column, and each row's columns out from the seed
+    /// column along that row, keeping the next cell whose distance from the last
+    /// kept one <c>d</c> satisfies Eqn 9.2 with <c>D = √2 · d</c>. On a uniform
+    /// square grid that is exactly every <see cref="GridIncrement"/>th row and
+    /// column; on a geographic grid it draws fewer rows near the equator than
+    /// near the poles, so the drawn spacing stays about the same on screen.
     /// </para>
     /// </remarks>
     public static void ThinGrid(
@@ -135,55 +149,108 @@ public static class SymbolThinning
             return;
         }
 
-        // Pass 1: the largest symbol in the displayed field and the seed cell.
+        // Pass 1: the largest symbol in the displayed field, which sets the
+        // spacing, and the seed cell, the largest symbol in the grid.
         int seed = -1;
         float maxScale = 0;
+        float seedScale = 0;
         float seedPriority = float.NegativeInfinity;
         for (int i = 0; i < count; i++)
         {
             float s = scale[i];
-            if (!(s > 0) || !displayed.Contains(x[i], y[i]))
+            if (!(s > 0) || !double.IsFinite(x[i]) || !double.IsFinite(y[i]))
                 continue;
 
-            float p = float.IsNaN(priority[i]) ? float.NegativeInfinity : priority[i];
-            if (s > maxScale || (s == maxScale && p > seedPriority))
-            {
+            if (s > maxScale && displayed.Contains(x[i], y[i]))
                 maxScale = s;
+
+            float p = float.IsNaN(priority[i]) ? float.NegativeInfinity : priority[i];
+            if (s > seedScale || (s == seedScale && p > seedPriority))
+            {
+                seedScale = s;
                 seedPriority = p;
                 seed = i;
             }
         }
 
-        if (seed < 0)
+        if (!(maxScale > 0))
             return;
 
         int seedRow = seed / cols;
         int seedCol = seed % cols;
+        double maxLength = maxScale * lengthPerScale;
 
-        // D: the seed cell's diagonal. Use whichever diagonal neighbour exists.
-        double diagonal = 0;
-        if (rows > 1 && cols > 1)
+        // Pass 2: the rows, along the seed column, then each kept row's
+        // columns, along the row.
+        var keptRows = new bool[rows];
+        MarkLattice(x, y, seedCol, cols, rows, seedRow, maxLength, maxRatio, keptRows);
+
+        var keptCols = new bool[cols];
+        for (int r = 0; r < rows; r++)
         {
-            int nRow = seedRow + 1 < rows ? seedRow + 1 : seedRow - 1;
-            int nCol = seedCol + 1 < cols ? seedCol + 1 : seedCol - 1;
-            int neighbour = nRow * cols + nCol;
-            double dx = x[neighbour] - x[seed];
-            double dy = y[neighbour] - y[seed];
-            diagonal = Math.Sqrt(dx * dx + dy * dy);
-        }
-
-        int n = GridIncrement(diagonal, maxScale * lengthPerScale, maxRatio);
-
-        // Pass 2: every nth row and column, counted from the seed.
-        for (int i = 0; i < count; i++)
-        {
-            if (!(scale[i] > 0) || !displayed.Contains(x[i], y[i]))
+            if (!keptRows[r])
                 continue;
 
-            int r = i / cols;
-            int c = i - r * cols;
-            if (Mod(r - seedRow, n) == 0 && Mod(c - seedCol, n) == 0)
-                selected.Add(i);
+            int rowStart = r * cols;
+            MarkLattice(x, y, rowStart, 1, cols, seedCol, maxLength, maxRatio, keptCols);
+            for (int c = 0; c < cols; c++)
+            {
+                int i = rowStart + c;
+                if (keptCols[c] && scale[i] > 0 && displayed.Contains(x[i], y[i]))
+                    selected.Add(i);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Marks the cells of one grid line (a column, or a row) to draw: the
+    /// anchor, then walking out from it both ways, each next cell far enough
+    /// from the last kept one to satisfy Eqn 9.2 with <c>D = √2 · d</c>.
+    /// </summary>
+    /// <param name="x">Per-cell x, row-major.</param>
+    /// <param name="y">Per-cell y, row-major.</param>
+    /// <param name="start">Index of the line's first cell.</param>
+    /// <param name="stride">Index step between the line's cells: the column count for a column, 1 for a row.</param>
+    /// <param name="length">Number of cells on the line.</param>
+    /// <param name="anchor">Position on the line of the cell the lattice is counted from.</param>
+    /// <param name="maxSymbolLength">The largest displayed symbol's length.</param>
+    /// <param name="maxRatio">The ratio <c>Rmax</c>.</param>
+    /// <param name="kept">Receives, per position on the line, whether its cell is drawn (cleared first).</param>
+    private static void MarkLattice(
+        ReadOnlySpan<double> x,
+        ReadOnlySpan<double> y,
+        int start,
+        int stride,
+        int length,
+        int anchor,
+        double maxSymbolLength,
+        double maxRatio,
+        Span<bool> kept)
+    {
+        kept.Clear();
+        int anchorIndex = start + (anchor * stride);
+        if (!double.IsFinite(x[anchorIndex]) || !double.IsFinite(y[anchorIndex]))
+            return;
+
+        kept[anchor] = true;
+        for (int step = -1; step <= 1; step += 2)
+        {
+            int last = anchorIndex;
+            for (int k = anchor + step; k >= 0 && k < length; k += step)
+            {
+                int i = start + (k * stride);
+                if (!double.IsFinite(x[i]) || !double.IsFinite(y[i]))
+                    continue;
+
+                double dx = x[i] - x[last];
+                double dy = y[i] - y[last];
+                double diagonal = Math.Sqrt(2 * ((dx * dx) + (dy * dy)));
+                if (!(maxSymbolLength > 0) || !(maxRatio > 0) || maxSymbolLength / diagonal < maxRatio)
+                {
+                    kept[k] = true;
+                    last = i;
+                }
+            }
         }
     }
 
