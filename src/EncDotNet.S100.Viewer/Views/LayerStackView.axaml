@@ -97,7 +97,7 @@
                                                           AutomationProperties.Name="{Binding DatasetLabel}"
                                                           AutomationProperties.AutomationId="LayerStack.Entry.Active"
                                                           IsChecked="{Binding IsActive, Mode=TwoWay}"
-                                                          ToolTip.Tip="{x:Static loc:Strings.LayerStack_ActiveTooltip}"
+                                                          ToolTip.Tip="{Binding ActiveTooltip}"
                                                           VerticalAlignment="Center" />
                                                 <StackPanel Grid.Column="1"
                                                             VerticalAlignment="Center"

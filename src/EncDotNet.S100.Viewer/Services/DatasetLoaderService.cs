@@ -708,6 +708,25 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     public void SetPortrayalTimeOnLoad(Func<DatasetEntry, IDatasetProcessor, PortrayalTime?>? policy) =>
         _portrayalTimeOnLoad = policy;
 
+    private Func<DatasetEntry, IDatasetProcessor, bool?>? _activeOnLoad;
+
+    /// <inheritdoc />
+    public void SetActiveOnLoad(Func<DatasetEntry, IDatasetProcessor, bool?>? policy) =>
+        _activeOnLoad = policy;
+
+    private Func<DatasetEntry, string, bool?>? _subLayerVisibilityOnLoad;
+
+    // Sub-layers the policy has decided, so a lazy reload or a re-render
+    // keeps the mariner's own toggle afterwards. Cleared with each new policy.
+    private readonly HashSet<(MapDatasetId Dataset, string Key)> _subLayersDecided = [];
+
+    /// <inheritdoc />
+    public void SetSubLayerVisibilityOnLoad(Func<DatasetEntry, string, bool?>? policy)
+    {
+        _subLayerVisibilityOnLoad = policy;
+        _subLayersDecided.Clear();
+    }
+
     private void ApplyPostRegistrationPolicies(
         DatasetEntry entry,
         IDatasetProcessor processor,
@@ -718,6 +737,14 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             entry.HiddenFeatures = hiddenFeatures(entry, processor);
         if (_portrayalTimeOnLoad is { } portrayalTime)
             entry.PortrayalTime = portrayalTime(entry, processor);
+
+        // The active display combination decides whether the dataset takes
+        // part in the S-98 rules, before the first stack evaluation, so a
+        // product it leaves out never paints for a frame. Only on the
+        // session's first load: a lazy reload keeps whatever the mariner set
+        // since.
+        if (!wasKnownBySession && _activeOnLoad?.Invoke(entry, processor) is { } active)
+            entry.IsActive = active;
 
         // Collapse duplicate coverage products: S-111/S-104 exchange sets
         // routinely bundle several variants of the same cell (e.g. neap /
@@ -1058,6 +1085,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         _mapSession?.RemoveDataset(entry.Id);
         _processorEntries.Remove(entry.Id);
         _sessionEntries.Remove(entry.Id);
+        _subLayersDecided.RemoveWhere(decided => decided.Dataset == entry.Id);
         _library.RemoveSessionCatalogue(entry.DisplayName);
         entry.IsLoaded = false;
         DatasetRemoved?.Invoke(entry);
@@ -1159,6 +1187,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
 
         var existing = entry.SubLayers.ToDictionary(s => s.Key, s => s);
         var projected = new List<DatasetSubLayer>(snapshot.Dataset.SubLayers.Count);
+        var decided = false;
         foreach (var state in snapshot.Dataset.SubLayers)
         {
             if (!existing.TryGetValue(state.Key, out var subLayer))
@@ -1170,6 +1199,16 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             subLayer.PropertyChanged -= OnSubLayerPropertyChanged;
             subLayer.IsVisible = state.IsVisible;
             subLayer.Opacity = state.Opacity;
+            // The active display combination decides a sub-layer once, the
+            // first time the dataset produces it (s104.isolines, s111.arrows).
+            if (_subLayerVisibilityOnLoad is { } policy
+                && _subLayersDecided.Add((entry.Id, state.Key))
+                && policy(entry, state.Key) is { } visible
+                && visible != subLayer.IsVisible)
+            {
+                subLayer.IsVisible = visible;
+                decided = true;
+            }
             subLayer.PropertyChanged += OnSubLayerPropertyChanged;
             projected.Add(subLayer);
         }
@@ -1185,6 +1224,11 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         entry.CurrentTime = snapshot.Dataset.CurrentTime;
         entry.Info = snapshot.Info;
         entry.ContentMaxVisibleResolution = snapshot.ContentMaxVisibleResolution;
+
+        // Hand the decided sub-layers back to the session. Each key is
+        // decided once, so the projection this causes changes nothing more.
+        if (decided)
+            ApplyEntryState(entry);
     }
 
     private void UnsubscribeSubLayers(DatasetEntry entry)
@@ -1199,7 +1243,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     /// new processor that forgets to add a translation still shows
     /// something readable.
     /// </summary>
-    private static string ResolveSubLayerDisplayName(string key) => key switch
+    internal static string ResolveSubLayerDisplayName(string key) => key switch
     {
         "s111.arrows" => Strings.SubLayer_S111_Arrows,
         "weather.wave.height" => Strings.SubLayer_Weather_WaveHeight,

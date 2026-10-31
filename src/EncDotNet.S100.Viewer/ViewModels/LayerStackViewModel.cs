@@ -85,13 +85,25 @@ internal sealed class LayerStackViewModel : ViewModelBase
     /// <summary>"Active vs. Visibility" help text for the panel footer.</summary>
     public string ActiveVsVisibilityHelp => Strings.LayerStack_VisibilityVsActive_HelpText;
 
+    private readonly Func<string, string?>? _inactiveReason;
+
     public LayerStackViewModel(
         IDatasetLoaderService loader,
         IS100DynamicSourceRegistry? dynamicSources = null,
-        ITimeFormatProvider? timeFormat = null)
+        ITimeFormatProvider? timeFormat = null,
+        Services.DisplayCombinations.DisplayCombinationService? displayCombinations = null,
+        DatasetsViewModel? datasets = null)
     {
         ArgumentNullException.ThrowIfNull(loader);
         _loader = loader;
+        if (displayCombinations is not null && datasets is not null)
+        {
+            // "Not in Pilotage" on the Active toggle of a dataset the active
+            // display combination left out (#1192).
+            _inactiveReason = id => datasets.Entries.FirstOrDefault(e => e.Id.Value == id) is { } entry
+                ? displayCombinations.InactiveReason(entry)
+                : null;
+        }
         _dynamicSources = dynamicSources;
         _timeFormat = timeFormat;
         _ = _timeFormat; // reserved for PR-L4 per-entry timestamp display
@@ -166,7 +178,7 @@ internal sealed class LayerStackViewModel : ViewModelBase
             var datasetChildren = planeEntriesList
                 .OrderByDescending(e => e.WithinPlanePriority)
                 .ThenBy(e => e.SourceDatasetId, StringComparer.Ordinal)
-                .Select(e => (ViewModelBase)new LayerStackEntryViewModel(_loader, e));
+                .Select(e => (ViewModelBase)new LayerStackEntryViewModel(_loader, e, _inactiveReason));
 
             // Dynamic rows: placed below the dataset rows in the panel.
             var dynamicChildren = dynamicForPlane
@@ -357,14 +369,27 @@ internal sealed class LayerStackEntryViewModel : ViewModelBase
         Entry.Item.Payload is CoverageStackPayload coverage ? coverage.SubLayer.LayerName : DatasetLabel,
         Legend.Count);
 
-    public LayerStackEntryViewModel(IDatasetLoaderService loader, LayerStackEntry entry)
+    public LayerStackEntryViewModel(
+        IDatasetLoaderService loader,
+        LayerStackEntry entry,
+        Func<string, string?>? inactiveReason = null)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(entry);
         _loader = loader;
         Entry = entry;
         Legend = LegendOf(entry);
+        _inactiveReason = inactiveReason;
     }
+
+    private readonly Func<string, string?>? _inactiveReason;
+
+    /// <summary>
+    /// The Active toggle's tooltip: why the dataset is inactive when a display
+    /// combination left it out ("Not in Pilotage"), else what Active means.
+    /// </summary>
+    public string ActiveTooltip =>
+        _inactiveReason?.Invoke(Entry.SourceDatasetId) ?? Strings.LayerStack_ActiveTooltip;
 
     private static IReadOnlyList<LayerStackLegendItemViewModel> LegendOf(LayerStackEntry entry) =>
         entry.Item.Payload is CoverageStackPayload { SubLayer: GridCoverageSubLayer { Legend: { Count: > 0 } legend } }

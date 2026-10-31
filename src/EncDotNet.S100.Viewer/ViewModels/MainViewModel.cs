@@ -51,6 +51,12 @@ internal sealed class MainViewModel : ViewModelBase
     public Services.NavigationalWarningDrawingService? NavigationalWarningDrawing { get; }
 
     /// <summary>
+    /// The display combinations behind the map's <b>View ▾</b> pill, or
+    /// <see langword="null"/> where they aren't wired (tests).
+    /// </summary>
+    public DisplayCombinationsViewModel? DisplayCombinations { get; }
+
+    /// <summary>
     /// Identifier of the default tab selected on a fresh launch (and the
     /// fallback when a persisted <see cref="ViewerSettings.LastSelectedActivity"/>
     /// no longer resolves to a registered tab).
@@ -1303,7 +1309,8 @@ internal sealed class MainViewModel : ViewModelBase
         McpServerHost? mcpServerHost = null,
         RoutesService? routes = null,
         NavigationalWarningsViewModel? navigationalWarnings = null,
-        Services.NavigationalWarningDrawingService? navigationalWarningDrawing = null)
+        Services.NavigationalWarningDrawingService? navigationalWarningDrawing = null,
+        DisplayCombinationsViewModel? displayCombinations = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(featureCatalogues);
@@ -1368,6 +1375,7 @@ internal sealed class MainViewModel : ViewModelBase
         Timeline = timeline;
         NavigationalWarnings = navigationalWarnings;
         NavigationalWarningDrawing = navigationalWarningDrawing;
+        DisplayCombinations = displayCombinations;
         DisplayToolbar = displayToolbar;
         TextToolbar = textToolbar;
         DisplayModeToolbar = displayModeToolbar;
