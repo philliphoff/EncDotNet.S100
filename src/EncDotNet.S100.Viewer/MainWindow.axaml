@@ -688,9 +688,11 @@
                                    VerticalAlignment="Center" />
                     </StackPanel>
                 </Panel>
-                <!-- The Range & bearing card (#1130 D13) takes the slot under the
-                     time stamp; the warning note moves down below it (D19). -->
-                <StackPanel HorizontalAlignment="Left"
+                <!-- The tool cards (#1130 D13) take the slot under the time stamp;
+                     the warning note moves down below them (D19). The measure card
+                     goes first, then Range & bearing. -->
+                <StackPanel x:Name="MapTopLeftStack"
+                            HorizontalAlignment="Left"
                             VerticalAlignment="Top"
                             Margin="12,44,64,0"
                             Spacing="8">
