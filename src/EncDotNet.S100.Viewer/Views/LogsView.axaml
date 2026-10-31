@@ -86,7 +86,8 @@
                         </DataTemplate>
                     </ComboBox.ItemTemplate>
                 </ComboBox>
-                <TextBox AutomationProperties.AutomationId="Logs.Search"
+                <TextBox x:Name="SearchBox"
+                         AutomationProperties.AutomationId="Logs.Search"
                          AutomationProperties.Name="{x:Static loc:Strings.Label_LogsSearch}"
                          Text="{Binding SearchText, Mode=TwoWay}"
                          PlaceholderText="{x:Static loc:Strings.Logs_SearchWatermark}"
@@ -99,24 +100,6 @@
             </Grid>
 
             <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" ItemsAlignment="End">
-                <TextBlock Text="{Binding PausedText}"
-                           IsVisible="{Binding IsPaused}"
-                           FontSize="11.5"
-                           Opacity="0.75"
-                           VerticalAlignment="Center"
-                           Margin="0,0,4,0" />
-                <ToggleButton Classes="Ghost logsTool"
-                              AutomationProperties.AutomationId="Logs.Pause"
-                              AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_LogsPause}"
-                              Content="{x:Static loc:Strings.Logs_Pause}"
-                              ToolTip.Tip="{x:Static loc:Strings.Tooltip_LogsPause}"
-                              IsChecked="{Binding IsPaused, Mode=TwoWay}" />
-                <ToggleButton Classes="Ghost logsTool"
-                              AutomationProperties.AutomationId="Logs.AutoScroll"
-                              AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_LogsAutoScroll}"
-                              Content="{x:Static loc:Strings.Logs_AutoScroll}"
-                              ToolTip.Tip="{x:Static loc:Strings.Tooltip_LogsAutoScroll}"
-                              IsChecked="{Binding AutoScroll, Mode=TwoWay}" />
                 <ToggleButton Classes="Ghost logsTool"
                               AutomationProperties.AutomationId="Logs.Verbose"
                               AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_LogsVerbose}"
@@ -240,6 +223,27 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+                <!--
+                    While the list isn't following the tail (#1173), new rows
+                    append below the ones being read; this pill says how many
+                    and goes back to the newest (End does the same).
+                -->
+                <Button Classes="Primary"
+                        AutomationProperties.AutomationId="Logs.NewEntries"
+                        AutomationProperties.Name="{Binding NewEntriesName}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_LogsNewEntries}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_LogsNewEntries}"
+                        Command="{Binding ResumeFollowingCommand}"
+                        Content="{Binding NewEntriesText}"
+                        IsVisible="{Binding HasNewEntries}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Bottom"
+                        Margin="0,0,0,8"
+                        Height="24"
+                        MinHeight="0"
+                        Padding="10,0"
+                        CornerRadius="12"
+                        FontSize="11.5" />
             </Panel>
 
             <!-- Details of the selected entry: the full message and the exception. -->

@@ -585,22 +585,6 @@
     <value>Filter by message or area…</value>
     <comment>Placeholder of the Logs panel's search box (#1080).</comment>
   </data>
-  <data name="Logs_Pause" xml:space="preserve">
-    <value>Pause</value>
-    <comment>Logs panel toggle that freezes the list (#1080).</comment>
-  </data>
-  <data name="Tooltip_LogsPause" xml:space="preserve">
-    <value>Stop adding new entries to the list while you read; they are still recorded</value>
-    <comment>Tooltip of the Logs panel's Pause toggle (#1080).</comment>
-  </data>
-  <data name="Logs_AutoScroll" xml:space="preserve">
-    <value>Auto-scroll</value>
-    <comment>Logs panel toggle that keeps the newest entry in view (#1080).</comment>
-  </data>
-  <data name="Tooltip_LogsAutoScroll" xml:space="preserve">
-    <value>Keep the newest entry in view</value>
-    <comment>Tooltip of the Logs panel's Auto-scroll toggle (#1080).</comment>
-  </data>
   <data name="Logs_Verbose" xml:space="preserve">
     <value>Verbose</value>
     <comment>Logs panel toggle that also records Debug messages (#1080).</comment>
@@ -641,9 +625,17 @@
     <value>No entries match the filter.</value>
     <comment>Logs panel empty state while the level filter or search hides every entry (#1080).</comment>
   </data>
-  <data name="Logs_PausedFormat" xml:space="preserve">
-    <value>Paused · {0} new</value>
-    <comment>Logs panel status while paused; {0} is how many messages arrived since (#1080).</comment>
+  <data name="Logs_NewEntriesFormat" xml:space="preserve">
+    <value>↓ {0} new</value>
+    <comment>Logs panel pill at the list's bottom edge while it isn't following new entries; {0} is how many shown entries arrived below (#1173).</comment>
+  </data>
+  <data name="Label_LogsNewEntriesFormat" xml:space="preserve">
+    <value>{0} new entries, show the newest</value>
+    <comment>Accessible name of the Logs panel's new-entries pill; {0} is how many shown entries arrived below (#1173).</comment>
+  </data>
+  <data name="Tooltip_LogsNewEntries" xml:space="preserve">
+    <value>Scroll to the newest entry and keep following new ones (End)</value>
+    <comment>Tooltip of the Logs panel's new-entries pill (#1173).</comment>
   </data>
   <data name="Logs_RepeatFormat" xml:space="preserve">
     <value>×{0}</value>

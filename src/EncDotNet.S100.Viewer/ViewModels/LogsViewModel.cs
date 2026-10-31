@@ -21,8 +21,8 @@ internal sealed record LogLevelFilterOption(LogLevel Level, string Label)
 
 /// <summary>
 /// View-model for the Logs tab in the bottom dock (#1080): the recent entries
-/// of the <see cref="LogBuffer"/>, filtered by level and text, with Pause,
-/// Auto-scroll, Copy, Clear, a Verbose toggle and Send feedback.
+/// of the <see cref="LogBuffer"/>, filtered by level and text, with Copy,
+/// Clear, a Verbose toggle and Send feedback.
 /// </summary>
 /// <remarks>
 /// The buffer raises <see cref="LogBuffer.Changed"/> at most once per
@@ -30,6 +30,13 @@ internal sealed record LogLevelFilterOption(LogLevel Level, string Label)
 /// becomes one refresh here: new entries are appended, entries the buffer
 /// dropped are removed from the front and a collapsed repeat updates its row's
 /// count, all without rebuilding the list. Only a very large batch resets it.
+/// <para>
+/// The list follows the tail (#1173): while <see cref="IsFollowing"/>, the view
+/// keeps the newest row in view. Scrolling up, selecting a row or focusing the
+/// search stops following; rows keep arriving, the view keeps the rows the user
+/// is reading in place and <see cref="NewEntriesCount"/> counts the rows below.
+/// The new-entries pill, <c>End</c> or scrolling back to the bottom resumes.
+/// </para>
 /// </remarks>
 internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivityTabShown, IDisposable
 {
@@ -43,7 +50,7 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
     private long _lastSequence;
     private int _refreshPosted;
     private long _problemsSeen;
-    private long _totalAtPause;
+    private long _followStoppedAt;
     private bool _isTabShown;
     private bool _disposed;
 
@@ -74,6 +81,8 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         ClearCommand = new RelayCommand(Clear);
         SendFeedbackCommand = new RelayCommand(() => _showFeedback?.Invoke(), () => _showFeedback is not null);
         CloseDetailsCommand = new RelayCommand(() => SelectedEntry = null);
+        CopySelectedEntryCommand = new RelayCommand(CopySelectedEntry, () => _selectedEntry is not null);
+        ResumeFollowingCommand = new RelayCommand(ResumeFollowing);
 
         // _problemsSeen starts at 0, so warnings logged at startup, before the
         // panel existed, show on the badge too.
@@ -85,8 +94,8 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
     /// <summary>The rows shown, oldest first: the buffer's entries that pass the level filter and the search.</summary>
     public ObservableCollection<LogRowViewModel> Entries { get; } = new BulkObservableCollection<LogRowViewModel>();
 
-    /// <summary>Raised after rows were appended to <see cref="Entries"/>, so the view can scroll to the newest when <see cref="AutoScroll"/> is on.</summary>
-    public event EventHandler? EntriesAppended;
+    /// <summary>Raised when the view should scroll to the newest row: rows arrived or the list was rebuilt while <see cref="IsFollowing"/>, or following resumed.</summary>
+    public event EventHandler? ScrollToNewestRequested;
 
     /// <summary>Raised with the text to put on the clipboard (Copy).</summary>
     public event EventHandler<string>? CopyRequested;
@@ -120,34 +129,46 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         }
     }
 
-    private bool _isPaused;
-    /// <summary>Whether the list is frozen while the user reads it; new entries keep arriving in the buffer.</summary>
-    public bool IsPaused
+    private bool _isFollowing = true;
+    /// <summary>
+    /// Whether the list follows the tail, keeping the newest row in view. Off
+    /// once the user scrolls up, selects a row or focuses the search.
+    /// </summary>
+    public bool IsFollowing
     {
-        get => _isPaused;
-        set
+        get => _isFollowing;
+        private set
         {
-            if (!SetProperty(ref _isPaused, value))
+            if (!SetProperty(ref _isFollowing, value))
                 return;
-            if (value)
-            {
-                _totalAtPause = _buffer.TotalAdded;
-            }
-            else
-            {
-                Apply(_buffer.Snapshot());
-            }
-            OnPropertyChanged(nameof(PausedText));
+            if (!value)
+                _followStoppedAt = _lastSequence;
+            RaiseNewEntries();
         }
     }
 
-    private bool _autoScroll = true;
-    /// <summary>Whether the list scrolls to the newest entry as entries arrive.</summary>
-    public bool AutoScroll
+    /// <summary>How many shown rows arrived since following stopped; 0 while following.</summary>
+    public int NewEntriesCount
     {
-        get => _autoScroll;
-        set => SetProperty(ref _autoScroll, value);
+        get
+        {
+            if (_isFollowing)
+                return 0;
+            var count = 0;
+            for (var i = Entries.Count - 1; i >= 0 && Entries[i].Sequence > _followStoppedAt; i--)
+                count++;
+            return count;
+        }
     }
+
+    /// <summary>Whether the new-entries pill shows: not following, and rows arrived below.</summary>
+    public bool HasNewEntries => NewEntriesCount > 0;
+
+    /// <summary>"↓ 12 new" for the new-entries pill.</summary>
+    public string NewEntriesText => string.Format(CultureInfo.CurrentCulture, Strings.Logs_NewEntriesFormat, NewEntriesCount);
+
+    /// <summary>The accessible name of the new-entries pill.</summary>
+    public string NewEntriesName => string.Format(CultureInfo.CurrentCulture, Strings.Label_LogsNewEntriesFormat, NewEntriesCount);
 
     /// <summary>
     /// Whether the buffer also captures Debug messages. Changes only what the
@@ -177,10 +198,17 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         get => _selectedEntry;
         set
         {
-            if (SetProperty(ref _selectedEntry, value))
-                OnPropertyChanged(nameof(HasSelectedEntry));
+            if (!SetProperty(ref _selectedEntry, value))
+                return;
+            OnPropertyChanged(nameof(HasSelectedEntry));
+            ((RelayCommand)CopySelectedEntryCommand).NotifyCanExecuteChanged();
+            // A selection pins the view, so the row stays where the user picked it.
+            if (value is not null && !_restoringSelection)
+                StopFollowing();
         }
     }
+
+    private bool _restoringSelection;
 
     /// <summary>Whether a row is selected.</summary>
     public bool HasSelectedEntry => _selectedEntry is not null;
@@ -196,11 +224,6 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
     /// <summary>Whether the empty state shows.</summary>
     public bool IsEmpty => Entries.Count == 0;
 
-    /// <summary>"Paused · 12 new" while paused, else empty.</summary>
-    public string PausedText => _isPaused
-        ? string.Format(CultureInfo.CurrentCulture, Strings.Logs_PausedFormat, Math.Max(0, _buffer.TotalAdded - _totalAtPause))
-        : string.Empty;
-
     /// <summary>Copies the shown entries as text.</summary>
     public ICommand CopyCommand { get; }
 
@@ -212,6 +235,68 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
 
     /// <summary>Closes the details pane by clearing the selection.</summary>
     public ICommand CloseDetailsCommand { get; }
+
+    /// <summary>Copies the selected entry as text, home directory redacted like Copy.</summary>
+    public ICommand CopySelectedEntryCommand { get; }
+
+    /// <summary>Scrolls to the newest row and follows the tail again (the new-entries pill, <c>End</c>).</summary>
+    public ICommand ResumeFollowingCommand { get; }
+
+    /// <summary>Stops following the tail: the view keeps the rows the user is reading in place.</summary>
+    public void StopFollowing() => IsFollowing = false;
+
+    /// <summary>Follows the tail again and asks the view to scroll to the newest row.</summary>
+    public void ResumeFollowing()
+    {
+        IsFollowing = true;
+        ScrollToNewestRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Takes a scroll the user made: away from the bottom stops following, and
+    /// back to the bottom resumes it unless a row is selected (the selection
+    /// keeps the view pinned until <see cref="ResumeFollowing"/>).
+    /// </summary>
+    /// <param name="atBottom">Whether the list is now scrolled to its last row.</param>
+    public void OnUserScrolled(bool atBottom)
+    {
+        if (!atBottom)
+            StopFollowing();
+        else if (_selectedEntry is null && !_isFollowing)
+            ResumeFollowing();
+    }
+
+    /// <summary>
+    /// Moves the selection by <paramref name="delta"/> rows (<c>↑</c>/<c>↓</c>),
+    /// clamped to the list. With nothing selected it selects the newest row.
+    /// </summary>
+    /// <returns>Whether the list had a row to select.</returns>
+    public bool MoveSelection(int delta)
+    {
+        if (Entries.Count == 0)
+            return false;
+        var index = _selectedEntry is null ? -1 : Entries.IndexOf(_selectedEntry);
+        index = index < 0 ? Entries.Count - 1 : Math.Clamp(index + delta, 0, Entries.Count - 1);
+        SelectedEntry = Entries[index];
+        return true;
+    }
+
+    /// <summary>Clears the selection, or the search when nothing is selected (<c>Esc</c>).</summary>
+    /// <returns>Whether there was anything to clear.</returns>
+    public bool ClearSelectionOrSearch()
+    {
+        if (_selectedEntry is not null)
+        {
+            SelectedEntry = null;
+            return true;
+        }
+        if (_searchText.Length > 0)
+        {
+            SearchText = string.Empty;
+            return true;
+        }
+        return false;
+    }
 
     /// <inheritdoc />
     public int BadgeCount => _isTabShown ? 0 : (int)Math.Min(int.MaxValue, Math.Max(0, _buffer.ProblemsAdded - _problemsSeen));
@@ -236,6 +321,11 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
     /// <summary>The text Copy puts on the clipboard: the shown entries, home directory redacted.</summary>
     internal string CopyText() => LogEntry.ToText(Entries.Select(r => r.Entry), HomePathRedactor.Redact);
 
+    /// <summary>The text Copy entry puts on the clipboard: the selected entry, home directory redacted, or empty.</summary>
+    internal string CopySelectedEntryText() => _selectedEntry is null
+        ? string.Empty
+        : LogEntry.ToText([_selectedEntry.Entry], HomePathRedactor.Redact);
+
     /// <summary>Applies the buffer's current state now (tests; the app refreshes on <see cref="LogBuffer.Changed"/>).</summary>
     internal void Refresh()
     {
@@ -243,11 +333,6 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         if (_disposed)
             return;
         RaiseBadge();
-        if (_isPaused)
-        {
-            OnPropertyChanged(nameof(PausedText));
-            return;
-        }
         Apply(_buffer.Snapshot());
     }
 
@@ -328,8 +413,9 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         }
         RestoreSelection(selected);
         RaiseListState();
-        if (added.Count > 0)
-            EntriesAppended?.Invoke(this, EventArgs.Empty);
+        RaiseNewEntries();
+        if (added.Count > 0 && _isFollowing)
+            ScrollToNewestRequested?.Invoke(this, EventArgs.Empty);
     }
 
     private void Refilter()
@@ -340,7 +426,9 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         RebuildEntries();
         RestoreSelection(selected);
         RaiseListState();
-        EntriesAppended?.Invoke(this, EventArgs.Empty);
+        RaiseNewEntries();
+        if (_isFollowing)
+            ScrollToNewestRequested?.Invoke(this, EventArgs.Empty);
     }
 
     private void RebuildEntries()
@@ -353,7 +441,15 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
     private void RestoreSelection(LogRowViewModel? selected)
     {
         // A rebuild can clear the list's selection; keep the user's row while it's still listed.
-        SelectedEntry = selected is not null && selected.IsShown && _all.Contains(selected) ? selected : null;
+        _restoringSelection = true;
+        try
+        {
+            SelectedEntry = selected is not null && selected.IsShown && _all.Contains(selected) ? selected : null;
+        }
+        finally
+        {
+            _restoringSelection = false;
+        }
     }
 
     private bool Matches(LogRowViewModel row)
@@ -377,14 +473,21 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
             CopyRequested?.Invoke(this, text);
     }
 
+    private void CopySelectedEntry()
+    {
+        var text = CopySelectedEntryText();
+        if (text.Length > 0)
+            CopyRequested?.Invoke(this, text);
+    }
+
     private void Clear()
     {
         _buffer.Clear();
         _problemsSeen = _buffer.ProblemsAdded;
-        _totalAtPause = _buffer.TotalAdded;
         Apply(_buffer.Snapshot());
         RaiseBadge();
-        OnPropertyChanged(nameof(PausedText));
+        // Nothing is left to read, so the next entries are followed again.
+        ResumeFollowing();
     }
 
     private void RaiseListState()
@@ -393,6 +496,14 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(EmptyText));
         ((RelayCommand)CopyCommand).NotifyCanExecuteChanged();
+    }
+
+    private void RaiseNewEntries()
+    {
+        OnPropertyChanged(nameof(NewEntriesCount));
+        OnPropertyChanged(nameof(HasNewEntries));
+        OnPropertyChanged(nameof(NewEntriesText));
+        OnPropertyChanged(nameof(NewEntriesName));
     }
 
     private void RaiseBadge()
