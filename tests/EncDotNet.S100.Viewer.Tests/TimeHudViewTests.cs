@@ -151,6 +151,46 @@ public sealed class TimeHudViewTests
     }
 
     [AvaloniaFact]
+    public async Task The_panel_button_says_show_timeline_while_the_dock_is_on_another_tab_and_hides_when_narrow()
+    {
+        // Time-overlays D9.
+        var (_, timeline) = CreateTimeline();
+        var hud = new TimeHudView { DataContext = timeline, MapWidth = 1200, IsDockOpen = true };
+        using var host = Show(hud);
+        var automation = new ViewerUiAutomation(() => [host.Window]);
+        var query = new UiTreeQuery(new UiTarget("TimeHud.DockToggle", null), Depth: 0, InteractiveOnly: true, MaxNodes: 10);
+
+        var button = (await automation.GetTreeAsync(query)).Roots[0].Element;
+        Assert.Equal(Strings.Label_ShowTimeline, button.Name);
+        Assert.Equal(Strings.Tooltip_TimeHudShowTimeline, button.HelpText);
+
+        hud.IsDockOpen = false;
+        button = (await automation.GetTreeAsync(query)).Roots[0].Element;
+        Assert.Equal(Strings.Label_OpenTimeline, button.Name);
+
+        hud.IsDockAvailable = false;
+        host.Settle();
+        Assert.False(host.IsShown("TimeHud.DockToggle"));
+    }
+
+    [AvaloniaFact]
+    public void The_time_and_the_step_buttons_say_what_they_do()
+    {
+        // Time-overlays D12: the time reads in full, the step buttons name the step.
+        var (_, timeline) = CreateTimeline();
+        timeline.NowCommand.Execute(null);
+        timeline.StepKind = TimelineStepKind.Hour;
+        using var host = Show(new TimeHudView { DataContext = timeline, MapWidth = 1200 });
+
+        var time = host.Find<Button>("TimeHud.Time");
+        Assert.Equal($"{timeline.CurrentTimeLabel}, live", Avalonia.Automation.AutomationProperties.GetName(time));
+        Assert.Equal($"Next step: {Strings.TimelinePanel_Step1H} (→)", ToolTip.GetTip(host.Find<Button>("TimeHud.Next")));
+
+        host.Click(host.Find<Button>("TimeHud.Next"));
+        Assert.Equal($"{timeline.CurrentTimeLabel}, in 1 h, pinned", Avalonia.Automation.AutomationProperties.GetName(time));
+    }
+
+    [AvaloniaFact]
     public void Clicking_the_time_focuses_the_bar_for_the_timeline_keys()
     {
         var (_, timeline) = CreateTimeline();
@@ -174,8 +214,9 @@ public sealed class TimeHudViewTests
         var time = await automation.ActAsync(new UiTarget("TimeHud.Time", null), UiAction.Invoke, null);
         host.Settle();
 
-        // Named by the time itself, with the tooltip as help text.
-        Assert.Equal(timeline.CurrentTimeLabel, time.Name);
+        // Named by the time read in full (time-overlays D12), with the tooltip as help text.
+        Assert.Equal(timeline.TimeReading, time.Name);
+        Assert.StartsWith(timeline.CurrentTimeLabel, time.Name, StringComparison.Ordinal);
         Assert.Equal(Strings.Tooltip_TimeHudTime, time.HelpText);
         Assert.True(hud.IsFocused);
     }

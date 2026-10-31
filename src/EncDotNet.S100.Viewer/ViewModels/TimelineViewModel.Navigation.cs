@@ -213,7 +213,10 @@ internal sealed partial class TimelineViewModel
         OnPropertyChanged(nameof(IsZoomed));
         OnPropertyChanged(nameof(PresetLabel));
         OnPropertyChanged(nameof(StepLabel));
+        OnPropertyChanged(nameof(NextStepTooltip));
+        OnPropertyChanged(nameof(PreviousStepTooltip));
         OnPropertyChanged(nameof(DriverOptions));
+        OnPropertyChanged(nameof(StepLabelCandidates));
     }
 
     /// <summary>True when <paramref name="time"/> needs the axis rebuilt: off the window, or inside a collapsed gap.</summary>
@@ -293,6 +296,8 @@ internal sealed partial class TimelineViewModel
             _stepKind = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(StepLabel));
+            OnPropertyChanged(nameof(NextStepTooltip));
+            OnPropertyChanged(nameof(PreviousStepTooltip));
             OnPropertyChanged(nameof(RangeLabel));
             OnPropertyChanged(nameof(DriverOptions));
             RaiseSteps();
@@ -310,6 +315,29 @@ internal sealed partial class TimelineViewModel
         TimelineStepKind.Boundary => Strings.TimelinePanel_StepBoundaryShort,
         _ => Strings.TimelinePanel_StepDataShort,
     };
+
+    /// <summary>
+    /// Every label the step menu can show: the fixed steps and each loaded
+    /// layer. The menu button is as wide as the longest, so choosing a step
+    /// doesn't move the buttons beside it (time-overlays D13).
+    /// </summary>
+    public IReadOnlyList<string> StepLabelCandidates =>
+    [
+        Strings.TimelinePanel_Step10Min,
+        Strings.TimelinePanel_Step1H,
+        Strings.TimelinePanel_Step6H,
+        Strings.TimelinePanel_Step1Day,
+        Strings.TimelinePanel_StepSampleOf,
+        Strings.TimelinePanel_StepBoundaryShort,
+        Strings.TimelinePanel_StepDataShort,
+        .. _service.TimedDatasets.Select(DriverLabel),
+    ];
+
+    /// <summary>‹'s tooltip, naming the step: "Previous step: 1 h (←)" (time-overlays D12).</summary>
+    public string PreviousStepTooltip => string.Format(CultureInfo.CurrentCulture, Strings.Tooltip_TimelinePreviousStepFormat, StepLabel);
+
+    /// <summary>›'s tooltip, naming the step: "Next step: 1 h (→)" (time-overlays D12).</summary>
+    public string NextStepTooltip => string.Format(CultureInfo.CurrentCulture, Strings.Tooltip_TimelineNextStepFormat, StepLabel);
 
     /// <summary>The layers the step can follow, for "Sample of ▸".</summary>
     public IReadOnlyList<TimelineDriverOption> DriverOptions
@@ -383,6 +411,18 @@ internal sealed partial class TimelineViewModel
 
     /// <summary>True when the axis shows less than everything loaded.</summary>
     public bool IsZoomed => _zoom is not null;
+
+    /// <summary>Every label the preset menu can show; the button is as wide as the longest (time-overlays D13).</summary>
+    public IReadOnlyList<string> PresetLabelCandidates { get; } =
+    [
+        Strings.TimelinePanel_PresetNowSixHours,
+        Strings.TimelinePanel_PresetToday,
+        Strings.TimelinePanel_PresetNext48Hours,
+        Strings.TimelinePanel_PresetThisRun,
+        Strings.TimelinePanel_PresetInView,
+        Strings.TimelinePanel_PresetAllLoaded,
+        Strings.TimelinePanel_PresetCustom,
+    ];
 
     /// <summary>The preset menu's label: the preset in force, or "Custom" after a zoom or pan.</summary>
     public string PresetLabel => _preset switch

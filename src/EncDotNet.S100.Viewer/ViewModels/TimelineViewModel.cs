@@ -82,6 +82,11 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
         InitializeNavigation();
         InitializeLanes(scope, library);
         NowCommand = new RelayCommand(GoLive, () => IsActive && !IsLive);
+        LiveToggleCommand = new RelayCommand(() =>
+        {
+            if (NowCommand.CanExecute(null))
+                NowCommand.Execute(null);
+        });
         CloseCommand = new RelayCommand(() => CloseRequested?.Invoke());
         CheckForNewRunsCommand = new RelayCommand(() => _refresher?.RefreshForecastSources(), () => _refresher?.HasForecastSources == true);
         JumpToDataCommand = new RelayCommand(JumpToData, () => NearestData() is not null);
@@ -115,6 +120,7 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
             }
             OnPropertyChanged(nameof(SliderValue));
             OnPropertyChanged(nameof(CurrentTimeLabel));
+            OnPropertyChanged(nameof(TimeReading));
             RaiseSteps();
             RaiseNow();
         };
@@ -129,6 +135,7 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
             _timeFormat.TimeFormatChanged += _ =>
             {
                 OnPropertyChanged(nameof(CurrentTimeLabel));
+                OnPropertyChanged(nameof(TimeReading));
                 OnPropertyChanged(nameof(WidestTimeLabel));
                 OnPropertyChanged(nameof(RangeLabel));
                 OnPropertyChanged(nameof(StampText));
@@ -170,6 +177,7 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
         OnPropertyChanged(nameof(SliderValue));
         OnPropertyChanged(nameof(RangeLabel));
         OnPropertyChanged(nameof(CurrentTimeLabel));
+        OnPropertyChanged(nameof(TimeReading));
         OnPropertyChanged(nameof(Ticks));
         OnPropertyChanged(nameof(IsSnapToTickEnabled));
         OnPropertyChanged(nameof(TickFrequency));
@@ -268,6 +276,13 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     /// </summary>
     public ICommand NowCommand { get; }
 
+    /// <summary>
+    /// The Live / Go live toggle (time-overlays D5, D13): goes live while
+    /// pinned and does nothing while live, so it never looks disabled and a
+    /// repeated click is safe.
+    /// </summary>
+    public ICommand LiveToggleCommand { get; }
+
     /// <summary>Refreshes the Library's forecast sources ("Check for new runs").</summary>
     public ICommand CheckForNewRunsCommand { get; }
 
@@ -306,9 +321,6 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
 
     /// <summary>The Live toggle's tooltip: what Live means while live, else what Go live does.</summary>
     public string LiveToggleTooltip => IsLive ? Strings.Tooltip_TimeHudLive : Strings.Tooltip_TimelineNow;
-
-    /// <summary>"LIVE" or "PINNED", for the mode pill.</summary>
-    public string ModeLabel => IsLive ? Strings.TimelinePanel_Live : Strings.TimelinePanel_Pinned;
 
     /// <summary>
     /// True when the timeline spans forecasts: a dataset whose processor
@@ -515,9 +527,9 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     {
         OnPropertyChanged(nameof(IsLive));
         OnPropertyChanged(nameof(IsNotRealTime));
-        OnPropertyChanged(nameof(ModeLabel));
         OnPropertyChanged(nameof(LiveToggleText));
         OnPropertyChanged(nameof(LiveToggleTooltip));
+        OnPropertyChanged(nameof(TimeReading));
         OnPropertyChanged(nameof(IsForecastTimeline));
         OnPropertyChanged(nameof(IsNowInRange));
         OnPropertyChanged(nameof(NowPosition));
@@ -594,6 +606,17 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
         else
             Avalonia.Threading.Dispatcher.UIThread.Post(action);
     }
+
+    /// <summary>
+    /// The time as a screen reader reads it (time-overlays D12): "10/31/2026
+    /// 2:00 PM, in 23 min, pinned" or "10/31/2026 2:00 PM, live".
+    /// </summary>
+    public string TimeReading =>
+        _service.CurrentTime is null
+            ? string.Empty
+            : IsLive
+                ? string.Format(CultureInfo.CurrentCulture, Strings.TimeHud_ReadingLiveFormat, CurrentTimeLabel)
+                : string.Format(CultureInfo.CurrentCulture, Strings.TimeHud_ReadingPinnedFormat, CurrentTimeLabel, OffsetText);
 
     /// <summary>Display text for the currently selected time, formatted via <see cref="TimeFormatting"/>.</summary>
     public string CurrentTimeLabel =>

@@ -142,4 +142,55 @@ public sealed class TimelineViewTests
         {
         }
     }
+
+    [AvaloniaFact]
+    public void The_step_buttons_stay_put_while_stepping_going_live_and_changing_the_step()
+    {
+        // Time-overlays D13: Go live is always there at a fixed size and the
+        // step menu is as wide as its longest label, so ⏮ ‹ › ⏭ don't jump when
+        // the time is pinned (Go live used to appear and push them ~80 px left).
+        var service = new GlobalTimeService();
+        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action());
+        var samples = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
+        service.ApplySnapshot(new MapsuiMapTimeSnapshot
+        {
+            Minimum = samples[0],
+            Maximum = samples[^1],
+            Current = samples[0],
+            Samples = samples,
+            CoverageSegments = [new MapsuiMapTimeSegment(samples[0], samples[^1])],
+            Datasets = [new MapsuiMapTimedDataset("111US00_CBOFS_20261002T00Z_US4MD1DD", samples[0], samples[^1]) { ProductSpec = "S-111", Samples = samples }],
+        });
+        timeline.NowCommand.Execute(null);
+        timeline.StepKind = TimelineStepKind.Hour;
+        using var host = Headless.ViewHost.Show(new TimelineView { DataContext = timeline }, width: 1100, height: 320);
+        string[] ids = ["Timeline.PreviousData", "Timeline.PreviousStep", "Timeline.StepMenu", "Timeline.NextStep", "Timeline.NextData", "Timeline.GoLive"];
+        Rect[] Bounds()
+        {
+            host.Settle();
+            return ids.Select(id => host.Find<Button>(id)).Select(b => new Rect(b.TranslatePoint(default, host.Window)!.Value, b.Bounds.Size)).ToArray();
+        }
+
+        var live = Bounds();
+        Assert.Equal(64, live[^1].Width);
+
+        host.Click(host.Find<Button>("Timeline.NextStep"));
+        Assert.False(timeline.IsLive);
+        Assert.Equal(live, Bounds());
+        for (var i = 0; i < 12; i++)
+            host.Click(host.Find<Button>("Timeline.NextStep"));
+        Assert.Equal(live, Bounds());
+
+        timeline.StepKind = TimelineStepKind.Day;
+        Assert.Equal(live, Bounds());
+        timeline.StepKind = TimelineStepKind.Sample;
+        Assert.Equal(live, Bounds());
+
+        // Go live, then Live again: the second click does nothing.
+        host.Click(host.Find<Button>("Timeline.GoLive"));
+        Assert.True(timeline.IsLive);
+        host.Click(host.Find<Button>("Timeline.GoLive"));
+        Assert.True(timeline.IsLive);
+        Assert.Equal(live, Bounds());
+    }
 }

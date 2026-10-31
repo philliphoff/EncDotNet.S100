@@ -1,6 +1,7 @@
 # Time overlays on the map
 
-> Status: **Accepted** (2026-10-31): D1–D13 as proposed; Q1–Q5 settled in §7. Follows the Timeline epic
+> Status: **Built** (2026-10-31): D1–D13; Q1–Q5 settled in §7. Slices 1–2 in
+> PR #1199, slices 3–4 in the follow-up PR. Follows the Timeline epic
 > [#707](https://github.com/philliphoff/EncDotNet.S100/issues/707): the map
 > stamp ([#713](https://github.com/philliphoff/EncDotNet.S100/issues/713) B4),
 > the Time HUD ([#712](https://github.com/philliphoff/EncDotNet.S100/issues/712),

@@ -10,19 +10,41 @@
 
     <UserControl.Styles>
         <!-- Slider accent styling lives app-wide in App.axaml. -->
-        <!-- Mode pill (#713 B1): outlined when pinned, filled when live. -->
-        <Style Selector="Border.ModePill">
+        <!-- Readout offset (time-overlays D3): accent when pinned, muted when live. -->
+        <Style Selector="TextBlock#ReadoutOffset">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="TextBlock#ReadoutOffset.live">
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+        </Style>
+        <!-- Go live (time-overlays D13, as the Time HUD's D5): always there, always 64 px.
+             Min and max too: ShadUI's button classes size their buttons themselves. -->
+        <Style Selector="Button#GoLiveButton">
+            <Setter Property="Width" Value="64" />
+            <Setter Property="MinWidth" Value="64" />
+            <Setter Property="MaxWidth" Value="64" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="MaxHeight" Value="28" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button#GoLiveButton.pinned">
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
-            <Setter Property="Background" Value="Transparent" />
         </Style>
-        <!-- Live: a dark pill with white text in both themes (handoff B1). -->
-        <Style Selector="Border.ModePill.live">
-            <Setter Property="BorderBrush" Value="#18181B" />
-            <Setter Property="Background" Value="#18181B" />
+        <Style Selector="Button#GoLiveButton:not(.pinned)">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
         </Style>
-        <Style Selector="Border.ModePill.live TextBlock">
-            <Setter Property="Foreground" Value="White" />
+        <!-- Invisible sizers: a menu button is as wide as its longest label, so a
+             label change doesn't move the buttons beside it. -->
+        <Style Selector="ItemsControl.Sizer">
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="AutomationProperties.AccessibilityView" Value="Raw" />
         </Style>
         <!-- Status messages (#713 B3; loading #709). -->
         <Style Selector="Button.StatusText">
@@ -278,41 +300,44 @@
             <DockPanel LastChildFill="True"
                        IsVisible="{Binding IsActive}">
 
-                <!-- Readout (#713 B1, B2): the mode pill, the view time and its
-                     offset from now; Go live and the step buttons on the right. -->
+                <!-- Readout (#713 B1, B2; time-overlays D3, D13): a status dot, the
+                     view time and its offset from now, read as the Time HUD and the
+                     map stamp read them; the step buttons and Go live on the right.
+                     The time and offset have fixed slots, so Follow passage doesn't
+                     move as the time changes. -->
                 <Grid DockPanel.Dock="Top"
                       ColumnDefinitions="Auto,Auto,Auto,*,Auto"
                       Margin="0,0,0,4">
-                    <Border Grid.Column="0"
-                            Classes="ModePill"
-                            Classes.live="{Binding IsLive}"
-                            CornerRadius="6"
-                            Padding="7,2"
-                            VerticalAlignment="Center">
-                        <StackPanel Orientation="Horizontal" Spacing="5">
-                            <Ellipse Width="7" Height="7"
-                                     IsVisible="{Binding IsLive}"
-                                     Fill="{DynamicResource SuccessColor}"
-                                     VerticalAlignment="Center" />
-                            <TextBlock Text="{Binding ModeLabel}"
-                                       FontSize="10.5"
-                                       FontWeight="Bold"
-                                       LetterSpacing="0.6"
-                                       VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Border>
-                    <TextBlock Grid.Column="1"
-                               Text="{Binding CurrentTimeLabel}"
-                               Margin="10,0,0,0"
-                               FontSize="13"
-                               FontWeight="SemiBold"
-                               FontFamily="{StaticResource MonoFontFamily}"
-                               VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="2"
+                    <Panel Grid.Column="0" Width="14" VerticalAlignment="Center"
+                           AutomationProperties.AutomationId="Timeline.StatusDot">
+                        <Ellipse Width="8" Height="8" IsVisible="{Binding !IsLive}" Fill="{DynamicResource AccentBrush}" />
+                        <Ellipse Width="8" Height="8" IsVisible="{Binding IsNotRealTime}" Fill="{DynamicResource WarningColor}" />
+                        <Ellipse Width="8" Height="8" IsVisible="{Binding IsLive}" Fill="{DynamicResource SuccessColor}" />
+                        <Ellipse Width="8" Height="8" IsVisible="{Binding IsDrawing}" Fill="{DynamicResource MutedColor}" />
+                    </Panel>
+                    <Panel Grid.Column="1" Margin="6,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding WidestTimeLabel}"
+                                   FontSize="13" FontWeight="SemiBold"
+                                   FontFamily="{StaticResource MonoFontFamily}"
+                                   Opacity="0" IsHitTestVisible="False"
+                                   AutomationProperties.AccessibilityView="Raw" />
+                        <TextBlock AutomationProperties.AutomationId="Timeline.Time"
+                                   AutomationProperties.Name="{Binding TimeReading}"
+                                   Text="{Binding CurrentTimeLabel}"
+                                   FontSize="13"
+                                   FontWeight="SemiBold"
+                                   FontFamily="{StaticResource MonoFontFamily}" />
+                    </Panel>
+                    <TextBlock x:Name="ReadoutOffset"
+                               Grid.Column="2"
+                               Classes.live="{Binding IsLive}"
+                               Width="84"
                                Text="{Binding OffsetText}"
+                               ToolTip.Tip="{Binding OffsetText}"
+                               TextTrimming="CharacterEllipsis"
                                Margin="8,0,0,0"
                                FontSize="12"
-                               Foreground="{DynamicResource AccentBrush}"
+                               FontFamily="{StaticResource MonoFontFamily}"
                                VerticalAlignment="Center" />
                     <!-- E3 (#904): Follow passage, next to the Pinned/Live readout, while the passage lanes show. -->
                     <ToggleButton Grid.Column="3"
@@ -349,9 +374,9 @@
                         <Button Classes="Icon"
                                 AutomationProperties.AutomationId="Timeline.PreviousStep"
                                 AutomationProperties.Name="{x:Static loc:Strings.Label_PreviousStep}"
-                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}"
+                                AutomationProperties.HelpText="{Binding PreviousStepTooltip}"
                                 Command="{Binding PreviousStepCommand}"
-                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}">
+                                ToolTip.Tip="{Binding PreviousStepTooltip}">
                             <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" FontSize="14" />
                         </Button>
                         <!-- C6: the step menu (built in code-behind: "Sample of ▸" lists the layers). -->
@@ -363,16 +388,27 @@
                                 FontSize="12"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineStep}">
                             <StackPanel Orientation="Horizontal" Spacing="4">
-                                <TextBlock Text="{Binding StepLabel}" VerticalAlignment="Center" />
+                                <!-- Capped: a layer's long file name ends in an ellipsis rather than
+                                     pushing the presets off the dock. -->
+                                <Panel MaxWidth="90" VerticalAlignment="Center">
+                                    <ItemsControl Classes="Sizer" ItemsSource="{Binding StepLabelCandidates}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <Panel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                    <TextBlock Text="{Binding StepLabel}" TextTrimming="CharacterEllipsis" />
+                                </Panel>
                                 <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="10" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>
                         <Button Classes="Icon"
                                 AutomationProperties.AutomationId="Timeline.NextStep"
                                 AutomationProperties.Name="{x:Static loc:Strings.Label_NextStep}"
-                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimelineNextStep}"
+                                AutomationProperties.HelpText="{Binding NextStepTooltip}"
                                 Command="{Binding NextStepCommand}"
-                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNextStep}">
+                                ToolTip.Tip="{Binding NextStepTooltip}">
                             <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="14" />
                         </Button>
                         <Button Classes="Icon"
@@ -384,15 +420,23 @@
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNextData}">
                             <ic:FluentIcon Icon="Next" IconVariant="Regular" FontSize="14" />
                         </Button>
-                        <!-- Go live (A1): shown while pinned. -->
-                        <Button Classes="Primary"
+                        <!-- Go live (A1; time-overlays D13): always there, always the same size.
+                             Live: quiet, with a green dot; clicking it does nothing. Pinned:
+                             outlined "Go live". -->
+                        <Button x:Name="GoLiveButton"
+                                Classes="Icon"
+                                Classes.pinned="{Binding !IsLive}"
                                 AutomationProperties.AutomationId="Timeline.GoLive"
-                                IsVisible="{Binding !IsLive}"
-                                Height="28" MinHeight="0" Padding="12,0" Margin="6,0,0,0"
-                                FontSize="12"
-                                Content="{x:Static loc:Strings.TimelinePanel_GoLive}"
-                                Command="{Binding NowCommand}"
-                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNow}" />
+                                AutomationProperties.Name="{Binding LiveToggleText}"
+                                Command="{Binding LiveToggleCommand}"
+                                Margin="6,0,0,0"
+                                ToolTip.Tip="{Binding LiveToggleTooltip}">
+                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                <Ellipse Width="7" Height="7" IsVisible="{Binding IsLive}"
+                                         Fill="{DynamicResource SuccessColor}" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding LiveToggleText}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
                         <!-- C5: the window presets. -->
                         <Button x:Name="PresetMenuButton"
                                 AutomationProperties.AutomationId="Timeline.Preset"
@@ -403,7 +447,16 @@
                                 FontSize="12"
                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreset}">
                             <StackPanel Orientation="Horizontal" Spacing="4">
-                                <TextBlock Text="{Binding PresetLabel}" VerticalAlignment="Center" />
+                                <Panel VerticalAlignment="Center">
+                                    <ItemsControl Classes="Sizer" ItemsSource="{Binding PresetLabelCandidates}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <Panel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                    <TextBlock Text="{Binding PresetLabel}" />
+                                </Panel>
                                 <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="10" VerticalAlignment="Center" />
                             </StackPanel>
                         </Button>

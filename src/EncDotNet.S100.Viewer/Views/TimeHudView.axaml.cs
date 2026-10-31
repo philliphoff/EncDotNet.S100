@@ -1,8 +1,9 @@
 using System.Windows.Input;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
-using EncDotNet.S100.Viewer.ViewModels;
+using EncDotNet.S100.Viewer.Resources;
 
 namespace EncDotNet.S100.Viewer.Views;
 
@@ -26,6 +27,17 @@ public partial class TimeHudView : UserControl
     public static readonly StyledProperty<ICommand?> DockCommandProperty =
         AvaloniaProperty.Register<TimeHudView, ICommand?>(nameof(DockCommand));
 
+    /// <summary>
+    /// True while the dock is open on another tab: the dock button then shows
+    /// the Timeline tab rather than opening the dock (time-overlays D9).
+    /// </summary>
+    public static readonly StyledProperty<bool> IsDockOpenProperty =
+        AvaloniaProperty.Register<TimeHudView, bool>(nameof(IsDockOpen));
+
+    /// <summary>False where the dock can't show (a narrow window): the dock button is hidden (D9).</summary>
+    public static readonly StyledProperty<bool> IsDockAvailableProperty =
+        AvaloniaProperty.Register<TimeHudView, bool>(nameof(IsDockAvailable), true);
+
     /// <summary>The width of the map the HUD sits on.</summary>
     public static readonly StyledProperty<double> MapWidthProperty =
         AvaloniaProperty.Register<TimeHudView, double>(nameof(MapWidth), double.PositiveInfinity);
@@ -37,27 +49,46 @@ public partial class TimeHudView : UserControl
         // automation clients (its invoke pattern) reach it as well as the pointer.
         if (this.FindControl<Button>("TimeText") is { } time)
             time.Click += (_, _) => Focus();
-        // D5: Live is always there; clicking it while live does nothing, rather
-        // than greying it out as a disabled command would.
-        if (this.FindControl<Button>("LiveToggle") is { } live)
-        {
-            live.Click += (_, _) =>
-            {
-                if (DataContext is TimelineViewModel timeline && timeline.NowCommand.CanExecute(null))
-                    timeline.NowCommand.Execute(null);
-            };
-        }
         if (this.FindControl<Button>("DockToggle") is { } dock)
             dock.Click += (_, _) => DockCommand?.Execute(null);
     }
 
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
+    private void UpdateDockToggle()
+    {
+        if (this.FindControl<Button>("DockToggle") is not { } dock)
+            return;
+        var (name, tip) = IsDockOpen
+            ? (Strings.Label_ShowTimeline, Strings.Tooltip_TimeHudShowTimeline)
+            : (Strings.Label_OpenTimeline, Strings.Tooltip_TimeHudOpenTimeline);
+        AutomationProperties.SetName(dock, name);
+        AutomationProperties.SetHelpText(dock, tip);
+        ToolTip.SetTip(dock, tip);
+        dock.IsVisible = IsDockAvailable;
+        if (this.FindControl<Border>("DockSeparator") is { } separator)
+            separator.IsVisible = IsDockAvailable;
+    }
+
     /// <inheritdoc cref="DockCommandProperty"/>
     public ICommand? DockCommand
     {
         get => GetValue(DockCommandProperty);
         set => SetValue(DockCommandProperty, value);
+    }
+
+    /// <inheritdoc cref="IsDockOpenProperty"/>
+    public bool IsDockOpen
+    {
+        get => GetValue(IsDockOpenProperty);
+        set => SetValue(IsDockOpenProperty, value);
+    }
+
+    /// <inheritdoc cref="IsDockAvailableProperty"/>
+    public bool IsDockAvailable
+    {
+        get => GetValue(IsDockAvailableProperty);
+        set => SetValue(IsDockAvailableProperty, value);
     }
 
     /// <inheritdoc cref="MapWidthProperty"/>
@@ -71,6 +102,8 @@ public partial class TimeHudView : UserControl
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
+        if (change.Property == IsDockOpenProperty || change.Property == IsDockAvailableProperty)
+            UpdateDockToggle();
         if (change.Property == MapWidthProperty)
         {
             Classes.Set("compact", MapWidth < CompactWidth);
