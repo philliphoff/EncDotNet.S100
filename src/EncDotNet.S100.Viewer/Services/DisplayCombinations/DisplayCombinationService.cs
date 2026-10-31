@@ -1,5 +1,4 @@
 using System.Collections.Specialized;
-using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.ViewModels;
 

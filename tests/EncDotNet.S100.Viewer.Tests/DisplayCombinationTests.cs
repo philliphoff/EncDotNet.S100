@@ -2,15 +2,13 @@ using System.Text.Json.Nodes;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
-using EncDotNet.S100.Features;
-using EncDotNet.S100.Pipelines.Vector;
-using DisplayPlane = EncDotNet.S100.Pipelines.Vector.DisplayPlane;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.DisplayCombinations;
 using EncDotNet.S100.Viewer.ViewModels;
+using DisplayPlane = EncDotNet.S100.Pipelines.Vector.DisplayPlane;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
