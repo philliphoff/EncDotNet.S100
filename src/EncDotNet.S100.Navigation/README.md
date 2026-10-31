@@ -499,6 +499,36 @@ give the same answer at a point:
   S-101 dredged areas, then depth areas, then the nearest sounding.
 - `WaterLevelPreference` chooses between overlapping S-104 grids.
 - `VerticalDatumCheck` compares the datums.
+- `WaterLevelSnapshot.Resolve` chooses the series at a point and time: the
+  most preferred one that covers the time, skipping one whose datum differs
+  from the depth's when another covers too. The clearance check uses it too.
+
+## Water level across an area
+
+An `IWaterLevelField` is the water level to apply across an area for one time
+or period, built on an `IWaterLevelSource`:
+
+- `WaterLevelSnapshot` is the field at one instant. A point outside every
+  series' time range isn't adjusted; times are never clamped to the first or
+  last step.
+- `WaterLevelPeriodMinimum` is the lowest water level at each point over a
+  period, from the values at every step inside it and at its two ends (S-98
+  Appendix D-2.5).
+
+`Resolve(position, depthDatum)` returns a `WaterLevelAtPoint` with a
+`WaterLevelStatus`, the `AppliedWaterLevel` read (height above the datum,
+uncertainty, source and step) and the `DatumAgreement`. `Sample(position)`
+returns the height to apply, or `null`. `Basis` names the time or period and
+the datasets, and `Footprint` the areas the source covers.
+
+```csharp
+var field = new WaterLevelSnapshot(sources.WaterLevel!, DateTime.UtcNow);
+var water = field.Resolve(new GeoPosition(47.6, -122.4), depthDatum: 12);
+if (water is { Status: WaterLevelStatus.Applied, Sample: { } sample })
+{
+    Console.WriteLine($"{12.0 + sample.HeightMeters:F1} m ± {sample.UncertaintyMeters}");
+}
+```
 
 ## Specification references
 

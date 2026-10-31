@@ -238,6 +238,47 @@ public sealed class PureHdfFile : IHdf5File
             return result;
         }
 
+        public IReadOnlyList<double>? TryReadCompoundMember(string datasetName, string memberName)
+        {
+            var start = Stopwatch.GetTimestamp();
+            try
+            {
+                if (!_group.LinkExists(datasetName))
+                    return null;
+
+                var dataset = _group.Dataset(datasetName);
+                if (dataset.Type.Class != H5DataTypeClass.Compound)
+                    return null;
+
+                // Decode as dictionaries so variable-length members (a name
+                // string, say) don't stop the numeric member being read.
+                var records = dataset.Read<Dictionary<string, object?>[]>();
+                var values = new List<double>(records.Length);
+                foreach (var record in records)
+                {
+                    var key = record.Keys.FirstOrDefault(k => string.Equals(k, memberName, StringComparison.OrdinalIgnoreCase));
+                    if (key is null)
+                        return null;
+
+                    switch (record[key])
+                    {
+                        case float f: values.Add(f); break;
+                        case double d: values.Add(d); break;
+                        case IConvertible c when c is not string:
+                            values.Add(c.ToDouble(System.Globalization.CultureInfo.InvariantCulture));
+                            break;
+                        default: return null;
+                    }
+                }
+
+                return values;
+            }
+            finally
+            {
+                Telemetry.ReadDuration.Record(GetElapsedMs(start), new KeyValuePair<string, object?>("kind", "dataset"));
+            }
+        }
+
         public RawCompoundDataset ReadRawCompoundDataset(string name)
         {
             using var activity = Telemetry.ActivitySource.StartActivity("s100.hdf5.dataset.read");

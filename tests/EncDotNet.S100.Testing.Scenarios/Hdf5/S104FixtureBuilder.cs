@@ -19,6 +19,21 @@ public static class S104FixtureBuilder
         [H5Name("waterLevelTrend")] public byte WaterLevelTrend;
     }
 
+    // S-104 Ed 2.0.0 shape with the optional per-record uncertainty (Table 10-3).
+    public struct UncertaintyRow
+    {
+        [H5Name("waterLevelHeight")] public float WaterLevelHeight;
+        [H5Name("waterLevelTrend")] public byte WaterLevelTrend;
+        [H5Name("uncertainty")] public float Uncertainty;
+    }
+
+    // The instance-level uncertainty dataset (S-104 Ed 2.0.0 §10.2.2.4).
+    public struct InstanceUncertaintyRow
+    {
+        [H5Name("name")] public string Name;
+        [H5Name("value")] public float Value;
+    }
+
     // UKHO dcf2 shape — height as F32, trend as F32.
     public struct UkhoRow
     {
@@ -142,6 +157,7 @@ public static class S104FixtureBuilder
     /// <param name="rootAttributes">Root attributes (product specification, CRS, datum, extent, issue date, …).</param>
     /// <param name="featureAttributes">Extra <c>/WaterLevel</c> attributes after <c>dataCodingFormat</c>, or <c>null</c>.</param>
     /// <param name="instanceAttributes">Extra <c>/WaterLevel/WaterLevel.01</c> attributes after the grid ones, or <c>null</c>.</param>
+    /// <param name="instanceUncertainty">The instance-level <c>uncertainty</c> dataset's value for <c>waterLevelHeight</c>, or <c>null</c> to omit the dataset.</param>
     /// <returns><paramref name="path"/>.</returns>
     public static string WriteTimeSeries<TRow>(
         string path,
@@ -149,7 +165,8 @@ public static class S104FixtureBuilder
         IReadOnlyList<(string TimePoint, TRow[] Values)> steps,
         IReadOnlyDictionary<string, object> rootAttributes,
         IReadOnlyDictionary<string, object>? featureAttributes = null,
-        IReadOnlyDictionary<string, object>? instanceAttributes = null)
+        IReadOnlyDictionary<string, object>? instanceAttributes = null,
+        float? instanceUncertainty = null)
         where TRow : struct
     {
         var instance = new H5Group
@@ -168,6 +185,8 @@ public static class S104FixtureBuilder
         };
         foreach (var (name, value) in instanceAttributes ?? new Dictionary<string, object>())
             instance.Attributes[name] = value;
+        if (instanceUncertainty is { } u)
+            instance["uncertainty"] = new[] { new InstanceUncertaintyRow { Name = "waterLevelHeight", Value = u } };
 
         for (int i = 0; i < steps.Count; i++)
         {

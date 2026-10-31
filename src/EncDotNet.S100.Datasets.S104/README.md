@@ -61,6 +61,12 @@ see [Reading product data](../../docs/reading-product-data.md).
     `S100DatasetSchemaException`.
   - The `waterLevelTrend` compound member accepts the signed and unsigned
     integer widths found in production data, including IC-ENC's `Int16`.
+  - The optional `uncertainty` member of each values record, and the optional
+    `uncertainty` dataset of each `WaterLevel.NN` instance, are read into
+    `WaterLevelCoverage.Uncertainties` and `WaterLevelStation.Uncertainties`
+    (S-104 Ed 2.0.0 §10.2.2.4 and Table 10-3). A record's own value overrides
+    the instance value. The fill value −1.0 means no uncertainty, and
+    `UncertaintyAt` returns `null` for it.
 - **`WaterLevelCoverage`** and **`WaterLevelValue`**: a grid at one time step
   and its values. `WaterLevelCoverage.GroupPath` is the HDF5 path of the
   coverage, such as `/WaterLevel/WaterLevel.01`. Validation findings use it as

@@ -1154,9 +1154,33 @@
     <value>± {0}</value>
     <comment>Uncertainty band caption; {0} is the formatted vertical uncertainty (e.g. "0.3 m").</comment>
   </data>
-  <data name="Pick_Depth_DatumNote" xml:space="preserve">
-    <value>Datums not reconciled — absolute baseline approximate</value>
-    <comment>Caption shown when the S-102 base and S-104 tide vertical datums differ or cannot be confirmed.</comment>
+  <data name="Pick_Depth_CombinedUncertainty" xml:space="preserve">
+    <value>Combined uncertainty ± {0} (charted ± {1}, water level ± {2})</value>
+    <comment>Depth card caption with water level applied; {0} is √(σ₁₀₂² + σ₁₀₄²), {1} the S-102 uncertainty, {2} the S-104 uncertainty, each formatted with its unit.</comment>
+  </data>
+  <data name="Pick_Depth_WaterLevelUncertainty" xml:space="preserve">
+    <value>Water level ± {0}</value>
+    <comment>Depth card caption when only the S-104 water level carries an uncertainty; {0} is the formatted uncertainty.</comment>
+  </data>
+  <data name="Pick_Depth_ChartedUncertaintyOnly" xml:space="preserve">
+    <value>Charted ± {0}. S-104 uncertainty not provided</value>
+    <comment>Depth card caption when the S-102 depth has an uncertainty and the applied S-104 water level has none; {0} is the formatted S-102 uncertainty.</comment>
+  </data>
+  <data name="Pick_Depth_WaterLevelUncertaintyNotProvided" xml:space="preserve">
+    <value>S-104 uncertainty not provided</value>
+    <comment>Depth card caption when the applied S-104 water level carries no uncertainty.</comment>
+  </data>
+  <data name="Pick_Depth_Refused_DifferentDatum" xml:space="preserve">
+    <value>Not adjusted: {0} on {1}, S-104 on {2}.</value>
+    <comment>Depth card caption when S-104 water level covers the pick but on another vertical datum; {0} is the depth product (S-102 or S-101), {1} and {2} the datum names.</comment>
+  </data>
+  <data name="Pick_Depth_Refused_UndeclaredDatum" xml:space="preserve">
+    <value>Not adjusted: datum not declared ({0}).</value>
+    <comment>Depth card caption when S-104 water level covers the pick but a vertical datum isn't declared; {0} names the product(s) without one.</comment>
+  </data>
+  <data name="Pick_Depth_Refused_Both" xml:space="preserve">
+    <value>{0} and S-104</value>
+    <comment>Fills Pick_Depth_Refused_UndeclaredDatum when neither the depth nor the water level declares a datum; {0} is the depth product (S-102 or S-101).</comment>
   </data>
   <data name="Pick_Depth_NoTide" xml:space="preserve">
     <value>No S-104 water level covers this location, so this is the charted depth.</value>

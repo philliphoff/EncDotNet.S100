@@ -505,6 +505,8 @@ public static class S104DatasetReader
             ? instance.ReadStringAttribute("startSequence")
             : null;
 
+        var instanceUncertainty = ReadInstanceUncertainty(instance);
+
         // Each Group_NNN is a time step with its own timePoint attribute and values dataset.
         foreach (var groupName in instance.GroupNames)
         {
@@ -516,7 +518,7 @@ public static class S104DatasetReader
             DateTime timePoint = group.ReadRequiredDateTimeAttribute(
                 "timePoint", "S-104", null, $"{instancePath}/{groupName}", spec);
 
-            var values = ReadValues(group);
+            var values = ReadValues(group, out var recordUncertainties);
 
             coverages.Add(new WaterLevelCoverage
             {
@@ -530,6 +532,7 @@ public static class S104DatasetReader
                 GroupPath = instancePath,
                 TimePoint = timePoint,
                 Values = values,
+                Uncertainties = ResolveUncertainties(recordUncertainties, instanceUncertainty, values.Length),
             });
         }
     }
@@ -557,9 +560,10 @@ public static class S104DatasetReader
     /// auxiliary to the renderable water-level height (issue #254).
     /// </para>
     /// </remarks>
-    private static WaterLevelValue[] ReadValues(IHdf5Group group)
+    private static WaterLevelValue[] ReadValues(IHdf5Group group, out float[]? uncertainties)
     {
         var raw = group.ReadRawCompoundDataset("values");
+        uncertainties = ReadUncertaintyMember(raw, raw.RecordCount);
 
         var heightMember = raw.FindMember("waterLevelHeight", "surfaceHeight", "Height")
             ?? throw new InvalidOperationException(
@@ -688,6 +692,8 @@ public static class S104DatasetReader
         var sampleTimes = new DateTime[numberOfTimes];
         var allHeights = new float[numberOfTimes][];
         var allTrends = new byte[numberOfTimes][];
+        var allUncertainties = new float[]?[numberOfTimes];
+        var instanceUncertainty = ReadInstanceUncertainty(instance);
 
         for (int timeIndex = 0; timeIndex < numberOfTimes; timeIndex++)
         {
@@ -709,7 +715,7 @@ public static class S104DatasetReader
                     + " Values-group timestamps must be strictly increasing.");
             }
 
-            var values = ReadValues(group);
+            var values = ReadValues(group, out var recordUncertainties);
             if (values.Length != stationCount)
             {
                 throw new S100DatasetSchemaException(
@@ -733,17 +739,25 @@ public static class S104DatasetReader
 
             allHeights[timeIndex] = heights;
             allTrends[timeIndex] = trends;
+            allUncertainties[timeIndex] = ResolveUncertainties(recordUncertainties, instanceUncertainty, stationCount);
         }
+
+        var hasUncertainty = allUncertainties.Any(u => u is not null);
 
         var interval = DeriveUniformInterval(sampleTimes);
         for (int stationIndex = 0; stationIndex < stationCount; stationIndex++)
         {
             var heights = new float[numberOfTimes];
             var trends = new byte[numberOfTimes];
+            var uncertainties = hasUncertainty ? new float[numberOfTimes] : null;
             for (int timeIndex = 0; timeIndex < numberOfTimes; timeIndex++)
             {
                 heights[timeIndex] = allHeights[timeIndex][stationIndex];
                 trends[timeIndex] = allTrends[timeIndex][stationIndex];
+                if (uncertainties is not null)
+                {
+                    uncertainties[timeIndex] = allUncertainties[timeIndex]?[stationIndex] ?? WaterLevelCoverage.UncertaintyFillValue;
+                }
             }
 
             var (latitude, longitude) = positions[stationIndex];
@@ -759,6 +773,7 @@ public static class S104DatasetReader
                 NumberOfTimes = numberOfTimes,
                 Heights = heights,
                 Trends = trends,
+                Uncertainties = uncertainties,
             });
         }
     }
@@ -1035,6 +1050,7 @@ public static class S104DatasetReader
 
         // Walk each Group_NNN station group in declaration order — the
         // i-th group's position is positions[i].
+        var instanceUncertainty = ReadInstanceUncertainty(instance);
         int stationIndex = 0;
         foreach (var groupName in instance.GroupNames)
         {
@@ -1059,7 +1075,7 @@ public static class S104DatasetReader
                 "timeRecordInterval", "S-104", null, groupPath, spec);
             var interval = TimeSpan.FromSeconds(intervalSeconds);
 
-            var (heights, trends) = ReadStationValues(group, numberOfTimes);
+            var (heights, trends, recordUncertainties) = ReadStationValues(group, numberOfTimes);
 
             if (stationIndex >= positions.Count)
             {
@@ -1087,6 +1103,7 @@ public static class S104DatasetReader
                 NumberOfTimes = numberOfTimes,
                 Heights = heights,
                 Trends = trends,
+                Uncertainties = ResolveUncertainties(recordUncertainties, instanceUncertainty, heights.Length),
             });
 
             stationIndex++;
@@ -1099,7 +1116,7 @@ public static class S104DatasetReader
         _ = numberOfStations;
     }
 
-    private static (float[] Heights, byte[] Trends) ReadStationValues(IHdf5Group group, int numberOfTimes)
+    private static (float[] Heights, byte[] Trends, float[]? Uncertainties) ReadStationValues(IHdf5Group group, int numberOfTimes)
     {
         var raw = group.ReadRawCompoundDataset("values");
 
@@ -1111,6 +1128,7 @@ public static class S104DatasetReader
         var trendMember = raw.FindMember("waterLevelTrend", "trend", "Trend");
 
         int count = Math.Min(raw.RecordCount, numberOfTimes);
+        var uncertainties = ReadUncertaintyMember(raw, count);
         var heights = new float[count];
         var trends = new byte[count];
         var span = raw.Data.AsSpan();
@@ -1132,6 +1150,80 @@ public static class S104DatasetReader
             trends[i] = trendMember is null ? (byte)0 : DecodeTrend(trendMember, record);
         }
 
-        return (heights, trends);
+        return (heights, trends, uncertainties);
+    }
+
+    // -------------------------------------------------------------------
+    // Uncertainty (S-104 Ed 2.0.0 §10.2.2.4, §10.2.2.5, Table 10-3)
+    // -------------------------------------------------------------------
+
+    /// <summary>
+    /// Reads the optional <c>uncertainty</c> member of a <c>values</c>
+    /// compound (metres; fill value −1.0), or <c>null</c> when the records
+    /// don't carry one.
+    /// </summary>
+    private static float[]? ReadUncertaintyMember(RawCompoundDataset raw, int count)
+    {
+        if (raw.FindMember("uncertainty") is not { Kind: CompoundMemberKind.Float32 or CompoundMemberKind.Float64 } member)
+            return null;
+
+        var result = new float[count];
+        var span = raw.Data.AsSpan();
+        for (int i = 0; i < count; i++)
+        {
+            result[i] = (float)ReadFloatingPointMember(span.Slice(i * raw.RecordSize, raw.RecordSize), member);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Reads the optional instance-level <c>uncertainty</c> dataset: a
+    /// compound of an attribute name and its uncertainty, applying to every
+    /// node unless a values record overrides it. S-104 has one entry, for
+    /// <c>waterLevelHeight</c>, so the first valid value is taken. Returns
+    /// <c>null</c> when the dataset is absent, unreadable or holds only the
+    /// fill value.
+    /// </summary>
+    private static double? ReadInstanceUncertainty(IHdf5Group instance)
+    {
+        IReadOnlyList<double>? values;
+        try
+        {
+            values = instance.TryReadCompoundMember("uncertainty", "value");
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // The dataset is optional; a malformed one means none.
+            return null;
+        }
+
+        foreach (var value in values ?? [])
+        {
+            if (WaterLevelCoverage.IsUncertainty((float)value))
+                return value;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Each record's uncertainty when it isn't the fill value, otherwise the
+    /// instance's; <c>null</c> when neither is given anywhere.
+    /// </summary>
+    private static float[]? ResolveUncertainties(float[]? records, double? instance, int count)
+    {
+        if (records is null && instance is null)
+            return null;
+
+        var result = new float[count];
+        for (int i = 0; i < count; i++)
+        {
+            result[i] = records is not null && i < records.Length && WaterLevelCoverage.IsUncertainty(records[i])
+                ? records[i]
+                : (float?)instance ?? WaterLevelCoverage.UncertaintyFillValue;
+        }
+
+        return result;
     }
 }

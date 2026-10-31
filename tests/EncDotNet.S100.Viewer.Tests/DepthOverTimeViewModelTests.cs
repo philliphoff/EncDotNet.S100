@@ -23,28 +23,22 @@ public sealed class DepthOverTimeViewModelTests
         double baseMetres = 10.0,
         BaseDepthSource source = BaseDepthSource.Bathymetry,
         double? uncertaintyMetres = null,
-        bool datumsNotReconciled = false,
+        int? waterLevelDatumCode = null,
         bool withTide = true,
         double[]? depths = null,
         int? datumCode = 23,
-        string? baseSourceId = null)
+        string? baseSourceId = null,
+        double? waterLevelUncertainty = null)
     {
+        // Built through the real assimilation, from a series whose heights
+        // give the requested adjusted depths.
         var times = Times(depths?.Length ?? 3);
-        var points = new List<DepthOverTimePoint>(times.Count);
-        for (var i = 0; i < times.Count; i++)
-        {
-            double? d = depths is not null ? depths[i] : baseMetres + i;
-            points.Add(new DepthOverTimePoint(times[i], d));
-        }
-
-        var tide = withTide ? new LocationTideSelection("S104DS", datumCode) : null;
-
-        return new LocationDepthResult(
-            new BaseDepthResult(baseMetres, source, uncertaintyMetres, datumCode, null, baseSourceId),
-            tide,
-            points,
-            uncertaintyMetres,
-            datumsNotReconciled);
+        var heights = times
+            .Select((_, i) => depths is not null ? (double.IsNaN(depths[i]) ? (double?)null : depths[i] - baseMetres) : i)
+            .ToList();
+        var series = new StepWaterLevelSeries("S104DS", waterLevelDatumCode ?? datumCode, times, heights, waterLevelUncertainty);
+        var baseDepth = new BaseDepthResult(baseMetres, source, uncertaintyMetres, datumCode, null, baseSourceId);
+        return new DepthAssimilationService().Assimilate(baseDepth, withTide ? [series] : [])!;
     }
 
     private static GlobalTimeService GlobalTimeOver(IReadOnlyList<DateTime> times)
@@ -102,10 +96,9 @@ public sealed class DepthOverTimeViewModelTests
         };
         var result = new LocationDepthResult(
             new BaseDepthResult(10.0, BaseDepthSource.Bathymetry, null, 23, null, "S102DS"),
-            new LocationTideSelection("S104DS", 23),
+            new LocationTideSelection("S104DS", 23, []),
             points,
-            UncertaintyMeters: null,
-            DatumsNotReconciled: false);
+            UncertaintyMeters: null);
 
         var vm = new DepthOverTimeViewModel(
             result, "loc", 51.9, 4.4, DepthUnit.Metres, safetyDepthMetres: null, globalTime: null);
@@ -145,10 +138,11 @@ public sealed class DepthOverTimeViewModelTests
     }
 
     [Fact]
-    public void DatumNote_ExposedWhenNotReconciled()
+    public void Refusal_names_both_datums_when_they_differ()
     {
+        // S-102 on MLLW (12), S-104 on LAT (23).
         var vm = new DepthOverTimeViewModel(
-            Result(datumsNotReconciled: true),
+            Result(datumCode: 12, waterLevelDatumCode: 23),
             "loc",
             51.9,
             4.4,
@@ -157,7 +151,102 @@ public sealed class DepthOverTimeViewModelTests
             globalTime: null);
 
         Assert.True(vm.HasDatumNote);
-        Assert.False(string.IsNullOrWhiteSpace(vm.DatumNoteText));
+        Assert.False(vm.HasTide);
+        Assert.False(vm.ShowNoTideInfo);
+        Assert.Equal(
+            string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                EncDotNet.S100.Viewer.Resources.Strings.Pick_Depth_Refused_DifferentDatum,
+                "S-102",
+                "Mean Lower Low Water",
+                "Lowest Astronomical Tide"),
+            vm.DatumNoteText);
+        Assert.Equal(vm.BaseDepthText, vm.DisplayDepthText);
+    }
+
+    [Fact]
+    public void Refusal_names_the_product_without_a_datum()
+    {
+        var vm = new DepthOverTimeViewModel(
+            Result(source: BaseDepthSource.Sounding, datumCode: null, waterLevelDatumCode: 23),
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+
+        Assert.True(vm.HasDatumNote);
+        Assert.Equal(
+            string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                EncDotNet.S100.Viewer.Resources.Strings.Pick_Depth_Refused_UndeclaredDatum,
+                "S-101"),
+            vm.DatumNoteText);
+    }
+
+    [Fact]
+    public void No_refusal_when_datums_agree()
+    {
+        var vm = new DepthOverTimeViewModel(Result(), "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+
+        Assert.False(vm.HasDatumNote);
+        Assert.Equal(string.Empty, vm.DatumNoteText);
+    }
+
+    [Fact]
+    public void Uncertainty_combines_s102_and_s104_at_the_timeline_time()
+    {
+        var globalTime = GlobalTimeOver(Times(3));
+        var vm = new DepthOverTimeViewModel(
+            Result(uncertaintyMetres: 0.5, waterLevelUncertainty: 0.3),
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime);
+
+        globalTime.SetCurrentTime(T0.AddHours(1));
+
+        // √(0.5² + 0.3²) ≈ 0.58 m.
+        Assert.Equal(
+            string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                EncDotNet.S100.Viewer.Resources.Strings.Pick_Depth_CombinedUncertainty,
+                DepthFormatting.Format(Math.Sqrt(0.34), DepthUnit.Metres),
+                DepthFormatting.Format(0.5, DepthUnit.Metres),
+                DepthFormatting.Format(0.3, DepthUnit.Metres)),
+            vm.UncertaintyText);
+    }
+
+    [Fact]
+    public void Uncertainty_says_when_s104_carries_none()
+    {
+        var globalTime = GlobalTimeOver(Times(3));
+        var vm = new DepthOverTimeViewModel(
+            Result(uncertaintyMetres: 0.5),
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime);
+
+        globalTime.SetCurrentTime(T0.AddHours(1));
+
+        Assert.Contains(EncDotNet.S100.Viewer.Resources.Strings.Pick_Depth_WaterLevelUncertaintyNotProvided, vm.UncertaintyText);
+    }
+
+    [Fact]
+    public void Uncertainty_band_is_the_combined_uncertainty()
+    {
+        var vm = new DepthOverTimeViewModel(
+            Result(uncertaintyMetres: 0.4, waterLevelUncertainty: 0.3, depths: [10.0, 10.0, 10.0]),
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+
+        var upper = Assert.IsType<LineSeries<DateTimePoint>>(vm.DepthSeries[0]);
+        var values = Assert.IsAssignableFrom<IEnumerable<DateTimePoint>>(upper.Values).ToList();
+        Assert.All(values, v => Assert.Equal(10.5, v.Value!.Value, 6));
+    }
+
+    [Fact]
+    public void Readout_interpolates_between_steps()
+    {
+        var globalTime = GlobalTimeOver(Times(3));
+        var vm = new DepthOverTimeViewModel(
+            Result(baseMetres: 10.0, depths: [10.0, 12.0, 14.0]),
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime);
+
+        globalTime.SetCurrentTime(T0.AddMinutes(30));
+
+        // The passage check's height at 00:30 is 1 m, not the nearest step's.
+        Assert.Equal(DepthFormatting.Format(11.0, DepthUnit.Metres), vm.DepthNowText);
     }
 
     [Fact]
