@@ -144,6 +144,13 @@ public partial class MainWindow : ShadUI.Window
             _viewModel.RoutesService,
             visual => ReferenceEquals(visual, MapControl) || ReferenceEquals(visual, MapArea));
 
+        // Measure keys (#1130, D20): G geometry, Delete clears, Ctrl+C (⌘C) copies.
+        Tools.MeasureKeys.Attach(
+            this,
+            _viewModel.MeasureSession,
+            _viewModel.MeasureCard,
+            visual => ReferenceEquals(visual, MapControl) || ReferenceEquals(visual, MapArea));
+
         // Range & bearing keys (#1130 D20): G geometry, Delete clears, Ctrl+C
         // (⌘C) copies; only while the tool is on and never while typing.
         Tools.RangeBearingKeys.Attach(

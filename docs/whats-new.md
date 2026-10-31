@@ -6,6 +6,15 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **A measure card.** SoundCharts' Measure tool now shows a card at the
+  map's top left. It measures along rhumb lines or great circles (press `G`
+  to switch; the choice is remembered), takes typed or pasted From and To
+  positions, and shows the distance in your Distance unit with the other
+  unit system under it, the forward and reverse bearings to 0.1°, and the
+  total. Great-circle legs draw as curves, the earth model is named, and Copy
+  (Ctrl+C or ⌘C) puts the measurement on the clipboard. A great-circle
+  measurement promoted to a route keeps geodesic legs. The `set_measure` and
+  `get_measure` MCP tools drive and read it with unrounded values (#1130).
 - **Range & bearing tool.** SoundCharts has a new map tool next to Measure:
   an EBL/VRM pair from an origin you choose (⌘R or Ctrl+R). Click the
   origin, then the end, or type the origin, range and bearing on its card to

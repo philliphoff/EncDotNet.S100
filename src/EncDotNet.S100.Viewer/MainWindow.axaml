@@ -696,6 +696,10 @@
                             VerticalAlignment="Top"
                             Margin="12,44,64,0"
                             Spacing="8">
+                <!-- Measure card (#1130, D1). -->
+                <views:MeasureCardView DataContext="{Binding MeasureCard}"
+                                       IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsMeasureModeActive}"
+                                       HorizontalAlignment="Left" />
                 <views:RangeBearingCardView DataContext="{Binding RangeBearing}"
                                             IsVisible="{Binding IsActive}" />
                 <!-- Navigational warning note (#932): while a warning opened from

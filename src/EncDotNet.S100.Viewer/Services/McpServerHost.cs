@@ -65,6 +65,8 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly EncDotNet.S100.Viewer.Diagnostics.LogBuffer? _logBuffer;
     private readonly EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService? _displayCombinations;
     private readonly EncDotNet.S100.Viewer.Services.Depth.DepthBasisService? _depthBasis;
+    private readonly MeasureSession? _measure;
+    private readonly EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel? _measureCard;
     private readonly EncDotNet.S100.Viewer.Tools.RangeBearingState? _rangeBearing;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -110,12 +112,16 @@ internal sealed class McpServerHost : IAsyncDisposable
         EncDotNet.S100.Viewer.Diagnostics.LogBuffer? logBuffer = null,
         EncDotNet.S100.Viewer.Services.Depth.DepthBasisService? depthBasis = null,
         EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService? displayCombinations = null,
+        MeasureSession? measure = null,
+        EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel? measureCard = null,
         EncDotNet.S100.Viewer.Tools.RangeBearingState? rangeBearing = null)
     {
         _rangeBearing = rangeBearing;
         _depthBasis = depthBasis;
         _logBuffer = logBuffer;
         _displayCombinations = displayCombinations;
+        _measure = measure;
+        _measureCard = measureCard;
         _routeCheckSources = routeCheckSources;
         _routeCheckLegend = routeCheckLegend;
         _routeExchange = routeExchange;
@@ -531,6 +537,12 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(SetPassageCardMcpAdapter.Create(new SetPassageCardTool(_routesService, invoker)));
             tools.Add(GetPassageMcpAdapter.Create(new GetPassageTool(_routesService, invoker)));
             tools.Add(SetPassageMcpAdapter.Create(new SetPassageTool(_routesService, invoker)));
+        }
+        if (_measure is not null && _measureCard is not null)
+        {
+            var measureInvoker = new DispatcherRouteEditInvoker();
+            tools.Add(MeasureMcpAdapters.Create(new GetMeasureTool(_measure, _measureCard, measureInvoker)));
+            tools.Add(MeasureMcpAdapters.Create(new SetMeasureTool(_measure, _measureCard, measureInvoker)));
         }
         if (_rangeBearing is not null)
         {

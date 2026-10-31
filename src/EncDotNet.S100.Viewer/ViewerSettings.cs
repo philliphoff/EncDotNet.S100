@@ -376,6 +376,12 @@ internal sealed partial class ViewerSettings
     public bool IsRouteCheckLegendOpen { get; set; } = true;
 
     /// <summary>
+    /// The geometry the measure tool measures along, "Rhumb" or "GreatCircle"
+    /// (#1130, D3): the last choice, starting at Rhumb.
+    /// </summary>
+    public string MeasureGeometry { get; set; } = "Rhumb";
+
+    /// <summary>
     /// The Range &amp; bearing tool's geometry, <c>"Rhumb"</c> or
     /// <c>"GreatCircle"</c>; <c>null</c> (the first run) is Rhumb (#1130 D15).
     /// </summary>
