@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
@@ -68,7 +69,7 @@ public sealed class NetCdfSampleCoverageTests : IDisposable
         var result = await client.CallToolAsync("sample_coverage_along", new Dictionary<string, object?>
         {
             ["spec"] = "NetCDF",
-            ["polyline"] = $$"""{"vertices":[[{{grid.South + 3 * grid.Spacing}},{{grid.West + 2 * grid.Spacing}}],[{{grid.South}},{{grid.West}}],[0.0,0.0]]}""",
+            ["polyline"] = string.Create(CultureInfo.InvariantCulture, $$"""{"vertices":[[{{grid.South + 3 * grid.Spacing}},{{grid.West + 2 * grid.Spacing}}],[{{grid.South}},{{grid.West}}],[0.0,0.0]]}"""),
             ["time"] = "2026-10-25T06:00:00Z",
         }, cancellationToken: TestContext.Current.CancellationToken);
 

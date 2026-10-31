@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json.Nodes;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
@@ -64,7 +65,7 @@ public sealed class GribSampleCoverageTests
         var result = await client.CallToolAsync("sample_coverage_along", new Dictionary<string, object?>
         {
             ["spec"] = "GRIB2",
-            ["polyline"] = $$"""{"vertices":[[{{latitude}},{{longitude}}],[{{CropSouth}},{{CropEast}}],[0.0,0.0]]}""",
+            ["polyline"] = string.Create(CultureInfo.InvariantCulture, $$"""{"vertices":[[{{latitude}},{{longitude}}],[{{CropSouth}},{{CropEast}}],[0.0,0.0]]}"""),
             ["time"] = "2026-10-25T06:00:00Z",
         }, cancellationToken: TestContext.Current.CancellationToken);
 
