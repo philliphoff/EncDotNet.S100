@@ -42,6 +42,8 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [JsonSerializable(typeof(NavigationalWarningsDto))]
 [JsonSerializable(typeof(WarningCardsDto))]
 [JsonSerializable(typeof(RecentLogsDto))]
+[JsonSerializable(typeof(DisplayCombinationListDto))]
+[JsonSerializable(typeof(SetDisplayCombinationDto))]
 // Errors, written by their concrete type.
 [JsonSerializable(typeof(MapNotReady))]
 [JsonSerializable(typeof(WindowNotReady))]
@@ -58,6 +60,8 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [JsonSerializable(typeof(UiElementAmbiguous))]
 [JsonSerializable(typeof(UiElementDisabled))]
 [JsonSerializable(typeof(UiActionNotSupported))]
+[JsonSerializable(typeof(DisplayCombinationNotFound))]
+[JsonSerializable(typeof(NoActiveDisplayCombination))]
 // Parameter types the adapters bind, beyond the shared tools'.
 [JsonSerializable(typeof(long?))]
 [JsonSerializable(typeof(float?))]

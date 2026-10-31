@@ -736,6 +736,47 @@
                                    VerticalAlignment="Center" />
                     </StackPanel>
                 </Border>
+                <!-- View pill (#1192): the active display combination, left
+                     of the map tools. Its flyout lists the combinations (built-ins,
+                     then the mariner's own), with Reapply, Save as and Manage. -->
+                <Button x:Name="DisplayCombinationButton"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Margin="0,14,60,0"
+                        Padding="10,4"
+                        CornerRadius="14"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        Background="{DynamicResource MapOverlaySurfaceBrush}"
+                        Foreground="{DynamicResource ForegroundColor}"
+                        IsVisible="{Binding DisplayCombinations, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        AutomationProperties.AutomationId="Map.View"
+                        AutomationProperties.Name="{x:Static loc:Strings.Label_DisplayCombination_Pill}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayCombination_Pill}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayCombination_Pill}">
+                    <TextBlock Text="{Binding DisplayCombinations.PillLabel, FallbackValue=''}"
+                               FontSize="12"
+                               FontWeight="Medium"
+                               MaxWidth="260"
+                               TextTrimming="CharacterEllipsis" />
+                    <Button.Flyout>
+                        <Flyout Placement="BottomEdgeAlignedRight">
+                            <Border Padding="14,12,14,12" Background="Transparent">
+                                <StackPanel Width="340" Spacing="8">
+                                    <views:DisplayCombinationsView DataContext="{Binding DisplayCombinations}" />
+                                    <Button Classes="Ghost"
+                                            HorizontalAlignment="Left"
+                                            Padding="8,4"
+                                            AutomationProperties.AutomationId="Map.View.Manage"
+                                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayCombination_Manage}"
+                                            Content="{x:Static loc:Strings.DisplayCombination_Manage}"
+                                            Command="{Binding DisplayCombinations.ManageCommand, FallbackValue={x:Null}}"
+                                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayCombination_Manage}" />
+                                </StackPanel>
+                            </Border>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
                 <StackPanel Orientation="Vertical"
                             Spacing="2"
                             HorizontalAlignment="Right"

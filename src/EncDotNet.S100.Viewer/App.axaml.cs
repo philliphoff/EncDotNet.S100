@@ -1226,7 +1226,8 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RouteExchangeService>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState>(),
             sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.LogBuffer>()));
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.LogBuffer>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService>()));
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
             () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources));
@@ -1320,6 +1321,17 @@ public partial class App : Application
         services.AddSingleton<TextGroupToolbarViewModel>();
         services.AddSingleton<DisplayModeToolbarViewModel>();
         services.AddSingleton<EcdisLabelOverrideProvider>();
+        // Predefined display combinations (#1192): the View pill and the
+        // Display controls' View section.
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService(
+            sp.GetRequiredService<EcdisDisplayState>(),
+            sp.GetRequiredService<IDatasetLoaderService>(),
+            sp.GetRequiredService<DatasetsViewModel>(),
+            sp.GetRequiredService<ViewerSettings>(),
+            action => Avalonia.Threading.Dispatcher.UIThread.Post(action)));
+        services.AddSingleton(sp => new DisplayCombinationsViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService>(),
+            sp.GetRequiredService<IViewerUiControllerAccessor>()));
         services.AddSingleton<EcdisDisplayPanelViewModel>();
         services.AddSingleton<HelmViewModel>();
         services.AddSingleton<RoutesPanelViewModel>();

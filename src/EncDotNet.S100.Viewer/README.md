@@ -631,9 +631,9 @@ beneath the chart. See
 
 ## Change the display
 
-Use the pill buttons on the map toolbar (**Display: Standard ▾** or the
-current category, **Text ▾** and **Palette ▾**) or the **Display controls**
-panel:
+Use the **View** pill on the map toolbar to choose a whole picture at once
+(see [Choose a view](#choose-a-view)). For single settings, use the **Display
+Settings** button on the map toolbar or the **Display controls** panel:
 
 - **Display category**: **Display Base**, **Standard**, **Other Information**
   or **All**. Changing it redraws every vector dataset.
@@ -685,6 +685,57 @@ groups, so you can hide or show particular symbol families:
   **Reset all overrides** clears them for every product.
 
 All of these choices are saved between sessions.
+
+### Choose a view
+
+A view is a named display combination: which products are in the picture and
+how they're shown. The **View** pill on the map toolbar shows the current one,
+for example **View: Pilotage ▾**. Choose another from its menu, or from the
+**View** section at the top of the **Display controls** panel.
+
+| View | Products | Display |
+|---|---|---|
+| **Charted only** | S-101 (and S-57 and S-401 cells) | **Standard**. Important text on, other text off. |
+| **Chart + bathymetry** | S-101, S-102 | As **Charted only**. |
+| **Pilotage** | S-101, S-102, S-104, S-111, S-124, S-125, S-201 | **Standard**. S-104 isolines off and stations on, S-111 arrows on and station arrows off, weather layers off. |
+| **Passage planning** | Every product but S-111 and weather | **Other Information**. S-104 isolines on. |
+| **Everything loaded** | Every product | Leaves the display settings as they are. |
+
+The first three are listed under **Build up the picture**, in order: the chart,
+then bathymetry, then water level, currents, warnings and aids to navigation.
+Use them to bring in one product at a time. A new installation starts in
+**Everything loaded**, which shows everything you load.
+
+A view changes these settings:
+
+- Products it leaves out are made inactive, not only hidden, so they're out of
+  the S-98 rules and picking. For example, **Charted only** makes S-102
+  inactive, so the ENC's own depth areas and contours draw again. Their
+  **Datasets** rows say **Not in Charted only**, and so does the tooltip of
+  their **Active** toggle in the **Layer stack**. Products it includes are made
+  active, and keep their visibility.
+- The display category, the viewing groups it names, product display modes,
+  the **Weather** switches, and sub-layers such as S-104 isolines.
+
+A view never changes your mariner settings (safety contour and depths), the
+**Navigational warnings** switch, display planes, the palette, own ship, AIS
+or routes. Route checks and the depth readout still use every loaded dataset.
+
+The menu lists each view's products. A product that isn't loaded is dimmed,
+and choosing the view doesn't load it. If you load it later, it comes in active
+or inactive as the current view says.
+
+When you change a setting the view covers, it stays selected and shows
+**(modified)**, for example **View: Pilotage (modified) ▾**. The **Display
+controls** panel says what changed, such as **Changed: Display category
+Standard → All.** **Reapply** puts the view's settings back. Settings a view
+doesn't cover, and a dataset's eye in **Datasets**, never mark it modified.
+
+To keep the current picture, choose **Save as…** and give it a name. Your
+views are listed under **My views**, where you can rename or delete them.
+The save form lists what's saved and what isn't. **Manage…** in the pill's menu
+opens the **Display controls** panel. Your views and the current view are
+saved between sessions.
 
 ### Mariner settings
 
@@ -1491,6 +1542,7 @@ folder in your per-user application-data folder. Saved settings include:
   runs, and runs that turn on MCP from the command line, use a fixed 1100×700
   window and leave the saved placement alone.
 - Palette and display category.
+- Your saved views and the current view.
 - Hidden viewing groups, display-plane toggles and the ice display mode.
 - Mariner settings, depth and distance units.
 - The own-ship overlay, its visibility, vessel dimensions and any AIS target

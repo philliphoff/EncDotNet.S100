@@ -329,6 +329,23 @@ internal sealed partial class ViewerSettings
         = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// The mariner's own display combinations, saved with <b>Save current view
+    /// as…</b> (design note <c>predefined-display-combinations.md</c> §3.2).
+    /// Built-ins aren't written here. Empty by default.
+    /// </summary>
+    public List<Services.DisplayCombinations.DisplayCombinationSettings> DisplayCombinations { get; set; } = new();
+
+    /// <summary>
+    /// The id of the display combination selected in the View menu, or
+    /// <see langword="null"/> for <b>Custom</b> (none). A fresh install starts
+    /// in <b>Everything loaded</b>, which shows every loaded product as before
+    /// combinations existed (design note §6, Q6). Restored at startup but
+    /// not reapplied: the persisted display settings are the truth, and the
+    /// modified marker is worked out against them.
+    /// </summary>
+    public string? ActiveDisplayCombinationId { get; set; } = Services.DisplayCombinations.BuiltInDisplayCombinations.AllLoadedId;
+
+    /// <summary>
     /// Per-spec explicit S-100 Part 9 §11.7 display-mode selections. Keys
     /// are spec codes (e.g. "S-411"); values are the spec-native mode id
     /// (e.g. "IceScientificIcesodDisplayMode"). Populated by the per-dataset
@@ -734,6 +751,7 @@ internal sealed partial class ViewerSettings
 
     /// <summary>Source-generated metadata for the settings file (issue #764).</summary>
     [JsonSerializable(typeof(ViewerSettings))]
+    [JsonSerializable(typeof(Services.DisplayCombinations.DisplayCombinationSettings))]
     private sealed partial class SettingsJsonContext : JsonSerializerContext
     {
         /// <summary>Metadata bound to indented output, for saving.</summary>
