@@ -2,8 +2,9 @@ using EncDotNet.S100.DataModel;
 namespace EncDotNet.S100.Geodesy;
 
 /// <summary>
-/// Spherical geodesic helpers for tessellating augmented line geometry
-/// (S-100 Part 9A §11.5 <c>AugmentedRay</c>, <c>ArcByRadius</c>).
+/// Spherical geodesic helpers: the direct problem along a great circle or a
+/// rhumb line, and tessellation of augmented line geometry (S-100 Part 9A
+/// §11.5 <c>AugmentedRay</c>, <c>ArcByRadius</c>).
 /// </summary>
 /// <remarks>
 /// Uses a spherical Earth model with the WGS-84 mean radius. For the
@@ -12,8 +13,15 @@ namespace EncDotNet.S100.Geodesy;
 /// </remarks>
 public static class GeodesicHelper
 {
-    /// <summary>WGS-84 mean Earth radius in metres.</summary>
-    private const double EarthRadiusMetres = 6_371_008.8;
+    /// <summary>
+    /// WGS-84 mean Earth radius in metres. Every spherical distance and
+    /// bearing in the library and the viewer uses this one radius, so a
+    /// measurement and its direct problem agree to the millimetre.
+    /// </summary>
+    public const double EarthRadiusMetres = 6_371_008.8;
+
+    // Mercator stretching diverges at the poles; clamp just short of them.
+    private const double LatitudeClampDegrees = 89.99;
 
     private const double DegToRadFactor = Math.PI / 180.0;
     private const double RadToDegFactor = 180.0 / Math.PI;
@@ -53,6 +61,48 @@ public static class GeodesicHelper
 
         // Normalise longitude to [-180, 180].
         double lonResult = lambda2 * RadToDegFactor;
+        lonResult = ((lonResult + 540.0) % 360.0) - 180.0;
+
+        return new GeoPosition(phi2 * RadToDegFactor, lonResult);
+    }
+
+    /// <summary>
+    /// Solves the direct problem along a rhumb line (loxodrome) on a sphere:
+    /// given an origin point, a constant true bearing and a distance,
+    /// computes the destination point.
+    /// </summary>
+    /// <param name="latDeg">Origin latitude in degrees.</param>
+    /// <param name="lonDeg">Origin longitude in degrees.</param>
+    /// <param name="bearingDeg">Constant true bearing in degrees (clockwise from north).</param>
+    /// <param name="distanceMetres">Distance along the rhumb line in metres.</param>
+    /// <returns>
+    /// Destination (latitude, longitude) in degrees. A rhumb line can't pass
+    /// a pole, so a line that would reach one ends there.
+    /// </returns>
+    public static GeoPosition RhumbDirectProblem(
+        double latDeg, double lonDeg, double bearingDeg, double distanceMetres)
+    {
+        double phi1 = latDeg * DegToRadFactor;
+        double theta = bearingDeg * DegToRadFactor;
+        double delta = distanceMetres / EarthRadiusMetres; // angular distance
+
+        double phi2 = phi1 + delta * Math.Cos(theta);
+        double maxPhi = Math.PI / 2.0;
+        if (Math.Abs(phi2) > maxPhi)
+        {
+            phi2 = Math.CopySign(maxPhi, phi2);
+        }
+
+        // Distance along a rhumb line is proportional to the change in
+        // latitude; longitude changes with the Mercator-stretched latitude.
+        double clamp = LatitudeClampDegrees * DegToRadFactor;
+        double psi1 = StretchedLatitude(Math.Clamp(phi1, -clamp, clamp));
+        double psi2 = StretchedLatitude(Math.Clamp(phi2, -clamp, clamp));
+        double dpsi = psi2 - psi1;
+        double q = Math.Abs(dpsi) > 1e-12 ? (phi2 - phi1) / dpsi : Math.Cos(phi1);
+        double dlambda = q > 1e-12 ? delta * Math.Sin(theta) / q : 0.0;
+
+        double lonResult = lonDeg + dlambda * RadToDegFactor;
         lonResult = ((lonResult + 540.0) % 360.0) - 180.0;
 
         return new GeoPosition(phi2 * RadToDegFactor, lonResult);
@@ -143,4 +193,6 @@ public static class GeodesicHelper
 
         return points;
     }
+
+    private static double StretchedLatitude(double phi) => Math.Log(Math.Tan(Math.PI / 4.0 + phi / 2.0));
 }

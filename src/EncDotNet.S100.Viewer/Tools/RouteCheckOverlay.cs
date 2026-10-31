@@ -2,6 +2,7 @@ using System.Globalization;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Viewer.Geodesy;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Routing;
 using EncDotNet.S100.Viewer.Services.PassageCheck;
@@ -193,7 +194,7 @@ internal sealed record RouteCheckOverlay(
         double Fraction(double d) => length > 0 ? Math.Clamp((d - summary.StartDistanceMeters) / length, 0, 1) : 0;
         var a = Fraction(from);
         var b = Fraction(to);
-        var steps = leg.Geometry == LegGeometry.GreatCircle ? Math.Max(1, (int)Math.Ceiling((b - a) * RouteOverlayScene.GeodesicSegments)) : 1;
+        var steps = leg.Geometry == LegGeometry.GreatCircle ? Math.Max(1, (int)Math.Ceiling((b - a) * length / MarineGeodesy.MaxSegmentMetres)) : 1;
         var path = new GeoPosition[steps + 1];
         for (var k = 0; k <= steps; k++)
             path[k] = PassageGeodesy.Interpolate(leg.Points[0], leg.Points[^1], a + ((b - a) * k / steps), leg.Geometry);
