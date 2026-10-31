@@ -1,6 +1,7 @@
 # Depth basis indicator — Design Note
 
-> Status: **Proposed** ([#1191](https://github.com/philliphoff/EncDotNet.S100/issues/1191)).
+> Status: **Built** ([#1191](https://github.com/philliphoff/EncDotNet.S100/issues/1191)): the
+> #1191 parts of §5 shipped together; the adjusted states wait for #1132.
 > A sub-issue of [#1132](https://github.com/philliphoff/EncDotNet.S100/issues/1132)
 > (chart-wide S-104 water level adjustment). This note designs the
 > permanent indication of what the depths on the chart are relative to,

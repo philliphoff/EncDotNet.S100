@@ -308,7 +308,8 @@ public class RouteCheckerTests
 
         Assert.Equal(2 * leg, track.LengthMeters, 3);
         Assert.Equal(leg, track.Legs[1].StartMeters, 3);
-        Assert.Equal(0, track.LegAt(leg));
+        // At the vertex itself, the earlier leg.
+        Assert.Equal(0, track.LegAt(track.Legs[1].StartMeters));
         Assert.Equal(1, track.LegAt(leg + 1));
         Assert.Equal(0.075, track.PositionAt(1.5 * leg).Longitude, 9);
         Assert.Equal(C, track.PositionAt(10 * leg));

@@ -48,6 +48,13 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private readonly PortrayalPipeline _pipeline;
     private readonly SemaphoreSlim _renderGate = new(1, 1);
     private GeographicBounds? _coverageExtent;
+
+    // The last traced depth lines and what they were traced from. The S-102
+    // values never change, so the same overview level, sampled region and
+    // safety contour give the same lines; redraws and palette switches reuse
+    // them. Read and written under the render gate.
+    private (DepthLineKey Key, double Safety, IReadOnlyList<Isoline> Lines)? _safetyLines;
+    private (DepthLineKey Key, IReadOnlyList<Isoline> Lines)? _limitLines;
     private ValidationReport? _validationReport;
     private bool _validationCached;
 
@@ -104,6 +111,13 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
     /// <inheritdoc />
     public DateTime? IssueTime => S100IssueTime.Parse(_dataset.IssueDate, _dataset.IssueTime);
+
+    /// <summary>
+    /// The vertical datum the surface's depths are relative to: the root
+    /// <c>verticalDatum</c> as an S-100 vertical datum code (S-102 Ed 3.0.0
+    /// §10.2.1), or <see langword="null"/> when it isn't declared.
+    /// </summary>
+    public int? VerticalDatum => _dataset.VerticalDatum;
 
     /// <summary>
     /// Initializes a new <see cref="S102DatasetProcessor"/> by reading and
@@ -273,6 +287,9 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     .ConfigureAwait(false);
                 var styledLayer = (StyledCoverageLayer)layer;
 
+                var depthLines = BuildDepthLineSubLayers(
+                    styledLayer, context?.Mariner ?? MarinerSettings.Default, crs, context?.Palette ?? PaletteType.Day);
+
                 var geoId = _dataset.GeographicIdentifier ?? _fileName;
                 var info = $"{geoId} — {metadata.GridMetadata.NumColumns}×{metadata.GridMetadata.NumRows} grid, CRS: EPSG:{crs}";
 
@@ -293,6 +310,8 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                             Coverage = styledLayer,
                             Viewport = viewport,
                         },
+                        depthLines.SafetyContour,
+                        depthLines.CoverageLimit,
                     },
                     Spec = Spec,
                     SourceDatasetId = _fileName,
@@ -312,6 +331,109 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             _renderGate.Release();
         }
     }
+
+    /// <summary>
+    /// The safety contour traced from the grid at the mariner's value (S-164
+    /// UserSelectedSafetyContour), and the border along the limit of the
+    /// S-102 data (S-98 Part A §A-6.9.1), on
+    /// <see cref="S98DisplayPlane.BaseChartOver"/> with the S-101 line work.
+    /// Neither is adjusted for water level. Called under the render gate.
+    /// </summary>
+    private (IsolineCoverageSubLayer SafetyContour, IsolineCoverageSubLayer CoverageLimit) BuildDepthLineSubLayers(
+        StyledCoverageLayer layer, MarinerSettings mariner, int crs, PaletteType palette)
+    {
+        Func<double, double, (double Longitude, double Latitude)>? nativeToWgs84 = null;
+        if (crs != 4326)
+        {
+            var transform = _crsTransformFactory.Create($"EPSG:{crs}", "EPSG:4326");
+            if (!transform.IsIdentity)
+            {
+                nativeToWgs84 = (x, y) => transform.Transform(x, y);
+            }
+        }
+
+        var mercatorExtent = S102DepthLines.SurfaceExtent(layer, nativeToWgs84);
+        var halo = RgbaColor.FromHex(_catalogue.ActivePalette.Resolve("CHWHT"));
+
+        var safety = _catalogue.SafetyContourStyle(mariner);
+        var limit = _catalogue.CoverageLimitStyle;
+        var grid = layer.Coverage.Metadata;
+        var key = new DepthLineKey(
+            _source.SelectedOverviewLevel, crs, grid.OriginLongitude, grid.OriginLatitude,
+            grid.SpacingLongitudinal, grid.SpacingLatitudinal, grid.NumRows, grid.NumColumns);
+        return (
+            new IsolineCoverageSubLayer
+            {
+                LayerKey = SafetyContourLayerKey,
+                LayerName = $"S-102 safety contour: {_fileName}",
+                Plane = S98DisplayPlane.BaseChartOver,
+                WithinPlanePriority = 1,
+                SourceFeatureType = SafetyContourLayerKey,
+                Isolines = SafetyLines(key, layer, safety.Value, nativeToWgs84),
+                Extent = mercatorExtent,
+                Ink = RgbaColor.FromHex(safety.Color),
+                LabelHalo = halo,
+                LineWidth = safety.LineWidth,
+                DashPattern = [],
+            },
+            new IsolineCoverageSubLayer
+            {
+                LayerKey = CoverageLimitLayerKey,
+                LayerName = $"S-102 coverage limit: {_fileName}",
+                Plane = S98DisplayPlane.BaseChartOver,
+                WithinPlanePriority = 0,
+                SourceFeatureType = CoverageLimitLayerKey,
+                Isolines = LimitLines(key, layer, nativeToWgs84),
+                Extent = mercatorExtent,
+                Ink = RgbaColor.FromHex(limit.Color),
+                LabelHalo = halo,
+                LineWidth = limit.LineWidth,
+                DashPattern = limit.DashPattern!.Select(d => (double)d).ToArray(),
+            });
+    }
+
+    private IReadOnlyList<Isoline> SafetyLines(
+        DepthLineKey key, StyledCoverageLayer layer, double safety, Func<double, double, (double, double)>? nativeToWgs84)
+    {
+        if (_safetyLines is { } cached && cached.Key == key && cached.Safety == safety)
+        {
+            return cached.Lines;
+        }
+
+        var lines = S102DepthLines.SafetyContour(layer, safety, nativeToWgs84);
+        _safetyLines = (key, safety, lines);
+        return lines;
+    }
+
+    private IReadOnlyList<Isoline> LimitLines(
+        DepthLineKey key, StyledCoverageLayer layer, Func<double, double, (double, double)>? nativeToWgs84)
+    {
+        if (_limitLines is { } cached && cached.Key == key)
+        {
+            return cached.Lines;
+        }
+
+        var lines = S102DepthLines.CoverageLimit(layer, nativeToWgs84);
+        _limitLines = (key, lines);
+        return lines;
+    }
+
+    /// <summary>What a traced depth line depends on besides the safety contour.</summary>
+    private readonly record struct DepthLineKey(
+        int OverviewLevel,
+        int Crs,
+        double OriginLongitude,
+        double OriginLatitude,
+        double SpacingLongitudinal,
+        double SpacingLatitudinal,
+        int Rows,
+        int Columns);
+
+    /// <summary>Layer key of the S-102 safety contour sub-layer.</summary>
+    public const string SafetyContourLayerKey = "s102.safetycontour";
+
+    /// <summary>Layer key of the S-102 coverage-limit sub-layer.</summary>
+    public const string CoverageLimitLayerKey = "s102.coveragelimit";
 
     /// <summary>
     /// The WGS-84 envelope of the full grid (all four reprojected corners for a

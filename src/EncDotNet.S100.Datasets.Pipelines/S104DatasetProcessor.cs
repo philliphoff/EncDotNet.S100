@@ -190,6 +190,18 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     public bool IsGriddedSurface => _source is not null;
 
     /// <summary>
+    /// The vertical datum the water levels are heights above: the dataset's
+    /// <c>verticalDatum</c> as an S-100 vertical datum code (S-104 Ed 2.0.0
+    /// §5.2), or <see langword="null"/> when it isn't declared.
+    /// </summary>
+    public int? VerticalDatum => _data switch
+    {
+        S104DatasetData.GriddedCoverage g => g.Dataset.VerticalDatum,
+        S104DatasetData.StationSeries s => s.Dataset.VerticalDatum,
+        _ => null,
+    };
+
+    /// <summary>
     /// Initializes a new <see cref="S104DatasetProcessor"/> by reading and
     /// parsing the HDF5 dataset file at <paramref name="path"/>. The file is
     /// read in full and closed before the constructor returns.

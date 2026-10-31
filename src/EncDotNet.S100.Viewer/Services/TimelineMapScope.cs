@@ -128,10 +128,18 @@ internal sealed class TimelineMapScope : ITimelineMapScope
         _datasets.Entries.FirstOrDefault(e => string.Equals(e.Id.Value, datasetId, StringComparison.Ordinal));
 
     /// <summary>The dataset's footprint in degrees: its drawn extent, else its catalogue box.</summary>
-    private GeoBounds? Footprint(string datasetId)
+    private GeoBounds? Footprint(string datasetId) =>
+        Entry(datasetId) is { } entry ? FootprintOf(entry) : null;
+
+    /// <summary>
+    /// A dataset's footprint in degrees: its drawn extent, else its catalogue
+    /// box; null when neither is known. The depth basis indicator (#1191)
+    /// tests the same footprint.
+    /// </summary>
+    /// <param name="entry">The dataset.</param>
+    internal static GeoBounds? FootprintOf(DatasetEntry entry)
     {
-        if (Entry(datasetId) is not { } entry)
-            return null;
+        ArgumentNullException.ThrowIfNull(entry);
         if (entry.MercatorExtent is { } extent)
         {
             var (west, south) = SphericalMercator.ToLonLat(extent.MinX, extent.MinY);
@@ -152,10 +160,17 @@ internal sealed class TimelineMapScope : ITimelineMapScope
         return new MRect(minX, minY, maxX, maxY);
     }
 
-    /// <summary>The map view in degrees, or null before the first viewport (or when it spans the globe).</summary>
-    private GeoBounds? View()
+    /// <summary>The map view in degrees, or null before the first viewport.</summary>
+    private GeoBounds? View() => ViewOf(_viewport.Current);
+
+    /// <summary>
+    /// A viewport in degrees, or null before the first viewport. A view that
+    /// spans the globe covers every longitude.
+    /// </summary>
+    /// <param name="snapshot">The viewport, or null.</param>
+    internal static GeoBounds? ViewOf(MapViewportSnapshot? snapshot)
     {
-        if (_viewport.Current is not { } snapshot)
+        if (snapshot is null)
             return null;
         if (snapshot.LongitudeSpanDegrees >= 359)
             return new GeoBounds(snapshot.MinLatitude, -180, snapshot.MaxLatitude, 180);

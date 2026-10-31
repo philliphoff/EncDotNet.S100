@@ -53,8 +53,16 @@ internal sealed class FakeDatasetLoaderService : IDatasetLoaderService
     public IReadOnlyList<ILayer> CurrentStackedLayers => Array.Empty<ILayer>();
     public IReadOnlyList<LayerStackEntry> CurrentStackEntries => Array.Empty<LayerStackEntry>();
     public event Action? LayerStackChanged { add { } remove { } }
-    public bool GetActive(string datasetId) => true;
-    public void SetActive(string datasetId, bool active) { }
+    /// <summary>Dataset ids whose Active flag is off; every other id is active.</summary>
+    public HashSet<string> Inactive { get; } = new(StringComparer.Ordinal);
+
+    public bool GetActive(string datasetId) => !Inactive.Contains(datasetId);
+
+    public void SetActive(string datasetId, bool active)
+    {
+        if (active ? Inactive.Remove(datasetId) : Inactive.Add(datasetId))
+            ActiveChanged?.Invoke(datasetId);
+    }
 
     /// <summary>The policy last passed to <see cref="SetHiddenFeaturesOnLoad"/>.</summary>
     public Func<DatasetEntry, IDatasetProcessor, IReadOnlySet<string>?>? HiddenFeaturesOnLoad { get; private set; }
@@ -67,5 +75,17 @@ internal sealed class FakeDatasetLoaderService : IDatasetLoaderService
 
     public void SetPortrayalTimeOnLoad(Func<DatasetEntry, IDatasetProcessor, PortrayalTime?>? policy) =>
         PortrayalTimeOnLoad = policy;
-    public event Action<string>? ActiveChanged { add { } remove { } }
+    public event Action<string>? ActiveChanged;
+
+    /// <summary>The policy last passed to <see cref="SetActiveOnLoad"/>.</summary>
+    public Func<DatasetEntry, IDatasetProcessor, bool?>? ActiveOnLoad { get; private set; }
+
+    public void SetActiveOnLoad(Func<DatasetEntry, IDatasetProcessor, bool?>? policy) =>
+        ActiveOnLoad = policy;
+
+    /// <summary>The policy last passed to <see cref="SetSubLayerVisibilityOnLoad"/>.</summary>
+    public Func<DatasetEntry, string, bool?>? SubLayerVisibilityOnLoad { get; private set; }
+
+    public void SetSubLayerVisibilityOnLoad(Func<DatasetEntry, string, bool?>? policy) =>
+        SubLayerVisibilityOnLoad = policy;
 }

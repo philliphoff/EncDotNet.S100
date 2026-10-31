@@ -7,15 +7,43 @@
              x:Class="EncDotNet.S100.Viewer.Views.EcdisDisplayPanelView"
              x:DataType="vm:EcdisDisplayPanelViewModel">
 
-    <Grid>
-        <!-- Empty state -->
-        <views:PlaceholderView IsVisible="{Binding IsEmpty}"
+    <Grid RowDefinitions="Auto,*">
+        <!-- With nothing to control yet, the View section still shows above
+             the empty state: a view chosen now applies to what loads later. -->
+        <StackPanel Grid.Row="0"
+                    Spacing="4"
+                    Margin="12,4,12,0"
+                    IsVisible="{Binding ShowsViewAboveEmptyState}">
+            <TextBlock Text="{x:Static loc:Strings.DisplayCombination_SectionHeader}"
+                       FontSize="11"
+                       FontWeight="SemiBold"
+                       LetterSpacing="0.5"
+                       Opacity="0.7" />
+            <views:DisplayCombinationsView DataContext="{Binding DisplayCombinations}"
+                                           AutomationProperties.AutomationId="Ecdis.View" />
+        </StackPanel>
+        <views:PlaceholderView Grid.Row="1"
+                               IsVisible="{Binding IsEmpty}"
                                Icon="Eye"
                                Header="{x:Static loc:Strings.EcdisPanel_NoSpecsTitle}"
                                Description="{x:Static loc:Strings.EcdisPanel_NoSpecsDescription}" />
 
-        <ScrollViewer IsVisible="{Binding !IsEmpty}">
+        <ScrollViewer Grid.Row="0" Grid.RowSpan="2"
+                      IsVisible="{Binding !IsEmpty}">
             <StackPanel Spacing="12" Margin="12,4,12,12">
+                <!-- View (#1192): the display combinations, above Display
+                     Category. Editing any control below that the active
+                     combination covers marks it modified. -->
+                <StackPanel Spacing="4" IsVisible="{Binding HasDisplayCombinations}">
+                    <TextBlock Text="{x:Static loc:Strings.DisplayCombination_SectionHeader}"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               LetterSpacing="0.5"
+                               Opacity="0.7" />
+                    <views:DisplayCombinationsView DataContext="{Binding DisplayCombinations}"
+                                                   AutomationProperties.AutomationId="Ecdis.View" />
+                </StackPanel>
+
                 <!-- Display category radio group -->
                 <StackPanel Spacing="4">
                     <TextBlock Text="{x:Static loc:Strings.EcdisPanel_CategoryHeader}"

@@ -17,7 +17,7 @@ public sealed partial class ClearanceCheck
     /// the required UKC (0 m when unset). Charted depth comes from S-102 where it
     /// covers the route, otherwise from S-101 (marked low confidence). Water
     /// level comes from S-104 at the ETA; outside the S-104 extent or time range
-    /// the sample is "no data" ("tide not applied"), never a charted-depth-only
+    /// the sample is "no data" ("water level not applied"), never a charted-depth-only
     /// pass. The depth and water level must share a vertical datum
     /// (<see cref="VerticalDatumCheck"/>).
     /// </para>

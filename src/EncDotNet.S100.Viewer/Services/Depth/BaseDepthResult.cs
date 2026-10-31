@@ -18,8 +18,9 @@ namespace EncDotNet.S100.Viewer.Services.Depth;
 /// </param>
 /// <param name="VerticalDatumCode">
 /// The source vertical datum as an S-100 register code, when known: the
-/// S-102 root <c>verticalDatum</c>, or the S-101 cell's <c>SoundingDatum</c>
-/// at the point (S-101 DCEG §3.9); <c>null</c> when the source doesn't declare one.
+/// S-102 root <c>verticalDatum</c>, or for an S-101 (or S-57) source the
+/// <c>SoundingDatum</c> area containing the pick. <c>null</c> when the source
+/// doesn't declare one.
 /// </param>
 /// <param name="SoundingDistanceMeters">
 /// Planar distance in metres from the pick to the chosen sounding —

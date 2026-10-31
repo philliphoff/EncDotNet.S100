@@ -666,6 +666,18 @@
                                     <TextBlock Text="{Binding ProductSpec}"
                                                FontSize="11"
                                                Opacity="0.6" />
+                                    <!-- Made inactive by the active display combination (#1192):
+                                         "Not in Pilotage". The layer stack's Active toggle turns it back on. -->
+                                    <Border Classes="HiddenTag"
+                                            HorizontalAlignment="Left"
+                                            Margin="0,2,0,0"
+                                            IsVisible="{Binding HasInactiveReason}"
+                                            AutomationProperties.AutomationId="Datasets.Row.InactiveReason"
+                                            AutomationProperties.Name="{Binding InactiveReason}">
+                                        <TextBlock Text="{Binding InactiveReason}"
+                                                   FontSize="10"
+                                                   FontWeight="SemiBold" />
+                                    </Border>
                                     <!-- A product that isn't S-100 (a weather model grid) is labelled so (weather-sources.md §3.1). -->
                                     <Border Classes="HiddenTag"
                                             HorizontalAlignment="Left"

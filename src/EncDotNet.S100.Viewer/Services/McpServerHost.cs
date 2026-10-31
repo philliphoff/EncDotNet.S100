@@ -63,6 +63,8 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly NavigationalWarningsService? _navigationalWarningsService;
     private readonly EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? _routeCheckSources;
     private readonly EncDotNet.S100.Viewer.Diagnostics.LogBuffer? _logBuffer;
+    private readonly EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService? _displayCombinations;
+    private readonly EncDotNet.S100.Viewer.Services.Depth.DepthBasisService? _depthBasis;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private S100McpServer? _server;
@@ -104,9 +106,13 @@ internal sealed class McpServerHost : IAsyncDisposable
         RouteExchangeService? routeExchange = null,
         EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState? routeCheckLegend = null,
         EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? routeCheckSources = null,
-        EncDotNet.S100.Viewer.Diagnostics.LogBuffer? logBuffer = null)
+        EncDotNet.S100.Viewer.Diagnostics.LogBuffer? logBuffer = null,
+        EncDotNet.S100.Viewer.Services.Depth.DepthBasisService? depthBasis = null,
+        EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService? displayCombinations = null)
     {
+        _depthBasis = depthBasis;
         _logBuffer = logBuffer;
+        _displayCombinations = displayCombinations;
         _routeCheckSources = routeCheckSources;
         _routeCheckLegend = routeCheckLegend;
         _routeExchange = routeExchange;
@@ -394,7 +400,11 @@ internal sealed class McpServerHost : IAsyncDisposable
         }
         if (_appScreenshot is not null)
         {
-            tools.Add(CaptureAppScreenshotMcpAdapter.Create(new CaptureAppScreenshotTool(_appScreenshot, _uiControllerAccessor)));
+            var combinations = _displayCombinations;
+            tools.Add(CaptureAppScreenshotMcpAdapter.Create(new CaptureAppScreenshotTool(
+                _appScreenshot,
+                _uiControllerAccessor,
+                combinations is null ? null : () => (combinations.Active?.Id, combinations.IsModified))));
         }
         if (_timeline is not null)
         {
@@ -413,9 +423,18 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(ViewerStateMcpAdapters.Create(new ListNotificationsTool(_notifications)));
             tools.Add(ViewerStateMcpAdapters.Create(new DismissNotificationTool(_notifications)));
         }
+        if (_displayCombinations is not null)
+        {
+            tools.Add(DisplayCombinationMcpAdapters.Create(new ListDisplayCombinationsTool(_displayCombinations)));
+            tools.Add(DisplayCombinationMcpAdapters.Create(new SetDisplayCombinationTool(_displayCombinations)));
+        }
         if (_logBuffer is not null)
         {
             tools.Add(GetRecentLogsMcpAdapter.Create(new GetRecentLogsTool(_logBuffer)));
+        }
+        if (_depthBasis is not null)
+        {
+            tools.Add(DepthBasisMcpAdapter.Create(new GetDepthBasisTool(_depthBasis, new DispatcherRouteEditInvoker())));
         }
         tools.AddRange(LibraryMcpTools.Create(_library, _libraryEditor, _secomRegistry, _secomServerTrust, _secomIdentities));
         // Test hooks only: set_test_clock exists only when the viewer was
@@ -471,10 +490,10 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(SetRouteInfoMcpAdapter.Create(new SetRouteInfoTool(_routesService, invoker)));
             if (_passageCheck is not null)
             {
-                tools.Add(PassageCheckMcpAdapters.Create(new SetCheckModeTool(_routesService, invoker, _passageCheck, _routeFindings)));
-                tools.Add(PassageCheckMcpAdapters.Create(new GetCheckStateTool(_routesService, invoker, _passageCheck, _routeFindings)));
-                tools.Add(PassageCheckMcpAdapters.Create(new SetPassageCursorTool(_routesService, invoker, _passageCheck, _routeFindings)));
-                tools.Add(PassageCheckMcpAdapters.Create(new SetDepartureTool(_routesService, invoker, _passageCheck, _routeFindings)));
+                tools.Add(PassageCheckMcpAdapters.Create(new SetCheckModeTool(_routesService, invoker, _passageCheck, _routeFindings) { DepthBasis = _depthBasis }));
+                tools.Add(PassageCheckMcpAdapters.Create(new GetCheckStateTool(_routesService, invoker, _passageCheck, _routeFindings) { DepthBasis = _depthBasis }));
+                tools.Add(PassageCheckMcpAdapters.Create(new SetPassageCursorTool(_routesService, invoker, _passageCheck, _routeFindings) { DepthBasis = _depthBasis }));
+                tools.Add(PassageCheckMcpAdapters.Create(new SetDepartureTool(_routesService, invoker, _passageCheck, _routeFindings) { DepthBasis = _depthBasis }));
                 if (_followPassage is not null && _timeline is not null)
                     tools.Add(PassageCheckMcpAdapters.Create(new SetFollowPassageTool(_followPassage, _passageCheck, invoker, _timeline)));
                 if (_routeFindings is not null)

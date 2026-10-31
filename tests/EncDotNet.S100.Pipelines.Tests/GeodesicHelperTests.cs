@@ -125,4 +125,41 @@ public class GeodesicHelperTests
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             GeodesicHelper.TessellateRay(0, 0, 0, -1));
     }
+
+    [Fact]
+    public void RhumbDirectProblem_DueEast_KeepsLatitude()
+    {
+        var (lat, lon) = GeodesicHelper.RhumbDirectProblem(45.0, 10.0, 90.0, 100_000.0);
+
+        Assert.Equal(45.0, lat, 9);
+        // Along a parallel: 100 km is 100 km / (R cos 45°) of longitude.
+        var expected = 10.0 + 100_000.0 / (GeodesicHelper.EarthRadiusMetres * Math.Cos(Math.PI / 4)) * 180.0 / Math.PI;
+        Assert.Equal(expected, lon, 9);
+    }
+
+    [Fact]
+    public void RhumbDirectProblem_DueNorth_MatchesTheGreatCircle()
+    {
+        var rhumb = GeodesicHelper.RhumbDirectProblem(10.0, 20.0, 0.0, 500_000.0);
+        var great = GeodesicHelper.DirectProblem(10.0, 20.0, 0.0, 500_000.0);
+
+        Assert.Equal(great.Latitude, rhumb.Latitude, 9);
+        Assert.Equal(great.Longitude, rhumb.Longitude, 9);
+    }
+
+    [Fact]
+    public void RhumbDirectProblem_PastThePole_EndsAtThePole()
+    {
+        var (lat, _) = GeodesicHelper.RhumbDirectProblem(89.0, 0.0, 10.0, 1_000_000.0);
+
+        Assert.Equal(90.0, lat, 9);
+    }
+
+    [Fact]
+    public void RhumbDirectProblem_AcrossTheAntimeridian_WrapsLongitude()
+    {
+        var (_, lon) = GeodesicHelper.RhumbDirectProblem(0.0, 179.5, 90.0, 111_000.0);
+
+        Assert.InRange(lon, -180.0, -179.0);
+    }
 }

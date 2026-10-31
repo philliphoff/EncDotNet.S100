@@ -840,11 +840,11 @@ public class RouteFindingFormatter
     /// <summary>A stretch's length ({0}: nautical miles).</summary>
     protected virtual string StretchLengthFormat => "{0:0.0} NM";
 
-    /// <summary>The tide isn't applied for a length ({0}: nautical miles).</summary>
-    protected virtual string TideNotAppliedForFormat => "tide not applied for {0:0.0} NM";
+    /// <summary>The water level isn't applied for a length ({0}: nautical miles).</summary>
+    protected virtual string TideNotAppliedForFormat => "water level not applied for {0:0.0} NM";
 
-    /// <summary>The tide isn't applied.</summary>
-    protected virtual string TideNotApplied => "tide not applied";
+    /// <summary>The water level isn't applied.</summary>
+    protected virtual string TideNotApplied => "water level not applied";
 
     /// <summary>Why there's no charted depth.</summary>
     protected virtual string NoDepthSource => "no S-102 or S-101 coverage";

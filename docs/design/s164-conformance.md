@@ -131,8 +131,11 @@ issue.
    own-ship pieces are already there.
 7. **Water level adjustment is point-only.** ([#1132](https://github.com/philliphoff/EncDotNet.S100/issues/1132)) S-104 is applied at a picked
    point, over time at a point, and in route clearance. It isn't applied to
-   the chart: no adjusted depths or safety contour, no adjustment boundary,
-   and no permanent indication.
+   the chart: no adjusted depths or safety contour and no adjustment
+   boundary. The status bar's **DEPTHS** indicator
+   ([#1191](https://github.com/philliphoff/EncDotNet.S100/issues/1191))
+   permanently says the chart shows charted depths, and whether S-104 in
+   view is not applied.
 8. **Chart furniture.** ([#1133](https://github.com/philliphoff/EncDotNet.S100/issues/1133)) There's no S-52-style north arrow or vertical scale
    bar, no latitude bar, no "no data" indication, no chart legend for a
    position, no check symbol, no colour differentiation diagram and no
@@ -461,7 +464,7 @@ viewer's pick panel shows.
 | FixedDateRange | S-98 12.8.1 | Settings | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Features draw only within their dates at the view time, read in the Local/UTC setting, and a pinned time says "Display Not Real Time" ([#1126](https://github.com/philliphoff/EncDotNet.S100/issues/1126)). The library takes a viewing range; the apps show one view time, and the Timeline only moves while time-aware data is loaded. |
 | PeriodicDateRange | S-98 12.8.1 | Settings | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Truncated dates (`----03--` to `----10--`) recur every year, wrapping over the year end. The manual names DisplayOther, but the dated buoys are in the Settings cell. As above for the view time. |
 | SafetyContourDisplay | S-98 12.6.1 | DisplayBase | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | The safety contour is drawn only on the depth-area edges at the safety depth ([#1126](https://github.com/philliphoff/EncDotNet.S100/issues/1126)). |
-| UserSelectedSafetyContour | S-98 Appendix D-1 | PowerUp | Partial | `src/EncDotNet.S100.Datasets.S102/S102PortrayalCatalogue.cs` | S-102 coloured by the user's safety contour; no S-104 adjustment of the contour. |
+| UserSelectedSafetyContour | S-98 Appendix D-1 | PowerUp | Partial | `src/EncDotNet.S100.Datasets.S102/S102PortrayalCatalogue.cs` | S-102 coloured by the user's safety contour, and the safety contour traced from the S-102 grid with the coverage-limit border; no S-104 adjustment of the contour. |
 | SafetyDepth | — | — | Supported | `src/EncDotNet.S100.Datasets.S101/S101LuaRuleExecutor.cs` | Passed to the PC. |
 | ShallowPattern | S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Viewer/Services/EcdisDisplayState.cs` | PC pattern, switchable by viewing group. |
 | ContourLabels | S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Datasets.S101/S101LuaRuleExecutor.cs` | PC labels plus safety-contour label merging. |
@@ -491,9 +494,9 @@ viewer's pick panel shows.
 | OverlappingData | S-98 20.3.1 | — | Gap | `src/EncDotNet.S100.Renderers.Mapsui/OverlapSuppression.cs` | Same-band overlaps both draw; no overlap indication. |
 | GraphicalIndex | S-98 12.4.1 | PowerUp | Supported | `src/EncDotNet.S100.Viewer/Services/LibraryCoverageOverlayController.cs` | Library coverage overlay with edition and update. |
 | DisplayScaleChange | S-98 12 | PowerUp | Partial | `src/EncDotNet.S100.Viewer/MapScaleFormatter.cs` | Zoom and scale readout; no chart-scale or range picker outside MCP. |
-| WaterLevelAdjustment | S-98 Appendix D-2 | PowerUp | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs` | S-102 replaces ENC depths; S-104 tide only at a picked point. |
+| WaterLevelAdjustment | S-98 Appendix D-2 | PowerUp | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs`, `src/EncDotNet.S100.Viewer/Services/Depth/DepthBasisEvaluator.cs` | S-102 replaces ENC depths; S-104 water level only at a picked point and in route clearance. The permanent indication exists (status bar **DEPTHS**, #1191); chart adjustment is #1132. |
 | AdjustmentOfDepthValues | S-98 Appendix D-3.1 | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/LocationDepthProbe.cs` | Point probe only. |
-| WLAFeatureInformation | S-98 Appendix D-3 | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs` | Depth card shows source and tide; not per feature. |
+| WLAFeatureInformation | S-98 Appendix D-3 | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs` | Depth card shows charted depth, water level and source, and says the chart shows charted depths (#1191); not per feature. Chart adjustment is #1132. |
 | UncertaintyWLA | S-98 Appendix D-2 | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs` | S-102 and S-104 uncertainty combined, √(σ₁₀₂² + σ₁₀₄²), at a picked point; not yet on the chart. |
 | WLATimePeriod | S-98 Appendix D-2.5 | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/DepthOverTimeViewModel.cs` | Depth over time at a point; no period adjustment. |
 | IncompatibleDatums | — | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs` | At a picked point, water level on another or an undeclared datum is refused and the reason shown; not yet on the chart. |

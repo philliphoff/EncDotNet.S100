@@ -565,7 +565,7 @@ public sealed record CheckRouteClearanceLeg(
     [property: Description("Separate stretches below the UKC setting on the leg.")] int PlacesBelow,
     [property: Description("True when part of the leg is lower confidence (dashed chip border and dashed route line in the band's colour).")] bool LowConfidence,
     [property: Description("Lower-confidence reasons on the leg (see samples[].confidence).")] IReadOnlyList<string> Confidence,
-    [property: Description("True when part of the leg has charted depth but no applied water level (\"no tide\").")] bool NoWaterLevel);
+    [property: Description("True when part of the leg has charted depth but no applied water level (\"no water level\").")] bool NoWaterLevel);
 
 /// <summary>A run of samples sharing a gap or low-confidence reason.</summary>
 public sealed record CheckRouteStretch(

@@ -1,26 +1,33 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Geodesy;
+using EncDotNet.S100.Navigation;
 
 namespace EncDotNet.S100.Viewer.Geodesy;
 
 /// <summary>
-/// Marine-navigation geodesy helpers used by the Measure Mode tool.
+/// Marine-navigation geodesy helpers used by the measure tools and the route
+/// overlay: rhumb-line and great-circle distances, bearings and direct
+/// problems, and densified lines and circles for drawing.
 /// </summary>
 /// <remarks>
-/// All inputs are WGS-84 latitude/longitude in degrees. Distances are
-/// returned in nautical miles. Bearings are true (relative to true north),
-/// in the closed-open range [0°, 360°).
-///
-/// <para>
-/// V1 implements rhumb-line (loxodrome) calculations only — the standard
-/// ECDIS convention for Distance/Bearing read-outs. A future
-/// great-circle helper would live alongside these methods so call sites
-/// can swap by selecting a different routine.
-/// </para>
+/// All inputs are WGS-84 latitude/longitude in degrees on a sphere of
+/// <see cref="GeodesicHelper.EarthRadiusMetres"/>. Bearings are true
+/// (relative to true north), in the closed-open range [0°, 360°).
 /// </remarks>
 internal static class MarineGeodesy
 {
-    /// <summary>Mean Earth radius in nautical miles (6371 km / 1.852).</summary>
-    private const double EarthRadiusNm = 3440.065;
+    /// <summary>
+    /// Longest straight piece, in metres, of a densified great circle or
+    /// geodesic circle. Shorter pieces keep the drawn curve on the true one
+    /// at large scales.
+    /// </summary>
+    public const double MaxSegmentMetres = 50_000.0;
+
+    /// <summary>Fewest pieces a geodesic circle is drawn with, however small.</summary>
+    public const int MinCircleSegments = 64;
+
+    /// <summary>Mean Earth radius in nautical miles.</summary>
+    private const double EarthRadiusNm = GeodesicHelper.EarthRadiusMetres / PassageGeodesy.MetersPerNauticalMile;
 
     /// <summary>
     /// Maximum absolute latitude (degrees) used when evaluating rhumb-line
@@ -167,6 +174,83 @@ internal static class MarineGeodesy
         }
 
         return result;
+    }
+
+    /// <summary>Distance in metres from one position to another along the given geometry.</summary>
+    public static double DistanceMetres(LegGeometry geometry, GeoPosition from, GeoPosition to) =>
+        (geometry == LegGeometry.GreatCircle
+            ? GreatCircleDistanceNm(from.Latitude, from.Longitude, to.Latitude, to.Longitude)
+            : RhumbDistanceNm(from.Latitude, from.Longitude, to.Latitude, to.Longitude))
+        * PassageGeodesy.MetersPerNauticalMile;
+
+    /// <summary>
+    /// True bearing in degrees [0°, 360°) at <paramref name="from"/> towards
+    /// <paramref name="to"/>: the constant bearing of a rhumb line, or the
+    /// initial bearing of a great circle.
+    /// </summary>
+    public static double InitialBearingDegrees(LegGeometry geometry, GeoPosition from, GeoPosition to) =>
+        geometry == LegGeometry.GreatCircle
+            ? GreatCircleInitialBearingDegrees(from.Latitude, from.Longitude, to.Latitude, to.Longitude)
+            : RhumbBearingDegrees(from.Latitude, from.Longitude, to.Latitude, to.Longitude);
+
+    /// <summary>
+    /// True bearing in degrees [0°, 360°) at <paramref name="to"/> back
+    /// towards <paramref name="from"/>. On a rhumb line it's the forward
+    /// bearing ± 180°; on a great circle it generally isn't.
+    /// </summary>
+    public static double ReverseBearingDegrees(LegGeometry geometry, GeoPosition from, GeoPosition to) =>
+        InitialBearingDegrees(geometry, to, from);
+
+    /// <summary>
+    /// The position <paramref name="distanceMetres"/> from
+    /// <paramref name="origin"/> on an initial true bearing, along a great
+    /// circle or a rhumb line.
+    /// </summary>
+    public static GeoPosition Destination(LegGeometry geometry, GeoPosition origin, double bearingDegrees, double distanceMetres) =>
+        geometry == LegGeometry.GreatCircle
+            ? GeodesicHelper.DirectProblem(origin.Latitude, origin.Longitude, bearingDegrees, distanceMetres)
+            : GeodesicHelper.RhumbDirectProblem(origin.Latitude, origin.Longitude, bearingDegrees, distanceMetres);
+
+    /// <summary>
+    /// Points along the great circle from <paramref name="from"/> to
+    /// <paramref name="to"/>, both ends included, no more than
+    /// <see cref="MaxSegmentMetres"/> apart. The ends are the given
+    /// positions exactly, so the line meets its waypoints.
+    /// </summary>
+    public static IReadOnlyList<GeoPosition> DensifyGreatCircle(GeoPosition from, GeoPosition to)
+    {
+        var metres = DistanceMetres(LegGeometry.GreatCircle, from, to);
+        var segments = Math.Max(1, (int)Math.Ceiling(metres / MaxSegmentMetres));
+        var points = GreatCircleIntermediatePoints(from.Latitude, from.Longitude, to.Latitude, to.Longitude, segments).ToArray();
+        points[0] = from;
+        points[^1] = to;
+        return points;
+    }
+
+    /// <summary>
+    /// A closed geodesic circle: every point is <paramref name="radiusMetres"/>
+    /// from <paramref name="centre"/> along a great circle. Points run
+    /// clockwise from north, at least <see cref="MinCircleSegments"/> pieces
+    /// and none longer than <see cref="MaxSegmentMetres"/>; the last point
+    /// repeats the first.
+    /// </summary>
+    public static IReadOnlyList<GeoPosition> GeodesicCircle(GeoPosition centre, double radiusMetres)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(radiusMetres);
+
+        // A small circle of angular radius r has circumference 2πR·sin r.
+        var circumference = 2.0 * Math.PI * GeodesicHelper.EarthRadiusMetres
+            * Math.Abs(Math.Sin(radiusMetres / GeodesicHelper.EarthRadiusMetres));
+        var segments = Math.Max(MinCircleSegments, (int)Math.Ceiling(circumference / MaxSegmentMetres));
+
+        var points = new GeoPosition[segments + 1];
+        for (var i = 0; i < segments; i++)
+        {
+            points[i] = GeodesicHelper.DirectProblem(centre.Latitude, centre.Longitude, 360.0 * i / segments, radiusMetres);
+        }
+
+        points[segments] = points[0];
+        return points;
     }
 
     /// <summary>

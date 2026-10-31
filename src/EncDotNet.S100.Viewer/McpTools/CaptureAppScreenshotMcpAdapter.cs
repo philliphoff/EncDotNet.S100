@@ -26,7 +26,8 @@ internal static class CaptureAppScreenshotMcpAdapter
         + "changes, e.g. confirming that set_panel actually opened a panel. Complements render_to_image, which "
         + "captures only the map surface. Pass scale (e.g. 2) for a sharper image: the window is rendered at "
         + "that many pixels per logical pixel, clamped to [0.5, 3]; the default is 1. Pass panel to crop to one panel "
-        + "(a smaller image). "
+        + "(a smaller image). The metadata records the display combination the map shows (displayCombinationId, "
+        + "displayCombinationModified; see list_display_combinations). "
         + "Read-only and side-effect free; the window is not mutated. "
         + "Viewer-injected tool — not available from a headless MCP host until that host supplies its own "
         + "equivalent.";
@@ -91,6 +92,11 @@ internal static class CaptureAppScreenshotMcpAdapter
         };
         if (value.Width > 0) metadata["width"] = value.Width;
         if (value.Height > 0) metadata["height"] = value.Height;
+        if (value.DisplayCombinationId is { } combination)
+        {
+            metadata["displayCombinationId"] = combination;
+            metadata["displayCombinationModified"] = value.DisplayCombinationModified;
+        }
 
         return new CallToolResult
         {

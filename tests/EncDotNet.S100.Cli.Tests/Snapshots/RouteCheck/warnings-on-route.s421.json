@@ -118,8 +118,8 @@
           "locality": "Synthetic Sound (fictitious)",
           "relation": "crosses",
           "status": "in_force",
-          "from": "2026-03-01T06:08:29.8986683\u002B00:00",
-          "until": "2026-03-01T06:10:07.022127\u002B00:00",
+          "from": "2026-03-01T06:08:29.8993422\u002B00:00",
+          "until": "2026-03-01T06:10:07.0229292\u002B00:00",
           "atEta": true,
           "validity": [
             {
@@ -162,8 +162,8 @@
           "locality": "Synthetic Sound (fictitious)",
           "relation": "near",
           "status": "in_force",
-          "from": "2026-03-01T06:04:51.3703761\u002B00:00",
-          "until": "2026-03-01T06:04:51.3703761\u002B00:00",
+          "from": "2026-03-01T06:04:51.3707612\u002B00:00",
+          "until": "2026-03-01T06:04:51.3707612\u002B00:00",
           "atEta": true,
           "validity": [
             {
@@ -215,7 +215,7 @@
         "group": "check",
         "category": "data",
         "title": "Outside water-level coverage",
-        "meta": "Leg 1 \u2192 2 \u00B7 2.9 NM \u00B7 tide not applied",
+        "meta": "Leg 1 \u2192 2 \u00B7 2.9 NM \u00B7 water level not applied",
         "legIndex": 0,
         "distanceNm": 1.4569,
         "location": {
@@ -336,8 +336,8 @@
             ],
             "relation": "enters",
             "inForce": true,
-            "from": "2026-03-01T06:11:19.8642111\u002B00:00",
-            "until": "2026-03-01T06:13:45.5483792\u002B00:00",
+            "from": "2026-03-01T06:11:19.8651096\u002B00:00",
+            "until": "2026-03-01T06:13:45.5494702\u002B00:00",
             "atEta": true
           }
         }
@@ -372,8 +372,8 @@
           "locality": "Synthetic Sound (fictitious)",
           "relation": "near",
           "status": "in_force",
-          "from": "2026-03-01T06:18:12.6394206\u002B00:00",
-          "until": "2026-03-01T06:18:12.6394206\u002B00:00",
+          "from": "2026-03-01T06:18:12.6408647\u002B00:00",
+          "until": "2026-03-01T06:18:12.6408647\u002B00:00",
           "atEta": true,
           "validity": [
             {
@@ -415,8 +415,8 @@
           "locality": "Synthetic Sound (fictitious)",
           "relation": "crosses",
           "status": "cancelled",
-          "from": "2026-03-01T06:02:49.9655427\u002B00:00",
-          "until": "2026-03-01T06:02:49.9655427\u002B00:00",
+          "from": "2026-03-01T06:02:49.9657674\u002B00:00",
+          "until": "2026-03-01T06:02:49.9657674\u002B00:00",
           "atEta": true,
           "validity": [
             {
@@ -460,8 +460,8 @@
           "locality": "Synthetic Sound (fictitious)",
           "relation": "crosses",
           "status": "not_in_force",
-          "from": "2026-03-01T06:14:58.3925032\u002B00:00",
-          "until": "2026-03-01T06:14:58.3925032\u002B00:00",
+          "from": "2026-03-01T06:14:58.3936905\u002B00:00",
+          "until": "2026-03-01T06:14:58.3936905\u002B00:00",
           "atEta": true,
           "validity": [
             {
@@ -532,8 +532,8 @@
           "locality": "Synthetic Sound (fictitious)",
           "relation": "crosses",
           "status": "cancelled",
-          "from": "2026-03-01T06:18:12.6394206\u002B00:00",
-          "until": "2026-03-01T06:19:25.4815047\u002B00:00",
+          "from": "2026-03-01T06:18:12.6408647\u002B00:00",
+          "until": "2026-03-01T06:19:25.483045\u002B00:00",
           "atEta": true,
           "validity": [
             {
@@ -557,7 +557,7 @@
     ],
     "clearance": {
       "departure": "2026-03-01T06:00:00\u002B00:00",
-      "arrival": "2026-03-01T06:21:51.1656728\u002B00:00",
+      "arrival": "2026-03-01T06:21:51.1674057\u002B00:00",
       "verdict": "incomplete_data",
       "verdictTitle": "No data for part of the passage",
       "confidence": [
@@ -577,7 +577,7 @@
           "startNm": 0,
           "endNm": 2.9137,
           "from": "2026-03-01T06:00:00\u002B00:00",
-          "to": "2026-03-01T06:21:51.1656728\u002B00:00"
+          "to": "2026-03-01T06:21:51.1674057\u002B00:00"
         }
       ],
       "lowConfidence": [
@@ -590,7 +590,7 @@
           "startNm": 0,
           "endNm": 2.9137,
           "from": "2026-03-01T06:00:00\u002B00:00",
-          "to": "2026-03-01T06:21:51.1656728\u002B00:00"
+          "to": "2026-03-01T06:21:51.1674057\u002B00:00"
         }
       ],
       "sources": {

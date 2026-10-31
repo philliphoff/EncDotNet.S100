@@ -67,7 +67,6 @@ internal sealed class LocationDepthProbe
         string? bathymetryDatasetId = null;
         S101SoundingSample? nearestSounding = null;
         string? soundingDatasetId = null;
-        IChartDepthCell? soundingCell = null;
         var entries = processors as IReadOnlyCollection<KeyValuePair<DatasetEntry, IDatasetProcessor>> ?? processors.ToList();
         var finest = FinestCoveringCells(entries.Select(p => p.Value).OfType<IChartDepthCell>(), latitude, longitude);
 
@@ -89,7 +88,6 @@ internal sealed class LocationDepthProbe
                     {
                         nearestSounding = s;
                         soundingDatasetId = entry.DisplayName;
-                        soundingCell = cell;
                     }
                     break;
             }
@@ -99,14 +97,23 @@ internal sealed class LocationDepthProbe
         var depthHits = finest is null
             ? hits
             : hits.Where(h => h.OwningProcessor is not IChartDepthCell cell || finest.Contains(cell)).ToList();
+        var chartCells = new Dictionary<string, IChartDepthCell>(StringComparer.Ordinal);
+        foreach (var (entry, processor) in entries)
+        {
+            if (processor is IChartDepthCell cell)
+                chartCells.TryAdd(entry.DisplayName, cell);
+        }
+        foreach (var hit in depthHits)
+        {
+            if (hit is { DatasetFileName: { } name, OwningProcessor: IChartDepthCell cell })
+                chartCells.TryAdd(name, cell);
+        }
+
         var baseDepth = _baseResolver.Resolve(
-            bathymetry,
-            depthHits,
-            nearestSounding,
-            bathymetryDatasetId,
-            soundingDatasetId,
-            soundingCell is null ? null : SafeSoundingDatum(soundingCell, latitude, longitude),
-            hit => hit.OwningProcessor is IChartDepthCell cell ? SafeSoundingDatum(cell, latitude, longitude) : null);
+            bathymetry, depthHits, nearestSounding, bathymetryDatasetId, soundingDatasetId,
+            datasetId => datasetId is not null && chartCells.TryGetValue(datasetId, out var cell)
+                ? SafeSoundingDatum(cell, latitude, longitude)
+                : null);
         var result = _assimilation.Assimilate(baseDepth, SafeLocate(waterLevel, latitude, longitude));
 
         return new Probe(waterLand, result);
