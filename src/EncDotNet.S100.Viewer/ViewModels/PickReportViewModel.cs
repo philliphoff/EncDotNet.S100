@@ -43,6 +43,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private EggCodeViewModel? _eggCode;
     private PickLocation? _location;
     private DepthOverTimeViewModel? _locationDepth;
+    private string _chartBasisLine = string.Empty;
 
     public PickReportViewModel()
         : this(timeFormat: null, marinerSettings: null)
@@ -567,6 +568,19 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             OnPropertyChanged();
             OnPropertyChanged(nameof(HasLocationDepthSeries));
         }
+    }
+
+    /// <summary>
+    /// Tells the depth card what the chart's depths are relative to (#1191),
+    /// so it says how the picked depth relates to what the chart draws.
+    /// </summary>
+    /// <param name="basis">The depth basis indicator's current basis.</param>
+    public void SetDepthBasis(Services.Depth.DepthBasis basis)
+    {
+        ArgumentNullException.ThrowIfNull(basis);
+        _chartBasisLine = Services.Depth.DepthBasisText.CardLine(basis);
+        if (_locationDepth is not null)
+            _locationDepth.ChartBasisLine = _chartBasisLine;
     }
 
     /// <summary>True when a depth-assimilation card is available for the pick.</summary>
@@ -1126,6 +1140,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         }
 
         Location = location;
+        if (locationDepth is not null)
+            locationDepth.ChartBasisLine = _chartBasisLine;
         LocationDepthSeries = locationDepth;
         HasPick = true;
         OnPropertyChanged(nameof(HasMultipleHits));

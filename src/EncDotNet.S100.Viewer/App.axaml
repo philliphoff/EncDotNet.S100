@@ -23,9 +23,17 @@
                      (inherited by Dusk and Night). -->
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="MapOverlaySurfaceBrush" Color="#B8FFFFFF" />
+                    <!-- Depth basis pill's informational accent (#1191): S-104 in view, not applied. -->
+                    <SolidColorBrush x:Key="DepthBasisInfoBackgroundBrush" Color="#1F2563EB" />
+                    <SolidColorBrush x:Key="DepthBasisInfoBorderBrush" Color="#802563EB" />
+                    <SolidColorBrush x:Key="DepthBasisInfoForegroundBrush" Color="#1D4ED8" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="MapOverlaySurfaceBrush" Color="#B818181B" />
+                    <!-- Depth basis pill's informational accent (#1191): S-104 in view, not applied. -->
+                    <SolidColorBrush x:Key="DepthBasisInfoBackgroundBrush" Color="#2E60A5FA" />
+                    <SolidColorBrush x:Key="DepthBasisInfoBorderBrush" Color="#8060A5FA" />
+                    <SolidColorBrush x:Key="DepthBasisInfoForegroundBrush" Color="#93C5FD" />
                 </ResourceDictionary>
                 <!--
                   S-100 Night chrome variant. Inherits from ShadUI's
@@ -67,6 +75,12 @@
                          zebra rows). A low-alpha white overlay reads as a
                          faint lift against the near-black Night surfaces. -->
                     <Color x:Key="MutedBackgroundColor">#14FFFFFF</Color>
+
+                    <!-- Depth basis accent kept in the red-shifted range for
+                         dark-adapted vision; the pill's text carries the state. -->
+                    <SolidColorBrush x:Key="DepthBasisInfoBackgroundBrush" Color="#24C88478" />
+                    <SolidColorBrush x:Key="DepthBasisInfoBorderBrush" Color="#80C88478" />
+                    <SolidColorBrush x:Key="DepthBasisInfoForegroundBrush" Color="#FFB0A0" />
                 </ResourceDictionary>
 
                 <!--
@@ -108,6 +122,11 @@
                          zebra rows): a faintly deeper warm tint than the
                          cream card surface. -->
                     <Color x:Key="MutedBackgroundColor">#14000000</Color>
+
+                    <!-- Depth basis pill's informational accent (#1191): S-104 in view, not applied. -->
+                    <SolidColorBrush x:Key="DepthBasisInfoBackgroundBrush" Color="#1F1E40AF" />
+                    <SolidColorBrush x:Key="DepthBasisInfoBorderBrush" Color="#801E40AF" />
+                    <SolidColorBrush x:Key="DepthBasisInfoForegroundBrush" Color="#1E3A8A" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 

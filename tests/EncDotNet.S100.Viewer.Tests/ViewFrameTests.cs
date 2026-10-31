@@ -59,6 +59,20 @@ public sealed class ViewFrameTests
         return Verify(host.CaptureFrame(), "png");
     }
 
+    [AvaloniaTheory]
+    [InlineData("charted", ChromeTheme.Light)]
+    [InlineData("charted", ChromeTheme.S100Night)]
+    [InlineData("not_applied", ChromeTheme.Light)]
+    [InlineData("not_applied", ChromeTheme.S100Night)]
+    public Task Depth_basis_pill(string state, ChromeTheme theme)
+    {
+        var vm = DepthBasisIndicatorViewTests.Pill(
+            state == "charted" ? DepthBasisIndicatorViewTests.Charted : DepthBasisIndicatorViewTests.NotApplied);
+        using var host = ViewHost.Show(new DepthBasisIndicatorView { DataContext = vm }, width: 360, height: 36, theme);
+
+        return Verify(host.CaptureFrame(), "png").UseParameters(state, theme);
+    }
+
     /// <summary>UTC labels, so the frame does not depend on the machine's time zone.</summary>
     private sealed class UtcTimeFormat : ITimeFormatProvider
     {
