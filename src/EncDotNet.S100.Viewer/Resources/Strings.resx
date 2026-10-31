@@ -6841,4 +6841,244 @@
     <value>Data credit</value>
     <comment>Accessible name of the data's attribution and licence line</comment>
   </data>
+  <data name="DisplayCombination_Charted" xml:space="preserve">
+    <value>Charted only</value>
+    <comment>Built-in display combination: the ENC on its own</comment>
+  </data>
+  <data name="DisplayCombination_Charted_Description" xml:space="preserve">
+    <value>The ENC on its own.</value>
+    <comment>One-line note under Charted only in the View menu</comment>
+  </data>
+  <data name="DisplayCombination_ChartedBathymetry" xml:space="preserve">
+    <value>Chart + bathymetry</value>
+    <comment>Built-in display combination: S-101 and S-102</comment>
+  </data>
+  <data name="DisplayCombination_ChartedBathymetry_Description" xml:space="preserve">
+    <value>Adds high-resolution bathymetry; replaces the chart's depth shading where it covers.</value>
+    <comment>One-line note under Chart + bathymetry</comment>
+  </data>
+  <data name="DisplayCombination_Pilotage" xml:space="preserve">
+    <value>Pilotage</value>
+    <comment>Built-in display combination for pilotage</comment>
+  </data>
+  <data name="DisplayCombination_Pilotage_Description" xml:space="preserve">
+    <value>Adds water level stations, currents, warnings and aids to navigation.</value>
+    <comment>One-line note under Pilotage</comment>
+  </data>
+  <data name="DisplayCombination_PassagePlanning" xml:space="preserve">
+    <value>Passage planning</value>
+    <comment>Built-in display combination for passage planning</comment>
+  </data>
+  <data name="DisplayCombination_PassagePlanning_Description" xml:space="preserve">
+    <value>Other Information · all but S-111 and weather</value>
+    <comment>One-line note under Passage planning</comment>
+  </data>
+  <data name="DisplayCombination_AllLoaded" xml:space="preserve">
+    <value>Everything loaded</value>
+    <comment>Built-in display combination: every loaded product</comment>
+  </data>
+  <data name="DisplayCombination_AllLoaded_Description" xml:space="preserve">
+    <value>Every loaded product, as you set it</value>
+    <comment>One-line note under Everything loaded</comment>
+  </data>
+  <data name="DisplayCombination_LadderHeader" xml:space="preserve">
+    <value>Build up the picture</value>
+    <comment>View menu group heading: the three combinations that add one product at a time</comment>
+  </data>
+  <data name="DisplayCombination_MoreHeader" xml:space="preserve">
+    <value>More</value>
+    <comment>View menu group heading: the other built-in combinations</comment>
+  </data>
+  <data name="DisplayCombination_UserHeader" xml:space="preserve">
+    <value>My views</value>
+    <comment>View menu group heading: the mariner's saved combinations</comment>
+  </data>
+  <data name="DisplayCombination_PillFormat" xml:space="preserve">
+    <value>View: {0} ▾</value>
+    <comment>Map toolbar pill; {0} is the active display combination, e.g. View: Pilotage ▾</comment>
+  </data>
+  <data name="DisplayCombination_Custom" xml:space="preserve">
+    <value>Custom</value>
+    <comment>Shown as the View when no display combination is active</comment>
+  </data>
+  <data name="DisplayCombination_ModifiedFormat" xml:space="preserve">
+    <value>{0} (modified)</value>
+    <comment>{0}: the active display combination, after the mariner changed a setting it covers</comment>
+  </data>
+  <data name="DisplayCombination_SaveAs" xml:space="preserve">
+    <value>Save current view as…</value>
+    <comment>View menu item</comment>
+  </data>
+  <data name="DisplayCombination_SaveAsShort" xml:space="preserve">
+    <value>Save as…</value>
+    <comment>Display controls View section button</comment>
+  </data>
+  <data name="DisplayCombination_Reapply" xml:space="preserve">
+    <value>Reapply</value>
+    <comment>Button: put back every setting the active combination covers</comment>
+  </data>
+  <data name="DisplayCombination_Manage" xml:space="preserve">
+    <value>Manage…</value>
+    <comment>View menu item: opens the Display controls panel</comment>
+  </data>
+  <data name="DisplayCombination_NotInFormat" xml:space="preserve">
+    <value>Not in {0}</value>
+    <comment>Why a dataset is inactive; {0} is the active display combination</comment>
+  </data>
+  <data name="DisplayCombination_NotLoaded" xml:space="preserve">
+    <value>not loaded</value>
+    <comment>Chip suffix: a product the combination names that isn't loaded</comment>
+  </data>
+  <data name="DisplayCombination_NotLoadedChipFormat" xml:space="preserve">
+    <value>{0} not loaded</value>
+    <comment>Accessible name of a product chip; {0} is the product, e.g. S-111</comment>
+  </data>
+  <data name="DisplayCombination_NotLoadedCountFormat" xml:space="preserve">
+    <value>{0} of {1} products not loaded</value>
+    <comment>{0}: products not loaded; {1}: products the combination names</comment>
+  </data>
+  <data name="DisplayCombination_ChangedFormat" xml:space="preserve">
+    <value>Changed: {0}.</value>
+    <comment>{0}: the list of changes, e.g. Display category Standard → All</comment>
+  </data>
+  <data name="DisplayCombination_ChangeSeparator" xml:space="preserve">
+    <value>, </value>
+    <comment>Separator between changes in the Changed: line</comment>
+  </data>
+  <data name="DisplayCombination_Change_CategoryFormat" xml:space="preserve">
+    <value>Display category {0} → {1}</value>
+    <comment>{0}: the combination's category; {1}: the current one</comment>
+  </data>
+  <data name="DisplayCombination_Change_ProductOnFormat" xml:space="preserve">
+    <value>{0} made active</value>
+    <comment>{0}: a product the combination leaves out</comment>
+  </data>
+  <data name="DisplayCombination_Change_ProductOffFormat" xml:space="preserve">
+    <value>{0} made inactive</value>
+    <comment>{0}: a product the combination includes</comment>
+  </data>
+  <data name="DisplayCombination_Change_ViewingGroupsFormat" xml:space="preserve">
+    <value>{0} viewing groups</value>
+    <comment>{0}: a product, e.g. S-101</comment>
+  </data>
+  <data name="DisplayCombination_Change_DisplayModeFormat" xml:space="preserve">
+    <value>{0} display mode</value>
+    <comment>{0}: a product, e.g. S-411</comment>
+  </data>
+  <data name="DisplayCombination_Change_SubLayerFormat" xml:space="preserve">
+    <value>{0} layers</value>
+    <comment>{0}: a product, e.g. S-104</comment>
+  </data>
+  <data name="DisplayCombination_SectionHeader" xml:space="preserve">
+    <value>View</value>
+    <comment>Display controls panel section heading, above Display Category</comment>
+  </data>
+  <data name="DisplayCombination_SaveTitle" xml:space="preserve">
+    <value>Save current view</value>
+    <comment>Heading of the save form</comment>
+  </data>
+  <data name="DisplayCombination_RenameTitle" xml:space="preserve">
+    <value>Rename view</value>
+    <comment>Heading of the rename form</comment>
+  </data>
+  <data name="DisplayCombination_NameLabel" xml:space="preserve">
+    <value>Name</value>
+    <comment>Label of the view's name box</comment>
+  </data>
+  <data name="DisplayCombination_DefaultNameFormat" xml:space="preserve">
+    <value>My view {0}</value>
+    <comment>Suggested name for a saved view; {0} is a number</comment>
+  </data>
+  <data name="DisplayCombination_SavedHeader" xml:space="preserve">
+    <value>Saved</value>
+    <comment>Save form: what a saved view captures</comment>
+  </data>
+  <data name="DisplayCombination_NotSavedHeader" xml:space="preserve">
+    <value>Not saved</value>
+    <comment>Save form: what a saved view never captures</comment>
+  </data>
+  <data name="DisplayCombination_SavedProductsFormat" xml:space="preserve">
+    <value>Products in the picture: {0}</value>
+    <comment>{0}: comma-separated products</comment>
+  </data>
+  <data name="DisplayCombination_SavedProductsAll" xml:space="preserve">
+    <value>Products in the picture: every product</value>
+    <comment>Save form line when nothing is loaded</comment>
+  </data>
+  <data name="DisplayCombination_SavedDisplayFormat" xml:space="preserve">
+    <value>Display category: {0} · Text: {1}</value>
+    <comment>{0}: category; {1}: the S-101 text groups shown</comment>
+  </data>
+  <data name="DisplayCombination_SavedTextNone" xml:space="preserve">
+    <value>none</value>
+    <comment>Text groups shown: none</comment>
+  </data>
+  <data name="DisplayCombination_SavedViewingGroupsFormat" xml:space="preserve">
+    <value>Viewing groups: {0} hidden</value>
+    <comment>{0}: number of hidden viewing groups</comment>
+  </data>
+  <data name="DisplayCombination_SavedSubLayersFormat" xml:space="preserve">
+    <value>{0}: {1}</value>
+    <comment>{0}: product; {1}: its sub-layers, e.g. isolines off, stations on</comment>
+  </data>
+  <data name="DisplayCombination_SavedSubLayerOnFormat" xml:space="preserve">
+    <value>{0} on</value>
+    <comment>{0}: a sub-layer name</comment>
+  </data>
+  <data name="DisplayCombination_SavedSubLayerOffFormat" xml:space="preserve">
+    <value>{0} off</value>
+    <comment>{0}: a sub-layer name</comment>
+  </data>
+  <data name="DisplayCombination_NotSavedText" xml:space="preserve">
+    <value>Mariner settings (safety contour and depths), the Navigational warnings switch, display planes, palette, own ship and AIS, routes.</value>
+    <comment>Save form: what a saved view never changes</comment>
+  </data>
+  <data name="DisplayCombination_Rename" xml:space="preserve">
+    <value>Rename</value>
+    <comment>Button: rename a saved view</comment>
+  </data>
+  <data name="DisplayCombination_Delete" xml:space="preserve">
+    <value>Delete</value>
+    <comment>Button: delete a saved view</comment>
+  </data>
+  <data name="Label_DisplayCombination_Pill" xml:space="preserve">
+    <value>View</value>
+    <comment>Accessible name of the map's View pill</comment>
+  </data>
+  <data name="Label_DisplayCombination_Select" xml:space="preserve">
+    <value>Select view</value>
+    <comment>Accessible name of the list of views</comment>
+  </data>
+  <data name="Tooltip_DisplayCombination_Pill" xml:space="preserve">
+    <value>Choose a view: which products are in the picture and how they're shown. Never changes safety settings.</value>
+    <comment>Map toolbar View pill tooltip</comment>
+  </data>
+  <data name="Tooltip_DisplayCombination_SaveAs" xml:space="preserve">
+    <value>Save what the map shows now as a view of your own</value>
+    <comment>Tooltip of Save as</comment>
+  </data>
+  <data name="Tooltip_DisplayCombination_Reapply" xml:space="preserve">
+    <value>Put back every setting this view covers</value>
+    <comment>Tooltip of Reapply</comment>
+  </data>
+  <data name="Tooltip_DisplayCombination_Manage" xml:space="preserve">
+    <value>Open Display controls to rename and delete your views</value>
+    <comment>Tooltip of Manage</comment>
+  </data>
+  <data name="Tooltip_DisplayCombination_Rename" xml:space="preserve">
+    <value>Rename this view</value>
+    <comment>Tooltip of the rename button on a saved view</comment>
+  </data>
+  <data name="Tooltip_DisplayCombination_Delete" xml:space="preserve">
+    <value>Delete this view</value>
+    <comment>Tooltip of the delete button on a saved view</comment>
+  </data>
+  <data name="Tooltip_DisplayCombination_SaveConfirm" xml:space="preserve">
+    <value>Save the view</value>
+    <comment>Tooltip of the save form's Save button</comment>
+  </data>
+  <data name="Tooltip_DisplayCombination_Cancel" xml:space="preserve">
+    <value>Close without saving</value>
+    <comment>Tooltip of the save form's Cancel button</comment>
+  </data>
 </root>

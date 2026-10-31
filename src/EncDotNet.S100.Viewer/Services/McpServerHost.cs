@@ -63,6 +63,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly NavigationalWarningsService? _navigationalWarningsService;
     private readonly EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? _routeCheckSources;
     private readonly EncDotNet.S100.Viewer.Diagnostics.LogBuffer? _logBuffer;
+    private readonly EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService? _displayCombinations;
     private readonly EncDotNet.S100.Viewer.Services.Depth.DepthBasisService? _depthBasis;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -106,10 +107,12 @@ internal sealed class McpServerHost : IAsyncDisposable
         EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState? routeCheckLegend = null,
         EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? routeCheckSources = null,
         EncDotNet.S100.Viewer.Diagnostics.LogBuffer? logBuffer = null,
-        EncDotNet.S100.Viewer.Services.Depth.DepthBasisService? depthBasis = null)
+        EncDotNet.S100.Viewer.Services.Depth.DepthBasisService? depthBasis = null,
+        EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService? displayCombinations = null)
     {
         _depthBasis = depthBasis;
         _logBuffer = logBuffer;
+        _displayCombinations = displayCombinations;
         _routeCheckSources = routeCheckSources;
         _routeCheckLegend = routeCheckLegend;
         _routeExchange = routeExchange;
@@ -397,7 +400,11 @@ internal sealed class McpServerHost : IAsyncDisposable
         }
         if (_appScreenshot is not null)
         {
-            tools.Add(CaptureAppScreenshotMcpAdapter.Create(new CaptureAppScreenshotTool(_appScreenshot, _uiControllerAccessor)));
+            var combinations = _displayCombinations;
+            tools.Add(CaptureAppScreenshotMcpAdapter.Create(new CaptureAppScreenshotTool(
+                _appScreenshot,
+                _uiControllerAccessor,
+                combinations is null ? null : () => (combinations.Active?.Id, combinations.IsModified))));
         }
         if (_timeline is not null)
         {
@@ -415,6 +422,11 @@ internal sealed class McpServerHost : IAsyncDisposable
         {
             tools.Add(ViewerStateMcpAdapters.Create(new ListNotificationsTool(_notifications)));
             tools.Add(ViewerStateMcpAdapters.Create(new DismissNotificationTool(_notifications)));
+        }
+        if (_displayCombinations is not null)
+        {
+            tools.Add(DisplayCombinationMcpAdapters.Create(new ListDisplayCombinationsTool(_displayCombinations)));
+            tools.Add(DisplayCombinationMcpAdapters.Create(new SetDisplayCombinationTool(_displayCombinations)));
         }
         if (_logBuffer is not null)
         {

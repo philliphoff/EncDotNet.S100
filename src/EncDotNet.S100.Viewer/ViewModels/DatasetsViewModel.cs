@@ -478,6 +478,26 @@ internal sealed class DatasetEntry : ViewModelBase
         }
     }
 
+    private string? _inactiveReason;
+    /// <summary>
+    /// Why the dataset is inactive, when a display combination made it so:
+    /// "Not in Pilotage". <see langword="null"/> otherwise. Set by
+    /// <see cref="Services.DisplayCombinations.DisplayCombinationService"/>
+    /// and shown on the Datasets row and the layer stack's Active toggle.
+    /// </summary>
+    public string? InactiveReason
+    {
+        get => _inactiveReason;
+        set
+        {
+            if (SetProperty(ref _inactiveReason, value))
+                OnPropertyChanged(nameof(HasInactiveReason));
+        }
+    }
+
+    /// <summary>True when <see cref="InactiveReason"/> has a value to show.</summary>
+    public bool HasInactiveReason => _inactiveReason is not null;
+
     private double _opacity = 1.0;
     /// <summary>
     /// Opacity factor applied to this dataset's layers, in the range
