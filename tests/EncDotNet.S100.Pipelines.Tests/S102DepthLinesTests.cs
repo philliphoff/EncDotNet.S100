@@ -143,6 +143,48 @@ public sealed class S102DepthLinesTests
         }
     }
 
+    [Fact]
+    public async Task Processor_reuses_the_traced_lines_until_the_safety_contour_or_region_changes()
+    {
+        var path = WriteGrid(8, 8, (r, c) => r >= 6 && c >= 6 ? Fill : 10f + r);
+        using var manager = CreateCatalogueManager();
+        using var processor = new S102DatasetProcessor(path, manager, new MoonSharpLuaEngine(), new ProjNetCrsTransformFactory());
+        try
+        {
+            RenderContext At(double safety, PaletteType palette = PaletteType.Day) => new()
+            {
+                Palette = palette,
+                Mariner = MarinerSettings.Default with
+                {
+                    ShallowContour = Depth.FromMetres(2),
+                    SafetyContour = Depth.FromMetres(safety),
+                    DeepContour = Depth.FromMetres(30),
+                },
+            };
+            async Task<(IReadOnlyList<Isoline> Safety, IReadOnlyList<Isoline> Limit)> Lines(RenderContext context)
+            {
+                var result = await processor.BuildCoveragePortrayalAsync(context, TestContext.Current.CancellationToken);
+                var lines = result.SubLayers.OfType<IsolineCoverageSubLayer>().ToList();
+                return (lines.Single(l => l.LayerKey == S102DatasetProcessor.SafetyContourLayerKey).Isolines,
+                        lines.Single(l => l.LayerKey == S102DatasetProcessor.CoverageLimitLayerKey).Isolines);
+            }
+
+            var first = await Lines(At(13.5));
+            var repeat = await Lines(At(13.5, PaletteType.Night));
+            var deeper = await Lines(At(14.5));
+
+            Assert.Same(first.Safety, repeat.Safety);
+            Assert.Same(first.Limit, repeat.Limit);
+            Assert.NotSame(first.Safety, deeper.Safety);
+            Assert.All(deeper.Safety, l => Assert.Equal(14.5, l.Level));
+            Assert.Same(first.Limit, deeper.Limit);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     private static StyledCoverageLayer Layer(int rows, int columns, Func<int, int, float> depth)
     {
         var values = new float[rows * columns];

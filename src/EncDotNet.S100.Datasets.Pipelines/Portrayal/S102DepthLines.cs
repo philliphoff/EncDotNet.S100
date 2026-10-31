@@ -53,19 +53,25 @@ public static class S102DepthLines
         var depths = layer.Coverage.GetValues(DepthField);
         float noData = layer.NoDataValue;
 
-        var mask = new float[rows * columns];
+        int count = Math.Min(rows * columns, depths.Length);
         bool anyValid = false, anyMissing = false;
-        for (int i = 0; i < mask.Length && i < depths.Length; i++)
+        for (int i = 0; i < count && !(anyValid && anyMissing); i++)
         {
-            bool valid = !float.IsNaN(depths[i]) && depths[i] != noData && depths[i] != S102CoverageSource.FillValue;
-            mask[i] = valid ? 1f : 0f;
+            bool valid = IsValid(depths[i], noData);
             anyValid |= valid;
             anyMissing |= !valid;
         }
 
+        // A grid that is all data, or all no-data, has no limit inside it.
         if (!anyValid || !anyMissing)
         {
             return [];
+        }
+
+        var mask = new float[rows * columns];
+        for (int i = 0; i < count; i++)
+        {
+            mask[i] = IsValid(depths[i], noData) ? 1f : 0f;
         }
 
         var traced = IsolineTracer.Trace(mask, rows, columns, noData: -1f, [0.5]);
@@ -87,6 +93,9 @@ public static class S102DepthLines
 
         return result;
     }
+
+    private static bool IsValid(float depth, float noData) =>
+        !float.IsNaN(depth) && depth != noData && depth != S102CoverageSource.FillValue;
 
     /// <summary>
     /// The EPSG:3857 extent of the sampled grid as the surface is drawn: the

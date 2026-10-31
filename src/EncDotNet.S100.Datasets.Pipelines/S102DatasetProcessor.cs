@@ -48,6 +48,13 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
     private readonly PortrayalPipeline _pipeline;
     private readonly SemaphoreSlim _renderGate = new(1, 1);
     private GeographicBounds? _coverageExtent;
+
+    // The last traced depth lines and what they were traced from. The S-102
+    // values never change, so the same overview level, sampled region and
+    // safety contour give the same lines; redraws and palette switches reuse
+    // them. Read and written under the render gate.
+    private (DepthLineKey Key, double Safety, IReadOnlyList<Isoline> Lines)? _safetyLines;
+    private (DepthLineKey Key, IReadOnlyList<Isoline> Lines)? _limitLines;
     private ValidationReport? _validationReport;
     private bool _validationCached;
 
@@ -343,6 +350,10 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
 
         var safety = _catalogue.SafetyContourStyle(mariner);
         var limit = _catalogue.CoverageLimitStyle;
+        var grid = layer.Coverage.Metadata;
+        var key = new DepthLineKey(
+            _source.SelectedOverviewLevel, crs, grid.OriginLongitude, grid.OriginLatitude,
+            grid.SpacingLongitudinal, grid.SpacingLatitudinal, grid.NumRows, grid.NumColumns);
         return (
             new IsolineCoverageSubLayer
             {
@@ -351,7 +362,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                 Plane = S98DisplayPlane.BaseChartOver,
                 WithinPlanePriority = 1,
                 SourceFeatureType = SafetyContourLayerKey,
-                Isolines = S102DepthLines.SafetyContour(layer, safety.Value, nativeToWgs84),
+                Isolines = SafetyLines(key, layer, safety.Value, nativeToWgs84),
                 Extent = mercatorExtent,
                 Ink = RgbaColor.FromHex(safety.Color),
                 LabelHalo = halo,
@@ -365,7 +376,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                 Plane = S98DisplayPlane.BaseChartOver,
                 WithinPlanePriority = 0,
                 SourceFeatureType = CoverageLimitLayerKey,
-                Isolines = S102DepthLines.CoverageLimit(layer, nativeToWgs84),
+                Isolines = LimitLines(key, layer, nativeToWgs84),
                 Extent = mercatorExtent,
                 Ink = RgbaColor.FromHex(limit.Color),
                 LabelHalo = halo,
@@ -373,6 +384,43 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                 DashPattern = limit.DashPattern!.Select(d => (double)d).ToArray(),
             });
     }
+
+    private IReadOnlyList<Isoline> SafetyLines(
+        DepthLineKey key, StyledCoverageLayer layer, double safety, Func<double, double, (double, double)>? nativeToWgs84)
+    {
+        if (_safetyLines is { } cached && cached.Key == key && cached.Safety == safety)
+        {
+            return cached.Lines;
+        }
+
+        var lines = S102DepthLines.SafetyContour(layer, safety, nativeToWgs84);
+        _safetyLines = (key, safety, lines);
+        return lines;
+    }
+
+    private IReadOnlyList<Isoline> LimitLines(
+        DepthLineKey key, StyledCoverageLayer layer, Func<double, double, (double, double)>? nativeToWgs84)
+    {
+        if (_limitLines is { } cached && cached.Key == key)
+        {
+            return cached.Lines;
+        }
+
+        var lines = S102DepthLines.CoverageLimit(layer, nativeToWgs84);
+        _limitLines = (key, lines);
+        return lines;
+    }
+
+    /// <summary>What a traced depth line depends on besides the safety contour.</summary>
+    private readonly record struct DepthLineKey(
+        int OverviewLevel,
+        int Crs,
+        double OriginLongitude,
+        double OriginLatitude,
+        double SpacingLongitudinal,
+        double SpacingLatitudinal,
+        int Rows,
+        int Columns);
 
     /// <summary>Layer key of the S-102 safety contour sub-layer.</summary>
     public const string SafetyContourLayerKey = "s102.safetycontour";
