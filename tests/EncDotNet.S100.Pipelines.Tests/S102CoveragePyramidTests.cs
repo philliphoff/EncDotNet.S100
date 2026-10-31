@@ -286,7 +286,7 @@ public class S102CoveragePyramidTests
 
             var result = await processor.BuildCoveragePortrayalAsync(context, TestContext.Current.CancellationToken);
 
-            var subLayer = Assert.IsType<GridCoverageSubLayer>(Assert.Single(result.SubLayers));
+            var subLayer = Assert.Single(result.SubLayers.OfType<GridCoverageSubLayer>());
             Assert.Equal(2, subLayer.Coverage.Coverage.Metadata.NumRows);
             Assert.Equal(2, subLayer.Coverage.Coverage.Metadata.NumColumns);
             Assert.Equal(10f, subLayer.Coverage.Coverage.GetField("depth")[0, 0]);

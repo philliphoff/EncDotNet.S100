@@ -153,7 +153,7 @@ public class ProjectedCoverageExtentTests
         {
             var result = await processor.BuildCoveragePortrayalAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-            var grid = Assert.IsType<GridCoverageSubLayer>(Assert.Single(result.SubLayers));
+            var grid = Assert.Single(result.SubLayers.OfType<GridCoverageSubLayer>());
             AssertViewportNearLakeErie(grid.Viewport);
         }
         finally
