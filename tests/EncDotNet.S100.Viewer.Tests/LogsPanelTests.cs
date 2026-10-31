@@ -222,6 +222,27 @@ public sealed class LogsPanelTests
     }
 
     [Fact]
+    public void A_chip_narrows_an_area_search_and_the_counts_ignore_it()
+    {
+        var (buffer, panel) = Create();
+        buffer.Add(LogLevel.Error, "EncDotNet.S100.Viewer.Services.Secom.SecomClient", "secom failed");
+        buffer.Add(LogLevel.Warning, "EncDotNet.S100.Viewer.Services.Secom.SecomClient", "secom slow");
+        buffer.Add(LogLevel.Error, Category, "load failed");
+        buffer.Flush();
+        var secom = panel.Entries[0].AreaText;
+        Assert.NotEqual(secom, panel.Entries[2].AreaText);
+
+        panel.SearchText = $"area:\"{secom}\"";
+        panel.ShowErrorsCommand.Execute(null);
+        Assert.Equal(["secom failed"], panel.Entries.Select(r => r.Summary));
+        // The chips describe the buffer, not what the search shows.
+        Assert.Equal((2, 1), (panel.ErrorCount, panel.WarningCount));
+
+        panel.ShowErrorsCommand.Execute(null);
+        Assert.Equal(["secom failed", "secom slow"], panel.Entries.Select(r => r.Summary));
+    }
+
+    [Fact]
     public void A_chip_keeps_debug_capture_until_it_restores_Everything()
     {
         var (buffer, panel) = Create();
