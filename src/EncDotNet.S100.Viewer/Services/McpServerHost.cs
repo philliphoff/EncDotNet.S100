@@ -63,6 +63,8 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly NavigationalWarningsService? _navigationalWarningsService;
     private readonly EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? _routeCheckSources;
     private readonly EncDotNet.S100.Viewer.Diagnostics.LogBuffer? _logBuffer;
+    private readonly MeasureSession? _measure;
+    private readonly EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel? _measureCard;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private S100McpServer? _server;
@@ -104,9 +106,13 @@ internal sealed class McpServerHost : IAsyncDisposable
         RouteExchangeService? routeExchange = null,
         EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState? routeCheckLegend = null,
         EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? routeCheckSources = null,
-        EncDotNet.S100.Viewer.Diagnostics.LogBuffer? logBuffer = null)
+        EncDotNet.S100.Viewer.Diagnostics.LogBuffer? logBuffer = null,
+        MeasureSession? measure = null,
+        EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel? measureCard = null)
     {
         _logBuffer = logBuffer;
+        _measure = measure;
+        _measureCard = measureCard;
         _routeCheckSources = routeCheckSources;
         _routeCheckLegend = routeCheckLegend;
         _routeExchange = routeExchange;
@@ -509,6 +515,12 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(SetPassageCardMcpAdapter.Create(new SetPassageCardTool(_routesService, invoker)));
             tools.Add(GetPassageMcpAdapter.Create(new GetPassageTool(_routesService, invoker)));
             tools.Add(SetPassageMcpAdapter.Create(new SetPassageTool(_routesService, invoker)));
+        }
+        if (_measure is not null && _measureCard is not null)
+        {
+            var measureInvoker = new DispatcherRouteEditInvoker();
+            tools.Add(MeasureMcpAdapters.Create(new GetMeasureTool(_measure, _measureCard, measureInvoker)));
+            tools.Add(MeasureMcpAdapters.Create(new SetMeasureTool(_measure, _measureCard, measureInvoker)));
         }
         return tools.Count == 0 ? null : tools;
     }

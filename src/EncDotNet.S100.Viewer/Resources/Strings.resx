@@ -1754,24 +1754,130 @@
 
   <!-- Measure Mode -->
   <data name="Tooltip_MeasureMode" xml:space="preserve">
-    <value>Measure distance and bearing (rhumb line)</value>
+    <value>Measure distance and bearing</value>
   </data>
   <data name="Menu_MeasureMode" xml:space="preserve">
     <value>Measure Mode</value>
   </data>
   <data name="Status_MeasureLeg" xml:space="preserve">
-    <value>Leg {0}: {1:0.0} NM @ {2:000}°T</value>
+    <value>Leg {0}: {1} · {2}T</value>
   </data>
   <data name="Status_MeasureTotal" xml:space="preserve">
-    <value>Total: {0:0.0} NM</value>
+    <value>Total: {0}</value>
   </data>
   <data name="Status_MeasureNoData" xml:space="preserve">
     <value>Click on the map to start measuring; double-click or Enter to finish.</value>
   </data>
   <data name="Status_MeasureLegLabel" xml:space="preserve">
-    <value>{0:0.0} NM @ {1:000}°T</value>
+    <value>{0} · {1}</value>
   </data>
 
+  <!-- Measure card (#1130) -->
+  <data name="Measure_CardTitle" xml:space="preserve">
+    <value>Measure</value>
+  </data>
+  <data name="Measure_Geometry" xml:space="preserve">
+    <value>Geometry</value>
+  </data>
+  <data name="Measure_Rhumb" xml:space="preserve">
+    <value>Rhumb</value>
+  </data>
+  <data name="Measure_GreatCircle" xml:space="preserve">
+    <value>Great circle</value>
+  </data>
+  <data name="Tooltip_MeasureGeometry" xml:space="preserve">
+    <value>Measure the whole path along rhumb lines or great circles (G)</value>
+  </data>
+  <data name="Measure_From" xml:space="preserve">
+    <value>From</value>
+  </data>
+  <data name="Measure_To" xml:space="preserve">
+    <value>To</value>
+  </data>
+  <data name="Measure_Distance" xml:space="preserve">
+    <value>Distance</value>
+  </data>
+  <data name="Measure_Bearing" xml:space="preserve">
+    <value>Bearing</value>
+  </data>
+  <data name="Measure_Reverse" xml:space="preserve">
+    <value>Reverse</value>
+  </data>
+  <data name="Measure_Total" xml:space="preserve">
+    <value>Total</value>
+  </data>
+  <data name="Measure_TrueBearing" xml:space="preserve">
+    <value>{0}T</value>
+  </data>
+  <data name="Measure_TotalValue" xml:space="preserve">
+    <value>{0} · {1}</value>
+  </data>
+  <data name="Tooltip_MeasureReverse" xml:space="preserve">
+    <value>The bearing from To back to From. On a great circle this isn't the forward bearing plus 180°.</value>
+  </data>
+  <data name="Measure_PositionError" xml:space="preserve">
+    <value>Not a position. Try 32°35.224'S 061°17.710'E or -32.587, 61.295</value>
+  </data>
+  <data name="Measure_LegOf" xml:space="preserve">
+    <value>Leg {0} of {1}</value>
+  </data>
+  <data name="Measure_PreviousLeg" xml:space="preserve">
+    <value>Previous leg</value>
+  </data>
+  <data name="Measure_NextLeg" xml:space="preserve">
+    <value>Next leg</value>
+  </data>
+  <data name="Measure_Copy" xml:space="preserve">
+    <value>Copy measurement</value>
+  </data>
+  <data name="Tooltip_MeasureCopy" xml:space="preserve">
+    <value>Copy the measurement ({0})</value>
+  </data>
+  <data name="Measure_Close" xml:space="preserve">
+    <value>Close Measure</value>
+  </data>
+  <data name="Measure_Model" xml:space="preserve">
+    <value>Sphere · R {0:#,0} km</value>
+  </data>
+  <data name="Tooltip_MeasureModel" xml:space="preserve">
+    <value>Distances and bearings use a spherical earth. That's within the S-164 accuracy tolerance. WGS-84 is tracked in #1189.</value>
+  </data>
+  <data name="Measure_ValueName" xml:space="preserve">
+    <value>{0} {1}</value>
+  </data>
+  <data name="Measure_CopyLeg" xml:space="preserve">
+    <value>Leg {0} of {1}</value>
+  </data>
+  <data name="Measure_CopyPosition" xml:space="preserve">
+    <value>{0}  {1}  ({2})</value>
+  </data>
+  <data name="Measure_CopyDistance" xml:space="preserve">
+    <value>Distance  {0}  ({1})</value>
+  </data>
+  <data name="Measure_CopyBearings" xml:space="preserve">
+    <value>Bearing  {0}T  Reverse  {1}T</value>
+  </data>
+  <data name="Measure_CopyTotal" xml:space="preserve">
+    <value>Total  {0}  ({1})</value>
+  </data>
+  <data name="Measure_CopyModel" xml:space="preserve">
+    <value>Earth model  {0}</value>
+  </data>
+  <data name="Measure_UnitNauticalMiles" xml:space="preserve">
+    <value>nautical miles</value>
+  </data>
+  <data name="Measure_UnitKilometres" xml:space="preserve">
+    <value>kilometres</value>
+  </data>
+  <data name="Measure_UnitMetres" xml:space="preserve">
+    <value>metres</value>
+  </data>
+  <data name="Measure_UnitStatuteMiles" xml:space="preserve">
+    <value>statute miles</value>
+  </data>
+  <data name="Measure_UnitDegreesTrue" xml:space="preserve">
+    <value>degrees true</value>
+  </data>
   <!-- Routing -->
   <data name="Route_LegLabel" xml:space="preserve">
     <value>{0:0.0} NM · {1:000}°</value>

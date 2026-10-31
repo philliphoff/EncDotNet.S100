@@ -143,6 +143,13 @@ public partial class MainWindow : ShadUI.Window
             _viewModel.RoutesService,
             visual => ReferenceEquals(visual, MapControl) || ReferenceEquals(visual, MapArea));
 
+        // Measure keys (#1130, D20): G geometry, Delete clears, Ctrl+C (⌘C) copies.
+        Tools.MeasureKeys.Attach(
+            this,
+            _viewModel.MeasureSession,
+            _viewModel.MeasureCard,
+            visual => ReferenceEquals(visual, MapControl) || ReferenceEquals(visual, MapArea));
+
         // The Time HUD and the dock follow the map's width (#712 F5).
         MapArea.SizeChanged += (_, e) => _viewModel.MapWidth = e.NewSize.Width;
         SizeChanged += (_, e) => _viewModel.WindowWidth = e.NewSize.Width;

@@ -1,5 +1,6 @@
 using System.Globalization;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.Geodesy;
 using EncDotNet.S100.Viewer.Resources;
 
@@ -52,6 +53,7 @@ internal sealed class MeasurePathState
     /// <returns>True when the click changed state.</returns>
     public bool Click(double lat, double lon)
     {
+        SelectedLeg = null;
         switch (_phase)
         {
             case MeasurePhase.Finalised:
@@ -124,11 +126,13 @@ internal sealed class MeasurePathState
         {
             _waypoints.Clear();
             _rubberBand = null;
+            SelectedLeg = null;
             _phase = MeasurePhase.Idle;
             return true;
         }
 
         _waypoints.RemoveAt(_waypoints.Count - 1);
+        SelectedLeg = null;
         if (_waypoints.Count == 0)
         {
             _rubberBand = null;
@@ -144,95 +148,200 @@ internal sealed class MeasurePathState
             return false;
         _waypoints.Clear();
         _rubberBand = null;
+        SelectedLeg = null;
         _phase = MeasurePhase.Idle;
         return true;
     }
 
     /// <summary>
-    /// Returns the rhumb distance + bearing of each placed segment
-    /// (waypoint i → waypoint i+1) plus, while drawing with a rubber-band
-    /// in scope, the in-progress pending leg from the last waypoint to
-    /// the cursor.
+    /// The geometry every leg of the path is measured along: rhumb lines
+    /// (constant bearing) or great circles (shortest distance).
+    /// </summary>
+    public LegGeometry Geometry { get; private set; } = LegGeometry.Rhumb;
+
+    /// <summary>
+    /// The one-based <see cref="MeasureLeg.Index"/> of the leg the card shows,
+    /// or <c>null</c> to follow the last leg as the path grows.
+    /// </summary>
+    public int? SelectedLeg { get; private set; }
+
+    /// <summary>Sets <see cref="Geometry"/>. Returns true when it changed.</summary>
+    public bool SetGeometry(LegGeometry geometry)
+    {
+        if (Geometry == geometry)
+            return false;
+        Geometry = geometry;
+        return true;
+    }
+
+    /// <summary>
+    /// Selects the leg with one-based <paramref name="index"/>, or follows the
+    /// last leg when <c>null</c>. Selecting the last leg follows it too, so a
+    /// growing path keeps showing its newest leg. Returns true when the
+    /// selection changed.
+    /// </summary>
+    public bool SelectLeg(int? index)
+    {
+        var legCount = ComputeLegs().Count;
+        if (index is { } i && (i < 1 || i > legCount))
+            return false;
+        if (index == legCount)
+            index = null;
+        if (SelectedLeg == index)
+            return false;
+        SelectedLeg = index;
+        return true;
+    }
+
+    /// <summary>
+    /// The leg the card shows: the selected leg, or the last leg (the pending
+    /// one while drawing). <c>null</c> when the path has no leg yet.
+    /// </summary>
+    public MeasureLeg? CurrentLeg
+    {
+        get
+        {
+            var legs = ComputeLegs();
+            if (legs.Count == 0)
+                return null;
+            return SelectedLeg is { } i && i <= legs.Count ? legs[i - 1] : legs[^1];
+        }
+    }
+
+    /// <summary>
+    /// Replaces the path with <paramref name="waypoints"/>, finalised, as typed
+    /// or set from outside the map. An empty list clears the path.
+    /// </summary>
+    public void SetWaypoints(IEnumerable<GeoPosition> waypoints)
+    {
+        ArgumentNullException.ThrowIfNull(waypoints);
+        _waypoints.Clear();
+        _waypoints.AddRange(waypoints);
+        _rubberBand = null;
+        SelectedLeg = null;
+        _phase = _waypoints.Count == 0 ? MeasurePhase.Idle : MeasurePhase.Finalised;
+    }
+
+    /// <summary>
+    /// Moves waypoint <paramref name="index"/> (zero-based) to
+    /// <paramref name="position"/>. Returns false when there's no such
+    /// waypoint.
+    /// </summary>
+    public bool MoveWaypoint(int index, GeoPosition position)
+    {
+        if (index < 0 || index >= _waypoints.Count)
+            return false;
+        _waypoints[index] = position;
+        return true;
+    }
+
+    /// <summary>
+    /// Adds a typed waypoint to the end of the path. The first one starts
+    /// drawing, as a click does; a later one also finalises the path, so the
+    /// typed leg stays on the card instead of giving way to the rubber band.
+    /// </summary>
+    public void AppendTypedWaypoint(GeoPosition position)
+    {
+        if (_phase == MeasurePhase.Finalised && _waypoints.Count == 0)
+            _phase = MeasurePhase.Idle;
+        _waypoints.Add(position);
+        SelectedLeg = null;
+        if (_waypoints.Count == 1)
+        {
+            _phase = MeasurePhase.Drawing;
+        }
+        else
+        {
+            _phase = MeasurePhase.Finalised;
+            _rubberBand = null;
+        }
+    }
+
+    /// <summary>
+    /// Returns the distance and bearings of each placed segment (waypoint
+    /// i → waypoint i+1) along <see cref="Geometry"/> plus, while drawing
+    /// with a rubber-band in scope, the in-progress pending leg from the last
+    /// waypoint to the cursor.
     /// </summary>
     public IReadOnlyList<MeasureLeg> ComputeLegs()
     {
         var result = new List<MeasureLeg>();
         for (int i = 1; i < _waypoints.Count; i++)
-        {
-            var a = _waypoints[i - 1];
-            var b = _waypoints[i];
-            result.Add(new MeasureLeg(
-                Index: i,
-                IsRubberBand: false,
-                FromLat: a.Latitude, FromLon: a.Longitude,
-                ToLat: b.Latitude, ToLon: b.Longitude,
-                DistanceNm: MarineGeodesy.RhumbDistanceNm(a.Latitude, a.Longitude, b.Latitude, b.Longitude),
-                BearingDeg: MarineGeodesy.RhumbBearingDegrees(a.Latitude, a.Longitude, b.Latitude, b.Longitude)));
-        }
+            result.Add(MeasureLeg.Between(i, isRubberBand: false, Geometry, _waypoints[i - 1], _waypoints[i]));
 
         if (_phase == MeasurePhase.Drawing && _rubberBand is { } rb && _waypoints.Count > 0)
-        {
-            var a = _waypoints[^1];
-            result.Add(new MeasureLeg(
-                Index: _waypoints.Count,
-                IsRubberBand: true,
-                FromLat: a.Latitude, FromLon: a.Longitude,
-                ToLat: rb.Latitude, ToLon: rb.Longitude,
-                DistanceNm: MarineGeodesy.RhumbDistanceNm(a.Latitude, a.Longitude, rb.Latitude, rb.Longitude),
-                BearingDeg: MarineGeodesy.RhumbBearingDegrees(a.Latitude, a.Longitude, rb.Latitude, rb.Longitude)));
-        }
+            result.Add(MeasureLeg.Between(_waypoints.Count, isRubberBand: true, Geometry, _waypoints[^1], rb));
 
         return result;
     }
 
     /// <summary>
-    /// Total rhumb distance (NM) across all current legs, including the
+    /// Total distance in metres across all current legs, including the
     /// pending rubber-band leg when present.
     /// </summary>
-    public double TotalDistanceNm()
+    public double TotalDistanceMetres()
     {
         double total = 0.0;
         foreach (var leg in ComputeLegs())
-            total += leg.DistanceNm;
+            total += leg.DistanceMetres;
         return total;
     }
 
     /// <summary>
-    /// Renders a localised summary string for the status bar. Returns
-    /// <c>null</c> when there is nothing to show (Idle and no rubber-band).
+    /// Total distance (NM) across all current legs, including the pending
+    /// rubber-band leg when present.
     /// </summary>
-    public string? FormatSummary()
+    public double TotalDistanceNm() => TotalDistanceMetres() / PassageGeodesy.MetersPerNauticalMile;
+
+    /// <summary>
+    /// Renders a localised summary for the status bar in the primary
+    /// <paramref name="unit"/> only (D6): the shown leg and the total.
+    /// </summary>
+    public string? FormatSummary(DistanceUnit unit = DistanceUnit.NauticalMiles)
     {
-        if (_phase == MeasurePhase.Idle && _waypoints.Count == 0)
+        if (CurrentLeg is not { } leg)
             return Strings.Status_MeasureNoData;
 
-        var legs = ComputeLegs();
-        if (legs.Count == 0)
-        {
-            // We have a single placed waypoint and no rubber-band yet.
-            return Strings.Status_MeasureNoData;
-        }
-
-        var last = legs[^1];
         var legText = string.Format(
             CultureInfo.CurrentCulture,
             Strings.Status_MeasureLeg,
-            last.Index,
-            last.DistanceNm,
-            last.BearingDeg);
+            leg.Index,
+            MeasureFormat.Distance(leg.DistanceMetres, unit),
+            MeasureFormat.Bearing(leg.BearingDeg));
         var totalText = string.Format(
             CultureInfo.CurrentCulture,
             Strings.Status_MeasureTotal,
-            TotalDistanceNm());
+            MeasureFormat.Distance(TotalDistanceMetres(), unit));
         return $"{legText}  |  {totalText}";
     }
 }
 
 /// <summary>One segment of a measurement path.</summary>
+/// <param name="Index">One-based leg number: leg 1 joins waypoints 1 and 2.</param>
+/// <param name="IsRubberBand">True for the pending leg to the cursor.</param>
+/// <param name="Geometry">The geometry the leg is measured along.</param>
+/// <param name="From">The leg's start.</param>
+/// <param name="To">The leg's end.</param>
+/// <param name="DistanceMetres">Length along <paramref name="Geometry"/>.</param>
+/// <param name="BearingDeg">True bearing at <paramref name="From"/> towards <paramref name="To"/>.</param>
+/// <param name="ReverseBearingDeg">True bearing at <paramref name="To"/> back towards <paramref name="From"/>.</param>
 internal readonly record struct MeasureLeg(
     int Index,
     bool IsRubberBand,
-    double FromLat, double FromLon,
-    double ToLat, double ToLon,
-    double DistanceNm,
-    double BearingDeg);
+    LegGeometry Geometry,
+    GeoPosition From,
+    GeoPosition To,
+    double DistanceMetres,
+    double BearingDeg,
+    double ReverseBearingDeg)
+{
+    /// <summary>Length in nautical miles.</summary>
+    public double DistanceNm => DistanceMetres / PassageGeodesy.MetersPerNauticalMile;
+
+    /// <summary>Measures the leg from <paramref name="from"/> to <paramref name="to"/>.</summary>
+    public static MeasureLeg Between(int index, bool isRubberBand, LegGeometry geometry, GeoPosition from, GeoPosition to) =>
+        new(index, isRubberBand, geometry, from, to,
+            MarineGeodesy.DistanceMetres(geometry, from, to),
+            MarineGeodesy.InitialBearingDegrees(geometry, from, to),
+            MarineGeodesy.ReverseBearingDegrees(geometry, from, to));
+}

@@ -16,6 +16,7 @@ internal sealed class MainViewModel : ViewModelBase
     private readonly INotificationService _notifications;
     private readonly RoutesService _routes;
     private readonly MeasureTool _measureTool;
+    private readonly MeasureSession _measure;
     private readonly RouteEditTool _routeEditTool;
     private readonly ShadUI.DialogManager _dialogManager;
     private readonly Func<FeedbackDialogViewModel>? _feedbackDialogFactory;
@@ -962,6 +963,12 @@ internal sealed class MainViewModel : ViewModelBase
 
     public ICommand ToggleMeasureModeCommand { get; }
 
+    /// <summary>The measure card shown while Measure is on (#1130, D1).</summary>
+    public MeasureCardViewModel MeasureCard { get; }
+
+    /// <summary>The measure tool's shared state (path, geometry, unit).</summary>
+    internal MeasureSession MeasureSession => _measure;
+
     /// <summary>
     /// The application-scoped editable route store. Exposed so the host
     /// window can drive the persistent route overlay and the routes side
@@ -1164,7 +1171,8 @@ internal sealed class MainViewModel : ViewModelBase
     /// <summary>
     /// Copies the current Measure Mode path into a brand-new editable route,
     /// makes it the active route, and switches to the route editor tool so
-    /// the user can immediately refine it.
+    /// the user can immediately refine it. The legs keep the measure geometry:
+    /// a great-circle measurement makes geodesic legs (#1130, D10).
     /// </summary>
     private void PromoteMeasurementToRoute()
     {
@@ -1179,6 +1187,12 @@ internal sealed class MainViewModel : ViewModelBase
         var route = _routes.Routes.CreateRoute(name);
         foreach (var (lat, lon) in waypoints)
             route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(lat, lon));
+        if (_measure.Geometry == EncDotNet.S100.Navigation.LegGeometry.GreatCircle)
+        {
+            foreach (var leg in route.Legs)
+                leg.GeometryType = Routing.RouteLegGeometryType.Geodesic;
+            route.NotifyChanged();
+        }
 
         _routes.SelectedWaypointIndex = null;
         Tools.Activate(RouteEditTool.ToolId);
@@ -1303,7 +1317,9 @@ internal sealed class MainViewModel : ViewModelBase
         McpServerHost? mcpServerHost = null,
         RoutesService? routes = null,
         NavigationalWarningsViewModel? navigationalWarnings = null,
-        Services.NavigationalWarningDrawingService? navigationalWarningDrawing = null)
+        Services.NavigationalWarningDrawingService? navigationalWarningDrawing = null,
+        MeasureSession? measure = null,
+        MeasureCardViewModel? measureCard = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(featureCatalogues);
@@ -1352,7 +1368,11 @@ internal sealed class MainViewModel : ViewModelBase
             AttachToMcpServer();
         }
 
-        _measureTool = new MeasureTool(measureAppearance);
+        _measure = measure ?? new MeasureSession();
+        _measureTool = new MeasureTool(measureAppearance, _measure);
+        MeasureCard = measureCard ?? new MeasureCardViewModel(_measure);
+        MeasureCard.CloseRequested += (_, _) => Tools.Activate(null);
+        _measure.ActivationRequested += (_, _) => Tools.Activate(MeasureTool.ToolId);
         _routeEditTool = new RouteEditTool(_routes);
         Tools.Register(new PickTool());
         Tools.Register(_measureTool);
@@ -1364,6 +1384,8 @@ internal sealed class MainViewModel : ViewModelBase
         LayerStack = layerStack;
         Search = search;
         Settings = settingsViewModel;
+        _measure.Unit = settingsViewModel.DistanceUnit;
+        settingsViewModel.DistanceUnitChanged += unit => _measure.Unit = unit;
         PickReport = pickReport;
         Timeline = timeline;
         NavigationalWarnings = navigationalWarnings;
@@ -1524,6 +1546,7 @@ internal sealed class MainViewModel : ViewModelBase
         PromoteMeasurementToRouteCommand = new RelayCommand(
             PromoteMeasurementToRoute,
             () => _measureTool.State.Waypoints.Count >= 2);
+        _measure.Changed += (_, _) => ((RelayCommand)PromoteMeasurementToRouteCommand).NotifyCanExecuteChanged();
         ToolCommitCommand = new RelayCommand(
             () => Tools.OnAction(MapToolAction.Commit),
             () => Tools.ActiveTool != null);

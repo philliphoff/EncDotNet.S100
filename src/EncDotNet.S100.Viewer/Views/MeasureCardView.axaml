@@ -1,0 +1,331 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.MeasureCardView"
+             x:DataType="vm:MeasureCardViewModel"
+             Width="296"
+             AutomationProperties.AutomationId="Measure.Card"
+             AutomationProperties.Name="{x:Static loc:Strings.Measure_CardTitle}">
+
+    <!-- The measure card (#1130, D1–D10, D17, D22): geometry, typed From and
+         To, the shown leg's distance in both unit systems, both bearings, the
+         total and the earth model. Every number is mono with tabular figures. -->
+    <UserControl.Styles>
+        <Style Selector="TextBlock.label">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.value">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
+            <Setter Property="FontFeatures" Value="+tnum" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+        </Style>
+        <Style Selector="TextBlock.muted">
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+        </Style>
+        <Style Selector="Border.divider">
+            <Setter Property="Height" Value="1" />
+            <Setter Property="Background" Value="{DynamicResource BorderColor}" />
+            <Setter Property="Opacity" Value="0.6" />
+        </Style>
+
+        <!-- Header buttons: 24 px ghost squares. -->
+        <Style Selector="Button.cardTool">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.legStep">
+            <Setter Property="Width" Value="22" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
+        <!-- Rhumb | Great circle segmented control. -->
+        <Style Selector="Border.segments">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="2" />
+            <Setter Property="Height" Value="24" />
+        </Style>
+        <Style Selector="Button.segment">
+            <Setter Property="Height" Value="20" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          VerticalAlignment="Center"
+                                          HorizontalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.segment:pointerover">
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+        </Style>
+        <Style Selector="Button.segment.selected">
+            <Setter Property="Background" Value="{DynamicResource BackgroundColor}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <!-- Position fields: 26 px, mono, a destructive border when refused. -->
+        <Style Selector="TextBox.position">
+            <Setter Property="Height" Value="26" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="CornerRadius" Value="5" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
+            <Setter Property="FontFeatures" Value="+tnum" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBox.position /template/ Border#Border">
+            <Setter Property="MinHeight" Value="26" />
+            <Setter Property="CornerRadius" Value="5" />
+        </Style>
+        <Style Selector="TextBox.position.invalid">
+            <Setter Property="BorderBrush" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+        <Style Selector="TextBox.position.invalid /template/ Border#Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Border Background="{DynamicResource MapOverlaySurfaceBrush}"
+            BorderBrush="{DynamicResource BorderColor}"
+            BorderThickness="1"
+            CornerRadius="8"
+            BoxShadow="0 4 12 0 #14090B0B">
+        <StackPanel>
+            <!-- Header: title, geometry, copy, close. -->
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="12,8,8,8">
+                <TextBlock Grid.Column="0"
+                           Text="{x:Static loc:Strings.Measure_CardTitle}"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource ForegroundColor}"
+                           VerticalAlignment="Center" />
+                <Border Grid.Column="1"
+                        Classes="segments"
+                        Margin="0,0,6,0"
+                        AutomationProperties.AutomationId="Measure.Geometry"
+                        AutomationProperties.Name="{x:Static loc:Strings.Measure_Geometry}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_MeasureGeometry}">
+                    <StackPanel Orientation="Horizontal">
+                        <Button Classes="segment"
+                                Classes.selected="{Binding IsRhumb}"
+                                AutomationProperties.AutomationId="Measure.Geometry.Rhumb"
+                                AutomationProperties.Name="{x:Static loc:Strings.Measure_Rhumb}"
+                                Command="{Binding RhumbCommand}"
+                                Content="{x:Static loc:Strings.Measure_Rhumb}" />
+                        <Button Classes="segment"
+                                Classes.selected="{Binding IsGreatCircle}"
+                                AutomationProperties.AutomationId="Measure.Geometry.GreatCircle"
+                                AutomationProperties.Name="{x:Static loc:Strings.Measure_GreatCircle}"
+                                Command="{Binding GreatCircleCommand}"
+                                Content="{x:Static loc:Strings.Measure_GreatCircle}" />
+                    </StackPanel>
+                </Border>
+                <Button Grid.Column="2"
+                        Classes="Ghost cardTool"
+                        AutomationProperties.AutomationId="Measure.Copy"
+                        AutomationProperties.Name="{x:Static loc:Strings.Measure_Copy}"
+                        AutomationProperties.HelpText="{x:Static vm:MeasureCardViewModel.CopyTooltip}"
+                        ToolTip.Tip="{x:Static vm:MeasureCardViewModel.CopyTooltip}"
+                        Command="{Binding CopyCommand}">
+                    <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="14" />
+                </Button>
+                <Button Grid.Column="3"
+                        Classes="Ghost cardTool"
+                        AutomationProperties.AutomationId="Measure.Close"
+                        AutomationProperties.Name="{x:Static loc:Strings.Measure_Close}"
+                        ToolTip.Tip="{x:Static loc:Strings.Measure_Close}"
+                        Command="{Binding CloseCommand}">
+                    <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="12" />
+                </Button>
+            </Grid>
+            <Border Classes="divider" />
+
+            <!-- Leg stepper (D9), only for a path of more than one leg. -->
+            <StackPanel Orientation="Horizontal"
+                        Spacing="4"
+                        Margin="12,8,12,0"
+                        IsVisible="{Binding HasMultipleLegs}">
+                <Button Classes="Outline legStep"
+                        AutomationProperties.AutomationId="Measure.LegPrevious"
+                        AutomationProperties.Name="{x:Static loc:Strings.Measure_PreviousLeg}"
+                        ToolTip.Tip="{x:Static loc:Strings.Measure_PreviousLeg}"
+                        Command="{Binding PreviousLegCommand}">
+                    <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" FontSize="10" />
+                </Button>
+                <TextBlock Text="{Binding LegCaption}"
+                           AutomationProperties.AutomationId="Measure.Leg"
+                           FontSize="12"
+                           Padding="6,0"
+                           Foreground="{DynamicResource ForegroundColor}"
+                           VerticalAlignment="Center" />
+                <Button Classes="Outline legStep"
+                        AutomationProperties.AutomationId="Measure.LegNext"
+                        AutomationProperties.Name="{x:Static loc:Strings.Measure_NextLeg}"
+                        ToolTip.Tip="{x:Static loc:Strings.Measure_NextLeg}"
+                        Command="{Binding NextLegCommand}">
+                    <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="10" />
+                </Button>
+            </StackPanel>
+
+            <!-- From and To (D7). -->
+            <Grid ColumnDefinitions="62,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="12,10,12,10">
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="label"
+                           Text="{x:Static loc:Strings.Measure_From}" />
+                <TextBox x:Name="FromBox"
+                         Grid.Row="0" Grid.Column="1"
+                         Classes="position"
+                         Classes.invalid="{Binding HasFromError}"
+                         AutomationProperties.AutomationId="Measure.From"
+                         AutomationProperties.Name="{x:Static loc:Strings.Measure_From}"
+                         Text="{Binding FromText, Mode=TwoWay}" />
+                <TextBlock Grid.Row="1" Grid.Column="1"
+                           AutomationProperties.AutomationId="Measure.FromError"
+                           Text="{Binding FromError}"
+                           IsVisible="{Binding HasFromError}"
+                           Foreground="{DynamicResource DestructiveColor}"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Margin="0,2,0,0" />
+                <TextBlock Grid.Row="2" Grid.Column="0" Classes="label"
+                           Margin="0,6,0,0"
+                           Text="{x:Static loc:Strings.Measure_To}" />
+                <TextBox x:Name="ToBox"
+                         Grid.Row="2" Grid.Column="1"
+                         Classes="position"
+                         Classes.invalid="{Binding HasToError}"
+                         Margin="0,6,0,0"
+                         AutomationProperties.AutomationId="Measure.To"
+                         AutomationProperties.Name="{x:Static loc:Strings.Measure_To}"
+                         IsEnabled="{Binding IsToEnabled}"
+                         Text="{Binding ToText, Mode=TwoWay}" />
+                <TextBlock Grid.Row="3" Grid.Column="1"
+                           AutomationProperties.AutomationId="Measure.ToError"
+                           Text="{Binding ToError}"
+                           IsVisible="{Binding HasToError}"
+                           Foreground="{DynamicResource DestructiveColor}"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Margin="0,2,0,0" />
+            </Grid>
+
+            <!-- The hint, until there's a leg. -->
+            <StackPanel IsVisible="{Binding ShowsHint}">
+                <Border Classes="divider" />
+                <TextBlock Text="{x:Static vm:MeasureCardViewModel.HintText}"
+                           AutomationProperties.AutomationId="Measure.Hint"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource MutedColor}"
+                           Margin="12,10" />
+            </StackPanel>
+
+            <!-- Distance, bearings and total. -->
+            <StackPanel IsVisible="{Binding HasLeg}">
+                <Border Classes="divider" />
+                <Grid ColumnDefinitions="62,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="12,10">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="label"
+                               VerticalAlignment="Top" Margin="0,2,0,0"
+                               Text="{x:Static loc:Strings.Measure_Distance}" />
+                    <StackPanel Grid.Row="0" Grid.Column="1" Spacing="1">
+                        <TextBlock Classes="value"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"
+                                   AutomationProperties.AutomationId="Measure.Distance"
+                                   AutomationProperties.Name="{Binding DistanceName}"
+                                   Text="{Binding DistanceText}" />
+                        <TextBlock Classes="value muted"
+                                   FontSize="11.5"
+                                   FontWeight="Normal"
+                                   AutomationProperties.AutomationId="Measure.DistanceOther"
+                                   AutomationProperties.Name="{Binding DistanceOtherName}"
+                                   Text="{Binding DistanceOtherText}" />
+                    </StackPanel>
+                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="label"
+                               Margin="0,8,0,0"
+                               Text="{x:Static loc:Strings.Measure_Bearing}" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Classes="value"
+                               Margin="0,8,0,0"
+                               AutomationProperties.AutomationId="Measure.Bearing"
+                               AutomationProperties.Name="{Binding BearingName}"
+                               Text="{Binding BearingText}" />
+                    <TextBlock Grid.Row="2" Grid.Column="0" Classes="label"
+                               Margin="0,8,0,0"
+                               Text="{x:Static loc:Strings.Measure_Reverse}" />
+                    <StackPanel Grid.Row="2" Grid.Column="1"
+                                Orientation="Horizontal"
+                                Spacing="6"
+                                Margin="0,8,0,0">
+                        <TextBlock Classes="value"
+                                   AutomationProperties.AutomationId="Measure.ReverseBearing"
+                                   AutomationProperties.Name="{Binding ReverseName}"
+                                   AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_MeasureReverse}"
+                                   Text="{Binding ReverseText}" />
+                        <ic:FluentIcon Icon="Info"
+                                       IconVariant="Regular"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource MutedColor}"
+                                       VerticalAlignment="Center"
+                                       Background="Transparent"
+                                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_MeasureReverse}" />
+                    </StackPanel>
+                    <TextBlock Grid.Row="3" Grid.Column="0" Classes="label"
+                               Margin="0,8,0,0"
+                               IsVisible="{Binding HasMultipleLegs}"
+                               Text="{x:Static loc:Strings.Measure_Total}" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Classes="value"
+                               Margin="0,8,0,0"
+                               IsVisible="{Binding HasMultipleLegs}"
+                               AutomationProperties.AutomationId="Measure.Total"
+                               AutomationProperties.Name="{Binding TotalName}"
+                               Text="{Binding TotalText}" />
+                </Grid>
+            </StackPanel>
+
+            <!-- The earth model (D17). -->
+            <Border Classes="divider" />
+            <TextBlock Text="{x:Static vm:MeasureCardViewModel.ModelText}"
+                       AutomationProperties.AutomationId="Measure.Model"
+                       AutomationProperties.Name="{x:Static vm:MeasureCardViewModel.ModelText}"
+                       AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_MeasureModel}"
+                       ToolTip.Tip="{x:Static loc:Strings.Tooltip_MeasureModel}"
+                       Background="Transparent"
+                       FontSize="11"
+                       Foreground="{DynamicResource MutedColor}"
+                       Margin="12,6" />
+        </StackPanel>
+    </Border>
+</UserControl>

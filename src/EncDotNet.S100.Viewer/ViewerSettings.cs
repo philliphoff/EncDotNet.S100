@@ -359,6 +359,12 @@ internal sealed partial class ViewerSettings
     public bool IsRouteCheckLegendOpen { get; set; } = true;
 
     /// <summary>
+    /// The geometry the measure tool measures along, "Rhumb" or "GreatCircle"
+    /// (#1130, D3): the last choice, starting at Rhumb.
+    /// </summary>
+    public string MeasureGeometry { get; set; } = "Rhumb";
+
+    /// <summary>
     /// Whether an accent-coloured border is drawn around the extent of a loaded
     /// dataset that has zoomed out past its display-scale minimum (and therefore
     /// renders no content). Enabled by default so a mariner who frames a

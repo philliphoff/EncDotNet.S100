@@ -867,6 +867,10 @@ public partial class App : Application
         services.AddSingleton<EncDotNet.S100.Viewer.Services.IViewTime>(sp => new EncDotNet.S100.Viewer.Services.TimelineViewTime(
             sp.GetRequiredService<GlobalTimeService>(), sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.RoutesService>();
+        // The measure tool's path and geometry (#1130), shared by the tool, its card and MCP.
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.MeasureSession(sp.GetRequiredService<ViewerSettings>()));
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MeasureSession>()));
         // One set of route-check sources per set of loaded datasets, shared by every route check.
         services.AddSingleton(_ => new EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache(
             new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory()));
@@ -1226,7 +1230,9 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RouteExchangeService>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState>(),
             sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.LogBuffer>()));
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.LogBuffer>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MeasureSession>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel>()));
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
             () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources));

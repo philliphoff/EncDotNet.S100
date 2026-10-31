@@ -676,12 +676,23 @@
                                    VerticalAlignment="Center" />
                     </StackPanel>
                 </Panel>
+                <!-- Top-left stack under the time stamp: a map tool's card, then the
+                     warning note, which moves down below the card while it's open
+                     (#1130, D19). -->
+                <StackPanel x:Name="MapTopLeftStack"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            Margin="12,44,64,0"
+                            Spacing="8">
+                <!-- Measure card (#1130, D1). -->
+                <views:MeasureCardView DataContext="{Binding MeasureCard}"
+                                       IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsMeasureModeActive}"
+                                       HorizontalAlignment="Left" />
                 <!-- Navigational warning note (#932): while a warning opened from
                      the panel draws nothing (no location) or isn't framed (not in
                      force), say why. In the page, so captures include it. -->
                 <Border HorizontalAlignment="Left"
                         VerticalAlignment="Top"
-                        Margin="12,44,64,0"
                         MaxWidth="300"
                         IsHitTestVisible="False"
                         AutomationProperties.AutomationId="Map.WarningNote"
@@ -707,6 +718,7 @@
                                    VerticalAlignment="Center" />
                     </Grid>
                 </Border>
+                </StackPanel>
                 <!-- Route editing chip (#896, handoff A6), below the scale bar and
                      clear of the map buttons so it never covers them. -->
                 <Border HorizontalAlignment="Left"
