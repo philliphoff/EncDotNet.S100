@@ -3,6 +3,7 @@ using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Tests.Headless;
 using EncDotNet.S100.Viewer.ViewModels;
 using EncDotNet.S100.Viewer.Views;
+using EncDotNet.S100.VisualRegression;
 using Microsoft.Extensions.Time.Testing;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -70,7 +71,14 @@ public sealed class ViewFrameTests
             state == "charted" ? DepthBasisIndicatorViewTests.Charted : DepthBasisIndicatorViewTests.NotApplied);
         using var host = ViewHost.Show(new DepthBasisIndicatorView { DataContext = vm }, width: 360, height: 36, theme);
 
-        return Verify(host.CaptureFrame(), "png").UseParameters(state, theme);
+        // The frame is small and mostly glyphs, so each OS's own font
+        // rasterisation alone moves about 10 % of its pixels (win-arm64 against
+        // the Linux baseline). The pill's fill and border cover about 40 % of the
+        // frame, so 15 % still catches a wrong palette or accent, which is what
+        // this frame guards; the text itself is asserted in DepthBasisIndicatorViewTests.
+        return Verify(host.CaptureFrame(), "png")
+            .UseParameters(state, theme)
+            .UsePerceptualImageComparer(new PerceptualImageComparer { MaxDifferentPixelFraction = 0.15 });
     }
 
     /// <summary>UTC labels, so the frame does not depend on the machine's time zone.</summary>
