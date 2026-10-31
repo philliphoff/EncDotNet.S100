@@ -19,11 +19,11 @@
         </Style>
         <Style Selector="Border.HudTint.warning">
             <Setter Property="IsVisible" Value="True" />
-            <Setter Property="Background" Value="#D1FFFBEB" />
+            <Setter Property="Background" Value="{DynamicResource MapOverlayWarningTintBrush}" />
         </Style>
         <Style Selector="Border.HudTint.error">
             <Setter Property="IsVisible" Value="True" />
-            <Setter Property="Background" Value="#D1FEF2F2" />
+            <Setter Property="Background" Value="{DynamicResource MapOverlayErrorTintBrush}" />
         </Style>
         <Style Selector="Button.HudText">
             <Setter Property="Background" Value="Transparent" />
@@ -36,10 +36,10 @@
             <Setter Property="Background" Value="Transparent" />
         </Style>
         <Style Selector="Button.HudText.warning /template/ ContentPresenter">
-            <Setter Property="Foreground" Value="#B45309" />
+            <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
         </Style>
         <Style Selector="Button.HudText.error /template/ ContentPresenter">
-            <Setter Property="Foreground" Value="#B91C1C" />
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
         </Style>
         <Style Selector="Button.HudText.warning">
             <Setter Property="Cursor" Value="Hand" />
@@ -156,7 +156,8 @@
              time-overlays D4), so stepping, going live or drawing never changes
              the bar's width and ‹ › stay under the pointer. The variable text
              is on the left, the controls on the right. -->
-        <Grid x:Name="Bar" HorizontalAlignment="Center" RowDefinitions="Auto,40">
+        <Grid x:Name="Bar" HorizontalAlignment="Center" RowDefinitions="Auto,40"
+              AutomationProperties.Name="{x:Static loc:Strings.Label_TimeHud}">
             <Border Grid.RowSpan="2" Background="{DynamicResource MapOverlaySurfaceBrush}" CornerRadius="10" />
             <!-- D2: Display Not Real Time (S-98 §12.7.2; #993) on its own line above the
                  controls. The HUD is anchored at the bottom, so the line grows the bar
@@ -195,6 +196,7 @@
                             Classes="HudText"
                             HorizontalAlignment="Left"
                             AutomationProperties.AutomationId="TimeHud.Time"
+                            AutomationProperties.Name="{Binding TimeReading}"
                             AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimeHudTime}"
                             Content="{Binding CurrentTimeLabel}"
                             FontFamily="{StaticResource MonoFontFamily}"
@@ -217,18 +219,18 @@
                 <Border Classes="HudSeparator" />
                 <Button Classes="Icon HudIcon"
                         AutomationProperties.Name="{x:Static loc:Strings.Label_PreviousStep}"
-                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}"
+                        AutomationProperties.HelpText="{Binding PreviousStepTooltip}"
                         Command="{Binding PreviousStepCommand}"
                         AutomationProperties.AutomationId="TimeHud.Previous"
-                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelinePreviousStep}">
+                        ToolTip.Tip="{Binding PreviousStepTooltip}">
                     <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" FontSize="14" />
                 </Button>
                 <Button Classes="Icon HudIcon"
                         AutomationProperties.Name="{x:Static loc:Strings.Label_NextStep}"
-                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimelineNextStep}"
+                        AutomationProperties.HelpText="{Binding NextStepTooltip}"
                         Command="{Binding NextStepCommand}"
                         AutomationProperties.AutomationId="TimeHud.Next"
-                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineNextStep}">
+                        ToolTip.Tip="{Binding NextStepTooltip}">
                     <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="14" />
                 </Button>
                 <!-- D5: always there, always the same size. Live: quiet, with a green dot;
@@ -238,6 +240,7 @@
                         Classes.pinned="{Binding !IsLive}"
                         AutomationProperties.AutomationId="TimeHud.Live"
                         AutomationProperties.Name="{Binding LiveToggleText}"
+                        Command="{Binding LiveToggleCommand}"
                         ToolTip.Tip="{Binding LiveToggleTooltip}">
                     <StackPanel Orientation="Horizontal" Spacing="5">
                         <Ellipse Width="7" Height="7" IsVisible="{Binding IsLive}"
@@ -249,7 +252,9 @@
                         <TextBlock Classes="LiveText" Text="{Binding LiveToggleText}" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
-                <Border Classes="HudSeparator" />
+                <!-- D9: the dock button says what it does (open the dock, or show the
+                     Timeline tab in it) and is hidden where the dock can't show. -->
+                <Border x:Name="DockSeparator" Classes="HudSeparator" />
                 <Button x:Name="DockToggle"
                         AutomationProperties.Name="{x:Static loc:Strings.Label_OpenTimeline}"
                         AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimeHudOpenTimeline}"

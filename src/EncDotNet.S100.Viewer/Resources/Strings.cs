@@ -627,6 +627,13 @@ internal static partial class Strings
     public static string TimelinePanel_PresetCustom => Get(nameof(TimelinePanel_PresetCustom));
     public static string TimeHud_Live => Get(nameof(TimeHud_Live));
     public static string Tooltip_TimeHudLive => Get(nameof(Tooltip_TimeHudLive));
+    public static string TimeHud_ReadingLiveFormat => Get(nameof(TimeHud_ReadingLiveFormat));
+    public static string TimeHud_ReadingPinnedFormat => Get(nameof(TimeHud_ReadingPinnedFormat));
+    public static string Tooltip_TimelineNextStepFormat => Get(nameof(Tooltip_TimelineNextStepFormat));
+    public static string Tooltip_TimelinePreviousStepFormat => Get(nameof(Tooltip_TimelinePreviousStepFormat));
+    public static string Label_ShowTimeline => Get(nameof(Label_ShowTimeline));
+    public static string Tooltip_TimeHudShowTimeline => Get(nameof(Tooltip_TimeHudShowTimeline));
+    public static string Label_TimeHud => Get(nameof(Label_TimeHud));
     public static string Tooltip_TimeHudOpenTimeline => Get(nameof(Tooltip_TimeHudOpenTimeline));
     public static string Timeline_ViewTime => Get(nameof(Timeline_ViewTime));
     public static string Tooltip_TimeHudTime => Get(nameof(Tooltip_TimeHudTime));
@@ -669,8 +676,6 @@ internal static partial class Strings
     public static string Tooltip_TimelineNextData => Get(nameof(Tooltip_TimelineNextData));
     public static string Tooltip_TimelineStep => Get(nameof(Tooltip_TimelineStep));
     public static string Tooltip_TimelinePreset => Get(nameof(Tooltip_TimelinePreset));
-    public static string TimelinePanel_Live => Get(nameof(TimelinePanel_Live));
-    public static string TimelinePanel_Pinned => Get(nameof(TimelinePanel_Pinned));
     public static string TimelinePanel_DisplayNotRealTime => Get(nameof(TimelinePanel_DisplayNotRealTime));
     public static string TimelinePanel_GoLive => Get(nameof(TimelinePanel_GoLive));
     public static string TimelinePanel_OffsetNow => Get(nameof(TimelinePanel_OffsetNow));

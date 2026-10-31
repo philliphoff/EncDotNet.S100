@@ -23,6 +23,9 @@
                      (inherited by Dusk and Night). -->
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="MapOverlaySurfaceBrush" Color="#B8FFFFFF" />
+                    <!-- The Time HUD message chip's warning and error tints (time-overlays D11). -->
+                    <SolidColorBrush x:Key="MapOverlayWarningTintBrush" Color="#D1FFFBEB" />
+                    <SolidColorBrush x:Key="MapOverlayErrorTintBrush" Color="#D1FEF2F2" />
                     <!-- Depth basis pill's informational accent (#1191): S-104 in view, not applied. -->
                     <SolidColorBrush x:Key="DepthBasisInfoBackgroundBrush" Color="#1F2563EB" />
                     <SolidColorBrush x:Key="DepthBasisInfoBorderBrush" Color="#802563EB" />
@@ -30,6 +33,9 @@
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="MapOverlaySurfaceBrush" Color="#B818181B" />
+                    <!-- The Time HUD message chip's warning and error tints (time-overlays D11). -->
+                    <SolidColorBrush x:Key="MapOverlayWarningTintBrush" Color="#B8451A03" />
+                    <SolidColorBrush x:Key="MapOverlayErrorTintBrush" Color="#B84C0519" />
                     <!-- Depth basis pill's informational accent (#1191): S-104 in view, not applied. -->
                     <SolidColorBrush x:Key="DepthBasisInfoBackgroundBrush" Color="#2E60A5FA" />
                     <SolidColorBrush x:Key="DepthBasisInfoBorderBrush" Color="#8060A5FA" />

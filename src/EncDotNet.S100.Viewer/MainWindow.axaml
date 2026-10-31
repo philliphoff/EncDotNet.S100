@@ -640,6 +640,8 @@
                 <views:TimeHudView DataContext="{Binding Timeline}"
                                    IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsTimeHudVisible}"
                                    DockCommand="{Binding $parent[Window].((vm:MainViewModel)DataContext).ToggleTimelineDockCommand}"
+                                   IsDockOpen="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsBottomDockShown}"
+                                   IsDockAvailable="{Binding !$parent[Window].((vm:MainViewModel)DataContext).IsWindowNarrow}"
                                    MapWidth="{Binding $parent[Window].((vm:MainViewModel)DataContext).MapWidth}"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Bottom"

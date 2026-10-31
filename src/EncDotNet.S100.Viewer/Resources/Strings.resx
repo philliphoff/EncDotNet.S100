@@ -4201,17 +4201,9 @@
   <data name="Library_Pairing_Get" xml:space="preserve">
     <value>Get</value>
   </data>
-  <data name="TimelinePanel_Live" xml:space="preserve">
-    <value>LIVE</value>
-    <comment>Mode pill while the view time follows now. Upper case.</comment>
-  </data>
   <data name="TimelinePanel_DisplayNotRealTime" xml:space="preserve">
     <value>Display Not Real Time</value>
     <comment>Starts the map stamp while the view time is pinned and navigational warnings are loaded, so their drawing follows a time other than now (S-98 §12.7.2 wording; keep it).</comment>
-  </data>
-  <data name="TimelinePanel_Pinned" xml:space="preserve">
-    <value>PINNED</value>
-    <comment>Mode pill while the user chose a time. Upper case.</comment>
   </data>
   <data name="TimelinePanel_GoLive" xml:space="preserve">
     <value>Go live</value>
@@ -4336,6 +4328,34 @@
   <data name="Tooltip_TimeHudLive" xml:space="preserve">
     <value>Showing now and keeping up with it.</value>
     <comment>Time HUD Live toggle tooltip while the view time follows now.</comment>
+  </data>
+  <data name="TimeHud_ReadingLiveFormat" xml:space="preserve">
+    <value>{0}, live</value>
+    <comment>Screen-reader name of the view time while live. {0} = the time.</comment>
+  </data>
+  <data name="TimeHud_ReadingPinnedFormat" xml:space="preserve">
+    <value>{0}, {1}, pinned</value>
+    <comment>Screen-reader name of a pinned view time. {0} = the time, {1} = its offset from now, e.g. 'in 23 min'.</comment>
+  </data>
+  <data name="Tooltip_TimelineNextStepFormat" xml:space="preserve">
+    <value>Next step: {0} (→)</value>
+    <comment>Tooltip of the next-step button. {0} = the step, e.g. '1 h' or a layer name.</comment>
+  </data>
+  <data name="Tooltip_TimelinePreviousStepFormat" xml:space="preserve">
+    <value>Previous step: {0} (←)</value>
+    <comment>Tooltip of the previous-step button. {0} = the step, e.g. '1 h' or a layer name.</comment>
+  </data>
+  <data name="Label_ShowTimeline" xml:space="preserve">
+    <value>Show timeline</value>
+    <comment>Time HUD dock button's name while the dock is open on another tab.</comment>
+  </data>
+  <data name="Tooltip_TimeHudShowTimeline" xml:space="preserve">
+    <value>Show the Timeline tab (T)</value>
+    <comment>Time HUD dock button's tooltip while the dock is open on another tab.</comment>
+  </data>
+  <data name="Label_TimeHud" xml:space="preserve">
+    <value>Time</value>
+    <comment>Accessible name of the Time HUD bar.</comment>
   </data>
   <data name="Tooltip_TimeHudOpenTimeline" xml:space="preserve">
     <value>Open timeline (T)</value>

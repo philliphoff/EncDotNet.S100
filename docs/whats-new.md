@@ -6,6 +6,22 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **One time readout on the map, and step buttons that stay put.**
+  SoundCharts shows the view time once on the map: the stamp at the top left
+  while the dock shows the **Timeline** tab, otherwise the time bar at the
+  bottom. With the dock on **Logs** or **Clearance**, both used to show. The
+  time bar and the Timeline's own readout now have fixed-width slots and an
+  always-present **Live** / **Go live** button, so ‹ and › no longer move
+  when you step and a second click can't land on the button that undoes it.
+  The words LIVE and PINNED are gone: a green dot and a muted "now" mean
+  live, an accent dot and an offset such as "in 23 min" mean you chose a
+  time. With navigational warnings or dated chart features loaded, the time
+  bar says "Display Not Real Time" on its own line. The step buttons' tooltips
+  name the step ("Next step: 1 h (→)"), screen readers hear the time in full
+  ("…, in 23 min, pinned"), the time bar's dock button says **Show timeline**
+  when the dock is open on another tab and is hidden in a narrow window, and
+  its message colours follow the dark theme.
+
 - **Range & bearing tool.** SoundCharts has a new map tool next to Measure:
   an EBL/VRM pair from an origin you choose (⌘R or Ctrl+R). Click the
   origin, then the end, or type the origin, range and bearing on its card to

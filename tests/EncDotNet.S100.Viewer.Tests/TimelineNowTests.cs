@@ -75,7 +75,8 @@ public sealed class TimelineNowTests
 
         Assert.Equal(TimeMode.Live, service.Mode);
         Assert.True(timeline.IsLive);
-        Assert.Equal("LIVE", timeline.ModeLabel);
+        Assert.Equal("Live", timeline.LiveToggleText);
+        Assert.EndsWith(", live", timeline.TimeReading, StringComparison.Ordinal);
         // Live is now itself, not the step nearest it (#713 A1).
         Assert.Equal(Run.AddHours(9).AddMinutes(10), service.CurrentTime);
         Assert.Equal("now", timeline.OffsetText);
@@ -161,7 +162,8 @@ public sealed class TimelineNowTests
 
         timeline.PreviousStepCommand.Execute(null);
         Assert.Equal(TimeMode.Pinned, service.Mode);
-        Assert.Equal("PINNED", timeline.ModeLabel);
+        Assert.Equal("Go live", timeline.LiveToggleText);
+        Assert.EndsWith(", 10 min ago, pinned", timeline.TimeReading, StringComparison.Ordinal);
         Assert.Equal(Run.AddHours(9), service.CurrentTime);
         clock.Advance(TimeSpan.FromHours(2));
         Assert.Equal(Run.AddHours(9), service.CurrentTime);
