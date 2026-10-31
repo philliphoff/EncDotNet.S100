@@ -20,7 +20,7 @@ namespace EncDotNet.S100.Viewer.Diagnostics;
 /// <para>
 /// The buffer has its own <see cref="MinimumLevel"/>, separate from the
 /// logging pipeline's global minimum (which <c>--verbose</c> sets and the
-/// OTLP exporter follows), so the Logs panel's Verbose toggle changes only
+/// OTLP exporter follows), so the Logs panel's Everything level changes only
 /// what the panel captures.
 /// </para>
 /// </remarks>
@@ -70,7 +70,7 @@ internal sealed class LogBuffer : IDisposable
 
     /// <summary>
     /// The lowest level the buffer captures. Defaults to Information; the
-    /// Logs panel's Verbose toggle lowers it to Debug.
+    /// Logs panel's Everything level lowers it to Debug.
     /// </summary>
     public LogLevel MinimumLevel
     {

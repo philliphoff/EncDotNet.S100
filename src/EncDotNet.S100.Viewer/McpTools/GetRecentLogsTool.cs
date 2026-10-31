@@ -25,7 +25,7 @@ internal sealed record RecentLogsDto(
     [property: Description("The entries, oldest first.")] IReadOnlyList<RecentLogEntryDto> Entries,
     [property: Description("How many buffered entries matched before 'limit' kept the newest.")] int Matched,
     [property: Description("Whether 'limit' dropped older matching entries.")] bool Truncated,
-    [property: Description("The lowest level the buffer records now ('information', or 'debug' while the panel's Verbose is on).")] string CaptureLevel,
+    [property: Description("The lowest level the buffer records now ('information', or 'debug' while the panel's level filter is Everything).")] string CaptureLevel,
     [property: Description("How many entries the buffer keeps; older ones are dropped.")] int Capacity,
     [property: Description("The sequence of the newest buffered entry, or 0 when the buffer is empty.")] long LastSequence);
 
@@ -117,7 +117,7 @@ internal static class GetRecentLogsMcpAdapter
     {
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
-            [Description("The lowest level returned: 'debug', 'information' (the default), 'warning' or 'error'. Debug entries exist only while the Logs panel's Verbose is on or the viewer runs with --verbose.")] string? minLevel = null,
+            [Description("The lowest level returned: 'debug', 'information' (the default), 'warning' or 'error'. Debug entries exist only while the Logs panel's level filter is Everything or the viewer runs with --verbose.")] string? minLevel = null,
             [Description("The most entries returned, newest kept; default 200, at most the buffer's capacity (1000).")] int? limit = null,
             [Description("Return only entries whose sequence is larger than this, e.g. the lastSequence of a previous call, to poll for new entries.")] long? afterSequence = null,
             [Description("Return only entries whose message, area, category or exception contains this text (case-insensitive).")] string? search = null,

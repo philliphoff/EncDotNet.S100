@@ -22,8 +22,8 @@ internal sealed record LogLevelFilterOption(LogLevel Level, string Label)
 
 /// <summary>
 /// View-model for the Logs tab in the bottom dock (#1080): the recent entries
-/// of the <see cref="LogBuffer"/>, filtered by level and text, with Copy,
-/// Clear, a Verbose toggle and Send feedback.
+/// of the <see cref="LogBuffer"/>, filtered by level and text, with problem
+/// counts, Copy all, Clear and Send feedback.
 /// </summary>
 /// <remarks>
 /// The buffer raises <see cref="LogBuffer.Changed"/> at most once per
@@ -43,6 +43,13 @@ internal sealed record LogLevelFilterOption(LogLevel Level, string Label)
 /// zone or UTC, never a zone of the data. When the shown rows span more than
 /// one day, the first row of each day carries a date divider.
 /// </para>
+/// <para>
+/// The level filter owns capture (#1172): <em>Everything, Debug included</em>
+/// lowers the buffer's <see cref="LogBuffer.MinimumLevel"/> to Debug, and any
+/// other level raises it back to Information. The error and warning chips are
+/// quick filters on top: they remember the level they replaced, and that level
+/// keeps deciding capture until a second click restores it.
+/// </para>
 /// </remarks>
 internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivityTabShown, IDisposable
 {
@@ -60,6 +67,11 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
     private int _refreshPosted;
     private long _problemsSeen;
     private long _followStoppedAt;
+    private int _errorCount;
+    private int _warningCount;
+    // The level a count chip replaced, restored by a second click; null while
+    // the filter wasn't set by a chip.
+    private LogLevelFilterOption? _levelBeforeChip;
     private bool _isTabShown;
     private bool _disposed;
 
@@ -88,12 +100,13 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
 
         LevelFilters =
         [
-            new(LogLevel.Debug, Strings.Logs_Filter_All),
-            new(LogLevel.Information, Strings.Logs_Filter_Information),
-            new(LogLevel.Warning, Strings.Logs_Filter_Warning),
             new(LogLevel.Error, Strings.Logs_Filter_Error),
+            new(LogLevel.Warning, Strings.Logs_Filter_Warning),
+            new(LogLevel.Information, Strings.Logs_Filter_Information),
+            new(LogLevel.Debug, Strings.Logs_Filter_All),
         ];
-        _selectedLevelFilter = LevelFilters[buffer.MinimumLevel <= LogLevel.Debug ? 0 : 1];
+        // --verbose starts the buffer at Debug, which is what Everything captures.
+        _selectedLevelFilter = FilterFor(buffer.MinimumLevel <= LogLevel.Debug ? LogLevel.Debug : LogLevel.Information);
 
         CopyCommand = new RelayCommand(Copy, () => Entries.Count > 0);
         ClearCommand = new RelayCommand(Clear);
@@ -104,6 +117,8 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         ShowOnlySelectedAreaCommand = new RelayCommand(() => AddSelectedAreaToken(hide: false), () => _selectedEntry is not null);
         HideSelectedAreaCommand = new RelayCommand(() => AddSelectedAreaToken(hide: true), () => _selectedEntry is not null);
         ResumeFollowingCommand = new RelayCommand(ResumeFollowing);
+        ShowErrorsCommand = new RelayCommand(() => ToggleChip(LogLevel.Error));
+        ShowWarningsCommand = new RelayCommand(() => ToggleChip(LogLevel.Warning));
 
         // _problemsSeen starts at 0, so warnings logged at startup, before the
         // panel existed, show on the badge too.
@@ -127,17 +142,55 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
     public IReadOnlyList<LogLevelFilterOption> LevelFilters { get; }
 
     private LogLevelFilterOption _selectedLevelFilter;
-    /// <summary>The level filter: entries below its level are hidden. Debug is hidden by default.</summary>
+    /// <summary>
+    /// The level filter: entries below its level are hidden. Debug is hidden by
+    /// default; choosing <em>Everything</em> also starts capturing Debug, and
+    /// choosing any other level stops it.
+    /// </summary>
     public LogLevelFilterOption SelectedLevelFilter
     {
         get => _selectedLevelFilter;
         set
         {
-            if (value is null || !SetProperty(ref _selectedLevelFilter, value))
+            if (value is null || ReferenceEquals(value, _selectedLevelFilter))
                 return;
-            Refilter();
+            // A level the user picks replaces whatever a chip would restore.
+            _levelBeforeChip = null;
+            SetLevelFilter(value);
         }
     }
+
+    /// <summary>
+    /// Whether the buffer captures Debug messages: while the level filter is
+    /// <em>Everything</em>, or the viewer runs with <c>--verbose</c>. Changes
+    /// only what the panel and feedback reports get, not the logging
+    /// pipeline's own minimum or what goes to OTLP.
+    /// </summary>
+    public bool IsCapturingDebug => _buffer.MinimumLevel <= LogLevel.Debug;
+
+    /// <summary>How many errors (Error and Critical entries) the buffer holds, filtered out or not.</summary>
+    public int ErrorCount => _errorCount;
+
+    /// <summary>How many warnings the buffer holds, filtered out or not.</summary>
+    public int WarningCount => _warningCount;
+
+    /// <summary>Whether the errors chip shows: the buffer holds an error.</summary>
+    public bool HasErrors => _errorCount > 0;
+
+    /// <summary>Whether the warnings chip shows: the buffer holds a warning.</summary>
+    public bool HasWarnings => _warningCount > 0;
+
+    /// <summary>The accessible name of the errors chip ("Errors: 2. Show errors only").</summary>
+    public string ErrorsChipName => string.Format(CultureInfo.CurrentCulture, Strings.Label_LogsErrorsChipFormat, _errorCount);
+
+    /// <summary>The accessible name of the warnings chip ("Warnings: 3. Show warnings and errors").</summary>
+    public string WarningsChipName => string.Format(CultureInfo.CurrentCulture, Strings.Label_LogsWarningsChipFormat, _warningCount);
+
+    /// <summary>Whether the errors chip set the current filter, so a click restores the previous level.</summary>
+    public bool IsErrorsChipActive => _levelBeforeChip is not null && _selectedLevelFilter.Level == LogLevel.Error;
+
+    /// <summary>Whether the warnings chip set the current filter, so a click restores the previous level.</summary>
+    public bool IsWarningsChipActive => _levelBeforeChip is not null && _selectedLevelFilter.Level == LogLevel.Warning;
 
     private string _searchText = string.Empty;
     /// <summary>
@@ -200,27 +253,6 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
 
     /// <summary>The accessible name of the new-entries pill.</summary>
     public string NewEntriesName => string.Format(CultureInfo.CurrentCulture, Strings.Label_LogsNewEntriesFormat, NewEntriesCount);
-
-    /// <summary>
-    /// Whether the buffer also captures Debug messages. Changes only what the
-    /// panel and feedback reports get, not the logging pipeline's own minimum
-    /// (<c>--verbose</c>) or what goes to OTLP. Turning it on shows Debug
-    /// entries; turning it off hides them again.
-    /// </summary>
-    public bool IsVerbose
-    {
-        get => _buffer.MinimumLevel <= LogLevel.Debug;
-        set
-        {
-            if (value == IsVerbose)
-                return;
-            _buffer.MinimumLevel = value ? LogLevel.Debug : LogLevel.Information;
-            if (value && SelectedLevelFilter.Level > LogLevel.Debug && SelectedLevelFilter.Level <= LogLevel.Information)
-                SelectedLevelFilter = LevelFilters[0];
-            else if (!value && SelectedLevelFilter.Level <= LogLevel.Debug)
-                SelectedLevelFilter = LevelFilters[1];
-        }
-    }
 
     private LogRowViewModel? _selectedEntry;
     /// <summary>The selected row, whose full message and exception the details pane shows.</summary>
@@ -294,6 +326,12 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
 
     /// <summary>Scrolls to the newest row and follows the tail again (the new-entries pill, <c>End</c>).</summary>
     public ICommand ResumeFollowingCommand { get; }
+
+    /// <summary>The errors chip: filters to errors, or restores the previous level when it already did.</summary>
+    public ICommand ShowErrorsCommand { get; }
+
+    /// <summary>The warnings chip: filters to warnings and errors, or restores the previous level when it already did.</summary>
+    public ICommand ShowWarningsCommand { get; }
 
     /// <summary>Stops following the tail: the view keeps the rows the user is reading in place.</summary>
     public void StopFollowing() => IsFollowing = false;
@@ -399,7 +437,44 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
     }
 
     private void OnMinimumLevelChanged(object? sender, EventArgs e) =>
-        _post(() => OnPropertyChanged(nameof(IsVerbose)));
+        _post(() => OnPropertyChanged(nameof(IsCapturingDebug)));
+
+    private LogLevelFilterOption FilterFor(LogLevel level) => LevelFilters.First(f => f.Level == level);
+
+    private void SetLevelFilter(LogLevelFilterOption value)
+    {
+        if (SetProperty(ref _selectedLevelFilter, value, nameof(SelectedLevelFilter)))
+            Refilter();
+        // The level the user chose decides capture, also while a chip narrows
+        // the list, so a quick look at the errors doesn't lose Debug messages.
+        var chosen = _levelBeforeChip ?? _selectedLevelFilter;
+        _buffer.MinimumLevel = chosen.Level <= LogLevel.Debug ? LogLevel.Debug : LogLevel.Information;
+        OnPropertyChanged(nameof(IsErrorsChipActive));
+        OnPropertyChanged(nameof(IsWarningsChipActive));
+    }
+
+    private void ToggleChip(LogLevel level)
+    {
+        if (_levelBeforeChip is { } previous && _selectedLevelFilter.Level == level)
+        {
+            _levelBeforeChip = null;
+            SetLevelFilter(previous);
+            return;
+        }
+        if (_selectedLevelFilter.Level == level)
+            return;
+        // Going from one chip to the other keeps the level the first replaced.
+        _levelBeforeChip ??= _selectedLevelFilter;
+        SetLevelFilter(FilterFor(level));
+    }
+
+    private void Count(LogRowViewModel row, int delta)
+    {
+        if (row.IsError)
+            _errorCount += delta;
+        else if (row.IsWarning)
+            _warningCount += delta;
+    }
 
     private void OnTimeFormatChanged(TimeFormat format) => _post(() =>
     {
@@ -417,6 +492,7 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
     private void Apply(IReadOnlyList<LogEntry> snapshot)
     {
         var oldest = snapshot.Count > 0 ? snapshot[0].Sequence : long.MaxValue;
+        var (errors, warnings) = (_errorCount, _warningCount);
 
         // Rows the buffer dropped (or cleared) leave from the front.
         var evicted = 0;
@@ -427,6 +503,7 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         {
             if (_all[i].IsShown)
                 shownEvicted++;
+            Count(_all[i], -1);
         }
         _all.RemoveRange(0, evicted);
 
@@ -455,6 +532,7 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
                 continue;
             var row = new LogRowViewModel(entry, zone, isUtc);
             _all.Add(row);
+            Count(row, +1);
             _lastSequence = entry.Sequence;
             if (Matches(row))
             {
@@ -462,6 +540,9 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
                 added.Add(row);
             }
         }
+
+        if (errors != _errorCount || warnings != _warningCount)
+            RaiseCounts();
 
         if (shownEvicted == 0 && added.Count == 0)
         {
@@ -611,6 +692,16 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         OnPropertyChanged(nameof(HasNewEntries));
         OnPropertyChanged(nameof(NewEntriesText));
         OnPropertyChanged(nameof(NewEntriesName));
+    }
+
+    private void RaiseCounts()
+    {
+        OnPropertyChanged(nameof(ErrorCount));
+        OnPropertyChanged(nameof(WarningCount));
+        OnPropertyChanged(nameof(HasErrors));
+        OnPropertyChanged(nameof(HasWarnings));
+        OnPropertyChanged(nameof(ErrorsChipName));
+        OnPropertyChanged(nameof(WarningsChipName));
     }
 
     private void RaiseBadge()
@@ -776,6 +867,15 @@ internal sealed class LogRowViewModel : ViewModelBase
 
     /// <summary>Whether the entry is an error or critical.</summary>
     public bool IsError => _entry.Level >= LogLevel.Error;
+
+    /// <summary>
+    /// Whether the level gutter shows the error glyph: an error, or any entry
+    /// that carries an exception.
+    /// </summary>
+    public bool ShowsErrorGlyph => IsError || HasException;
+
+    /// <summary>Whether the level gutter shows the warning glyph: a warning without an exception.</summary>
+    public bool ShowsWarningGlyph => IsWarning && !HasException;
 
     /// <summary>Whether the entry is Debug or Trace.</summary>
     public bool IsDebug => _entry.Level <= LogLevel.Debug;

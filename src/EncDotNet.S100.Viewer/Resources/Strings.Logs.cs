@@ -22,8 +22,11 @@ internal static partial class Strings
     public static string Tooltip_LogsLevelFilter => Get(nameof(Tooltip_LogsLevelFilter));
     public static string Label_LogsSearch => Get(nameof(Label_LogsSearch));
     public static string Logs_SearchWatermark => Get(nameof(Logs_SearchWatermark));
-    public static string Logs_Verbose => Get(nameof(Logs_Verbose));
-    public static string Tooltip_LogsVerbose => Get(nameof(Tooltip_LogsVerbose));
+    public static string Logs_CapturingDebug => Get(nameof(Logs_CapturingDebug));
+    public static string Label_LogsErrorsChipFormat => Get(nameof(Label_LogsErrorsChipFormat));
+    public static string Label_LogsWarningsChipFormat => Get(nameof(Label_LogsWarningsChipFormat));
+    public static string Tooltip_LogsErrorsChip => Get(nameof(Tooltip_LogsErrorsChip));
+    public static string Tooltip_LogsWarningsChip => Get(nameof(Tooltip_LogsWarningsChip));
     public static string Logs_Copy => Get(nameof(Logs_Copy));
     public static string Tooltip_LogsCopy => Get(nameof(Tooltip_LogsCopy));
     public static string Logs_Clear => Get(nameof(Logs_Clear));

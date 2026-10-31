@@ -185,7 +185,7 @@ public sealed class LogBufferTests
     public void Logger_provider_keeps_hosting_library_chatter_to_warnings(string category)
     {
         // MCP and HTTP traffic logs several entries per request; even with
-        // Verbose on, only its warnings and errors reach the buffer.
+        // Debug capture on, only its warnings and errors reach the buffer.
         using var buffer = new LogBuffer(minimumLevel: LogLevel.Debug);
         using var provider = new ServiceCollection()
             .AddLogging(builder =>
