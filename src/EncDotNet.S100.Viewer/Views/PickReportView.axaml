@@ -1223,7 +1223,7 @@
                                     <TextBlock FontSize="12" TextTrimming="CharacterEllipsis">
                                         <Run Text="{Binding Role}" />
                                         <Run Text=" → " FontWeight="Light" />
-                                        <Run Text="{Binding TargetRef}" FontStyle="Italic" />
+                                        <Run Text="{Binding TargetDisplayName}" FontStyle="Italic" />
                                     </TextBlock>
                                 </Button>
                             </DataTemplate>

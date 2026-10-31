@@ -99,7 +99,7 @@ These read an `IDatasetCatalog` and never change it.
 | `ListSpecsTool` | `list_specs` | Lists the product specifications and what each tool supports for them. |
 | `ListTimeStepsTool` | `list_time_steps` | Lists the time steps of a time-varying dataset. |
 | `FindAtTool` | `find_at` | Finds the datasets whose declared bounding box contains a point or intersects a `GeoQuery`. It doesn't check per-cell coverage or no-data masks. |
-| `IdentifyFeaturesTool` | `identify_features` | Picks the features at a point, ranked point before curve before area, with exact containment for areas and a radius in metres for points and curves. S-101 features include the text of the files their `fileReference` attributes name. |
+| `IdentifyFeaturesTool` | `identify_features` | Picks the features at a point, ranked by drawing priority where the dataset was portrayed (S-98 15.1), then point before curve before area, with exact containment for areas and a radius in metres for points and curves. S-101 features include the text of the files their `fileReference` attributes name. |
 | `NearestFeaturesTool` | `nearest_features` | Ranks features by true distance to a point, including the nearest point on a segment, with the bearing. An area that contains the point has distance 0. |
 | `QueryFeaturesTool` | `query_features` | Finds the features that intersect a `GeoQuery`, with optional product, feature type, time window and attribute filters, and pages the results. Set `Precise` for full-geometry intersection instead of the bounding-box test. |
 | `CountFeaturesTool` | `count_features` | Counts features by type, for each dataset. |

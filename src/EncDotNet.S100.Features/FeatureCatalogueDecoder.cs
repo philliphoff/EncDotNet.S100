@@ -84,6 +84,18 @@ public sealed class FeatureCatalogueDecoder
     }
 
     /// <summary>
+    /// Returns the simple attribute with the code <paramref name="code"/>,
+    /// for its value type and unit of measure, or <c>null</c> if the
+    /// catalogue does not define it.
+    /// </summary>
+    /// <param name="code">The simple attribute's code (e.g. <c>"signalPeriod"</c>).</param>
+    public SimpleAttribute? ResolveSimpleAttribute(string code)
+    {
+        if (string.IsNullOrEmpty(code)) return null;
+        return _simpleAttributesByCode.TryGetValue(code, out var sa) ? sa : null;
+    }
+
+    /// <summary>
     /// Resolves a listed-value (enumeration) code for the given simple
     /// attribute to its display label. Returns <c>null</c> when the
     /// attribute is not enumerated, the value is not a listed value, or

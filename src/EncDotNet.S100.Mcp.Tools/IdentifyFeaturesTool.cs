@@ -6,7 +6,7 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// <summary>
 /// MCP wrapper over <see cref="IdentifyFeaturesService"/> — the ECDIS
 /// cursor-pick that identifies vector features at a geographic point,
-/// ranked most-specific first. The reusable query logic lives in
+/// ranked by drawing priority, then most-specific first. The reusable query logic lives in
 /// <see cref="IdentifyFeaturesService"/>
 /// (<c>EncDotNet.S100.Datasets.Pipelines.Query</c>); this class exists only
 /// to surface it as an MCP tool.

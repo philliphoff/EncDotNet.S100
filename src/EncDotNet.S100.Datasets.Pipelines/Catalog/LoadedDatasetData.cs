@@ -59,6 +59,14 @@ public sealed record S101DatasetData(
     int? CompilationScale = null) : LoadedDatasetData
 {
     /// <summary>
+    /// A feature's highest drawing priority in the cell's latest portrayal,
+    /// by feature id, or <c>null</c> when it isn't drawn; ranks
+    /// <c>identify_features</c> matches as S-98 15.1 asks. <c>null</c> when
+    /// the cell was loaded without a portrayal, which keeps the geometric order.
+    /// </summary>
+    public Func<string, int?>? DrawingPriority { get; init; }
+
+    /// <summary>
     /// Runs the cell's portrayal rules for chosen features and reports the
     /// alerts they raise, for route checks (#1127); <c>null</c> when the
     /// payload was read without a portrayal catalogue.

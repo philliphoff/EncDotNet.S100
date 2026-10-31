@@ -83,11 +83,18 @@ public static class FeatureInfoBuilder
             Code = code,
             Name = ResolveName(code, decoder),
             RawValue = value,
-            DisplayValue = decoder?.ResolveListedValue(leaf, value),
+            DisplayValue = decoder?.ResolveListedValue(leaf, value) ?? FormatValue(leaf, value, decoder),
             DepthMetresValue = depthMetres,
             Children = [],
         };
     }
+
+    // Numbers without padding and with their unit, dates as DD-MMM-YYYY
+    // (S-98 15.1), by the catalogue's value type.
+    private static string? FormatValue(string code, string value, FeatureCatalogueDecoder? decoder) =>
+        decoder?.ResolveSimpleAttribute(code) is { } attribute
+            ? PickValueFormatter.Format(attribute, value)
+            : null;
 
     private static string? ResolveName(string code, FeatureCatalogueDecoder? decoder)
     {

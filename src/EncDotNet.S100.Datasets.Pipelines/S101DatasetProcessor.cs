@@ -116,6 +116,10 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     // Distinct time intervals of the last portrayal (IDateDependentDatasetProcessor).
     private volatile IReadOnlyList<PortrayalTimeInterval> _portrayalTimeIntervals = [];
 
+    // Each drawn feature's highest drawing priority in the last portrayal,
+    // which orders the pick report (S-98 15.1, #1159). Null until portrayed.
+    private volatile IReadOnlyDictionary<string, int>? _drawingPriorities;
+
     // Memoized portrayal-content hash forming the cross-load instruction-cache
     // key prefix (and strengthening the pattern-clip key). Computed once on
     // first render and reused; constant for the lifetime of this processor.
@@ -195,7 +199,11 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
 
     /// <inheritdoc />
     public LoadedDatasetData CreateLoadedData() =>
-        new S101DatasetData(_dataset, _externalTextResolver) { Alerts = AlertPortrayal };
+        new S101DatasetData(_dataset, _externalTextResolver)
+        {
+            Alerts = AlertPortrayal,
+            DrawingPriority = DrawingPriority,
+        };
 
     private S101AlertPortrayal? _alertPortrayal;
 
@@ -847,6 +855,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         var prepared = PortrayalTimeFilter.Apply(
             VectorPipeline.ApplyDisplayFilters(unfiltered, s101Cat), context?.PortrayalTime);
         Console.WriteLine($"[S101] {prepared.Count} of {unfiltered.Count} drawing instructions shown");
+        _drawingPriorities = DrawingPriorities(prepared);
 
         // S-98 R-101-102-A (Annex A §A-6.9.1): S-102 must render between
         // S-101 area fills and S-101 line work / points / text. We split
@@ -1277,6 +1286,28 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         return _validationReport;
     }
 
+    /// <summary>
+    /// Each feature's highest drawing priority among <paramref name="instructions"/>,
+    /// keyed by feature reference.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, int> DrawingPriorities(IEnumerable<DrawingInstruction> instructions)
+    {
+        var result = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var instruction in instructions)
+        {
+            if (string.IsNullOrEmpty(instruction.FeatureReference))
+                continue;
+            if (!result.TryGetValue(instruction.FeatureReference, out var priority) || instruction.DrawingPriority > priority)
+                result[instruction.FeatureReference] = instruction.DrawingPriority;
+        }
+
+        return result;
+    }
+
+    // The feature's drawing priority in the last portrayal, or null.
+    private int? DrawingPriority(string featureRef) =>
+        _drawingPriorities is { } priorities && priorities.TryGetValue(featureRef, out var priority) ? priority : null;
+
     private S101FeatureRecord? FeatureRecord(long featureId)
     {
         _featureRecords ??= _dataset.Document.Features
@@ -1288,13 +1319,20 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     private FeatureInfo BuildFeatureInfo(EncDotNet.S100.Pipelines.Vector.Feature feature)
     {
         // Read the attributes from the feature record, not the portrayal's
-        // attribute dictionary, which keeps one value per code (#1156).
-        var attributes = FeatureRecord(feature.Id) is { } record
-            ? S101PickReport.Attributes(_dataset.Document, record.Attributes, _decoder)
+        // attribute dictionary, which keeps one value per code (#1156), and
+        // follow its information and feature associations (#1157).
+        var record = FeatureRecord(feature.Id);
+        var document = _dataset.Document;
+        IReadOnlyList<PickAttribute> attributes = record is not null
+            ? [.. S101PickReport.Attributes(document, record.Attributes, _decoder),
+               .. S101PickReport.InformationRows(document, record, _decoder)]
             : FeatureInfoBuilder.BuildFlat(
                 feature.Attributes.Select(kv =>
                     new KeyValuePair<string, string?>(kv.Key, kv.Value?.ToString())),
                 _decoder);
+        var references = record is not null
+            ? S101PickReport.FeatureReferences(document, record, id => FeatureRecord(id), _decoder)
+            : [];
 
         // Resolve any `fileReference` attribute (S-101 FC; alias TXTDSC /
         // NTXTDS) to the textual content of the external file it names,
@@ -1303,12 +1341,16 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         if (_externalTextResolver is not null)
             attributes = FeatureInfoBuilder.ResolveFileReferences(attributes, _externalTextResolver);
 
+        var featureRef = feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
         return new FeatureInfo
         {
-            FeatureRef = feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            FeatureRef = featureRef,
             FeatureType = feature.FeatureType,
             FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
             Attributes = attributes,
+            References = references,
+            DrawingPriority = DrawingPriority(featureRef),
+            Geometry = ((IS100Feature)feature).GeometryType,
         };
     }
 

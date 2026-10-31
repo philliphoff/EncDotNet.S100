@@ -69,6 +69,16 @@ internal sealed class PickHit
     public IReadOnlyList<FeatureReference> References { get; init; } = [];
 
     /// <summary>
+    /// The feature's highest drawing priority in its dataset's portrayal
+    /// (<see cref="FeatureInfo.DrawingPriority"/>), which orders the pick
+    /// report; <c>null</c> when not known.
+    /// </summary>
+    public int? DrawingPriority { get; init; }
+
+    /// <summary>The feature's geometry (<see cref="FeatureInfo.Geometry"/>), which orders the pick report at equal priority.</summary>
+    public EncDotNet.S100.Features.S100GeometryType Geometry { get; init; }
+
+    /// <summary>
     /// Processor that owns this hit's source feature. Set by
     /// <c>PickService</c> at construction time so reference navigation
     /// can re-query the same processor without re-walking the layer

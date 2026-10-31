@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Features;
 using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
@@ -297,6 +298,21 @@ public sealed class FeatureInfo
     public required IReadOnlyList<PickAttribute> Attributes { get; init; }
 
     /// <summary>
+    /// The highest drawing priority of the feature's drawing instructions in
+    /// the dataset's last portrayal (S-100 Part 9), which orders the pick
+    /// report (S-98 15.1, see <see cref="PickOrder"/>); <c>null</c> when the
+    /// feature wasn't drawn or the product doesn't report it.
+    /// </summary>
+    public int? DrawingPriority { get; init; }
+
+    /// <summary>
+    /// The feature's geometry, which orders the pick report at equal
+    /// <see cref="DrawingPriority"/>; <see cref="S100GeometryType.None"/>
+    /// when the product doesn't report it.
+    /// </summary>
+    public S100GeometryType Geometry { get; init; }
+
+    /// <summary>
     /// xlink-style references this feature points to (e.g. S-125
     /// information bindings, S-421 route topology). Each reference's
     /// <see cref="FeatureReference.TargetRef"/> resolves against the
@@ -362,7 +378,21 @@ public sealed class FeatureReference
 
     /// <summary>
     /// The <c>xlink:arcrole</c> value when present; conveys the semantic
-    /// of the link (e.g. an S-421 segment role) and may be null.
+    /// of the link (e.g. an S-421 segment role, or an S-101 feature
+    /// association's role such as <c>"theEquipment"</c>) and may be null.
     /// </summary>
     public string? ArcRole { get; init; }
+
+    /// <summary>
+    /// A readable name for the referenced feature, e.g. its feature type and
+    /// name (<c>"Light All Around: Bell Rock"</c>), or <c>null</c> when the
+    /// product doesn't resolve one.
+    /// </summary>
+    public string? TargetName { get; init; }
+
+    /// <summary>
+    /// What a pick report shows for the target: <see cref="TargetName"/>
+    /// when set, otherwise <see cref="TargetRef"/>.
+    /// </summary>
+    public string TargetDisplayName => TargetName ?? TargetRef;
 }
