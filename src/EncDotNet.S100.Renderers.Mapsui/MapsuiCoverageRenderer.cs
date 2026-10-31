@@ -3,6 +3,7 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Skia;
+using EncDotNet.S100.Rendering.Scene;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Projections;
@@ -136,12 +137,11 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
 
         int outCols = layout.OutCols;
         int outRows = layout.OutRows;
-        int[] nodeToPixel = layout.NodeToPixel;
+        short[] nodeCells = layout.NodeCells;
 
-        // Render: for each grid node, place its color at the precomputed
-        // Mercator pixel. Fill a uint[] (RGBA8888) buffer directly to avoid
-        // the per-pixel managed→native round-trip that SKBitmap.SetPixel
-        // performs.
+        // Render: for each grid node, fill its precomputed Mercator pixel cell.
+        // Fill a uint[] (RGBA8888) buffer directly to avoid the per-pixel
+        // managed→native round-trip that SKBitmap.SetPixel performs.
         int pixelCount = outCols * outRows;
         var pixels = new uint[pixelCount];
 
@@ -176,9 +176,12 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
                     if (packed == 0) continue;
                 }
 
-                int target = nodeToPixel[r * srcCols + c];
-                if (target >= 0)
-                    pixels[target] = packed;
+                int cell = (r * srcCols + c) * 4;
+                int x0 = nodeCells[cell];
+                if (x0 < 0) continue;
+                int y0 = nodeCells[cell + 1], x1 = nodeCells[cell + 2], y1 = nodeCells[cell + 3];
+                for (int y = y0; y < y1; y++)
+                    pixels.AsSpan(y * outCols + x0, x1 - x0).Fill(packed);
             }
 
         using var bmp = new SKBitmap(new SKImageInfo(outCols, outRows, SKColorType.Rgba8888, SKAlphaType.Premul));
@@ -209,6 +212,12 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
             Opacity = Opacity,
         };
     }
+
+    // Web Mercator with the latitude clamped to the projection limit. A global
+    // grid has rows at ±90°, where the northing diverges (−∞ at the south
+    // pole), which would make the raster extent infinite and its height zero.
+    private static (double X, double Y) ToMercator(double lon, double lat) =>
+        SphericalMercator.FromLonLat(lon, Math.Clamp(lat, -WebMercator.MaxLatitude, WebMercator.MaxLatitude));
 
     private static byte[] EncodePng(SKBitmap bitmap)
     {
@@ -253,7 +262,7 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
                 landAreas,
                 (lon, lat) =>
                 {
-                    var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
+                    var (mx, my) = ToMercator(lon, lat);
                     float px = (float)((mx - layout.MercMinX) / spanX * tCols);
                     // Row 0 of the source raster is north (top); flip Y so the
                     // clip matches the raster's north-up orientation.
@@ -333,7 +342,7 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
                     (lon, lat) = nativeToWgs84.Transform(nativeX, nativeY);
                 }
 
-                var (mx, my) = SphericalMercator.FromLonLat(lon, lat);
+                var (mx, my) = ToMercator(lon, lat);
                 nodePositions[r, c] = (mx, my);
 
                 if (mx < mercMinX) mercMinX = mx;
@@ -366,27 +375,67 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
             cellSizeY = (mercMaxY - mercMinY) / outRows;
         }
 
-        // Compute the destination pixel for each grid node using the final
-        // (post-MaxDim) cell sizes. Out-of-bounds nodes map to -1.
-        var nodeToPixel = new int[srcRows * srcCols];
+        // Compute the pixel cell each grid node fills, using the final
+        // (post-MaxDim) cell sizes: the pixels whose centres lie between the
+        // midpoints to its neighbours. A single pixel per node would leave gaps
+        // wherever Mercator spaces rows (or columns) wider than the average
+        // cell, as it does towards the poles on a global grid. Each cell always
+        // holds the node's own pixel. Out-of-bounds nodes get x0 = -1.
+        var nodeCells = new short[srcRows * srcCols * 4];
         for (int r = 0; r < srcRows; r++)
             for (int c = 0; c < srcCols; c++)
             {
                 var (mx, my) = nodePositions[r, c];
-                int px = (int)((mx - mercMinX) / cellSizeX);
-                int py = outRows - 1 - (int)((my - mercMinY) / cellSizeY);
-                nodeToPixel[r * srcCols + c] =
-                    (px >= 0 && px < outCols && py >= 0 && py < outRows)
-                        ? py * outCols + px
-                        : -1;
+                double fx = (mx - mercMinX) / cellSizeX;
+                double fy = (my - mercMinY) / cellSizeY;
+                int px = (int)fx;
+                int py = outRows - 1 - (int)fy;
+                int cell = (r * srcCols + c) * 4;
+                if (px < 0 || px >= outCols || py < 0 || py >= outRows)
+                {
+                    nodeCells[cell] = -1;
+                    continue;
+                }
+
+                var (left, right) = CellSpan(
+                    fx,
+                    c > 0 ? (nodePositions[r, c - 1].MercX - mercMinX) / cellSizeX : null,
+                    c < srcCols - 1 ? (nodePositions[r, c + 1].MercX - mercMinX) / cellSizeX : null);
+                var (bottom, top) = CellSpan(
+                    fy,
+                    r > 0 ? (nodePositions[r - 1, c].MercY - mercMinY) / cellSizeY : null,
+                    r < srcRows - 1 ? (nodePositions[r + 1, c].MercY - mercMinY) / cellSizeY : null);
+
+                // Pixels (bottom-up for Y) whose centres fall in [lo, hi).
+                int x0 = Math.Clamp(Math.Min((int)Math.Ceiling(left - 0.5), px), 0, outCols - 1);
+                int x1 = Math.Clamp(Math.Max((int)Math.Ceiling(right - 0.5), px + 1), x0 + 1, outCols);
+                int k0 = (int)Math.Ceiling(bottom - 0.5);
+                int k1 = (int)Math.Ceiling(top - 0.5);
+                int y0 = Math.Clamp(Math.Min(outRows - k1, py), 0, outRows - 1);
+                int y1 = Math.Clamp(Math.Max(outRows - k0, py + 1), y0 + 1, outRows);
+
+                nodeCells[cell] = (short)x0;
+                nodeCells[cell + 1] = (short)y0;
+                nodeCells[cell + 2] = (short)x1;
+                nodeCells[cell + 3] = (short)y1;
             }
 
         return new LayoutCacheEntry(
             georeferencer.CRS, srcRows, srcCols,
             meta.OriginLongitude, meta.OriginLatitude,
             meta.SpacingLongitudinal, meta.SpacingLatitudinal,
-            outCols, outRows, nodeToPixel,
+            outCols, outRows, nodeCells,
             mercMinX, mercMinY, mercMaxX, mercMaxY);
+    }
+
+    // The extent of a node's cell along one axis, in pixel units: halfway to
+    // each neighbour, mirroring the other side at the grid edge, or half a
+    // pixel either way for a lone node.
+    private static (double Low, double High) CellSpan(double at, double? before, double? after)
+    {
+        double low = before is { } b ? (b + at) / 2 : after is { } a1 ? at - (a1 - at) / 2 : at - 0.5;
+        double high = after is { } a ? (a + at) / 2 : before is { } b1 ? at + (at - b1) / 2 : at + 0.5;
+        return low <= high ? (low, high) : (high, low);
     }
 
     /// <summary>
@@ -398,7 +447,7 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
             string crs, int srcRows, int srcCols,
             double originLon, double originLat,
             double spacingLon, double spacingLat,
-            int outCols, int outRows, int[] nodeToPixel,
+            int outCols, int outRows, short[] nodeCells,
             double mercMinX, double mercMinY, double mercMaxX, double mercMaxY)
         {
             _crs = crs;
@@ -410,7 +459,7 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
             _spacingLat = spacingLat;
             OutCols = outCols;
             OutRows = outRows;
-            NodeToPixel = nodeToPixel;
+            NodeCells = nodeCells;
             MercMinX = mercMinX;
             MercMinY = mercMinY;
             MercMaxX = mercMaxX;
@@ -427,7 +476,11 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
 
         public int OutCols { get; }
         public int OutRows { get; }
-        public int[] NodeToPixel { get; }
+        /// <summary>
+        /// Per node, the pixel cell it fills as x0, y0, x1, y1 (exclusive ends,
+        /// rows top-down); x0 = -1 when the node is outside the raster.
+        /// </summary>
+        public short[] NodeCells { get; }
         public double MercMinX { get; }
         public double MercMinY { get; }
         public double MercMaxX { get; }
