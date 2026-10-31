@@ -17,6 +17,7 @@ internal sealed class MainViewModel : ViewModelBase
     private readonly RoutesService _routes;
     private readonly MeasureTool _measureTool;
     private readonly RouteEditTool _routeEditTool;
+    private readonly RangeBearingTool _rangeBearingTool;
     private readonly ShadUI.DialogManager _dialogManager;
     private readonly Func<FeedbackDialogViewModel>? _feedbackDialogFactory;
     private readonly Func<AboutDialogViewModel>? _aboutDialogFactory;
@@ -963,6 +964,25 @@ internal sealed class MainViewModel : ViewModelBase
     public ICommand ToggleMeasureModeCommand { get; }
 
     /// <summary>
+    /// True when the Range &amp; bearing tool is active (#1130 D11). Mirrors
+    /// <see cref="MapToolController.ActiveToolId"/> like
+    /// <see cref="IsMeasureModeActive"/>.
+    /// </summary>
+    public bool IsRangeBearingModeActive => Tools.IsActive(RangeBearingTool.ToolId);
+
+    /// <summary>Toggles the Range &amp; bearing tool (Ctrl+R, or ⌘R on macOS).</summary>
+    public ICommand ToggleRangeBearingModeCommand { get; }
+
+    /// <summary>The Range &amp; bearing card, shown while its tool is on.</summary>
+    public RangeBearingViewModel RangeBearing { get; }
+
+    /// <summary>Tooltip on the map's Range &amp; bearing button, naming its shortcut.</summary>
+    public string RangeBearingModeTooltip => string.Format(
+        System.Globalization.CultureInfo.CurrentCulture,
+        Strings.Tooltip_RangeBearingMode,
+        ShortcutText.Command("R"));
+
+    /// <summary>
     /// The application-scoped editable route store. Exposed so the host
     /// window can drive the persistent route overlay and the routes side
     /// panel can bind to it.
@@ -980,7 +1000,7 @@ internal sealed class MainViewModel : ViewModelBase
     /// True when the tool-owned status summary should be shown — i.e. while
     /// either Measure Mode or Route Edit Mode is active.
     /// </summary>
-    public bool IsToolSummaryVisible => IsMeasureModeActive || IsRouteEditModeActive;
+    public bool IsToolSummaryVisible => IsMeasureModeActive || IsRouteEditModeActive || IsRangeBearingModeActive;
 
     /// <summary>Toggles the interactive route editor tool on/off.</summary>
     public ICommand ToggleRouteEditModeCommand { get; }
@@ -1303,7 +1323,8 @@ internal sealed class MainViewModel : ViewModelBase
         McpServerHost? mcpServerHost = null,
         RoutesService? routes = null,
         NavigationalWarningsViewModel? navigationalWarnings = null,
-        Services.NavigationalWarningDrawingService? navigationalWarningDrawing = null)
+        Services.NavigationalWarningDrawingService? navigationalWarningDrawing = null,
+        RangeBearingState? rangeBearing = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(featureCatalogues);
@@ -1357,6 +1378,25 @@ internal sealed class MainViewModel : ViewModelBase
         Tools.Register(new PickTool());
         Tools.Register(_measureTool);
         Tools.Register(_routeEditTool);
+        var rangeBearingState = rangeBearing ?? new RangeBearingState();
+        _rangeBearingTool = new RangeBearingTool(rangeBearingState, measureAppearance, () => settingsViewModel.DistanceUnit);
+        Tools.Register(_rangeBearingTool);
+        RangeBearing = new RangeBearingViewModel(
+            rangeBearingState,
+            () => settingsViewModel.DistanceUnit,
+            () => Tools.Activate(null));
+        settingsViewModel.DistanceUnitChanged += _ =>
+        {
+            RangeBearing.OnUnitChanged();
+            _rangeBearingTool.InvalidateOverlay();
+        };
+        // The MCP tools turn the tool on through the shared state, as
+        // set_route_edit_mode does through RoutesService.
+        rangeBearingState.ToolActiveChanged += (_, _) =>
+        {
+            if (rangeBearingState.IsToolActive != IsRangeBearingModeActive)
+                Tools.Activate(rangeBearingState.IsToolActive ? RangeBearingTool.ToolId : null);
+        };
 
         FeatureCatalogues = featureCatalogues;
         PortrayalCatalogues = portrayalCatalogues;
@@ -1519,6 +1559,7 @@ internal sealed class MainViewModel : ViewModelBase
         TogglePickModeCommand = new RelayCommand(() => Tools.Toggle(PickTool.ToolId));
         ExitPickModeCommand = new RelayCommand(() => Tools.Activate(null));
         ToggleMeasureModeCommand = new RelayCommand(() => Tools.Toggle(MeasureTool.ToolId));
+        ToggleRangeBearingModeCommand = new RelayCommand(() => Tools.Toggle(RangeBearingTool.ToolId));
         ToggleRouteEditModeCommand = new RelayCommand(() => Tools.Toggle(RouteEditTool.ToolId));
         EnterRouteEditModeCommand = new RelayCommand(() => Tools.Activate(RouteEditTool.ToolId));
         PromoteMeasurementToRouteCommand = new RelayCommand(
@@ -1548,7 +1589,12 @@ internal sealed class MainViewModel : ViewModelBase
             }
             OnPropertyChanged(nameof(IsMeasureModeActive));
             OnPropertyChanged(nameof(IsRouteEditModeActive));
+            OnPropertyChanged(nameof(IsRangeBearingModeActive));
             OnPropertyChanged(nameof(IsToolSummaryVisible));
+            // Switching away clears the tool (D19).
+            if (!IsRangeBearingModeActive && RangeBearing.State.IsToolActive)
+                RangeBearing.State.Reset();
+            RangeBearing.State.IsToolActive = IsRangeBearingModeActive;
             ((RelayCommand)ToolCommitCommand).NotifyCanExecuteChanged();
             ((RelayCommand)ToolBackstepCommand).NotifyCanExecuteChanged();
             ((RelayCommand)PromoteMeasurementToRouteCommand).NotifyCanExecuteChanged();

@@ -42,6 +42,7 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [JsonSerializable(typeof(NavigationalWarningsDto))]
 [JsonSerializable(typeof(WarningCardsDto))]
 [JsonSerializable(typeof(RecentLogsDto))]
+[JsonSerializable(typeof(RangeBearingDto))]
 // Errors, written by their concrete type.
 [JsonSerializable(typeof(MapNotReady))]
 [JsonSerializable(typeof(WindowNotReady))]
@@ -65,4 +66,5 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [JsonSerializable(typeof(bool?))]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(JsonElement))]
+[JsonSerializable(typeof(JsonElement?))]
 internal sealed partial class ViewerMcpJsonContext : JsonSerializerContext;

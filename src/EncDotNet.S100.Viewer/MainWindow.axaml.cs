@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
@@ -141,6 +142,18 @@ public partial class MainWindow : ShadUI.Window
         Tools.RouteEditorKeys.Attach(
             this,
             _viewModel.RoutesService,
+            visual => ReferenceEquals(visual, MapControl) || ReferenceEquals(visual, MapArea));
+
+        // Range & bearing keys (#1130 D20): G geometry, Delete clears, Ctrl+C
+        // (⌘C) copies; only while the tool is on and never while typing.
+        Tools.RangeBearingKeys.Attach(
+            this,
+            _viewModel.RangeBearing.State,
+            () =>
+            {
+                if (_viewModel.RangeBearing.CopyText is { } text && Clipboard is { } clipboard)
+                    _ = clipboard.SetTextAsync(text);
+            },
             visual => ReferenceEquals(visual, MapControl) || ReferenceEquals(visual, MapArea));
 
         // The Time HUD and the dock follow the map's width (#712 F5).

@@ -1,0 +1,280 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.RangeBearingCardView"
+             x:DataType="vm:RangeBearingViewModel"
+             AutomationProperties.AutomationId="RangeBearing.Card"
+             AutomationProperties.Name="{x:Static loc:Strings.RangeBearing_Title}">
+
+    <!-- The Range & bearing card (#1130 D13–D17): the map's top left, in the
+         slot the route editor's chip uses. Every number and position is in the
+         mono font with tabular figures. -->
+    <UserControl.Styles>
+        <Style Selector="TextBlock.label">
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.value, SelectableTextBlock.value">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
+            <Setter Property="FontFeatures" Value="+tnum" />
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.other">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
+            <Setter Property="FontFeatures" Value="+tnum" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+            <Setter Property="Margin" Value="5,1,0,0" />
+        </Style>
+        <Style Selector="TextBlock.error">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+            <Setter Property="Margin" Value="0,2,0,0" />
+        </Style>
+        <Style Selector="TextBox.field">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
+            <Setter Property="FontFeatures" Value="+tnum" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="Padding" Value="5,0" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBox.field.invalid">
+            <Setter Property="BorderBrush" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+        <Style Selector="TextBox.field.invalid:focus-within">
+            <Setter Property="BorderBrush" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+        <Style Selector="Button.lock">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.chrome">
+            <Setter Property="Width" Value="22" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <!-- A compact Rhumb | Great circle control. -->
+        <Style Selector="Border.segmentTrack.compact">
+            <Setter Property="Padding" Value="2" />
+            <Setter Property="CornerRadius" Value="6" />
+        </Style>
+        <Style Selector="Border.segmentTrack.compact RadioButton.segment">
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="11" />
+        </Style>
+        <Style Selector="Border.segmentTrack.compact RadioButton.segment /template/ Border#Seg">
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="CornerRadius" Value="4" />
+        </Style>
+    </UserControl.Styles>
+
+    <Border Width="296"
+            Background="{DynamicResource MapOverlaySurfaceBrush}"
+            BorderBrush="{DynamicResource BorderColor}"
+            BorderThickness="1"
+            CornerRadius="8"
+            Padding="10,8,8,8">
+        <StackPanel Spacing="6">
+            <!-- Header: title, geometry, copy, close. -->
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                <TextBlock Grid.Column="0"
+                           Text="{x:Static loc:Strings.RangeBearing_Title}"
+                           FontSize="12"
+                           FontWeight="SemiBold"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource ForegroundColor}"
+                           VerticalAlignment="Center" />
+                <Border Grid.Column="1"
+                        Classes="segmentTrack compact"
+                        Margin="0,0,4,0"
+                        AutomationProperties.AutomationId="RangeBearing.Geometry"
+                        AutomationProperties.Name="{x:Static loc:Strings.RangeBearing_GeometryLabel}"
+                        ToolTip.Tip="{x:Static loc:Strings.RangeBearing_GeometryTooltip}">
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton Classes="segment"
+                                     GroupName="RangeBearingGeometry"
+                                     AutomationProperties.AutomationId="RangeBearing.Geometry.Rhumb"
+                                     Content="{x:Static loc:Strings.RangeBearing_Rhumb}"
+                                     IsChecked="{Binding IsRhumb}" />
+                        <RadioButton Classes="segment"
+                                     GroupName="RangeBearingGeometry"
+                                     AutomationProperties.AutomationId="RangeBearing.Geometry.GreatCircle"
+                                     Content="{x:Static loc:Strings.RangeBearing_GreatCircle}"
+                                     IsChecked="{Binding IsGreatCircle}" />
+                    </StackPanel>
+                </Border>
+                <Button Grid.Column="2"
+                        x:Name="CopyButton"
+                        Classes="Icon chrome"
+                        AutomationProperties.AutomationId="RangeBearing.Copy"
+                        AutomationProperties.Name="{x:Static loc:Strings.RangeBearing_Copy}"
+                        ToolTip.Tip="{x:Static loc:Strings.RangeBearing_Copy}"
+                        Click="OnCopyClick">
+                    <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="14" />
+                </Button>
+                <Button Grid.Column="3"
+                        Classes="Icon chrome"
+                        AutomationProperties.AutomationId="RangeBearing.Close"
+                        AutomationProperties.Name="{x:Static loc:Strings.RangeBearing_Close}"
+                        ToolTip.Tip="{x:Static loc:Strings.RangeBearing_Close}"
+                        Command="{Binding CloseCommand}">
+                    <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="14" />
+                </Button>
+            </Grid>
+
+            <TextBlock Text="{x:Static loc:Strings.RangeBearing_Hint}"
+                       FontSize="11.5"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource MutedColor}"
+                       IsVisible="{Binding ShowHint}" />
+
+            <Grid ColumnDefinitions="62,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="5">
+                <!-- Origin -->
+                <TextBlock Grid.Row="0" Grid.Column="0" Classes="label" VerticalAlignment="Top" Margin="0,5,0,0"
+                           Text="{x:Static loc:Strings.RangeBearing_Origin}" />
+                <StackPanel Grid.Row="0" Grid.Column="1">
+                    <TextBox x:Name="OriginBox"
+                             Classes="field"
+                             Classes.invalid="{Binding OriginError, Converter={x:Static ObjectConverters.IsNotNull}}"
+                             AutomationProperties.AutomationId="RangeBearing.Origin"
+                             AutomationProperties.Name="{x:Static loc:Strings.RangeBearing_Origin}"
+                             Text="{Binding OriginText}" />
+                    <TextBlock Classes="error"
+                               Text="{Binding OriginError}"
+                               IsVisible="{Binding OriginError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                </StackPanel>
+
+                <!-- Range -->
+                <TextBlock Grid.Row="1" Grid.Column="0" Classes="label" VerticalAlignment="Top" Margin="0,5,0,0"
+                           Text="{x:Static loc:Strings.RangeBearing_Range}"
+                           ToolTip.Tip="{x:Static loc:Strings.RangeBearing_RangeTooltip}" />
+                <StackPanel Grid.Row="1" Grid.Column="1">
+                    <TextBox x:Name="RangeBox"
+                             Classes="field"
+                             Classes.invalid="{Binding RangeError, Converter={x:Static ObjectConverters.IsNotNull}}"
+                             AutomationProperties.AutomationId="RangeBearing.Range"
+                             AutomationProperties.Name="{Binding RangeAccessibleName}"
+                             ToolTip.Tip="{x:Static loc:Strings.RangeBearing_RangeTooltip}"
+                             Text="{Binding RangeText}">
+                        <TextBox.InnerRightContent>
+                            <Button Classes="lock"
+                                    AutomationProperties.AutomationId="RangeBearing.RangeLock"
+                                    AutomationProperties.Name="{x:Static loc:Strings.RangeBearing_RangeLock}"
+                                    ToolTip.Tip="{x:Static loc:Strings.RangeBearing_LockTooltip}"
+                                    IsVisible="{Binding IsRangeLocked}"
+                                    Command="{Binding UnlockRangeCommand}">
+                                <ic:FluentIcon Icon="LockClosed" IconVariant="Filled" FontSize="13" />
+                            </Button>
+                        </TextBox.InnerRightContent>
+                    </TextBox>
+                    <TextBlock Classes="other"
+                               AutomationProperties.AutomationId="RangeBearing.RangeOther"
+                               Text="{Binding RangeOther}"
+                               IsVisible="{Binding RangeOther, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    <TextBlock Classes="error"
+                               Text="{Binding RangeError}"
+                               IsVisible="{Binding RangeError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                </StackPanel>
+
+                <!-- Bearing -->
+                <TextBlock Grid.Row="2" Grid.Column="0" Classes="label" VerticalAlignment="Top" Margin="0,5,0,0"
+                           Text="{x:Static loc:Strings.RangeBearing_Bearing}" />
+                <StackPanel Grid.Row="2" Grid.Column="1">
+                    <TextBox x:Name="BearingBox"
+                             Classes="field"
+                             Classes.invalid="{Binding BearingError, Converter={x:Static ObjectConverters.IsNotNull}}"
+                             AutomationProperties.AutomationId="RangeBearing.Bearing"
+                             AutomationProperties.Name="{Binding BearingAccessibleName}"
+                             Text="{Binding BearingText}">
+                        <TextBox.InnerRightContent>
+                            <Button Classes="lock"
+                                    AutomationProperties.AutomationId="RangeBearing.BearingLock"
+                                    AutomationProperties.Name="{x:Static loc:Strings.RangeBearing_BearingLock}"
+                                    ToolTip.Tip="{x:Static loc:Strings.RangeBearing_LockTooltip}"
+                                    IsVisible="{Binding IsBearingLocked}"
+                                    Command="{Binding UnlockBearingCommand}">
+                                <ic:FluentIcon Icon="LockClosed" IconVariant="Filled" FontSize="13" />
+                            </Button>
+                        </TextBox.InnerRightContent>
+                    </TextBox>
+                    <TextBlock Classes="error"
+                               Text="{Binding BearingError}"
+                               IsVisible="{Binding BearingError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                </StackPanel>
+
+                <!-- End -->
+                <TextBlock Grid.Row="3" Grid.Column="0" Classes="label"
+                           Text="{x:Static loc:Strings.RangeBearing_End}" />
+                <SelectableTextBlock Grid.Row="3" Grid.Column="1" Classes="value" Margin="6,0,0,0"
+                                     AutomationProperties.AutomationId="RangeBearing.End"
+                                     AutomationProperties.Name="{Binding EndAccessibleName}"
+                                     Text="{Binding EndText}" />
+
+                <!-- Reverse -->
+                <TextBlock Grid.Row="4" Grid.Column="0" Classes="label"
+                           Text="{x:Static loc:Strings.RangeBearing_Reverse}"
+                           ToolTip.Tip="{x:Static loc:Strings.RangeBearing_ReverseTooltip}" />
+                <TextBlock Grid.Row="4" Grid.Column="1" Classes="value" Margin="6,0,0,0"
+                           AutomationProperties.AutomationId="RangeBearing.ReverseBearing"
+                           AutomationProperties.Name="{Binding ReverseAccessibleName}"
+                           ToolTip.Tip="{x:Static loc:Strings.RangeBearing_ReverseTooltip}"
+                           Text="{Binding ReverseText}" />
+
+                <!-- Rings -->
+                <CheckBox Grid.Row="5" Grid.Column="0"
+                          MinHeight="0"
+                          FontSize="11.5"
+                          VerticalAlignment="Top"
+                          Margin="0,4,0,0"
+                          AutomationProperties.AutomationId="RangeBearing.Rings"
+                          AutomationProperties.Name="{x:Static loc:Strings.RangeBearing_Rings}"
+                          Content="{x:Static loc:Strings.RangeBearing_Rings}"
+                          IsChecked="{Binding RingsEnabled}" />
+                <StackPanel Grid.Row="5" Grid.Column="1">
+                    <Grid ColumnDefinitions="Auto,*,Auto,46" ColumnSpacing="5"
+                          IsEnabled="{Binding RingsEnabled}">
+                        <TextBlock Grid.Column="0" Classes="label"
+                                   Text="{x:Static loc:Strings.RangeBearing_RingsEvery}" />
+                        <TextBox Grid.Column="1"
+                                 x:Name="RingIntervalBox"
+                                 Classes="field"
+                                 AutomationProperties.AutomationId="RangeBearing.RingInterval"
+                                 AutomationProperties.Name="{x:Static loc:Strings.RangeBearing_RingInterval}"
+                                 Text="{Binding RingIntervalText}" />
+                        <TextBlock Grid.Column="2" Classes="label" Text="×" />
+                        <TextBox Grid.Column="3"
+                                 x:Name="RingCountBox"
+                                 Classes="field"
+                                 AutomationProperties.AutomationId="RangeBearing.RingCount"
+                                 AutomationProperties.Name="{x:Static loc:Strings.RangeBearing_RingCount}"
+                                 Text="{Binding RingCountText}" />
+                    </Grid>
+                    <TextBlock Classes="error"
+                               Text="{Binding RingError}"
+                               IsVisible="{Binding RingError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                </StackPanel>
+            </Grid>
+
+            <!-- Earth model (D17). -->
+            <TextBlock Text="{Binding ModelText}"
+                       FontSize="11"
+                       Foreground="{DynamicResource MutedColor}"
+                       AutomationProperties.AutomationId="RangeBearing.Model"
+                       ToolTip.Tip="{x:Static loc:Strings.RangeBearing_ModelTooltip}" />
+        </StackPanel>
+    </Border>
+</UserControl>
