@@ -63,6 +63,21 @@ public sealed class WaterLevelStation
     public required byte[] Trends { get; init; }
 
     /// <summary>
+    /// The uncertainty of each height in metres (a ± value), in the same order
+    /// as <see cref="Heights"/>, or <c>null</c> when the dataset carries none.
+    /// Resolved as for <see cref="WaterLevelCoverage.Uncertainties"/>: the
+    /// values record's <c>uncertainty</c>, else the instance's
+    /// <c>uncertainty</c> dataset (S-104 Ed 2.0.0 §10.2.2.4).
+    /// <see cref="WaterLevelCoverage.UncertaintyFillValue"/> marks a step with neither.
+    /// </summary>
+    public float[]? Uncertainties { get; init; }
+
+    /// <summary>The uncertainty at a time step in metres, or <c>null</c> when none is given.</summary>
+    /// <param name="index">The time step index.</param>
+    /// <returns>The uncertainty, or <c>null</c>.</returns>
+    public double? UncertaintyAt(int index) => WaterLevelCoverage.Uncertainty(Uncertainties, index);
+
+    /// <summary>
     /// Returns the index of the sample whose timestamp is closest to
     /// <paramref name="time"/>, clamped to <c>[0, NumberOfTimes - 1]</c>.
     /// Nearest-neighbour rounding; no interpolation.

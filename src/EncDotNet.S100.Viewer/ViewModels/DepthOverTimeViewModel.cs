@@ -1,5 +1,7 @@
 using System.Globalization;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
@@ -14,10 +16,12 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 
 /// <summary>
 /// Time-series view model for the location depth-assimilation card. Plots the
-/// total available water depth over time (base depth + S-104 tide) at a picked
-/// location, overlays the mariner safety-depth reference line and, for an S-102
-/// base, a ± uncertainty band, and exposes a compact now-readout that tracks
-/// the global clock.
+/// total available water depth over time (base depth + S-104 water level) at a
+/// picked location, overlays the mariner safety-depth reference line and a ±
+/// band of the combined S-102 and S-104 uncertainty, and exposes a compact
+/// now-readout that tracks the global clock. The readout reads the water level
+/// at the timeline's time as the passage check does (interpolated, never
+/// clamped), and says why when covering water level was refused for its datum.
 /// </summary>
 /// <remarks>
 /// Orientation follows the design decision: more water is plotted upward
@@ -30,8 +34,6 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
 
     private readonly DepthUnit _depthUnit;
     private readonly double _baseDepthMetres;
-    private readonly IReadOnlyList<DateTime> _curveTimes;
-    private readonly IReadOnlyList<double?> _curveDepthsMetres;
 
     private readonly SolidColorPaint _depthStrokePaint;
     private readonly SolidColorPaint _uncertaintyStrokePaint;
@@ -43,6 +45,7 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
 
     private string _depthNowText;
     private string _tideNowText;
+    private string _uncertaintyText = string.Empty;
     private bool _isExpanded = true;
 
     /// <summary>
@@ -77,8 +80,6 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
         LocationLabel = locationLabel;
         _depthUnit = depthUnit;
         _baseDepthMetres = result.Base.DepthMeters;
-        _curveTimes = result.DepthOverTime.Select(p => p.Time).ToList();
-        _curveDepthsMetres = result.DepthOverTime.Select(p => p.DepthMeters).ToList();
         _depthNowText = Strings.Pick_Depth_Value_Unavailable;
         _tideNowText = Strings.Pick_Depth_Value_Unavailable;
 
@@ -223,22 +224,45 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
     public bool IsChartedAreaSource =>
         Result.Base.Source is BaseDepthSource.DredgedArea or BaseDepthSource.DepthArea;
 
-    /// <summary><c>true</c> when an S-102 uncertainty band is available.</summary>
-    public bool HasUncertainty => Result.UncertaintyMeters is not null;
+    /// <summary><c>true</c> when an uncertainty caption is shown.</summary>
+    public bool HasUncertainty => !string.IsNullOrEmpty(UncertaintyText);
 
-    /// <summary>The formatted ± uncertainty caption, or empty when none.</summary>
-    public string UncertaintyText => Result.UncertaintyMeters is { } unc
-        ? string.Format(
-            CultureInfo.CurrentCulture,
-            Strings.Pick_Depth_Uncertainty,
-            DepthFormatting.Format(unc, _depthUnit))
-        : string.Empty;
+    /// <summary>
+    /// The uncertainty caption at the timeline's time: with water level
+    /// applied, the S-102 and S-104 uncertainties combined as independent,
+    /// √(σ₁₀₂² + σ₁₀₄²) (S-98 Appendix D-2), or which one isn't provided;
+    /// without, the S-102 uncertainty. Empty when there's nothing to say.
+    /// </summary>
+    public string UncertaintyText
+    {
+        get => _uncertaintyText;
+        private set
+        {
+            if (SetProperty(ref _uncertaintyText, value))
+            {
+                OnPropertyChanged(nameof(HasUncertainty));
+            }
+        }
+    }
 
-    /// <summary><c>true</c> when the base/tide vertical datums are not reconciled.</summary>
-    public bool HasDatumNote => Result.DatumsNotReconciled;
+    /// <summary>
+    /// <c>true</c> when S-104 water level covers the location but was refused
+    /// because its vertical datum differs from the charted depth's, or either
+    /// isn't declared.
+    /// </summary>
+    public bool HasDatumNote => Result.Refusal is not null;
 
-    /// <summary>The datum-not-reconciled caption.</summary>
-    public string DatumNoteText => Strings.Pick_Depth_DatumNote;
+    /// <summary>
+    /// Why the water level was refused, e.g. "Not adjusted: S-102 on Mean
+    /// Lower Low Water, S-104 on Lowest Astronomical Tide."; empty when not refused.
+    /// </summary>
+    public string DatumNoteText => Result.Refusal is { } refusal ? FormatRefusal(refusal) : string.Empty;
+
+    /// <summary>
+    /// <c>true</c> when no S-104 water level covers the location, so the
+    /// static-depth info bar shows (not when covering water level was refused).
+    /// </summary>
+    public bool ShowNoTideInfo => !HasTide && Result.Refusal is null;
 
     /// <summary><c>true</c> when an S-104 tide series overlaps the location.</summary>
     public bool HasTide => Result.Tide is not null;
@@ -296,49 +320,79 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
 
     private void RefreshNow(DateTime? time)
     {
-        var depthMetres = time is { } t ? NearestDepth(t) : null;
-        if (depthMetres is { } depth)
+        var water = time is { } t ? Result.WaterLevelAt(t) : null;
+        if (water is { } sample)
         {
-            DepthNowText = DepthFormatting.Format(depth, _depthUnit);
-            TideNowText = DepthFormatting.Format(depth - _baseDepthMetres, _depthUnit);
+            DepthNowText = DepthFormatting.Format(_baseDepthMetres + sample.HeightMeters, _depthUnit);
+            TideNowText = DepthFormatting.Format(sample.HeightMeters, _depthUnit);
         }
         else
         {
             DepthNowText = Strings.Pick_Depth_Value_Unavailable;
             TideNowText = Strings.Pick_Depth_Value_Unavailable;
         }
+
+        UncertaintyText = FormatUncertainty(Result.UncertaintyMeters, water);
     }
 
-    private double? NearestDepth(DateTime time)
+    private string FormatUncertainty(double? charted, AppliedWaterLevel? water)
     {
-        if (_curveTimes.Count == 0)
+        string F(double metres) => DepthFormatting.Format(metres, _depthUnit);
+
+        if (!HasTide || water is not { } sample)
         {
-            return null;
+            // No water level at this time: only the charted uncertainty applies.
+            return charted is { } c
+                ? string.Format(CultureInfo.CurrentCulture, Strings.Pick_Depth_Uncertainty, F(c))
+                : string.Empty;
         }
 
-        var bestIndex = 0;
-        var bestDelta = (_curveTimes[0] - time).Duration();
-        for (var i = 1; i < _curveTimes.Count; i++)
+        return (charted, sample.UncertaintyMeters) switch
         {
-            var delta = (_curveTimes[i] - time).Duration();
-            if (delta < bestDelta)
-            {
-                bestDelta = delta;
-                bestIndex = i;
-            }
+            ({ } a, { } b) => string.Format(
+                CultureInfo.CurrentCulture,
+                Strings.Pick_Depth_CombinedUncertainty,
+                F(LocationDepthResult.CombineUncertainty(a, b)!.Value),
+                F(a),
+                F(b)),
+            (null, { } b) => string.Format(CultureInfo.CurrentCulture, Strings.Pick_Depth_WaterLevelUncertainty, F(b)),
+            ({ } a, null) => string.Format(CultureInfo.CurrentCulture, Strings.Pick_Depth_ChartedUncertaintyOnly, F(a)),
+            _ => Strings.Pick_Depth_WaterLevelUncertaintyNotProvided,
+        };
+    }
+
+    private static string FormatRefusal(WaterLevelRefusal refusal)
+    {
+        var product = refusal.DepthSource == BaseDepthSource.Bathymetry ? "S-102" : "S-101";
+        if (refusal.Agreement == DatumAgreement.Different)
+        {
+            return string.Format(
+                CultureInfo.CurrentCulture,
+                Strings.Pick_Depth_Refused_DifferentDatum,
+                product,
+                VerticalDatums.GetLabel(refusal.DepthDatumCode),
+                VerticalDatums.GetLabel(refusal.WaterLevelDatumCode));
         }
 
-        return _curveDepthsMetres[bestIndex];
+        var depthDeclared = refusal.DepthDatumCode is { } d && VerticalDatums.TryGetLabel(d, out _);
+        var waterDeclared = refusal.WaterLevelDatumCode is { } w && VerticalDatums.TryGetLabel(w, out _);
+        var undeclared = (depthDeclared, waterDeclared) switch
+        {
+            (false, false) => string.Format(CultureInfo.CurrentCulture, Strings.Pick_Depth_Refused_Both, product),
+            (false, true) => product,
+            _ => "S-104",
+        };
+        return string.Format(CultureInfo.CurrentCulture, Strings.Pick_Depth_Refused_UndeclaredDatum, undeclared);
     }
 
     private ISeries[] BuildSeries(LocationDepthResult result, DepthUnit depthUnit)
     {
         var series = new List<ISeries>(3);
 
-        if (result.UncertaintyMeters is { } unc)
+        if (result.DepthOverTime.Any(p => p.UncertaintyMeters is not null))
         {
-            series.Add(BoundarySeries(result, depthUnit, unc));
-            series.Add(BoundarySeries(result, depthUnit, -unc));
+            series.Add(BoundarySeries(result, depthUnit, +1));
+            series.Add(BoundarySeries(result, depthUnit, -1));
         }
 
         var points = new List<DateTimePoint>(result.DepthOverTime.Count);
@@ -370,15 +424,16 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
         return series.ToArray();
     }
 
-    private LineSeries<DateTimePoint> BoundarySeries(LocationDepthResult result, DepthUnit depthUnit, double offsetMetres)
+    private LineSeries<DateTimePoint> BoundarySeries(LocationDepthResult result, DepthUnit depthUnit, int sign)
     {
         var points = new List<DateTimePoint>(result.DepthOverTime.Count);
         foreach (var point in result.DepthOverTime)
         {
             // Match the main curve: emit a null-valued point at NoData steps so
             // the uncertainty boundary breaks at the gap instead of bridging it.
-            points.Add(point.DepthMeters is { } depth
-                ? new DateTimePoint(point.Time, DepthFormatting.ToDisplay(depth + offsetMetres, depthUnit))
+            // The band is the combined uncertainty at each step.
+            points.Add(point is { DepthMeters: { } depth, UncertaintyMeters: { } unc }
+                ? new DateTimePoint(point.Time, DepthFormatting.ToDisplay(depth + (sign * unc), depthUnit))
                 : new DateTimePoint(point.Time, null));
         }
 

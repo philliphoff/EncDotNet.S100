@@ -1,7 +1,9 @@
 # Chart-wide water level adjustment — Design Note
 
-> Status: **Proposed** ([#1132](https://github.com/philliphoff/EncDotNet.S100/issues/1132)).
-> Nothing in this note is built yet. It proposes how SoundCharts applies
+> Status: **Phase 1 built** ([#1132](https://github.com/philliphoff/EncDotNet.S100/issues/1132)).
+> The water-level field, S-104 uncertainty, the S-101 sounding datum and the
+> pick report's move to the field (§10, phase 1) are built; the rest is
+> proposed. The note proposes how SoundCharts applies
 > S-104 water levels to the depths, the safety contour and the S-102 surface
 > across the displayed chart, not only at a picked point and along a route.
 > The status-bar indication that tells the mariner what the chart shows is
@@ -101,18 +103,25 @@ A new pure model in `EncDotNet.S100.Navigation`, next to `IWaterLevelSource`:
 public interface IWaterLevelField
 {
     // The water level to apply at a point, or null where nothing applies.
-    WaterLevelSample? Sample(GeoPosition position);
+    AppliedWaterLevel? Sample(GeoPosition position);
+
+    // The same, for a depth on a given datum, with the reason when none applies.
+    WaterLevelAtPoint Resolve(GeoPosition position, int? depthDatum);
 
     // The area where the field applies, for the adjusted-area boundary.
-    IReadOnlyList<GeoPolygon> Footprint { get; }
+    IReadOnlyList<CoverageArea> Footprint { get; }
 
     // What was applied: the time or period, and each contributing source.
     WaterLevelBasis Basis { get; }
 }
 
-public readonly record struct WaterLevelSample(
-    double HeightMeters, double? UncertaintyMeters, WaterLevelSourceInfo Source);
+public readonly record struct AppliedWaterLevel(
+    double HeightMeters, double? UncertaintyMeters, WaterLevelSourceInfo Source, DateTime StepTime);
 ```
+
+As built, the sample type is `AppliedWaterLevel`, since
+`EncDotNet.S100.Datasets.Pipelines.Query.WaterLevelSample` already exists,
+and the footprint uses the existing `CoverageArea`.
 
 Two implementations:
 

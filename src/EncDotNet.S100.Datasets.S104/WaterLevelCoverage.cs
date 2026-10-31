@@ -49,4 +49,27 @@ public sealed class WaterLevelCoverage
     /// Index a cell at (row, col) as <c>Values[row * NumPointsLongitudinal + col]</c>.
     /// </summary>
     public required WaterLevelValue[] Values { get; init; }
+
+    /// <summary>
+    /// The uncertainty of each value's height in metres (a ± value), row-major
+    /// like <see cref="Values"/>, or <c>null</c> when the dataset carries none.
+    /// A node's value is the <c>uncertainty</c> member of its values record
+    /// when that isn't the fill value, otherwise the instance's
+    /// <c>uncertainty</c> dataset (S-104 Ed 2.0.0 §10.2.2.4, §10.2.2.5 and
+    /// Table 10-3). <see cref="UncertaintyFillValue"/> marks a node with neither.
+    /// </summary>
+    public float[]? Uncertainties { get; init; }
+
+    /// <summary>The S-104 uncertainty fill value, −1.0 (S-104 Ed 2.0.0 Table 10-3).</summary>
+    public const float UncertaintyFillValue = -1f;
+
+    /// <summary>The uncertainty at a node in metres, or <c>null</c> when none is given.</summary>
+    /// <param name="index">The row-major node index.</param>
+    /// <returns>The uncertainty, or <c>null</c>.</returns>
+    public double? UncertaintyAt(int index) => Uncertainty(Uncertainties, index);
+
+    internal static double? Uncertainty(float[]? values, int index) =>
+        values is not null && (uint)index < (uint)values.Length && IsUncertainty(values[index]) ? values[index] : null;
+
+    internal static bool IsUncertainty(float value) => float.IsFinite(value) && value >= 0;
 }

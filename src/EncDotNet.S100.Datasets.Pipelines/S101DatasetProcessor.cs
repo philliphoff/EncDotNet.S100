@@ -78,6 +78,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
 
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
     private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage)? _cellExtent;
+    private SoundingDatumResolver? _soundingDatum;
     private Dictionary<long, S101FeatureRecord>? _featureRecords;
     private FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
@@ -1187,6 +1188,18 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         }
 
         return false;
+    }
+
+    /// <inheritdoc/>
+    public int? SoundingDatumAt(double latitude, double longitude)
+    {
+        if (_soundingDatum is null)
+        {
+            _featureIndex ??= BuildFeatureIndex();
+            _soundingDatum = new SoundingDatumResolver(_featureIndex.Values);
+        }
+
+        return _soundingDatum.At(latitude, longitude);
     }
 
     private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage) CellExtent

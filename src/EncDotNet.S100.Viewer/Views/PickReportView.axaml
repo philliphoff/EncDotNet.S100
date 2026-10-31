@@ -945,7 +945,7 @@
                                             YAxes="{Binding DepthAxisArray}"
                                             Sections="{Binding DepthSections}" />
 
-                        <!-- Uncertainty caption (S-102 base only). -->
+                        <!-- Uncertainty caption: combined S-102 and S-104 uncertainty. -->
                         <TextBlock Text="{Binding UncertaintyText}"
                                    FontSize="11"
                                    Opacity="0.6"
@@ -954,7 +954,7 @@
                         <!-- No-tide info bar: neutral (non-alarming) explanation
                              that the depth is static because no S-104 grid
                              overlaps the point. -->
-                        <Border IsVisible="{Binding !HasTide}"
+                        <Border IsVisible="{Binding ShowNoTideInfo}"
                                 Background="{DynamicResource MutedBackgroundColor}"
                                 CornerRadius="4"
                                 Padding="10,8">
@@ -974,7 +974,7 @@
                             </Grid>
                         </Border>
 
-                        <!-- Datum-reconciliation caveat: a prominent amber warning box. -->
+                        <!-- Datum refusal: water level on another or an undeclared datum isn't applied. -->
                         <Border IsVisible="{Binding HasDatumNote}"
                                 Background="{DynamicResource DepthWarningSubtleBrush}"
                                 BorderBrush="{DynamicResource DepthWarningBrush}"

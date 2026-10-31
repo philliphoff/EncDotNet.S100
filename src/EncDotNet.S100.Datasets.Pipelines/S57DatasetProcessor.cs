@@ -61,6 +61,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     private readonly S57TranslationTarget _target;
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
     private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage)? _cellExtent;
+    private SoundingDatumResolver? _soundingDatum;
     private EncDotNet.S100.Features.FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
     private ValidationReport? _validationReport;
@@ -641,6 +642,18 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// <returns>The nearest sounding sample, or <c>null</c>.</returns>
     public S101SoundingSample? SampleNearestSounding(double latitude, double longitude)
         => S101SoundingSampler.SampleNearest(_translatedDataset.Document, latitude, longitude);
+
+    /// <inheritdoc/>
+    public int? SoundingDatumAt(double latitude, double longitude)
+    {
+        if (_soundingDatum is null)
+        {
+            _featureIndex ??= BuildFeatureIndex();
+            _soundingDatum = new SoundingDatumResolver(_featureIndex.Values);
+        }
+
+        return _soundingDatum.At(latitude, longitude);
+    }
 
     private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage) CellExtent
     {

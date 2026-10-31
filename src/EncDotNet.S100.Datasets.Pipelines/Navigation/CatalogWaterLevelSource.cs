@@ -21,7 +21,9 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// and the 0…360° longitude frame are absorbed at lookup by
 /// <see cref="PassageGrid"/>. Heights are taken as metres above the vertical datum
 /// (vertical CS 6499, height up; S-104 Ed 2.0.0 Table 5-1). The fill value
-/// −9999 is NoData.
+/// −9999 is NoData. A reading's uncertainty is the S-104 <c>uncertainty</c>
+/// at the nearest step, or the larger of the two bracketing steps' when the
+/// height is interpolated (S-104 Ed 2.0.0 §10.2.2.4).
 /// </remarks>
 internal sealed class CatalogWaterLevelSource : IWaterLevelSource
 {
@@ -47,6 +49,79 @@ internal sealed class CatalogWaterLevelSource : IWaterLevelSource
         }
 
         _grids.Sort((a, b) => WaterLevelPreference.Compare(a.Spacing, a.Issued, a.DatasetId, b.Spacing, b.Issued, b.DatasetId));
+
+        var listed = new List<WaterLevelSourceInfo>();
+        var footprint = new List<CoverageArea>();
+        foreach (var grid in _grids)
+        {
+            listed.Add(new WaterLevelSourceInfo(grid.DatasetId, WaterLevelSourceKind.Grid, grid.Model.VerticalDatum));
+            footprint.Add(GridFootprint(grid.Grid));
+        }
+
+        foreach (var (datasetId, dataset) in _stations)
+        {
+            listed.Add(new WaterLevelSourceInfo(datasetId, WaterLevelSourceKind.Station, dataset.VerticalDatum));
+            foreach (var station in dataset.Stations)
+            {
+                if (station.NumberOfTimes > 0)
+                {
+                    footprint.Add(StationFootprint(station, _maxStationDistance));
+                }
+            }
+        }
+
+        Datasets = listed;
+        Footprint = footprint;
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<WaterLevelSourceInfo> Datasets { get; }
+
+    /// <summary>
+    /// Each grid's node extent and a disc of
+    /// <see cref="RouteCheckSourceOptions.MaxStationDistanceMeters"/> around
+    /// each station: where <see cref="Locate"/> can return a series. Masked
+    /// nodes aren't cut out, and overlapping station discs aren't split into
+    /// cells.
+    /// </summary>
+    public IReadOnlyList<CoverageArea> Footprint { get; }
+
+    private static CoverageArea GridFootprint(PassageGrid grid)
+    {
+        // Walk the perimeter nodes so a projected grid's curved edges are kept.
+        var ring = new List<GeoPosition>();
+        int rows = grid.Rows - 1, cols = grid.Columns - 1;
+        var rowStep = Math.Max(1, rows / 16);
+        var colStep = Math.Max(1, cols / 16);
+        for (var c = 0; c < cols; c += colStep) ring.Add(grid.NodeToWgs84(0, c));
+        for (var r = 0; r < rows; r += rowStep) ring.Add(grid.NodeToWgs84(r, cols));
+        for (var c = cols; c > 0; c -= colStep) ring.Add(grid.NodeToWgs84(rows, c));
+        for (var r = rows; r > 0; r -= rowStep) ring.Add(grid.NodeToWgs84(r, 0));
+        if (ring.Count == 0)
+        {
+            ring.Add(grid.NodeToWgs84(0, 0));
+        }
+
+        ring.Add(ring[0]);
+        return new CoverageArea { ExteriorRing = ring };
+    }
+
+    private static CoverageArea StationFootprint(WaterLevelStation station, double radiusMeters)
+    {
+        const int vertices = 36;
+        const double earthRadius = 6_371_008.8;
+        var lat = station.Latitude * Math.PI / 180;
+        var ring = new List<GeoPosition>(vertices + 1);
+        for (var i = 0; i < vertices; i++)
+        {
+            var bearing = 2 * Math.PI * i / vertices;
+            var dLat = radiusMeters * Math.Cos(bearing) / earthRadius;
+            var dLon = radiusMeters * Math.Sin(bearing) / (earthRadius * Math.Max(Math.Cos(lat), 1e-6));
+            ring.Add(new GeoPosition(station.Latitude + (dLat * 180 / Math.PI), station.Longitude + (dLon * 180 / Math.PI)));
+        }
+
+        ring.Add(ring[0]);
+        return new CoverageArea { ExteriorRing = ring };
     }
 
     public IReadOnlyList<IWaterLevelSeries> Locate(GeoPosition position)
@@ -149,7 +224,12 @@ internal sealed class CatalogWaterLevelSource : IWaterLevelSource
         }
 
         public WaterLevelReading? ValueAt(DateTime utc) =>
-            Interpolate(_steps.Count, i => DateTime.SpecifyKind(_steps[i].TimePoint, DateTimeKind.Utc), i => _steps[i].Values[_index].Height, utc);
+            Interpolate(_steps.Count, TimeAt, i => _steps[i].Values[_index].Height, i => _steps[i].UncertaintyAt(_index), utc);
+
+        public IReadOnlyList<DateTime> StepsWithin(DateTime start, DateTime end) =>
+            Steps(_steps.Count, TimeAt, start, end);
+
+        private DateTime TimeAt(int i) => DateTime.SpecifyKind(_steps[i].TimePoint, DateTimeKind.Utc);
     }
 
     private sealed class StationSeries : IWaterLevelSeries
@@ -171,7 +251,27 @@ internal sealed class CatalogWaterLevelSource : IWaterLevelSource
         public DateTime End { get; }
 
         public WaterLevelReading? ValueAt(DateTime utc) =>
-            Interpolate(_station.NumberOfTimes, i => DateTime.SpecifyKind(_station.TimeAt(i), DateTimeKind.Utc), i => _station.Heights[i], utc);
+            Interpolate(_station.NumberOfTimes, TimeAt, i => _station.Heights[i], _station.UncertaintyAt, utc);
+
+        public IReadOnlyList<DateTime> StepsWithin(DateTime start, DateTime end) =>
+            Steps(_station.NumberOfTimes, TimeAt, start, end);
+
+        private DateTime TimeAt(int i) => DateTime.SpecifyKind(_station.TimeAt(i), DateTimeKind.Utc);
+    }
+
+    private static List<DateTime> Steps(int count, Func<int, DateTime> timeAt, DateTime start, DateTime end)
+    {
+        var result = new List<DateTime>();
+        for (var i = 0; i < count; i++)
+        {
+            var t = timeAt(i);
+            if (t >= start && t <= end)
+            {
+                result.Add(t);
+            }
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -179,7 +279,7 @@ internal sealed class CatalogWaterLevelSource : IWaterLevelSource
     /// The nearest step must hold a value; when the other is NoData, the
     /// nearest value is used as is.
     /// </summary>
-    private static WaterLevelReading? Interpolate(int count, Func<int, DateTime> timeAt, Func<int, float> heightAt, DateTime utc)
+    private static WaterLevelReading? Interpolate(int count, Func<int, DateTime> timeAt, Func<int, float> heightAt, Func<int, double?> uncertaintyAt, DateTime utc)
     {
         if (count == 0)
         {
@@ -209,11 +309,17 @@ internal sealed class CatalogWaterLevelSource : IWaterLevelSource
         var hAfter = heightAt(after);
         if (before == after || !IsValue(hBefore) || !IsValue(hAfter) || tAfter <= tBefore)
         {
-            return new WaterLevelReading(hNearest, timeAt(nearest));
+            return new WaterLevelReading(hNearest, timeAt(nearest)) { UncertaintyMeters = uncertaintyAt(nearest) };
         }
 
         var f = Math.Clamp((utc - tBefore).TotalSeconds / (tAfter - tBefore).TotalSeconds, 0, 1);
-        return new WaterLevelReading(hBefore + f * (hAfter - hBefore), timeAt(nearest));
+        var (uBefore, uAfter) = (uncertaintyAt(before), uncertaintyAt(after));
+        return new WaterLevelReading(hBefore + f * (hAfter - hBefore), timeAt(nearest))
+        {
+            UncertaintyMeters = f is 0 or 1
+                ? uncertaintyAt(nearest)
+                : uBefore is { } a && uAfter is { } b ? Math.Max(a, b) : uBefore ?? uAfter,
+        };
     }
 
     private static bool IsValue(float h) => h != S104CoverageSource.FillValue && float.IsFinite(h);

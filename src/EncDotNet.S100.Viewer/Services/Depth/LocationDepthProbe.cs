@@ -1,14 +1,16 @@
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S101;
+using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services.Depth;
 
 /// <summary>
 /// Orchestrates the location depth-assimilation pipeline against the currently
-/// loaded datasets: it live-samples S-102 bathymetry, the nearest S-101
-/// sounding (S-101, S-401 or translated S-57) and every overlapping S-104 tide grid at a picked point, then runs
+/// loaded datasets: it live-samples S-102 bathymetry and the nearest S-101
+/// sounding (S-101, S-401 or translated S-57), and locates the S-104 water
+/// level through the passage check's <see cref="IWaterLevelSource"/>, then runs
 /// the <see cref="WaterLandClassifier"/>, <see cref="BaseDepthResolver"/> and
 /// <see cref="DepthAssimilationService"/> to produce a single
 /// <see cref="LocationDepthResult"/> and a water/land classification.
@@ -46,12 +48,17 @@ internal sealed class LocationDepthProbe
     /// <param name="hits">The resolved pick hits (searched for S-101 area depths).</param>
     /// <param name="latitude">Pick latitude in decimal degrees (WGS-84).</param>
     /// <param name="longitude">Pick longitude in decimal degrees (WGS-84).</param>
+    /// <param name="waterLevel">
+    /// The water-level source the passage check reads, or <c>null</c> when
+    /// none is available (the depth is then static).
+    /// </param>
     /// <returns>The probe outcome.</returns>
     public Probe Evaluate(
         IEnumerable<KeyValuePair<DatasetEntry, IDatasetProcessor>> processors,
         IReadOnlyList<PickHit> hits,
         double latitude,
-        double longitude)
+        double longitude,
+        IWaterLevelSource? waterLevel = null)
     {
         ArgumentNullException.ThrowIfNull(processors);
         ArgumentNullException.ThrowIfNull(hits);
@@ -60,7 +67,7 @@ internal sealed class LocationDepthProbe
         string? bathymetryDatasetId = null;
         S101SoundingSample? nearestSounding = null;
         string? soundingDatasetId = null;
-        var tideCandidates = new List<S104TideCandidate>();
+        IChartDepthCell? soundingCell = null;
         var entries = processors as IReadOnlyCollection<KeyValuePair<DatasetEntry, IDatasetProcessor>> ?? processors.ToList();
         var finest = FinestCoveringCells(entries.Select(p => p.Value).OfType<IChartDepthCell>(), latitude, longitude);
 
@@ -82,18 +89,7 @@ internal sealed class LocationDepthProbe
                     {
                         nearestSounding = s;
                         soundingDatasetId = entry.DisplayName;
-                    }
-                    break;
-
-                case S104DatasetProcessor s104:
-                    if (SafeSampleTide(s104, latitude, longitude) is { } probe)
-                    {
-                        tideCandidates.Add(new S104TideCandidate(
-                            entry.DisplayName,
-                            probe.SpacingDegrees,
-                            probe.IssueDate,
-                            probe.VerticalDatumCode,
-                            probe.Series));
+                        soundingCell = cell;
                     }
                     break;
             }
@@ -104,8 +100,14 @@ internal sealed class LocationDepthProbe
             ? hits
             : hits.Where(h => h.OwningProcessor is not IChartDepthCell cell || finest.Contains(cell)).ToList();
         var baseDepth = _baseResolver.Resolve(
-            bathymetry, depthHits, nearestSounding, bathymetryDatasetId, soundingDatasetId);
-        var result = _assimilation.Assimilate(baseDepth, tideCandidates);
+            bathymetry,
+            depthHits,
+            nearestSounding,
+            bathymetryDatasetId,
+            soundingDatasetId,
+            soundingCell is null ? null : SafeSoundingDatum(soundingCell, latitude, longitude),
+            hit => hit.OwningProcessor is IChartDepthCell cell ? SafeSoundingDatum(cell, latitude, longitude) : null);
+        var result = _assimilation.Assimilate(baseDepth, SafeLocate(waterLevel, latitude, longitude));
 
         return new Probe(waterLand, result);
     }
@@ -165,15 +167,34 @@ internal sealed class LocationDepthProbe
         }
     }
 
-    private static S104TideProbe? SafeSampleTide(S104DatasetProcessor processor, double latitude, double longitude)
+    private static int? SafeSoundingDatum(IChartDepthCell cell, double latitude, double longitude)
     {
         try
         {
-            return processor.SampleTide(latitude, longitude, from: null, to: null);
+            return cell.SoundingDatumAt(latitude, longitude);
         }
         catch
         {
+            // A cell whose features can't be read declares no datum.
             return null;
+        }
+    }
+
+    private static IReadOnlyList<IWaterLevelSeries> SafeLocate(IWaterLevelSource? source, double latitude, double longitude)
+    {
+        if (source is null)
+        {
+            return [];
+        }
+
+        try
+        {
+            return source.Locate(new GeoPosition(latitude, longitude));
+        }
+        catch
+        {
+            // Malformed grids can throw during lookup; treat as "no coverage".
+            return [];
         }
     }
 }
