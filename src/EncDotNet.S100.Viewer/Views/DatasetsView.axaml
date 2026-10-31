@@ -28,7 +28,7 @@
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="MinHeight" Value="0" />
-            <Setter Property="FontFamily" Value="Menlo, Consolas, monospace" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
             <Setter Property="FontSize" Value="11" />
             <Setter Property="HorizontalContentAlignment" Value="Left" />
             <Setter Property="Opacity" Value="0.85" />
@@ -1062,7 +1062,7 @@
                                                                            ToolTip.Tip="{Binding SeverityLabel}" />
                                                             <TextBlock Grid.Row="0" Grid.Column="1"
                                                                        Text="{Binding RuleId}"
-                                                                       FontFamily="Consolas,Menlo,monospace"
+                                                                       FontFamily="{StaticResource MonoFontFamily}"
                                                                        FontSize="11"
                                                                        Opacity="0.75" />
                                                             <TextBlock Grid.Row="1" Grid.Column="1"

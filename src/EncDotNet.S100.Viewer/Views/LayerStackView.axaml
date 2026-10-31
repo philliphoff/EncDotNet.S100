@@ -117,7 +117,7 @@
                                                            FontSize="10"
                                                            Opacity="0.6"
                                                            VerticalAlignment="Center"
-                                                           FontFamily="Consolas,Menlo,Monaco,monospace" />
+                                                           FontFamily="{StaticResource MonoFontFamily}" />
                                                 <!-- #1072: the colour legend of a fill that carries one
                                                      (the weather fills): a swatch and label per band. -->
                                                 <ItemsControl Grid.Row="1"

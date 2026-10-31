@@ -10,7 +10,6 @@
 
     <!-- Declared before the styles: static resources resolve in document order. -->
     <UserControl.Resources>
-        <FontFamily x:Key="ManifestMonoFont">Cascadia Mono,Consolas,Menlo,monospace</FontFamily>
     </UserControl.Resources>
 
     <UserControl.Styles>
@@ -24,7 +23,7 @@
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <Style Selector="Border.fileTag > TextBlock">
-            <Setter Property="FontFamily" Value="{StaticResource ManifestMonoFont}" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
             <Setter Property="FontSize" Value="10.5" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Opacity" Value="0.65" />
@@ -56,7 +55,7 @@
                             </Border>
                         </StackPanel>
                         <TextBlock Text="{Binding ManifestPath}" Classes="muted" FontSize="12"
-                                   FontFamily="{StaticResource ManifestMonoFont}"
+                                   FontFamily="{StaticResource MonoFontFamily}"
                                    TextTrimming="{x:Static TextTrimming.PrefixCharacterEllipsis}"
                                    ToolTip.Tip="{Binding ManifestPath}" />
                     </StackPanel>
@@ -88,7 +87,7 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="x:String">
                                         <TextBlock Text="{Binding}" FontSize="12" TextWrapping="Wrap" Margin="0,1"
-                                                   FontFamily="{StaticResource ManifestMonoFont}" />
+                                                   FontFamily="{StaticResource MonoFontFamily}" />
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>

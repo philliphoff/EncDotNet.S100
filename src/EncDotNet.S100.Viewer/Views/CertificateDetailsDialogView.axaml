@@ -9,7 +9,7 @@
     <!-- An identity's or authority's certificate details (#845); never the private key. -->
     <UserControl.Styles>
         <Style Selector="SelectableTextBlock.mono">
-            <Setter Property="FontFamily" Value="Cascadia Mono,Consolas,Menlo,monospace" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
         </Style>
         <Style Selector="SelectableTextBlock.destructive">
             <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />

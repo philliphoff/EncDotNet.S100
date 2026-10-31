@@ -138,7 +138,7 @@
                         AutomationProperties.AutomationId="TimeHud.Time"
                         AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimeHudTime}"
                         Content="{Binding CurrentTimeLabel}"
-                        FontFamily="Menlo, Consolas, monospace"
+                        FontFamily="{StaticResource MonoFontFamily}"
                         FontSize="13" FontWeight="SemiBold"
                         Cursor="Hand"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimeHudTime}"

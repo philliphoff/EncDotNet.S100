@@ -670,7 +670,7 @@
                                      Fill="#A1A1AA" />
                         </Panel>
                         <TextBlock Text="{Binding Timeline.StampText}"
-                                   FontFamily="Menlo, Consolas, monospace"
+                                   FontFamily="{StaticResource MonoFontFamily}"
                                    FontSize="11.5"
                                    Foreground="{DynamicResource ForegroundColor}"
                                    VerticalAlignment="Center" />

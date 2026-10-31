@@ -118,6 +118,14 @@
                  their dictionaries above. -->
             <Color x:Key="MutedBackgroundColor">#12000000</Color>
 
+        <!-- The viewer's one monospace stack (#1171): SF Mono / Menlo on
+             macOS, Cascadia Mono / Consolas on Windows, DejaVu Sans Mono on
+             Linux. Use it for ids, paths, times and log text instead of
+             spelling out a stack per view. -->
+        <FontFamily x:Key="MonoFontFamily">SF Mono,Menlo,Cascadia Mono,Consolas,DejaVu Sans Mono,monospace</FontFamily>
+        <!-- Size for dense monospace text, such as the Logs tab's rows. -->
+        <x:Double x:Key="MonoFontSize">11</x:Double>
+
         <!-- Indent step for nested accentTree rows (the Datasets panel's exchange sets,
              the Library's collections) (matches the
              SimpleTheme default so the disclosure chevron lines up). -->
@@ -327,11 +335,18 @@
                 </ControlTemplate>
             </Setter>
         </Style>
-        <!-- Dense rows for long text-only lists, such as the Logs tab (#1080). -->
+        <!--
+          Dense rows for long text-only lists, such as the Logs tab (#1080).
+          ShadUI's ListBoxItem theme sets FontWeight Medium (and FontSize 14)
+          on the item, and every TextBlock in the row inherits it, so log rows
+          rendered semibold (#1171). Dense rows are plain text: reset the
+          weight here; the row template sets its own sizes.
+        -->
         <Style Selector="ListBox.accentList.dense ListBoxItem">
             <Setter Property="Padding" Value="8,1" />
             <Setter Property="Margin" Value="0" />
             <Setter Property="MinHeight" Value="22" />
+            <Setter Property="FontWeight" Value="Normal" />
         </Style>
         <Style Selector="ListBox.accentList ListBoxItem:pointerover /template/ Border#PART_Tint">
             <Setter Property="Opacity" Value="0.06" />
