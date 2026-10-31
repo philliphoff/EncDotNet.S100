@@ -98,3 +98,9 @@
           href: design/dataset-collections.md
         - name: Wind and wave data
           href: design/weather-sources.md
+        - name: Depth basis indicator
+          href: design/depth-basis-indicator.md
+        - name: Chart-wide water level adjustment
+          href: design/chart-wide-water-level-adjustment.md
+        - name: Predefined display combinations
+          href: design/predefined-display-combinations.md
