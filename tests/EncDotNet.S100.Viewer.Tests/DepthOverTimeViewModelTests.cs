@@ -1,4 +1,3 @@
-using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Depth;

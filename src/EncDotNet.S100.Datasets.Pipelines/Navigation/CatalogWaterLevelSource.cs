@@ -108,15 +108,15 @@ internal sealed class CatalogWaterLevelSource : IWaterLevelSource
 
     private static CoverageArea StationFootprint(WaterLevelStation station, double radiusMeters)
     {
-        const int Vertices = 36;
-        const double EarthRadius = 6_371_008.8;
+        const int vertices = 36;
+        const double earthRadius = 6_371_008.8;
         var lat = station.Latitude * Math.PI / 180;
-        var ring = new List<GeoPosition>(Vertices + 1);
-        for (var i = 0; i < Vertices; i++)
+        var ring = new List<GeoPosition>(vertices + 1);
+        for (var i = 0; i < vertices; i++)
         {
-            var bearing = 2 * Math.PI * i / Vertices;
-            var dLat = radiusMeters * Math.Cos(bearing) / EarthRadius;
-            var dLon = radiusMeters * Math.Sin(bearing) / (EarthRadius * Math.Max(Math.Cos(lat), 1e-6));
+            var bearing = 2 * Math.PI * i / vertices;
+            var dLat = radiusMeters * Math.Cos(bearing) / earthRadius;
+            var dLon = radiusMeters * Math.Sin(bearing) / (earthRadius * Math.Max(Math.Cos(lat), 1e-6));
             ring.Add(new GeoPosition(station.Latitude + (dLat * 180 / Math.PI), station.Longitude + (dLon * 180 / Math.PI)));
         }
 
