@@ -625,8 +625,8 @@
                                     VerticalAlignment="Top"
                                     Margin="0,4,0,0" />
                 <!-- Time HUD (#712, handoff Part F): the Timeline's controls at the
-                     bottom centre of the map while its dock is closed (or the
-                     window is too narrow for the dock). -->
+                     bottom centre of the map while the Timeline tab isn't shown
+                     (dock closed, on another tab, or the window too narrow). -->
                 <views:TimeHudView DataContext="{Binding Timeline}"
                                    IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsTimeHudVisible}"
                                    DockCommand="{Binding $parent[Window].((vm:MainViewModel)DataContext).ToggleTimelineDockCommand}"
@@ -641,11 +641,13 @@
                                             VerticalAlignment="Bottom"
                                             Margin="12,0,0,60" />
                 <!-- Map stamp (#713 B4): the view time over the map while the
-                     Timeline dock is shown, so the map (and any screenshot of
-                     it) says which time it shows. Green dot Live, accent Pinned.
-                     With navigational warnings loaded and the time pinned it
-                     starts "Display Not Real Time" and stays shown (S-98
-                     §12.7.2; #993). -->
+                     Timeline tab is shown in the dock, so the map (and any
+                     screenshot of it) says which time it shows; the Time HUD
+                     takes over otherwise, never both (design note
+                     time-overlays D1). Green dot Live, accent Pinned. With
+                     date-dependent data loaded and the time pinned it starts
+                     "Display Not Real Time" (S-98 §12.7.2; #993), as the HUD
+                     does. -->
                 <Panel HorizontalAlignment="Left"
                        VerticalAlignment="Top"
                        Margin="12,12,0,0"

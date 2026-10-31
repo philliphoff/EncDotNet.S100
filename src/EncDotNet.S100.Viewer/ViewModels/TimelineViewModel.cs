@@ -129,6 +129,7 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
             _timeFormat.TimeFormatChanged += _ =>
             {
                 OnPropertyChanged(nameof(CurrentTimeLabel));
+                OnPropertyChanged(nameof(WidestTimeLabel));
                 OnPropertyChanged(nameof(RangeLabel));
                 OnPropertyChanged(nameof(StampText));
                 OnPropertyChanged(nameof(DisplayRuns));
@@ -300,6 +301,12 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     /// </summary>
     public bool IsNotRealTime => IsActive && !IsLive && _hasDateDependentData;
 
+    /// <summary>The Time HUD's Live toggle: "Live" while live, else "Go live" (design note time-overlays D5).</summary>
+    public string LiveToggleText => IsLive ? Strings.TimeHud_Live : Strings.TimelinePanel_GoLive;
+
+    /// <summary>The Live toggle's tooltip: what Live means while live, else what Go live does.</summary>
+    public string LiveToggleTooltip => IsLive ? Strings.Tooltip_TimeHudLive : Strings.Tooltip_TimelineNow;
+
     /// <summary>"LIVE" or "PINNED", for the mode pill.</summary>
     public string ModeLabel => IsLive ? Strings.TimelinePanel_Live : Strings.TimelinePanel_Pinned;
 
@@ -355,15 +362,14 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     public string OffsetText => _service.CurrentTime is { } t ? Offset(t - Now) : string.Empty;
 
     /// <summary>
-    /// The map stamp: "LIVE · 01.10.2026 20:30" or "02.10.2026 08:00 · in 11 h 30"
-    /// (top left of the map while the Timeline is open; #713 B4); while
-    /// <see cref="IsNotRealTime"/>, "Display Not Real Time · 02.10.2026 08:00 · in 11 h 30".
+    /// The map stamp: "01.10.2026 20:30 · now" or "02.10.2026 08:00 · in 11 h 30"
+    /// (top left of the map while the Timeline tab is shown; #713 B4), read in
+    /// the same order as the Time HUD; while <see cref="IsNotRealTime"/>,
+    /// "Display Not Real Time · 02.10.2026 08:00 · in 11 h 30".
     /// </summary>
     public string StampText => _service.CurrentTime is { } t
         ? IsDrawing && _progress?.Drawn is { } drawn && _progress.Target is { } target
             ? string.Format(CultureInfo.CurrentCulture, Strings.TimelinePanel_StampDrawingFormat, TimeFormatting.Format(drawn, ActiveFormat), TimeFormatting.Format(target, ActiveFormat))
-        : IsLive
-            ? $"{Strings.TimelinePanel_Live} · {TimeFormatting.Format(t, ActiveFormat)}"
         : IsNotRealTime
             ? $"{Strings.TimelinePanel_DisplayNotRealTime} · {TimeFormatting.Format(t, ActiveFormat)} · {OffsetText}"
             : $"{TimeFormatting.Format(t, ActiveFormat)} · {OffsetText}"
@@ -510,6 +516,8 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
         OnPropertyChanged(nameof(IsLive));
         OnPropertyChanged(nameof(IsNotRealTime));
         OnPropertyChanged(nameof(ModeLabel));
+        OnPropertyChanged(nameof(LiveToggleText));
+        OnPropertyChanged(nameof(LiveToggleTooltip));
         OnPropertyChanged(nameof(IsForecastTimeline));
         OnPropertyChanged(nameof(IsNowInRange));
         OnPropertyChanged(nameof(NowPosition));
@@ -592,6 +600,24 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
         _service.CurrentTime is { } t
             ? TimeFormatting.Format(t, ActiveFormat)
             : string.Empty;
+
+    /// <summary>
+    /// The longest time label the active format can produce, e.g.
+    /// "12/28/2026 12:00 PM" or "28.12.2026 23:00": the Time HUD sizes its
+    /// time slot to it, so stepping never changes the bar's width (#712; design
+    /// note time-overlays D6). Changes only with the Local/UTC setting.
+    /// </summary>
+    public string WidestTimeLabel
+    {
+        get
+        {
+            var fmt = ActiveFormat;
+            // Two-digit month, day and hour, with a 12-hour clock's widest meridiem.
+            return new[] { 0, 11, 12, 23 }
+                .Select(h => TimeFormatting.Format(new DateTime(2026, 12, 28, h, 58, 0, fmt == TimeFormat.Utc ? DateTimeKind.Utc : DateTimeKind.Local), fmt))
+                .MaxBy(label => label.Length)!;
+        }
+    }
 
     /// <summary>"N steps from T0 to T1"-style summary of the timeline.</summary>
     public string RangeLabel
