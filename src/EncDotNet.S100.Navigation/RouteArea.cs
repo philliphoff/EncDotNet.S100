@@ -40,6 +40,18 @@ public enum RouteAreaKind
     /// <summary>An S-101 <c>SubmarineTransitLane</c>.</summary>
     SubmarineTransitLane,
 
+    /// <summary>An S-101 <c>OffshoreProductionArea</c> (#1127).</summary>
+    OffshoreProductionArea,
+
+    /// <summary>An S-101 <c>SeaplaneLandingArea</c> (#1127).</summary>
+    SeaplaneLandingArea,
+
+    /// <summary>An S-101 <c>MarineFarmCulture</c> (#1127).</summary>
+    MarineFarm,
+
+    /// <summary>Another S-101 feature whose portrayal raises the <c>ProhAre</c> alert (#1127).</summary>
+    Other,
+
     /// <summary>An S-122 <c>MarineProtectedArea</c>.</summary>
     MarineProtectedArea,
 }
@@ -99,6 +111,15 @@ public sealed record RouteArea(
     /// <c>null</c> (S-122, or when not known).
     /// </summary>
     public RouteChartCell? Cell { get; init; }
+
+    /// <summary>
+    /// Its kind of prohibited area or area with special conditions in the
+    /// S-101 alert catalogue: the viewing group of its <c>ProhAre</c>
+    /// highlight (53012–53024, <see cref="RouteAreaKinds"/>), or <c>null</c>
+    /// when it raises no <c>ProhAre</c> alert, as an S-122 area or an S-101
+    /// precautionary area (#1127).
+    /// </summary>
+    public int? AreaKind { get; init; }
 }
 
 /// <summary>

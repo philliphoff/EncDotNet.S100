@@ -89,7 +89,8 @@ internal sealed class ViewerFindingFormatter : RouteFindingFormatter
         RouteAreaKind.PrecautionaryArea => Strings.RouteArea_PrecautionaryArea,
         RouteAreaKind.InshoreTrafficZone => Strings.RouteArea_InshoreTrafficZone,
         RouteAreaKind.SubmarineTransitLane => Strings.RouteArea_SubmarineTransitLane,
-        _ => Strings.RouteArea_MarineProtectedArea,
+        RouteAreaKind.MarineProtectedArea => Strings.RouteArea_MarineProtectedArea,
+        _ => base.AreaKindLabel(kind),
     };
 
     protected override string WarningInsideAreaFormat => Strings.Findings_WarningInsideFormat;

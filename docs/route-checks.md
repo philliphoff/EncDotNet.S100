@@ -156,12 +156,26 @@ ETAs where it meets the route.
 |---|---|---|
 | `route_check.enters_prohibited_area` | Must review | The track enters an S-101 area where entry is prohibited or restricted. |
 | `route_check.prohibited_area_in_corridor` | Check | Such an area inside the limits, off the track. |
-| `route_check.restricted_area` | Check or Info | Another S-101 restricted or military practice area; Info when its restrictions don't bear on a passage, such as fishing or anchoring prohibited. |
+| `route_check.restricted_area` | Check, Info or Must review | Another S-101 restricted or military practice area, offshore production area, seaplane landing area or marine farm; Info when its restrictions don't bear on a passage, such as fishing or anchoring prohibited; Must review when the track enters an area to be avoided. |
 | `route_check.caution_area` | Check | A caution area. |
-| `route_check.traffic_area` | Check or Info | A separation zone, precautionary area or submarine transit lane; Info for an inshore traffic zone. |
+| `route_check.traffic_area` | Check, Info or Must review | A precautionary area or submarine transit lane; Info for an inshore traffic zone; Must review when the track enters a traffic separation zone. |
 | `route_check.anchorage_area` | Check | An anchorage area. |
 | `route_check.protected_area` | Check or Info | An S-122 marine protected or restricted area. It's never Must review. |
 | `route_check.area_not_in_force` | Info | The area's date range or season doesn't cover the ETAs. |
+| `route_check.area_kind_off` | Info | The route meets areas of a kind whose indication is turned off; one finding per kind. |
+
+The S-101 areas are the ones whose portrayal raises the `ProhAre` alert, in
+the 13 kinds of the S-101 alert catalogue, plus precautionary areas. Areas
+charted as points count too. Each kind can be turned off (`--areas-off` in
+`s100 route check`, `areaKindsOff` in `check_route`; S-164 calls this the
+user selection of prohibited areas). The areas of a kind that's off aren't
+reported; instead one finding, worded as the catalogue words it, says the
+indication of some areas is off, with the kind and how many the route meets.
+The kinds are `traffic_separation_zone`, `inshore_traffic_zone`,
+`restricted_area`, `area_to_be_avoided`, `particularly_sensitive_sea_area`,
+`caution_area`, `offshore_production_area`, `user_area_to_be_avoided`,
+`military_practice_area`, `seaplane_landing_area`, `submarine_transit_lane`,
+`anchorage_area` and `marine_farm`.
 
 ## S-124 navigational warnings
 

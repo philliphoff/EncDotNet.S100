@@ -403,24 +403,30 @@ vessel is there. It reads the areas through `IRouteAreaSource`
 var outcome = new AreaCheck().Run(new RouteCheckContext(plan, new RouteCheckSettings { At = viewTime }, sources));
 ```
 
-The S-101 feature types it checks are `RestrictedArea` (and the 1.x
-`RestrictedAreaNavigational` and `RestrictedAreaRegulatory`),
-`MilitaryPracticeArea`, `CautionArea`, `AnchorageArea`, `SeparationZoneOrLine`
-surfaces, `PrecautionaryArea`, `InshoreTrafficZone` and
-`SubmarineTransitLane`. Cable and pipeline areas, dumping grounds, fairways
-and traffic lanes aren't checked: they restrict anchoring or fishing, or are
-where a route is meant to go.
+The S-101 areas are those whose portrayal raises the `ProhAre` alert (#1127):
+restricted, military practice, caution, anchorage and mooring, traffic
+separation, inshore traffic, submarine transit, offshore production,
+seaplane landing and marine farm areas and discoloured water, plus
+`PrecautionaryArea`. Areas charted as points count too. Each carries its
+alert-catalogue kind in `RouteArea.AreaKind` (`RouteAreaKinds`, the
+`ProhAre` highlight's viewing groups 53012–53024), and
+`RouteCheckSettings.AreaKindsOff` turns kinds off. A source that can't
+portray reads the same types and gives each the kind the S-101 rules would.
+Cable and pipeline areas, dumping grounds, fairways and traffic lanes aren't
+checked: they restrict anchoring or fishing, or are where a route is meant
+to go.
 
 | Code | Group | When |
 | --- | --- | --- |
 | `route_check.enters_prohibited_area` | MustReview | The track enters an S-101 area whose `restriction` is entry prohibited (7) or entry restricted (8) |
 | `route_check.prohibited_area_in_corridor` | Check | Such an area reaches inside the limits, but the track doesn't enter it |
-| `route_check.restricted_area` | Check or Info | Another S-101 restricted or military practice area; Info when its restrictions don't bear on a passage (fishing, anchoring, dredging and the like) |
+| `route_check.restricted_area` | Check or Info | Another S-101 restricted or military practice area, offshore production or seaplane landing area or marine farm; Info when its restrictions don't bear on a passage (fishing, anchoring, dredging and the like); MustReview when the track enters an area to be avoided |
 | `route_check.caution_area` | Check | A `CautionArea` |
-| `route_check.traffic_area` | Check or Info | A separation zone, precautionary area or submarine transit lane; Info for an inshore traffic zone |
+| `route_check.traffic_area` | Check or Info | A precautionary area or submarine transit lane; Info for an inshore traffic zone; MustReview when the track enters a traffic separation zone |
 | `route_check.anchorage_area` | Check | An `AnchorageArea` |
 | `route_check.protected_area` | Check or Info | An S-122 marine protected or restricted area; Info by restriction, as above. Never MustReview |
 | `route_check.area_not_in_force` | Info | The area's `fixedDateRange` or season doesn't cover the vessel's time there |
+| `route_check.area_kind_off` | Info | The route meets areas of a kind in `AreaKindsOff` (`AreaKindOffDetails`); one per kind, in the alert catalogue's words |
 
 An area that only reaches inside the limits is one group lighter (Check
 becomes Info). Findings have category `Area` and `AreaDetails`, and the

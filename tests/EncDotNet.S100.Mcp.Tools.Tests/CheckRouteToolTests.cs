@@ -138,6 +138,23 @@ public class CheckRouteToolTests
     }
 
     [Fact]
+    public async Task An_unknown_area_kind_is_rejected()
+    {
+        var error = await Err(new CheckRouteTool(new FakeDatasetCatalog()), new CheckRouteRequest(Polyline: Polyline, AreaKindsOff: ["anchorage_area", "lagoon"]));
+
+        Assert.Equal("invalid_argument", error.Code);
+        Assert.Contains("lagoon", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_area_kind_off_finding_names_the_kind()
+    {
+        var details = CheckRouteDetails.From(new AreaKindOffDetails { AreaKind = RouteAreaKinds.MarineFarm, Count = 3 })!.AreaKindOff!;
+
+        Assert.Equal(new CheckRouteAreaKindOffDetails("marine_farm", 3), details);
+    }
+
+    [Fact]
     public void A_hazards_details_carry_its_class_and_position()
     {
         var details = CheckRouteDetails.From(new HazardDetails
