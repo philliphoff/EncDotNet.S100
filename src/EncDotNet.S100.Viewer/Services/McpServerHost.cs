@@ -65,6 +65,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly EncDotNet.S100.Viewer.Diagnostics.LogBuffer? _logBuffer;
     private readonly EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService? _displayCombinations;
     private readonly EncDotNet.S100.Viewer.Services.Depth.DepthBasisService? _depthBasis;
+    private readonly EncDotNet.S100.Viewer.Tools.RangeBearingState? _rangeBearing;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     private S100McpServer? _server;
@@ -108,8 +109,10 @@ internal sealed class McpServerHost : IAsyncDisposable
         EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? routeCheckSources = null,
         EncDotNet.S100.Viewer.Diagnostics.LogBuffer? logBuffer = null,
         EncDotNet.S100.Viewer.Services.Depth.DepthBasisService? depthBasis = null,
-        EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService? displayCombinations = null)
+        EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService? displayCombinations = null,
+        EncDotNet.S100.Viewer.Tools.RangeBearingState? rangeBearing = null)
     {
+        _rangeBearing = rangeBearing;
         _depthBasis = depthBasis;
         _logBuffer = logBuffer;
         _displayCombinations = displayCombinations;
@@ -528,6 +531,12 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(SetPassageCardMcpAdapter.Create(new SetPassageCardTool(_routesService, invoker)));
             tools.Add(GetPassageMcpAdapter.Create(new GetPassageTool(_routesService, invoker)));
             tools.Add(SetPassageMcpAdapter.Create(new SetPassageTool(_routesService, invoker)));
+        }
+        if (_rangeBearing is not null)
+        {
+            var rangeBearingInvoker = new DispatcherRouteEditInvoker();
+            tools.Add(RangeBearingMcpAdapters.Create(new SetRangeBearingTool(_rangeBearing, _settings, rangeBearingInvoker)));
+            tools.Add(RangeBearingMcpAdapters.Create(new GetRangeBearingTool(_rangeBearing, rangeBearingInvoker)));
         }
         return tools.Count == 0 ? null : tools;
     }

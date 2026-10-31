@@ -1869,6 +1869,124 @@
   <data name="Menu_RouteEditMode" xml:space="preserve">
     <value>Route Edit Mode</value>
   </data>
+  <data name="Label_RangeBearingMode" xml:space="preserve">
+    <value>Range &amp; bearing</value>
+  </data>
+  <data name="Tooltip_RangeBearingMode" xml:space="preserve">
+    <value>Range and bearing ({0}): click an origin, then the end</value>
+  </data>
+  <data name="Menu_RangeBearingMode" xml:space="preserve">
+    <value>Range &amp; Bearing Mode</value>
+  </data>
+  <data name="RangeBearing_Title" xml:space="preserve">
+    <value>Range &amp; bearing</value>
+  </data>
+  <data name="RangeBearing_Hint" xml:space="preserve">
+    <value>Click on the map to set the origin, or type it.</value>
+  </data>
+  <data name="RangeBearing_Origin" xml:space="preserve">
+    <value>Origin</value>
+  </data>
+  <data name="RangeBearing_Range" xml:space="preserve">
+    <value>Range</value>
+  </data>
+  <data name="RangeBearing_Bearing" xml:space="preserve">
+    <value>Bearing</value>
+  </data>
+  <data name="RangeBearing_End" xml:space="preserve">
+    <value>End</value>
+  </data>
+  <data name="RangeBearing_Reverse" xml:space="preserve">
+    <value>Reverse</value>
+  </data>
+  <data name="RangeBearing_Rings" xml:space="preserve">
+    <value>Rings</value>
+  </data>
+  <data name="RangeBearing_RingsEvery" xml:space="preserve">
+    <value>every</value>
+  </data>
+  <data name="RangeBearing_RingsCopy" xml:space="preserve">
+    <value>every {0} × {1}</value>
+    <comment>Copied rings: {0} the interval, {1} the count</comment>
+  </data>
+  <data name="RangeBearing_RingCount" xml:space="preserve">
+    <value>Number of rings</value>
+  </data>
+  <data name="RangeBearing_RingInterval" xml:space="preserve">
+    <value>Ring interval</value>
+  </data>
+  <data name="RangeBearing_Rhumb" xml:space="preserve">
+    <value>Rhumb</value>
+  </data>
+  <data name="RangeBearing_GreatCircle" xml:space="preserve">
+    <value>Great circle</value>
+  </data>
+  <data name="RangeBearing_GeometryLabel" xml:space="preserve">
+    <value>Geometry</value>
+  </data>
+  <data name="RangeBearing_GeometryTooltip" xml:space="preserve">
+    <value>How the bearing line runs and how the end is computed (G)</value>
+  </data>
+  <data name="RangeBearing_Model" xml:space="preserve">
+    <value>Sphere · R {0:#,0} km</value>
+    <comment>The earth model in the card footer; {0} is the radius in km</comment>
+  </data>
+  <data name="RangeBearing_ModelLabel" xml:space="preserve">
+    <value>Earth model</value>
+  </data>
+  <data name="RangeBearing_ModelTooltip" xml:space="preserve">
+    <value>Distances and bearings use a spherical earth. That's within the S-164 accuracy tolerance. WGS-84 is tracked in #1189.</value>
+  </data>
+  <data name="RangeBearing_RangeTooltip" xml:space="preserve">
+    <value>The range ring is a geodesic circle: every point on it is the range from the origin along a great circle. On a rhumb-line bearing it passes through the end only approximately.</value>
+  </data>
+  <data name="RangeBearing_ReverseTooltip" xml:space="preserve">
+    <value>The bearing from End back to Origin. On a great circle this isn't the bearing plus 180°.</value>
+  </data>
+  <data name="RangeBearing_LockTooltip" xml:space="preserve">
+    <value>Typed, so the cursor doesn't change it. Click to unlock.</value>
+  </data>
+  <data name="RangeBearing_RangeLock" xml:space="preserve">
+    <value>Unlock the range</value>
+  </data>
+  <data name="RangeBearing_BearingLock" xml:space="preserve">
+    <value>Unlock the bearing</value>
+  </data>
+  <data name="RangeBearing_Copy" xml:space="preserve">
+    <value>Copy the result</value>
+  </data>
+  <data name="RangeBearing_Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="RangeBearing_NotAPosition" xml:space="preserve">
+    <value>Not a position. Try 32°35.224'S 061°17.710'E or -32.587, 61.295</value>
+  </data>
+  <data name="RangeBearing_NotARange" xml:space="preserve">
+    <value>Not a range. Try 2000000 m, 2,000 km or 1079.9 NM</value>
+  </data>
+  <data name="RangeBearing_AmbiguousM" xml:space="preserve">
+    <value>M could be metres or nautical miles. Type m or NM.</value>
+  </data>
+  <data name="RangeBearing_NotPositive" xml:space="preserve">
+    <value>The range must be more than zero.</value>
+  </data>
+  <data name="RangeBearing_NotABearing" xml:space="preserve">
+    <value>Not a bearing. Type 0 to 360, such as 295.7</value>
+  </data>
+  <data name="RangeBearing_NotARingCount" xml:space="preserve">
+    <value>Type a whole number from 1 to 20.</value>
+  </data>
+  <data name="RangeBearing_Status" xml:space="preserve">
+    <value>{0} · {1}T</value>
+    <comment>Status bar while the tool is on: {0} the range, {1} the bearing such as 295.7°</comment>
+  </data>
+  <data name="RangeBearing_StatusHint" xml:space="preserve">
+    <value>Click to set the origin</value>
+  </data>
+  <data name="RangeBearing_ValueName" xml:space="preserve">
+    <value>{0} {1}</value>
+    <comment>Accessible name of a card value: {0} the row label, {1} its value</comment>
+  </data>
   <data name="Status_RouteEditNoData" xml:space="preserve">
     <value>Click on the map to add waypoints; drag a waypoint to move it, Backspace removes the last.</value>
   </data>

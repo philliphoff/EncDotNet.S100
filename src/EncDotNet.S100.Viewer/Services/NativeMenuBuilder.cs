@@ -106,6 +106,14 @@ internal sealed class NativeMenuBuilder
             checkedSelector: () => _viewModel.IsMeasureModeActive,
             gesture: new KeyGesture(Key.M, KeyModifiers.Meta));
 
+        var rangeBearingModeItem = BuildToggleItem(
+            Strings.Menu_RangeBearingMode,
+            initiallyChecked: _viewModel.IsRangeBearingModeActive,
+            execute: () => _viewModel.ToggleRangeBearingModeCommand.Execute(null),
+            propertyName: nameof(MainViewModel.IsRangeBearingModeActive),
+            checkedSelector: () => _viewModel.IsRangeBearingModeActive,
+            gesture: new KeyGesture(Key.R, KeyModifiers.Meta));
+
         // ⌘E is also handled by Tools.RouteEditorKeys; the menu's copy of the
         // shortcut must not fire while a text field has focus either.
         var routeEditModeItem = BuildToggleItem(
@@ -122,7 +130,7 @@ internal sealed class NativeMenuBuilder
 
         var appearanceMenu = new NativeMenuItem(Strings.Menu_Appearance)
         {
-            Menu = new NativeMenu { sideBarItem, statusBarItem, timelineItem, pickPanelItem, pickModeItem, measureModeItem, routeEditModeItem },
+            Menu = new NativeMenu { sideBarItem, statusBarItem, timelineItem, pickPanelItem, pickModeItem, measureModeItem, rangeBearingModeItem, routeEditModeItem },
         };
 
         var viewMenu = new NativeMenuItem(Strings.Menu_View)

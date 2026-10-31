@@ -6,6 +6,14 @@ month. For package versions and release assets, see
 
 ## October 2026
 
+- **Range & bearing tool.** SoundCharts has a new map tool next to Measure:
+  an EBL/VRM pair from an origin you choose (⌘R or Ctrl+R). Click the
+  origin, then the end, or type the origin, range and bearing on its card to
+  read the end position and the reverse bearing; a typed range or bearing is
+  locked. It works along a rhumb line or a great circle (`G` switches), draws
+  the range as a geodesic circle and can add range rings. MCP's
+  `set_range_bearing` and `get_range_bearing` drive and read it with
+  unrounded values, for the S-164 Accuracy4–6 and Accuracy12 tests (#1130).
 - **What the chart's depths are relative to.** SoundCharts' status bar now
   shows **DEPTHS** next to **OVERSCALE** whenever an S-101, S-57 or S-102
   dataset is loaded: **Charted**, or **Charted · water level not applied**
