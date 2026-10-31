@@ -9,6 +9,13 @@
 > ([#1191](https://github.com/philliphoff/EncDotNet.S100/issues/1191)); this
 > note defines the state that indicator reports.
 
+The mocks for this note are the **Chart-wide Water Level Adjustment · design
+pass** artboard on the *Chart display* page of the SoundCharts design canvas
+(<https://claude.ai/artifact/2hWbgQ9wKM1gC2gM51mSCs>): the **Water level adjustment** setting
+(A1–A3), the same chart charted and adjusted with the boundary and a refused
+area (B1–B6), the adjusted-sounding options for Q3 (C0–C3), the Depth card
+and sounding pick report (D1, D2), and the timeline while dragging (E1, E2).
+
 ## 0. Problem
 
 S-104 water level is applied in three places today, and the chart isn't one

@@ -8,6 +8,13 @@
 > [Chart-wide water level adjustment](chart-wide-water-level-adjustment.md)
 > covers the adjustment itself.
 
+The mocks for this note are the **Depth Basis Indicator · design pass**
+artboard on the *Chart display* page of the SoundCharts design canvas
+(<https://claude.ai/artifact/2hWbgQ9wKM1gC2gM51mSCs>): the status bar in each state (A1–A6) and
+its placement (A7), the flyout before and after #1132 (B1, B2), the Depth
+card in the new wording (C1–C3), and the Clearance readout and route-check
+findings (D1, D2).
+
 ## 0. Problem
 
 In the ECDIS Ltd simulator trials comparing S-57 with S-100 products

@@ -8,6 +8,12 @@
 > off the deferred list in
 > [S-98 interoperability](s98-interoperability.md#35-deferred--explicit-non-goals-for-v1).
 
+The mocks for this note are the **Predefined Display Combinations · design
+pass** artboard on the *Chart display* page of the SoundCharts design canvas
+(<https://claude.ai/artifact/2hWbgQ9wKM1gC2gM51mSCs>): the **View ▾** pill (A1–A3), its menu
+(B), the View section of the Display controls panel (C), the **Save current
+view** dialog (D), and the Datasets panel with **Charted only** applied (E).
+
 ## 0. Problem
 
 SoundCharts can already build a calm, task-specific picture from several
