@@ -382,6 +382,12 @@ internal sealed partial class ViewerSettings
     public string MeasureGeometry { get; set; } = "Rhumb";
 
     /// <summary>
+    /// The Range &amp; bearing tool's geometry, <c>"Rhumb"</c> or
+    /// <c>"GreatCircle"</c>; <c>null</c> (the first run) is Rhumb (#1130 D15).
+    /// </summary>
+    public string? RangeBearingGeometry { get; set; }
+
+    /// <summary>
     /// Whether an accent-coloured border is drawn around the extent of a loaded
     /// dataset that has zoomed out past its display-scale minimum (and therefore
     /// renders no content). Enabled by default so a mariner who frames a

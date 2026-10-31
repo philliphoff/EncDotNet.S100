@@ -50,6 +50,9 @@
         <!-- Cmd+M / Ctrl+M toggles Measure Mode. -->
         <KeyBinding Gesture="Cmd+M" Command="{Binding ToggleMeasureModeCommand}" />
         <KeyBinding Gesture="Ctrl+M" Command="{Binding ToggleMeasureModeCommand}" />
+        <!-- Cmd+R / Ctrl+R toggles Range & bearing (#1130 D11). -->
+        <KeyBinding Gesture="Cmd+R" Command="{Binding ToggleRangeBearingModeCommand}" />
+        <KeyBinding Gesture="Ctrl+R" Command="{Binding ToggleRangeBearingModeCommand}" />
         <!-- Enter / Backspace are tool actions while a tool is active. -->
         <KeyBinding Gesture="Enter" Command="{Binding ToolCommitCommand}" />
         <KeyBinding Gesture="Back" Command="{Binding ToolBackstepCommand}" />
@@ -685,9 +688,9 @@
                                    VerticalAlignment="Center" />
                     </StackPanel>
                 </Panel>
-                <!-- Top-left stack under the time stamp: a map tool's card, then the
-                     warning note, which moves down below the card while it's open
-                     (#1130, D19). -->
+                <!-- The tool cards (#1130 D13) take the slot under the time stamp;
+                     the warning note moves down below them (D19). The measure card
+                     goes first, then Range & bearing. -->
                 <StackPanel x:Name="MapTopLeftStack"
                             HorizontalAlignment="Left"
                             VerticalAlignment="Top"
@@ -697,6 +700,8 @@
                 <views:MeasureCardView DataContext="{Binding MeasureCard}"
                                        IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsMeasureModeActive}"
                                        HorizontalAlignment="Left" />
+                <views:RangeBearingCardView DataContext="{Binding RangeBearing}"
+                                            IsVisible="{Binding IsActive}" />
                 <!-- Navigational warning note (#932): while a warning opened from
                      the panel draws nothing (no location) or isn't framed (not in
                      force), say why. In the page, so captures include it. -->
@@ -895,6 +900,40 @@
                             </Style>
                         </Button.Styles>
                         <ic:FluentIcon Icon="Ruler" IconVariant="Regular" FontSize="16" />
+                    </Button>
+                    <!--
+                      Range & bearing toggle button (#1130 D11): an EBL/VRM
+                      pair from a chosen origin. Same accent-fill pattern as
+                      the Measure button; Cmd/Ctrl+R toggles it.
+                    -->
+                    <Button x:Name="RangeBearingModeButton"
+                            AutomationProperties.AutomationId="Map.RangeBearingMode"
+                            AutomationProperties.Name="{x:Static loc:Strings.Label_RangeBearingMode}"
+                            AutomationProperties.HelpText="{Binding RangeBearingModeTooltip}"
+                            Classes="Icon MapOverlay"
+                            Classes.rangeBearingActive="{Binding IsRangeBearingModeActive}"
+                            Command="{Binding ToggleRangeBearingModeCommand}"
+                            ToolTip.Tip="{Binding RangeBearingModeTooltip}">
+                        <Button.Styles>
+                            <Style Selector="Button#RangeBearingModeButton.rangeBearingActive">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#RangeBearingModeButton.rangeBearingActive /template/ ContentPresenter">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Style>
+                            <Style Selector="Button#RangeBearingModeButton.rangeBearingActive ic|FluentIcon">
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#RangeBearingModeButton.rangeBearingActive /template/ Border#HoverBackground">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Opacity" Value="1" />
+                            </Style>
+                        </Button.Styles>
+                        <ic:FluentIcon Icon="CompassNorthwest" IconVariant="Regular" FontSize="16" />
                     </Button>
                     <!--
                       Route Edit Mode toggle button. Mirrors the Measure

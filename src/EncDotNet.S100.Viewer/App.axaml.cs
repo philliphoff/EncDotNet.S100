@@ -883,9 +883,9 @@ public partial class App : Application
             new EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
                 sp.GetRequiredService<ViewerDatasetCatalog>(),
-                sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>(),
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PanelRouteWarningSource>(),
-                sp.GetService<IMarinerSettingsProvider>(),
+                sources: sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>(),
+                warnings: sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PanelRouteWarningSource>(),
+                mariner: sp.GetService<IMarinerSettingsProvider>(),
                 post: action =>
                 {
                     if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
@@ -911,6 +911,10 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>()));
         // The Check route map legend's fold, kept per user (#959, C8).
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState(
+            sp.GetRequiredService<ViewerSettings>()));
+        // The Range & bearing tool's model, shared by the map tool, its card and
+        // the MCP tools; its geometry is kept per user (#1130 D15).
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Tools.RangeBearingState(
             sp.GetRequiredService<ViewerSettings>()));
         // Loads persisted routes at startup and writes them back (debounced)
         // on change, so user/agent routes survive a restart. Eagerly
@@ -1234,7 +1238,8 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MeasureSession>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel>()));
+            sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Tools.RangeBearingState>()));
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
             () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources));

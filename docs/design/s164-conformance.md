@@ -497,9 +497,9 @@ viewer's pick panel shows.
 | WaterLevelAdjustment | S-98 Appendix D-2 | PowerUp | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs`, `src/EncDotNet.S100.Viewer/Services/Depth/DepthBasisEvaluator.cs` | S-102 replaces ENC depths; S-104 water level only at a picked point and in route clearance. The permanent indication exists (status bar **DEPTHS**, #1191); chart adjustment is #1132. |
 | AdjustmentOfDepthValues | S-98 Appendix D-3.1 | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/LocationDepthProbe.cs` | Point probe only. |
 | WLAFeatureInformation | S-98 Appendix D-3 | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs` | Depth card shows charted depth, water level and source, and says the chart shows charted depths (#1191); not per feature. Chart adjustment is #1132. |
-| UncertaintyWLA | S-98 Appendix D-2 | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs` | S-102 uncertainty only; S-104 uncertainty not combined. |
+| UncertaintyWLA | S-98 Appendix D-2 | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs` | S-102 and S-104 uncertainty combined, √(σ₁₀₂² + σ₁₀₄²), at a picked point; not yet on the chart. |
 | WLATimePeriod | S-98 Appendix D-2.5 | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/DepthOverTimeViewModel.cs` | Depth over time at a point; no period adjustment. |
-| IncompatibleDatums | — | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs` | Mismatched datums warn; data isn't rejected. |
+| IncompatibleDatums | — | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs` | At a picked point, water level on another or an undeclared datum is refused and the reason shown; not yet on the chart. |
 | WLAPlanning1 | S-98 Appendix D-2.7 | — | Supported | `src/EncDotNet.S100.Navigation/ClearanceCheck.UkcModel.cs` | Route clearance applies S-104 at each ETA. |
 | PolarData1 | — | — | Supported | `src/EncDotNet.S100.Rendering.Scene/WebMercator.cs` | Web Mercator to 85.05°. |
 | HighLatitudeScaleBar | S-98 12.10.1 | — | Partial | `src/EncDotNet.S100.Viewer/Views/ScaleBarView.axaml.cs` | Scale bar corrected at view centre only. |

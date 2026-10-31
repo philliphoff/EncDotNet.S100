@@ -33,7 +33,15 @@ public sealed record WaterLevelSourceInfo(
 /// <summary>A water-level height read from a series.</summary>
 /// <param name="HeightMeters">Height of the water above the vertical datum, in metres.</param>
 /// <param name="StepTime">The time step nearest the requested time.</param>
-public readonly record struct WaterLevelReading(double HeightMeters, DateTime StepTime);
+public readonly record struct WaterLevelReading(double HeightMeters, DateTime StepTime)
+{
+    /// <summary>
+    /// The uncertainty of <see cref="HeightMeters"/> in metres (a ± value), or
+    /// <c>null</c> when the dataset doesn't carry one (S-104 Ed 2.0.0
+    /// §10.2.2.4 and Annex A <c>uncertainty</c>; fill value −1.0).
+    /// </summary>
+    public double? UncertaintyMeters { get; init; }
+}
 
 /// <summary>
 /// The water-level time series at one place: a grid cell or a station.
@@ -58,6 +66,16 @@ public interface IWaterLevelSeries
     /// <param name="utc">The time (UTC).</param>
     /// <returns>The reading, or <c>null</c>.</returns>
     WaterLevelReading? ValueAt(DateTime utc);
+
+    /// <summary>
+    /// The series' own time steps that fall within
+    /// [<paramref name="start"/>, <paramref name="end"/>], in order.
+    /// <see cref="WaterLevelPeriodMinimum"/> reads the series at each of them.
+    /// </summary>
+    /// <param name="start">The start of the period (UTC), inclusive.</param>
+    /// <param name="end">The end of the period (UTC), inclusive.</param>
+    /// <returns>The step times, ascending.</returns>
+    IReadOnlyList<DateTime> StepsWithin(DateTime start, DateTime end);
 }
 
 /// <summary>Finds the water-level series that apply at a point.</summary>
@@ -74,6 +92,19 @@ public interface IWaterLevelSource
     /// <param name="position">The point, in WGS-84.</param>
     /// <returns>The series, most preferred first.</returns>
     IReadOnlyList<IWaterLevelSeries> Locate(GeoPosition position);
+
+    /// <summary>
+    /// The datasets the source reads, one entry per dataset (no station or
+    /// grid cell), for a <see cref="WaterLevelBasis"/>. Empty when the source
+    /// can't list them.
+    /// </summary>
+    IReadOnlyList<WaterLevelSourceInfo> Datasets => [];
+
+    /// <summary>
+    /// The areas where <see cref="Locate"/> can return a series, in WGS-84.
+    /// Empty when the source can't describe them.
+    /// </summary>
+    IReadOnlyList<CoverageArea> Footprint => [];
 }
 
 /// <summary>

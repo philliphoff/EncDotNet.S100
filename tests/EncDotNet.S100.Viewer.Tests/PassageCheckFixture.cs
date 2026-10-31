@@ -29,9 +29,9 @@ internal sealed class PassageCheckFixture
 
     /// <summary>
     /// A <c>post</c> that runs each result under one lock, standing in for the
-    /// UI thread when a view model listens to more than one service: without
-    /// it, the check and the findings raise <c>Changed</c> on different pool
-    /// threads and the view model's collections are edited concurrently.
+    /// UI thread: without it, a result lands on a pool thread while the test
+    /// edits the route on its own, and services raise <c>Changed</c> on
+    /// different threads, so view models' collections are edited concurrently.
     /// </summary>
     public static void SerialPost(Action action)
     {
@@ -76,7 +76,7 @@ internal sealed class PassageCheckFixture
             Catalog,
             checks: allChecks ? null : () => [new EncDotNet.S100.Navigation.ClearanceCheck(), .. checks ?? []],
             debounce: debounce ?? TimeSpan.Zero,
-            post: post);
+            post: post ?? SerialPost);
     }
 
     public FixedCatalog Catalog { get; }

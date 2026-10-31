@@ -408,7 +408,13 @@ internal static partial class Strings
     public static string Pick_Depth_Label_DepthStatic => Get(nameof(Pick_Depth_Label_DepthStatic));
     public static string Pick_Depth_SourceData => Get(nameof(Pick_Depth_SourceData));
     public static string Pick_Depth_Uncertainty => Get(nameof(Pick_Depth_Uncertainty));
-    public static string Pick_Depth_DatumNote => Get(nameof(Pick_Depth_DatumNote));
+    public static string Pick_Depth_CombinedUncertainty => Get(nameof(Pick_Depth_CombinedUncertainty));
+    public static string Pick_Depth_WaterLevelUncertainty => Get(nameof(Pick_Depth_WaterLevelUncertainty));
+    public static string Pick_Depth_ChartedUncertaintyOnly => Get(nameof(Pick_Depth_ChartedUncertaintyOnly));
+    public static string Pick_Depth_WaterLevelUncertaintyNotProvided => Get(nameof(Pick_Depth_WaterLevelUncertaintyNotProvided));
+    public static string Pick_Depth_Refused_DifferentDatum => Get(nameof(Pick_Depth_Refused_DifferentDatum));
+    public static string Pick_Depth_Refused_UndeclaredDatum => Get(nameof(Pick_Depth_Refused_UndeclaredDatum));
+    public static string Pick_Depth_Refused_Both => Get(nameof(Pick_Depth_Refused_Both));
     public static string Pick_Depth_NoTide => Get(nameof(Pick_Depth_NoTide));
     public static string Pick_Depth_Value_Unavailable => Get(nameof(Pick_Depth_Value_Unavailable));
 

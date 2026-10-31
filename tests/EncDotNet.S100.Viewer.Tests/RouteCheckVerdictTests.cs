@@ -299,7 +299,7 @@ internal sealed record WarningsRouteCheck(RoutesService Routes, Route Route, Pas
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
         var check = new PassageCheckService(routes, catalog, warnings: new PanelRouteWarningSource(warnings),
             checks: () => [new WarningCheck(), new ClearanceCheck()],
-            options: options is null ? null : new RouteCheckOptions { Warnings = options }, debounce: TimeSpan.Zero, post: post);
+            options: options is null ? null : new RouteCheckOptions { Warnings = options }, debounce: TimeSpan.Zero, post: post ?? PassageCheckFixture.SerialPost);
         var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(), warnings: warnings);
         return new WarningsRouteCheck(routes, route, check, findings) { Warnings = warnings };
     }

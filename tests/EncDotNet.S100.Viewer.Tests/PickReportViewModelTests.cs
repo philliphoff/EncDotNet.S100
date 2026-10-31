@@ -300,8 +300,7 @@ public class PickReportViewModelTests
             new BaseDepthResult(10.0, BaseDepthSource.Bathymetry, null, 23, null),
             null,
             new[] { new DepthOverTimePoint(new DateTime(2030, 6, 1, 0, 0, 0, DateTimeKind.Utc), 10.0) },
-            null,
-            DatumsNotReconciled: false);
+            null);
 
         return new DepthOverTimeViewModel(
             result,

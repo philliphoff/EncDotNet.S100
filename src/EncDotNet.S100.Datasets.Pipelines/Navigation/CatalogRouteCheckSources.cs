@@ -71,6 +71,10 @@ public static class CatalogRouteCheckSources
         private readonly Lazy<IWaterLevelSource> _source = new(create, LazyThreadSafetyMode.ExecutionAndPublication);
 
         public IReadOnlyList<IWaterLevelSeries> Locate(GeoPosition position) => _source.Value.Locate(position);
+
+        public IReadOnlyList<WaterLevelSourceInfo> Datasets => _source.Value.Datasets;
+
+        public IReadOnlyList<CoverageArea> Footprint => _source.Value.Footprint;
     }
 
     private sealed class LazyWarnings(Func<IRouteWarningSource> create) : IRouteWarningSource

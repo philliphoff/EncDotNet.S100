@@ -14,7 +14,8 @@ internal static class S104Synth
         float height = 1.5f,
         byte trend = 3,
         int dataCodingFormat = 2,
-        DateTime[]? times = null)
+        DateTime[]? times = null,
+        Func<int, float>? uncertaintyAtStep = null)
     {
         times ??= new[]
         {
@@ -41,6 +42,7 @@ internal static class S104Synth
                 NumPointsLongitudinal = numCols,
                 TimePoint = times[t],
                 Values = values,
+                Uncertainties = uncertaintyAtStep is null ? null : Enumerable.Repeat(uncertaintyAtStep(t), values.Length).ToArray(),
             });
         }
 
