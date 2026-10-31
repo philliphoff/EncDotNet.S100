@@ -90,7 +90,7 @@ public sealed partial class ChartCheck
         // do the sweep's cells.
         private void CheckDangers(IReadOnlyList<RouteChartFeature> features, LegDepths depths)
         {
-            var nearby = Math.Max(0, _run.Options.DangerNearbyMeters);
+            var nearby = _nearby;
             foreach (var feature in features)
             {
                 if (feature.Kind != RouteChartFeatureKind.Danger)

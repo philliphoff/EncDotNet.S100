@@ -198,6 +198,18 @@ public class RouteFindingFormatter
     /// <summary>The title of <see cref="RouteFindingCodes.DangerNearRoute"/>: the danger's kind ({0}).</summary>
     protected virtual string DangerNearRouteFormat => "{0} near the route";
 
+    /// <summary>The title of a hazard on the track (#1127): its kind ({0}, from <see cref="HazardKind"/>).</summary>
+    protected virtual string HazardOnTrackFormat => "{0} on the track";
+
+    /// <summary>The title of a hazard elsewhere in the corridor: its kind ({0}).</summary>
+    protected virtual string HazardInCorridorFormat => "{0} in the corridor";
+
+    /// <summary>The title of a hazard near the route: its kind ({0}).</summary>
+    protected virtual string HazardNearRouteFormat => "{0} near the route";
+
+    /// <summary>The title of an overhead feature over the track: its kind ({0}).</summary>
+    protected virtual string OverheadOverTrackFormat => "{0} over the track";
+
     /// <summary>The kind of a <c>Wreck</c>, in a danger's title.</summary>
     protected virtual string Wreck => "Wreck";
 
@@ -279,6 +291,19 @@ public class RouteFindingFormatter
             return Format(code == RouteFindingCodes.DangerInCorridor ? DangerInCorridorFormat : DangerNearRouteFormat, DangerKind(type));
         }
 
+        if (finding.Details is HazardDetails hazard)
+        {
+            return Format(
+                hazard.Position switch
+                {
+                    RouteFindingPosition.OnTrack when hazard.HazardClass == RouteHazardClass.Overhead => OverheadOverTrackFormat,
+                    RouteFindingPosition.OnTrack => HazardOnTrackFormat,
+                    RouteFindingPosition.InCorridor => HazardInCorridorFormat,
+                    _ => HazardNearRouteFormat,
+                },
+                HazardKind(hazard.FeatureType));
+        }
+
         return code.Value switch
         {
             "route_check.crosses_land" => CrossesLand,
@@ -321,6 +346,11 @@ public class RouteFindingFormatter
 
         switch (finding.Details)
         {
+            case HazardDetails hazard:
+                parts.Add(hazard.Side == RouteFindingSide.OnTrack
+                    ? OnTrack
+                    : Format(hazard.Side == RouteFindingSide.Port ? ToPortFormat : ToStarboardFormat, hazard.Offset.TotalMetres));
+                break;
             case DangerDetails danger:
                 parts.Add(danger.Side == RouteFindingSide.OnTrack
                     ? OnTrack
@@ -368,6 +398,32 @@ public class RouteFindingFormatter
         }
 
         return string.Join(Separator, parts);
+    }
+
+    /// <summary>
+    /// The kind of a hazard in its title (#1127): its feature type in words,
+    /// such as "Lateral buoy" for <c>LateralBuoy</c> and "Virtual AIS aid to
+    /// navigation" for <c>VirtualAISAidToNavigation</c>.
+    /// </summary>
+    /// <param name="featureType">The S-101 feature type.</param>
+    /// <returns>The kind.</returns>
+    protected virtual string HazardKind(string featureType)
+    {
+        var words = new List<string>();
+        var start = 0;
+        for (var i = 1; i <= featureType.Length; i++)
+        {
+            if (i == featureType.Length
+                || (char.IsUpper(featureType[i]) && (char.IsLower(featureType[i - 1])
+                    || (i + 1 < featureType.Length && char.IsLower(featureType[i + 1]) && char.IsUpper(featureType[i - 1])))))
+            {
+                var word = featureType[start..i];
+                words.Add(words.Count == 0 || word.All(char.IsUpper) ? word : word.ToLowerInvariant());
+                start = i;
+            }
+        }
+
+        return string.Join(' ', words);
     }
 
     /// <summary>A danger's kind in its title, from its feature type.</summary>

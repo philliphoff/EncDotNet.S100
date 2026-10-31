@@ -75,9 +75,17 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         public double SafetyContourMeters { get; init; } = 30.0;
 
         [CommandOption("--safety-depth <METERS>")]
-        [Description("Safety depth in metres, for charted dangers and soundings, as the mariner setting (S-101 SafetyDepth). Default 30.")]
+        [Description("Safety depth in metres, for soundings, as the mariner setting (S-101 SafetyDepth). Default 30.")]
         [DefaultValue(30.0)]
         public double SafetyDepthMeters { get; init; } = 30.0;
+
+        [CommandOption("--track-clearance <METERS>")]
+        [Description("How close to the track line, in metres, an aid to navigation, structure or overhead feature counts as on the track. Default 30.")]
+        public double? TrackClearanceMeters { get; init; }
+
+        [CommandOption("--nearby <METERS>")]
+        [Description("How far beyond the cross-track limits, in metres, a danger or hazard counts as near the route. Default 185.2 (0.1 NM).")]
+        public double? NearbyMeters { get; init; }
 
         [CommandOption("--window")]
         [Description("Also sweep departures across the S-104 time range that covers the route, to find the departure window. Needs a draft.")]
@@ -118,6 +126,8 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
                 ("--corridor", CorridorMeters, true),
                 ("--safety-contour", SafetyContourMeters, true),
                 ("--safety-depth", SafetyDepthMeters, true),
+                ("--track-clearance", TrackClearanceMeters, true),
+                ("--nearby", NearbyMeters, true),
             })
             {
                 if (value is { } v && (!double.IsFinite(v) || v < 0 || (!allowZero && v == 0)))
@@ -188,6 +198,8 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
                 SafetyContour = Depth.FromMetres(settings.SafetyContourMeters),
                 SafetyDepth = Depth.FromMetres(settings.SafetyDepthMeters),
                 CorridorOverride = settings.CorridorMeters is { } corridor ? Length.FromMetres(corridor) : null,
+                TrackClearance = settings.TrackClearanceMeters is { } clearance ? Length.FromMetres(clearance) : null,
+                NearbyDistance = settings.NearbyMeters is { } nearby ? Length.FromMetres(nearby) : null,
                 DepartureWindow = settings.Window ? DepartureRange.WaterLevelData(WindowStep) : null,
             };
 
@@ -337,6 +349,8 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         }
 
         Add("corridorHalfWidthMeters", settings.CorridorMeters);
+        Add("trackClearanceMeters", settings.TrackClearanceMeters);
+        Add("nearbyDistanceMeters", settings.NearbyMeters);
         Add("draftMeters", settings.DraftMeters);
         Add("squatMeters", settings.SquatMeters);
         Add("speedKnots", settings.SpeedKnots);
