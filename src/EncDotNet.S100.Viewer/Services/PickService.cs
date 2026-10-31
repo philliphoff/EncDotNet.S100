@@ -37,6 +37,8 @@ internal sealed class PickService : IPickService
     private readonly IThemeService? _themeService;
     private readonly IMarinerSettingsProvider? _marinerSettings;
     private readonly EncDotNet.S100.Viewer.Services.Depth.LocationDepthProbe _depthProbe = new();
+    private readonly ViewerDatasetCatalog? _catalog;
+    private readonly EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? _routeSources;
 
     public PickService(
         IDatasetLoaderService loader,
@@ -72,7 +74,9 @@ internal sealed class PickService : IPickService
         GlobalTimeService? globalTime,
         ITimeFormatProvider? timeFormat,
         IThemeService? themeService,
-        IMarinerSettingsProvider? marinerSettings = null)
+        IMarinerSettingsProvider? marinerSettings = null,
+        ViewerDatasetCatalog? catalog = null,
+        EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? routeSources = null)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(pickReport);
@@ -84,6 +88,8 @@ internal sealed class PickService : IPickService
         _timeFormat = timeFormat;
         _themeService = themeService;
         _marinerSettings = marinerSettings;
+        _catalog = catalog;
+        _routeSources = routeSources;
 
         // The pick-report VM raises NavigateRequested when the user
         // clicks a row in the References list. Failures surface as a
@@ -513,7 +519,12 @@ internal sealed class PickService : IPickService
         double longitude)
     {
         using var processors = _loader.AcquireProcessors();
-        var probe = _depthProbe.Evaluate(processors, hits, latitude, longitude);
+        // The water level comes from the passage check's source for the same
+        // loaded datasets, so the card and Check passage give one answer (#1132).
+        var waterLevel = _catalog is not null && _routeSources is not null
+            ? _routeSources.Get(_catalog.Datasets).WaterLevel
+            : null;
+        var probe = _depthProbe.Evaluate(processors, hits, latitude, longitude, waterLevel);
         if (probe.Class != EncDotNet.S100.Viewer.Services.Depth.WaterLandClass.Water || probe.Depth is not { } result)
             return null;
 

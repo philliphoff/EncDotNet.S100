@@ -1,34 +1,31 @@
-using EncDotNet.S100.Datasets.S104;
+using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.Services.Depth;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
+/// <summary>
+/// The pick report's depth assimilation over the water-level field: the
+/// series order is the shared source's (<c>CatalogWaterLevelSource</c>, tested
+/// with the passage check's sources), heights are read as the passage check
+/// reads them, and water level on an incompatible datum is refused.
+/// </summary>
 public class DepthAssimilationServiceTests
 {
-    private readonly DepthAssimilationService _service = new();
+    private const int Lat = 23;
+    private const int Mllw = 12;
 
-    private static S104TimeSeries Series(params (DateTime Time, double? Height)[] points)
-    {
-        var list = points
-            .Select(p => new S104TimeSeriesPoint(p.Time, p.Height, 1))
-            .ToList();
-        return new S104TimeSeries
-        {
-            Row = 0,
-            Col = 0,
-            CellLatitude = 51.9,
-            CellLongitude = 4.4,
-            Points = list,
-        };
-    }
+    private readonly DepthAssimilationService _service = new();
 
     private static readonly DateTime T0 = new(2024, 7, 23, 0, 0, 0, DateTimeKind.Utc);
 
-    private static BaseDepthResult Bathy(double depth, double? unc = 0.3, int? datum = 10) =>
+    private static StepWaterLevelSeries Series(string id, int? datum, params (DateTime Time, double? Height)[] points) =>
+        new(id, datum, points.Select(p => p.Time).ToList(), points.Select(p => p.Height).ToList());
+
+    private static BaseDepthResult Bathy(double depth, double? unc = 0.3, int? datum = Lat) =>
         new(depth, BaseDepthSource.Bathymetry, unc, datum, SoundingDistanceMeters: null);
 
-    private static BaseDepthResult Vector(double depth) =>
-        new(depth, BaseDepthSource.DepthArea, null, null, null);
+    private static BaseDepthResult Vector(double depth, int? datum = Lat) =>
+        new(depth, BaseDepthSource.DepthArea, null, datum, null);
 
     [Fact]
     public void Assimilate_returns_null_when_no_base_depth()
@@ -37,26 +34,37 @@ public class DepthAssimilationServiceTests
     }
 
     [Fact]
-    public void Assimilate_composes_tide_adjusted_depth()
+    public void Assimilate_composes_adjusted_depth()
     {
         var result = _service.Assimilate(
             Bathy(12.0),
-            [new S104TideCandidate("ds1", 0.01, T0, 10, Series((T0, 1.5), (T0.AddMinutes(10), 1.0)))]);
+            [Series("ds1", Lat, (T0, 1.5), (T0.AddMinutes(10), -1.0))]);
 
         Assert.NotNull(result);
         Assert.Equal(2, result!.DepthOverTime.Count);
         Assert.Equal(13.5, result.DepthOverTime[0].DepthMeters);
-        Assert.Equal(13.0, result.DepthOverTime[1].DepthMeters);
+        Assert.Equal(11.0, result.DepthOverTime[1].DepthMeters);
         Assert.Equal("ds1", result.Tide!.DatasetId);
         Assert.Equal(0.3, result.UncertaintyMeters);
+        Assert.Null(result.Refusal);
     }
 
     [Fact]
-    public void Assimilate_maps_nodata_tide_to_null_depth()
+    public void Water_level_at_a_time_is_interpolated_and_never_clamped()
+    {
+        var result = _service.Assimilate(Bathy(12.0), [Series("ds1", Lat, (T0, 1.0), (T0.AddHours(1), 2.0))])!;
+
+        Assert.Equal(1.5, result.WaterLevelAt(T0.AddMinutes(30))!.Value.HeightMeters, 6);
+        Assert.Null(result.WaterLevelAt(T0.AddHours(2)));
+        Assert.Null(result.WaterLevelAt(T0.AddMinutes(-1)));
+    }
+
+    [Fact]
+    public void Assimilate_maps_nodata_to_null_depth()
     {
         var result = _service.Assimilate(
             Bathy(12.0),
-            [new S104TideCandidate("ds1", 0.01, T0, 10, Series((T0, null), (T0.AddMinutes(10), 2.0)))]);
+            [Series("ds1", Lat, (T0, null), (T0.AddMinutes(10), 2.0))]);
 
         Assert.NotNull(result);
         Assert.Null(result!.DepthOverTime[0].DepthMeters);
@@ -64,7 +72,7 @@ public class DepthAssimilationServiceTests
     }
 
     [Fact]
-    public void Assimilate_partial_state_when_no_tide_overlap()
+    public void Assimilate_partial_state_when_no_series_covers()
     {
         var result = _service.Assimilate(Bathy(12.0), []);
 
@@ -72,127 +80,95 @@ public class DepthAssimilationServiceTests
         Assert.Null(result!.Tide);
         Assert.Empty(result.DepthOverTime);
         Assert.Equal(0.3, result.UncertaintyMeters);
-        Assert.False(result.DatumsNotReconciled);
+        Assert.Null(result.Refusal);
     }
 
     [Fact]
-    public void Assimilate_partial_state_when_all_candidates_out_of_bounds()
+    public void Assimilate_falls_back_to_static_when_all_steps_are_nodata()
     {
-        var result = _service.Assimilate(
-            Bathy(12.0),
-            [new S104TideCandidate("ds1", 0.01, T0, 10, Series: null)]);
-
-        Assert.NotNull(result);
-        Assert.Null(result!.Tide);
-        Assert.Empty(result.DepthOverTime);
-    }
-
-    [Fact]
-    public void Assimilate_falls_back_to_static_when_all_tide_steps_are_nodata()
-    {
-        // The grid overlaps (Series is non-null) but every time-step at the
-        // picked cell is NODATA — e.g. a land-masked cell. The result must be
-        // the static base-only state, not a tide selection with an all-null
-        // curve (which would render "DEPTH NOW n/a" despite a valid base).
+        // The grid overlaps but every step at the picked cell is NoData (a
+        // land-masked cell): the static base-only state, not an all-null curve.
         var result = _service.Assimilate(
             Bathy(0.9),
-            [new S104TideCandidate("ds1", 0.01, T0, 10, Series((T0, null), (T0.AddMinutes(10), null)))]);
+            [Series("ds1", Lat, (T0, null), (T0.AddMinutes(10), null))]);
 
         Assert.NotNull(result);
         Assert.Null(result!.Tide);
         Assert.Empty(result.DepthOverTime);
         Assert.Equal(0.9, result.Base.DepthMeters);
-        Assert.False(result.DatumsNotReconciled);
+        Assert.Null(result.Refusal);
     }
 
     [Fact]
-    public void Assimilate_selects_finest_resolution()
+    public void Assimilate_uses_the_source_order()
     {
-        var coarse = new S104TideCandidate("coarse", 0.05, T0, 10, Series((T0, 1.0)));
-        var fine = new S104TideCandidate("fine", 0.01, T0, 10, Series((T0, 2.0)));
+        var preferred = Series("fine", Lat, (T0, 2.0));
+        var other = Series("coarse", Lat, (T0, 1.0));
 
-        var result = _service.Assimilate(Bathy(10.0), [coarse, fine]);
+        var result = _service.Assimilate(Bathy(10.0), [preferred, other]);
 
         Assert.Equal("fine", result!.Tide!.DatasetId);
         Assert.Equal(12.0, result.DepthOverTime[0].DepthMeters);
     }
 
-    [Fact]
-    public void Assimilate_breaks_resolution_tie_by_latest_issuance()
+    [Theory]
+    [InlineData(Mllw, Lat, DatumAgreement.Different)]
+    [InlineData(null, Lat, DatumAgreement.Unknown)]
+    [InlineData(Lat, null, DatumAgreement.Unknown)]
+    [InlineData(Lat, 4326, DatumAgreement.Unknown)] // an EPSG code isn't an S-100 datum
+    public void Incompatible_datums_are_refused_not_applied(int? depthDatum, int? waterDatum, DatumAgreement agreement)
     {
-        var older = new S104TideCandidate("older", 0.01, T0, 10, Series((T0, 1.0)));
-        var newer = new S104TideCandidate("newer", 0.01, T0.AddDays(1), 10, Series((T0, 2.0)));
+        var result = _service.Assimilate(Bathy(10.0, datum: depthDatum), [Series("ds1", waterDatum, (T0, 1.0))])!;
 
-        var result = _service.Assimilate(Bathy(10.0), [older, newer]);
-
-        Assert.Equal("newer", result!.Tide!.DatasetId);
+        Assert.Null(result.Tide);
+        Assert.Empty(result.DepthOverTime);
+        Assert.Null(result.WaterLevelAt(T0));
+        var refusal = Assert.IsType<WaterLevelRefusal>(result.Refusal);
+        Assert.Equal(agreement, refusal.Agreement);
+        Assert.Equal(depthDatum, refusal.DepthDatumCode);
+        Assert.Equal(waterDatum, refusal.WaterLevelDatumCode);
+        Assert.Equal("ds1", refusal.WaterLevelDatasetId);
     }
 
     [Fact]
-    public void Assimilate_prefers_dated_candidate_over_undated_on_tie()
-    {
-        var undated = new S104TideCandidate("undated", 0.01, null, 10, Series((T0, 1.0)));
-        var dated = new S104TideCandidate("dated", 0.01, T0, 10, Series((T0, 2.0)));
-
-        var result = _service.Assimilate(Bathy(10.0), [undated, dated]);
-
-        Assert.Equal("dated", result!.Tide!.DatasetId);
-    }
-
-    [Fact]
-    public void Assimilate_breaks_full_tie_by_dataset_id_regardless_of_order()
-    {
-        // Equal resolution and both undated: the selection must be stable and
-        // independent of enumeration order, so the ordinally-smaller id wins.
-        var alpha = new S104TideCandidate("alpha", 0.01, null, 10, Series((T0, 1.0)));
-        var bravo = new S104TideCandidate("bravo", 0.01, null, 10, Series((T0, 2.0)));
-
-        var forward = _service.Assimilate(Bathy(10.0), [alpha, bravo]);
-        var reversed = _service.Assimilate(Bathy(10.0), [bravo, alpha]);
-
-        Assert.Equal("alpha", forward!.Tide!.DatasetId);
-        Assert.Equal("alpha", reversed!.Tide!.DatasetId);
-    }
-
-    [Fact]
-    public void Assimilate_flags_datum_mismatch_when_s102_and_s104_differ()
+    public void A_series_on_the_depth_datum_is_used_past_a_refused_one()
     {
         var result = _service.Assimilate(
-            Bathy(10.0, datum: 10),
-            [new S104TideCandidate("ds1", 0.01, T0, 23, Series((T0, 1.0)))]);
+            Bathy(10.0, datum: Lat),
+            [Series("mllw", Mllw, (T0, 5.0)), Series("lat", Lat, (T0, 1.0))])!;
 
-        Assert.True(result!.DatumsNotReconciled);
+        Assert.Equal("lat", result.Tide!.DatasetId);
+        Assert.Equal(11.0, result.DepthOverTime[0].DepthMeters);
+        Assert.Null(result.Refusal);
     }
 
     [Fact]
-    public void Assimilate_does_not_flag_when_datums_match()
+    public void S101_base_is_checked_against_its_sounding_datum()
     {
-        var result = _service.Assimilate(
-            Bathy(10.0, datum: 23),
-            [new S104TideCandidate("ds1", 0.01, T0, 23, Series((T0, 1.0)))]);
+        var applied = _service.Assimilate(Vector(7.0, datum: Lat), [Series("ds1", Lat, (T0, 1.0))])!;
+        var refused = _service.Assimilate(Vector(7.0, datum: Mllw), [Series("ds1", Lat, (T0, 1.0))])!;
 
-        Assert.False(result!.DatumsNotReconciled);
+        Assert.Null(applied.UncertaintyMeters);
+        Assert.Equal(8.0, applied.DepthOverTime[0].DepthMeters);
+        Assert.Equal(DatumAgreement.Different, refused.Refusal!.Agreement);
+        Assert.Equal(BaseDepthSource.DepthArea, refused.Refusal.DepthSource);
     }
 
     [Fact]
-    public void Assimilate_flags_when_datum_unknown()
+    public void Curve_carries_the_combined_uncertainty()
     {
-        var result = _service.Assimilate(
-            Bathy(10.0, datum: null),
-            [new S104TideCandidate("ds1", 0.01, T0, 23, Series((T0, 1.0)))]);
+        var series = new StepWaterLevelSeries("ds1", Lat, [T0], [1.0], uncertainty: 0.4);
 
-        Assert.True(result!.DatumsNotReconciled);
+        var result = _service.Assimilate(Bathy(10.0, unc: 0.3), [series])!;
+
+        Assert.Equal(0.5, result.DepthOverTime[0].UncertaintyMeters!.Value, 9);
     }
 
-    [Fact]
-    public void Assimilate_never_flags_for_vector_base()
-    {
-        var result = _service.Assimilate(
-            Vector(7.0),
-            [new S104TideCandidate("ds1", 0.01, T0, 23, Series((T0, 1.0)))]);
-
-        Assert.False(result!.DatumsNotReconciled);
-        Assert.Null(result.UncertaintyMeters);
-        Assert.Equal(8.0, result.DepthOverTime[0].DepthMeters);
-    }
+    [Theory]
+    [InlineData(0.3, 0.4, 0.5)]
+    [InlineData(0.3, null, 0.3)]
+    [InlineData(null, 0.4, 0.4)]
+    [InlineData(null, null, null)]
+    public void Uncertainties_combine_as_independent(double? charted, double? water, double? expected) =>
+        Assert.Equal(expected, LocationDepthResult.CombineUncertainty(charted, water) is { } c ? Math.Round(c, 9) : null);
 }

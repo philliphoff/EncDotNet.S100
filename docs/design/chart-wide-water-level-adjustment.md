@@ -1,7 +1,9 @@
 # Chart-wide water level adjustment — Design Note
 
-> Status: **Proposed** ([#1132](https://github.com/philliphoff/EncDotNet.S100/issues/1132)).
-> Nothing in this note is built yet. It proposes how SoundCharts applies
+> Status: **Phase 1 built** ([#1132](https://github.com/philliphoff/EncDotNet.S100/issues/1132)).
+> The water-level field, S-104 uncertainty, the S-101 sounding datum and the
+> pick report's move to the field (§10, phase 1) are built; the rest is
+> proposed. The note proposes how SoundCharts applies
 > S-104 water levels to the depths, the safety contour and the S-102 surface
 > across the displayed chart, not only at a picked point and along a route.
 > The status-bar indication that tells the mariner what the chart shows is

@@ -47,13 +47,23 @@ internal sealed class BaseDepthResolver
     /// Display name of the S-101 dataset that supplied
     /// <paramref name="nearestSounding"/>, or <c>null</c>.
     /// </param>
+    /// <param name="soundingDatum">
+    /// The sounding datum of the cell that supplied <paramref name="nearestSounding"/>
+    /// at the pick, or <c>null</c>.
+    /// </param>
+    /// <param name="areaDatum">
+    /// The sounding datum of the cell owning an area hit at the pick, or
+    /// <c>null</c> to leave S-101 area depths without a datum.
+    /// </param>
     /// <returns>The chosen <see cref="BaseDepthResult"/>, or <c>null</c>.</returns>
     public BaseDepthResult? Resolve(
         S102DepthSample? bathymetry,
         IReadOnlyList<PickHit> hits,
         S101SoundingSample? nearestSounding,
         string? bathymetryDatasetId = null,
-        string? soundingDatasetId = null)
+        string? soundingDatasetId = null,
+        int? soundingDatum = null,
+        Func<PickHit, int?>? areaDatum = null)
     {
         ArgumentNullException.ThrowIfNull(hits);
 
@@ -62,13 +72,13 @@ internal sealed class BaseDepthResolver
                 ? new ChartedDepth(bathy.DepthMeters, ChartedDepthKind.Bathymetry, bathy.UncertaintyMeters, bathy.VerticalDatumCode, bathymetryDatasetId)
                 : null,
             TryReadAreaMinimumDepth(hits, "DredgedArea") is { } dredged
-                ? new ChartedDepth(dredged.Depth, ChartedDepthKind.DredgedArea, DatasetId: dredged.DatasetId)
+                ? new ChartedDepth(dredged.Depth, ChartedDepthKind.DredgedArea, VerticalDatum: areaDatum?.Invoke(dredged.Hit), DatasetId: dredged.Hit.DatasetFileName)
                 : null,
             TryReadAreaMinimumDepth(hits, "DepthArea") is { } area
-                ? new ChartedDepth(area.Depth, ChartedDepthKind.DepthArea, DatasetId: area.DatasetId)
+                ? new ChartedDepth(area.Depth, ChartedDepthKind.DepthArea, VerticalDatum: areaDatum?.Invoke(area.Hit), DatasetId: area.Hit.DatasetFileName)
                 : null,
             nearestSounding is { } sounding
-                ? new ChartedDepth(sounding.DepthMeters, ChartedDepthKind.Sounding, DatasetId: soundingDatasetId, SoundingDistanceMeters: sounding.DistanceMeters)
+                ? new ChartedDepth(sounding.DepthMeters, ChartedDepthKind.Sounding, VerticalDatum: soundingDatum, DatasetId: soundingDatasetId, SoundingDistanceMeters: sounding.DistanceMeters)
                 : null);
 
         return chosen is null
@@ -90,14 +100,14 @@ internal sealed class BaseDepthResolver
 
     /// <summary>
     /// Finds the shoalest declared minimum depth across every pick hit of the
-    /// given S-101 feature type together with the dataset it came from, or
+    /// given S-101 feature type together with the hit it came from, or
     /// <c>null</c> when none is present.
     /// </summary>
-    private static (double Depth, string? DatasetId)? TryReadAreaMinimumDepth(
+    private static (double Depth, PickHit Hit)? TryReadAreaMinimumDepth(
         IReadOnlyList<PickHit> hits, string featureType)
     {
         double? shoalest = null;
-        string? datasetId = null;
+        PickHit? shoalestHit = null;
         foreach (var hit in hits)
         {
             if (!string.Equals(hit.FeatureType, featureType, StringComparison.Ordinal))
@@ -109,11 +119,11 @@ internal sealed class BaseDepthResolver
             if (depth is { } value && (shoalest is null || value < shoalest))
             {
                 shoalest = value;
-                datasetId = hit.DatasetFileName;
+                shoalestHit = hit;
             }
         }
 
-        return shoalest is { } result ? (result, datasetId) : null;
+        return shoalest is { } result && shoalestHit is not null ? (result, shoalestHit) : null;
     }
 
     /// <summary>
