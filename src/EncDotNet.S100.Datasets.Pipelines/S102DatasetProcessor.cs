@@ -8,7 +8,6 @@ using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Datasets.S102.Validation;
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Hdf5.PureHdf;
-using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
