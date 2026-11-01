@@ -1635,10 +1635,10 @@ internal sealed class DatasetsViewModel : ViewModelBase
     /// </summary>
     /// <param name="entry">The dataset entry to load.</param>
     /// <returns>A task that completes when the entry has finished loading.</returns>
-    public Task RequestLoadAsync(DatasetEntry entry)
+    public Task RequestLoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        return _loader.LoadAsync(entry);
+        return _loader.LoadAsync(entry, cancellationToken);
     }
 
     /// <summary>

@@ -186,6 +186,14 @@ public static class S100VectorTileRenderer
     public static bool PredictionEnabled => RenderingOptimizations.TilePredictionEnabled;
 
     /// <summary>
+    /// Whether any layer had visible tiles waiting to be drawn within the last
+    /// half second. The renderer holds its own predicted and pre-warm tiles back
+    /// while this is true; hosts can hold back their own speculative work
+    /// (such as loading cells ahead of the viewport) the same way.
+    /// </summary>
+    public static bool HasVisibleTileWork => HasActiveVisibleWork(Stopwatch.GetTimestamp());
+
+    /// <summary>
     /// Whether idle <b>cross-band pre-warm</b> (issue&#160;#428) is enabled. When
     /// on, and the tiled base plane is otherwise idle for a layer (no cold
     /// visible misses this frame and cache headroom to spare), the renderer

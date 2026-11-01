@@ -1037,7 +1037,7 @@ public partial class App : Application
                 EncDotNet.S100.Viewer.Services.IMapViewportNotifier>();
             return new EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetLazyLoadCoordinator(
                 notifier,
-                (entry, _) => datasets.RequestLoadAsync(entry),
+                (entry, ct) => datasets.RequestLoadAsync(entry, ct),
                 loader.UnloadEntry,
                 logger: sp.GetService<ILogger<
                     EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetLazyLoadCoordinator>>(),
@@ -1045,7 +1045,9 @@ public partial class App : Application
                 {
                     if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) action();
                     else Avalonia.Threading.Dispatcher.UIThread.Post(action);
-                });
+                },
+                hasVisibleTileWork: () =>
+                    EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.HasVisibleTileWork);
         });
 
         // Own-ship dynamic source. The steerable driver dead-reckons a
