@@ -1,4 +1,5 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Geodesy;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Quantities;
 
@@ -12,7 +13,10 @@ namespace EncDotNet.S100.Navigation.Tests;
 /// </summary>
 public class ChartCheckDepthsTests
 {
-    private static readonly double M = PassageGeodesy.MetersPerDegreeLatitude;
+    // Metres per degree on the WGS-84 ellipsoid at the equator: east (along
+    // the track) and north (across it).
+    private static readonly double E = Wgs84Geodesy.MetresPerDegree(0).East;
+    private static readonly double N = Wgs84Geodesy.MetresPerDegree(0).North;
 
     private static readonly PassageLeg East = Fixture.Leg([new GeoPosition(0, 0), new GeoPosition(0, 0.01)]);
 
@@ -37,7 +41,7 @@ public class ChartCheckDepthsTests
     private static RouteChartFeature Danger(string type, string id, double longitude, double northMeters, double? valueOfSounding, int? waterLevelEffect = 3, RouteChartCell? cell = null) =>
         new(RouteChartFeatureKind.Danger, cell ?? Harbour, id, type, [], [])
         {
-            Points = [new GeoPosition(northMeters / M, longitude)],
+            Points = [new GeoPosition(northMeters / N, longitude)],
             DepthMeters = valueOfSounding,
             WaterLevelEffect = waterLevelEffect,
         };
@@ -48,7 +52,7 @@ public class ChartCheckDepthsTests
     private static RouteChartFeature Sounding(string id, double longitude, double northMeters, double depth) =>
         new(RouteChartFeatureKind.Sounding, Harbour, id, "Sounding", [], [])
         {
-            Points = [new GeoPosition(northMeters / M, longitude)],
+            Points = [new GeoPosition(northMeters / N, longitude)],
             DepthMeters = depth,
         };
 
@@ -63,7 +67,7 @@ public class ChartCheckDepthsTests
         Assert.Equal(RouteFindingCategory.Depth, finding.Category);
         Assert.Equal("Wreck in the corridor", finding.Title);
         Assert.Equal("Leg 1 → 2 · Wreck · on the track · 3.2 m · no deeper than safety contour 10 m", finding.Meta);
-        Assert.Equal(0.004 * M, finding.Distance!.Value.TotalMetres, 3);
+        Assert.Equal(0.004 * E, finding.Distance!.Value.TotalMetres, 3);
         Assert.True(finding.Location!.IsPoint);
         Assert.Equal(0.004, finding.Location.Path[0].Longitude, 9);
         Assert.Equal(new RouteFindingFeature("101HARBOUR", "5") { FeatureType = "Wreck" }, finding.Feature);
@@ -91,7 +95,7 @@ public class ChartCheckDepthsTests
         Assert.Equal(code == RouteFindingCodes.DangerInCorridor.Value ? RouteFindingGroup.MustReview : RouteFindingGroup.Check, finding.Group);
         Assert.Equal(code == RouteFindingCodes.DangerInCorridor.Value ? "Obstruction in the corridor" : "Obstruction near the route", finding.Title);
         Assert.Contains($" · {where} · ", finding.Meta, StringComparison.Ordinal);
-        Assert.Equal(0.005 * M, finding.Distance!.Value.TotalMetres, 1);
+        Assert.Equal(0.005 * E, finding.Distance!.Value.TotalMetres, 1);
     }
 
     [Fact]
@@ -174,8 +178,8 @@ public class ChartCheckDepthsTests
     {
         // UDWHAZ05 (#1151): the 5 m area north of the track holds a 3 m
         // wreck, the 20 m area south of it a 3 m obstruction; both are alerts.
-        var shallow = Area(RouteChartFeatureKind.DepthArea, "20", 5, 0, 0.01, south: 80 / M, north: 0.003);
-        var deep = Area(RouteChartFeatureKind.DepthArea, "21", 20, 0, 0.01, south: -0.003, north: 80 / M);
+        var shallow = Area(RouteChartFeatureKind.DepthArea, "20", 5, 0, 0.01, south: 80 / N, north: 0.003);
+        var deep = Area(RouteChartFeatureKind.DepthArea, "21", 20, 0, 0.01, south: -0.003, north: 80 / N);
 
         var findings = Check([shallow, deep, Danger("Wreck", "1", 0.005, 120, 3), Danger("Obstruction", "2", 0.005, -120, 3)]).Findings;
 
@@ -202,7 +206,7 @@ public class ChartCheckDepthsTests
         var north = Fixture.Leg([new GeoPosition(0, 0.01), new GeoPosition(0.01, 0.01)]);
 
         // 30 m east of the second leg and 30 m north of the end of the first.
-        var finding = Assert.Single(Check([Danger("Wreck", "1", 0.01 + 30 / M, 30, 3)], legs: [East, north]).Findings);
+        var finding = Assert.Single(Check([Danger("Wreck", "1", 0.01 + 30 / E, 30, 3)], legs: [East, north]).Findings);
 
         Assert.Equal(1, finding.LegIndex);
         Assert.Contains("30 m to starboard", finding.Meta, StringComparison.Ordinal);
@@ -222,8 +226,8 @@ public class ChartCheckDepthsTests
 
         var crossing = Assert.Single(findings, f => f.Code == RouteFindingCodes.CrossesSafetyContour);
         Assert.Equal(RouteFindingGroup.MustReview, crossing.Group);
-        Assert.Equal(0.002 * M, crossing.Location!.StartDistanceMeters, 3);
-        Assert.Equal(0.007 * M, crossing.Location.EndDistanceMeters, 3);
+        Assert.Equal(0.002 * E, crossing.Location!.StartDistanceMeters, 3);
+        Assert.Equal(0.007 * E, crossing.Location.EndDistanceMeters, 3);
         Assert.Equal("1", crossing.Feature!.FeatureId);
         Assert.EndsWith(" · DepthArea · least -1.0 m · shallower than safety contour 10 m", crossing.Meta, StringComparison.Ordinal);
         Assert.DoesNotContain(findings, f => f.Code == RouteFindingCodes.SafetyContourInCorridor);
@@ -232,7 +236,7 @@ public class ChartCheckDepthsTests
     [Fact]
     public void Shallow_water_off_the_track_inside_the_limits_is_worth_checking()
     {
-        var findings = Check([Area(RouteChartFeatureKind.DepthArea, "1", 5, 0.004, 0.006, south: 30 / M, north: 0.002)]).Findings;
+        var findings = Check([Area(RouteChartFeatureKind.DepthArea, "1", 5, 0.004, 0.006, south: 30 / N, north: 0.002)]).Findings;
 
         var finding = Assert.Single(findings);
         Assert.Equal(RouteFindingCodes.SafetyContourInCorridor, finding.Code);
@@ -259,7 +263,7 @@ public class ChartCheckDepthsTests
 
         Assert.Equal(RouteFindingCodes.CrossesSafetyContour, finding.Code);
         Assert.Equal("Pontoon", finding.Feature!.FeatureType);
-        Assert.Equal(0.004 * M, finding.Location!.StartDistanceMeters, 1);
+        Assert.Equal(0.004 * E, finding.Location!.StartDistanceMeters, 1);
     }
 
     [Theory]
@@ -315,8 +319,8 @@ public class ChartCheckDepthsTests
 
         Assert.Equal(3, findings.Count);
         Assert.All(findings, f => Assert.Equal(RouteFindingGroup.Check, f.Group));
-        Assert.Equal(0.003 * M, findings[0].Location!.StartDistanceMeters, 1);
-        Assert.Equal(0.0036 * M, findings[0].Location!.EndDistanceMeters, 1);
+        Assert.Equal(0.003 * E, findings[0].Location!.StartDistanceMeters, 1);
+        Assert.Equal(0.0036 * E, findings[0].Location!.EndDistanceMeters, 1);
         Assert.Contains("3 soundings · least 4.2 m · no deeper than safety contour 10 m · shallower than safety depth 10 m", findings[0].Meta, StringComparison.Ordinal);
         Assert.EndsWith(" · Sounding · least 10.0 m · no deeper than safety contour 10 m", findings[1].Meta, StringComparison.Ordinal);
         Assert.True(findings[2].Location!.IsPoint);
@@ -330,8 +334,8 @@ public class ChartCheckDepthsTests
         // the track (10–40 m to port) between 800 and 850 m.
         var bathymetry = new FakeDepth((lat, lon) =>
         {
-            var x = lon * M;
-            var y = lat * M;
+            var x = lon * E;
+            var y = lat * N;
             var depth = x is >= 400 and <= 500 ? 6.0 : x is >= 800 and <= 850 && y is >= 10 and <= 40 ? 8.0 : 20.0;
             return new ChartedDepth(depth, ChartedDepthKind.Bathymetry, 0.4, null, "102TEST", $"{(int)(y / 5)},{(int)(x / 5)}");
         }, gridSpacingMeters: 5);

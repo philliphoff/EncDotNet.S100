@@ -2,29 +2,22 @@ using EncDotNet.S100.DataModel;
 namespace EncDotNet.S100.Geodesy;
 
 /// <summary>
-/// Spherical geodesic helpers: the direct problem along a great circle or a
-/// rhumb line, and tessellation of augmented line geometry (S-100 Part 9A
-/// §11.5 <c>AugmentedRay</c>, <c>ArcByRadius</c>).
+/// Geodesic helpers: the direct problem along a geodesic or a rhumb line,
+/// and tessellation of augmented line geometry (S-100 Part 9A §11.5
+/// <c>AugmentedRay</c>, <c>ArcByRadius</c>).
 /// </summary>
 /// <remarks>
-/// Uses a spherical Earth model with the WGS-84 mean radius. For the
-/// short distances involved in sector-light portrayal (typically &lt; 50 NM),
-/// the error vs. an ellipsoidal (Vincenty) solution is &lt; 0.3 %.
+/// The direct problems are solved on the WGS-84 ellipsoid by
+/// <see cref="Wgs84Geodesy"/>.
 /// </remarks>
 public static class GeodesicHelper
 {
     /// <summary>
-    /// WGS-84 mean Earth radius in metres. Every spherical distance and
-    /// bearing in the library and the viewer uses this one radius, so a
-    /// measurement and its direct problem agree to the millimetre.
+    /// WGS-84 mean Earth radius in metres, for local approximations such as
+    /// metres per degree or a Web Mercator scale. Distances and bearings
+    /// between positions come from the ellipsoid (<see cref="Wgs84Geodesy"/>).
     /// </summary>
     public const double EarthRadiusMetres = 6_371_008.8;
-
-    // Mercator stretching diverges at the poles; clamp just short of them.
-    private const double LatitudeClampDegrees = 89.99;
-
-    private const double DegToRadFactor = Math.PI / 180.0;
-    private const double RadToDegFactor = 180.0 / Math.PI;
 
     /// <summary>
     /// Number of tessellation segments per full 360° circle.
@@ -33,43 +26,23 @@ public static class GeodesicHelper
     private const int SegmentsPerFullCircle = 72;
 
     /// <summary>
-    /// Solves the geodesic direct problem on a sphere: given an origin
-    /// point, true bearing, and distance, computes the destination point.
+    /// Solves the geodesic direct problem on the WGS-84 ellipsoid: given an
+    /// origin point, initial true bearing, and distance, computes the
+    /// destination point.
     /// </summary>
     /// <param name="latDeg">Origin latitude in degrees.</param>
     /// <param name="lonDeg">Origin longitude in degrees.</param>
     /// <param name="bearingDeg">Initial true bearing in degrees (clockwise from north).</param>
-    /// <param name="distanceMetres">Distance along the great circle in metres.</param>
+    /// <param name="distanceMetres">Distance along the geodesic in metres.</param>
     /// <returns>Destination (latitude, longitude) in degrees.</returns>
     public static GeoPosition DirectProblem(
-        double latDeg, double lonDeg, double bearingDeg, double distanceMetres)
-    {
-        double phi1 = latDeg * DegToRadFactor;
-        double lambda1 = lonDeg * DegToRadFactor;
-        double theta = bearingDeg * DegToRadFactor;
-        double delta = distanceMetres / EarthRadiusMetres; // angular distance
-
-        double sinPhi1 = Math.Sin(phi1);
-        double cosPhi1 = Math.Cos(phi1);
-        double sinDelta = Math.Sin(delta);
-        double cosDelta = Math.Cos(delta);
-
-        double phi2 = Math.Asin(sinPhi1 * cosDelta + cosPhi1 * sinDelta * Math.Cos(theta));
-        double lambda2 = lambda1 + Math.Atan2(
-            Math.Sin(theta) * sinDelta * cosPhi1,
-            cosDelta - sinPhi1 * Math.Sin(phi2));
-
-        // Normalise longitude to [-180, 180].
-        double lonResult = lambda2 * RadToDegFactor;
-        lonResult = ((lonResult + 540.0) % 360.0) - 180.0;
-
-        return new GeoPosition(phi2 * RadToDegFactor, lonResult);
-    }
+        double latDeg, double lonDeg, double bearingDeg, double distanceMetres) =>
+        Wgs84Geodesy.GeodesicDestination(new GeoPosition(latDeg, lonDeg), bearingDeg, distanceMetres);
 
     /// <summary>
-    /// Solves the direct problem along a rhumb line (loxodrome) on a sphere:
-    /// given an origin point, a constant true bearing and a distance,
-    /// computes the destination point.
+    /// Solves the direct problem along a rhumb line (loxodrome) on the
+    /// WGS-84 ellipsoid: given an origin point, a constant true bearing and
+    /// a distance, computes the destination point.
     /// </summary>
     /// <param name="latDeg">Origin latitude in degrees.</param>
     /// <param name="lonDeg">Origin longitude in degrees.</param>
@@ -80,33 +53,8 @@ public static class GeodesicHelper
     /// a pole, so a line that would reach one ends there.
     /// </returns>
     public static GeoPosition RhumbDirectProblem(
-        double latDeg, double lonDeg, double bearingDeg, double distanceMetres)
-    {
-        double phi1 = latDeg * DegToRadFactor;
-        double theta = bearingDeg * DegToRadFactor;
-        double delta = distanceMetres / EarthRadiusMetres; // angular distance
-
-        double phi2 = phi1 + delta * Math.Cos(theta);
-        double maxPhi = Math.PI / 2.0;
-        if (Math.Abs(phi2) > maxPhi)
-        {
-            phi2 = Math.CopySign(maxPhi, phi2);
-        }
-
-        // Distance along a rhumb line is proportional to the change in
-        // latitude; longitude changes with the Mercator-stretched latitude.
-        double clamp = LatitudeClampDegrees * DegToRadFactor;
-        double psi1 = StretchedLatitude(Math.Clamp(phi1, -clamp, clamp));
-        double psi2 = StretchedLatitude(Math.Clamp(phi2, -clamp, clamp));
-        double dpsi = psi2 - psi1;
-        double q = Math.Abs(dpsi) > 1e-12 ? (phi2 - phi1) / dpsi : Math.Cos(phi1);
-        double dlambda = q > 1e-12 ? delta * Math.Sin(theta) / q : 0.0;
-
-        double lonResult = lonDeg + dlambda * RadToDegFactor;
-        lonResult = ((lonResult + 540.0) % 360.0) - 180.0;
-
-        return new GeoPosition(phi2 * RadToDegFactor, lonResult);
-    }
+        double latDeg, double lonDeg, double bearingDeg, double distanceMetres) =>
+        Wgs84Geodesy.RhumbDestination(new GeoPosition(latDeg, lonDeg), bearingDeg, distanceMetres);
 
     /// <summary>
     /// Tessellates a circular arc around an origin point into a polyline
@@ -154,7 +102,7 @@ public static class GeodesicHelper
     }
 
     /// <summary>
-    /// Tessellates a geodesic ray (great-circle segment) from an origin
+    /// Tessellates a geodesic ray from an origin
     /// along a bearing for a given distance.
     /// </summary>
     /// <param name="originLat">Origin latitude in degrees.</param>
@@ -164,7 +112,7 @@ public static class GeodesicHelper
     /// <returns>
     /// An ordered list of at least two coordinates from origin to endpoint.
     /// Short rays (&lt; 10 km) are returned as a simple two-point segment;
-    /// longer rays are tessellated for great-circle fidelity.
+    /// longer rays are tessellated to follow the geodesic.
     /// </returns>
     public static IReadOnlyList<GeoPosition> TessellateRay(
         double originLat, double originLon, double bearingDeg, double distanceMetres)
@@ -172,7 +120,7 @@ public static class GeodesicHelper
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(distanceMetres);
 
         // For short rays (< 10 km), a straight segment is visually identical
-        // to the great-circle path at any reasonable zoom level.
+        // to the geodesic at any reasonable zoom level.
         const double shortRayThreshold = 10_000.0;
         if (distanceMetres <= shortRayThreshold)
         {
@@ -193,6 +141,4 @@ public static class GeodesicHelper
 
         return points;
     }
-
-    private static double StretchedLatitude(double phi) => Math.Log(Math.Tan(Math.PI / 4.0 + phi / 2.0));
 }

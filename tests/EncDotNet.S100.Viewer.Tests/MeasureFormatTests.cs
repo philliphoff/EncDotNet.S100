@@ -150,7 +150,8 @@ public class MeasureDensifyTests
         var north = MarineGeodesy.GeodesicCircle(centre, 2_000_000)[0];
 
         Assert.Equal(-45, north.Longitude, 9);
-        Assert.Equal(45 + 2_000_000 / GeodesicHelper.EarthRadiusMetres * 180 / Math.PI, north.Latitude, 9);
+        Assert.True(north.Latitude > 45);
+        Assert.Equal(2_000_000, Wgs84Geodesy.GeodesicDistanceMetres(centre, north), 0.001);
     }
 
     [Fact]

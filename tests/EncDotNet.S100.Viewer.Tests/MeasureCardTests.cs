@@ -3,7 +3,6 @@ using System.Text.Json;
 using Avalonia.Input;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Query;
-using EncDotNet.S100.Geodesy;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services;
@@ -53,7 +52,7 @@ public sealed class MeasureCardTests : IDisposable
         Assert.True(card.IsRhumb);
         Assert.False(card.IsToEnabled);
         Assert.False(card.CanCopy);
-        Assert.Equal("Sphere · R 6,371 km", MeasureCardViewModel.ModelText);
+        Assert.Equal("WGS-84 ellipsoid", MeasureCardViewModel.ModelText);
     }
 
     [Fact]
@@ -65,12 +64,12 @@ public sealed class MeasureCardTests : IDisposable
         Type(card, Viking, CorundCape);
 
         Assert.False(card.ShowsHint);
-        Assert.Equal("17.90 NM", card.DistanceText);
-        Assert.Equal("33.154 km", card.DistanceOtherText);
-        Assert.Equal("295.7°T", card.BearingText);
-        Assert.Equal("115.9°T", card.ReverseText);
-        Assert.Equal("Distance 17.90 nautical miles", card.DistanceName);
-        Assert.Equal("Reverse 115.9 degrees true", card.ReverseName);
+        Assert.Equal("17.92 NM", card.DistanceText);
+        Assert.Equal("33.194 km", card.DistanceOtherText);
+        Assert.Equal("295.6°T", card.BearingText);
+        Assert.Equal("115.8°T", card.ReverseText);
+        Assert.Equal("Distance 17.92 nautical miles", card.DistanceName);
+        Assert.Equal("Reverse 115.8 degrees true", card.ReverseName);
         Assert.Equal("32°35.224'S  061°17.710'E", card.FromText);
         Assert.Equal(MeasurePathState.MeasurePhase.Finalised, session.State.Phase);
         Assert.False(card.HasMultipleLegs);
@@ -82,8 +81,8 @@ public sealed class MeasureCardTests : IDisposable
         var (_, card) = Create();
         Type(card, Viking, CorundCape);
 
-        Assert.Equal("295.8°T", card.BearingText);
-        Assert.Equal("115.8°T", card.ReverseText);
+        Assert.Equal("295.7°T", card.BearingText);
+        Assert.Equal("115.7°T", card.ReverseText);
     }
 
     [Fact]
@@ -94,9 +93,9 @@ public sealed class MeasureCardTests : IDisposable
 
         session.Unit = DistanceUnit.Metric;
 
-        Assert.Equal("33.154 km", card.DistanceText);
-        Assert.Equal("17.90 NM", card.DistanceOtherText);
-        Assert.StartsWith("Leg 1: 33.154 km · 295.8°T", session.State.FormatSummary(session.Unit));
+        Assert.Equal("33.194 km", card.DistanceText);
+        Assert.Equal("17.92 NM", card.DistanceOtherText);
+        Assert.StartsWith("Leg 1: 33.194 km · 295.7°T", session.State.FormatSummary(session.Unit));
     }
 
     [Fact]
@@ -109,7 +108,7 @@ public sealed class MeasureCardTests : IDisposable
         Assert.False(card.CommitTo());
 
         Assert.True(card.HasToError);
-        Assert.Equal("17.90 NM", card.DistanceText);
+        Assert.Equal("17.92 NM", card.DistanceText);
         Assert.Equal(2, session.State.Waypoints.Count);
 
         // Esc reverts; a second Esc has nothing to revert, so it can leave the tool.
@@ -176,7 +175,7 @@ public sealed class MeasureCardTests : IDisposable
         card.PreviousLegCommand.Execute(null);
 
         Assert.Equal("Leg 1 of 2", card.LegCaption);
-        Assert.Equal("17.90 NM", card.DistanceText);
+        Assert.Equal("17.92 NM", card.DistanceText);
         Assert.Equal("32°35.224'S  061°17.710'E", card.FromText);
 
         // From and To are the selected leg's ends.
@@ -201,10 +200,10 @@ public sealed class MeasureCardTests : IDisposable
         Assert.Contains("Great circle", copied);
         Assert.Contains("32°35.224'S  061°17.710'E", copied);
         Assert.Contains("-32.587067, 61.295167", copied);
-        Assert.Contains("17.90 NM  (33.154 km)", copied);
-        Assert.Contains("295.7°T", copied);
-        Assert.Contains("115.9°T", copied);
-        Assert.Contains("Sphere · R 6,371 km", copied);
+        Assert.Contains("17.92 NM  (33.194 km)", copied);
+        Assert.Contains("295.6°T", copied);
+        Assert.Contains("115.8°T", copied);
+        Assert.Contains("WGS-84 ellipsoid", copied);
     }
 
     [Fact]
@@ -230,8 +229,8 @@ public sealed class MeasureCardTests : IDisposable
         Type(card, Viking, CorundCape);
         var leg = session.State.CurrentLeg!.Value;
 
-        Assert.Equal("Leg 1: 17.90 NM · 295.8°T  |  Total: 17.90 NM", session.State.FormatSummary(session.Unit));
-        Assert.Equal("17.90 NM · 295.8°", MeasureOverlayLayer.LegLabelText(leg, session.Unit));
+        Assert.Equal("Leg 1: 17.92 NM · 295.7°T  |  Total: 17.92 NM", session.State.FormatSummary(session.Unit));
+        Assert.Equal("17.92 NM · 295.7°", MeasureOverlayLayer.LegLabelText(leg, session.Unit));
     }
 
     [Fact]
@@ -348,18 +347,17 @@ public sealed class MeasureCardTests : IDisposable
         Assert.True(dto.Active);
         Assert.Equal("greatCircle", dto.Geometry);
         Assert.Equal("finalised", dto.Phase);
-        Assert.Equal("sphere", dto.EarthModel.Name);
-        Assert.Equal(GeodesicHelper.EarthRadiusMetres, dto.EarthModel.RadiusMetres);
+        Assert.Equal("wgs84", dto.EarthModel.Name);
         var leg = Assert.Single(dto.Legs);
         Assert.Equal(MarineGeodesy(leg.From, leg.To), leg.DistanceMetres);
-        Assert.InRange(leg.DistanceMetres, 33154.0, 33155.0);
+        Assert.Equal(33_193.554, leg.DistanceMetres, 0.001);
         Assert.NotEqual(Math.Round(leg.DistanceMetres), leg.DistanceMetres);
         Assert.Equal(leg.DistanceMetres / PassageGeodesy.MetersPerNauticalMile, leg.DistanceNm, 9);
-        Assert.InRange(leg.BearingDeg, 295.65, 295.75);
-        Assert.InRange(leg.ReverseBearingDeg, 115.85, 115.95);
+        Assert.Equal(295.614, leg.BearingDeg, 0.001);
+        Assert.Equal(115.785, leg.ReverseBearingDeg, 0.001);
         Assert.Equal(1, dto.SelectedLeg);
-        Assert.Equal("17.90 NM", dto.Card!.Distance);
-        Assert.Equal("33.154 km", dto.Card.DistanceOther);
+        Assert.Equal("17.92 NM", dto.Card!.Distance);
+        Assert.Equal("33.194 km", dto.Card.DistanceOther);
         Assert.Null(dto.Card.Total);
 
         static double MarineGeodesy(MeasurePointDto a, MeasurePointDto b) =>

@@ -1,4 +1,5 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Geodesy;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Quantities;
 
@@ -801,19 +802,19 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
         // The unit direction from a to b, in local east/north metres.
         private static (double East, double North) Direction(GeoPosition a, GeoPosition b)
         {
-            var cosLat = Math.Cos((a.Latitude + b.Latitude) / 2 * Math.PI / 180);
-            var east = (b.Longitude - a.Longitude) * cosLat;
-            var north = b.Latitude - a.Latitude;
+            var scale = Wgs84Geodesy.MetresPerDegree((a.Latitude + b.Latitude) / 2);
+            var east = (b.Longitude - a.Longitude) * scale.East;
+            var north = (b.Latitude - a.Latitude) * scale.North;
             var length = Math.Sqrt(east * east + north * north);
             return length > 0 ? (east / length, north / length) : (0, 0);
         }
 
         private static GeoPosition Offset(GeoPosition centre, double east, double north, double meters)
         {
-            var cosLat = Math.Cos(centre.Latitude * Math.PI / 180);
+            var scale = Wgs84Geodesy.MetresPerDegree(centre.Latitude);
             return new GeoPosition(
-                centre.Latitude + north * meters / PassageGeodesy.MetersPerDegreeLatitude,
-                centre.Longitude + east * meters / (PassageGeodesy.MetersPerDegreeLatitude * Math.Max(cosLat, 1e-6)));
+                centre.Latitude + north * meters / scale.North,
+                centre.Longitude + east * meters / Math.Max(scale.East, 1e-6));
         }
 
         private static double Lerp(double a, double b, double u) => a + (b - a) * u;

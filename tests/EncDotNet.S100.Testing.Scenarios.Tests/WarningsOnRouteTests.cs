@@ -75,10 +75,12 @@ public abstract class WarningsOnRouteTests(GeneratedScenarioFixture fixture, int
             Assert.Equal(expected.StartDistanceMeters, start, 0.05);
             Assert.Equal(expected.EndDistanceMeters, end, 0.05);
 
-            // ETAs from the S-421 legs (geodesic) agree with the model's clock to a couple of seconds.
+            // ETAs from the S-421 legs (WGS-84 geodesics) agree with the model's
+            // clock, which runs on the world's flat frame, to a few seconds: the
+            // two part by about 0,2 % across the scenario.
             var startEta = Eta(schedule, path, start);
             var endEta = Eta(schedule, path, end);
-            Assert.InRange((startEta.UtcDateTime - expected.StartTime!.Value).Duration(), TimeSpan.Zero, TimeSpan.FromSeconds(2));
+            Assert.InRange((startEta.UtcDateTime - expected.StartTime!.Value).Duration(), TimeSpan.Zero, TimeSpan.FromSeconds(3));
 
             Assert.Equal(expected.InForce, InForce(warning, warnings.Values, startEta, endEta));
         }

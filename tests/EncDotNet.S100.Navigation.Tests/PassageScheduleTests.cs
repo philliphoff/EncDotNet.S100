@@ -9,18 +9,18 @@ public class PassageScheduleTests
     [Fact]
     public void Legs_get_distances_durations_and_etas()
     {
-        // A minute of latitude is a nautical mile on the model sphere to within 0,1 %.
-        var a = new GeoPosition(0, 0);
-        var b = new GeoPosition(0.5, 0);
-        var c = new GeoPosition(1.0, 0);
+        // Around 45° N a minute of latitude is a nautical mile to within 0,02 %.
+        var a = new GeoPosition(44.5, 0);
+        var b = new GeoPosition(45.0, 0);
+        var c = new GeoPosition(45.5, 0);
         var schedule = PassageSchedule.Compute([Fixture.Leg([a, b], 5, speed: 10), Fixture.Leg([b, c], 5, speed: 15)], Departure);
 
-        Assert.InRange(schedule.Legs[0].DistanceNauticalMiles, 29.97, 30.03);
+        Assert.Equal(55_563.446, schedule.Legs[0].DistanceMeters, 0.001);
         AssertClose(Departure.AddHours(3), Departure + schedule.Legs[0].Duration!.Value);
         AssertClose(Departure.AddHours(2), Departure + schedule.Legs[1].Duration!.Value);
         AssertClose(Departure.AddHours(3), schedule.Legs[1].Start!.Value);
         AssertClose(Departure.AddHours(5), schedule.Arrival!.Value);
-        Assert.InRange(schedule.TotalDistanceMeters / PassageGeodesy.MetersPerNauticalMile, 59.94, 60.06);
+        Assert.Equal(111_131.778, schedule.TotalDistanceMeters, 0.001);
 
         var halfway = schedule.EtaAt(1, schedule.Legs[1].DistanceMeters / 2)!.Value;
         AssertClose(Departure.AddHours(4), halfway);
@@ -63,7 +63,8 @@ public class PassageGeodesyTests
         var a = new GeoPosition(50, -1);
         var b = new GeoPosition(51, -1);
 
-        Assert.InRange(PassageGeodesy.RhumbDistanceMeters(a, b) / PassageGeodesy.MetersPerNauticalMile, 59.94, 60.06);
+        // The WGS-84 meridian arc from 50° N to 51° N (GeographicLib).
+        Assert.Equal(111_238.681, PassageGeodesy.RhumbDistanceMeters(a, b), 0.001);
         Assert.Equal(PassageGeodesy.GreatCircleDistanceMeters(a, b), PassageGeodesy.RhumbDistanceMeters(a, b), 3);
     }
 

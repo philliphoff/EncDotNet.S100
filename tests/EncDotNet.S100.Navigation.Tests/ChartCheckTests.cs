@@ -1,5 +1,6 @@
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Geodesy;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Quantities;
 
@@ -7,12 +8,15 @@ namespace EncDotNet.S100.Navigation.Tests;
 
 /// <summary>
 /// The chart check on synthetic squares near the equator: one leg due
-/// east from 0° to 0,01° E (about 1 112 m), where 1° of longitude is
-/// <see cref="PassageGeodesy.MetersPerDegreeLatitude"/> metres.
+/// east from 0° to 0,01° E (about 1 113 m), where 1° of longitude is
+/// 111 319 m on the WGS-84 ellipsoid.
 /// </summary>
 public class ChartCheckTests
 {
-    private static readonly double M = PassageGeodesy.MetersPerDegreeLatitude;
+    // Metres per degree on the WGS-84 ellipsoid at the equator: east (along
+    // the track) and north (across it).
+    private static readonly double E = Wgs84Geodesy.MetresPerDegree(0).East;
+    private static readonly double N = Wgs84Geodesy.MetresPerDegree(0).North;
 
     private static readonly PassageLeg East = Fixture.Leg([new GeoPosition(0, 0), new GeoPosition(0, 0.01)]);
 
@@ -34,11 +38,11 @@ public class ChartCheckTests
         Assert.Equal(RouteFindingGroup.MustReview, finding.Group);
         Assert.Equal(RouteFindingCategory.Chart, finding.Category);
         Assert.Equal(0, finding.LegIndex);
-        Assert.Equal(0.004 * M, finding.Distance!.Value.TotalMetres, 3);
+        Assert.Equal(0.004 * E, finding.Distance!.Value.TotalMetres, 3);
         var location = Assert.IsType<RouteFindingLocation>(finding.Location);
         Assert.False(location.IsPoint);
-        Assert.Equal(0.004 * M, location.StartDistanceMeters, 3);
-        Assert.Equal(0.005 * M, location.EndDistanceMeters, 3);
+        Assert.Equal(0.004 * E, location.StartDistanceMeters, 3);
+        Assert.Equal(0.005 * E, location.EndDistanceMeters, 3);
         Assert.Equal(0.004, location.Path[0].Longitude, 9);
         Assert.Equal(0.005, location.Path[^1].Longitude, 9);
         Assert.Equal(new RouteFindingFeature("101HARBOUR", "7") { FeatureType = "LandArea" }, finding.Feature);
@@ -55,8 +59,8 @@ public class ChartCheckTests
 
         Assert.Equal(RouteFindingCodes.CrossesDrying, finding.Code);
         Assert.Equal(RouteFindingGroup.MustReview, finding.Group);
-        Assert.Equal(0.002 * M, finding.Distance!.Value.TotalMetres, 3);
-        Assert.Equal(0.003 * M, finding.Location!.EndDistanceMeters, 3);
+        Assert.Equal(0.002 * E, finding.Distance!.Value.TotalMetres, 3);
+        Assert.Equal(0.003 * E, finding.Location!.EndDistanceMeters, 3);
     }
 
     [Fact]
@@ -68,8 +72,8 @@ public class ChartCheckTests
         var finding = Assert.Single(Check(new FakeCharts([Harbour], [b, a])).Findings);
 
         Assert.Equal("1", finding.Feature!.FeatureId);
-        Assert.Equal(0.002 * M, finding.Location!.StartDistanceMeters, 3);
-        Assert.Equal(0.0045 * M, finding.Location.EndDistanceMeters, 3);
+        Assert.Equal(0.002 * E, finding.Location!.StartDistanceMeters, 3);
+        Assert.Equal(0.0045 * E, finding.Location.EndDistanceMeters, 3);
     }
 
     [Fact]
@@ -83,22 +87,22 @@ public class ChartCheckTests
         var corridor = Assert.Single(result.Detail!.Corridors);
         Assert.Equal(50, corridor.PortHalfWidthMeters);
         Assert.Equal(50, corridor.StarboardHalfWidthMeters);
-        Assert.Equal(0.01 * M, result.Detail!.LengthMeters, 3);
+        Assert.Equal(0.01 * E, result.Detail!.LengthMeters, 3);
     }
 
     [Fact]
     public void Land_inside_the_cross_track_limits_is_worth_checking()
     {
         // 40 m north of the track: inside the default 50 m half-width to port.
-        var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.004, 0.005, south: 40 / M, north: 0.002);
+        var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.004, 0.005, south: 40 / N, north: 0.002);
 
         var finding = Assert.Single(Check(new FakeCharts([Harbour], [land])).Findings);
 
         Assert.Equal(RouteFindingCodes.LandInCorridor, finding.Code);
         Assert.Equal(RouteFindingGroup.Check, finding.Group);
         Assert.Equal(RouteFindingCategory.Chart, finding.Category);
-        Assert.InRange(finding.Location!.StartDistanceMeters, 0.004 * M, 0.004 * M + 10);
-        Assert.InRange(finding.Location.EndDistanceMeters, 0.005 * M - 10, 0.005 * M);
+        Assert.InRange(finding.Location!.StartDistanceMeters, 0.004 * E, 0.004 * E + 10);
+        Assert.InRange(finding.Location.EndDistanceMeters, 0.005 * E - 10, 0.005 * E);
     }
 
     [Theory]
@@ -107,7 +111,7 @@ public class ChartCheckTests
     [InlineData(45.0, 0.0, true)]
     public void Each_side_has_its_own_cross_track_limit(double port, double starboard, bool found)
     {
-        var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.004, 0.005, south: 40 / M, north: 0.002);
+        var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.004, 0.005, south: 40 / N, north: 0.002);
 
         var result = Check(new FakeCharts([Harbour], [land]), Fixture.Leg(East.Points, port: port, starboard: starboard));
 
@@ -119,7 +123,7 @@ public class ChartCheckTests
     public void The_corridor_override_replaces_every_legs_limits()
     {
         // Land 40 m to port, beside a leg whose own port limit (30 m) misses it.
-        var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.004, 0.005, south: 40 / M, north: 0.002);
+        var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.004, 0.005, south: 40 / N, north: 0.002);
         var result = Checks.Chart(
             new FakeCharts([Harbour], [land]),
             new PassagePlan([Fixture.Leg(East.Points, port: 30, starboard: 30)]),
@@ -141,8 +145,8 @@ public class ChartCheckTests
         Assert.Equal(RouteFindingGroup.Check, finding.Group);
         Assert.Equal(RouteFindingCategory.Data, finding.Category);
         Assert.Null(finding.Feature);
-        Assert.InRange(finding.Distance!.Value.TotalMetres, 0.006 * M - 10, 0.006 * M + 10);
-        Assert.Equal(0.01 * M, finding.Location!.EndDistanceMeters, 3);
+        Assert.InRange(finding.Distance!.Value.TotalMetres, 0.006 * E - 10, 0.006 * E + 10);
+        Assert.Equal(0.01 * E, finding.Location!.EndDistanceMeters, 3);
     }
 
     [Fact]
@@ -154,8 +158,8 @@ public class ChartCheckTests
 
         Assert.Equal([0, 1], result.Findings.Select(f => f.LegIndex!.Value));
         Assert.All(result.Findings, f => Assert.Equal(RouteFindingCodes.OutsideChartCoverage, f.Code));
-        Assert.Equal(0.01 * M, result.Findings[1].Location!.StartDistanceMeters, 3);
-        Assert.Equal(0.02 * M, result.Findings[1].Location!.EndDistanceMeters, 1);
+        Assert.Equal(0.01 * E, result.Findings[1].Location!.StartDistanceMeters, 3);
+        Assert.Equal((0.01 * E) + (0.01 * N), result.Findings[1].Location!.EndDistanceMeters, 1);
         Assert.Equal("Leg 2 → 3", result.Findings[1].Meta.Split(" · ")[0]);
     }
 
@@ -172,8 +176,8 @@ public class ChartCheckTests
         // Only the western half, where the coastal cell is the finest, counts.
         var finding = Assert.Single(result.Findings);
         Assert.Equal("101COASTAL", finding.Feature!.DatasetId);
-        Assert.Equal(0.004 * M, finding.Location!.StartDistanceMeters, 3);
-        Assert.InRange(finding.Location.EndDistanceMeters, 0.0045 * M - 1, 0.0045 * M + 10);
+        Assert.Equal(0.004 * E, finding.Location!.StartDistanceMeters, 3);
+        Assert.InRange(finding.Location.EndDistanceMeters, 0.0045 * E - 1, 0.0045 * E + 10);
     }
 
     [Fact]
@@ -198,7 +202,7 @@ public class ChartCheckTests
 
         Assert.Equal(RouteFindingCodes.CrossesLand, finding.Code);
         Assert.True(finding.Location!.IsPoint);
-        Assert.Equal(0.007 * M, finding.Distance!.Value.TotalMetres, 3);
+        Assert.Equal(0.007 * E, finding.Distance!.Value.TotalMetres, 3);
         Assert.Equal("Coastline", finding.Meta.Split(" · ")[^1]);
     }
 
@@ -224,8 +228,8 @@ public class ChartCheckTests
         var findings = Check(new FakeCharts([Harbour], [land])).Findings;
 
         Assert.Equal(2, findings.Count);
-        Assert.Equal(0.0045 * M, findings[0].Location!.EndDistanceMeters, 3);
-        Assert.Equal(0.0055 * M, findings[1].Location!.StartDistanceMeters, 3);
+        Assert.Equal(0.0045 * E, findings[0].Location!.EndDistanceMeters, 3);
+        Assert.Equal(0.0055 * E, findings[1].Location!.StartDistanceMeters, 3);
     }
 
     [Fact]
@@ -236,7 +240,7 @@ public class ChartCheckTests
         var finding = Assert.Single(Check(new FakeCharts([Harbour], [land])).Findings);
 
         Assert.Equal(0, finding.Distance?.TotalMetres);
-        Assert.Equal(0.001 * M, finding.Location!.EndDistanceMeters, 3);
+        Assert.Equal(0.001 * E, finding.Location!.EndDistanceMeters, 3);
     }
 
     [Fact]

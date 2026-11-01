@@ -1948,10 +1948,10 @@
     <value>Close Measure</value>
   </data>
   <data name="Measure_Model" xml:space="preserve">
-    <value>Sphere · R {0:#,0} km</value>
+    <value>WGS-84 ellipsoid</value>
   </data>
   <data name="Tooltip_MeasureModel" xml:space="preserve">
-    <value>Distances and bearings use a spherical earth. That's within the S-164 accuracy tolerance. WGS-84 is tracked in #1189.</value>
+    <value>Distances and bearings are computed on the WGS-84 ellipsoid with GeographicLib, so they match other navigation software to the metre.</value>
   </data>
   <data name="Measure_ValueName" xml:space="preserve">
     <value>{0} {1}</value>
@@ -2058,14 +2058,14 @@
     <value>How the bearing line runs and how the end is computed (G)</value>
   </data>
   <data name="RangeBearing_Model" xml:space="preserve">
-    <value>Sphere · R {0:#,0} km</value>
-    <comment>The earth model in the card footer; {0} is the radius in km</comment>
+    <value>WGS-84 ellipsoid</value>
+    <comment>The earth model in the card footer</comment>
   </data>
   <data name="RangeBearing_ModelLabel" xml:space="preserve">
     <value>Earth model</value>
   </data>
   <data name="RangeBearing_ModelTooltip" xml:space="preserve">
-    <value>Distances and bearings use a spherical earth. That's within the S-164 accuracy tolerance. WGS-84 is tracked in #1189.</value>
+    <value>Distances and bearings are computed on the WGS-84 ellipsoid with GeographicLib, so they match other navigation software to the metre.</value>
   </data>
   <data name="RangeBearing_RangeTooltip" xml:space="preserve">
     <value>The range ring is a geodesic circle: every point on it is the range from the origin along a great circle. On a rhumb-line bearing it passes through the end only approximately.</value>

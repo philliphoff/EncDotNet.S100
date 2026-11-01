@@ -1,4 +1,5 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Geodesy;
 using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Navigation;
@@ -214,9 +215,8 @@ public sealed partial class ChartCheck
         // signed offset, in local metres around the point.
         private Projection Project(GeoPosition point)
         {
-            var cosLat = Math.Cos(point.Latitude * Math.PI / 180);
-            var m = PassageGeodesy.MetersPerDegreeLatitude;
-            (double X, double Y) Local(GeoPosition p) => ((p.Longitude - point.Longitude) * cosLat * m, (p.Latitude - point.Latitude) * m);
+            var scale = Wgs84Geodesy.MetresPerDegree(point.Latitude);
+            (double X, double Y) Local(GeoPosition p) => ((p.Longitude - point.Longitude) * scale.East, (p.Latitude - point.Latitude) * scale.North);
 
             var best = new Projection(_stations[0].Distance, double.MaxValue);
             var bestSquared = double.MaxValue;

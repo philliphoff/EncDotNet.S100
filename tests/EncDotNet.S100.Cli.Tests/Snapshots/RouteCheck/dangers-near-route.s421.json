@@ -16,7 +16,7 @@
   "check": {
     "routeId": "ZZ00-DANGERS-1",
     "routeName": "Past the wrecks north of the channel (fictitious)",
-    "distanceNm": 2.698,
+    "distanceNm": 2.7049,
     "verdict": {
       "kind": "must_review",
       "title": "Wreck in the corridor",
@@ -60,11 +60,11 @@
         "title": "Wreck in the corridor",
         "meta": "Leg 1 \u2192 2 \u00B7 Wreck \u00B7 on the track \u00B7 6.2 m \u00B7 shallower than draft \u002B squat \u002B UKC (12 m)",
         "legIndex": 0,
-        "distanceNm": 0.5396,
+        "distanceNm": 0.541,
         "location": {
           "kind": "point",
-          "startNm": 0.5396,
-          "endNm": 0.5396,
+          "startNm": 0.541,
+          "endNm": 0.541,
           "path": [
             [
               -40.97036,
@@ -96,11 +96,11 @@
         "title": "Obstruction in the corridor",
         "meta": "Leg 1 \u2192 2 \u00B7 Obstruction \u00B7 60 m to port \u00B7 11.0 m \u00B7 shallower than draft \u002B squat \u002B UKC (12 m)",
         "legIndex": 0,
-        "distanceNm": 0.9173,
+        "distanceNm": 0.9197,
         "location": {
           "kind": "point",
-          "startNm": 0.9173,
-          "endNm": 0.9173,
+          "startNm": 0.9197,
+          "endNm": 0.9197,
           "path": [
             [
               -40.96982,
@@ -132,11 +132,11 @@
         "title": "Rock in the corridor",
         "meta": "Leg 1 \u2192 2 \u00B7 UnderwaterAwashRock \u00B7 80 m to starboard \u00B7 awash",
         "legIndex": 0,
-        "distanceNm": 1.3436,
+        "distanceNm": 1.347,
         "location": {
           "kind": "point",
-          "startNm": 1.3436,
-          "endNm": 1.3436,
+          "startNm": 1.347,
+          "endNm": 1.347,
           "path": [
             [
               -40.97107,
@@ -153,7 +153,7 @@
             "featureType": "UnderwaterAwashRock",
             "waterLevelEffect": 5,
             "side": "starboard",
-            "offsetMeters": 79.9
+            "offsetMeters": 79.8
           }
         }
       },
@@ -165,11 +165,11 @@
         "title": "Crosses the safety contour",
         "meta": "Leg 2 \u2192 3 \u00B7 0.06 NM \u00B7 DepthArea \u00B7 least 5.0 m \u00B7 shallower than safety contour 10 m",
         "legIndex": 1,
-        "distanceNm": 1.8567,
+        "distanceNm": 1.8615,
         "location": {
           "kind": "span",
-          "startNm": 1.8567,
-          "endNm": 1.9204,
+          "startNm": 1.8615,
+          "endNm": 1.9253,
           "path": [
             [
               -40.97036,
@@ -177,47 +177,51 @@
             ],
             [
               -40.97036,
-              -134.95298
+              -134.95303
             ],
             [
               -40.97036,
-              -134.95287
+              -134.95291
             ],
             [
               -40.97036,
-              -134.95275
+              -134.95279
             ],
             [
               -40.97036,
-              -134.95263
+              -134.95267
             ],
             [
               -40.97036,
-              -134.95251
+              -134.95256
             ],
             [
               -40.97036,
-              -134.95239
+              -134.95244
             ],
             [
               -40.97036,
-              -134.95227
+              -134.95232
             ],
             [
               -40.97036,
-              -134.95215
+              -134.9522
             ],
             [
               -40.97036,
-              -134.95203
+              -134.95208
             ],
             [
               -40.97036,
-              -134.95191
+              -134.95196
             ],
             [
               -40.97036,
-              -134.95179
+              -134.95184
+            ],
+            [
+              -40.97036,
+              -134.95173
             ],
             [
               -40.97036,
@@ -243,85 +247,89 @@
         "group": "must_review",
         "category": "depth",
         "title": "Crosses S-102 depths shallower than the safety contour",
-        "meta": "Leg 2 \u2192 3 \u00B7 0.08 NM \u00B7 least 7.6 m \u00B1 0.3 m at cell 10,80 of S-102/DATASET_FILES/102ZZ00SPIT.h5 \u00B7 shallower than safety contour 10 m",
+        "meta": "Leg 2 \u2192 3 \u00B7 0.09 NM \u00B7 least 7.6 m \u00B1 0.3 m at cell 10,80 of S-102/DATASET_FILES/102ZZ00SPIT.h5 \u00B7 shallower than safety contour 10 m",
         "legIndex": 1,
-        "distanceNm": 1.8602,
+        "distanceNm": 1.863,
         "location": {
           "kind": "span",
-          "startNm": 1.8602,
-          "endNm": 1.9439,
+          "startNm": 1.863,
+          "endNm": 1.9519,
           "path": [
             [
               -40.97036,
-              -134.95301
+              -134.95306
             ],
             [
               -40.97036,
-              -134.95298
+              -134.95303
             ],
             [
               -40.97036,
-              -134.95287
+              -134.95291
             ],
             [
               -40.97036,
-              -134.95275
+              -134.95279
             ],
             [
               -40.97036,
-              -134.95263
+              -134.95267
             ],
             [
               -40.97036,
-              -134.95251
+              -134.95256
             ],
             [
               -40.97036,
-              -134.95239
+              -134.95244
             ],
             [
               -40.97036,
-              -134.95227
+              -134.95232
             ],
             [
               -40.97036,
-              -134.95215
+              -134.9522
             ],
             [
               -40.97036,
-              -134.95203
+              -134.95208
             ],
             [
               -40.97036,
-              -134.95191
+              -134.95196
             ],
             [
               -40.97036,
-              -134.95179
+              -134.95184
             ],
             [
               -40.97036,
-              -134.95167
+              -134.95173
             ],
             [
               -40.97036,
-              -134.95156
+              -134.95161
             ],
             [
               -40.97036,
-              -134.95144
+              -134.95149
             ],
             [
               -40.97036,
-              -134.95132
+              -134.95137
             ],
             [
               -40.97036,
-              -134.9512
+              -134.95125
             ],
             [
               -40.97036,
-              -134.95117
+              -134.95113
+            ],
+            [
+              -40.97036,
+              -134.9511
             ]
           ]
         },
@@ -344,11 +352,11 @@
         "title": "Obstruction in the corridor",
         "meta": "Leg 2 \u2192 3 \u00B7 Obstruction \u00B7 10 m to port \u00B7 5.0 m \u00B7 shallower than draft \u002B squat \u002B UKC (12 m)",
         "legIndex": 1,
-        "distanceNm": 1.8886,
+        "distanceNm": 1.8934,
         "location": {
           "kind": "point",
-          "startNm": 1.8886,
-          "endNm": 1.8886,
+          "startNm": 1.8934,
+          "endNm": 1.8934,
           "path": [
             [
               -40.97027,
@@ -380,11 +388,11 @@
         "title": "Below your UKC setting for 1 min",
         "meta": "Leg 2 \u2192 3 \u00B7 min -2.1 m at 2026-03-01 06:14 UTC",
         "legIndex": 1,
-        "distanceNm": 1.9099,
+        "distanceNm": 1.9148,
         "location": {
           "kind": "span",
-          "startNm": 1.8498,
-          "endNm": 1.9567,
+          "startNm": 1.8546,
+          "endNm": 1.9617,
           "path": [
             [
               -40.97036,
@@ -401,12 +409,12 @@
             "stretch": "below_setting",
             "firstLegIndex": 1,
             "lastLegIndex": 1,
-            "lengthNm": 0.1069,
-            "startTime": "2026-03-01T06:14:01.444523\u002B00:00",
-            "minimumClearanceMeters": -2.08283,
+            "lengthNm": 0.1071,
+            "startTime": "2026-03-01T06:14:03.6007558\u002B00:00",
+            "minimumClearanceMeters": -2.0831,
             "requiredUkcMeters": 1.5,
-            "marginMeters": -3.58283,
-            "minimumTime": "2026-03-01T06:14:19.4755208\u002B00:00",
+            "marginMeters": -3.5831,
+            "minimumTime": "2026-03-01T06:14:21.6779587\u002B00:00",
             "minutesBelow": 0.8
           }
         }
@@ -419,11 +427,11 @@
         "title": "Wreck near the route",
         "meta": "Leg 2 \u2192 3 \u00B7 Wreck \u00B7 180 m to port \u00B7 depth unknown",
         "legIndex": 1,
-        "distanceNm": 2.2123,
+        "distanceNm": 2.218,
         "location": {
           "kind": "point",
-          "startNm": 2.2123,
-          "endNm": 2.2123,
+          "startNm": 2.218,
+          "endNm": 2.218,
           "path": [
             [
               -40.96874,
@@ -440,7 +448,7 @@
             "featureType": "Wreck",
             "waterLevelEffect": 3,
             "side": "port",
-            "offsetMeters": 179.8
+            "offsetMeters": 179.6
           }
         }
       }
@@ -449,21 +457,21 @@
       {
         "index": 0,
         "startNm": 0,
-        "distanceNm": 1.349,
+        "distanceNm": 1.3524,
         "portMeters": 100,
         "starboardMeters": 100
       },
       {
         "index": 1,
-        "startNm": 1.349,
-        "distanceNm": 1.349,
+        "startNm": 1.3524,
+        "distanceNm": 1.3524,
         "portMeters": 100,
         "starboardMeters": 100
       }
     ],
     "clearance": {
       "departure": "2026-03-01T06:00:00\u002B00:00",
-      "arrival": "2026-03-01T06:20:14.0851439\u002B00:00",
+      "arrival": "2026-03-01T06:20:17.1962821\u002B00:00",
       "verdict": "below_setting",
       "verdictTitle": "Below your UKC setting in 1 place",
       "confidence": [],
@@ -473,8 +481,8 @@
         "sample": 72,
         "latitude": -40.97036,
         "longitude": -134.95192,
-        "distanceNm": 1.9099,
-        "time": "2026-03-01T06:14:19.4755208\u002B00:00",
+        "distanceNm": 1.9148,
+        "time": "2026-03-01T06:14:21.6779587\u002B00:00",
         "hasEta": true,
         "ukcMeters": -2.08,
         "requiredUkcMeters": 1.5,

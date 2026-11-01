@@ -1,4 +1,5 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Geodesy;
 using EncDotNet.S100.Quantities;
 
 namespace EncDotNet.S100.Navigation.Tests;
@@ -9,7 +10,10 @@ namespace EncDotNet.S100.Navigation.Tests;
 /// </summary>
 public class RouteCheckerTests
 {
-    private static readonly double M = PassageGeodesy.MetersPerDegreeLatitude;
+    // Metres per degree on the WGS-84 ellipsoid at the equator: east (along
+    // the track) and north (across it).
+    private static readonly double E = Wgs84Geodesy.MetresPerDegree(0).East;
+    private static readonly double N = Wgs84Geodesy.MetresPerDegree(0).North;
 
     private static readonly FakeCell Harbour = new("101HARBOUR", 22_000);
 
@@ -144,7 +148,7 @@ public class RouteCheckerTests
     public void Land_in_the_corridor_is_check_and_names_the_verdict()
     {
         // 40 m north of the track: inside the default 50 m half-width to port.
-        var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.02, 0.03, south: 40 / M, north: 0.002);
+        var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.02, 0.03, south: 40 / N, north: 0.002);
         var sources = new RouteCheckSources { Charts = new FakeCharts([Harbour], [land]) };
 
         var report = new RouteChecker(sources).Check(TwoLegs(), Fixture.Settings(), Token);
@@ -157,7 +161,7 @@ public class RouteCheckerTests
     [Fact]
     public void The_default_limit_applies_to_every_check()
     {
-        var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.02, 0.03, south: 40 / M, north: 0.002);
+        var land = FakeCharts.Area(RouteChartFeatureKind.Land, Harbour, "7", 0.02, 0.03, south: 40 / N, north: 0.002);
         var sources = new RouteCheckSources { Charts = new FakeCharts([Harbour], [land]) };
         var options = RouteCheckOptions.Default with { DefaultLimit = Length.FromMetres(30) };
 
@@ -304,7 +308,7 @@ public class RouteCheckerTests
     {
         var plan = TwoLegs();
         var track = RouteTrack.Build(plan, Fixture.Settings(), Length.FromMetres(50));
-        var leg = 0.05 * M;
+        var leg = 0.05 * E;
 
         Assert.Equal(2 * leg, track.LengthMeters, 3);
         Assert.Equal(leg, track.Legs[1].StartMeters, 3);

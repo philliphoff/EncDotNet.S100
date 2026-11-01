@@ -1,6 +1,7 @@
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Geodesy;
 
 namespace EncDotNet.S100.Navigation.Tests;
 
@@ -11,7 +12,10 @@ namespace EncDotNet.S100.Navigation.Tests;
 /// </summary>
 public class WarningCheckTests
 {
-    private static readonly double M = PassageGeodesy.MetersPerDegreeLatitude;
+    // Metres per degree on the WGS-84 ellipsoid at the equator: east (along
+    // the track) and north (across it).
+    private static readonly double E = Wgs84Geodesy.MetresPerDegree(0).East;
+    private static readonly double N = Wgs84Geodesy.MetresPerDegree(0).North;
     private static readonly DateTimeOffset Departure = new(2026, 3, 1, 6, 0, 0, TimeSpan.Zero);
     private static readonly PassageLeg East = Fixture.Leg([new GeoPosition(0, 0), new GeoPosition(0, 0.01)]);
     private static readonly PassageLeg EastPassage = Fixture.Leg(East.Points, speed: 6);
@@ -56,8 +60,8 @@ public class WarningCheckTests
 
         var match = Assert.Single(result.Detail!.Matches);
         Assert.Equal(RouteWarningRelation.Crosses, match.Relation);
-        Assert.Equal(0.004 * M, match.StartDistanceMeters, 3);
-        Assert.Equal(0.006 * M, match.EndDistanceMeters, 3);
+        Assert.Equal(0.004 * E, match.StartDistanceMeters, 3);
+        Assert.Equal(0.006 * E, match.EndDistanceMeters, 3);
         var finding = Assert.Single(result.Findings);
         Assert.Equal((RouteFindingCodes.WarningOnRoute, RouteFindingGroup.MustReview, RouteFindingCategory.Warning), (finding.Code, finding.Group, finding.Category));
         Assert.Equal("Inside navigational warning 001/26", finding.Title);
@@ -74,14 +78,14 @@ public class WarningCheckTests
 
         Assert.Equal("Crosses navigational warning 002/26", finding.Title);
         Assert.True(finding.Location!.IsPoint);
-        Assert.Equal(0.005 * M, finding.Distance!.Value.TotalMetres, 3);
+        Assert.Equal(0.005 * E, finding.Distance!.Value.TotalMetres, 3);
     }
 
     [Fact]
     public void An_area_inside_the_limits_but_off_the_track_crosses_the_corridor()
     {
         // 30 m north of the track, inside the 50 m port limit.
-        var north = 30 / M;
+        var north = 30 / N;
         var match = Assert.Single(Check(Warning(Info(3), Box(north, 0.004, north + 0.001, 0.005))).Detail!.Matches);
 
         Assert.Equal(RouteWarningRelation.Crosses, match.Relation);
@@ -93,7 +97,7 @@ public class WarningCheckTests
     public void A_source_gives_the_warnings_near_the_route_and_judges_with_its_set()
     {
         // 800 m aside is within the 0,5 NM near distance; 50 km aside is never asked about.
-        var aside = Warning(Info(5), Point(800 / M, 0.005));
+        var aside = Warning(Info(5), Point(800 / N, 0.005));
         var far = Warning(Info(6), Point(0.5, 0.005));
         var source = new RouteWarningList([aside, far]);
 
@@ -109,8 +113,8 @@ public class WarningCheckTests
     public void A_point_in_the_corridor_or_within_half_a_mile_is_near()
     {
         var onTrack = Warning(Info(4), Point(0, 0.005));
-        var aside = Warning(Info(5), Point(800 / M, 0.005));
-        var far = Warning(Info(6), Point(1000 / M, 0.005));
+        var aside = Warning(Info(5), Point(800 / N, 0.005));
+        var far = Warning(Info(6), Point(1000 / N, 0.005));
 
         var result = Check(onTrack, aside, far);
 
@@ -126,7 +130,7 @@ public class WarningCheckTests
     public void The_near_distance_is_configurable()
     {
         var result = Checks.Warnings(
-            new FakeWarnings([Warning(Info(7), Point(800 / M, 0.005))]),
+            new FakeWarnings([Warning(Info(7), Point(800 / N, 0.005))]),
             new PassagePlan([East]),
             AtDeparture,
             new RouteCheckOptions { Warnings = new RouteWarningOptions { NearDistanceMeters = 100 } });
@@ -145,8 +149,8 @@ public class WarningCheckTests
         var match = Assert.Single(Check(Warning(Info(8), area)).Detail!.Matches);
 
         // Enters at 0,002°, leaves for the last time at 0,008°: the span covers the hole.
-        Assert.Equal(0.002 * M, match.StartDistanceMeters, 3);
-        Assert.Equal(0.008 * M, match.EndDistanceMeters, 3);
+        Assert.Equal(0.002 * E, match.StartDistanceMeters, 3);
+        Assert.Equal(0.008 * E, match.EndDistanceMeters, 3);
     }
 
     [Fact]
@@ -202,8 +206,8 @@ public class WarningCheckTests
 
         var match = Assert.Single(result.Detail!.Matches);
         Assert.Equal(0, match.LegIndex);
-        Assert.Equal(0.004 * M, match.StartDistanceMeters, 1);
-        Assert.Equal(0.007 * M, match.EndDistanceMeters, 1);
+        Assert.Equal(0.004 * E, match.StartDistanceMeters, 1);
+        Assert.Equal((0.005 * E) + (0.002 * N), match.EndDistanceMeters, 1);
         Assert.False(((WarningDetails)match.Finding!.Details!).AtEta);
         Assert.Equal(Departure, ((WarningDetails)match.Finding.Details!).From);
     }

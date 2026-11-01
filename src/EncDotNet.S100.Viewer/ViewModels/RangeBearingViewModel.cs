@@ -169,7 +169,7 @@ internal sealed class RangeBearingViewModel : ViewModelBase
     /// <summary>Why a ring value was refused, or <c>null</c>.</summary>
     public string? RingError { get => _ringError; private set => SetProperty(ref _ringError, value); }
 
-    /// <summary>The earth model footer: <c>Sphere · R 6,371 km</c>.</summary>
+    /// <summary>The earth model footer: <c>WGS-84 ellipsoid</c>.</summary>
     public string ModelText { get; } = RangeBearingText.Model();
 
     /// <summary>Accessible name of the range value, with its unit.</summary>

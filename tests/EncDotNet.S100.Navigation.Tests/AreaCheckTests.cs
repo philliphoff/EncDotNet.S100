@@ -1,6 +1,7 @@
 using System.Globalization;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Features;
+using EncDotNet.S100.Geodesy;
 
 namespace EncDotNet.S100.Navigation.Tests;
 
@@ -11,7 +12,10 @@ namespace EncDotNet.S100.Navigation.Tests;
 /// </summary>
 public class AreaCheckTests
 {
-    private static readonly double M = PassageGeodesy.MetersPerDegreeLatitude;
+    // Metres per degree on the WGS-84 ellipsoid at the equator: east (along
+    // the track) and north (across it).
+    private static readonly double E = Wgs84Geodesy.MetresPerDegree(0).East;
+    private static readonly double N = Wgs84Geodesy.MetresPerDegree(0).North;
     private static readonly DateTimeOffset Departure = new(2026, 3, 1, 6, 0, 0, TimeSpan.Zero);
     private static readonly PassageLeg East = Fixture.Leg([new GeoPosition(0, 0), new GeoPosition(0, 0.01)]);
     private static readonly PassageLeg EastPassage = Fixture.Leg(East.Points, speed: 6);
@@ -86,7 +90,7 @@ public class AreaCheckTests
         Assert.Equal("Indication of some prohibited areas or areas with special conditions is Off", off.Title);
         Assert.Equal("Leg 1 → 2 · Anchorage area · 2 on the route", off.Meta);
         Assert.Null(off.Feature);
-        Assert.Equal(0.002 * M, off.Location!.StartDistanceMeters, 1.0);
+        Assert.Equal(0.002 * E, off.Location!.StartDistanceMeters, 1.0);
         Assert.Single(findings, f => f.Code == RouteFindingCodes.CautionArea);
         Assert.Equal(2, findings.Count);
     }
@@ -107,8 +111,8 @@ public class AreaCheckTests
 
         var match = Assert.Single(result.Detail!.Matches);
         Assert.Equal(RouteAreaRelation.Enters, match.Relation);
-        Assert.Equal(0.004 * M, match.StartDistanceMeters, 1.0);
-        Assert.Equal(0.006 * M, match.EndDistanceMeters, 1.0);
+        Assert.Equal(0.004 * E, match.StartDistanceMeters, 1.0);
+        Assert.Equal(0.006 * E, match.EndDistanceMeters, 1.0);
         var finding = match.Finding!;
         Assert.Equal((RouteFindingCodes.EntersProhibitedArea, RouteFindingGroup.MustReview), (finding.Code, finding.Group));
         Assert.Equal("Enters restricted area", finding.Title);
@@ -160,22 +164,22 @@ public class AreaCheckTests
     public void An_area_only_inside_the_limits_is_one_group_lighter()
     {
         // 30 m north of the track, inside the 50 m port limit.
-        var prohibited = Check(Area(RouteAreaKind.RestrictedArea, 0.004, 0.006, south: 30 / M, north: 0.002, restrictions: [7]));
-        var caution = Check(Area(RouteAreaKind.CautionArea, 0.004, 0.006, south: 30 / M, north: 0.002));
+        var prohibited = Check(Area(RouteAreaKind.RestrictedArea, 0.004, 0.006, south: 30 / N, north: 0.002, restrictions: [7]));
+        var caution = Check(Area(RouteAreaKind.CautionArea, 0.004, 0.006, south: 30 / N, north: 0.002));
 
         var match = Assert.Single(prohibited.Detail!.Matches);
         Assert.Equal(RouteAreaRelation.InCorridor, match.Relation);
         Assert.Equal((RouteFindingCodes.ProhibitedAreaInCorridor, RouteFindingGroup.Check), (match.Finding!.Code, match.Finding.Group));
         Assert.Equal("Restricted area inside the cross-track limits", match.Finding.Title);
-        Assert.Equal(0.004 * M, match.StartDistanceMeters, 30.0);
-        Assert.Equal(0.006 * M, match.EndDistanceMeters, 30.0);
+        Assert.Equal(0.004 * E, match.StartDistanceMeters, 30.0);
+        Assert.Equal(0.006 * E, match.EndDistanceMeters, 30.0);
         Assert.Equal(RouteFindingGroup.Info, caution.Findings.Single().Group);
     }
 
     [Fact]
     public void An_area_beyond_the_limits_gives_nothing()
     {
-        var result = Check(Area(RouteAreaKind.RestrictedArea, 0.004, 0.006, south: 80 / M, north: 0.002, restrictions: [7]));
+        var result = Check(Area(RouteAreaKind.RestrictedArea, 0.004, 0.006, south: 80 / N, north: 0.002, restrictions: [7]));
 
         Assert.Equal(RouteAreaRelation.Off, Assert.Single(result.Detail!.Matches).Relation);
         Assert.Empty(result.Findings);
