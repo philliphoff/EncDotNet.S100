@@ -352,6 +352,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 entry, spec, fromExchangeSet, token).ConfigureAwait(true);
             parseTime = Stopwatch.GetElapsedTime(parseStart);
             callerOwnedProcessor = processor;
+            // Parsing cannot be interrupted, but a load cancelled meanwhile
+            // stops here, before registering or rendering anything.
+            token.ThrowIfCancellationRequested();
             if (!IsCurrentLoad(entry, loadGeneration))
             {
                 DriveLoadAbandoned(loadNotification, fromExchangeSet, entry);

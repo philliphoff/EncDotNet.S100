@@ -451,4 +451,181 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
         notifier.Publish(Viewport(50, -5, 51, -4));
         Assert.True(await WaitUntilAsync(() => loaded.Contains(far)));
     }
+
+    private static DatasetEntry UnboundedCell(string name)
+        => new(
+            filePath: name + ".h5",
+            productSpec: "S-102",
+            source: null,
+            relativePath: name + ".h5",
+            displayName: name,
+            geographicBounds: null);
+
+    [Fact]
+    public async Task VisibleCellsLoadNearestTheCentreFirst()
+    {
+        var notifier = new FakeNotifier();
+        var order = new ConcurrentQueue<DatasetEntry>();
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            (entry, _) => { order.Enqueue(entry); return Task.CompletedTask; },
+            _ => { },
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 });
+
+        var corner = Cell("US5CORNER", 40.0, -75.0, 40.1, -74.9);
+        var middle = Cell("US5MIDDLE", 40.4, -74.6, 40.6, -74.4);
+        coordinator.Register(new[] { corner, middle });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        Assert.True(await WaitUntilAsync(() => order.Count == 2));
+        Assert.Equal(new[] { middle, corner }, order.ToArray());
+    }
+
+    [Fact]
+    public async Task VisibleCellLoadsBeforeAheadAndUnboundedCells()
+    {
+        var notifier = new FakeNotifier();
+        var order = new ConcurrentQueue<DatasetEntry>();
+        var release = new TaskCompletionSource();
+        var blocker = Cell("US5BLOCK", 40.4, -74.6, 40.6, -74.4);
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            async (entry, _) =>
+            {
+                if (ReferenceEquals(entry, blocker))
+                    await release.Task;
+                order.Enqueue(entry);
+            },
+            _ => { },
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 });
+
+        // The blocker takes the only slot; the rest queue behind it.
+        coordinator.Register(new[] { blocker });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        var unbounded = UnboundedCell("102XX00UNBOUND");
+        var ahead = Cell("US5AHEAD", 40.2, -73.8, 40.4, -73.6);
+        var visible = Cell("US5VISIBLE", 40.0, -75.0, 40.1, -74.9);
+        coordinator.Register(new[] { unbounded, ahead, visible });
+        release.SetResult();
+
+        Assert.True(await WaitUntilAsync(() => order.Count == 4));
+        Assert.Equal(new[] { blocker, visible }, order.Take(2).ToArray());
+        Assert.Equal(unbounded, order.Last());
+    }
+
+    [Fact]
+    public async Task SpeculativeLoadsRunOneAtATime()
+    {
+        var notifier = new FakeNotifier();
+        var running = 0;
+        var maxRunning = 0;
+        var done = new ConcurrentBag<DatasetEntry>();
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            async (entry, _) =>
+            {
+                var now = Interlocked.Increment(ref running);
+                InterlockedMax(ref maxRunning, now);
+                await Task.Delay(30);
+                Interlocked.Decrement(ref running);
+                done.Add(entry);
+            },
+            _ => { },
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 4 });
+
+        coordinator.Register(new[]
+        {
+            Cell("US5E1", 40.2, -73.8, 40.4, -73.6),
+            Cell("US5E2", 40.5, -73.8, 40.7, -73.6),
+            Cell("US5E3", 40.2, -75.4, 40.4, -75.2),
+        });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        Assert.True(await WaitUntilAsync(() => done.Count == 3));
+        Assert.Equal(1, maxRunning);
+    }
+
+    [Fact]
+    public async Task SpeculativeLoadWaitsWhileTilesAreStillDrawing()
+    {
+        var notifier = new FakeNotifier();
+        var loaded = new ConcurrentBag<DatasetEntry>();
+        var tilesBusy = true;
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            (entry, _) => { loaded.Add(entry); return Task.CompletedTask; },
+            _ => { },
+            new LazyLoadOptions
+            {
+                ViewportDebounce = TimeSpan.Zero,
+                SpeculativeRetryDelay = TimeSpan.FromMilliseconds(20),
+            },
+            hasVisibleTileWork: () => Volatile.Read(ref tilesBusy));
+
+        var visible = Cell("US5VIS", 40.4, -74.6, 40.6, -74.4);
+        var ahead = Cell("US5AHD", 40.2, -73.8, 40.4, -73.6);
+        coordinator.Register(new[] { visible, ahead });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        // Visible work never waits for the renderer; speculative work does.
+        Assert.True(await WaitUntilAsync(() => loaded.Contains(visible)));
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(ahead, loaded);
+
+        Volatile.Write(ref tilesBusy, false);
+        Assert.True(await WaitUntilAsync(() => loaded.Contains(ahead)));
+    }
+
+    [Fact]
+    public async Task RunningLoadIsCancelledWhenItsCellLeavesTheAheadWindow()
+    {
+        var notifier = new FakeNotifier();
+        var started = new TaskCompletionSource();
+        var cancelled = new TaskCompletionSource();
+        var attempts = 0;
+        var cell = Cell("US5GONE", 40.4, -74.6, 40.6, -74.4);
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            async (entry, ct) =>
+            {
+                if (Interlocked.Increment(ref attempts) == 1)
+                {
+                    started.TrySetResult();
+                    try { await Task.Delay(Timeout.Infinite, ct); }
+                    catch (OperationCanceledException) { cancelled.TrySetResult(); throw; }
+                }
+            },
+            _ => { },
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero });
+
+        coordinator.Register(new[] { cell });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+
+        // A small pan keeps the cell within the ahead margin: still loading.
+        notifier.Publish(Viewport(40, -74.2, 41, -73.2));
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        Assert.False(cancelled.Task.IsCompleted);
+
+        // Panning well away cancels it; the cell stays deferred.
+        notifier.Publish(Viewport(10, 10, 11, 11));
+        await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+        Assert.True(await WaitUntilAsync(() => coordinator.LoadedCount == 0 && cell.IsDeferred));
+
+        // Panning back loads it again.
+        notifier.Publish(Viewport(40, -75, 41, -74));
+        Assert.True(await WaitUntilAsync(() => coordinator.LoadedCount == 1));
+        Assert.Equal(2, attempts);
+        Assert.False(cell.IsDeferred);
+    }
+
+    private static void InterlockedMax(ref int target, int value)
+    {
+        int current;
+        while ((current = Volatile.Read(ref target)) < value
+            && Interlocked.CompareExchange(ref target, value, current) != current)
+        {
+        }
+    }
 }
