@@ -229,6 +229,85 @@ public sealed class MapsuiDatasetLayerSessionTests
     }
 
     [Fact]
+    public async Task RendersOfDifferentDatasetsRunConcurrently()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+
+        var processors = new List<StubProcessor>();
+        var renders = new List<Task<MapsuiDatasetResult?>>();
+        foreach (var id in new[] { new MapDatasetId("a"), new MapDatasetId("b") })
+        {
+            var processor = new StubProcessor(id.Value)
+            {
+                Delay = TimeSpan.FromSeconds(30),
+                RenderStarted = new TaskCompletionSource(
+                    TaskCreationOptions.RunContinuationsAsynchronously),
+            };
+            processors.Add(processor);
+            Assert.True(owner.TryRegister(id, processor));
+            session.SetDataset(Dataset(id));
+            renders.Add(session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken));
+        }
+
+        // Both portrayals start before either is released. A render that waited
+        // for every other render would block on the first cell's 30s delay.
+        var allStarted = Task.WhenAll(processors.Select(p => p.RenderStarted!.Task));
+        var winner = await Task.WhenAny(allStarted, Task.Delay(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        Assert.Same(allStarted, winner);
+
+        foreach (var processor in processors)
+            processor.ReleaseDelayedRender.TrySetResult();
+
+        Assert.All(await Task.WhenAll(renders), Assert.NotNull);
+        Assert.Equal(2, map.Layers.Count);
+    }
+
+    [Fact]
+    public async Task RefreshWaitsForRunningRenderAndHoldsBackLaterRenders()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var a = new MapDatasetId("a");
+        var b = new MapDatasetId("b");
+        var processorA = new StubProcessor(a.Value);
+        var processorB = new StubProcessor(b.Value);
+        Assert.True(owner.TryRegister(a, processorA));
+        Assert.True(owner.TryRegister(b, processorB));
+        session.SetDataset(Dataset(a));
+        session.SetDataset(Dataset(b));
+        await session.RenderAsync(a, MapPresentationState.Default, TestContext.Current.CancellationToken);
+        await session.RenderAsync(b, MapPresentationState.Default, TestContext.Current.CancellationToken);
+
+        // A single render of a is in flight and blocked.
+        processorA.Delay = TimeSpan.FromSeconds(30);
+        processorA.RenderStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var renderA = session.RenderAsync(a, MapPresentationState.Default, TestContext.Current.CancellationToken);
+        await processorA.RenderStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        processorA.Delay = TimeSpan.Zero;
+        processorA.RenderStarted = null;
+
+        // The refresh waits for that render; a render of b asked for after the
+        // refresh waits behind it.
+        var refresh = session.RefreshAsync(MapPresentationState.Default, cancellationToken: TestContext.Current.CancellationToken);
+        var renderB = session.RenderAsync(b, MapPresentationState.Default, TestContext.Current.CancellationToken);
+        await Task.Delay(TimeSpan.FromMilliseconds(200), TestContext.Current.CancellationToken);
+        Assert.False(refresh.IsCompleted);
+        Assert.False(renderB.IsCompleted);
+        Assert.Equal(1, processorB.RenderCount);
+
+        processorA.ReleaseDelayedRender.TrySetResult();
+
+        Assert.NotNull(await renderA.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        Assert.True(await refresh.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        Assert.NotNull(await renderB.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        Assert.Equal(3, processorB.RenderCount);
+    }
+
+    [Fact]
     public async Task RefreshComposesOnceEvenWhenAnOutOfRangeTimeAwareCellIsCleared()
     {
         using var map = new Map();
