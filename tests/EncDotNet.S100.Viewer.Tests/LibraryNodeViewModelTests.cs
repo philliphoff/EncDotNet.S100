@@ -195,7 +195,9 @@ public sealed class LibraryNodeViewModelTests
         Assert.Equal("SECOM", node.KindTag);
         Assert.False(node.HasStatusLine);  // before the first sync
 
-        var at = new DateTimeOffset(DateTime.Today.AddHours(14), TimeZoneInfo.Local.GetUtcOffset(DateTime.Today));
+        // Takes the local offset at 14:00 itself, which differs from midnight's
+        // on a daylight-saving changeover day.
+        var at = new DateTimeOffset(DateTime.Today.AddHours(14));
         node.SyncStatus = new EncDotNet.S100.Collections.Library.LibrarySyncStatus(at, 3, 3, 3, 0, 0);
         Assert.Equal(LibraryNodeStatusKind.Ok, node.StatusKind);
         Assert.StartsWith("Synced 3 of 3 · ", node.StatusLine, StringComparison.Ordinal);

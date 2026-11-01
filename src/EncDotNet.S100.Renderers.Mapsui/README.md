@@ -575,7 +575,10 @@ layerSession.SetMarinerSettings(presentation.Mariner);
   immediately. `RefreshTimeAsync` waits 100 ms for further changes and cancels
   the previous time refresh. `RefreshAsync` re-renders everything for a new
   presentation; the latest request wins.
-- All render methods share one lock. Call and await them from the
+- `RenderAsync` calls for different datasets run in parallel; two renders of
+  the same dataset run one after the other. `RefreshAsync`, `RefreshTimeAsync`
+  and `RefreshRevealedAsync` wait for running renders, and renders requested
+  after a waiting refresh start once it finishes. Call and await them from the
   synchronization context that owns the map.
 - `GetLayerStackEntries` returns the full S-98 stack, including inactive
   datasets, and `GetStackedLayers` returns the layers in the dataset band.

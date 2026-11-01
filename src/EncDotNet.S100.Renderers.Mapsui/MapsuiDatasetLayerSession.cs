@@ -49,7 +49,11 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
     private readonly Dictionary<MapDatasetId, Entry> _entries = [];
     private readonly List<MapDatasetId> _order = [];
     private readonly ConditionalWeakTable<ILayer, LayerBaseState> _baseStates = new();
-    private readonly SemaphoreSlim _renderGate = new(1, 1);
+    // Single-dataset renders hold this shared, so different datasets render in
+    // parallel; bulk refreshes hold it exclusively so they never interleave
+    // with a single render. Each entry's RenderLock keeps two renders of one
+    // dataset from overlapping.
+    private readonly SharedExclusiveGate _renderGate = new();
     private IReadOnlyList<LayerStackEntry> _stackEntries = [];
     private IReadOnlyList<ILayer> _stackedLayers = [];
     private MapsuiMapTimeSnapshot _time = MapsuiMapTimeSnapshot.Empty;
@@ -353,11 +357,13 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
         CancellationTokenSource localCts;
         DateTime? selectedTime;
+        SemaphoreSlim datasetLock;
         lock (_sync)
         {
             ThrowIfDisposed();
             if (!_entries.TryGetValue(datasetId, out var entry))
                 return null;
+            datasetLock = entry.RenderLock;
             entry.RenderCts?.Cancel();
             localCts = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken);
@@ -368,10 +374,13 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         }
 
         var enteredGate = false;
+        var enteredDatasetLock = false;
         try
         {
-            await _renderGate.WaitAsync(localCts.Token).ConfigureAwait(true);
+            await _renderGate.EnterSharedAsync(localCts.Token).ConfigureAwait(true);
             enteredGate = true;
+            await datasetLock.WaitAsync(localCts.Token).ConfigureAwait(true);
+            enteredDatasetLock = true;
             return await RenderCoreAsync(
                 datasetId,
                 presentation,
@@ -385,8 +394,10 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         }
         finally
         {
+            if (enteredDatasetLock)
+                datasetLock.Release();
             if (enteredGate)
-                _renderGate.Release();
+                _renderGate.ExitShared();
 
             lock (_sync)
             {
@@ -437,7 +448,8 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
     /// <summary>
     /// Coalesces rapid clock changes, cancels the preceding time refresh, and
-    /// applies product-specific time gating through the shared render gate.
+    /// applies product-specific time gating while holding the render gate
+    /// exclusively.
     /// </summary>
     /// <param name="presentation">
     /// The immutable map presentation used to construct product contexts.
@@ -487,7 +499,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
     /// <summary>
     /// Cancels the preceding full refresh and re-renders registered datasets
-    /// through the shared render gate while preserving time gating.
+    /// while holding the render gate exclusively, preserving time gating.
     /// </summary>
     /// <param name="presentation">
     /// The immutable map presentation used to construct product contexts.
@@ -612,7 +624,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             viewport.Width * ViewportRefreshMarginFraction,
             viewport.Height * ViewportRefreshMarginFraction);
 
-        await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(true);
+        await _renderGate.EnterExclusiveAsync(cancellationToken).ConfigureAwait(true);
         try
         {
             MapDatasetId[] datasetIds;
@@ -679,7 +691,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         }
         finally
         {
-            _renderGate.Release();
+            _renderGate.ExitExclusive();
         }
     }
 
@@ -2300,6 +2312,12 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         public double? ContentMaxVisibleResolution { get; set; }
 
         public long Generation { get; set; }
+
+        /// <summary>
+        /// Serializes single renders of this dataset; renders of different
+        /// datasets run in parallel under the shared render gate.
+        /// </summary>
+        public SemaphoreSlim RenderLock { get; } = new(1, 1);
 
         /// <summary>
         /// The dataset's gridded-coverage projection layout, reused across
