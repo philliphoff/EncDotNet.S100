@@ -130,6 +130,7 @@ internal static class MapZoomLimits
         /// </remarks>
         public Viewport Limit(Viewport viewport, MRect? panBounds, MMinMax? zoomBounds)
         {
+            panBounds = WithinWorld(panBounds);
             var latitude = MapScaleFormatter.MercatorYToLatitudeDegrees(viewport.CenterY);
             if (!double.IsFinite(latitude))
                 return _inner.Limit(viewport, panBounds, zoomBounds);
@@ -146,6 +147,28 @@ internal static class MapZoomLimits
                     panBounds,
                     BoundsAt(finalLatitude))
                 : limited;
+        }
+
+        /// <summary>
+        /// <paramref name="panBounds"/> cut to the Web Mercator world's northing
+        /// (±π·R, the ±<see cref="MaxMercatorLatitude"/> limit). The pan bounds
+        /// are the loaded data's extent, and a layer that projects a pole row
+        /// (a global weather grid's ±90°) reports a northing far beyond the
+        /// world, which would let the map pan off into empty space.
+        /// </summary>
+        /// <param name="panBounds">The pan bounds, or <see langword="null"/>.</param>
+        internal static MRect? WithinWorld(MRect? panBounds)
+        {
+            if (panBounds is null)
+                return null;
+
+            const double maxY = Rendering.Scene.WebMercator.Circumference / 2.0;
+            if (panBounds.MinY >= -maxY && panBounds.MaxY <= maxY)
+                return panBounds;
+
+            double minY = Math.Clamp(panBounds.MinY, -maxY, maxY);
+            double clampedMaxY = Math.Clamp(panBounds.MaxY, -maxY, maxY);
+            return new MRect(panBounds.MinX, minY, panBounds.MaxX, clampedMaxY);
         }
 
         /// <summary>Latitude change (degrees) below which a second pass is skipped.</summary>

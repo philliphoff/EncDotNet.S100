@@ -20,7 +20,7 @@ public sealed class S111RenderingTests
             TimeStepIndex = 0,
         });
 
-        // Sparse render (5 arrows, ink ~325 px): hold it to a share of its own
+        // Sparse render (7 arrows, ink ~450 px): hold it to a share of its own
         // ink rather than the default 5 % of the image (18 000 px). The arrows
         // render identically on macOS, linux-arm64 and linux-x64, so one
         // missing or moved arrow (~65 px) fails either limit.
@@ -43,7 +43,7 @@ public sealed class S111RenderingTests
             Palette = PaletteType.Night,
         });
 
-        // Sparse render (5 arrows, ink ~325 px): hold it to a share of its own
+        // Sparse render (7 arrows, ink ~450 px): hold it to a share of its own
         // ink rather than the default 5 % of the image (18 000 px). The arrows
         // render identically on macOS, linux-arm64 and linux-x64, so one
         // missing or moved arrow (~65 px) fails either limit.

@@ -31,10 +31,13 @@ public sealed class CoverageSymbolField
     /// <summary>Number of grid columns.</summary>
     public int Cols { get; }
 
-    /// <summary>Per-cell EPSG:3857 x of the cell centre.</summary>
+    /// <summary>
+    /// Per-cell EPSG:3857 x of the cell centre; NaN for a cell beyond
+    /// ±<see cref="WebMercator.MaxLatitude"/>, which has no symbol.
+    /// </summary>
     public double[] X { get; }
 
-    /// <summary>Per-cell EPSG:3857 y of the cell centre.</summary>
+    /// <summary>Per-cell EPSG:3857 y of the cell centre; NaN like <see cref="X"/>.</summary>
     public double[] Y { get; }
 
     /// <summary>
@@ -91,10 +94,20 @@ public sealed class CoverageSymbolField
                 double lon, lat;
                 if (nativeToWgs84.IsIdentity) { lon = nativeX; lat = nativeY; }
                 else { (lon, lat) = nativeToWgs84.Transform(nativeX, nativeY); }
-                (field.X[i], field.Y[i]) = WebMercator.FromLonLat(lon, lat);
-
                 field.Scale[i] = float.NaN;
                 field.Priority[i] = float.NaN;
+
+                // Web Mercator can't show a cell beyond its latitude limit: the
+                // northing runs off to ±∞ at the poles (a global grid's pole
+                // rows would stretch the layer's extent far past the world).
+                if (!(Math.Abs(lat) <= WebMercator.MaxLatitude))
+                {
+                    field.X[i] = double.NaN;
+                    field.Y[i] = double.NaN;
+                    continue;
+                }
+
+                (field.X[i], field.Y[i]) = WebMercator.FromLonLat(lon, lat);
 
                 float value = valueData[r, c];
                 float direction = rotationData[r, c];

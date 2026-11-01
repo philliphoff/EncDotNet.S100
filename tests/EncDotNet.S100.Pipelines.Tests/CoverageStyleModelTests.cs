@@ -120,6 +120,49 @@ public sealed class CoverageStyleModelTests
     }
 
     [Fact]
+    public void Symbol_field_has_no_position_or_symbol_beyond_the_Mercator_limit()
+    {
+        // A global grid's pole rows: 90° N, the equator and 90° S.
+        var metadata = new GridMetadata
+        {
+            NumRows = 3,
+            NumColumns = 1,
+            OriginLatitude = 90.0,
+            OriginLongitude = 0.0,
+            SpacingLatitudinal = -90.0,
+            SpacingLongitudinal = 1.0,
+        };
+        var layer = new StyledCoverageLayer
+        {
+            Coverage = new SampledCoverage
+            {
+                Region = GridRegion.Full,
+                Metadata = metadata,
+                Values = new Dictionary<string, float[]>
+                {
+                    ["speed"] = [10f, 10f, 10f],
+                    ["direction"] = [90f, 90f, 90f],
+                },
+            },
+            Georeferencer = new GridGeoreferencer(metadata, "EPSG:4326"),
+            SymbolScheme = BarbScheme(rotationOffset: 0),
+            NoDataValue = float.NaN,
+        };
+
+        var field = CoverageSymbolField.Build(layer, IdentityCrsTransform.Instance);
+
+        foreach (int pole in new[] { 0, 2 })
+        {
+            Assert.True(double.IsNaN(field.X[pole]) && double.IsNaN(field.Y[pole]), $"row {pole}");
+            Assert.True(float.IsNaN(field.Scale[pole]));
+            Assert.Null(field.Bands[pole]);
+        }
+
+        Assert.Equal(0.0, field.Y[1], 6);
+        Assert.NotNull(field.Bands[1]);
+    }
+
+    [Fact]
     public void Computed_field_is_derived_from_stored_fields_on_first_read()
     {
         int calls = 0;
