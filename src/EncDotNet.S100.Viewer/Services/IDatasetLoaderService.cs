@@ -101,6 +101,23 @@ internal interface IDatasetLoaderService
     }
 
     /// <summary>
+    /// Unloads several lazily-loaded cells as <see cref="UnloadEntry"/> does,
+    /// rebuilding the map once for the whole set rather than once per cell. A
+    /// lazy-load eviction pass can unload hundreds of cells at a time.
+    /// </summary>
+    /// <param name="entries">The exchange-set cell entries to unload.</param>
+    /// <remarks>
+    /// Provided as a default interface member that unloads one at a time, so
+    /// existing test doubles need not override it.
+    /// </remarks>
+    void UnloadEntries(IReadOnlyList<DatasetEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        foreach (var entry in entries)
+            UnloadEntry(entry);
+    }
+
+    /// <summary>
     /// Reorders the dataset layers on the map to match the supplied
     /// entry sequence. Lowest-indexed entry paints first (bottom of
     /// the dataset stack). Entries not currently bound to layers are

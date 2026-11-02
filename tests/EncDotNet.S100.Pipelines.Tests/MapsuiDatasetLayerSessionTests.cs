@@ -692,6 +692,66 @@ public sealed class MapsuiDatasetLayerSessionTests
     }
 
     [Fact]
+    public async Task RemovingSeveralDatasetsComposesOnce()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var ids = new[] { new MapDatasetId("a"), new MapDatasetId("b"), new MapDatasetId("c") };
+        foreach (var id in ids)
+        {
+            Assert.True(owner.TryRegister(id, new StubProcessor(id.Value)));
+            session.SetDataset(Dataset(id));
+            await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
+        }
+        var changes = 0;
+        session.LayersChanged += (_, _) => changes++;
+
+        var removed = session.RemoveDatasets(
+            [ids[0], ids[2], new MapDatasetId("unknown")], preserveState: true);
+
+        Assert.Equal(2, removed);
+        Assert.Equal(1, changes);
+        Assert.Equal("b-v1", Assert.Single(map.Layers).Name);
+        // Preserved for a lazy reload, without layers or processors.
+        Assert.Empty(session.GetDataset(ids[0])!.Layers);
+        Assert.Empty(session.GetDataset(ids[2])!.Layers);
+        Assert.False(owner.TryAcquire(ids[0], out _));
+        Assert.True(owner.TryAcquire(ids[1], out var kept));
+        kept.Dispose();
+    }
+
+    [Fact]
+    public async Task ProjectionFailureRollsBackEveryDatasetInABatchRemoval()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        var authority = new ThrowingAuthority();
+        using var session = CreateSession(
+            map,
+            owner,
+            new InteroperabilityAuthorityProvider(authority));
+        var ids = new[] { new MapDatasetId("a"), new MapDatasetId("b") };
+        var processors = new List<StubProcessor>();
+        foreach (var id in ids)
+        {
+            var processor = new StubProcessor(id.Value);
+            processors.Add(processor);
+            Assert.True(owner.TryRegister(id, processor));
+            session.SetDataset(Dataset(id));
+            await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
+        }
+        var before = map.Layers.ToArray();
+
+        authority.Throw = true;
+        Assert.Throws<InvalidOperationException>(() => session.RemoveDatasets(ids));
+
+        Assert.Equal(before, map.Layers.ToArray());
+        Assert.All(ids, id => Assert.Single(session.GetDataset(id)!.Layers));
+        Assert.All(processors, p => Assert.Equal(0, p.DisposeCount));
+    }
+
+    [Fact]
     public async Task LayersChangedCanReenterSessionWithoutOverwritingNewState()
     {
         using var map = new Map();

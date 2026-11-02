@@ -113,7 +113,7 @@ internal sealed class LibraryTimeSource : ILibraryTimeSource
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(clock);
         _panel = panel;
-        _dispatch = dispatch ?? PostToUiThread;
+        _dispatch = dispatch ?? PostLater;
         library.Changed += (_, _) => Invalidate();
         loader.Changed += (_, _) => Invalidate();
         panel.Downloader.Changed += (_, _) => Invalidate();
@@ -243,11 +243,8 @@ internal sealed class LibraryTimeSource : ILibraryTimeSource
         }
     }
 
-    private static void PostToUiThread(Action action)
-    {
-        if (Dispatcher.UIThread.CheckAccess())
-            action();
-        else
-            Dispatcher.UIThread.Post(action);
-    }
+    // Always defers, even on the UI thread, so Invalidate's coalescing works:
+    // a burst of changes raised there (a pass that evicts or loads many cells)
+    // raises Changed once, and the Timeline rebuilds once, instead of per cell.
+    private static void PostLater(Action action) => Dispatcher.UIThread.Post(action);
 }

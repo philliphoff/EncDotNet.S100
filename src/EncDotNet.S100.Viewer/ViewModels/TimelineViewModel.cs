@@ -455,10 +455,68 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     /// <summary>How many time-aware layers have no data within their tolerance of the view time, of how many.</summary>
     private (int Empty, int Total) EmptyLayerCount()
     {
+        var status = CurrentDataStatus();
+        return (status.Empty.Length, status.Datasets.Count);
+    }
+
+    // The layers without data, and the nearest time some of them have data,
+    // depend only on the time snapshot and the view time, but the status line
+    // reads them many times per change: RaiseNow raises five status properties
+    // and the command states, each of which consults them, and it runs on
+    // every load, progress tick and map-scope change. Cache them per snapshot
+    // (whose lists are replaced, never mutated) and view time.
+    private DataStatus? _dataStatus;
+
+    private DataStatus CurrentDataStatus()
+    {
         var datasets = _service.TimedDatasets;
-        if (_service.CurrentTime is not { } t || datasets.Count == 0)
-            return (0, datasets.Count);
-        return (datasets.Count(d => !Covers(d, t)), datasets.Count);
+        var samples = _service.AllSamples;
+        var time = _service.CurrentTime;
+        if (_dataStatus is { } cached
+            && ReferenceEquals(cached.Datasets, datasets)
+            && ReferenceEquals(cached.Samples, samples)
+            && cached.Time == time)
+        {
+            return cached;
+        }
+
+        var empty = time is { } t
+            ? datasets.Where(d => !Covers(d, t)).ToArray()
+            : [];
+        return _dataStatus = new DataStatus(datasets, samples, time, empty);
+    }
+
+    /// <summary>The layers without data at one view time, and the nearest time some of them have data.</summary>
+    private sealed class DataStatus(
+        IReadOnlyList<EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimedDataset> datasets,
+        IReadOnlyList<DateTime> samples,
+        DateTime? time,
+        EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimedDataset[] empty)
+    {
+        private bool _nearestFound;
+        private DateTime? _nearest;
+
+        public IReadOnlyList<EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimedDataset> Datasets { get; } = datasets;
+
+        public IReadOnlyList<DateTime> Samples { get; } = samples;
+
+        public DateTime? Time { get; } = time;
+
+        public EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimedDataset[] Empty { get; } = empty;
+
+        /// <summary>Found on first use: the Next data action is only shown with a warning.</summary>
+        public DateTime? Nearest
+        {
+            get
+            {
+                if (!_nearestFound)
+                {
+                    _nearest = Time is { } t ? NearestData(Samples, Empty, t) : null;
+                    _nearestFound = true;
+                }
+                return _nearest;
+            }
+        }
     }
 
     /// <summary>True when the dataset draws something at <paramref name="time"/>, by the renderer's own time rule.</summary>
@@ -469,39 +527,77 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
 
     /// <summary>The id of the first layer without data at the view time, or null.</summary>
     private string? FirstEmptyDatasetId() =>
-        _service.CurrentTime is { } t
-            ? _service.TimedDatasets.FirstOrDefault(d => d.DatasetId is not null && !Covers(d, t))?.DatasetId
-            : null;
+        CurrentDataStatus().Empty.FirstOrDefault(d => d.DatasetId is not null)?.DatasetId;
 
     /// <summary>
     /// The loaded sample nearest the view time, before or after it, at which
     /// a layer without data now has data; <see langword="null"/> when there is none.
     /// </summary>
-    private DateTime? NearestData()
+    private DateTime? NearestData() => CurrentDataStatus().Nearest;
+
+    /// <summary>
+    /// The sample in <paramref name="samples"/> (ascending) nearest <paramref name="time"/>,
+    /// before or after it, at which one of <paramref name="empty"/> has data; the earlier
+    /// one on a tie, <see langword="null"/> when there is none. Walks outward from the
+    /// view time and stops at the first hit each way, so it usually looks at only a
+    /// few samples rather than every one.
+    /// </summary>
+    internal static DateTime? NearestData(
+        IReadOnlyList<DateTime> samples,
+        IReadOnlyList<EncDotNet.S100.Renderers.Mapsui.MapsuiMapTimedDataset> empty,
+        DateTime time)
     {
-        if (_service.CurrentTime is not { } t)
+        if (empty.Count == 0 || samples.Count == 0)
             return null;
-        var empty = _service.TimedDatasets.Where(d => !Covers(d, t)).ToArray();
-        if (empty.Length == 0)
-            return null;
-        DateTime? previous = null;
-        DateTime? next = null;
-        foreach (var sample in _service.AllSamples)
+
+        // The first sample at or after the view time.
+        int low = 0, high = samples.Count;
+        while (low < high)
         {
-            if (!empty.Any(d => Covers(d, sample)))
-                continue;
-            if (sample < t)
-                previous = sample;
-            else if (sample > t && next is null)
-                next = sample;
+            var mid = (low + high) / 2;
+            if (samples[mid] < time)
+                low = mid + 1;
+            else
+                high = mid;
         }
+
+        DateTime? next = null;
+        for (var i = low; i < samples.Count; i++)
+        {
+            if (samples[i] > time && HasData(samples[i]))
+            {
+                next = samples[i];
+                break;
+            }
+        }
+
+        DateTime? previous = null;
+        for (var i = low - 1; i >= 0; i--)
+        {
+            if (HasData(samples[i]))
+            {
+                previous = samples[i];
+                break;
+            }
+        }
+
         return (previous, next) switch
         {
-            ({ } p, { } n) => t - p <= n - t ? p : n,
+            ({ } p, { } n) => time - p <= n - time ? p : n,
             ({ } p, null) => p,
             (null, { } n) => n,
             _ => null,
         };
+
+        bool HasData(DateTime sample)
+        {
+            foreach (var dataset in empty)
+            {
+                if (Covers(dataset, sample))
+                    return true;
+            }
+            return false;
+        }
     }
 
     private void JumpToData()

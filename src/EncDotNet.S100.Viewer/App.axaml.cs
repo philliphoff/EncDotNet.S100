@@ -1047,7 +1047,8 @@ public partial class App : Application
                     else Avalonia.Threading.Dispatcher.UIThread.Post(action);
                 },
                 hasVisibleTileWork: () =>
-                    EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.HasVisibleTileWork);
+                    EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.HasVisibleTileWork,
+                unloadMany: loader.UnloadEntries);
         });
 
         // Own-ship dynamic source. The steerable driver dead-reckons a
