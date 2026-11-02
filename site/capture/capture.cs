@@ -120,10 +120,11 @@ var checkDeparture = new DateTimeOffset(2025, 12, 18, 13, 30, 0, TimeSpan.Zero);
 // US2ATLOC, the band-2 cell that draws at this scale (the band-3 cells don't),
 // so the chart reaches the edges of the view.
 var hatterasBox = new Box(33.62, -76.75, 37.8, -71.0);
-// W2: the entrance to the Strait of Juan de Fuca, Cape Flattery and the outer
-// Washington coast, where Pacific swell meets the coast and the Strait, with
-// the San Juan Islands and the north of Puget Sound at the east edge.
-var flatteryBox = new Box(47.0, -127.2, 49.4, -122.3);
+// W2: the outer Washington coast from Grays Harbor to Cape Flattery, with the
+// mouth of the Strait of Juan de Fuca and Puget Sound at the east edge: the
+// waters NOAA charts, so the chart (and the wave fill clipped to its water)
+// reaches the edges of the view.
+var flatteryBox = new Box(46.3, -127.9, 48.55, -122.6);
 
 var shots = new List<Shot>
 {
@@ -306,22 +307,27 @@ var shots = new List<Shot>
         return await v.Window();
     }, Themed: true),
 
-    // W2: wind and waves off Cape Flattery: NOAA GFS-Wave significant wave
+    // W2: wind and waves off the Washington coast: NOAA GFS-Wave significant wave
     // height (the West Coast 0.16° grid) and the GFS 10 m wind and sea level
-    // pressure, at the forecast hour in the latest run (or --gfs-run) with the
-    // highest seas off the Strait, over the NOAA coastal charts; NWS marine
-    // alerts for the view from the Library, and NDBC buoy observations (live, so
-    // they're from capture time, not the forecast hour).
+    // pressure, at the hour in the next day of the latest run (or --gfs-run) with
+    // the highest seas off the coast, over the NOAA coastal charts; NWS marine
+    // alerts for the view from the Library.
     new("W2", async v =>
     {
         await v.Reset(category: "DisplayBase");
         await CoastalCharts(v, "WA", flatteryBox);
+        // The coastal cells along the Strait, if the Library's state list missed them.
+        foreach (var cell in Grid("US3WA1", "F", "CDEFG"))
+            try { await v.OpenAll(await data.Enc([cell]), tolerateFailures: true); }
+            catch (Exception e) { Console.WriteLine($"  {cell}: {e.Message[..Math.Min(50, e.Message.Length)]}"); }
         var run = gfsRun ?? await data.LatestGfsRun(6);
 
-        // The forecast hour with the highest seas at a few points off the Strait.
-        (double Lat, double Lon)[] offshore = [(48.40, -125.20), (47.90, -125.00), (48.60, -125.80)];
+        // The hour in the next day with the highest seas off the coast, so the
+        // marine alerts in force now still apply at the view time.
+        (double Lat, double Lon)[] offshore = [(48.30, -125.20), (47.50, -125.00), (46.80, -124.80)];
         var (bestHour, bestHeight) = (6, double.MinValue);
-        for (var hour = 0; hour <= 120; hour += 6)
+        var firstHour = (int)Math.Ceiling((DateTime.UtcNow - run).TotalHours / 3) * 3;
+        for (var hour = firstHour; hour <= firstHour + 24; hour += 3)
         {
             string file;
             try { file = await data.GfsWave(run, "wcoast.0p16", hour, ["HTSGW:surface"]); }
@@ -342,7 +348,7 @@ var shots = new List<Shot>
             Console.WriteLine($"  f{hour:000} {run.AddHours(hour):u}: {height:0.0} m");
             if (height > bestHeight) (bestHour, bestHeight) = (hour, height);
         }
-        Console.WriteLine($"  using f{bestHour:000} ({run.AddHours(bestHour):u}), {bestHeight:0.0} m off the Strait");
+        Console.WriteLine($"  using f{bestHour:000} ({run.AddHours(bestHour):u}), {bestHeight:0.0} m off the coast");
 
         await v.OpenAll([await data.GfsWave(run, "wcoast.0p16", bestHour, ["HTSGW:surface", "PERPW:surface", "DIRPW:surface"])]);
         await v.OpenAll([await data.Gfs(run, bestHour, ["UGRD:10 m above ground", "VGRD:10 m above ground", "PRMSL:mean sea level"])]);
@@ -365,19 +371,7 @@ var shots = new List<Shot>
         }
         catch (InvalidOperationException e) { Console.WriteLine($"  marine alerts: {e.Message}"); }
 
-        // NDBC buoys: tick the Layer stack row (off by default).
-        await v.Panel("LayerStack");
-        try
-        {
-            var tree = await v.Call("ui_tree", new() { ["filter"] = "all", ["maxNodes"] = 3000 });
-            var toggle = FindToggleNear(tree, "NDBC");
-            if (toggle is null) Console.WriteLine("  NDBC row not found in the Layer stack");
-            else await v.Call("ui_toggle", new() { ["ref"] = toggle, ["state"] = "on" });
-            await Task.Delay(TimeSpan.FromSeconds(10));
-        }
-        catch (InvalidOperationException e) { Console.WriteLine($"  NDBC: {e.Message}"); }
-
-        await v.Panel("EcdisDisplay");
+        // NDBC buoys need a scripted way to turn their layer on (#1225).
         await v.Frame(flatteryBox);
         foreach (var d in (await v.Call("list_datasets"))?["datasets"]?.AsArray() ?? [])
             Console.WriteLine($"  loaded {d!["id"]} {d["spec"]?["name"]}");
