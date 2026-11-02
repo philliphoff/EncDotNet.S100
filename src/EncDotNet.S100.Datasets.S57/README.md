@@ -513,6 +513,67 @@ file, with its updates applied before translation. Like the verification
 adapter, this adapts the directory-based S-57 model rather than sharing an
 interface.
 
+## Reverse translation (preview)
+
+`S101ToS57Translator` translates an `S101Document` back into an S-57
+`EncDotNet.S57.S57Document`, following S-65 Annex C (*S-101 to S-57 ENC
+Conversion Guidance*, Ed 1.0.0). Its main use today is as a round-trip check of
+the forward translation, not as a producer of S-57 cells for distribution:
+there's no S-57 writer yet, and Annex C expects the producer to clean up the
+output by hand.
+
+```csharp
+var s101 = new S57ToS101Translator().Translate(S57Dataset.Open("cell.000"));
+
+var diagnostics = new S101ToS57TranslationDiagnostics();
+var options = new S101ToS57TranslationOptions { InformSeparator = "; ", NationalLanguage = "fra" };
+EncDotNet.S57.S57Document s57 = new S101ToS57Translator(options).Translate(s101, diagnostics);
+```
+
+What it covers:
+
+- **The general rules (Annex C §2).** A multi-valued enumeration joins with
+  commas on an S-57 List attribute and keeps its first value on an Enumerated
+  one. A mandatory S-57 attribute with no source value is written empty.
+  Booleans become enumerations (`radarConspicuous` → `CONRAD` 1/2). Truncated
+  dates lose their trailing dashes. Time, URI and URN attributes and Text
+  Placement are dropped. `featureName` becomes `OBJNAM`/`NOBJNM` by
+  `nameUsage`. `fileReference` becomes `TXTDSC`/`NTXTDS` by language, and only
+  the first `pictorialRepresentation` is kept as `PICREP`. Text from
+  `information`, Nautical Information and `multiplicityOfFeatures` folds into
+  `INFORM`/`NINFOM`.
+- **Meta features (§3), attributes only.** `DataCoverage` becomes `M_COVR` with
+  `CATCOV` 1. The commonest `SoundingDatum` and `VerticalDatumOfData` go to the
+  dataset parameters and the rest to `M_SDAT`/`M_VDAT`. Update Information is
+  dropped.
+- **Feature and attribute classes.** The rules (`S101ToS57Rules`) invert the
+  forward mapping, with an Annex C override layer, and cite an Annex C clause
+  each. A `LightSectored` becomes one `LIGHTS` per sector (§19.3), and a
+  `topmark` becomes a slave `TOPMAR` (§18.1).
+- **Geometry**, feature by feature: points become isolated nodes, curves become
+  edges between connected nodes, and surfaces become rings of edges.
+
+`S101ToS57TranslationOptions` holds the choices Annex C leaves to the
+converter: the `INFORM` separator, the 300-character policy, the preferred
+national language, what to do with a name that has no `nameUsage`, and whether
+to make the optional `INFORM` conversions. `S101ToS57TranslationDiagnostics`
+counts the features read and written, and the features and attributes dropped
+by rule (with the clause). It also counts the values folded into `INFORM`, the
+values truncated to the first, the mandatory attributes written empty, and the
+classes and attributes with no rule.
+
+Not covered yet: the structural inverses (folding `SpanFixed`/`SpanOpening`
+back into `BRIDGE`, `RangeSystem` into `C_AGGR`, landmarks into `BRIDGE` or
+`DAMCON`), chain-node topology, the skin-of-earth cut (§2.5.1.1), the
+`M_COVR`/`M_CSCL` tiling (§3.5), the enumeration differences of Annex C
+Table A-2, and the S-401 product. The spans and range systems are reported as
+deferred.
+
+The opt-in round-trip test `S57RoundTripCorpusTests` runs S-57 → S-101 → S-57
+over a folder of cells (`ENCDOTNET_S57_CORPUS`) and sorts each difference as an
+expected loss, an expected restructure, unexplained or a reverse bug, in a JSON
+report.
+
 ## See also
 
 - [Bringing S-57 into the pipeline](../../docs/s57-to-s101.md): convert, view
