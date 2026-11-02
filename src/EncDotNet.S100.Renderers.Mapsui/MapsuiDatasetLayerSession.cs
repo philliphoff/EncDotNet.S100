@@ -1029,41 +1029,82 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
     public bool RemoveDataset(
         MapDatasetId datasetId,
         bool preserveState = false,
+        bool removeProcessor = true) =>
+        RemoveDatasets([datasetId], preserveState, removeProcessor) > 0;
+
+    /// <summary>
+    /// Removes several datasets' generated layers, and optionally their retained
+    /// state, recomposing the layer stack and the time state once for the whole
+    /// set rather than once per dataset. Removing many cells at once (a lazy-load
+    /// eviction pass) otherwise rebuilds the full S-98 stack for each of them.
+    /// </summary>
+    /// <param name="datasetIds">The dataset identities; unknown ones are skipped.</param>
+    /// <param name="preserveState">
+    /// Whether to retain renderer-neutral state and order slots for a future
+    /// lazy reload.
+    /// </param>
+    /// <param name="removeProcessor">
+    /// Whether to retire the corresponding processors from the supplied owner.
+    /// </param>
+    /// <returns>The number of datasets that had managed state.</returns>
+    /// <remarks>
+    /// All or nothing: when recomposition fails, every dataset is restored and
+    /// the exception propagates.
+    /// </remarks>
+    public int RemoveDatasets(
+        IReadOnlyCollection<MapDatasetId> datasetIds,
+        bool preserveState = false,
         bool removeProcessor = true)
     {
-        DatasetProcessorLease? processorLease = null;
+        ArgumentNullException.ThrowIfNull(datasetIds);
+
+        var leases = new List<DatasetProcessorLease>();
         var rangeChanged = false;
         DateTime? changedCurrent = null;
+        var removed = 0;
         try
         {
             lock (_sync)
             {
                 ThrowIfDisposed();
-                if (!_entries.TryGetValue(datasetId, out var entry))
-                    return false;
 
-                var previous = entry.CaptureRendering();
-                var previousGeneration = entry.Generation;
-                var previousTimePolicy = entry.TimePolicy;
-                var previousRenderedTime = entry.RenderedTime;
-                var orderIndex = _order.IndexOf(datasetId);
-                entry.Generation++;
-                entry.ClearRendering();
-                if (!preserveState)
+                // Detach every dataset first, recording how to restore it.
+                var undo = new List<RemovedDataset>();
+                foreach (var datasetId in datasetIds)
                 {
-                    _entries.Remove(datasetId);
-                    _order.Remove(datasetId);
+                    if (!_entries.TryGetValue(datasetId, out var entry))
+                        continue;
+
+                    var removal = new RemovedDataset(
+                        datasetId,
+                        entry,
+                        entry.CaptureRendering(),
+                        entry.Generation,
+                        entry.TimePolicy,
+                        entry.RenderedTime,
+                        _order.IndexOf(datasetId));
+                    entry.Generation++;
+                    entry.ClearRendering();
+                    if (!preserveState)
+                    {
+                        _entries.Remove(datasetId);
+                        _order.Remove(datasetId);
+                    }
+                    else
+                    {
+                        entry.TimePolicy = null;
+                        entry.RenderedTime = null;
+                        entry.Dataset = CopyDataset(
+                            entry.Dataset,
+                            entry.Dataset.SubLayers,
+                            availableTimes: [],
+                            currentTime: null);
+                    }
+                    undo.Add(removal);
                 }
-                else
-                {
-                    entry.TimePolicy = null;
-                    entry.RenderedTime = null;
-                    entry.Dataset = CopyDataset(
-                        entry.Dataset,
-                        entry.Dataset.SubLayers,
-                        availableTimes: [],
-                        currentTime: null);
-                }
+
+                if (undo.Count == 0)
+                    return 0;
 
                 try
                 {
@@ -1072,45 +1113,65 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 }
                 catch
                 {
-                    entry.RestoreRendering(previous);
-                    entry.Generation = previousGeneration;
-                    entry.TimePolicy = previousTimePolicy;
-                    entry.RenderedTime = previousRenderedTime;
-                    if (!preserveState)
+                    // Restore in reverse so each order slot is reinserted where it was.
+                    for (var i = undo.Count - 1; i >= 0; i--)
                     {
-                        _entries.Add(datasetId, entry);
-                        _order.Insert(orderIndex, datasetId);
+                        var removal = undo[i];
+                        removal.Entry.RestoreRendering(removal.Rendering);
+                        removal.Entry.Generation = removal.Generation;
+                        removal.Entry.TimePolicy = removal.TimePolicy;
+                        removal.Entry.RenderedTime = removal.RenderedTime;
+                        if (!preserveState)
+                        {
+                            _entries.Add(removal.DatasetId, removal.Entry);
+                            _order.Insert(removal.OrderIndex, removal.DatasetId);
+                        }
                     }
                     RecomputeTimeState();
                     throw;
                 }
 
-                // Retire the processor before cancelling the in-flight render.
-                // Cancellation can complete the render, and a caller awaiting it,
-                // synchronously; that caller must already see the processor as no
-                // longer owned, or it reports success for a dataset this call just
-                // removed (#873). The lease defers the processor's disposal until
-                // it is released below.
-                if (removeProcessor
-                    && _processorOwner.TryAcquire(datasetId, out processorLease))
+                foreach (var removal in undo)
                 {
-                    _processorOwner.Remove(datasetId, processorLease.Processor);
-                }
+                    // Retire the processor before cancelling the in-flight render.
+                    // Cancellation can complete the render, and a caller awaiting it,
+                    // synchronously; that caller must already see the processor as no
+                    // longer owned, or it reports success for a dataset this call just
+                    // removed (#873). The lease defers the processor's disposal until
+                    // it is released below.
+                    if (removeProcessor
+                        && _processorOwner.TryAcquire(removal.DatasetId, out var processorLease))
+                    {
+                        leases.Add(processorLease);
+                        _processorOwner.Remove(removal.DatasetId, processorLease.Processor);
+                    }
 
-                entry.RenderCts?.Cancel();
+                    removal.Entry.RenderCts?.Cancel();
+                }
+                removed = undo.Count;
             }
         }
         finally
         {
-            // Disposes the processor, when this was its last lease, outside
-            // the lock.
-            processorLease?.Dispose();
+            // Disposes the processors, when these were their last leases,
+            // outside the lock.
+            foreach (var lease in leases)
+                lease.Dispose();
         }
 
         LayersChanged?.Invoke(this, EventArgs.Empty);
         RaiseTimeEvents(rangeChanged, changedCurrent);
-        return true;
+        return removed;
     }
+
+    private sealed record RemovedDataset(
+        MapDatasetId DatasetId,
+        Entry Entry,
+        RenderingState Rendering,
+        long Generation,
+        TimePolicy? TimePolicy,
+        DateTime? RenderedTime,
+        int OrderIndex);
 
     /// <summary>
     /// Replaces ordinary dataset order.

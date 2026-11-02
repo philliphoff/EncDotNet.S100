@@ -620,6 +620,38 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
         Assert.False(cell.IsDeferred);
     }
 
+    [Fact]
+    public async Task AnEvictionPassUnloadsItsCellsInOneCall()
+    {
+        var notifier = new FakeNotifier();
+        var batches = new ConcurrentQueue<DatasetEntry[]>();
+        var single = new ConcurrentBag<DatasetEntry>();
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            (_, _) => Task.CompletedTask,
+            single.Add,
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, RetentionBudget = 0 },
+            unloadMany: entries => batches.Enqueue(entries.ToArray()));
+
+        var cells = new[]
+        {
+            Cell("US5EV1", 40.1, -74.9, 40.2, -74.8),
+            Cell("US5EV2", 40.4, -74.6, 40.5, -74.5),
+            Cell("US5EV3", 40.7, -74.3, 40.8, -74.2),
+        };
+        coordinator.Register(cells);
+        notifier.Publish(Viewport(40, -75, 41, -74));
+        Assert.True(await WaitUntilAsync(() => coordinator.LoadedCount == 3));
+
+        // Panning far away evicts all three in one pass.
+        notifier.Publish(Viewport(10, 10, 11, 11));
+
+        var batch = Assert.Single(batches);
+        Assert.Equal(cells.OrderBy(c => c.DisplayName), batch.OrderBy(c => c.DisplayName));
+        Assert.Empty(single);
+        Assert.Equal(0, coordinator.LoadedCount);
+    }
+
     private static void InterlockedMax(ref int target, int value)
     {
         int current;

@@ -49,6 +49,11 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<(Guid Source, string Package), LibraryItemViewModel> _packageHeaders = [];
     private readonly Services.Notifications.INotificationService? _notifications;
     private readonly Action<Action> _dispatch;
+
+    // Runs a coalesced refresh. Unlike _dispatch it always defers, even on the
+    // UI thread, so a burst of changes raised there (a pass that evicts or loads
+    // many cells) collapses into one refresh instead of one per cell.
+    private readonly Action<Action> _coalesce;
     private readonly TimeProvider _time;
     private readonly ITimer? _clock;
     private readonly Services.GlobalTimeService? _viewTime;
@@ -85,7 +90,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         Services.GlobalTimeService? viewTime = null,
         Services.ITimeFormatProvider? timeFormat = null,
         LibrarySync? sync = null)
-        : this(library, importer, loader, downloader, PostToUiThread, feedHealth, notifications, time, viewTime, timeFormat, sync)
+        : this(library, importer, loader, downloader, PostToUiThread, feedHealth, notifications, time, viewTime, timeFormat, sync, PostLater)
     {
     }
 
@@ -100,7 +105,8 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         TimeProvider? time = null,
         Services.GlobalTimeService? viewTime = null,
         Services.ITimeFormatProvider? timeFormat = null,
-        LibrarySync? sync = null)
+        LibrarySync? sync = null,
+        Action<Action>? coalesce = null)
     {
         _time = time ?? TimeProvider.System;
         _sync = sync;
@@ -122,6 +128,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         _importer = importer;
         _loader = loader;
         _dispatch = dispatch;
+        _coalesce = coalesce ?? dispatch;
 
         AddFolderCommand = new AsyncRelayCommand(() => _importer.AddFolderAsync(TargetCollectionId));
         AddExchangeSetZipCommand = new AsyncRelayCommand(() => _importer.AddExchangeSetZipAsync(TargetCollectionId));
@@ -1342,7 +1349,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
             _availabilityRefreshPosted = true;
         }
 
-        _dispatch(() =>
+        _coalesce(() =>
         {
             lock (Nodes)
                 _availabilityRefreshPosted = false;
@@ -2015,6 +2022,8 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         else
             Dispatcher.UIThread.Post(action);
     }
+
+    private static void PostLater(Action action) => Dispatcher.UIThread.Post(action);
 }
 
 /// <summary>

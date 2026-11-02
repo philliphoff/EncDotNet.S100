@@ -112,6 +112,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     private readonly IMapViewportNotifier _notifier;
     private readonly Func<DatasetEntry, CancellationToken, Task> _loadAsync;
     private readonly Action<DatasetEntry> _unload;
+    private readonly Action<IReadOnlyList<DatasetEntry>>? _unloadMany;
     private readonly LazyLoadOptions _options;
     private readonly ILogger _logger;
     private readonly Action<Action>? _marshal;
@@ -161,6 +162,12 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     /// Speculative loads wait while it returns <see langword="true"/>. When
     /// <see langword="null"/>, speculative loads never wait for the renderer.
     /// </param>
+    /// <param name="unloadMany">
+    /// Unloads a whole eviction pass's cells at once (typically
+    /// <c>IDatasetLoaderService.UnloadEntries</c>), so the map is rebuilt once
+    /// rather than per cell. When <see langword="null"/>, <paramref name="unload"/>
+    /// is called for each cell.
+    /// </param>
     public ExchangeSetLazyLoadCoordinator(
         IMapViewportNotifier notifier,
         Func<DatasetEntry, CancellationToken, Task> loadAsync,
@@ -168,7 +175,8 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         LazyLoadOptions? options = null,
         ILogger<ExchangeSetLazyLoadCoordinator>? logger = null,
         Action<Action>? marshal = null,
-        Func<bool>? hasVisibleTileWork = null)
+        Func<bool>? hasVisibleTileWork = null,
+        Action<IReadOnlyList<DatasetEntry>>? unloadMany = null)
     {
         ArgumentNullException.ThrowIfNull(notifier);
         ArgumentNullException.ThrowIfNull(loadAsync);
@@ -177,6 +185,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         _notifier = notifier;
         _loadAsync = loadAsync;
         _unload = unload;
+        _unloadMany = unloadMany;
         _options = options ?? new LazyLoadOptions();
         _logger = logger ?? NullLogger<ExchangeSetLazyLoadCoordinator>.Instance;
         _marshal = marshal;
@@ -383,10 +392,18 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             }
         }
 
-        foreach (var victim in victims)
+        if (victims.Count > 0 && _unloadMany is not null)
         {
-            try { _unload(victim); }
+            try { _unloadMany(victims); }
             catch (Exception ex) { _logger.LogWarning(ex, "Lazy-load eviction unload threw."); }
+        }
+        else
+        {
+            foreach (var victim in victims)
+            {
+                try { _unload(victim); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Lazy-load eviction unload threw."); }
+            }
         }
 
         StartQueuedLoads();

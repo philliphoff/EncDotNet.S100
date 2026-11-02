@@ -1109,12 +1109,28 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     public void UnloadEntry(DatasetEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        InvalidateLoad(entry);
+        UnloadEntries([entry]);
+    }
 
-        _mapSession?.RemoveDataset(entry.Id, preserveState: true);
-        _processorEntries.Remove(entry.Id);
-        entry.IsLoaded = false;
-        entry.IsDeferred = true;
+    /// <inheritdoc />
+    public void UnloadEntries(IReadOnlyList<DatasetEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        if (entries.Count == 0)
+            return;
+
+        foreach (var entry in entries)
+            InvalidateLoad(entry);
+
+        // One removal for the whole set, so the S-98 layer stack and time
+        // state are rebuilt once rather than once per evicted cell.
+        _mapSession?.RemoveDatasets(entries.Select(entry => entry.Id).ToArray(), preserveState: true);
+        foreach (var entry in entries)
+        {
+            _processorEntries.Remove(entry.Id);
+            entry.IsLoaded = false;
+            entry.IsDeferred = true;
+        }
     }
 
     public void SetEntryOrder(IReadOnlyList<DatasetEntry> orderedEntries)
