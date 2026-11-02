@@ -490,7 +490,7 @@ public sealed class MapsuiDatasetLayerSessionTests
     }
 
     [Fact]
-    public void CompositionUsesOneAuthoritySnapshot()
+    public async Task CompositionUsesOneAuthoritySnapshot()
     {
         using var map = new Map();
         using var owner = new DatasetProcessorOwner();
@@ -500,10 +500,14 @@ public sealed class MapsuiDatasetLayerSessionTests
             failingAuthority);
         using var session = CreateSession(map, owner, provider);
         var id = new MapDatasetId("dataset");
+        Assert.True(owner.TryRegister(id, new StubProcessor(id.Value)));
 
+        // Registering a dataset without layers composes nothing; its first
+        // render composes once.
         session.SetDataset(Dataset(id));
+        Assert.NotNull(await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken));
 
-        Assert.NotNull(session.GetDataset(id));
+        Assert.Single(map.Layers);
         Assert.Equal(1, provider.ReadCount);
     }
 
@@ -649,10 +653,11 @@ public sealed class MapsuiDatasetLayerSessionTests
         Assert.True(existingLayer.Enabled);
         Assert.True(session.GetDataset(existingId)!.Dataset.IsVisible);
 
+        // A dataset without layers adds nothing to the stack, so registering
+        // it does not compose and cannot fail on the projection.
         var newId = new MapDatasetId("new");
-        Assert.Throws<InvalidOperationException>(() =>
-            session.SetDataset(Dataset(newId)));
-        Assert.Null(session.GetDataset(newId));
+        session.SetDataset(Dataset(newId));
+        Assert.NotNull(session.GetDataset(newId));
         Assert.Same(existingLayer, Assert.Single(map.Layers));
     }
 
@@ -749,6 +754,49 @@ public sealed class MapsuiDatasetLayerSessionTests
         Assert.Equal(before, map.Layers.ToArray());
         Assert.All(ids, id => Assert.Single(session.GetDataset(id)!.Layers));
         Assert.All(processors, p => Assert.Equal(0, p.DisposeCount));
+    }
+
+    [Fact]
+    public async Task ReapplyingUnchangedStateDoesNotRecompose()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        var provider = new CountingAuthorityProvider();
+        using var session = CreateSession(map, owner, provider);
+        var id = new MapDatasetId("dataset");
+        Assert.True(owner.TryRegister(id, new StubProcessor(id.Value)));
+        session.SetDataset(Dataset(id));
+        await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
+        var layer = Assert.Single(map.Layers);
+        var changes = 0;
+        session.LayersChanged += (_, _) => changes++;
+
+        var composes = provider.Reads;
+        session.SetDataset(Dataset(id));
+        Assert.Equal(composes, provider.Reads);
+        Assert.Equal(1, changes);
+        Assert.Same(layer, Assert.Single(map.Layers));
+
+        // A change composition reads still recomposes.
+        session.SetDataset(Dataset(id, isVisible: false));
+        Assert.True(provider.Reads > composes);
+        Assert.False(Assert.Single(map.Layers).Enabled);
+    }
+
+    [Fact]
+    public void RegisteringADatasetWithoutLayersDoesNotRecompose()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        var provider = new CountingAuthorityProvider();
+        using var session = CreateSession(map, owner, provider);
+
+        var composes = provider.Reads;
+        session.SetDataset(Dataset(new MapDatasetId("a")));
+        session.SetDataset(Dataset(new MapDatasetId("a"), isActive: false));
+
+        Assert.Equal(composes, provider.Reads);
+        Assert.NotNull(session.GetDataset(new MapDatasetId("a")));
     }
 
     [Fact]
@@ -1724,6 +1772,30 @@ public sealed class MapsuiDatasetLayerSessionTests
             MarinerSettings? mariner = null,
             IReadOnlyCollection<S98InteroperabilityRule>? rules = null) =>
             _inner.ApplyRules(sortedStack, loadedDatasets, mariner, rules);
+    }
+
+    /// <summary>Counts compositions: each one reads <see cref="Current"/> once.</summary>
+    private sealed class CountingAuthorityProvider : IInteroperabilityAuthorityProvider
+    {
+        private readonly InteroperabilityAuthority _authority = new();
+        private int _reads;
+
+        public int Reads => Volatile.Read(ref _reads);
+
+        public IInteroperabilityAuthority Current
+        {
+            get
+            {
+                Interlocked.Increment(ref _reads);
+                return _authority;
+            }
+        }
+
+        public event Action? CurrentChanged
+        {
+            add { }
+            remove { }
+        }
     }
 
     private sealed class AlternatingAuthorityProvider(

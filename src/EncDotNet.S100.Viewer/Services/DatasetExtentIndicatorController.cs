@@ -47,6 +47,12 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
     private readonly IMeasureOverlayAppearanceProvider _appearance;
     private readonly SettingsViewModel _settings;
     private readonly Action<Action> _marshal;
+
+    // Runs a coalesced rebuild. Unlike DispatcherMarshal it always defers, so a
+    // burst of entry changes raised on the UI thread (a pass that loads or
+    // evicts many cells) rebuilds every outline once, not once per cell.
+    private readonly Action<Action> _coalesce;
+    private bool _rebuildPending;
     private readonly S100DatasetExtentIndicatorLayer _extent;
     private readonly HashSet<DatasetEntry> _subscribed = new();
     private bool _disposed;
@@ -81,6 +87,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
         _appearance = appearance;
         _settings = settings;
         _marshal = marshal ?? DispatcherMarshal;
+        _coalesce = marshal ?? PostLater;
 
         _extent = new S100DatasetExtentIndicatorLayer(name: OverlayLayerName);
 
@@ -118,7 +125,7 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
                 Subscribe(entry);
         }
 
-        _marshal(Rebuild);
+        ScheduleRebuild();
     }
 
     private void Subscribe(DatasetEntry entry)
@@ -141,13 +148,25 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
             or nameof(DatasetEntry.IsDeferred)
             or nameof(DatasetEntry.IsVisible))
         {
-            _marshal(Rebuild);
+            ScheduleRebuild();
         }
     }
 
-    private void OnAppearanceChanged(object? sender, EventArgs e) => _marshal(Rebuild);
+    private void OnAppearanceChanged(object? sender, EventArgs e) => ScheduleRebuild();
 
-    private void OnToggleChanged() => _marshal(Rebuild);
+    private void OnToggleChanged() => ScheduleRebuild();
+
+    private void ScheduleRebuild()
+    {
+        if (_rebuildPending)
+            return;
+        _rebuildPending = true;
+        _coalesce(() =>
+        {
+            _rebuildPending = false;
+            Rebuild();
+        });
+    }
 
     private void Rebuild()
     {
@@ -248,6 +267,8 @@ internal sealed class DatasetExtentIndicatorController : IDisposable
         if (Dispatcher.UIThread.CheckAccess()) action();
         else Dispatcher.UIThread.Post(action);
     }
+
+    private static void PostLater(Action action) => Dispatcher.UIThread.Post(action);
 
     /// <summary>Detaches the overlay layer and unsubscribes. Idempotent.</summary>
     public void Dispose()

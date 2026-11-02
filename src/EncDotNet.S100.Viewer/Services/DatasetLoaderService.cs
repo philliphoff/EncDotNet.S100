@@ -1235,9 +1235,15 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         foreach (var stale in existing.Values.Except(projected))
             stale.PropertyChanged -= OnSubLayerPropertyChanged;
 
-        entry.SubLayers.Clear();
-        foreach (var subLayer in projected)
-            entry.SubLayers.Add(subLayer);
+        // Every layer change re-projects every dataset; leave a dataset's list
+        // alone when it already holds these sub-layers in this order, so an
+        // unchanged dataset does not rebuild its map state.
+        if (!entry.SubLayers.SequenceEqual(projected))
+        {
+            entry.SubLayers.Clear();
+            foreach (var subLayer in projected)
+                entry.SubLayers.Add(subLayer);
+        }
 
         entry.AvailableTimes = snapshot.Dataset.AvailableTimes;
         entry.CurrentTime = snapshot.Dataset.CurrentTime;
