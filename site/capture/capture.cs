@@ -120,6 +120,10 @@ var checkDeparture = new DateTimeOffset(2025, 12, 18, 13, 30, 0, TimeSpan.Zero);
 // US2ATLOC, the band-2 cell that draws at this scale (the band-3 cells don't),
 // so the chart reaches the edges of the view.
 var hatterasBox = new Box(33.62, -76.75, 37.8, -71.0);
+// W2: the entrance to the Strait of Juan de Fuca, Cape Flattery and the outer
+// Washington coast, where Pacific swell meets the coast and the Strait, with
+// the San Juan Islands and the north of Puget Sound at the east edge.
+var flatteryBox = new Box(47.0, -127.2, 49.4, -122.3);
 
 var shots = new List<Shot>
 {
@@ -299,6 +303,84 @@ var shots = new List<Shot>
         await v.Call("set_view_time", new() { ["time"] = run.AddHours(hour).ToString("O"), ["snap"] = "nearest" });
         await v.Panel("EcdisDisplay");
         await v.Frame(hatterasBox);
+        return await v.Window();
+    }, Themed: true),
+
+    // W2: wind and waves off Cape Flattery: NOAA GFS-Wave significant wave
+    // height (the West Coast 0.16° grid) and the GFS 10 m wind and sea level
+    // pressure, at the forecast hour in the latest run (or --gfs-run) with the
+    // highest seas off the Strait, over the NOAA coastal charts; NWS marine
+    // alerts for the view from the Library, and NDBC buoy observations (live, so
+    // they're from capture time, not the forecast hour).
+    new("W2", async v =>
+    {
+        await v.Reset(category: "DisplayBase");
+        await CoastalCharts(v, "WA", flatteryBox);
+        var run = gfsRun ?? await data.LatestGfsRun(6);
+
+        // The forecast hour with the highest seas at a few points off the Strait.
+        (double Lat, double Lon)[] offshore = [(48.40, -125.20), (47.90, -125.00), (48.60, -125.80)];
+        var (bestHour, bestHeight) = (6, double.MinValue);
+        for (var hour = 0; hour <= 120; hour += 6)
+        {
+            string file;
+            try { file = await data.GfsWave(run, "wcoast.0p16", hour, ["HTSGW:surface"]); }
+            catch (Exception e) { Console.WriteLine($"  f{hour:000}: {e.Message}"); continue; }
+            var ids = await v.OpenAll([file]);
+            var height = double.MinValue;
+            foreach (var (lat, lon) in offshore)
+            {
+                try
+                {
+                    var sample = await v.Call("sample_coverage", new() { ["spec"] = "GRIB2", ["latitude"] = lat, ["longitude"] = lon });
+                    if (hour == 0 && lat == offshore[0].Lat) Console.WriteLine($"  sample: {sample?.ToJsonString()[..Math.Min(600, sample?.ToJsonString().Length ?? 0)]}");
+                    height = Math.Max(height, MaxValue(sample));
+                }
+                catch (InvalidOperationException e) { Console.WriteLine($"  sample f{hour:000}: {e.Message}"); }
+            }
+            foreach (var id in ids) await v.Call("close_dataset", new() { ["id"] = id });
+            Console.WriteLine($"  f{hour:000} {run.AddHours(hour):u}: {height:0.0} m");
+            if (height > bestHeight) (bestHour, bestHeight) = (hour, height);
+        }
+        Console.WriteLine($"  using f{bestHour:000} ({run.AddHours(bestHour):u}), {bestHeight:0.0} m off the Strait");
+
+        await v.OpenAll([await data.GfsWave(run, "wcoast.0p16", bestHour, ["HTSGW:surface", "PERPW:surface", "DIRPW:surface"])]);
+        await v.OpenAll([await data.Gfs(run, bestHour, ["UGRD:10 m above ground", "VGRD:10 m above ground", "PRMSL:mean sea level"])]);
+        await v.Call("set_view_time", new() { ["time"] = run.AddHours(bestHour).ToString("O"), ["snap"] = "nearest" });
+        await v.Frame(flatteryBox);
+
+        // NWS marine alerts for the zones in view (the Library takes the area
+        // from the map view), drawn while in force at the view time.
+        try
+        {
+            var added = await v.Call("add_library_source", new() { ["knownSourceId"] = "nws-marine-alerts" });
+            var sourceId = added?["sourceId"]?.GetValue<string>();
+            await v.Call("await_library_idle", new() { ["timeoutMs"] = 120000 });
+            if (sourceId is not null)
+            {
+                await v.Call("library_action", new() { ["action"] = "download", ["sourceId"] = sourceId });
+                await v.Call("await_library_idle", new() { ["timeoutMs"] = 120000 });
+                await v.WaitForLoads();
+            }
+        }
+        catch (InvalidOperationException e) { Console.WriteLine($"  marine alerts: {e.Message}"); }
+
+        // NDBC buoys: tick the Layer stack row (off by default).
+        await v.Panel("LayerStack");
+        try
+        {
+            var tree = await v.Call("ui_tree", new() { ["filter"] = "all", ["maxNodes"] = 3000 });
+            var toggle = FindToggleNear(tree, "NDBC");
+            if (toggle is null) Console.WriteLine("  NDBC row not found in the Layer stack");
+            else await v.Call("ui_toggle", new() { ["ref"] = toggle, ["state"] = "on" });
+            await Task.Delay(TimeSpan.FromSeconds(10));
+        }
+        catch (InvalidOperationException e) { Console.WriteLine($"  NDBC: {e.Message}"); }
+
+        await v.Panel("EcdisDisplay");
+        await v.Frame(flatteryBox);
+        foreach (var d in (await v.Call("list_datasets"))?["datasets"]?.AsArray() ?? [])
+            Console.WriteLine($"  loaded {d!["id"]} {d["spec"]?["name"]}");
         return await v.Window();
     }, Themed: true),
 
@@ -739,6 +821,64 @@ async Task CoastalCharts(Viewer v, string state, Box box)
     await v.Call("library_action", new() { ["action"] = "download", ["itemIds"] = coastal, ["maxBytes"] = 50_000_000L });
     await v.Call("await_library_idle", new() { ["timeoutMs"] = 300000 });
     await v.WaitForLoads();
+}
+
+// The largest number under a "value" key anywhere in a tool result (a coverage
+// sample's fields), or NaN-safe MinValue when there is none.
+static double MaxValue(JsonNode? node)
+{
+    var best = double.MinValue;
+    void Walk(JsonNode? n)
+    {
+        switch (n)
+        {
+            case JsonObject o:
+                foreach (var (key, child) in o)
+                {
+                    if (key == "value" && child is JsonValue value && value.TryGetValue<double>(out var d) && !double.IsNaN(d))
+                        best = Math.Max(best, d);
+                    else
+                        Walk(child);
+                }
+                break;
+            case JsonArray a:
+                foreach (var child in a) Walk(child);
+                break;
+        }
+    }
+    Walk(node);
+    return best;
+}
+
+// The ref of the toggle for the first element (in any window) whose name or
+// text contains <text>, from a ui_tree result: the first toggleable element in
+// that element's subtree, or in its parent's or grandparent's (a row's check box
+// can sit beside its label).
+static string? FindToggleNear(JsonNode? tree, string text)
+{
+    List<JsonObject>? Match(JsonNode? n, List<JsonObject> path)
+    {
+        if (n is not JsonObject o) return null;
+        var here = new List<JsonObject>(path) { o };
+        var label = (o["name"]?.ToString() ?? "") + " " + (o["text"]?.ToString() ?? "");
+        if (label.Contains(text, StringComparison.OrdinalIgnoreCase)) return here;
+        foreach (var child in o["children"]?.AsArray() ?? []) if (Match(child, here) is { } hit) return hit;
+        return null;
+    }
+    string? Toggle(JsonNode? n)
+    {
+        if (n is not JsonObject o) return null;
+        if (o["patterns"]?.ToJsonString().Contains("toggle", StringComparison.Ordinal) == true) return o["ref"]?.ToString();
+        foreach (var child in o["children"]?.AsArray() ?? []) if (Toggle(child) is { } hit) return hit;
+        return null;
+    }
+    foreach (var root in tree?["roots"]?.AsArray() ?? [])
+    {
+        if (Match(root?["element"], []) is not { } path) continue;
+        for (var i = path.Count - 1; i >= Math.Max(0, path.Count - 3); i--)
+            if (Toggle(path[i]) is { } found) return found;
+    }
+    return null;
 }
 
 static IEnumerable<string> Grid(string prefix, string rows, string cols) =>
