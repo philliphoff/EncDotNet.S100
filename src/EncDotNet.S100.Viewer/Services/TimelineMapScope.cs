@@ -53,6 +53,16 @@ internal sealed class TimelineMapScope : ITimelineMapScope
     private readonly IMapViewportNotifier _viewport;
     private readonly DatasetsViewModel _datasets;
     private readonly HashSet<DatasetEntry> _subscribed = [];
+
+    // The Timeline asks about every lane on every axis rebuild, and that ran on
+    // every pan, load and Library change; each answer looked its entry up by a
+    // scan of every entry and re-projected the view. Keep an id index and the
+    // answers until the view, the entries or a footprint changes.
+    private readonly object _cacheLock = new();
+    private readonly Dictionary<string, bool?> _inView = new(StringComparer.Ordinal);
+    private Dictionary<string, DatasetEntry>? _byId;
+    private MapViewportSnapshot? _viewSnapshot;
+    private GeoBounds? _view;
     private readonly S100DatasetExtentIndicatorLayer _overlay = new(
         new S100DatasetExtentIndicatorStyle { OutlineWidth = 2.5, OutlineOpacity = 0.9f },
         OverlayLayerName);
@@ -83,9 +93,44 @@ internal sealed class TimelineMapScope : ITimelineMapScope
     /// <inheritdoc />
     public bool? IsInMapView(string datasetId)
     {
-        if (View() is not { } view || Footprint(datasetId) is not { } footprint)
-            return null;
-        return footprint.Intersects(view);
+        lock (_cacheLock)
+        {
+            var view = CachedViewLocked();
+            if (_inView.TryGetValue(datasetId, out var cached))
+                return cached;
+
+            bool? inView = view is { } v && Footprint(datasetId) is { } footprint
+                ? footprint.Intersects(v)
+                : null;
+            _inView[datasetId] = inView;
+            return inView;
+        }
+    }
+
+    /// <summary>
+    /// The view in degrees for the current viewport, converted once per
+    /// viewport; a new viewport drops the cached answers.
+    /// </summary>
+    private GeoBounds? CachedViewLocked()
+    {
+        var snapshot = _viewport.Current;
+        if (!ReferenceEquals(snapshot, _viewSnapshot))
+        {
+            _viewSnapshot = snapshot;
+            _view = ViewOf(snapshot);
+            _inView.Clear();
+        }
+        return _view;
+    }
+
+    private void InvalidateCache(bool entries)
+    {
+        lock (_cacheLock)
+        {
+            _inView.Clear();
+            if (entries)
+                _byId = null;
+        }
     }
 
     /// <inheritdoc />
@@ -101,7 +146,13 @@ internal sealed class TimelineMapScope : ITimelineMapScope
     }
 
     /// <inheritdoc />
-    public bool? Intersects(GeoBounds bounds) => View() is { } view ? bounds.Intersects(view) : null;
+    public bool? Intersects(GeoBounds bounds)
+    {
+        GeoBounds? view;
+        lock (_cacheLock)
+            view = CachedViewLocked();
+        return view is { } v ? bounds.Intersects(v) : null;
+    }
 
     /// <inheritdoc />
     public void HighlightAreas(IReadOnlyList<GeoBounds> areas, (byte R, byte G, byte B) color = default)
@@ -124,8 +175,20 @@ internal sealed class TimelineMapScope : ITimelineMapScope
         return new MRect(minX, minY, maxX, maxY);
     }
 
-    private DatasetEntry? Entry(string datasetId) =>
-        _datasets.Entries.FirstOrDefault(e => string.Equals(e.Id.Value, datasetId, StringComparison.Ordinal));
+    private DatasetEntry? Entry(string datasetId)
+    {
+        lock (_cacheLock)
+        {
+            if (_byId is null)
+            {
+                // The first entry with an id wins, as a scan in order would find.
+                _byId = new Dictionary<string, DatasetEntry>(StringComparer.Ordinal);
+                foreach (var entry in _datasets.Entries)
+                    _byId.TryAdd(entry.Id.Value, entry);
+            }
+            return _byId.GetValueOrDefault(datasetId);
+        }
+    }
 
     /// <summary>The dataset's footprint in degrees: its drawn extent, else its catalogue box.</summary>
     private GeoBounds? Footprint(string datasetId) =>
@@ -160,8 +223,6 @@ internal sealed class TimelineMapScope : ITimelineMapScope
         return new MRect(minX, minY, maxX, maxY);
     }
 
-    /// <summary>The map view in degrees, or null before the first viewport.</summary>
-    private GeoBounds? View() => ViewOf(_viewport.Current);
 
     /// <summary>
     /// A viewport in degrees, or null before the first viewport. A view that
@@ -201,6 +262,7 @@ internal sealed class TimelineMapScope : ITimelineMapScope
             foreach (DatasetEntry entry in e.NewItems ?? Array.Empty<DatasetEntry>())
                 Subscribe(entry);
         }
+        InvalidateCache(entries: true);
         Raise();
     }
 
@@ -213,7 +275,10 @@ internal sealed class TimelineMapScope : ITimelineMapScope
     private void OnEntryChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(DatasetEntry.MercatorExtent))
+        {
+            InvalidateCache(entries: false);
             Raise();
+        }
     }
 
     private void Raise()
