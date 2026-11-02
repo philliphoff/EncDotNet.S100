@@ -86,6 +86,31 @@ public class DatasetExtentIndicatorControllerTests
     }
 
     [Fact]
+    public void ABurstOfEntryChanges_RebuildsOnce()
+    {
+        var host = new FakeMapHost();
+        var vm = new DatasetsViewModel(new NoopLoader());
+        var posted = new Queue<Action>();
+        var entries = Enumerable.Range(0, 20).Select(i => LoadedOutOfScaleEntry(vm)).ToArray();
+        using var controller = new DatasetExtentIndicatorController(
+            host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
+            marshal: posted.Enqueue);
+        while (posted.TryDequeue(out var action))
+            action();
+
+        // An eviction pass flips every cell back to deferred at once.
+        foreach (var entry in entries)
+        {
+            entry.IsLoaded = false;
+            entry.IsDeferred = true;
+        }
+
+        Assert.Single(posted);
+        posted.Dequeue()();
+        Assert.Equal(0, FeatureCount(host));
+    }
+
+    [Fact]
     public void QualifyingEntry_ProducesOneIndicator()
     {
         var host = new FakeMapHost();

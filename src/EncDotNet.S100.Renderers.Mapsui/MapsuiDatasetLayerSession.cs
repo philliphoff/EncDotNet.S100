@@ -309,7 +309,19 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                             ? entry.TimePolicy.SnapTo(clock)
                             : entry.TimePolicy.AvailableTimes.FirstOrDefault());
                 }
-                ComposeLayers();
+
+                // Hosts re-apply a dataset's state often (after each load
+                // step, after validation), mostly without changing anything
+                // the stack is built from, and rebuilding the whole S-98
+                // stack each time made every load cost as much as all the
+                // loaded datasets together.
+                if (ChangesComposition(
+                        entry,
+                        previousDataset,
+                        previousMinimum != minimumDisplayScale || previousMaximum != maximumDisplayScale))
+                {
+                    ComposeLayers();
+                }
             }
             catch
             {
@@ -2128,6 +2140,46 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                         baseLayer.Opacity));
             }
         }
+    }
+
+    /// <summary>
+    /// Whether a change to one dataset's state (<see cref="SetDataset"/>) can
+    /// change the composed stack. A dataset with no rendered layers contributes
+    /// nothing to it: no layers or stack entries, and it never counts as active
+    /// in the S-98 rules (<see cref="LoadedDatasetInfo.Active"/>). Otherwise
+    /// composition reads the dataset's activity, visibility, opacity, product,
+    /// sub-layer display state and scale window.
+    /// </summary>
+    private static bool ChangesComposition(
+        Entry entry,
+        MapDataset previous,
+        bool scaleChanged)
+    {
+        if (entry.Layers.Count == 0 && entry.StackEntries is not { Count: > 0 })
+            return false;
+        var current = entry.Dataset;
+        if (scaleChanged)
+            return true;
+        if (previous.IsActive != current.IsActive
+            || previous.IsVisible != current.IsVisible
+            || previous.Opacity != current.Opacity
+            || !string.Equals(previous.Metadata.Spec.Name, current.Metadata.Spec.Name, StringComparison.Ordinal)
+            || previous.SubLayers.Count != current.SubLayers.Count)
+        {
+            return true;
+        }
+        for (var i = 0; i < previous.SubLayers.Count; i++)
+        {
+            var before = previous.SubLayers[i];
+            var after = current.SubLayers[i];
+            if (!string.Equals(before.Key, after.Key, StringComparison.Ordinal)
+                || before.IsVisible != after.IsVisible
+                || before.Opacity != after.Opacity)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static bool IsDrawing(Entry entry)
