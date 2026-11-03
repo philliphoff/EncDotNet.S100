@@ -686,7 +686,7 @@ public class S57ToS101TranslatorTests
         var s101Feature = Assert.Single(s101.Features);
         var soundingTypeCode = s101.FeatureTypeCatalogue.First(kv => kv.Value == "Sounding").Key;
         Assert.Equal(soundingTypeCode, s101Feature.FeatureTypeCode);
-        Assert.Empty(s101Feature.Attributes);
+        Assert.Empty(s101Feature.Attributes); // the source has no attributes
 
         var spa = Assert.Single(s101Feature.SpatialAssociations);
         Assert.Equal((byte)115, spa.RecordName);
@@ -704,6 +704,39 @@ public class S57ToS101TranslatorTests
 
         // CMFZ defaults to SOMF (10) so consumers can recover real depth.
         Assert.Equal(10u, s101.StructureInfo.CoordinateMultiplicationFactorZ);
+    }
+
+    // #1219: a SOUNDG's own attributes go through the normal attribute path,
+    // gated on what the FC binds on Sounding (S-65 Annex B § 11.3).
+    [Fact]
+    public void Translate_SoundingFeature_CarriesBoundAttributes()
+    {
+        var sn = SoundingNode(1, (10, 20, 50));
+        var feature = Feat(
+            recordId: 1, primitive: 1, objectClass: 129, // SOUNDG
+            attributes: new[]
+            {
+                Attr(133, "21999"),           // SCAMIN
+                Attr(147, "20180827"),        // SORDAT
+                Attr(125, "1"),               // QUASOU
+                Attr(156, "3"),               // TECSOU
+                Attr(93, "3"),                // EXPSOU (not bound on Sounding)
+                Attr(102, "Reported depth"),  // INFORM
+            },
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, 1, 1, 0, 0) });
+
+        var doc = BuildDocument(vectorRecords: new[] { sn }, features: new[] { feature }, somf: 10);
+        var diagnostics = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(doc, diagnostics);
+
+        var sounding = Assert.Single(s101.Features);
+        Assert.Equal("21999", TopLevelValue(s101, sounding, "scaleMinimum"));
+        Assert.Equal("20180827", TopLevelValue(s101, sounding, "reportedDate"));
+        Assert.Equal("1", TopLevelValue(s101, sounding, "qualityOfVerticalMeasurement"));
+        Assert.Equal("3", TopLevelValue(s101, sounding, "techniqueOfVerticalMeasurement"));
+        Assert.DoesNotContain("expositionOfSounding", AttributeNames(s101, sounding));
+        Assert.NotNull(NauticalInformationOf(s101, sounding));
+        Assert.Equal(1, diagnostics.RuleDroppedAttributes[93]); // reported, not silently lost
     }
 
     [Fact]

@@ -2969,6 +2969,17 @@ public sealed class S57ToS101Translator
             }
 
             var typeCode = GetOrAssignFeatureTypeCode(SoundingS101Code);
+            // The depth values live on the points of the MultiPoint geometry,
+            // which the SOUNDG03 portrayal rule reads as point.ScaledZ. The
+            // object's own attributes (SCAMIN, SORDAT, QUASOU, TECSOU, STATUS,
+            // INFORM, …) go through the normal attribute path, gated on what
+            // the FC binds on Sounding (S-65 Annex B § 11.3; #1219).
+            var resolved = _mapping.ResolveFeature(
+                SoundingObjl, _mapping.BuildAcronymView(feat.Attributes), MapPrimitive(feat.Primitive));
+            IReadOnlyList<S101Attribute> attributes = [];
+            IReadOnlyList<S101InformationAssociation> infoAssociations = [];
+            if (resolved is not null)
+                attributes = TranslateAttributes(feat.Attributes, resolved, SoundingObjl, out infoAssociations);
             Features.Add(new S101FeatureRecord
             {
                 RecordId = _nextFeatureId++,
@@ -2976,13 +2987,10 @@ public sealed class S57ToS101Translator
                 ProducingAgency = (ushort)feat.RecordName.AgencyCode,
                 FeatureIdentificationNumber = (uint)feat.RecordName.FeatureId,
                 FeatureIdentificationSubdivision = (ushort)feat.RecordName.FeatureSubdivision,
-                // The S-101 Sounding feature carries no attributes — depth values
-                // live on the individual points within the MultiPoint geometry,
-                // which the SOUNDG03 portrayal rule reads as point.ScaledZ.
-                Attributes = [],
+                Attributes = attributes,
                 SpatialAssociations = [new S101SpatialAssociation(S101RcnmMultiPoint, mpid, OrientationForward)],
                 FeatureAssociations = [],
-                InformationAssociations = [],
+                InformationAssociations = infoAssociations,
             });
         }
 
