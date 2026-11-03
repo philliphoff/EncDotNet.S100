@@ -1,4 +1,5 @@
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -57,12 +58,16 @@ internal static class S64Cells
 
     /// <summary>
     /// The S-101 feature types in <paramref name="instructions"/> that drew
-    /// <see cref="QuestionMark"/>.
+    /// <see cref="QuestionMark"/>; an S-57 object of a class translation has
+    /// no rule for goes by its pick-report name, such as
+    /// <c>"Unknown S-57 object (163)"</c>.
     /// </summary>
     public static IReadOnlyList<string> QuestionMarks(S57DatasetProcessor processor, IEnumerable<DrawingInstruction> instructions) =>
         instructions.OfType<PointInstruction>()
             .Where(p => p.SymbolReference == QuestionMark)
-            .Select(p => processor.GetFeatureInfo(p.FeatureReference)?.FeatureType ?? p.FeatureReference)
+            .Select(p => processor.GetFeatureInfo(p.FeatureReference) is { } info
+                ? info.FeatureType == S57UnknownObject.FeatureTypeCode ? info.FeatureTypeName! : info.FeatureType
+                : p.FeatureReference)
             .Distinct()
             .Order(StringComparer.Ordinal)
             .ToList();

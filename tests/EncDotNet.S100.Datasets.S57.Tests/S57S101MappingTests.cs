@@ -661,7 +661,7 @@ public class S57S101MappingTests
     }
 
     [Theory]
-    [InlineData(301, "QualityOfNonBathymetricData")] // M_ACCY
+    [InlineData(300, "QualityOfNonBathymetricData")] // M_ACCY
     [InlineData(302, "DataCoverage")]                // M_COVR
     [InlineData(305, "InformationArea")]             // M_NPUB
     [InlineData(306, "NavigationalSystemOfMarks")]   // M_NSYS

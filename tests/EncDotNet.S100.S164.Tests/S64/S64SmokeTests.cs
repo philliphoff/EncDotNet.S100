@@ -30,13 +30,88 @@ public sealed partial class S64SmokeTests
 
     /// <summary>
     /// Base cells whose portrayal draws <see cref="S64Cells.QuestionMark"/>,
-    /// with the S-101 feature types that do and why.
+    /// with the S-101 feature types that do, or the S-57 object classes
+    /// translation has no rule for, and why.
     /// </summary>
     /// <remarks>
-    /// The 3.2 cell charts objects of unknown classes, which S-52 draws as "?";
-    /// translation drops them instead (#1242), so they draw nothing.
+    /// An S-57 object of a class translation has no rule for is drawn as "?"
+    /// (#1242), as S-52 draws an object of unknown class. The S-64 cells chart
+    /// test-only classes (161, 163, 255, and 500 to 502 and 999 in 3.2), which
+    /// should draw as "?", and some S-57 classes the mapping doesn't convert
+    /// yet, which show where translation has gaps.
     /// </remarks>
-    private static readonly Dictionary<string, string[]> ExpectedQuestionMarks = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, string[]> ExpectedQuestionMarks = new(StringComparer.Ordinal)
+    {
+        // Classes without a rule yet.
+        ["2.1.1 Power Up/ENC_ROOT/GB4X0000.000"] =
+        [
+            "Unknown S-57 object ICNARE (67)",
+            "Unknown S-57 object RADRNG (100)",
+            "Unknown S-57 object TSSRON (149)",
+            "Unknown S-57 object TS_PAD (138)",
+        ],
+        ["2.1.1 Power Up/ENC_ROOT/GB5X01SW.000"] = [TidalStreamPanel, TidalStreamHarmonicPrediction],
+        ["2.2.5 Good Base Cells/ENC_ROOT/GB5X01SW.000"] = [TidalStreamPanel, TidalStreamHarmonicPrediction],
+        ["2.2.6 Re-issue/GB5X01SW_RE-ISSUE/ENC_ROOT/GB5X01SW.000"] = [TidalStreamPanel, TidalStreamHarmonicPrediction],
+        // Classes without a rule yet.
+        ["3.1 ENC Display/Other/ENC_ROOT/AA5OTHER.000"] =
+        [
+            "Unknown S-57 object COSARE (32)",
+            "Unknown S-57 object CUSZNE (37)",
+            "Unknown S-57 object FRPARE (60)",
+            TidalStreamPanel,
+            "Unknown S-57 object TS_PNH (137)",
+            TidalStreamHarmonicPrediction,
+            "Unknown S-57 object TS_TIS (139)",
+            "Unknown S-57 object T_HMON (140)",
+            "Unknown S-57 object T_NHMN (141)",
+            "Unknown S-57 object T_TIMS (142)",
+        ],
+        // Test-only classes; classes without a rule yet; and a TOPMAR on no
+        // buoy or beacon, which has no S-101 feature of its own.
+        ["3.1 ENC Display/Standard/ENC_ROOT/AA5STNDR.000"] =
+        [
+            "Unknown S-57 object (161)",
+            TestWaypoint,
+            "Unknown S-57 object ICNARE (67)",
+            "Unknown S-57 object RADRFL (101)",
+            "Unknown S-57 object RADRNG (100)",
+            "Unknown S-57 object TOPMAR (144)",
+        ],
+        // 3.2.1: the unknown classes 500 (point) and 502 (area) draw SY(QUESMRK1);
+        // 501 (line) draws LC(QUESMRK1), which isn't counted here.
+        ["3.2 Invalid Object/ENC_ROOT/AA3INVOB.000"] =
+        [
+            TestWaypoint,
+            "Unknown S-57 object (500)",
+            "Unknown S-57 object (502)",
+            "Unknown S-57 object TOPMAR (144)",
+        ],
+        ["3.2 Invalid Object/Invalid Base/ENC_ROOT/GB5X01NE.000"] = ["Unknown S-57 object (999)"],
+        ["3.3 Settings/ENC_ROOT/GB4X0001.000"] =
+        [
+            "Unknown S-57 object ICNARE (67)",
+            "Unknown S-57 object TSSRON (149)",
+            TidalStreamPanel,
+            "Unknown S-57 object TS_PNH (137)",
+            TidalStreamHarmonicPrediction,
+        ],
+        ["3.6 Display Priorities/ENC_ROOT/2J4X0001.000"] = [TestWaypoint],
+        ["3.6 Display Priorities/ENC_ROOT/2J5X0001.000"] =
+            ["Unknown S-57 object (161)", TestWaypoint, "Unknown S-57 object (255)"],
+        ["3.6 Display Priorities/ENC_ROOT/2J5X0002.000"] = [TestWaypoint],
+        ["5.0 Navigational Hazards/ENC_ROOT/AA3NAVHZ.000"] = [TestWaypoint],
+        ["5.0 Navigational Hazards/Overview/ENC_ROOT/AA2OVRVU.000"] = [TestWaypoint],
+        ["6.0 Special Conditions/ENC_ROOT/AA3ARSPC.000"] = [TestWaypoint],
+        ["7.0 Safety Contour/ENC_ROOT/AA3SAFCO.000"] = [TestWaypoint],
+    };
+
+    /// <summary>The waypoints WP1, WP2 and so on: points of the test-only class 163.</summary>
+    private const string TestWaypoint = "Unknown S-57 object (163)";
+
+    private const string TidalStreamPanel = "Unknown S-57 object TS_PAD (138)";
+
+    private const string TidalStreamHarmonicPrediction = "Unknown S-57 object TS_PRH (136)";
 
     /// <summary>Every base cell in the edition, by path in the archive.</summary>
     internal static readonly string[] Cells =

@@ -698,6 +698,9 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
 
     private FeatureInfo BuildFeatureInfo(EncDotNet.S100.Pipelines.Vector.Feature feature)
     {
+        if (feature.FeatureType == S57UnknownObject.FeatureTypeCode)
+            return BuildUnknownObjectInfo(feature);
+
         var attributes = FeatureInfoBuilder.BuildFlat(
             feature.Attributes.Select(kv =>
                 new KeyValuePair<string, string?>(kv.Key, kv.Value?.ToString())),
@@ -708,6 +711,37 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             FeatureRef = feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
             FeatureType = feature.FeatureType,
             FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+            Attributes = attributes,
+        };
+    }
+
+    /// <summary>
+    /// The pick report of an S-57 object whose class the translation has no
+    /// rule for (drawn as "?"): named by its object class, with its S-57
+    /// attributes as encoded (none of them are in the Feature Catalogue) and,
+    /// for a point, its position.
+    /// </summary>
+    private static FeatureInfo BuildUnknownObjectInfo(EncDotNet.S100.Pipelines.Vector.Feature feature)
+    {
+        var attributes = FeatureInfoBuilder.BuildFlat(
+            feature.Attributes.Select(kv =>
+                new KeyValuePair<string, string?>(kv.Key, kv.Value?.ToString())),
+            decoder: null);
+        if (feature.GeometryType == EncDotNet.S100.Pipelines.Vector.GeometryType.Point
+            && feature.Coordinates is [var position])
+        {
+            var value = string.Create(
+                System.Globalization.CultureInfo.InvariantCulture,
+                $"{position.Latitude:0.0000000} {position.Longitude:0.0000000}");
+            attributes = [.. attributes, new PickAttribute { Code = "position", Name = "Position", RawValue = value }];
+        }
+
+        return new FeatureInfo
+        {
+            FeatureRef = feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            FeatureType = feature.FeatureType,
+            FeatureTypeName = S57UnknownObject.Name(
+                feature.Attributes.GetValueOrDefault(S57UnknownObject.ObjectClassAttribute)?.ToString()),
             Attributes = attributes,
         };
     }
@@ -726,7 +760,9 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
                 FeatureRef = feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 Ordinal = i++,
                 FeatureType = feature.FeatureType,
-                FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+                FeatureTypeName = feature.FeatureType == S57UnknownObject.FeatureTypeCode
+                    ? S57UnknownObject.Name(feature.Attributes.GetValueOrDefault(S57UnknownObject.ObjectClassAttribute)?.ToString())
+                    : _decoder?.ResolveFeatureTypeName(feature.FeatureType),
             };
         }
     }

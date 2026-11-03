@@ -62,7 +62,7 @@ they drift.
 | 6 | Areas with special conditions | 5 | 3 | 0 | 0 | 0 | 2 | 0 |
 | 7 | Safety contour | 6 | 1 | 0 | 0 | 3 | 2 | 0 |
 | 8 | S-57 testing | 0 | — | — | — | — | — | — |
-| 8 | S-64 tests on the S-57 path (§7, Part 8) | 35 | 16 | 6 | 6 | 0 | 5 | 2 |
+| 8 | S-64 tests on the S-57 path (§7, Part 8) | 35 | 17 | 5 | 6 | 0 | 5 | 2 |
 | 9 | Dual fuel mode and SECOM | 17 | 0 | 0 | 2 | 9 | 6 | 0 |
 | | **Total** | **212** | **40** | **0** | **43** | **78** | **48** | **3** |
 
@@ -413,8 +413,9 @@ The S-64 cells for §5–7 are the charts S-164 converted to S-101, at the same
 places (NAVHZ is a quarter of a degree further east). So the S-57 route
 checks are compared with the S-101 ones as well as with the plots, which
 shows translation problems directly. The S-57 cells chart WP1, WP2 and so
-on as points of object class 163 with a test-only symbol; translation drops
-that class, so the tests read the waypoints from the S-57 records.
+on as points of object class 163 with a test-only symbol; translation keeps
+them only as unknown objects ("?"), so the tests read the waypoints from the
+S-57 records.
 
 - **Smoke test.** All 40 base cells load, take their updates and portray.
   Three drew "?". A point RUNWAY (`GB55062B`) has no S-101 counterpart; it's
@@ -428,7 +429,7 @@ that class, so the tests read the waypoints from the S-57 records.
   (null), Annex B's convention for a mandatory attribute with no S-57 value;
   the portrayal API reads that as nil, so the rule draws the arrow without a
   speed ([#1244](https://github.com/philliphoff/EncDotNet.S100/issues/1244), fixed).
-  No base cell draws "?" now.
+  The cells that draw "?" now are the unknown objects below.
 - **Hazard depths** ([#1237](https://github.com/philliphoff/EncDotNet.S100/issues/1237), fixed).
   The translator gave hazards without VALSOU S-52's default depths. S-65
   Annex B asks for those of S-101 DCEG clause 30.1, which differ: 0.1 m for
@@ -452,9 +453,21 @@ that class, so the tests read the waypoints from the S-57 records.
   exchange set can't be CRC-checked. S-101 has these checks
   (`S101UpdateApplicator`); S-57 needs the same. Those tests are skipped on
   the issue.
-- **Unknown object classes** ([#1242](https://github.com/philliphoff/EncDotNet.S100/issues/1242)).
-  S-52 draws an object of unknown class as "?" and lets it be picked;
-  translation drops it, so §3.2 shows nothing.
+- **Unknown object classes** ([#1242](https://github.com/philliphoff/EncDotNet.S100/issues/1242), fixed).
+  S-52 draws an object of unknown class as "?" and lets it be picked.
+  Translation used to drop it, so §3.2 showed nothing. Now an object of any
+  class with no translation rule becomes an `S57UnknownObject`, which the
+  S-101 portrayal's default rule draws as "?" by primitive, and its pick
+  report names the class and lists its S-57 attributes and position. It's
+  always on, with no setting, because the "?" marks are also where the
+  translation has gaps. The smoke test now lists them: the S-64 test-only
+  classes (161, 163, 255, 500–502, 999), and classes the mapping doesn't
+  convert yet (tidal stream panels and harmonic predictions `TS_*`/`T_*`,
+  `ICNARE`, `TSSRON`, `RADRNG`, `RADRFL`, `COSARE`, `CUSZNE`, `FRPARE`, and a
+  `TOPMAR` on no buoy or beacon). It also showed the meta objects without an
+  S-101 counterpart (`M_PROD`) and that `M_ACCY` was mapped under `M_CSCL`'s
+  code; `M_ACCY` now converts, and `M_CSCL`, `M_HDAT`, `M_HOPA`, `M_PROD`
+  and `M_UNIT` are dropped by rule.
 - **Display categories.** DBASE, STNDR and OTHER land in their categories
   except where the S-101 catalogue places a feature differently from S-52:
   dock areas and lock basins are Standard Display, plain depth contours and
@@ -719,7 +732,7 @@ Section numbers are the S-64 manual's. Evidence is in
 | 2.3 Manual updates | S-52 App 1 3.4.3 | — | N/A | — | Manual chart correction (§5). |
 | 2.5 Encrypted ENCs | S-63 | Encrypted set | Gap | — | S-63 isn't supported; the encrypted set isn't pinned. |
 | 3.1 Display of ENC data | S-52 10.3 | 3.1 ENC Display | Passes | `S64Part3DisplayTests.cs` | Categories as S-101 assigns them; differences from S-52 listed (§6.6). |
-| 3.2 Invalid objects | S-52 10.3.3.4, 10.8.6 | 3.2 Invalid Object | Fails | `S64Part3DisplayTests.cs` | Unknown classes dropped, no "?" or pick ([#1242](https://github.com/philliphoff/EncDotNet.S100/issues/1242)). |
+| 3.2 Invalid objects | S-52 10.3.3.4, 10.8.6 | 3.2 Invalid Object | Passes | `S64Part3DisplayTests.cs` | Unknown classes 500–502 draw "?" by primitive and can be picked ([#1242](https://github.com/philliphoff/EncDotNet.S100/issues/1242)). |
 | 3.3 Mariner selections | S-52 10.3 | 3.3 Settings | Supported | `S64SmokeTests.cs` | Portrays without rule failures; not compared with the plots. |
 | 3.4 Non-official data | S-52 10.3 | 3.4 Non-Official Data | Supported | `S64SmokeTests.cs` | Portrays; no non-official indication. |
 | 3.6 Display priority | S-52 10.3.4 | 3.6 Display Priorities | Supported | `S64SmokeTests.cs` | Portrays; order follows S-101 (finding 1). |

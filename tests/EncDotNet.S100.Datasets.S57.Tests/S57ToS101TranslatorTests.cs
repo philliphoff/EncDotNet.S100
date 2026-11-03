@@ -217,6 +217,125 @@ public class S57ToS101TranslatorTests
         Assert.Equal(120, sa.RecordName);
     }
 
+    // ── Unknown object classes → S57UnknownObject ("?", #1242) ──────────
+
+    private static Dictionary<string, string> AttributesOf(S101Document doc, S101FeatureRecord feat)
+        => feat.Attributes.ToDictionary(a => doc.AttributeTypeCatalogue[a.NumericCode], a => a.Value);
+
+    [Fact]
+    public void Translate_UnknownClassPoint_IsKeptAsUnknownObjectWithItsS57Attributes()
+    {
+        // OBJL 500 isn't in the S-57 Object Catalogue (S-64 3.2.1). OBJNAM
+        // (116) has a rule, so it keeps its acronym; ATTL 9999 has none.
+        var n1 = Node(1, 1000, 2000, RcnmIsolatedNode);
+        var feature = Feat(recordId: 1, primitive: 1, objectClass: 500,
+            producingAgency: 550, featureIdentificationNumber: 77,
+            attributes: new[] { Attr(116, "WP1"), Attr(9999, "x") },
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, 1, 255, 255, 255) });
+        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { feature });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(doc, diag);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(S57UnknownObject.FeatureTypeCode, ClassOf(s101, feat));
+        Assert.Equal(110, Assert.Single(feat.SpatialAssociations).RecordName);
+        Assert.Equal((ushort)550, feat.ProducingAgency);
+        Assert.Equal(77u, feat.FeatureIdentificationNumber);
+        Assert.Equal(
+            new Dictionary<string, string> { ["OBJL"] = "500", ["OBJNAM"] = "WP1", ["ATTL9999"] = "x" },
+            AttributesOf(s101, feat));
+        // Still counted as unmapped, and as emitted.
+        Assert.Equal(1, diag.UnmappedObjectClasses[500]);
+        Assert.Equal(1, diag.FeaturesEmitted);
+    }
+
+    [Theory]
+    [InlineData(2, 120)] // line → curve
+    [InlineData(3, 130)] // area → surface
+    public void Translate_UnknownClassLineOrArea_KeepsItsGeometry(byte primitive, int expectedRcnm)
+    {
+        var n1 = Node(1, 0, 0);
+        var n2 = Node(2, 0, 100);
+        var n3 = Node(3, 100, 50);
+        var edges = primitive == 2
+            ? new[] { Edge(10, 1, 2) }
+            : new[] { Edge(10, 1, 2), Edge(11, 2, 3), Edge(12, 3, 1) };
+        var feature = Feat(recordId: 1, primitive: primitive, objectClass: (ushort)(499 + primitive),
+            spatialPointers: edges.Select(e => Sp(RcnmEdge, (uint)e.RecordName.RecordId, 1, 1, 0)).ToArray());
+        var doc = BuildDocument(
+            vectorRecords: new EncDotNet.S57.S57VectorRecord[] { n1, n2, n3 }.Concat(edges),
+            features: new[] { feature });
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(S57UnknownObject.FeatureTypeCode, ClassOf(s101, feat));
+        Assert.Equal(expectedRcnm, feat.SpatialAssociations[0].RecordName);
+    }
+
+    [Fact]
+    public void Translate_UnknownClassWithoutGeometry_IsCountedButNotEmitted()
+    {
+        var feature = Feat(recordId: 1, primitive: 255, objectClass: 500);
+        var doc = BuildDocument(features: new[] { feature });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(doc, diag);
+
+        Assert.Empty(s101.Features);
+        Assert.Equal(1, diag.UnmappedObjectClasses[500]);
+    }
+
+    [Theory]
+    [InlineData(301)] // M_CSCL
+    [InlineData(303)] // M_HDAT
+    [InlineData(304)] // M_HOPA
+    [InlineData(307)] // M_PROD
+    [InlineData(311)] // M_UNIT
+    public void Translate_MetaObjectWithoutS101Feature_IsDroppedByRule(ushort objl)
+    {
+        // These have rules that drop them, so they don't draw as "?".
+        var n1 = Node(1, 0, 0);
+        var n2 = Node(2, 0, 100);
+        var n3 = Node(3, 100, 50);
+        var feature = Feat(recordId: 1, primitive: 3, objectClass: objl,
+            spatialPointers: new[] { Sp(RcnmEdge, 10, 1, 1, 0), Sp(RcnmEdge, 11, 1, 1, 0), Sp(RcnmEdge, 12, 1, 1, 0) });
+        var doc = BuildDocument(
+            vectorRecords: new[] { n1, n2, n3, Edge(10, 1, 2), Edge(11, 2, 3), Edge(12, 3, 1) },
+            features: new[] { feature });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(doc, diag);
+
+        Assert.Empty(s101.Features);
+        Assert.Equal(1, diag.RuleDroppedObjectClasses[objl]);
+        Assert.Empty(diag.UnmappedObjectClasses);
+    }
+
+    [Fact]
+    public void Translate_RuleDroppedClass_IsNotKeptAsUnknownObject()
+    {
+        // CTRPNT (33) is dropped unless CATCTR is 1 or 5 (Conversion Guidance § 4.3).
+        var n1 = Node(1, 1000, 2000, RcnmIsolatedNode);
+        var feature = Feat(recordId: 1, primitive: 1, objectClass: 33,
+            spatialPointers: new[] { Sp(RcnmIsolatedNode, 1, 255, 255, 255) });
+        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { feature });
+        var diag = new S57TranslationDiagnostics();
+
+        var s101 = new S57ToS101Translator().Translate(doc, diag);
+
+        Assert.Empty(s101.Features);
+        Assert.Equal(1, diag.RuleDroppedObjectClasses[33]);
+    }
+
+    [Theory]
+    [InlineData("138", "Unknown S-57 object TS_PAD (138)")]
+    [InlineData("500", "Unknown S-57 object (500)")]
+    [InlineData(null, "Unknown S-57 object")]
+    public void UnknownObjectName_UsesTheAcronymWhenTheCatalogueDefinesTheClass(string? objl, string expected)
+        => Assert.Equal(expected, S57UnknownObject.Name(objl));
+
     [Fact]
     public void Translate_MCovr_CoverageAvailable_BecomesDataCoverage()
     {
@@ -833,7 +952,8 @@ public class S57ToS101TranslatorTests
         var maritime = new S57ToS101Translator().Translate(doc, maritimeDiag);
         var inland = S57ToS101Translator.ForTarget(S57TranslationTarget.S401).Translate(doc);
 
-        Assert.Empty(maritime.Features);
+        // The maritime mapping has no rule for it: it's kept as an unknown object.
+        Assert.Equal(S57UnknownObject.FeatureTypeCode, ClassOf(maritime, Assert.Single(maritime.Features)));
         Assert.Equal(1, maritimeDiag.UnmappedObjectClasses[17050]);
 
         var feature = Assert.Single(inland.Features);

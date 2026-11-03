@@ -493,7 +493,18 @@ internal static class DefaultRules
         // converts to QualityOfBathymetricData; QualityOfNonBathymetricData is
         // sourced from M_ACCY (S-57 → S-101 Conversion Guidance; the bundled
         // S-101 FC aliases QualityOfNonBathymetricData to M_ACCY).
-        yield return F(301, "M_ACCY", "QualityOfNonBathymetricData");
+        yield return F(300, "M_ACCY", "QualityOfNonBathymetricData");
+        // Meta objects S-101 has no feature for. They're dropped on purpose,
+        // so they don't draw as unknown objects ("?", S57UnknownObject):
+        // M_HOPA isn't converted (S-65 Annex B § 2.1.1); M_CSCL's scale
+        // belongs on DataCoverage (§ 2.2.6), which the M_COVR rule doesn't
+        // take from it yet; and S-65 Annex B converts no M_HDAT, M_PROD or
+        // M_UNIT (their content is dataset-level metadata in S-101, § 2.2.1).
+        yield return F(301, "M_CSCL", null);
+        yield return F(303, "M_HDAT", null);
+        yield return F(304, "M_HOPA", null);
+        yield return F(307, "M_PROD", null);
+        yield return F(311, "M_UNIT", null);
         yield return F(302, "M_COVR", "DataCoverage");
         yield return F(305, "M_NPUB", "InformationArea");
         // M_NSYS — S-65 Annex B § 12.2: an M_NSYS with a value in ORIENT is
