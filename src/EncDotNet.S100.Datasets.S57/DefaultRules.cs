@@ -405,7 +405,23 @@ internal static class DefaultRules
         yield return F(91, "PILBOP", "PilotBoardingPlace");
         yield return F(92, "PIPARE", "SubmarinePipelineArea");
         yield return F(93, "PIPOHD", "PipelineOverhead");
-        yield return F(94, "PIPSOL", "PipelineSubmarineOnLand");
+        // PIPSOL — S-65 Annex B (Ed 2.0.0) § 11.6.1: point is not a permitted
+        // PipelineSubmarineOnLand primitive. A point PIPSOL converts to
+        // Obstruction when it extends from the seabed and to Landmark when it
+        // is on land. The rule table cannot see the skin of the earth, so the
+        // point redirects to Obstruction here and S57ToS101Translator moves it
+        // to Landmark when no depth or dredged area covers it.
+        yield return new S57FeatureRule
+        {
+            Objl = 94,
+            S57Acronym = "PIPSOL",
+            DefaultS101Code = "PipelineSubmarineOnLand",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionPrimitives = [S57GeometryPrimitive.Point],
+                TargetS101Code = "Obstruction",
+            }],
+        };
         yield return F(96, "PRCARE", "PrecautionaryArea");
         yield return F(97, "PRDARE", "ProductionStorageArea");
         yield return F(98, "PYLONS", "PylonBridgeSupport");

@@ -500,6 +500,18 @@ public sealed class S57ToS101Translator
     // BRIDGE objects emit only their spans. See BuildBridgeAggregations.
     private const ushort BridgeObjl = 11;          // BRIDGE (S-57 object class)
     private const ushort DamconObjl = 38;          // DAMCON (S-57 object class)
+
+    // A point PIPSOL converts to Obstruction when it extends from the seabed
+    // and to Landmark when it is on land (S-65 Annex B Ed 2.0.0 §11.6.1). The
+    // DefaultRules redirect sends every point to Obstruction; the translator
+    // moves one that no DepthArea or DredgedArea covers to Landmark, the same
+    // skin-of-the-earth test Annex B uses for a Landmark's inTheWater. Annex B
+    // names no category for either class: the optional categoryOfObstruction
+    // stays unset, and the mandatory categoryOfLandmark is populated as empty
+    // (null), its convention for a mandatory attribute without a source value,
+    // for the producer to review.
+    private const ushort PipsolObjl = 94;          // PIPSOL (S-57 object class)
+    private const string S101ClassObstruction = "Obstruction";
     private const string BridgeAcronym = "BRIDGE";
 
     // ── IENC c_brga → S-401 BridgeArchAssociation ───────────────────────
@@ -673,7 +685,9 @@ public sealed class S57ToS101Translator
     // (CURENT) and TidalStreamFloodEbb (TS_FEB). The complex carries a
     // mandatory `speedMaximum` [1..1] real sub-attribute (the CURVEL value,
     // carried verbatim) plus an optional `speedMinimum` [0..1] that has no S-57
-    // source and is left unpopulated. Flat one-level complex, so no consumer
+    // source and is left unpopulated. `speed` is itself mandatory on both
+    // classes, so an object without CURVEL still gets the complex, with
+    // `speedMaximum` empty (null). Flat one-level complex, so no consumer
     // change is required (like CATZOC / valueOfLocalMagneticAnomaly).
     private const ushort S57AttrCurvel = 84;   // CURVEL — current velocity
     private const string S101AttrSpeed = "speed";
@@ -1182,6 +1196,10 @@ public sealed class S57ToS101Translator
                     continue;
                 }
 
+                // A point PIPSOL on land is a Landmark, not an Obstruction.
+                if (objl == PipsolObjl && resolved.S101Code == S101ClassObstruction && !IsUnderWater(feat))
+                    resolved = resolved with { S101Code = S101ClassLandmark };
+
                 bool isBridge = IsBridgeObjl(objl) && resolved.S101Code == S101ClassBridge;
 
                 // A BRIDGE that is a member of a bridge C_AGGR contributes only
@@ -1314,6 +1332,13 @@ public sealed class S57ToS101Translator
                     GetOrAssignAttributeCode(S101AttrDefaultClearanceDepth), 1, S57HazardDepths.Format(clearance)));
             }
             return result;
+        }
+
+        // True when a depth or dredged area covers the point feature.
+        private bool IsUnderWater(EncDotNet.S57.S57FeatureRecord feat)
+        {
+            _hazardDepths ??= BuildHazardDepths();
+            return _hazardDepths.SurroundingDepth(S57Positions(feat), isPoint: true) is not null;
         }
 
         private S57HazardDepths BuildHazardDepths()
@@ -2282,16 +2307,22 @@ public sealed class S57ToS101Translator
 
         // The categoryOfLandmark of a point object redirected to Landmark
         // because its own S-101 class permits no point: 26 (bridge) for a
-        // BRIDGE, 27 (dam) for a DAMCON; null for any other feature.
+        // BRIDGE, 27 (dam) for a DAMCON, empty (null) for a PIPSOL; null for
+        // any other feature.
         private string? PointLandmarkCategory(ushort ownerObjl, string s101Code)
         {
             if (s101Code != S101ClassLandmark) return null;
             if (IsBridgeObjl(ownerObjl)) return CategoryOfLandmarkBridge;
-            return ownerObjl == DamconObjl ? CategoryOfLandmarkDam : null;
+            return ownerObjl switch
+            {
+                DamconObjl => CategoryOfLandmarkDam,
+                PipsolObjl => string.Empty,
+                _ => null,
+            };
         }
 
-        // Supplies the mandatory Landmark attributes for a point BRIDGE or
-        // DAMCON redirected to Landmark: its categoryOfLandmark and, when
+        // Supplies the mandatory Landmark attributes for a point BRIDGE, DAMCON
+        // or PIPSOL redirected to Landmark: its categoryOfLandmark and, when
         // CONVIS did not provide one, visualProminence = 2 (not visually
         // conspicuous).
         private void AppendPointLandmarkAttributes(List<S101Attribute> builder, string category)
@@ -2965,7 +2996,8 @@ public sealed class S57ToS101Translator
         {
             informationAssociations = [];
             if (attrs.Count == 0 && topmarkSource is null
-                && PointLandmarkCategory(ownerObjl, feature.S101Code) is null)
+                && PointLandmarkCategory(ownerObjl, feature.S101Code) is null
+                && !_featureBindings.Binds(feature.S101Code, S101AttrSpeed))
                 return [];
 
             // Pre-pass: collect INFORM / NINFOM / TXTDSC / NTXTDS values so we
@@ -3624,10 +3656,15 @@ public sealed class S57ToS101Translator
             // Append the `speed` complex-attribute instance. Its mandatory
             // sub-attribute `speedMaximum` is a real carrying the CURVEL value
             // verbatim; the optional `speedMinimum` has no S-57 source and is
-            // left unpopulated.
-            if (bindsSpeed && curvelValue is not null)
+            // left unpopulated. `speed` is mandatory on every class that binds
+            // it, so without CURVEL (S-57 lets it be empty or absent) the
+            // instance carries `speedMaximum` as empty (null), the S-65 Annex B
+            // convention for a mandatory attribute without a source value. The
+            // portrayal API reads an unknown value as nil, so the PC draws the
+            // stream arrow without the speed text, as S-52 does.
+            if (bindsSpeed)
             {
-                AppendSpeedInstance(builder, curvelValue);
+                AppendSpeedInstance(builder, curvelValue ?? string.Empty);
             }
 
             // Append the `multiplicityOfFeatures` complex-attribute instance.
@@ -3711,9 +3748,9 @@ public sealed class S57ToS101Translator
                 }
             }
 
-            // A point BRIDGE or DAMCON redirected to Landmark needs the
+            // A point BRIDGE, DAMCON or PIPSOL redirected to Landmark needs the
             // Landmark's mandatory category and visual prominence (S-65 Annex B
-            // §4.8.10, §4.8.5).
+            // §4.8.10, §4.8.5, §11.6.1).
             if (PointLandmarkCategory(ownerObjl, feature.S101Code) is { } landmarkCategory)
                 AppendPointLandmarkAttributes(builder, landmarkCategory);
 

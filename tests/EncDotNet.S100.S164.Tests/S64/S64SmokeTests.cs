@@ -42,11 +42,9 @@ public sealed partial class S64SmokeTests
     /// </remarks>
     private static readonly Dictionary<string, string[]> ExpectedQuestionMarks = new(StringComparer.Ordinal)
     {
-        // A point PIPSOL: S-101 pipelines are curves only (#1243). The rest
-        // are classes without a rule yet.
+        // Classes without a rule yet.
         ["2.1.1 Power Up/ENC_ROOT/GB4X0000.000"] =
         [
-            "PipelineSubmarineOnLand",
             "Unknown S-57 object ICNARE (67)",
             "Unknown S-57 object RADRNG (100)",
             "Unknown S-57 object TSSRON (149)",
@@ -55,11 +53,9 @@ public sealed partial class S64SmokeTests
         ["2.1.1 Power Up/ENC_ROOT/GB5X01SW.000"] = [TidalStreamPanel, TidalStreamHarmonicPrediction],
         ["2.2.5 Good Base Cells/ENC_ROOT/GB5X01SW.000"] = [TidalStreamPanel, TidalStreamHarmonicPrediction],
         ["2.2.6 Re-issue/GB5X01SW_RE-ISSUE/ENC_ROOT/GB5X01SW.000"] = [TidalStreamPanel, TidalStreamHarmonicPrediction],
-        // A TS_FEB without CURVEL: S-101 makes speed mandatory (#1244). The
-        // rest are classes without a rule yet.
+        // Classes without a rule yet.
         ["3.1 ENC Display/Other/ENC_ROOT/AA5OTHER.000"] =
         [
-            "TidalStreamFloodEbb",
             "Unknown S-57 object COSARE (32)",
             "Unknown S-57 object CUSZNE (37)",
             "Unknown S-57 object FRPARE (60)",

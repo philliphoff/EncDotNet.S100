@@ -69,10 +69,10 @@ public sealed class S64Part3DisplayTests
             .Distinct()
             .ToArray();
 
-        // The tidal stream is the "?" of #1244, and the objects of classes
-        // translation has no rule for are "?" too, all drawn in 21010.
+        // The objects of classes translation has no rule for are "?", drawn
+        // in 21010.
         Assert.Equal(
-            ["CableOverhead (12210)", "S57UnknownObject (21010)", "TidalStreamFloodEbb (21010)"],
+            ["CableOverhead (12210)", "S57UnknownObject (21010)"],
             inStandard.Order(StringComparer.Ordinal));
     }
 
