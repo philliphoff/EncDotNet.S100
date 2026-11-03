@@ -503,9 +503,16 @@ internal sealed class S57RoundTripComparer
         // An attribute the forward translation assembles into a complex (or
         // one of a few top-level homes) has nowhere to go on a class that
         // binds none of them.
+        // (A class the translator picks in code, such as a NEWOBJ's
+        // VirtualAISAidToNavigation, is read from the S-101 intermediate.)
         if (resultValue is null && Homes.TryGetValue(acronym, out var homes)
-            && ResolveForward(source) is { } home && !homes.Any(h => _bindings.Binds(home.S101Code, h)))
-            return D(RoundTripClass.ExpectedLoss, $"{home.S101Code} binds no {string.Join('/', homes)} in S-101");
+            && (ResolveForward(source)?.S101Code ?? (s101 is null ? null : intermediate.FeatureTypeCatalogue.GetValueOrDefault(s101.FeatureTypeCode))) is { } home
+            && !homes.Any(h => _bindings.Binds(home, h)))
+            return D(RoundTripClass.ExpectedLoss, $"{home} binds no {string.Join('/', homes)} in S-101");
+
+        // A TOPMAR folds into its master's topmark complex, which has no date.
+        if (resultValue is null && name == "TOPMAR" && acronym == "SORDAT")
+            return D(RoundTripClass.ExpectedLoss, "the S-101 topmark complex has no reportedDate");
 
         // A range-system C_AGGR is a RangeSystem in S-101, which binds no
         // home for some of the collection's attributes.

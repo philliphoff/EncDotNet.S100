@@ -324,6 +324,9 @@ internal static class DefaultRules
         yield return F(27, "CTNARE", "CautionArea");
         yield return F(29, "CGUSTA", "CoastGuardStation");
         yield return F(31, "CONZNE", "ContiguousZone");
+        // COSARE: S-65 Annex C §16.14 converts ContinentalShelfArea back;
+        // the S-101 class permits the S-57 area primitive.
+        yield return F(32, "COSARE", "ContinentalShelfArea");
         yield return F(34, "CONVYR", "Conveyor");
         yield return F(36, "CURENT", "CurrentNonGravitational");
         // DAMCON — S-65 Annex B (Ed 2.0.0) § 4.8.5: point is not a permitted
@@ -743,6 +746,13 @@ internal static class DefaultRules
         yield return A(111, "NATION", "nationality");
         yield return A(130, "RYRMGV", "referenceYearForMagneticVariation");
         yield return A(139, "SIGFRQ", "signalFrequency");
+        // The class definition, name and symbol instruction of a NEWOBJ
+        // (OBJL 163). A virtual AIS aid to navigation's are replaced by its
+        // virtualAISAidToNavigationType (S57ToS101Translator.VirtualAisType),
+        // from which S-65 Annex C §27.199 re-creates them.
+        yield return A(190, "CLSDEF", null);
+        yield return A(191, "CLSNAM", null);
+        yield return A(192, "SYMINS", null);
         yield return A(140, "SIGGEN", "signalGeneration");
         yield return A(150, "SURATH", "surveyAuthority");
         yield return A(153, "SURTYP", "surveyType");

@@ -282,7 +282,7 @@ public sealed partial class S101ToS57Rules
 
     // §27.199: per virtualAISAidToNavigationType value, the type name, the
     // S-52 symbol and the class definition.
-    private static readonly (string Value, string Name, string Symbol, string Definition)[] VirtualAisTypes =
+    internal static readonly (string Value, string Name, string Symbol, string Definition)[] VirtualAisTypes =
     [
         ("1", "North Cardinal", "BCNCAR01", "A Virtual object which indicates navigable water lies northwards"),
         ("2", "East Cardinal", "BCNCAR02", "A Virtual object which indicates navigable water lies eastwards"),

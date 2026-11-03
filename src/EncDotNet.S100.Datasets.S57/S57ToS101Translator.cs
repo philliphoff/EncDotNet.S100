@@ -268,6 +268,11 @@ public sealed class S57ToS101Translator
     // is emitted for them. `fixedDateRange` has no CATZOC-side source and is
     // always left unpopulated.
     private const ushort S57AttrCatzoc = 72;   // CATZOC — category of ZOC in data
+    // Where the M_QUAL itself carries POSACC / SOUACC, those take precedence
+    // over the CATZOC table: they become the fixed term of the horizontal /
+    // vertical uncertainty, which S-65 Annex C §3.1 / §3.2 convert back.
+    private const ushort S57AttrPosacc = 401;  // POSACC — positional accuracy
+    private const ushort S57AttrSouacc = 144;  // SOUACC — sounding accuracy
     private const string S101AttrZoneOfConfidence = "zoneOfConfidence";
     private const string S101AttrCategoryOfZocInData = "categoryOfZoneOfConfidenceInData";
     private const string S101AttrHorizontalPositionUncertainty = "horizontalPositionUncertainty";
@@ -377,6 +382,7 @@ public sealed class S57ToS101Translator
     private const ushort S57AttrColpat = 76;    // COLPAT — colour pattern (single value)
     private const string S101AttrTopmark = "topmark";
     private const string S101AttrTopmarkDaymarkShape = "topmarkDaymarkShape";
+    private const string S101AttrShapeInformation = "shapeInformation";
     private const string S101AttrColourPattern = "colourPattern";
 
     // S-57 HORCLR (Horizontal clearance, ATTL 98) maps to the mandatory
@@ -511,6 +517,24 @@ public sealed class S57ToS101Translator
     // (null), its convention for a mandatory attribute without a source value,
     // for the producer to review.
     private const ushort PipsolObjl = 94;          // PIPSOL (S-57 object class)
+
+    // ── NEWOBJ virtual AIS aid to navigation → VirtualAISAidToNavigation ──
+    // S-57 has no class for a virtual AIS aid to navigation, so producers
+    // encode one as a point NEWOBJ (OBJL 163) whose CLSNAM is "Virtual AtoN,
+    // <type>", with the matching CLSDEF and SYMINS. S-65 Annex C §21.3 /
+    // §27.199 write exactly that from a VirtualAISAidToNavigation and its
+    // virtualAISAidToNavigationType, so the translator reads it back by the
+    // same table (S101ToS57Rules.VirtualAisTypes). Port and starboard
+    // lateral each have two types, told apart by the SYMINS symbol. Any
+    // other NEWOBJ still becomes an S57UnknownObject.
+    private const ushort NewobjObjl = 163;         // NEWOBJ (S-57 object class)
+    private const ushort S57AttrClsnam = 191;      // CLSNAM — object class name
+    private const ushort S57AttrSymins = 192;      // SYMINS — symbol instruction
+    private const string VirtualAisClassPrefix = "Virtual AtoN, ";
+    private const string S101ClassVirtualAis = "VirtualAISAidToNavigation";
+    private const string S101AttrVirtualAisType = "virtualAISAidToNavigationType";
+    private static readonly IReadOnlyDictionary<string, S57AttributeOverride> NoAttributeOverrides =
+        new Dictionary<string, S57AttributeOverride>();
     private const string S101ClassObstruction = "Obstruction";
     private const string BridgeAcronym = "BRIDGE";
 
@@ -1164,6 +1188,9 @@ public sealed class S57ToS101Translator
 
                 var acronymView = _mapping.BuildAcronymView(feat.Attributes);
                 var resolved = _mapping.ResolveFeature(objl, acronymView, MapPrimitive(feat.Primitive));
+                string? virtualAisType = null;
+                if (resolved is null && objl == NewobjObjl && (virtualAisType = VirtualAisType(feat)) is not null)
+                    resolved = new ResolvedFeature(S101ClassVirtualAis, NoAttributeOverrides);
                 if (resolved is null)
                 {
                     if (_mapping.FeatureRules.ContainsKey(objl))
@@ -1237,6 +1264,8 @@ public sealed class S57ToS101Translator
                 var attributes = TranslateAttributes(
                     feat.Attributes, resolved, objl, out var infoAssociations, extraSectors, topmarkSource);
                 attributes = AppendHazardDepths(feat, resolved.S101Code, acronymView, attributes);
+                if (virtualAisType is not null)
+                    attributes = [new S101Attribute(GetOrAssignAttributeCode(S101AttrVirtualAisType), 1, virtualAisType), .. attributes];
                 if (schedulePlan.SchedulesByFeature.TryGetValue(fi, out var schedules))
                     infoAssociations = [.. infoAssociations, .. TimeScheduleAssociations(resolved.S101Code, schedules, schedulePlan)];
 
@@ -1753,6 +1782,27 @@ public sealed class S57ToS101Translator
                     UpdateInstruction = f.UpdateInstruction,
                 };
             }
+        }
+
+        // The virtualAISAidToNavigationType of a point NEWOBJ that encodes a
+        // virtual AIS aid to navigation (see NewobjObjl), or null.
+        private string? VirtualAisType(EncDotNet.S57.S57FeatureRecord feat)
+        {
+            if (MapPrimitive(feat.Primitive) != S57GeometryPrimitive.Point
+                || !_featureBindings.Binds(S101ClassVirtualAis, S101AttrVirtualAisType))
+                return null;
+            var clsnam = feat.Attributes.Where(a => a.AttributeCode == S57AttrClsnam).Select(a => a.Value?.Trim()).FirstOrDefault();
+            if (clsnam is null || !clsnam.StartsWith(VirtualAisClassPrefix, StringComparison.OrdinalIgnoreCase))
+                return null;
+            var name = clsnam[VirtualAisClassPrefix.Length..].Trim();
+            var types = S101ToS57Rules.VirtualAisTypes
+                .Where(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (types.Count == 0) return null;
+            var symins = feat.Attributes.Where(a => a.AttributeCode == S57AttrSymins).Select(a => a.Value).FirstOrDefault() ?? string.Empty;
+            return (types.FirstOrDefault(t => symins.Contains(t.Symbol, StringComparison.OrdinalIgnoreCase)) is { Value: not null } bySymbol
+                ? bySymbol
+                : types[0]).Value;
         }
 
         // WGS-84 positions of an S-57 feature's geometry: one part per node, or
@@ -3040,6 +3090,8 @@ public sealed class S57ToS101Translator
             // class that binds the complex (QualityOfBathymetricData).
             bool bindsZoc = _featureBindings.Binds(feature.S101Code, S101AttrZoneOfConfidence);
             string? catzocValue = null;
+            string? posaccValue = null;
+            string? souaccValue = null;
             // topmark source — the TOPSHP/COLOUR/COLPAT of a master's slave TOPMAR
             // record (BuildTopmarkGroups), assembled into the `topmark` complex on
             // the buoy/beacon/light-float classes that bind it.
@@ -3160,6 +3212,8 @@ public sealed class S57ToS101Translator
                     case S57AttrSursta: if (bindsSurveyDate && !string.IsNullOrEmpty(a.Value)) surstaValue = a.Value; break;
                     case S57AttrSurend: if (bindsSurveyDate && !string.IsNullOrEmpty(a.Value)) surendValue = a.Value; break;
                     case S57AttrCatzoc: if (bindsZoc && !string.IsNullOrEmpty(a.Value)) catzocValue = a.Value; break;
+                    case S57AttrPosacc: if (bindsZoc && !string.IsNullOrEmpty(a.Value)) posaccValue = a.Value; break;
+                    case S57AttrSouacc: if (bindsZoc && !string.IsNullOrEmpty(a.Value)) souaccValue = a.Value; break;
                     case S57AttrNatsur: if (bindsSurfaceChar && !string.IsNullOrEmpty(a.Value)) natsurList = a.Value; break;
                     case S57AttrNatqua: if (bindsSurfaceChar && !string.IsNullOrEmpty(a.Value)) natquaList = a.Value; break;
                     case S57AttrHorclr: if (bindsHorClearance && !string.IsNullOrEmpty(a.Value)) horclrValue = a.Value; break;
@@ -3233,6 +3287,8 @@ public sealed class S57ToS101Translator
                 // On QualityOfBathymetricData, CATZOC is assembled into the
                 // `zoneOfConfidence` complex below rather than passed through.
                 if (bindsZoc && a.AttributeCode is S57AttrCatzoc)
+                    continue;
+                if (bindsZoc && !string.IsNullOrEmpty(a.Value) && a.AttributeCode is S57AttrPosacc or S57AttrSouacc)
                     continue;
 
                 // On SeabedArea, NATSUR/NATQUA are assembled into the
@@ -3567,17 +3623,19 @@ public sealed class S57ToS101Translator
             // CATZOC-sourced sub-attribute, `categoryOfZoneOfConfidenceInData`,
             // is mandatory in practice (nothing else is populated), so an
             // out-of-range CATZOC code drops the instance and is reported.
-            if (bindsZoc && catzocValue is not null)
+            if (bindsZoc && catzocValue is not null
+                && (_allowedEnumValues is null
+                    || _allowedEnumValues.IsAllowed(S101AttrCategoryOfZocInData, catzocValue)))
             {
-                if (_allowedEnumValues is null
-                    || _allowedEnumValues.IsAllowed(S101AttrCategoryOfZocInData, catzocValue))
-                {
-                    AppendZoneOfConfidenceInstance(builder, catzocValue);
-                }
-                else
-                {
+                AppendZoneOfConfidenceInstance(builder, catzocValue, posaccValue, souaccValue);
+            }
+            else if (bindsZoc)
+            {
+                if (catzocValue is not null)
                     _diagnostics?.RecordDroppedEnumValue(S101AttrCategoryOfZocInData, catzocValue);
-                }
+                // Without a zone of confidence the accuracies have no home.
+                if (posaccValue is not null) _diagnostics?.RecordRuleDroppedAttribute(S57AttrPosacc);
+                if (souaccValue is not null) _diagnostics?.RecordRuleDroppedAttribute(S57AttrSouacc);
             }
 
             // Append the `topmark` complex-attribute instance from the master's
@@ -3914,9 +3972,13 @@ public sealed class S57ToS101Translator
         // uncertainty is itself a complex of uncertaintyFixed [1..1] +
         // uncertaintyVariableFactor [0..1]. ZOC D/U have no quantified accuracy
         // (absent from CatzocUncertainties) so only the category is emitted.
+        // The M_QUAL's own POSACC / SOUACC, where present, replace the
+        // CATZOC-implied horizontal / vertical uncertainty (fixed term only).
         private void AppendZoneOfConfidenceInstance(
             List<S101Attribute> builder,
-            string categoryOfZoneOfConfidenceInData)
+            string categoryOfZoneOfConfidenceInData,
+            string? posacc = null,
+            string? souacc = null)
         {
             var zocCode = GetOrAssignAttributeCode(S101AttrZoneOfConfidence);
             // Marker entry — Index=1, value=empty — followed by the sub-attribute.
@@ -3924,19 +3986,27 @@ public sealed class S57ToS101Translator
             var catCode = GetOrAssignAttributeCode(S101AttrCategoryOfZocInData);
             builder.Add(new S101Attribute(catCode, 1, categoryOfZoneOfConfidenceInData));
 
-            if (!CatzocUncertainties.TryGetValue(categoryOfZoneOfConfidenceInData, out var u))
-                return;
+            ZocUncertainty? implied = CatzocUncertainties.TryGetValue(categoryOfZoneOfConfidenceInData, out var u) ? u : null;
 
             // horizontalPositionUncertainty → uncertaintyFixed [+ uncertaintyVariableFactor].
-            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrHorizontalPositionUncertainty), 1, string.Empty));
-            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyFixed), 1, u.HorizontalFixed));
-            if (u.HorizontalVariable is not null)
-                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyVariableFactor), 1, u.HorizontalVariable));
+            if (posacc is not null)
+                AppendUncertainty(S101AttrHorizontalPositionUncertainty, posacc, null);
+            else if (implied is { } h)
+                AppendUncertainty(S101AttrHorizontalPositionUncertainty, h.HorizontalFixed, h.HorizontalVariable);
 
             // verticalUncertainty → uncertaintyFixed + uncertaintyVariableFactor.
-            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrVerticalUncertainty), 1, string.Empty));
-            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyFixed), 1, u.VerticalFixed));
-            builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyVariableFactor), 1, u.VerticalVariable));
+            if (souacc is not null)
+                AppendUncertainty(S101AttrVerticalUncertainty, souacc, null);
+            else if (implied is { } v)
+                AppendUncertainty(S101AttrVerticalUncertainty, v.VerticalFixed, v.VerticalVariable);
+
+            void AppendUncertainty(string complex, string fixedTerm, string? variableFactor)
+            {
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(complex), 1, string.Empty));
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyFixed), 1, fixedTerm));
+                if (variableFactor is not null)
+                    builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrUncertaintyVariableFactor), 1, variableFactor));
+            }
         }
 
         // Emits a `topmark` complex-attribute instance from the master's slave
@@ -3957,6 +4027,7 @@ public sealed class S57ToS101Translator
             string? topshp = null;
             string? colourList = null;
             string? colpat = null;
+            string? inform = null;
             foreach (var a in topmarkSource.Attributes)
             {
                 switch (a.AttributeCode)
@@ -3964,6 +4035,7 @@ public sealed class S57ToS101Translator
                     case S57AttrTopshp: if (!string.IsNullOrEmpty(a.Value)) topshp = a.Value; break;
                     case S57AttrColour: if (!string.IsNullOrEmpty(a.Value)) colourList = a.Value; break;
                     case S57AttrColpat: if (!string.IsNullOrEmpty(a.Value)) colpat = a.Value; break;
+                    case S57AttrInform: if (!string.IsNullOrWhiteSpace(a.Value)) inform = a.Value; break;
                 }
             }
 
@@ -4008,6 +4080,16 @@ public sealed class S57ToS101Translator
             }
 
             builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrTopmarkDaymarkShape), 1, topshp));
+
+            // The TOPMAR's INFORM describes the topmark: it becomes the
+            // complex's shapeInformation, which S-65 Annex C §29.24 / §2.4.6
+            // convert back to the TOPMAR's INFORM.
+            if (inform is not null)
+            {
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrShapeInformation), 1, string.Empty));
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrLanguage), 1, LanguageEng));
+                builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrText), 1, inform));
+            }
         }
 
         // Emits a `horizontalClearanceOpen` / `horizontalClearanceFixed`
@@ -4295,8 +4377,11 @@ public sealed class S57ToS101Translator
             string? natsurList,
             string? natquaList)
         {
-            var surfaces = SplitEnumList(natsurList);
-            var quals = SplitEnumList(natquaList);
+            // The lists pair by position (S-57 UOC 7.1.2), so an empty
+            // position is kept: NATSUR "4,1,4" with NATQUA ",1," qualifies
+            // only the second surface.
+            var surfaces = SplitPositionalList(natsurList);
+            var quals = SplitPositionalList(natquaList);
             int count = Math.Max(surfaces.Count, quals.Count);
             for (int i = 0; i < count; i++)
             {
@@ -4330,6 +4415,13 @@ public sealed class S57ToS101Translator
                     builder.Add(new S101Attribute(GetOrAssignAttributeCode(S101AttrNatureOfSurfaceQualifyingTerms), 1, qual));
             }
         }
+
+        // Splits an S-57 list-valued enumerate attribute into its positions,
+        // an empty position as null.
+        private static List<string?> SplitPositionalList(string? list)
+            => string.IsNullOrEmpty(list)
+                ? []
+                : list.Split(',').Select(t => t.Trim() is { Length: > 0 } code ? code : null).ToList();
 
         // Splits an S-57 list-valued enumerate attribute (comma-separated
         // integer codes) into its individual non-empty tokens.
