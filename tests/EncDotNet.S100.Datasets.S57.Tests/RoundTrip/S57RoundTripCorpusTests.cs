@@ -1,13 +1,15 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using EncDotNet.S57;
 
 namespace EncDotNet.S100.Datasets.S57.Tests.RoundTrip;
 
 /// <summary>
-/// Opt-in round trip over a corpus of S-57 cells: S-57 → S-101 → S-57, each
-/// result compared with its source (see <see cref="S57RoundTripComparer"/>).
-/// The headline figure is the number of unexplained differences, each most
-/// likely a forward-mapping bug.
+/// Opt-in round trip over a corpus of S-57 cells: S-57 → S-101 → S-57 model →
+/// ISO 8211 bytes (<see cref="S57DocumentWriter"/>) → S-57 model read back
+/// (<see cref="S57DocumentReader"/>), the result compared with its source (see
+/// <see cref="S57RoundTripComparer"/>). The headline figure is the number of
+/// unexplained differences, each most likely a forward-mapping bug.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -17,6 +19,12 @@ namespace EncDotNet.S100.Datasets.S57.Tests.RoundTrip;
 /// <c>ENCDOTNET_ROUNDTRIP_REPORT</c> names the JSON report file (default
 /// <c>s57-roundtrip-report.json</c> in the temp folder). Skipped otherwise, so
 /// CI never depends on real ENC data. Inland (S-401) cells are skipped.
+/// </para>
+/// <para>
+/// The report's <c>WriteReadBack</c> section covers the encoding step: cells
+/// the writer rejected, and fields that differ between the translated model
+/// and the model read back (<see cref="S57ModelDiff"/>). A cell the writer
+/// rejects is still compared with its source, using the translated model.
 /// </para>
 /// </remarks>
 public class S57RoundTripCorpusTests
@@ -70,7 +78,8 @@ public class S57RoundTripCorpusTests
             {
                 var s101 = forward.Translate(dataset.Document);
                 var back = reverse.Translate(s101, reverseDiagnostics);
-                var differences = comparer.Compare(dataset.Document, s101, back);
+                var result = report.WriteReadBack.WriteAndReadBack(Path.GetFileName(path), back) ?? back;
+                var differences = comparer.Compare(dataset.Document, s101, result);
                 report.Add(Path.GetFileName(path), dataset.Document.FeatureRecords.Count, differences);
             }
             catch (Exception ex)
@@ -89,9 +98,13 @@ public class S57RoundTripCorpusTests
         _output.WriteLine($"Source objects: {report.SourceFeatures}. Differences: {report.Totals.Sum(t => t.Value)}.");
         foreach (var (cls, count) in report.Totals)
             _output.WriteLine($"  {cls}: {count}");
+        var written = report.WriteReadBack;
+        _output.WriteLine($"Written: {written.CellsWritten}, read back unchanged: {written.CellsReadBackUnchanged}, write failures: {written.WriteFailures.Count}.");
         _output.WriteLine($"Report: {reportPath}");
 
         Assert.Empty(report.Failures);
+        Assert.Empty(report.WriteReadBack.WriteFailures);
+        Assert.Empty(report.WriteReadBack.ReadFailures);
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -116,6 +129,73 @@ public class S57RoundTripCorpusTests
         public List<string> Samples { get; } = [];
     }
 
+    private sealed record FieldBucket(string Field)
+    {
+        public int Count { get; set; }
+        public int Cells { get; set; }
+        public List<string> Samples { get; } = [];
+    }
+
+    // The write → read-back step: S57DocumentWriter on the translated model,
+    // then S57DocumentReader on the bytes.
+    private sealed class WriteReadBackSummary
+    {
+        private readonly Dictionary<string, FieldBucket> _fields = new(StringComparer.Ordinal);
+
+        public int CellsWritten { get; private set; }
+        public int CellsReadBackUnchanged { get; private set; }
+        public long BytesWritten { get; private set; }
+        public List<CellFailure> WriteFailures { get; } = [];
+        public List<CellFailure> ReadFailures { get; } = [];
+
+        /// <summary>Fields that differ after the read back, largest first.</summary>
+        public IEnumerable<FieldBucket> ReadBackDifferences => _fields.Values.OrderByDescending(b => b.Count).ThenBy(b => b.Field, StringComparer.Ordinal);
+
+        // Returns the model read back, or null when the cell didn't write or read.
+        public S57Document? WriteAndReadBack(string cell, S57Document translated)
+        {
+            byte[] bytes;
+            try
+            {
+                bytes = S57DocumentWriter.Write(translated);
+            }
+            catch (ArgumentException ex)
+            {
+                WriteFailures.Add(new CellFailure(cell, ex.Message));
+                return null;
+            }
+            CellsWritten++;
+            BytesWritten += bytes.Length;
+
+            S57Document readBack;
+            try
+            {
+                readBack = S57DocumentReader.Read(bytes);
+            }
+            catch (Exception ex)
+            {
+                ReadFailures.Add(new CellFailure(cell, $"{ex.GetType().Name}: {ex.Message}"));
+                return null;
+            }
+
+            var differences = S57ModelDiff.Compare(translated, readBack);
+            if (differences.Count == 0) CellsReadBackUnchanged++;
+            foreach (var group in differences.GroupBy(d => d.Field))
+            {
+                if (!_fields.TryGetValue(group.Key, out var bucket))
+                    _fields[group.Key] = bucket = new FieldBucket(group.Key);
+                bucket.Cells++;
+                foreach (var d in group)
+                {
+                    bucket.Count++;
+                    if (bucket.Samples.Count < SamplesPerBucket)
+                        bucket.Samples.Add($"{cell} {d.Detail}");
+                }
+            }
+            return readBack;
+        }
+    }
+
     private sealed record CellSummary(string Cell, int Features, int Differences, int Unexplained, int ReverseBugs);
 
     private sealed record ReverseSummary(
@@ -130,6 +210,8 @@ public class S57RoundTripCorpusTests
         Dictionary<string, int> TruncatedToFirst,
         Dictionary<string, int> MandatoryAttributesNulled,
         Dictionary<string, int> FeaturesSynthesised,
+        Dictionary<string, int> MovedToNational,
+        Dictionary<string, int> UnencodableText,
         int InformOverLength,
         int NonBooleanValues)
     {
@@ -145,6 +227,8 @@ public class S57RoundTripCorpusTests
             Sorted(d.TruncatedToFirst.ToDictionary(kv => kv.Key, kv => kv.Value)),
             Sorted(d.MandatoryAttributesNulled.ToDictionary(kv => $"{kv.Key.ObjectClass}.{kv.Key.Attribute}", kv => kv.Value)),
             Sorted(d.FeaturesSynthesised.ToDictionary(kv => kv.Key, kv => kv.Value)),
+            Sorted(d.MovedToNational.ToDictionary(kv => kv.Key, kv => kv.Value)),
+            Sorted(d.UnencodableText.ToDictionary(kv => kv.Key, kv => kv.Value)),
             d.InformOverLength,
             d.NonBooleanValues);
 
@@ -163,6 +247,7 @@ public class S57RoundTripCorpusTests
         public Dictionary<RoundTripClass, int> Totals { get; } = Enum.GetValues<RoundTripClass>().ToDictionary(c => c, _ => 0);
         public List<CellFailure> Failures { get; } = [];
         public ReverseSummary? Reverse { get; set; }
+        public WriteReadBackSummary WriteReadBack { get; } = new();
 
         /// <summary>The unexplained differences and reverse bugs, largest first.</summary>
         public IEnumerable<Bucket> Unexplained => Buckets.Where(b => b.Class is RoundTripClass.Unexplained or RoundTripClass.ReverseBug);

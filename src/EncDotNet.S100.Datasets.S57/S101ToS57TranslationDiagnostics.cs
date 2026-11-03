@@ -43,6 +43,8 @@ public sealed class S101ToS57TranslationDiagnostics
     private readonly Dictionary<S57AttributeNulled, int> _mandatoryNulled = new();
     private readonly Dictionary<string, int> _featuresSynthesised = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _unmappedInformationTypes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _movedToNational = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _unencodableText = new(StringComparer.Ordinal);
 
     /// <summary>Number of S-101 feature records read.</summary>
     public int FeaturesRead { get; internal set; }
@@ -104,6 +106,20 @@ public sealed class S101ToS57TranslationDiagnostics
     /// <summary>Information types linked to a feature that Phase 1 does not fold into <c>INFORM</c>.</summary>
     public IReadOnlyDictionary<string, int> UnmappedInformationTypes => _unmappedInformationTypes;
 
+    /// <summary>
+    /// ATTF values outside ISO 8859-1 moved to their NATF counterpart
+    /// (<c>OBJNAM</c> to <c>NOBJNM</c>, <c>INFORM</c> to <c>NINFOM</c>,
+    /// <c>TXTDSC</c> to <c>NTXTDS</c>), by the ATTF acronym (S-57 Part 3 §2.4).
+    /// </summary>
+    public IReadOnlyDictionary<string, int> MovedToNational => _movedToNational;
+
+    /// <summary>
+    /// Values dropped because no S-57 lexical level can encode them: ATTF
+    /// text outside ISO 8859-1 with no free NATF counterpart, or text outside
+    /// the Basic Multilingual Plane, by S-57 acronym.
+    /// </summary>
+    public IReadOnlyDictionary<string, int> UnencodableText => _unencodableText;
+
     internal void RecordDroppedFeature(string s101Code, string clause) => Increment(_droppedFeatures, new S101FeatureDrop(s101Code, clause));
 
     internal void RecordDeferredFeature(string s101Code) => Increment(_deferredFeatures, s101Code);
@@ -123,6 +139,10 @@ public sealed class S101ToS57TranslationDiagnostics
     internal void RecordSynthesised(string s57Acronym) => Increment(_featuresSynthesised, s57Acronym);
 
     internal void RecordUnmappedInformationType(string s101Code) => Increment(_unmappedInformationTypes, s101Code);
+
+    internal void RecordMovedToNational(string s57Acronym) => Increment(_movedToNational, s57Acronym);
+
+    internal void RecordUnencodableText(string s57Acronym) => Increment(_unencodableText, s57Acronym);
 
     private static void Increment<TKey>(Dictionary<TKey, int> map, TKey key) where TKey : notnull
         => map[key] = map.TryGetValue(key, out var n) ? n + 1 : 1;
