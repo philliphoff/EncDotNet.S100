@@ -1775,6 +1775,83 @@ public class S57ToS101TranslatorTests
         }
     }
 
+    // ── Master/slave (FFPT) → StructureEquipment (#1220) ───────────────
+
+    // A BOYLAT master whose FFPT names a LIGHTS, a FOGSIG and an OBSTRN as
+    // slaves (S-57 UOC 12.1.1), all at the buoy's node.
+    [Fact]
+    public void Translate_MasterSlaves_BecomeStructureEquipment()
+    {
+        var slave = EncDotNet.S57.S57RelationshipIndicator.Slave;
+        var n1 = Node(1, 1000, 2000);
+        var buoy = Feat(
+            recordId: 1, primitive: 1, objectClass: 17, // BOYLAT
+            featureIdentificationNumber: 10,
+            attributes: new[] { Attr(36, "1") }, // CATLAM
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) },
+            featurePointers: new[]
+            {
+                Ffpt(540, 20, relationship: slave),
+                Ffpt(540, 21, relationship: slave),
+                Ffpt(540, 22, relationship: slave),
+                Ffpt(540, 99, relationship: slave), // names no object
+            });
+        var light = Feat(
+            recordId: 2, primitive: 1, objectClass: 75, // LIGHTS
+            featureIdentificationNumber: 20,
+            attributes: new[] { Attr(107, "2") }, // LITCHR
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var fog = Feat(
+            recordId: 3, primitive: 1, objectClass: 58, // FOGSIG
+            featureIdentificationNumber: 21,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var obstruction = Feat(
+            recordId: 4, primitive: 1, objectClass: 86, // OBSTRN
+            featureIdentificationNumber: 22,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { buoy, light, fog, obstruction });
+
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(doc, diag);
+
+        var structure = SingleOfClass(s101, "LateralBuoy");
+        var equipment = structure.FeatureAssociations
+            .Where(a => s101.FeatureAssociationCatalogue[a.NumericCode] == "StructureEquipment")
+            .ToList();
+        Assert.All(equipment, a => Assert.Equal("theEquipment", s101.RoleCatalogue[a.RoleCode]));
+        Assert.Equal(
+            new[] { SingleOfClass(s101, "LightAllAround").RecordId, SingleOfClass(s101, "FogSignal").RecordId },
+            equipment.Select(a => a.RecordId));
+        Assert.Equal(2, diag.StructureEquipmentLinked);
+        Assert.Equal(1, diag.UnboundStructureEquipment[new S57StructureEquipmentPair("LateralBuoy", "Obstruction")]);
+    }
+
+    // Peer pointers (and a master pointer back from a slave) aren't
+    // master/slave links from the master's side.
+    [Fact]
+    public void Translate_PeerPointers_DoNotBecomeStructureEquipment()
+    {
+        var n1 = Node(1, 1000, 2000);
+        var buoy = Feat(
+            recordId: 1, primitive: 1, objectClass: 17, // BOYLAT
+            featureIdentificationNumber: 10,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) },
+            featurePointers: new[] { Ffpt(540, 20) });
+        var light = Feat(
+            recordId: 2, primitive: 1, objectClass: 75, // LIGHTS
+            featureIdentificationNumber: 20,
+            attributes: new[] { Attr(107, "2") },
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) },
+            featurePointers: new[] { Ffpt(540, 10, relationship: EncDotNet.S57.S57RelationshipIndicator.Master) });
+        var doc = BuildDocument(vectorRecords: new[] { n1 }, features: new[] { buoy, light });
+
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(doc, diag);
+
+        Assert.All(s101.Features, f => Assert.Empty(f.FeatureAssociations));
+        Assert.Equal(0, diag.StructureEquipmentLinked);
+    }
+
     // ── TOPMAR slave → parent `topmark` complex attribute ───────────────
 
     // Builds a buoy/beacon master feature (with geometry) that references a
