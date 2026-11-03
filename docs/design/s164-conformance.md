@@ -420,12 +420,15 @@ that class, so the tests read the waypoints from the S-57 records.
   Three drew "?". A point RUNWAY (`GB55062B`) has no S-101 counterpart; it's
   now converted as S-65 Annex B §4.8.12 asks, to `Helipad` or nothing
   ([#1238](https://github.com/philliphoff/EncDotNet.S100/issues/1238), fixed).
-  A point PIPSOL (`GB4X0000`) should become an obstruction or a landmark
-  depending on what's under it
-  ([#1243](https://github.com/philliphoff/EncDotNet.S100/issues/1243)). A
-  TS_FEB without CURVEL (`AA5OTHER`) fails the S-101 rule, which needs a
-  speed ([#1244](https://github.com/philliphoff/EncDotNet.S100/issues/1244)).
-  The last two are listed as expected.
+  A point PIPSOL (`GB4X0000`) now becomes an `Obstruction` when a depth or
+  dredged area covers it and a `Landmark` otherwise, as §11.6.1 asks
+  ([#1243](https://github.com/philliphoff/EncDotNet.S100/issues/1243), fixed).
+  A TS_FEB without CURVEL (`AA5OTHER`) failed the S-101 rule, which reads a
+  mandatory speed. It now gets the `speed` complex with `speedMaximum` empty
+  (null), Annex B's convention for a mandatory attribute with no S-57 value;
+  the portrayal API reads that as nil, so the rule draws the arrow without a
+  speed ([#1244](https://github.com/philliphoff/EncDotNet.S100/issues/1244), fixed).
+  No base cell draws "?" now.
 - **Hazard depths** ([#1237](https://github.com/philliphoff/EncDotNet.S100/issues/1237), fixed).
   The translator gave hazards without VALSOU S-52's default depths. S-65
   Annex B asks for those of S-101 DCEG clause 30.1, which differ: 0.1 m for
