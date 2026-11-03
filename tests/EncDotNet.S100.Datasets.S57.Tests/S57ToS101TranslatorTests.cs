@@ -3396,6 +3396,51 @@ public class S57ToS101TranslatorTests
         Assert.DoesNotContain("categoryOfDam", AttributeNames(s101, feat));
     }
 
+    private const ushort ObjlPipsol = 94;
+    private const int AttlCatpip = 47;
+    private const int AttlProdct = 123;
+
+    [Fact]
+    public void Translate_PointPipelineOnSeabed_BecomesObstruction()
+    {
+        // S-65 Annex B §11.6.1: a point PIPSOL extending from the seabed (in a
+        // depth area) is an Obstruction (#1243).
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            HazardCell(HazardPoint(ObjlPipsol, node: 1, Attr(AttlCatpip, "2"))), diag);
+
+        var feat = SingleHazard(s101);
+        Assert.Equal("Obstruction", ClassOf(s101, feat));
+        Assert.Equal("5", TopLevelValue(s101, feat, "surroundingDepth"));
+        Assert.NotNull(TopLevelValue(s101, feat, "defaultClearanceDepth"));
+        Assert.DoesNotContain("categoryOfPipelinePipe", AttributeNames(s101, feat));
+        Assert.Equal(1, diag.RuleDroppedAttributes[AttlCatpip]);
+    }
+
+    [Fact]
+    public void Translate_PointPipelineOnLand_BecomesLandmark()
+    {
+        // Outside every depth area the point is on land: a Landmark, with
+        // the mandatory category populated as empty (null) for review.
+        var s101 = new S57ToS101Translator().Translate(
+            HazardCell(HazardPoint(ObjlPipsol, node: 2, Attr(AttlProdct, "1"))));
+
+        var feat = SingleHazard(s101);
+        Assert.Equal("Landmark", ClassOf(s101, feat));
+        Assert.Equal("", TopLevelValue(s101, feat, "categoryOfLandmark"));
+        Assert.Equal("2", TopLevelValue(s101, feat, "visualProminence"));
+        Assert.DoesNotContain("surroundingDepth", AttributeNames(s101, feat));
+    }
+
+    [Fact]
+    public void Translate_LinePipeline_StaysPipeline()
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            LineFeatureWithS57Attributes(ObjlPipsol, Attr(AttlCatpip, "2")));
+
+        Assert.Equal("PipelineSubmarineOnLand", ClassOf(s101, Assert.Single(s101.Features)));
+    }
+
     [Fact]
     public void Translate_LineDam_StaysDam()
     {
@@ -4488,7 +4533,9 @@ public class S57ToS101TranslatorTests
             LineFeatureWithS57Attributes(objl, Attr(AttlOrient, "123.5")));
 
         var feat = SingleOfClass(s101, s101Class);
-        var orientation = ComplexInstanceStrict(s101, feat.Attributes, "orientation", 1, "orientation").ToList();
+        // The streams also carry the mandatory speed complex, which ends the
+        // orientation instance.
+        var orientation = ComplexInstanceStrict(s101, feat.Attributes, "orientation", 1, "orientation", "speed").ToList();
         Assert.Equal(["orientation", "orientationValue"],
             orientation.Select(a => s101.AttributeTypeCatalogue[a.NumericCode]));
         Assert.Equal("123.5", orientation[1].Value);
@@ -4732,6 +4779,33 @@ public class S57ToS101TranslatorTests
         Assert.Equal("TidalStreamFloodEbb", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
         var instance = ComplexInstance(s101, feat.Attributes, "speed", 1).ToList();
         Assert.Equal("0.9", GetSubAttribute(s101, instance, "speedMaximum"));
+    }
+
+    [Theory]
+    [InlineData(160, "TidalStreamFloodEbb")]
+    [InlineData(36, "CurrentNonGravitational")]
+    public void Translate_StreamWithoutCurvel_HasSpeedWithEmptyMaximum(ushort objl, string s101Class)
+    {
+        // speed is mandatory on both classes. S-57 lets CURVEL be empty, so
+        // the complex carries speedMaximum as empty (null) (#1244).
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(objl, Attr(117, "45"), Attr(84, "")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(s101Class, ClassOf(s101, feat));
+        var instance = ComplexInstance(s101, feat.Attributes, "speed", 1).ToList();
+        Assert.Equal("", GetSubAttribute(s101, instance, "speedMaximum"));
+        Assert.Null(GetSubAttribute(s101, instance, "speedMinimum"));
+    }
+
+    [Fact]
+    public void Translate_StreamWithNoAttributes_StillHasSpeed()
+    {
+        var s101 = new S57ToS101Translator().Translate(PointFeatureWithS57Attributes(160));
+
+        var feat = Assert.Single(s101.Features);
+        var instance = ComplexInstance(s101, feat.Attributes, "speed", 1).ToList();
+        Assert.Equal("", GetSubAttribute(s101, instance, "speedMaximum"));
     }
 
     [Fact]

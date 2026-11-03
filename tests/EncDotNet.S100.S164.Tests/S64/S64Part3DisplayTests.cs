@@ -69,8 +69,7 @@ public sealed class S64Part3DisplayTests
             .Distinct()
             .ToArray();
 
-        // The tidal stream is the "?" of #1244, drawn in 21010.
-        Assert.Equal(["CableOverhead (12210)", "TidalStreamFloodEbb (21010)"], inStandard.Order(StringComparer.Ordinal));
+        Assert.Equal(["CableOverhead (12210)"], inStandard.Order(StringComparer.Ordinal));
     }
 
     [Fact(Skip = "Unknown S-57 object classes are dropped by translation (#1242).")]

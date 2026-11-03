@@ -36,13 +36,7 @@ public sealed partial class S64SmokeTests
     /// The 3.2 cell charts objects of unknown classes, which S-52 draws as "?";
     /// translation drops them instead (#1242), so they draw nothing.
     /// </remarks>
-    private static readonly Dictionary<string, string[]> ExpectedQuestionMarks = new(StringComparer.Ordinal)
-    {
-        // A point PIPSOL: S-101 pipelines are curves only (#1243).
-        ["2.1.1 Power Up/ENC_ROOT/GB4X0000.000"] = ["PipelineSubmarineOnLand"],
-        // A TS_FEB without CURVEL: S-101 makes speed mandatory (#1244).
-        ["3.1 ENC Display/Other/ENC_ROOT/AA5OTHER.000"] = ["TidalStreamFloodEbb"],
-    };
+    private static readonly Dictionary<string, string[]> ExpectedQuestionMarks = new(StringComparer.Ordinal);
 
     /// <summary>Every base cell in the edition, by path in the archive.</summary>
     internal static readonly string[] Cells =
