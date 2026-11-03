@@ -47,6 +47,18 @@ public partial class S101ToS57TranslatorTests
             return id;
         }
 
+        // A closed curve: one point association with TOPI 3, begin and end.
+        public uint ClosedCurve(uint id, uint point, params (int Y, int X)[] intermediates)
+        {
+            _curves[id] = new S101CurveSegmentRecord
+            {
+                RecordId = id,
+                PointAssociations = [new(110, point, 3)],
+                IntermediateCoordinates = intermediates,
+            };
+            return id;
+        }
+
         public uint Surface(uint id, params uint[] exteriorCurves)
         {
             _surfaces[id] = new S101SurfaceRecord
@@ -645,6 +657,24 @@ public partial class S101ToS57TranslatorTests
         Assert.Equal([(1, 1), (2, 2)], edge.VectorPointers.Select(p => (p.Name.RecordId, (int)p.Topology)));
         Assert.Equal(2, result.VectorRecords.Count(v => v.RecordName.RecordNameCode == 120));
         Assert.Equal((50, 5), (edge.Coordinates2D[0].X, edge.Coordinates2D[0].Y));
+    }
+
+    [Fact]
+    public void ClosedCurve_BecomesEdgeThatBeginsAndEndsAtOneNode()
+    {
+        var b = new DocumentBuilder();
+        b.Point(1, 400_000_000, -700_000_000);
+        var ring = b.ClosedCurve(7, 1, (400_000_000, -699_000_000), (401_000_000, -699_000_000), (401_000_000, -700_000_000));
+        b.Feature("LandArea", (130, b.Surface(1, ring)), []);
+
+        var result = new S101ToS57Translator().Translate(b.Build());
+
+        var edge = Assert.Single(result.VectorRecords, v => v.RecordName.RecordNameCode == 130);
+        Assert.Equal(
+            [(1, S57TopologyIndicator.Beginning), (1, S57TopologyIndicator.End)],
+            edge.VectorPointers.Select(p => (p.Name.RecordId, p.Topology)));
+        Assert.Equal(S57GeometricPrimitive.Area, Single(result).Primitive);
+        Assert.Empty(S57TopologyCheck.Check(result));
     }
 
     [Fact]

@@ -15,6 +15,7 @@ command offers it, and treat paths as local filesystem paths.
 | Write XYZ raster tiles (folder, PMTiles or MBTiles) for a web map | `s100 tiles export` |
 | Serve a built tile set, or datasets rendered on demand, to a local web map on XYZ URLs | `s100 tiles serve` |
 | Convert an S-57 base cell to S-101 (or an inland ENC cell to S-401) | `s100 s57 convert` |
+| Convert an S-101 dataset to an S-57 cell or exchange set for testing or S-57-only tools (not a production ENC) | `s100 s101 convert --to s57` |
 | Serve the read-only query tools to an MCP client over stdio | `s100 mcp serve` |
 | Publish datasets to other machines' viewers over HTTP | `s100 feed serve` |
 | Write datasets as a static feed for any web host | `s100 feed export` |

@@ -4,6 +4,16 @@ This page lists notable changes to the libraries, tools and documentation, by
 month. For package versions and release assets, see
 [GitHub releases](https://github.com/philliphoff/EncDotNet.S100/releases).
 
+## November 2026
+
+- **Convert S-101 to S-57.** `s100 s101 convert --to s57` writes an S-101
+  dataset as an S-57 Edition 3.1 base cell, following S-65 Annex C, and
+  prints what Annex C dropped or folded into `INFORM`. `--exchange-set`
+  writes an `ENC_ROOT` with a `CATALOG.031`, and options cover the choices
+  Annex C leaves to the converter. It's for testing the S-57 → S-101
+  translation and for tools that read only S-57, not for producing ENCs. See
+  [Converting S-101 to S-57](s101-to-s57.md).
+
 ## October 2026
 
 - **One time readout on the map, and step buttons that stay put.**
