@@ -7,7 +7,7 @@ namespace EncDotNet.S100.Datasets.S57.Tests;
 /// Tests for <see cref="S101ToS57Translator"/>, one or more per S-65 Annex C
 /// general rule (§2), plus the meta-feature and structural rules Phase 1 covers.
 /// </summary>
-public class S101ToS57TranslatorTests
+public partial class S101ToS57TranslatorTests
 {
     // ── Builder ─────────────────────────────────────────────────────────
 
@@ -21,6 +21,8 @@ public class S101ToS57TranslatorTests
         private readonly Dictionary<ushort, string> _informationTypes = new();
         private readonly Dictionary<ushort, string> _informationAssociations = new();
         private readonly Dictionary<ushort, string> _roles = new();
+        private readonly Dictionary<ushort, string> _featureAssociations = new();
+        private readonly Dictionary<uint, S101CompositeCurveRecord> _composites = new();
         private readonly Dictionary<uint, S101PointRecord> _points = new();
         private readonly Dictionary<uint, S101MultiPointRecord> _multiPoints = new();
         private readonly Dictionary<uint, S101CurveSegmentRecord> _curves = new();
@@ -97,6 +99,39 @@ public class S101ToS57TranslatorTests
             return feature;
         }
 
+        // A surface with interior rings, each ring a list of curves.
+        public uint SurfaceWithHoles(uint id, uint[] exterior, params uint[][] interiors)
+        {
+            var rings = exterior.Select(c => new S101RingAssociation(120, c, 1, 1)).ToList();
+            foreach (var ring in interiors)
+                rings.AddRange(ring.Select(c => new S101RingAssociation(120, c, 1, 2)));
+            _surfaces[id] = new S101SurfaceRecord { RecordId = id, RingAssociations = rings };
+            return id;
+        }
+
+        // Adds a feature association from one feature to another.
+        public void Associate(S101FeatureRecord from, string association, string role, S101FeatureRecord to)
+        {
+            var index = _features.FindIndex(f => f.RecordId == from.RecordId);
+            var current = _features[index];
+            _features[index] = new S101FeatureRecord
+            {
+                RecordId = current.RecordId,
+                FeatureTypeCode = current.FeatureTypeCode,
+                ProducingAgency = current.ProducingAgency,
+                FeatureIdentificationNumber = current.FeatureIdentificationNumber,
+                FeatureIdentificationSubdivision = current.FeatureIdentificationSubdivision,
+                Attributes = current.Attributes,
+                SpatialAssociations = current.SpatialAssociations,
+                InformationAssociations = current.InformationAssociations,
+                FeatureAssociations =
+                [
+                    .. current.FeatureAssociations,
+                    new S101FeatureAssociation(Code(_featureAssociations, association), to.RecordId, Code(_roles, role)),
+                ],
+            };
+        }
+
         private List<S101Attribute> Rows((string Code, string Value, int Parent)[] rows)
             => rows.Select(r => new S101Attribute(Code(_attributes, r.Code), 1, r.Value, (ushort)r.Parent)).ToList();
 
@@ -120,13 +155,13 @@ public class S101ToS57TranslatorTests
             Points = _points,
             MultiPoints = _multiPoints,
             CurveSegments = _curves,
-            CompositeCurves = new Dictionary<uint, S101CompositeCurveRecord>(),
+            CompositeCurves = _composites,
             Surfaces = _surfaces,
             Features = _features,
             InformationTypes = _information,
             InformationTypeCatalogue = _informationTypes,
             InformationAssociationCatalogue = _informationAssociations,
-            FeatureAssociationCatalogue = new Dictionary<ushort, string>(),
+            FeatureAssociationCatalogue = _featureAssociations,
             RoleCatalogue = _roles,
         };
     }
@@ -266,7 +301,7 @@ public class S101ToS57TranslatorTests
     [Fact]
     public void TimeUriAndUrnAttributes_AreNotConverted()
     {
-        var document = PointFeature("Landmark",
+        var document = PointFeature("Building",
             R("timeOfDayStart", "080000"),
             R("linkage", "https://example.org"),
             R("interoperabilityIdentifier", "urn:mrn:example"));
@@ -480,10 +515,11 @@ public class S101ToS57TranslatorTests
         b.Feature("DataCoverage", (130, b.Surface(1, 1, 2, 3)), [R("optimumDisplayScale", "22000")]);
         var diagnostics = new S101ToS57TranslationDiagnostics();
 
-        var feature = Single(new S101ToS57Translator().Translate(b.Build(), diagnostics));
+        var document = new S101ToS57Translator().Translate(b.Build(), diagnostics);
 
+        // The triangle covers half its bounding box; §3.5 tiles the rest.
+        var feature = Assert.Single(document.FeatureRecords, f => Value(f, AttlCatcov) == "1");
         Assert.Equal((int)S57ObjectCode.M_COVR, (int)feature.ObjectCode);
-        Assert.Equal("1", Value(feature, AttlCatcov));
         Assert.Equal(255, (int)feature.Group);
         Assert.Equal(1, diagnostics.DroppedAttributes[new S101AttributeDrop("optimumDisplayScale", "3.5")]);
     }

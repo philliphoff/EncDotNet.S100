@@ -10,7 +10,7 @@ internal enum RoundTripClass
     /// <summary>A loss the conversion rules call for, with the clause that does.</summary>
     ExpectedLoss,
 
-    /// <summary>A restructuring with an inverse rule (or one deferred to a later phase).</summary>
+    /// <summary>A restructuring with an inverse rule.</summary>
     ExpectedRestructure,
 
     /// <summary>Not explained by any rule; most likely a forward-mapping bug.</summary>
@@ -43,6 +43,8 @@ internal sealed record RoundTripDifference(
         (_, "NINFOM" or "NOBJNM" or "NTXTDS") => "#1221",
         ("TSEZNE" or "COSARE" or "163", "(feature)") => "#1222",
         ("TOPMAR", _) or ("M_QUAL", "SOUACC" or "POSACC") or ("SBDARE", "NATSUR" or "NATQUA") => "#1222",
+        ("C_AGGR", "OBJNAM" or "NOBJNM" or "INFORM") => "#1249",
+        ("LOCMAG", "VALLMA") => "#1250",
         _ => null,
     };
 }
@@ -90,6 +92,7 @@ internal sealed class S57RoundTripComparer
         ["VERACC"] = "uncertaintyFixed",
         ["SORDAT"] = "reportedDate",
         ["SORIND"] = "source",
+        ["SCAMIN"] = "scaleMinimum",
         ["VALLMA"] = "magneticAnomalyValue",
         ["RADWAL"] = "waveLengthValue",
         ["CURVEL"] = "speedMaximum",
@@ -109,13 +112,13 @@ internal sealed class S57RoundTripComparer
     // §2.1 notes a round trip can therefore never be the identity).
     private static readonly Dictionary<string, string> ClassesWithoutS101 = new(StringComparer.Ordinal)
     {
-        ["M_CSCL"] = "Annex B: no S-101 class (Annex C §3.5 synthesises it, Phase 2)",
+        ["M_CSCL"] = "Annex B: no S-101 class (Annex C §3.5 re-creates one only where coverage scales differ)",
         ["M_HDAT"] = "Annex B: no S-101 class",
         ["M_HOPA"] = "Annex B: no S-101 class",
         ["M_PROD"] = "Annex B: no S-101 class",
         ["M_UNIT"] = "Annex B: no S-101 class",
         ["C_ASSO"] = "Annex B: no S-101 class",
-        ["C_AGGR"] = "Annex B: RangeSystem / Bridge aggregation (structural inverse, Phase 2)",
+        ["C_AGGR"] = "Annex B: only range systems and bridge collections carry to S-101",
         ["$AREAS"] = "cartographic object",
         ["$LINES"] = "cartographic object",
         ["$CSYMB"] = "cartographic object",
@@ -123,7 +126,7 @@ internal sealed class S57RoundTripComparer
         ["$TEXTS"] = "cartographic object",
     };
 
-    // Object classes the forward translation restructures and Phase 2 inverts.
+    // Object classes the forward translation restructures and the reverse inverts.
     private static readonly HashSet<string> RestructuredClasses = new(StringComparer.Ordinal)
     {
         "BRIDGE", "DAMCON", "CTRPNT", "MORFAC", "TOPMAR", "C_AGGR",
@@ -157,8 +160,8 @@ internal sealed class S57RoundTripComparer
         ("LITCHR", 107), ("SIGSEQ", 143), ("DATSTA", 86), ("DATEND", 85), ("PERSTA", 119), ("PEREND", 118),
         ("SURSTA", 152), ("SUREND", 151), ("CATZOC", 72), ("NATQUA", 114), ("HORCLR", 98), ("SORDAT", 147),
         ("SORIND", 148), ("VALLMA", 175), ("RADWAL", 126), ("CURVEL", 84), ("MLTYLT", 110), ("HORACC", 97),
-        ("VERACC", 180), ("POSACC", 400), ("SOUACC", 401), ("QUAPOS", 402), ("RECDAT", 129), ("RECIND", 130),
-        ("CSCALE", 80), ("NPLDST", 302), ("PILDST", 122), ("CATRUN", 58),
+        ("VERACC", 180), ("POSACC", 401), ("SOUACC", 144), ("QUAPOS", 402), ("HORDAT", 400), ("RECDAT", 128), ("RECIND", 129),
+        ("CSCALE", 80), ("NPLDST", 302), ("PILDST", 121), ("CATRUN", 58),
         ("CATSPM", 66), ("TOPSHP", 171), ("COLPAT", 76), ("CATCOV", 18),
     ];
 
@@ -218,6 +221,16 @@ internal sealed class S57RoundTripComparer
                 .FirstOrDefault(c => !matched.Contains(c.Index)
                     && c.Feature.ObjectCode == feature.ObjectCode
                     && resultGeometry.Fingerprint(c.Feature) == fingerprint);
+            if (pick.Feature is null && Retiled.Contains(ClassName((int)feature.ObjectCode)))
+            {
+                // §3.5 re-tiles coverage: an M_COVR / M_CSCL matches one of
+                // its class with the same CATCOV / CSCALE wherever it lies.
+                pick = result.FeatureRecords
+                    .Select((f, i) => (Feature: f, Index: i))
+                    .FirstOrDefault(c => !matched.Contains(c.Index)
+                        && c.Feature.ObjectCode == feature.ObjectCode
+                        && TileKey(c.Feature) == TileKey(feature));
+            }
             if (pick.Feature is not null)
             {
                 matched.Add(pick.Index);
@@ -239,12 +252,50 @@ internal sealed class S57RoundTripComparer
             if (matched.Contains(i)) continue;
             var feature = result.FeatureRecords[i];
             var name = ClassName((int)feature.ObjectCode);
+            var reason = AddedReasons.GetValueOrDefault(name);
             differences.Add(new RoundTripDifference(name, "(feature)", "added",
-                RestructuredClasses.Contains(name) ? RoundTripClass.ExpectedRestructure : RoundTripClass.Unexplained,
-                name == "TOPMAR" ? "Annex C §18.1 (topmark → TOPMAR)" : "no source object", null, null));
+                RestructuredClasses.Contains(name) || reason is not null ? RoundTripClass.ExpectedRestructure : RoundTripClass.Unexplained,
+                reason ?? "no source object", null, null));
         }
 
+        CompareTopology(source, result, differences);
         return differences;
+    }
+
+    // Objects the reverse translation creates without a source object of
+    // their own, with the rule that creates them.
+    private static readonly Dictionary<string, string> AddedReasons = new(StringComparer.Ordinal)
+    {
+        ["TOPMAR"] = "Annex C §18.1 (topmark → TOPMAR)",
+        ["M_COVR"] = "Annex C §3.5 (M_COVR tiles the bounding box)",
+        ["M_CSCL"] = "Annex C §3.5 (M_CSCL where a coverage scale differs)",
+        ["C_AGGR"] = "Annex C §6.6 / §25 (aggregation → C_AGGR)",
+        ["DEPARE"] = "Annex C §2.5.1.1 (skin of the earth cut into parts)",
+        ["LNDARE"] = "Annex C §2.5.1.1 (skin of the earth cut into parts)",
+        ["DRGARE"] = "Annex C §2.5.1.1 (skin of the earth cut into parts)",
+        ["UNSARE"] = "Annex C §2.5.1.1 (skin of the earth cut into parts)",
+    };
+
+    // Classes §3.5 rebuilds, matched by attribute rather than identity.
+    private static readonly HashSet<string> Retiled = new(StringComparer.Ordinal) { "M_COVR", "M_CSCL" };
+
+    private static string TileKey(S57FeatureRecord feature)
+        => string.Join(';', feature.Attributes.Where(a => a.AttributeCode is 18 or 80).Select(a => $"{a.AttributeCode}={a.Value?.Trim()}"));
+
+    // Runs S57TopologyCheck on both cells; an issue the result has more of
+    // than the source is the reverse translation's.
+    private static void CompareTopology(S57Document source, S57Document result, List<RoundTripDifference> differences)
+    {
+        var before = S57TopologyCheck.Check(source).GroupBy(i => i.Kind).ToDictionary(g => g.Key, g => g.Count());
+        foreach (var group in S57TopologyCheck.Check(result).GroupBy(i => i.Kind))
+        {
+            var extra = group.Count() - before.GetValueOrDefault(group.Key);
+            for (int i = 0; i < extra; i++)
+            {
+                differences.Add(new("(dataset)", group.Key, "topology", RoundTripClass.ReverseBug,
+                    "topology check (S57TopologyCheck)", null, group.ElementAt(Math.Min(i, group.Count() - 1)).Detail));
+            }
+        }
     }
 
     private RoundTripDifference ExplainMissingFeature(
@@ -261,7 +312,7 @@ internal sealed class S57RoundTripComparer
         if (intermediateByFoid.TryGetValue(Foid(feature), out _))
         {
             return RestructuredClasses.Contains(name)
-                ? new(name, "(feature)", "missing", RoundTripClass.ExpectedRestructure, "structural inverse (Phase 2)", null, null)
+                ? new(name, "(feature)", "missing", RoundTripClass.ExpectedRestructure, "structural inverse", null, null)
                 : new(name, "(feature)", "missing", RoundTripClass.ReverseBug, "S-101 carried the feature", null, null);
         }
 
@@ -274,14 +325,14 @@ internal sealed class S57RoundTripComparer
 
         var view = _mapping.BuildAcronymView(feature.Attributes);
         if (name == "M_COVR" && view.GetValueOrDefault("CATCOV")?.Trim() == "2")
-            return new(name, "(feature)", "missing", RoundTripClass.ExpectedLoss, "forward drops CATCOV 2 (#438); Annex C §3.5 re-tiles, Phase 2", null, null);
+            return new(name, "(feature)", "missing", RoundTripClass.ExpectedLoss, "forward drops CATCOV 2 (#438); Annex C §3.5 re-tiles the bounding box", null, null);
 
         var primitive = (int)feature.Primitive switch { 1 => S57GeometryPrimitive.Point, 2 => S57GeometryPrimitive.Curve, 3 => S57GeometryPrimitive.Surface, _ => S57GeometryPrimitive.None };
         if (_mapping.ResolveFeature(objl, view, primitive) is null)
             return new(name, "(feature)", "missing", RoundTripClass.ExpectedLoss, "forward rule drops it (Annex B)", null, null);
 
         return RestructuredClasses.Contains(name)
-            ? new(name, "(feature)", "missing", RoundTripClass.ExpectedRestructure, "structural inverse (Phase 2)", null, null)
+            ? new(name, "(feature)", "missing", RoundTripClass.ExpectedRestructure, "structural inverse", null, null)
             : new(name, "(feature)", "missing", RoundTripClass.Unexplained, "forward emitted no feature", null, null);
     }
 
@@ -301,7 +352,7 @@ internal sealed class S57RoundTripComparer
             var resultName = ClassName((int)result.ObjectCode);
             differences.Add(new(name, "(class)", "class",
                 RestructuredClasses.Contains(name) ? RoundTripClass.ExpectedRestructure : RoundTripClass.Unexplained,
-                RestructuredClasses.Contains(name) ? "class remodelled in S-101 (Phase 2 inverse)" : "class changed", name, resultName));
+                RestructuredClasses.Contains(name) ? "class remodelled in S-101 (no unique inverse)" : "class changed", name, resultName));
             return; // attributes of different classes don't compare
         }
 
@@ -309,6 +360,10 @@ internal sealed class S57RoundTripComparer
         {
             differences.Add(new(name, "(primitive)", "primitive", RoundTripClass.Unexplained, "primitive changed",
                 source.Primitive.ToString(), result.Primitive.ToString()));
+        }
+        else if ((int)source.Primitive == 3)
+        {
+            CompareArea(name, source, result, sourceGeometry, resultGeometry, differences);
         }
         else if (sourceGeometry.Fingerprint(source) != resultGeometry.Fingerprint(result))
         {
@@ -344,6 +399,48 @@ internal sealed class S57RoundTripComparer
         }
     }
 
+    // Compares two areas as polygons: a different outline is a geometry
+    // difference; the same outline with other edges is a topology one (edges
+    // split where new nodes were made).
+    private static void CompareArea(
+        string name, S57FeatureRecord source, S57FeatureRecord result,
+        GeometryIndex sourceGeometry, GeometryIndex resultGeometry, List<RoundTripDifference> differences)
+    {
+        var a = sourceGeometry.Area(source);
+        var b = resultGeometry.Area(result);
+        if (a is null || b is null)
+        {
+            if (a is not null || b is not null)
+                differences.Add(new(name, "(geometry)", "geometry", RoundTripClass.ReverseBug, "area has no closed boundary", null, null));
+            return;
+        }
+
+        double changed;
+        try
+        {
+            changed = a.SymmetricDifference(b).Area;
+        }
+        catch (NetTopologySuite.Geometries.TopologyException)
+        {
+            changed = Math.Abs(a.Area - b.Area);
+        }
+        if (changed > Math.Max(1, a.Area * 1e-6))
+        {
+            var (cls, reason) = name switch
+            {
+                "DEPARE" or "DRGARE" or "LNDARE" or "UNSARE" => (RoundTripClass.ExpectedRestructure, "Annex C §2.5.1.1 (skin of the earth cut)"),
+                "M_COVR" or "M_CSCL" => (RoundTripClass.ExpectedRestructure, "Annex C §3.5 (coverage re-tiled)"),
+                _ => (RoundTripClass.Unexplained, "outline differs"),
+            };
+            differences.Add(new(name, "(geometry)", "geometry", cls, reason,
+                a.Area.ToString("0", CultureInfo.InvariantCulture), b.Area.ToString("0", CultureInfo.InvariantCulture)));
+        }
+        else if (sourceGeometry.Fingerprint(source) != resultGeometry.Fingerprint(result))
+        {
+            differences.Add(new(name, "(edges)", "topology", RoundTripClass.ExpectedRestructure, "same outline, edges split at new nodes", null, null));
+        }
+    }
+
     private RoundTripDifference Explain(
         string name, string acronym, S57FeatureRecord source, S101FeatureRecord? s101, S101Document intermediate,
         bool byPosition, Dictionary<int, string> resultAttributes, string? sourceValue, string? resultValue)
@@ -362,6 +459,15 @@ internal sealed class S57RoundTripComparer
                 return D(RoundTripClass.ExpectedRestructure, "Annex C §2.4.3 (mandatory attribute nulled)");
             if (acronym == "CATCOV")
                 return D(RoundTripClass.ExpectedRestructure, "Annex C §3.5 (CATCOV 1 on converted coverage)");
+            // §29.42: the forward translation derives the uncertainties of a
+            // zone of confidence from its CATZOC (Annex B), which convert back.
+            if (name == "M_QUAL" && acronym is "POSACC" or "SOUACC")
+                return D(RoundTripClass.ExpectedRestructure, "Annex C §29.42 (uncertainty the forward derives from CATZOC)");
+            // A point BRIDGE or DAMCON is a Landmark in S-101, which the
+            // forward translation gives visualProminence 2 when CONVIS is
+            // absent (Annex B §4.8.5); §7.2 converts it back.
+            if (name is "BRIDGE" or "DAMCON" && acronym == "CONVIS" && resultValue == "2")
+                return D(RoundTripClass.ExpectedRestructure, "Annex C §7.2 (Landmark default visual prominence)");
             if (acronym == "INFORM" && resultValue!.EndsWith(" features", StringComparison.Ordinal))
                 return D(RoundTripClass.ExpectedRestructure, "Annex C §2.1.1 / §27.131 (MLTYLT → INFORM)");
             return D(RoundTripClass.Unexplained, "value appeared");
@@ -372,10 +478,9 @@ internal sealed class S57RoundTripComparer
         if (byPosition && name == "LIGHTS")
             return D(RoundTripClass.ExpectedRestructure, "co-located sector lights merged (forward) and split (Annex C §19.3)");
 
-        // The clearances of a BRIDGE travel on its SpanFixed / SpanOpening,
-        // folded back in Phase 2.
+        // The clearances of a BRIDGE travel on its SpanFixed / SpanOpening.
         if (name == "BRIDGE" && BridgeSpanAttributes.Contains(acronym) && resultValue is null)
-            return D(RoundTripClass.ExpectedRestructure, "carried on the bridge span (Phase 2 inverse)");
+            return D(RoundTripClass.ExpectedRestructure, "carried on the bridge span");
 
         // §27.140: openingBridge adds CATBRG 1 or 2 to the categories.
         if (acronym == "CATBRG" && resultValue is not null
@@ -402,6 +507,12 @@ internal sealed class S57RoundTripComparer
             && ResolveForward(source) is { } home && !homes.Any(h => _bindings.Binds(home.S101Code, h)))
             return D(RoundTripClass.ExpectedLoss, $"{home.S101Code} binds no {string.Join('/', homes)} in S-101");
 
+        // A range-system C_AGGR is a RangeSystem in S-101, which binds no
+        // home for some of the collection's attributes.
+        if (resultValue is null && name == "C_AGGR" && Homes.TryGetValue(acronym, out var collectionHomes)
+            && !collectionHomes.Any(h => _bindings.Binds("RangeSystem", h)))
+            return D(RoundTripClass.ExpectedLoss, $"RangeSystem binds no {string.Join('/', collectionHomes)} in S-101");
+
         // S-101 makes dateEnd mandatory in surveyDateRange and both dates
         // in periodicDateRange, so a lone start date has no home.
         if (resultValue is null && acronym is "SURSTA" or "PERSTA" or "PEREND"
@@ -423,6 +534,10 @@ internal sealed class S57RoundTripComparer
             && sourceValue.Contains(',') && sourceValue.Split(',')[0].Trim() == resultValue.Trim())
             return D(RoundTripClass.ExpectedLoss, "Annex C §2.4.1 (Enumerated keeps first value)");
 
+        // Annex C says the S-101 attribute isn't converted on this class.
+        if (resultValue is null && NotConvertedOnClass(source, s101, intermediate, acronym) is { } notConverted)
+            return D(RoundTripClass.ExpectedLoss, $"Annex C §{notConverted} (not converted)");
+
         // Did the S-101 intermediate carry the value?
         var carried = s101 is not null && Carries(intermediate, s101, acronym, sourceValue);
         if (carried && resultValue is null)
@@ -432,6 +547,27 @@ internal sealed class S57RoundTripComparer
             return D(RoundTripClass.ExpectedLoss, "forward rule drops it on this class (Annex B)");
 
         return D(RoundTripClass.Unexplained, resultValue is null ? "not carried to S-101" : "value changed");
+    }
+
+    // The clause under which Annex C leaves the S-101 attribute carrying an
+    // S-57 attribute unconverted on the source object's S-101 class.
+    private string? NotConvertedOnClass(S57FeatureRecord source, S101FeatureRecord? s101, S101Document intermediate, string acronym)
+    {
+        var s101Class = s101 is not null
+            ? intermediate.FeatureTypeCatalogue.GetValueOrDefault(s101.FeatureTypeCode)
+            : ResolveForward(source)?.S101Code;
+        if (s101Class is null) return null;
+        var codes = new List<string>();
+        if (AssembledCarriers.TryGetValue(acronym, out var carrier)) codes.Add(carrier);
+        if (Homes.TryGetValue(acronym, out var homes)) codes.AddRange(homes);
+        if (_mapping.TryGetAttl(acronym, out var attl) && _mapping.AttributeRules.TryGetValue(attl, out var rule) && rule.DefaultS101Code is { } code)
+            codes.Add(code);
+        if (acronym == "SCAMIN") codes.Add("scaleMinimum");
+        foreach (var c in codes)
+        {
+            if (S101ToS57Rules.NotConvertedClause(s101Class, c) is { } clause) return clause;
+        }
+        return null;
     }
 
     // Where the forward translation puts each S-57 attribute it assembles.
@@ -602,6 +738,30 @@ internal sealed class S57RoundTripComparer
         {
             foreach (var v in document.VectorRecords)
                 _vectors[(v.RecordName.RecordNameCode, v.RecordName.RecordId)] = v;
+        }
+
+        private S57EdgeGraph? _graph;
+
+        // The polygon an area object's edges bound.
+        public NetTopologySuite.Geometries.Geometry? Area(S57FeatureRecord feature)
+        {
+            if (_graph is null)
+            {
+                uint next = 1;
+                _graph = new S57EdgeGraph(() => next++);
+                foreach (var v in _vectors.Values.Where(v => v.RecordName.RecordNameCode == 120 && v.Coordinates2D.Count > 0))
+                    _graph.AddNode((uint)v.RecordName.RecordId, v.Coordinates2D[0].X, v.Coordinates2D[0].Y);
+                foreach (var v in _vectors.Values.Where(v => v.RecordName.RecordNameCode == 130))
+                {
+                    if (!v.VectorPointers.Any(p => (int)p.Topology == 1) || !v.VectorPointers.Any(p => (int)p.Topology == 2)) continue;
+                    var begin = v.VectorPointers.First(p => (int)p.Topology == 1);
+                    var end = v.VectorPointers.First(p => (int)p.Topology == 2);
+                    if (!_graph.Nodes.ContainsKey((uint)begin.Name.RecordId) || !_graph.Nodes.ContainsKey((uint)end.Name.RecordId)) continue;
+                    _graph.Edges[(uint)v.RecordName.RecordId] = new S57EdgeGraph.Edge(
+                        (uint)begin.Name.RecordId, (uint)end.Name.RecordId, v.Coordinates2D.Select(c => (c.X, c.Y)).ToArray());
+                }
+            }
+            return _graph.Area(feature.SpatialPointers);
         }
 
         public string Fingerprint(S57FeatureRecord feature)

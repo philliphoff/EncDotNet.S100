@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using EncDotNet.S57;
 
 namespace EncDotNet.S100.Datasets.S57;
 
@@ -20,7 +21,79 @@ public sealed record S101ToS57FeatureRule(
     ushort Objl,
     string S57Acronym,
     string Clause,
-    IReadOnlyDictionary<string, string> FixedAttributes);
+    IReadOnlyDictionary<string, string> FixedAttributes)
+{
+    /// <summary>
+    /// Conditions under which the feature converts to another S-57 class
+    /// instead, tried in order; the first that matches wins (e.g. a
+    /// <c>Landmark</c> with <c>categoryOfLandmark</c> 26 becomes a
+    /// <c>BRIDGE</c>, §7.2).
+    /// </summary>
+    public IReadOnlyList<S101ToS57FeatureRedirect> Redirects { get; init; } = [];
+
+    /// <summary>
+    /// Further S-57 objects created at the feature's position when their
+    /// condition matches (e.g. a <c>PILPNT</c> for a landmark standing in the
+    /// water, §30). They take the rule's fixed attributes and the feature's
+    /// <c>SCAMIN</c>.
+    /// </summary>
+    public IReadOnlyList<S101ToS57FeatureRedirect> Companions { get; init; } = [];
+
+    /// <summary>How the S-57 object's geometric primitive differs from the S-101 feature's (Annex C Table 2-1).</summary>
+    public S101ToS57PrimitiveChange PrimitiveChange { get; init; }
+}
+
+/// <summary>
+/// How <see cref="S101ToS57Translator"/> changes a feature's geometric
+/// primitive where S-57 doesn't allow the S-101 one (Annex C Table 2-1).
+/// </summary>
+public enum S101ToS57PrimitiveChange
+{
+    /// <summary>The primitive is kept.</summary>
+    None,
+
+    /// <summary>
+    /// A curve becomes a narrow area along it, 0.3 mm wide at the compilation
+    /// scale (e.g. a curve <c>CollisionRegulationsLimit</c> → <c>CTNARE</c>, §16.27).
+    /// </summary>
+    CurveToArea,
+
+    /// <summary>A surface becomes a point at its centre (e.g. <c>CGUSTA</c>, §22.3).</summary>
+    SurfaceToPoint,
+
+    /// <summary>A curve isn't converted (e.g. a curve <c>LandRegion</c>, §5.11).</summary>
+    DropCurve,
+}
+
+/// <summary>
+/// A condition under which an S-101 feature converts to another S-57 object
+/// class (see <see cref="S101ToS57FeatureRule.Redirects"/>), or creates a
+/// further object (see <see cref="S101ToS57FeatureRule.Companions"/>).
+/// </summary>
+/// <param name="Target">The rule to apply when the condition matches.</param>
+/// <param name="Attribute">
+/// The top-level S-101 simple attribute tested, or <c>null</c> to test the
+/// primitive only.
+/// </param>
+/// <param name="Values">
+/// The attribute values that match; empty to match a Boolean attribute that is
+/// true.
+/// </param>
+/// <param name="Primitives">The S-101 primitives that match; empty for any.</param>
+public sealed record S101ToS57FeatureRedirect(
+    S101ToS57FeatureRule Target,
+    string? Attribute,
+    IReadOnlyList<string> Values,
+    IReadOnlyList<S57GeometricPrimitive> Primitives)
+{
+    /// <summary>
+    /// Whether the tested attribute is used up by the redirect rather than
+    /// converted as well (true for most: <c>categoryOfLandmark</c> 22 chooses
+    /// <c>CTRPNT</c> and has no <c>CATLMK</c> there; false for a <c>Lake</c>
+    /// whose <c>status</c> 5 makes it a <c>RIVERS</c> with <c>STATUS</c> 5).
+    /// </summary>
+    public bool ConsumesAttribute { get; init; } = true;
+}
 
 /// <summary>
 /// How an S-101 simple attribute converts to an S-57 attribute in
@@ -39,7 +112,22 @@ public sealed record S101ToS57AttributeRule(
     ushort Attl,
     string S57Acronym,
     string Clause,
-    IReadOnlyDictionary<string, string?> ValueRemap);
+    IReadOnlyDictionary<string, string?> ValueRemap)
+{
+    /// <summary>
+    /// S-101 values that S-57 lacks and that fold into <c>INFORM</c> as the
+    /// given text instead of converting (Annex C Table A-2), e.g.
+    /// <c>categoryOfHulk</c> 6 → "Casino".
+    /// </summary>
+    public IReadOnlyDictionary<string, string> InformText { get; init; } = FrozenDictionary<string, string>.Empty;
+
+    /// <summary>
+    /// When set, the whole value folds into <c>INFORM</c> as this composite
+    /// format with the value as <c>{0}</c> (e.g. "Maximum draught permitted =
+    /// {0} metres", §27.125), and <see cref="Attl"/> is not written.
+    /// </summary>
+    public string? InformFormat { get; init; }
+}
 
 /// <summary>
 /// The rule tables for <see cref="S101ToS57Translator"/>: S-101 feature
@@ -61,7 +149,7 @@ public sealed record S101ToS57AttributeRule(
 /// <see cref="WithFeatureRule"/> and <see cref="WithAttributeRule"/>.
 /// </para>
 /// </remarks>
-public sealed class S101ToS57Rules
+public sealed partial class S101ToS57Rules
 {
     private readonly FrozenDictionary<string, S101ToS57FeatureRule> _features;
     private readonly FrozenDictionary<string, S101ToS57AttributeRule> _attributes;
@@ -127,6 +215,8 @@ public sealed class S101ToS57Rules
     }
 
     private static IReadOnlyDictionary<string, string> NoFixedAttributes => FrozenDictionary<string, string>.Empty;
+
+    internal static IReadOnlyDictionary<string, string> NoFixedAttributesValue => NoFixedAttributes;
     private static IReadOnlyDictionary<string, string?> NoRemap => FrozenDictionary<string, string?>.Empty;
 
     /// <summary>
@@ -217,6 +307,8 @@ public sealed class S101ToS57Rules
         // categoryOfOpeningBridge keeps the S-57 CATBRG codes (forward § 4.8.10).
         AddAttribute(attributes, "categoryOfOpeningBridge", 9, "CATBRG");
 
+        AddAnnexC(forward, features, attributes, featureAttributes);
+
         return new S101ToS57Rules(features, attributes, featureAttributes);
     }
 
@@ -262,6 +354,20 @@ public sealed class S101ToS57Rules
         }
         return inverse;
     }
+
+    /// <summary>
+    /// The Annex C clause under which an S-101 attribute isn't converted on a
+    /// feature class: one the class's clause names, one Annex C never
+    /// converts, or (for those it doesn't name) a §2.6 enhancement; otherwise
+    /// <c>null</c>. Attributes a value remap drops are not included.
+    /// </summary>
+    /// <param name="s101FeatureCode">The S-101 feature or information type code.</param>
+    /// <param name="s101AttributeCode">The S-101 attribute code.</param>
+    public static string? NotConvertedClause(string s101FeatureCode, string s101AttributeCode)
+        => S101ToS57AnnexCClauses.NotConvertedOnClass.GetValueOrDefault((s101FeatureCode, s101AttributeCode))
+            ?? NotConvertedOnClass.GetValueOrDefault((s101FeatureCode, s101AttributeCode))
+            ?? S101ToS57AnnexCClauses.NotConverted.GetValueOrDefault(s101AttributeCode)
+            ?? NotConverted.GetValueOrDefault(s101AttributeCode);
 
     internal static string FeatureClause(string s101Code)
         => S101ToS57AnnexCClauses.FeatureTypes.GetValueOrDefault(s101Code, "2.1");
@@ -333,7 +439,8 @@ public sealed class S101ToS57Rules
     /// <summary>
     /// S-57 attributes that an ENC must populate on an object class (S-57
     /// Appendix B.1 Annex A, and S-58), written empty when the S-101 source has
-    /// no value (§2.4.1, §2.4.3). Limited to the classes Phase 1 converts.
+    /// no value (§2.4.1, §2.4.3), for the classes whose Annex C clause names
+    /// a mandatory attribute.
     /// </summary>
     internal static readonly FrozenDictionary<string, string[]> S57MandatoryAttributes =
         new Dictionary<string, string[]>(StringComparer.Ordinal)
@@ -343,6 +450,13 @@ public sealed class S101ToS57Rules
             ["DEPCNT"] = ["VALDCO"],
             ["M_COVR"] = ["CATCOV"],
             ["M_QUAL"] = ["CATZOC"],
+            ["M_CSCL"] = ["CSCALE"],
+            ["NEWOBJ"] = ["CLSDEF", "CLSNAM", "SYMINS"],
+            ["CTRPNT"] = ["CATCTR"],
+            ["BCNSPP"] = ["BCNSHP", "CATSPM", "COLOUR"],
+            ["CTNARE"] = ["INFORM"],
+            ["LNDMRK"] = ["CATLMK", "CONVIS"],
+            ["MORFAC"] = ["CATMOR"],
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>
@@ -398,5 +512,41 @@ public sealed class S101ToS57Rules
             ["DRVAL1"] = 87,
             ["DRVAL2"] = 88,
             ["VALDCO"] = 174,
+            ["CLSDEF"] = 190,
+            ["CLSNAM"] = 191,
+            ["SYMINS"] = 192,
+            ["JRSDTN"] = 103,
+            ["CATCTR"] = 16,
+            ["CATRUN"] = 58,
+            ["CATWED"] = 70,
+            ["CATSCF"] = 65,
+            ["BCNSHP"] = 2,
+            ["CATSPM"] = 66,
+            ["CONRAD"] = 82,
+            ["CATMOR"] = 40,
+            ["CATOBS"] = 42,
+            ["WATLEV"] = 187,
+            ["QUASOU"] = 125,
+            ["CATLIT"] = 37,
+            ["CATLMK"] = 35,
+            ["CONVIS"] = 83,
+            ["CATHAF"] = 30,
+            ["CATVEG"] = 68,
+            ["CSCALE"] = 80,
+            ["CATACH"] = 8,
+            ["STATUS"] = 149,
+            ["POSACC"] = 401,
+            ["SOUACC"] = 144,
+            ["QUAPOS"] = 402,
+            ["CALSGN"] = 6,
+            ["COMCHA"] = 77,
+            ["SIGFRQ"] = 139,
+            ["TS_TSP"] = 159,
+            ["PILDST"] = 121,
+            ["NPLDST"] = 302,
+            ["HORACC"] = 97,
+            ["VALSOU"] = 179,
+            ["SCAMIN"] = 133,
+            ["NATION"] = 111,
         }.ToFrozenDictionary(StringComparer.Ordinal);
 }
