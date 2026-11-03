@@ -715,11 +715,23 @@ public sealed class S57ToS101Translator
     private const string S101AttrOpeningBridge = "openingBridge";
     private const string S101AttrCategoryOfOpeningBridge = "categoryOfOpeningBridge";
 
-    // ISO 639-3 language code used for the English-language INFORM/TXTDSC
-    // bucket. NINFOM/NTXTDS are emitted with an empty language string,
-    // since S-57 carries no language tag and Data Producers are expected
-    // to fill it in manually (Conversion Guidance §2.3).
+    // ISO 639-2 language code used for the English-language INFORM/TXTDSC
+    // and OBJNAM bucket.
     private const string LanguageEng = "eng";
+
+    // ISO 639-2 "undetermined", the language of the national-language
+    // NINFOM/NTXTDS and NOBJNM. S-57 doesn't say which language they're in,
+    // and an empty language reads as English (S-65 Annex C §27.177,
+    // §2.4.12.1), which would merge them into INFORM/TXTDSC/OBJNAM on the
+    // way back (#1221). Data producers can set the real one after conversion.
+    private const string LanguageNational = "und";
+
+    // S-101 DCEG 2.5.8 nameUsage: OBJNAM is the default name for chart
+    // display, NOBJNM the alternate one (S-65 Annex C §2.5.8 / §27.132 read
+    // them back the same way). The S-101 portrayal shows only names with a
+    // nameUsage.
+    private const string NameUsageDefault = "1";
+    private const string NameUsageAlternate = "2";
 
     private readonly S57S101Mapping _mapping;
     private readonly S101AllowedEnumValues? _allowedEnumValues;
@@ -903,6 +915,16 @@ public sealed class S57ToS101Translator
     private sealed class TranslationContext
     {
         private readonly EncDotNet.S57.S57Document _s57;
+
+        // The feature records, each with its national attributes (the NATF
+        // field: NINFOM, NOBJNM, NPLDST, NTXTDS) read along with its ATTF
+        // ones, so the rest of the translation sees them like any other.
+        private readonly List<EncDotNet.S57.S57FeatureRecord> _featureRecords;
+
+        private static EncDotNet.S57.S57FeatureRecord WithNationalAttributes(EncDotNet.S57.S57FeatureRecord feature)
+            => feature.NationalAttributes is { Count: > 0 } national
+                ? feature with { Attributes = [.. feature.Attributes, .. national] }
+                : feature;
         private readonly S57S101Mapping _mapping;
         private readonly S101AllowedEnumValues? _allowedEnumValues;
         private readonly S101FeatureAttributeBindings _featureBindings;
@@ -979,6 +1001,7 @@ public sealed class S57ToS101Translator
             bool inlineTextualInformation)
         {
             _s57 = s57;
+            _featureRecords = s57.FeatureRecords.Select(WithNationalAttributes).ToList();
             _mapping = mapping;
             _allowedEnumValues = allowedEnumValues;
             _featureBindings = featureBindings;
@@ -1074,9 +1097,7 @@ public sealed class S57ToS101Translator
             // absorbed members' sectors into the surviving LightSectored feature
             // as additional `sectorCharacteristics` instances (S-101 FC makes
             // `sectorCharacteristics` [1..*]). See BuildSectorMergeGroups.
-            var featureRecords =
-                _s57.FeatureRecords as IReadOnlyList<EncDotNet.S57.S57FeatureRecord>
-                ?? _s57.FeatureRecords.ToList();
+            var featureRecords = _featureRecords;
             var (absorbed, extraSectorsByIndex) = BuildSectorMergeGroups(featureRecords);
 
             // S-57 TOPMAR objects are folded into the `topmark` complex attribute
@@ -1344,7 +1365,7 @@ public sealed class S57ToS101Translator
         private S57HazardDepths BuildHazardDepths()
         {
             var areas = new List<(double, List<List<(double Lat, double Lon)>>)>();
-            foreach (var feat in _s57.FeatureRecords)
+            foreach (var feat in _featureRecords)
             {
                 var primitive = MapPrimitive(feat.Primitive);
                 if (primitive != S57GeometryPrimitive.Surface) continue;
@@ -2601,7 +2622,7 @@ public sealed class S57ToS101Translator
             // Index every S-57 feature by LNAM so C_AGGR members (referenced by
             // long name, not RCNM/RCID) can be resolved to their object class.
             var featureByLnam = new Dictionary<S57LongName, EncDotNet.S57.S57FeatureRecord>();
-            foreach (var r in _s57.FeatureRecords)
+            foreach (var r in _featureRecords)
                 featureByLnam[Lnam(r.RecordName)] = r;
 
             var pendingByLnam = new Dictionary<S57LongName, EncDotNet.S57.S57FeatureRecord>();
@@ -3474,9 +3495,9 @@ public sealed class S57ToS101Translator
                 if (txtdscFile is not null)
                     AppendInformationInstance(builder, text: null, fileReference: txtdscFile, language: LanguageEng);
                 if (ninfomText is not null)
-                    AppendInformationInstance(builder, text: ninfomText, fileReference: null, language: string.Empty);
+                    AppendInformationInstance(builder, text: ninfomText, fileReference: null, language: LanguageNational);
                 if (ntxtdsFile is not null)
-                    AppendInformationInstance(builder, text: null, fileReference: ntxtdsFile, language: string.Empty);
+                    AppendInformationInstance(builder, text: null, fileReference: ntxtdsFile, language: LanguageNational);
             }
             else
             {
@@ -3487,16 +3508,15 @@ public sealed class S57ToS101Translator
             }
 
             // Append `featureName` complex-attribute instances only on feature
-            // classes that bind the complex. OBJNAM carries the English name;
-            // NOBJNM the national-language name (emitted with an empty language
-            // string, as S-57 carries no language tag — mirrors the
-            // INFORM/NINFOM handling above).
+            // classes that bind the complex. OBJNAM carries the English, default
+            // name; NOBJNM the national-language, alternate one (its language
+            // is undetermined, as for NINFOM above).
             if (bindsFeatureName)
             {
                 if (objnamText is not null)
-                    AppendFeatureNameInstance(builder, name: objnamText, language: LanguageEng);
+                    AppendFeatureNameInstance(builder, name: objnamText, language: LanguageEng, NameUsageIfAllowed(NameUsageDefault));
                 if (nobjnmText is not null)
-                    AppendFeatureNameInstance(builder, name: nobjnmText, language: string.Empty);
+                    AppendFeatureNameInstance(builder, name: nobjnmText, language: LanguageNational, NameUsageIfAllowed(NameUsageAlternate));
             }
 
             // Append the `rhythmOfLight` complex-attribute instance. The FC
@@ -3801,7 +3821,7 @@ public sealed class S57ToS101Translator
             if (hasEnglish)
                 AppendInformationInstance(infoAttributes, text: informText, fileReference: txtdscFile, language: LanguageEng);
             if (hasNational)
-                AppendInformationInstance(infoAttributes, text: ninfomText, fileReference: ntxtdsFile, language: string.Empty);
+                AppendInformationInstance(infoAttributes, text: ninfomText, fileReference: ntxtdsFile, language: LanguageNational);
 
             var infoId = _nextInformationId++;
             InformationTypes[infoId] = new S101InformationRecord
@@ -3818,6 +3838,9 @@ public sealed class S57ToS101Translator
                 infoId,
                 GetOrAssignRoleCode(S101RoleTheInformation));
         }
+        private string? NameUsageIfAllowed(string nameUsage)
+            => _allowedEnumValues?.IsAllowed(S101AttrNameUsage, nameUsage) != false ? nameUsage : null;
+
         private void AppendFeatureNameInstance(
             List<S101Attribute> builder,
             string name,
