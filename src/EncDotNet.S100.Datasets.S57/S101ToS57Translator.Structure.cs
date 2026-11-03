@@ -25,7 +25,7 @@ public sealed partial class S101ToS57Translator
         public List<S57FeaturePointer> FeaturePointers { get; } = [];
         public bool Removed { get; set; }
 
-        public S57LongName LongName => new((ushort)Foid.Agency, (uint)Foid.Fidn, (ushort)Foid.Fids);
+        public S57LongName LongName => new((ushort)Foid.Agency, unchecked((uint)Foid.Fidn), (ushort)Foid.Fids);
     }
 
     // One S-101 feature association, read in the direction it is encoded.
@@ -195,7 +195,7 @@ public sealed partial class S101ToS57Translator
         // (the forward translation of a single BRIDGE) needs none.
         private void EmitBridgeAggregation(S101FeatureRecord bridge)
         {
-            var bridgeFoid = (Agency: (int)bridge.ProducingAgency, Fidn: (int)bridge.FeatureIdentificationNumber, Fids: (int)bridge.FeatureIdentificationSubdivision);
+            var bridgeFoid = (Agency: (int)bridge.ProducingAgency, Fidn: unchecked((int)bridge.FeatureIdentificationNumber), Fids: (int)bridge.FeatureIdentificationSubdivision);
             var components = Linked(bridge.RecordId, BridgeAggregation).Distinct().ToList();
             if (IsOnlySpan(bridge) && !Linked(bridge.RecordId, StructureEquipment).Any()) return;
 

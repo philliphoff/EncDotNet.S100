@@ -34,20 +34,6 @@ public sealed partial class S101ToS57Translator
     {
         private readonly int _compilationScale;
 
-        // §3.5: the dataset's compilation scale (DSPM CSCL) is the largest
-        // optimum display scale of its Data Coverage features.
-        private int CompilationScale()
-        {
-            int? best = null;
-            foreach (var feature in _s101.Features)
-            {
-                if (ClassOf(feature) != "DataCoverage") continue;
-                if (OptimumDisplayScale(feature) is { } scale && (best is null || scale < best))
-                    best = scale;
-            }
-            return best ?? 0;
-        }
-
         private int? OptimumDisplayScale(S101FeatureRecord feature)
         {
             var value = BuildTree(feature.Attributes, _s101.AttributeTypeCatalogue, _owner._bindings)
@@ -82,6 +68,8 @@ public sealed partial class S101ToS57Translator
                 _connectedNodes[id] = new S57VectorRecord
                 {
                     RecordName = new S57RecordName { RecordNameCode = S57RcnmConnectedNode, RecordId = (int)id },
+                    RecordVersion = 1,
+                    UpdateInstruction = S57UpdateInstruction.Insert,
                     VectorPointers = [],
                     Coordinates2D = [new S57Coordinate2D { X = x, Y = y }],
                     Soundings = [],
@@ -93,6 +81,8 @@ public sealed partial class S101ToS57Translator
                 _edges[id] = new S57VectorRecord
                 {
                     RecordName = new S57RecordName { RecordNameCode = S57RcnmEdge, RecordId = (int)id },
+                    RecordVersion = 1,
+                    UpdateInstruction = S57UpdateInstruction.Insert,
                     VectorPointers =
                     [
                         NodePointer(edge.Begin, S57TopologyIndicator.Beginning),
@@ -129,6 +119,8 @@ public sealed partial class S101ToS57Translator
             _isolatedNodes[id] = new S57VectorRecord
             {
                 RecordName = new S57RecordName { RecordNameCode = S57RcnmIsolatedNode, RecordId = (int)id },
+                RecordVersion = 1,
+                UpdateInstruction = S57UpdateInstruction.Insert,
                 VectorPointers = [],
                 Coordinates2D = [new S57Coordinate2D { X = (int)Math.Round(centre.X), Y = (int)Math.Round(centre.Y) }],
                 Soundings = [],
@@ -151,7 +143,7 @@ public sealed partial class S101ToS57Translator
                 .ToList();
             if (lines.Count == 0) return (S57GeometricPrimitive.Line, pointers);
 
-            var comf = (double)(_s101.StructureInfo.CoordinateMultiplicationFactorY == 0 ? 10_000_000 : _s101.StructureInfo.CoordinateMultiplicationFactorY);
+            var comf = (double)_comf;
             var latitude = lines.SelectMany(l => l).Average(p => p.Y) / comf;
             var cos = Math.Cos(latitude * Math.PI / 180);
             var scale = _compilationScale > 0 ? _compilationScale : DefaultCompilationScale;

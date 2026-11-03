@@ -45,6 +45,8 @@ public sealed class S101ToS57TranslationDiagnostics
     private readonly Dictionary<S101FeatureDrop, int> _restructured = new();
     private readonly Dictionary<string, int> _primitivesChanged = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _skinOfTheEarthCuts = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _movedToNational = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _unencodableText = new(StringComparer.Ordinal);
 
     /// <summary>Number of S-101 feature records read.</summary>
     public int FeaturesRead { get; internal set; }
@@ -107,6 +109,20 @@ public sealed class S101ToS57TranslationDiagnostics
     public IReadOnlyDictionary<S101FeatureDrop, int> Restructured => _restructured;
 
     /// <summary>
+    /// ATTF values outside ISO 8859-1 moved to their NATF counterpart
+    /// (<c>OBJNAM</c> to <c>NOBJNM</c>, <c>INFORM</c> to <c>NINFOM</c>,
+    /// <c>TXTDSC</c> to <c>NTXTDS</c>), by the ATTF acronym (S-57 Part 3 §2.4).
+    /// </summary>
+    public IReadOnlyDictionary<string, int> MovedToNational => _movedToNational;
+
+    /// <summary>
+    /// Values dropped because no S-57 lexical level can encode them: ATTF
+    /// text outside ISO 8859-1 with no free NATF counterpart, or text outside
+    /// the Basic Multilingual Plane, by S-57 acronym.
+    /// </summary>
+    public IReadOnlyDictionary<string, int> UnencodableText => _unencodableText;
+
+    /// <summary>
     /// Features whose geometric primitive changed because S-57 doesn't allow
     /// the S-101 one (Annex C Table 2-1), by S-101 class.
     /// </summary>
@@ -151,6 +167,10 @@ public sealed class S101ToS57TranslationDiagnostics
     internal void RecordSynthesised(string s57Acronym) => Increment(_featuresSynthesised, s57Acronym);
 
     internal void RecordUnmappedInformationType(string s101Code) => Increment(_unmappedInformationTypes, s101Code);
+
+    internal void RecordMovedToNational(string s57Acronym) => Increment(_movedToNational, s57Acronym);
+
+    internal void RecordUnencodableText(string s57Acronym) => Increment(_unencodableText, s57Acronym);
 
     private static void Increment<TKey>(Dictionary<TKey, int> map, TKey key) where TKey : notnull
         => map[key] = map.TryGetValue(key, out var n) ? n + 1 : 1;

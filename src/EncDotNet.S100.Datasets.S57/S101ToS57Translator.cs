@@ -16,13 +16,15 @@ namespace EncDotNet.S100.Datasets.S57;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The output uses the <c>EncDotNet.S57</c> record types, so a writer for
-/// those types can encode it. Points become isolated nodes and S-101 curves
-/// shared edges between connected nodes, which keeps S-57 chain-node topology.
-/// The skin of the earth is cut around floating docks, hulks and pontoons
-/// (§2.5.1.1), and the <c>M_COVR</c> objects tile the dataset's bounding box,
-/// with an <c>M_CSCL</c> where a coverage's scale differs (§3.5); both split
-/// shared edges for every object that uses them.
+/// The output uses the <c>EncDotNet.S57</c> record types and is a base cell
+/// <see cref="S57DocumentWriter"/> can encode: every record is an insert at
+/// version 1, the DSID/DSPM describe a new ENC cell, and ATTF/NATF text sits
+/// at lexical levels that encode it. Points become isolated nodes and S-101
+/// curves shared edges between connected nodes, which keeps S-57 chain-node
+/// topology. The skin of the earth is cut around floating docks, hulks and
+/// pontoons (§2.5.1.1), and the <c>M_COVR</c> objects tile the dataset's
+/// bounding box, with an <c>M_CSCL</c> where a coverage's scale differs
+/// (§3.5); both split shared edges for every object that uses them.
 /// <see cref="S57TopologyCheck"/> checks the result.
 /// </para>
 /// <para>
@@ -234,6 +236,9 @@ public sealed partial class S101ToS57Translator
         private readonly HashSet<(int Agency, int Fidn, int Fids)> _usedFoids = [];
         private readonly uint _soundingNodeBase;
         private uint _nextVectorId;
+        private readonly uint _comf;
+        private readonly uint _somf;
+        private readonly uint _cmfy;
 
         public Context(S101ToS57Translator owner, S101Document s101, S101ToS57TranslationDiagnostics? diagnostics)
         {
@@ -243,8 +248,14 @@ public sealed partial class S101ToS57Translator
             _rules = owner._rules;
             _options = owner._options;
             _soundingNodeBase = s101.Points.Count == 0 ? 0 : s101.Points.Keys.Max();
+            // S-57 has one COMF for both axes (DSPM, Part 3 §7.3.2.1), so it
+            // takes the S-101 CMFX and Y is rescaled when CMFY differs.
+            var structure = s101.StructureInfo;
+            _comf = structure.CoordinateMultiplicationFactorX == 0 ? 10_000_000u : structure.CoordinateMultiplicationFactorX;
+            _cmfy = structure.CoordinateMultiplicationFactorY == 0 ? _comf : structure.CoordinateMultiplicationFactorY;
+            _somf = structure.CoordinateMultiplicationFactorZ == 0 ? 10u : structure.CoordinateMultiplicationFactorZ;
             foreach (var f in s101.Features)
-                _usedFoids.Add((f.ProducingAgency, (int)f.FeatureIdentificationNumber, f.FeatureIdentificationSubdivision));
+                _usedFoids.Add((f.ProducingAgency, unchecked((int)f.FeatureIdentificationNumber), f.FeatureIdentificationSubdivision));
 
             // Records the translator creates (cut or buffered areas, surface
             // centres, coverage tiles) take ids past every S-101 one, so they
@@ -252,7 +263,7 @@ public sealed partial class S101ToS57Translator
             uint max = _soundingNodeBase + (s101.MultiPoints.Count == 0 ? 0 : s101.MultiPoints.Keys.Max());
             if (s101.CurveSegments.Count > 0) max = Math.Max(max, s101.CurveSegments.Keys.Max());
             _nextVectorId = max + 1;
-            _compilationScale = CompilationScale();
+            _compilationScale = CompilationScale() ?? 0;
         }
 
         public S57Document Run()
@@ -271,9 +282,6 @@ public sealed partial class S101ToS57Translator
             EmitStructure();
             ApplyTopology();
 
-            var structure = _s101.StructureInfo;
-            var comf = structure.CoordinateMultiplicationFactorX == 0 ? 10_000_000u : structure.CoordinateMultiplicationFactorX;
-            var somf = structure.CoordinateMultiplicationFactorZ == 0 ? 10u : structure.CoordinateMultiplicationFactorZ;
             var id = _s101.Identification;
 
             var vectors = new List<S57VectorRecord>();
@@ -282,25 +290,107 @@ public sealed partial class S101ToS57Translator
             vectors.AddRange(_connectedNodes.OrderBy(kv => kv.Key).Select(kv => kv.Value));
             vectors.AddRange(_edges.OrderBy(kv => kv.Key).Select(kv => kv.Value));
 
+            // S-57 Part 3 §2.4: ATTF and NATF are written at the lowest lexical
+            // level that encodes their text.
+            var (features, attfLevel, natfLevel) = S101ToS57LexicalLevels.Assign(FinishObjects(), _options.InformSeparator, _diagnostics);
+            var issueDate = IssueDate(id.DatasetReferenceDate);
+            int? compilationScale = _compilationScale == 0 ? null : _compilationScale;
+
+            // A new ENC base cell (S-57 Part 3 §7.3.1, Appendix B.1 §5): the
+            // S-101 identification where it has an S-57 counterpart, the ENC
+            // product specification's fixed values otherwise.
             return new S57Document
             {
                 DataSetIdentification = new S57DataSetIdentification
                 {
+                    RecordName = new S57RecordName { RecordNameCode = S57RecordNameCodes.DataSetGeneralInfo, RecordId = 1 },
+                    ExchangePurpose = 1, // N: data set is new
+                    IntendedUsage = IntendedUsage(id.DatasetName, compilationScale),
                     DataSetName = id.DatasetName,
                     EditionNumber = id.EditionNumber?.ToString(CultureInfo.InvariantCulture) ?? id.DatasetEdition,
                     UpdateNumber = id.UpdateNumber.ToString(CultureInfo.InvariantCulture),
-                    IssueDate = RemoveDashes(id.DatasetReferenceDate),
+                    UpdateApplicationDate = issueDate,
+                    IssueDate = issueDate,
+                    S57EditionNumber = "03.1",
+                    ProductSpecification = 1, // ENC
+                    ProductSpecificationEdition = "2.0",
+                    ApplicationProfile = 1, // EN: ENC new
+                    ProducingAgency = ProducingAgency(),
+                    DataStructure = 2, // chain-node
+                    AttfLexicalLevel = attfLevel,
+                    NatfLexicalLevel = natfLevel,
                 },
                 DataSetParameters = new S57DataSetParameters
                 {
-                    CompilationScale = _compilationScale,
-                    CoordinateMultiplicationFactor = (int)comf,
-                    SoundingMultiplicationFactor = (int)somf,
+                    RecordName = new S57RecordName { RecordNameCode = S57RecordNameCodes.DataSetGeoReference, RecordId = 1 },
+                    HorizontalDatum = 2, // WGS 84, the only S-101 horizontal CRS
+                    CoordinateMultiplicationFactor = (int)_comf,
+                    SoundingMultiplicationFactor = (int)_somf,
                     SoundingDatum = soundingDatum ?? 0,
                     VerticalDatum = verticalDatum ?? 0,
+                    CompilationScale = compilationScale ?? 0,
+                    DepthUnits = 1, // metres
+                    HeightUnits = 1, // metres
+                    PositionalUnits = 1, // metres
+                    CoordinateUnits = 1, // latitude/longitude
                 },
                 VectorRecords = vectors,
-                FeatureRecords = FinishObjects(),
+                FeatureRecords = features,
+            };
+        }
+
+        // DSID ISDT and UADT are YYYYMMDD; S-101 may write the reference date
+        // with dashes.
+        private static string IssueDate(string date) => date.Replace("-", string.Empty, StringComparison.Ordinal);
+
+        // The cell's producing agency: the commonest feature agency, as S-101
+        // has no dataset-level AGEN.
+        private int ProducingAgency()
+            => _s101.Features
+                .Where(f => f.ProducingAgency != 0)
+                .GroupBy(f => (int)f.ProducingAgency)
+                .OrderByDescending(g => g.Count())
+                .ThenBy(g => g.Key)
+                .Select(g => g.Key)
+                .FirstOrDefault();
+
+        // §3.5: CSCL is the largest scale (smallest denominator) among the
+        // S-101 DataCoverage optimum display scales, or, where none has one,
+        // among their maximum display scales.
+        private int? CompilationScale()
+        {
+            int? optimum = null, maximum = null;
+            foreach (var feature in _s101.Features)
+            {
+                if (ClassOf(feature) != "DataCoverage") continue;
+                var tree = BuildTree(feature.Attributes, _s101.AttributeTypeCatalogue, _owner._bindings);
+                optimum = Smallest(optimum, tree.Find(n => n.Code == "optimumDisplayScale")?.Value);
+                maximum = Smallest(maximum, tree.Find(n => n.Code == "maximumDisplayScale")?.Value);
+            }
+            return optimum ?? maximum;
+
+            static int? Smallest(int? current, string? text)
+                => int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var scale) && scale > 0
+                    ? current is { } c ? Math.Min(c, scale) : scale
+                    : current;
+        }
+
+        // INTU (navigational purpose 1–6): the third character of an S-57
+        // style cell name (S-57 Appendix B.1 §5.6), else the band the
+        // compilation scale falls in.
+        private static int IntendedUsage(string name, int? compilationScale)
+        {
+            if (name.Length >= 8 && name[2] is >= '1' and <= '6' && char.IsAsciiLetterUpper(name[0]))
+                return name[2] - '0';
+            return compilationScale switch
+            {
+                null => 0,
+                > 1_500_000 => 1,
+                > 350_000 => 2,
+                > 90_000 => 3,
+                > 22_000 => 4,
+                > 4_000 => 5,
+                _ => 6,
             };
         }
 
@@ -430,11 +520,12 @@ public sealed partial class S101ToS57Translator
             // keeping the feature's identity.
             var lightSectors = SplitSectors(sectors);
 
-            var foid = (Agency: (int)feature.ProducingAgency, Fidn: (int)feature.FeatureIdentificationNumber, Fids: (int)feature.FeatureIdentificationSubdivision);
+            // FIDN is a b14 (unsigned) that the S-57 model holds as an int.
+            var foid = (Agency: (int)feature.ProducingAgency, Fidn: unchecked((int)feature.FeatureIdentificationNumber), Fids: (int)feature.FeatureIdentificationSubdivision);
             // §2.5.6: the one span of a bridge is the bridge, so its BRIDGE
             // keeps the Bridge's identity.
             if (bridge is not null && IsOnlySpan(bridge))
-                foid = (bridge.ProducingAgency, (int)bridge.FeatureIdentificationNumber, bridge.FeatureIdentificationSubdivision);
+                foid = (bridge.ProducingAgency, unchecked((int)bridge.FeatureIdentificationNumber), bridge.FeatureIdentificationSubdivision);
 
             // An aggregation that is also a surface yields the area object as
             // well as its C_AGGR (§5.5, §15.x); the C_AGGR keeps the identity.
@@ -616,6 +707,8 @@ public sealed partial class S101ToS57Translator
                         FeatureSubdivision = pending.Foid.Fids,
                     },
                     Primitive = pending.Primitive,
+                    RecordVersion = 1,
+                    UpdateInstruction = S57UpdateInstruction.Insert,
                     Group = rule.Objl >= 300 ? Null : SkinOfTheEarth.Contains(rule.S57Acronym) ? 1 : 2,
                     ObjectCode = (S57ObjectCode)rule.Objl,
                     Attributes = attributes,
@@ -1316,7 +1409,7 @@ public sealed partial class S101ToS57Translator
 
         private static void AddSlave(PendingObject master, PendingObject slave)
         {
-            var name = new S57LongName((ushort)slave.Foid.Agency, (uint)slave.Foid.Fidn, (ushort)slave.Foid.Fids);
+            var name = new S57LongName((ushort)slave.Foid.Agency, unchecked((uint)slave.Foid.Fidn), (ushort)slave.Foid.Fids);
             if (master.FeaturePointers.Exists(p => p.Name.Equals(name))) return;
             master.FeaturePointers.Add(new S57FeaturePointer { Name = name, Relationship = S57RelationshipIndicator.Slave });
         }
@@ -1406,12 +1499,14 @@ public sealed partial class S101ToS57Translator
             return pointId;
         }
 
-        private static S57VectorRecord Node(int rcnm, uint id, S101PointRecord point)
+        private S57VectorRecord Node(int rcnm, uint id, S101PointRecord point)
             => new()
             {
                 RecordName = new S57RecordName { RecordNameCode = rcnm, RecordId = (int)id },
+                RecordVersion = 1,
+                UpdateInstruction = S57UpdateInstruction.Insert,
                 VectorPointers = [],
-                Coordinates2D = [new S57Coordinate2D { X = point.X, Y = point.Y }],
+                Coordinates2D = [new S57Coordinate2D { X = point.X, Y = ScaleY(point.Y) }],
                 Soundings = [],
                 Attributes = [],
             };
@@ -1424,14 +1519,19 @@ public sealed partial class S101ToS57Translator
                 _soundingNodes[id] = new S57VectorRecord
                 {
                     RecordName = new S57RecordName { RecordNameCode = S57RcnmIsolatedNode, RecordId = (int)id },
+                    RecordVersion = 1,
+                    UpdateInstruction = S57UpdateInstruction.Insert,
                     VectorPointers = [],
                     Coordinates2D = [],
-                    Soundings = multi.Points.Select(p => new S57Sounding { X = p.X, Y = p.Y, Depth = p.Z }).ToArray(),
+                    Soundings = multi.Points.Select(p => new S57Sounding { X = p.X, Y = ScaleY(p.Y), Depth = p.Z }).ToArray(),
                     Attributes = [],
                 };
             }
             return id;
         }
+
+        private int ScaleY(int y)
+            => _cmfy == _comf ? y : (int)Math.Round((double)y * _comf / _cmfy, MidpointRounding.AwayFromZero);
 
         private uint Edge(uint curveId)
         {
@@ -1452,8 +1552,10 @@ public sealed partial class S101ToS57Translator
             _edges[curveId] = new S57VectorRecord
             {
                 RecordName = new S57RecordName { RecordNameCode = S57RcnmEdge, RecordId = (int)curveId },
+                RecordVersion = 1,
+                UpdateInstruction = S57UpdateInstruction.Insert,
                 VectorPointers = pointers,
-                Coordinates2D = curve.IntermediateCoordinates.Select(c => new S57Coordinate2D { X = c.X, Y = c.Y }).ToArray(),
+                Coordinates2D = curve.IntermediateCoordinates.Select(c => new S57Coordinate2D { X = c.X, Y = ScaleY(c.Y) }).ToArray(),
                 Soundings = [],
                 Attributes = [],
             };

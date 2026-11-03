@@ -519,8 +519,8 @@ interface.
 `EncDotNet.S57.S57Document`, following S-65 Annex C (*S-101 to S-57 ENC
 Conversion Guidance*, Ed 1.0.0). Its main use today is as a round-trip check of
 the forward translation, not as a producer of S-57 cells for distribution:
-there's no S-57 writer yet, and Annex C expects the producer to clean up the
-output by hand.
+Annex C expects the producer to clean up the output by hand, and the output
+isn't checked against S-58.
 
 ```csharp
 var s101 = new S57ToS101Translator().Translate(S57Dataset.Open("cell.000"));
@@ -528,6 +528,9 @@ var s101 = new S57ToS101Translator().Translate(S57Dataset.Open("cell.000"));
 var diagnostics = new S101ToS57TranslationDiagnostics();
 var options = new S101ToS57TranslationOptions { InformSeparator = "; ", NationalLanguage = "fra" };
 EncDotNet.S57.S57Document s57 = new S101ToS57Translator(options).Translate(s101, diagnostics);
+
+// Encode it as an S-57 Edition 3.1 base cell (EncDotNet.S57 0.9.0 or later).
+EncDotNet.S57.S57DocumentWriter.WriteToFile("cell.000", s57);
 ```
 
 What it covers:
@@ -588,6 +591,16 @@ What it covers:
 - **Feature identifiers (§2.5.6).** An object converted one to one keeps its
   S-101 FOID; further objects from the same feature take the next free
   subdivision.
+- **A writable base cell.** Every record is an `Insert` at version 1. `DSID`
+  and `DSPM` describe a new ENC base cell (`EN`, S-57 Edition 3.1, chain-node,
+  WGS 84, metres). The compilation scale is set as above (from
+  `maximumDisplayScale` where no coverage has an optimum display scale), the
+  intended usage comes from the cell name, and the
+  producing agency is the commonest feature agency. `COMF` is the S-101 `CMFX`
+  (Y is rescaled when `CMFY` differs) and `SOMF` the `CMFZ`. `ATTF` and `NATF`
+  get the lowest lexical level that encodes their text. An `OBJNAM`, `INFORM`
+  or `TXTDSC` outside ISO 8859-1 moves to its national counterpart, which can
+  be UCS-2 (`NALL` 2).
 
 `S101ToS57TranslationOptions` holds the choices Annex C leaves to the
 converter: the `INFORM` separator, the 300-character policy, the preferred
@@ -596,7 +609,8 @@ to make the optional `INFORM` conversions. `S101ToS57TranslationDiagnostics`
 counts the features read and written, and the features and attributes dropped
 by rule (with the clause). It also counts the values folded into `INFORM`, the
 values truncated to the first, the mandatory attributes written empty, and the
-classes and attributes with no rule.
+classes and attributes with no rule, the values moved to `NATF`, and the
+text no lexical level can encode.
 
 Not covered: spatial-record attributes from Spatial Quality (`QUAPOS`, and
 `POSACC`/`SOUACC` on vector records, §24.5), because `S101Document` doesn't
@@ -604,9 +618,12 @@ read spatial-to-information associations; the optional `M_QUAL` `CATZOC` 4/5
 fill (§3.8); and the S-401 product.
 
 The opt-in round-trip test `S57RoundTripCorpusTests` runs S-57 → S-101 → S-57
-over a folder of cells (`ENCDOTNET_S57_CORPUS`) and sorts each difference as an
-expected loss, an expected restructure, unexplained or a reverse bug, in a JSON
-report. It compares areas as polygons as well as attributes, and runs
+over a folder of cells (`ENCDOTNET_S57_CORPUS`). It writes each result with
+`S57DocumentWriter` and reads it back with `S57DocumentReader`, then sorts each
+difference from the source as an expected loss, an expected restructure,
+unexplained or a reverse bug, in a JSON report. The report also lists the cells
+the writer rejected and any field that changed between writing and reading
+back. It compares areas as polygons as well as attributes, and runs
 `S57TopologyCheck` on both cells: a topology issue the result has and the
 source doesn't is counted as a reverse bug.
 
