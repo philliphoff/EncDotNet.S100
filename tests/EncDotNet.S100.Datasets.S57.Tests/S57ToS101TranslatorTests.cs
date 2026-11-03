@@ -1526,7 +1526,7 @@ public class S57ToS101TranslatorTests
 
         var ninfom = InformationInstance(inland, feature.Attributes, 3).ToList();
         Assert.Equal("Durchfahrtshöhe 5,20 m", GetSubAttribute(inland, ninfom, "text"));
-        Assert.Equal(string.Empty, GetSubAttribute(inland, ninfom, "language"));
+        Assert.Equal("und", GetSubAttribute(inland, ninfom, "language"));
     }
 
     [Fact]
@@ -1687,7 +1687,7 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
-    public void Translate_NinfomAttribute_BecomesNauticalInformation_WithBlankLanguage()
+    public void Translate_NinfomAttribute_BecomesNauticalInformation_WithUndeterminedLanguage()
     {
         var doc = LandRegionWithS57Attributes(Attr(300, "Información en español"));
 
@@ -1698,7 +1698,8 @@ public class S57ToS101TranslatorTests
         var instance = InformationInstance(s101, info!.Attributes, 1).ToList();
 
         Assert.Equal("Información en español", GetSubAttribute(s101, instance, "text"));
-        Assert.Equal("", GetSubAttribute(s101, instance, "language"));
+        // #1221: an empty language would read as English (S-65 Annex C §27.177).
+        Assert.Equal("und", GetSubAttribute(s101, instance, "language"));
     }
 
     [Fact]
@@ -1719,7 +1720,7 @@ public class S57ToS101TranslatorTests
         Assert.Equal("English text", GetSubAttribute(s101, first, "text"));
         Assert.Equal("eng", GetSubAttribute(s101, first, "language"));
         Assert.Equal("National text", GetSubAttribute(s101, second, "text"));
-        Assert.Equal("", GetSubAttribute(s101, second, "language"));
+        Assert.Equal("und", GetSubAttribute(s101, second, "language"));
 
         // Both texts live on a single NauticalInformation record (one association).
         Assert.Single(feat.InformationAssociations);
@@ -2381,7 +2382,7 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
-    public void Translate_NobjnmAttribute_BecomesFeatureNameComplex_WithBlankLanguage()
+    public void Translate_NobjnmAttribute_BecomesFeatureNameComplex_WithUndeterminedLanguage()
     {
         var doc = LandRegionWithS57Attributes(Attr(301, "Bahía de Todos"));
 
@@ -2390,7 +2391,8 @@ public class S57ToS101TranslatorTests
         var instance = ComplexInstance(s101, feat.Attributes, "featureName", 1).ToList();
 
         Assert.Equal("Bahía de Todos", GetSubAttribute(s101, instance, "name"));
-        Assert.Equal("", GetSubAttribute(s101, instance, "language"));
+        Assert.Equal("und", GetSubAttribute(s101, instance, "language"));
+        Assert.Equal("2", GetSubAttribute(s101, instance, "nameUsage"));
     }
 
     [Fact]
@@ -2408,8 +2410,33 @@ public class S57ToS101TranslatorTests
 
         Assert.Equal("English name", GetSubAttribute(s101, first, "name"));
         Assert.Equal("eng", GetSubAttribute(s101, first, "language"));
+        Assert.Equal("1", GetSubAttribute(s101, first, "nameUsage")); // S-101 DCEG 2.5.8 default
         Assert.Equal("National name", GetSubAttribute(s101, second, "name"));
-        Assert.Equal("", GetSubAttribute(s101, second, "language"));
+        Assert.Equal("und", GetSubAttribute(s101, second, "language"));
+        Assert.Equal("2", GetSubAttribute(s101, second, "nameUsage")); // alternate
+    }
+
+    // #1221: S-57 puts national attributes in the NATF field, which
+    // EncDotNet.S57 reads into NationalAttributes, not Attributes.
+    [Fact]
+    public void Translate_NationalAttributesField_IsTranslated()
+    {
+        var doc = LandRegionWithS57Attributes(Attr(116, "English name"));
+        var feature = doc.FeatureRecords[0] with
+        {
+            NationalAttributes = new[] { Attr(301, "Nom national"), Attr(300, "Texte national") },
+        };
+        doc = doc with { FeatureRecords = [feature] };
+
+        var s101 = new S57ToS101Translator().Translate(doc);
+        var feat = Assert.Single(s101.Features);
+
+        var national = ComplexInstance(s101, feat.Attributes, "featureName", 2).ToList();
+        Assert.Equal("Nom national", GetSubAttribute(s101, national, "name"));
+        Assert.Equal("und", GetSubAttribute(s101, national, "language"));
+        var info = InformationInstance(s101, NauticalInformationOf(s101, feat)!.Attributes, 1).ToList();
+        Assert.Equal("Texte national", GetSubAttribute(s101, info, "text"));
+        Assert.Equal("und", GetSubAttribute(s101, info, "language"));
     }
 
     [Fact]
@@ -4053,7 +4080,7 @@ public class S57ToS101TranslatorTests
         var bridge = SingleOfClass(doc, "Bridge");
         var first = ComplexInstance(doc, bridge.Attributes, "featureName", 1).ToList();
         Assert.Equal("Harbour Bridge", GetSubAttribute(doc, first, "name"));
-        Assert.Null(GetSubAttribute(doc, first, "nameUsage"));
+        Assert.Equal("1", GetSubAttribute(doc, first, "nameUsage"));
         var second = ComplexInstance(doc, bridge.Attributes, "featureName", 2).ToList();
         Assert.Equal("Old Swing Bridge", GetSubAttribute(doc, second, "name"));
         Assert.Equal("eng", GetSubAttribute(doc, second, "language"));

@@ -495,12 +495,13 @@ internal sealed class S57RoundTripComparer
             && Tokens(sourceValue).All(Tokens(resultValue).Contains))
             return D(RoundTripClass.ExpectedRestructure, "Annex C §27.140 (openingBridge → CATBRG 1/2)");
 
-        // The forward translation tags national text, names and files with an
-        // empty language, which Annex C §27.177 / §2.4.12.1 / §27.132 read as
-        // English: they come back merged into INFORM / TXTDSC / OBJNAM.
+        // National text, names and files that come back merged into INFORM /
+        // TXTDSC / OBJNAM were read as English (Annex C §27.177 / §2.4.12.1 /
+        // §27.132): the forward translation must give them a language other
+        // than English and empty (#1221).
         if (resultValue is null && NationalTwin.TryGetValue(acronym, out var twin)
             && resultAttributes.TryGetValue(twin, out var twinValue) && twinValue.Contains(sourceValue, StringComparison.Ordinal))
-            return D(RoundTripClass.Unexplained, "national text has an empty S-101 language (read as English)");
+            return D(RoundTripClass.Unexplained, "national text read as English");
 
         // A value the S-101 enumeration doesn't list is dropped by the
         // forward translation (S101AllowedEnumValues).
