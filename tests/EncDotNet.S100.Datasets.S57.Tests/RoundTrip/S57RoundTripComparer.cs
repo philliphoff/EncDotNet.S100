@@ -180,6 +180,10 @@ internal sealed class S57RoundTripComparer
     {
         var differences = new List<RoundTripDifference>();
         var sourceGeometry = new GeometryIndex(source);
+        _sourceByLnam = source.FeatureRecords
+            .Where(f => f.RecordName.LongName.HasValue)
+            .GroupBy(f => f.RecordName.LongName!.Value)
+            .ToDictionary(g => g.Key, g => g.First());
         var resultGeometry = new GeometryIndex(result);
 
         var resultByFoid = result.FeatureRecords
@@ -374,9 +378,12 @@ internal sealed class S57RoundTripComparer
         var resultPointers = result.FeaturePointers.Count;
         if (sourcePointers != resultPointers)
         {
-            differences.Add(new(name, "(pointers)", "pointers",
-                resultPointers < sourcePointers ? RoundTripClass.Unexplained : RoundTripClass.ExpectedRestructure,
-                resultPointers < sourcePointers ? "FFPT relationships not carried to S-101" : "Annex C §18.2 (master/slave)",
+            var (cls, reason) = resultPointers > sourcePointers
+                ? (RoundTripClass.ExpectedRestructure, "Annex C §18.2 (master/slave)")
+                : UnboundSlaves(source) is { Count: > 0 } unbound && sourcePointers - resultPointers <= unbound.Count
+                    ? (RoundTripClass.ExpectedLoss, $"S-101 binds no StructureEquipment {string.Join(", ", unbound.Distinct())}")
+                    : (RoundTripClass.Unexplained, "FFPT relationships not carried to S-101");
+            differences.Add(new(name, "(pointers)", "pointers", cls, reason,
                 sourcePointers.ToString(CultureInfo.InvariantCulture), resultPointers.ToString(CultureInfo.InvariantCulture)));
         }
 
@@ -620,6 +627,26 @@ internal sealed class S57RoundTripComparer
 
     private static List<string> Tokens(string? value)
         => value is null ? [] : value.Split(',').Select(t => t.Trim()).Where(t => t.Length > 0).ToList();
+
+    // The slaves of a master whose S-101 classes the Feature Catalogue doesn't
+    // let it carry as StructureEquipment, as "structure → equipment".
+    private List<string> UnboundSlaves(S57FeatureRecord master)
+    {
+        var unbound = new List<string>();
+        if (ResolveForward(master) is not { } structure) return unbound;
+        foreach (var pointer in master.FeaturePointers)
+        {
+            if (pointer.Relationship != S57RelationshipIndicator.Slave
+                || !_sourceByLnam.TryGetValue(pointer.Name, out var slave)
+                || ResolveForward(slave) is not { } equipment)
+                continue;
+            if (!_bindings.BindsFeatureAssociation(structure.S101Code, "StructureEquipment", "theEquipment", equipment.S101Code))
+                unbound.Add($"{structure.S101Code} → {equipment.S101Code}");
+        }
+        return unbound;
+    }
+
+    private Dictionary<S57LongName, S57FeatureRecord> _sourceByLnam = [];
 
     private ResolvedFeature? ResolveForward(S57FeatureRecord feature)
     {

@@ -1289,6 +1289,7 @@ public sealed class S57ToS101Translator
             RecordUnlinkedTimeSchedules(schedulePlan);
             EmitBridgeArchAssociations(archGroups, archSpanPositions);
             EmitRangeSystems(pendingAggregations);
+            EmitStructureEquipment(featureRecords);
         }
 
         // ── Underwater hazard depths ────────────────────────────────────
@@ -1733,6 +1734,62 @@ public sealed class S57ToS101Translator
                 }
             }
 
+            AppendFeatureAssociations(added);
+        }
+
+        // S-57 ties the parts of an aid to navigation with master/slave feature
+        // pointers (UOC 12.1.1): the master's FFPT names each slave with the
+        // slave relationship indicator. S-101 carries the same relationship as
+        // a StructureEquipment association, which S-65 Annex C §18.2 converts
+        // back to master/slave. Each slave with a feature of its own becomes
+        // `theEquipment` of its master's feature where the target FC binds the
+        // pair. Equipment links at most one structure, so a light a bridge
+        // collection already linked keeps that link (EmitBridgeAggregations).
+        private void EmitStructureEquipment(IReadOnlyList<EncDotNet.S57.S57FeatureRecord> featureRecords)
+        {
+            var classById = Features.ToDictionary(f => f.RecordId, f => FeatureTypeCatalogue[f.FeatureTypeCode]);
+            var added = new Dictionary<uint, List<S101FeatureAssociation>>();
+            foreach (var master in featureRecords)
+            {
+                if ((ushort)(int)master.ObjectCode is CAggrObjl or CAssoObjl) continue;
+                if (!_recordIdByLnam.TryGetValue(Lnam(master.RecordName), out var structureId)
+                    || !classById.TryGetValue(structureId, out var structureClass))
+                    continue;
+
+                foreach (var fp in master.FeaturePointers)
+                {
+                    if (fp.Relationship != EncDotNet.S57.S57RelationshipIndicator.Slave) continue;
+                    // A slave with no feature of its own (a TOPMAR folded into
+                    // the master's topmark, a merged sector light) has nothing
+                    // to link.
+                    if (!_recordIdByLnam.TryGetValue(fp.Name, out var equipmentId)
+                        || equipmentId == structureId
+                        || !classById.TryGetValue(equipmentId, out var equipmentClass))
+                        continue;
+                    if (!_featureBindings.BindsFeatureAssociation(
+                            structureClass, S101AssocStructureEquipment, S101RoleTheEquipment, equipmentClass))
+                    {
+                        _diagnostics?.RecordUnboundStructureEquipment(structureClass, equipmentClass);
+                        continue;
+                    }
+                    if (!_linkedEquipment.Add(equipmentId)) continue;
+
+                    if (_diagnostics is not null) _diagnostics.StructureEquipmentLinked++;
+                    if (!added.TryGetValue(structureId, out var links))
+                        added[structureId] = links = [];
+                    links.Add(new S101FeatureAssociation(
+                        GetOrAssignFeatureAssociationCode(S101AssocStructureEquipment),
+                        equipmentId,
+                        GetOrAssignRoleCode(S101RoleTheEquipment)));
+                }
+            }
+
+            AppendFeatureAssociations(added);
+        }
+
+        // Adds feature associations to features already emitted.
+        private void AppendFeatureAssociations(Dictionary<uint, List<S101FeatureAssociation>> added)
+        {
             if (added.Count == 0) return;
             for (int i = 0; i < Features.Count; i++)
             {
