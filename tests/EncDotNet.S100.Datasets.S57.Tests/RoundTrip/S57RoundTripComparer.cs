@@ -530,6 +530,11 @@ internal sealed class S57RoundTripComparer
             && resultValue.Split(';').Contains(sourceValue))
             return D(RoundTripClass.ExpectedRestructure, "Annex C §2.1.1 / §27.131 (MLTYLT → INFORM)");
 
+        // §27.146 / §27.90: S-101 keeps only true or false, so CONRAD 3
+        // comes back as 1 and CATDIS 2 (pole) and 3 (board) as 4.
+        if ((acronym, sourceValue.Trim(), resultValue) is ("CONRAD", "3", "1") or ("CATDIS", "2" or "3", "4"))
+            return D(RoundTripClass.ExpectedLoss, $"Annex C §{(acronym == "CONRAD" ? "27.146" : "27.90")} (S-101 Boolean)");
+
         if (resultValue is not null && !S101ToS57Rules.IsS57ListAttribute(acronym)
             && sourceValue.Contains(',') && sourceValue.Split(',')[0].Trim() == resultValue.Trim())
             return D(RoundTripClass.ExpectedLoss, "Annex C §2.4.1 (Enumerated keeps first value)");
