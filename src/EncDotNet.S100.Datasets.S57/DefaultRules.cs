@@ -588,7 +588,12 @@ internal static class DefaultRules
         yield return A(76, "COLPAT", "colourPattern");
         yield return A(77, "COMCHA", "communicationChannel");
         yield return A(81, "CONDTN", "condition");
-        yield return A(82, "CONRAD", "radarConspicuous");
+        // CONRAD, CATDIS, CATTRK and CATTSS are S-57 enumerations that S-101
+        // remodels as Booleans; the remaps write "true"/"false" (as the
+        // openingBridge remap does), since the S-100 Lua framework reads a
+        // Boolean as true only for "1" or "true". S-65 Annex C §27.146,
+        // §27.90, §27.1 and §27.112 give the inverses.
+        yield return Boolean(82, "CONRAD", "radarConspicuous", whenTrue: ["1", "3"], whenFalse: ["2"]);
         yield return A(83, "CONVIS", "visualProminence");
         yield return A(87, "DRVAL1", "depthRangeMinimumValue");
         yield return A(88, "DRVAL2", "depthRangeMaximumValue");
@@ -661,7 +666,7 @@ internal static class DefaultRules
         yield return A(7, "CATAIR", "categoryOfAirportAirfield");
         yield return A(8, "CATACH", "categoryOfAnchorage");
         yield return A(10, "CATBUA", "categoryOfBuiltUpArea");
-        yield return A(21, "CATDIS", "distanceMarkVisible");
+        yield return Boolean(21, "CATDIS", "distanceMarkVisible", whenTrue: ["2", "3", "4"], whenFalse: ["1"]);
         yield return A(35, "CATLMK", "categoryOfLandmark");
         yield return A(41, "CATNAV", "categoryOfNavigationLine");
         yield return A(45, "CATPLE", "categoryOfPile");
@@ -729,13 +734,13 @@ internal static class DefaultRules
         yield return A(51, "CATRAS", "categoryOfRadarStation");
         yield return A(52, "CATRTB", "categoryOfRadarTransponderBeacon");
         yield return A(53, "CATROS", "categoryOfRadioStation");
-        yield return A(54, "CATTRK", "basedOnFixedMarks");
+        yield return Boolean(54, "CATTRK", "basedOnFixedMarks", whenTrue: ["1"], whenFalse: ["2"]);
         yield return A(55, "CATRSC", "categoryOfRescueStation");
         yield return A(59, "CATSEA", "categoryOfSeaArea");
         yield return A(61, "CATSIT", "categoryOfSignalStationTraffic");
         yield return A(62, "CATSIW", "categoryOfSignalStationWarning");
         yield return A(63, "CATSIL", "categoryOfSiloTank");
-        yield return A(67, "CATTSS", "iMOAdopted");
+        yield return Boolean(67, "CATTSS", "iMOAdopted", whenTrue: ["1"], whenFalse: ["2"]);
         yield return A(68, "CATVEG", "categoryOfVegetation");
         yield return A(69, "CATWAT", "categoryOfWaterTurbulence");
         yield return A(70, "CATWED", "categoryOfWeedKelp");
@@ -790,4 +795,13 @@ internal static class DefaultRules
 
     private static S57AttributeRule A(ushort attl, string acronym, string? s101)
         => new() { Attl = attl, S57Acronym = acronym, DefaultS101Code = s101 };
+
+    // An S-57 enumeration that S-101 models as a Boolean attribute.
+    private static S57AttributeRule Boolean(ushort attl, string acronym, string s101, string[] whenTrue, string[] whenFalse)
+    {
+        var remap = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var value in whenTrue) remap[value] = "true";
+        foreach (var value in whenFalse) remap[value] = "false";
+        return A(attl, acronym, s101) with { DefaultValueRemap = remap };
+    }
 }
