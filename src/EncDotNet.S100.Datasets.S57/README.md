@@ -542,16 +542,52 @@ What it covers:
   the first `pictorialRepresentation` is kept as `PICREP`. Text from
   `information`, Nautical Information and `multiplicityOfFeatures` folds into
   `INFORM`/`NINFOM`.
-- **Meta features (§3), attributes only.** `DataCoverage` becomes `M_COVR` with
-  `CATCOV` 1. The commonest `SoundingDatum` and `VerticalDatumOfData` go to the
+- **Meta features (§3).** Data Coverage becomes `M_COVR` with `CATCOV` 1, and
+  `CATCOV` 2 objects fill the rest of the bounding box so that the `M_COVR`
+  objects tile it without overlap. Adjoining coverages merge into one
+  `CATCOV` 1 object. The largest optimum display scale becomes the
+  compilation scale (`DSPM` `CSCL`), and a coverage at another scale gets an
+  `M_CSCL`. The commonest `SoundingDatum` and `VerticalDatumOfData` go to the
   dataset parameters and the rest to `M_SDAT`/`M_VDAT`. Update Information is
   dropped.
-- **Feature and attribute classes.** The rules (`S101ToS57Rules`) invert the
-  forward mapping, with an Annex C override layer, and cite an Annex C clause
-  each. A `LightSectored` becomes one `LIGHTS` per sector (§19.3), and a
-  `topmark` becomes a slave `TOPMAR` (§18.1).
-- **Geometry**, feature by feature: points become isolated nodes, curves become
-  edges between connected nodes, and surfaces become rings of edges.
+- **Feature and attribute classes (§4–§30).** The rules (`S101ToS57Rules`)
+  invert the forward mapping, with an Annex C override layer, and cite an
+  Annex C clause each. The override layer holds the classes S-57 → S-101
+  never produces, the class changes Annex C makes by attribute value
+  (`S101ToS57FeatureRule.Redirects`, e.g. `categoryOfLandmark` 26 → `BRIDGE`,
+  a radar-conspicuous `Pile` → `BCNSPP`), the objects it adds
+  (`Companions`, e.g. a `PILPNT` for a structure in the water), and the
+  enumeration differences of Table A-2: value remaps, and values S-57 lacks
+  folding into `INFORM` as text (`S101ToS57AttributeRule.InformText`). The
+  attributes each feature clause says are not converted on its class are
+  generated from Annex C (`tools/annexc-clauses`).
+- **Information types (§24).** Nautical Information and Contact Details fold
+  into the feature (`INFORM`, `CALSGN`, `COMCHA`, …); Service Hours and
+  Non-standard Working Day are dropped.
+- **Structural inverses.** A `Bridge` with spans becomes one `BRIDGE` per
+  `SpanFixed`/`SpanOpening`, each carrying the bridge's attributes and the
+  span's clearances; one span keeps the bridge's FOID, several are tied by a
+  `C_AGGR` (§6.6–§6.8). Range systems, traffic separation schemes, routes,
+  fairway systems, island groups and mooring trots become `C_AGGR` (§25), and
+  the aids-to-navigation and fairway-auxiliary associations `C_ASSO`.
+  Structure/Equipment becomes master and slave feature pointers (§18.2). A
+  `LightSectored` becomes one `LIGHTS` per sector (§19.3), a `topmark` a slave
+  `TOPMAR` (§18.1), and `surfaceCharacteristics` positional
+  `NATSUR`/`NATQUA` lists, with `/` before an underlying layer (§12.1).
+- **Geometry and topology.** Points become isolated nodes, and S-101 curves
+  become shared edges between connected nodes. Where S-57 doesn't allow the
+  S-101 primitive (Table 2-1), a curve becomes an area 0.3 mm wide at the
+  compilation scale and a surface becomes a point inside it. The S-101 skin of
+  the earth is cut around `FLODOC`, `HULKES` and `PONTON` areas, which are
+  skin of the earth in S-57 (§2.5.1.1). Both that cut and the `M_COVR`
+  tiling node the edges involved (snap-rounded to the coordinate grid) and
+  split each edge for every object that shares it, so the topology stays
+  chain-node. `S57TopologyCheck` checks the result: every edge ends at
+  connected nodes, every area closes, the skin of the earth has no gaps or
+  overlaps, and `M_COVR` tiles its bounding box.
+- **Feature identifiers (§2.5.6).** An object converted one to one keeps its
+  S-101 FOID; further objects from the same feature take the next free
+  subdivision.
 
 `S101ToS57TranslationOptions` holds the choices Annex C leaves to the
 converter: the `INFORM` separator, the 300-character policy, the preferred
@@ -562,17 +598,578 @@ by rule (with the clause). It also counts the values folded into `INFORM`, the
 values truncated to the first, the mandatory attributes written empty, and the
 classes and attributes with no rule.
 
-Not covered yet: the structural inverses (folding `SpanFixed`/`SpanOpening`
-back into `BRIDGE`, `RangeSystem` into `C_AGGR`, landmarks into `BRIDGE` or
-`DAMCON`), chain-node topology, the skin-of-earth cut (§2.5.1.1), the
-`M_COVR`/`M_CSCL` tiling (§3.5), the enumeration differences of Annex C
-Table A-2, and the S-401 product. The spans and range systems are reported as
-deferred.
+Not covered: spatial-record attributes from Spatial Quality (`QUAPOS`, and
+`POSACC`/`SOUACC` on vector records, §24.5), because `S101Document` doesn't
+read spatial-to-information associations; the optional `M_QUAL` `CATZOC` 4/5
+fill (§3.8); and the S-401 product.
 
 The opt-in round-trip test `S57RoundTripCorpusTests` runs S-57 → S-101 → S-57
 over a folder of cells (`ENCDOTNET_S57_CORPUS`) and sorts each difference as an
 expected loss, an expected restructure, unexplained or a reverse bug, in a JSON
-report.
+report. It compares areas as polygons as well as attributes, and runs
+`S57TopologyCheck` on both cells: a topology issue the result has and the
+source doesn't is counted as a reverse bug.
+
+### Annex C coverage
+
+Every clause of Annex C §3–§30, with the rule that converts it or the reason
+it's dropped (`S101ToS57Coverage.Clauses`; a test keeps this table current):
+
+<!-- annex-c-coverage:start -->
+<details>
+<summary>Feature types and general clauses (§3–§23): 218 clauses</summary>
+
+| Clause | S-101 | Treatment | S-57 |
+|---|---|---|---|
+| 3.1 | horizontal uncertainty | assembled | POSACC from horizontalPositionUncertainty; QUAPOS on spatial records isn't read (§24.5) |
+| 3.2 | vertical uncertainty | assembled | SOUACC from verticalUncertainty |
+| 3.3 | hierarchy of metadata | general | no conversion |
+| 3.4 | QualityOfNonBathymetricData | rule | M_ACCY |
+| 3.5 | DataCoverage | rule | M_COVR |
+| 3.6 | NavigationalSystemOfMarks | rule | M_NSYS |
+| 3.7 | LocalDirectionOfBuoyage | rule | M_NSYS |
+| 3.8 | QualityOfBathymetricData | rule | M_QUAL |
+| 3.9 | SoundingDatum | structural | DSPM SDAT for the commonest datum, M_SDAT for the others (§3.9) |
+| 3.10 | VerticalDatumOfData | structural | DSPM VDAT for the commonest datum, M_VDAT for the others (§3.10) |
+| 3.11 | QualityOfSurvey | rule | M_SREL |
+| 3.12 | UpdateInformation | dropped | not converted (§3.12) |
+| 4.1 | MagneticVariation | rule | MAGVAR |
+| 4.2 | LocalMagneticAnomaly | rule | LOCMAG |
+| 5.1 | cliffs | general | guidance; the features convert by their own clauses |
+| 5.2 | cuttings and embankments | general | guidance; the features convert by their own clauses |
+| 5.3 | Coastline | rule | COALNE |
+| 5.4 | LandArea | rule | LNDARE |
+| 5.5 | IslandGroup | rule | C_AGGR |
+| 5.6 | LandElevation | rule | LNDELV |
+| 5.7 | River | rule | RIVERS |
+| 5.8 | Rapids | rule | RAPIDS |
+| 5.9 | Waterfall | rule | WATFAL |
+| 5.10 | Lake | rule | LAKARE; RIVERS when status 5 |
+| 5.11 | LandRegion | rule | LNDRGN; a curve is dropped |
+| 5.12 | Vegetation | rule | VEGATN |
+| 5.13 | IceArea | rule | ICEARE |
+| 5.14 | SlopingGround | rule | SLOGRD |
+| 5.15 | SlopeTopline | rule | SLOTOP |
+| 5.16 | Tideway | rule | TIDEWY |
+| 6.1 | BuiltUpArea | rule | BUAARE |
+| 6.2 | Building | rule | BUISGL; plus PILPNT when inTheWater, point |
+| 6.3 | AirportAirfield | rule | AIRARE |
+| 6.4 | Runway | rule | RUNWAY |
+| 6.5 | Helipad | rule | RUNWAY CATRUN 2; plus LNDMRK when point |
+| 6.6 | Bridge | structural | BRIDGE, one per span when it has spans, tied by C_AGGR (§6.6) |
+| 6.7 | SpanFixed | rule | BRIDGE |
+| 6.8 | SpanOpening | rule | BRIDGE |
+| 6.9 | Conveyor | rule | CONVYR |
+| 6.10 | CableOverhead | rule | CBLOHD |
+| 6.11 | PipelineOverhead | rule | PIPOHD |
+| 6.12 | PylonBridgeSupport | rule | PYLONS |
+| 6.13 | FenceWall | rule | FNCLNE |
+| 6.14 | Railway | rule | RAILWY |
+| 6.15 | Road | rule | ROADWY |
+| 6.16 | Tunnel | rule | TUNNEL |
+| 7.1 | landmark encoding combinations | general | guidance; the features convert by their own clauses |
+| 7.2 | Landmark | rule | LNDMRK; CTRPNT when categoryOfLandmark 22 or categoryOfLandmark 23; BRIDGE when categoryOfLandmark 26; DAMCON when categoryOfLandmark 27; plus PILPNT when inTheWater, point |
+| 7.3 | SiloTank | rule | SILTNK; plus PILPNT when inTheWater, point |
+| 7.4 | WindTurbine | rule | LNDMRK CATLMK 19, CONVIS 2; plus PILPNT when inTheWater, point |
+| 7.5 | FortifiedStructure | rule | FORSTC; plus PILPNT when inTheWater, point |
+| 7.6 | ProductionStorageArea | rule | PRDARE |
+| 8.1 | works in progress | general | guidance; the features convert by their own clauses |
+| 8.2 | Checkpoint | rule | CHKPNT |
+| 8.3 | Hulk | rule | HULKES |
+| 8.4 | Pile | rule | PILPNT; CTNARE when categoryOfPile 5, area; MORFAC when line/area or categoryOfPile 8; BCNSPP when radarConspicuous, point |
+| 8.5 | Dyke | rule | DYKCON |
+| 8.6 | ShorelineConstruction | rule | SLCONS; MORFAC when categoryOfShorelineConstruction 23 |
+| 8.7 | StructureOverNavigableWater | rule | BUISGL; plus HRBFAC when categoryOfStructure 2 |
+| 8.8 | Causeway | rule | CAUSWY |
+| 8.9 | Canal | rule | CANALS |
+| 8.10 | DistanceMark | rule | DISMAR |
+| 8.11 | Gate | rule | GATCON |
+| 8.12 | Dam | rule | DAMCON |
+| 8.13 | Crane | rule | CRANES; plus PILPNT when inTheWater, point |
+| 8.14 | Berth | rule | BERTHS |
+| 8.15 | Dolphin | rule | MORFAC |
+| 8.16 | Bollard | rule | MORFAC CATMOR 3 |
+| 8.17 | DryDock | rule | DRYDOC |
+| 8.18 | FloatingDock | rule | FLODOC |
+| 8.19 | Pontoon | rule | PONTON |
+| 8.20 | DockArea | rule | DOCARE |
+| 8.21 | Gridiron | rule | GRIDRN |
+| 8.22 | LockBasin | rule | LOKBSN |
+| 8.23 | MooringTrot | rule | C_AGGR |
+| 9.1 | SeaAreaNamedWaterArea | rule | SEAARE |
+| 10.1 | tidal data | general | guidance; the features convert by their own clauses |
+| 10.2 | TidalStreamFloodEbb | rule | TS_FEB |
+| 10.3 | CurrentNonGravitational | rule | CURENT |
+| 10.4 | WaterTurbulence | rule | WATTUR |
+| 10.5 | TidalStreamPanelData | rule | TS_PAD |
+| 11.1 | generalisation of depth portrayal | general | no conversion |
+| 11.2 | representation of depth | general | no conversion |
+| 11.3 | Sounding | rule | SOUNDG |
+| 11.4 | DredgedArea | rule | DRGARE |
+| 11.5 | SweptArea | rule | SWPARE |
+| 11.6 | DepthContour | rule | DEPCNT |
+| 11.7 | DepthArea | rule | DEPARE |
+| 11.8 | DepthNoBottomFound | rule | SOUNDG QUASOU 5 |
+| 11.9 | areas with inadequate depth information | general | guidance; the features convert by their own clauses |
+| 11.10 | UnsurveyedArea | rule | UNSARE |
+| 12.1 | SeabedArea | rule | SBDARE |
+| 12.2 | WeedKelp | rule | WEDKLP |
+| 12.3 | Seagrass | rule | WEDKLP CATWED 3 |
+| 12.4 | Sandwave | rule | SNDWAV |
+| 12.5 | Spring | rule | SPRING |
+| 13.1 | danger lines | general | guidance; the features convert by their own clauses |
+| 13.3 | doubtful dangers | general | guidance; the features convert by their own clauses |
+| 13.4 | UnderwaterAwashRock | rule | UWTROC |
+| 13.5 | Wreck | rule | WRECKS |
+| 13.6 | Obstruction | rule | OBSTRN; VEGATN when categoryOfObstruction 23, area |
+| 13.7 | FoulGround | rule | OBSTRN CATOBS 7, WATLEV 3 |
+| 13.8 | DiscolouredWater | rule | CTNARE "Discoloured water" |
+| 13.9 | FishingFacility | rule | FSHFAC |
+| 13.10 | MarineFarmCulture | rule | MARCUL |
+| 14.1 | OffshorePlatform | rule | OFSPLF; plus LNDMRK when flareStack |
+| 14.2 | CableSubmarine | rule | CBLSUB; MORFAC when categoryOfCable 9 |
+| 14.3 | CableArea | rule | CBLARE |
+| 14.4 | PipelineSubmarineOnLand | rule | PIPSOL |
+| 14.5 | SubmarinePipelineArea | rule | PIPARE |
+| 14.6 | OffshoreProductionArea | rule | OSPARE |
+| 15.2 | traffic lanes | general | guidance; the features convert by their own clauses |
+| 15.3 | traffic separation schemes | general | guidance; the features convert by their own clauses |
+| 15.4 | NavigationLine | rule | NAVLNE |
+| 15.5 | RecommendedTrack | rule | RECTRC |
+| 15.6 | RangeSystem | rule | C_AGGR |
+| 15.7 | Fairway | rule | FAIRWY |
+| 15.8 | FairwaySystem | rule | C_AGGR |
+| 15.9 | RecommendedRouteCentreline | rule | RCRTCL |
+| 15.10 | TwoWayRoutePart | rule | TWRTPT |
+| 15.11 | TwoWayRoute | rule | C_AGGR |
+| 15.12 | RecommendedTrafficLanePart | rule | RCTLPT |
+| 15.13 | DeepWaterRouteCentreline | rule | DWRTCL |
+| 15.14 | DeepWaterRoutePart | rule | DWRTPT |
+| 15.15 | DeepWaterRoute | rule | C_AGGR |
+| 15.16 | InshoreTrafficZone | rule | ISTZNE |
+| 15.17 | PrecautionaryArea | rule | PRCARE |
+| 15.18 | TrafficSeparationSchemeLanePart | rule | TSSLPT |
+| 15.19 | SeparationZoneOrLine | rule | TSEZNE; TSELNE when line |
+| 15.20 | TrafficSeparationSchemeBoundary | rule | TSSBND |
+| 15.21 | TrafficSeparationSchemeCrossing | rule | TSSCRS |
+| 15.22 | TrafficSeparationSchemeRoundabout | rule | TSSRON |
+| 15.23 | TrafficSeparationScheme | rule | C_AGGR |
+| 15.24 | ArchipelagicSeaLaneArea | rule | ARCSLN |
+| 15.25 | ArchipelagicSeaLaneAxis | rule | ASLXIS |
+| 15.26 | ArchipelagicSeaLane | rule | C_AGGR |
+| 15.27 | RadioCallingInPoint | rule | RDOCAL |
+| 15.28 | FerryRoute | rule | FERYRT |
+| 15.29 | RadarLine | rule | RADLNE |
+| 15.30 | RadarRange | rule | RADRNG |
+| 15.31 | RadarStation | rule | RADSTA |
+| 16.1 | boundaries and limits | general | guidance; the features convert by their own clauses |
+| 16.2 | maritime jurisdiction areas | structural | a CTNARE "In dispute" for a disputed area; curves widened to areas |
+| 16.3 | AnchorageArea | rule | ACHARE |
+| 16.4 | MooringArea | rule | ACHARE |
+| 16.5 | AnchorBerth | rule | ACHBRT |
+| 16.6 | SeaplaneLandingArea | rule | SPLARE |
+| 16.7 | DumpingGround | rule | DMPGRD |
+| 16.8 | MilitaryPracticeArea | rule | MIPARE |
+| 16.9 | AdministrationArea | rule | ADMARE; plus CTNARE when inDispute; a curve becomes a 0.3 mm area |
+| 16.10 | CargoTranshipmentArea | rule | CTSARE |
+| 16.11 | CautionArea | rule | CTNARE |
+| 16.12 | InformationArea | rule | M_NPUB |
+| 16.13 | ContiguousZone | rule | CONZNE; plus CTNARE when inDispute; a curve becomes a 0.3 mm area |
+| 16.14 | ContinentalShelfArea | rule | COSARE; plus CTNARE when inDispute; a curve becomes a 0.3 mm area |
+| 16.15 | CustomZone | rule | CUSZNE; plus CTNARE when inDispute |
+| 16.16 | ExclusiveEconomicZone | rule | EXEZNE; plus CTNARE when inDispute; a curve becomes a 0.3 mm area |
+| 16.17 | FisheryZone | rule | FSHZNE; plus CTNARE when inDispute |
+| 16.18 | FishingGround | rule | FSHGRD |
+| 16.19 | FreePortArea | rule | FRPARE |
+| 16.20 | HarbourAreaAdministrative | rule | HRBARE |
+| 16.21 | LogPond | rule | LOGPON |
+| 16.22 | OilBarrier | rule | OILBAR |
+| 16.23 | StraightTerritorialSeaBaseline | rule | STSLNE |
+| 16.24 | TerritorialSeaArea | rule | TESARE; plus CTNARE when inDispute; a curve becomes a 0.3 mm area |
+| 16.25 | SubmarineTransitLane | rule | SUBTLN |
+| 16.26 | PilotageDistrict | rule | ADMARE JRSDTN 3 |
+| 16.27 | CollisionRegulationsLimit | rule | CTNARE "Collision regulations limit"; a curve becomes a 0.3 mm area |
+| 16.28 | MarinePollutionRegulationsArea | rule | ADMARE JRSDTN 3 |
+| 17.1 | minefields | general | guidance; RESARE by §17.8 |
+| 17.2 | degaussing ranges | general | guidance; RESARE by §17.8 |
+| 17.3 | nature reserves | general | guidance; RESARE by §17.8 |
+| 17.4 | speed limits | assembled | INFORM "Speed limit is n units" (vesselSpeedLimit) |
+| 17.5 | anchoring restricted | general | guidance; RESARE by §17.8 |
+| 17.6 | areas to be avoided | general | guidance; RESARE by §17.8 |
+| 17.7 | environmentally sensitive sea areas | general | guidance; RESARE by §17.8 |
+| 17.8 | RestrictedArea | rule | RESARE |
+| 18.1 | parts of navigational aids | assembled | topmark → TOPMAR, light sectors → LIGHTS |
+| 18.2 | relationships | structural | Structure/Equipment → master and slaves (FFPT) |
+| 18.3 | buoyage systems | general | M_NSYS by §3.6 / §3.7 |
+| 19.1 | lights | general | guidance; the light classes convert by their own clauses |
+| 19.2 | LightAllAround | rule | LIGHTS |
+| 19.3 | LightSectored | rule | LIGHTS |
+| 19.4 | LightFogDetector | rule | LIGHTS CATLIT 7 |
+| 19.5 | LightAirObstruction | rule | LIGHTS CATLIT 6 |
+| 20.1 | LateralBuoy | rule | BOYLAT |
+| 20.2 | CardinalBuoy | rule | BOYCAR |
+| 20.3 | IsolatedDangerBuoy | rule | BOYISD |
+| 20.4 | SafeWaterBuoy | rule | BOYSAW |
+| 20.5 | SpecialPurposeGeneralBuoy | rule | BOYSPP |
+| 20.6 | EmergencyWreckMarkingBuoy | rule | BOYSPP CATSPM 27 |
+| 20.7 | InstallationBuoy | rule | BOYINB |
+| 20.8 | MooringBuoy | rule | MORFAC CATMOR 7; SMCFAC when visitorsMooring |
+| 20.9 | LateralBeacon | rule | BCNLAT |
+| 20.10 | CardinalBeacon | rule | BCNCAR |
+| 20.11 | IsolatedDangerBeacon | rule | BCNISD |
+| 20.12 | SafeWaterBeacon | rule | BCNSAW |
+| 20.13 | SpecialPurposeGeneralBeacon | rule | BCNSPP |
+| 20.14 | Daymark | rule | DAYMAR |
+| 20.15 | LightFloat | rule | LITFLT |
+| 20.16 | LightVessel | rule | LITVES |
+| 20.17 | Retroreflector | rule | RETRFL |
+| 20.18 | RadarReflector | rule | RADRFL |
+| 20.19 | FogSignal | rule | FOGSIG |
+| 21.1 | AIS aids to navigation | general | guidance; §21.2 and §21.3 |
+| 21.2 | PhysicalAISAidToNavigation | structural | INFORM text on the structure it equips (§21.2) |
+| 21.3 | VirtualAISAidToNavigation | rule | NEWOBJ, its attributes by virtualAISAidToNavigationType |
+| 21.4 | RadioStation | rule | RDOSTA |
+| 21.5 | RadarTransponderBeacon | rule | RTPBCN |
+| 22.1 | PilotBoardingPlace | rule | PILBOP |
+| 22.2 | VesselTrafficServiceArea | rule | ADMARE JRSDTN 3 |
+| 22.3 | CoastGuardStation | rule | CGUSTA; a surface becomes a point |
+| 22.4 | SignalStationWarning | rule | SISTAW; a surface becomes a point |
+| 22.5 | SignalStationTraffic | rule | SISTAT; a surface becomes a point |
+| 22.6 | RescueStation | rule | RSCSTA; a surface becomes a point |
+| 22.7 | HarbourFacility | rule | HRBFAC |
+| 22.8 | SmallCraftFacility | rule | SMCFAC |
+| 23.1 | TextPlacement | dropped | cartographic features are prohibited in S-57 (§2.5.8.1, §23.1) |
+
+</details>
+
+<details>
+<summary>Information types and associations (§24–§25): 26 clauses</summary>
+
+| Clause | S-101 | Treatment | S-57 |
+|---|---|---|---|
+| 24.1 | ContactDetails | assembled | CALSGN, COMCHA, SIGFRQ and INFORM on the feature |
+| 24.2 | ServiceHours | dropped | no S-57 encoding |
+| 24.3 | NonStandardWorkingDay | dropped | no S-57 encoding |
+| 24.4 | NauticalInformation | assembled | INFORM / NINFOM, TXTDSC / NTXTDS, PICREP on the feature |
+| 24.5 | SpatialQuality | dropped | on spatial records, which the S-101 reader doesn't associate (§24.5) |
+| 25.1 | AdditionalInformation | assembled | information types fold into the feature's attributes (§24) |
+| 25.2 | AidsToNavigationAssociation | structural | C_ASSO of the feature and its aids |
+| 25.3 | ASLAggregation | structural | C_AGGR |
+| 25.4 | BridgeAggregation | structural | C_AGGR of the bridge's BRIDGE, PYLONS and PONTON objects |
+| 25.5 | CautionAreaAssociation | dropped | not converted |
+| 25.6 | DeepWaterRouteAggregation | structural | C_AGGR |
+| 25.7 | FairwayAggregation | structural | C_AGGR |
+| 25.8 | FairwayAuxiliary | structural | C_ASSO of the fairway and its auxiliary features |
+| 25.9 | IslandAggregation | structural | C_AGGR |
+| 25.10 | MooringTrotAggregation | structural | C_AGGR |
+| 25.11 | PilotageDistrictAssociation | structural | C_AGGR of the ADMARE and its PILBOP, which take PILDST / NPLDST |
+| 25.12 | QualityOfBathymetricDataComposition | dropped | not converted (§24.5) |
+| 25.13 | RangeSystemAggregation | structural | C_AGGR |
+| 25.14 | RoofedStructureAggregation | structural | C_AGGR of the PYLONS and BUISGL |
+| 25.15 | SpatialAssociation | dropped | not converted (§24.5) |
+| 25.16 | StructureEquipment | structural | master and slaves (FFPT) |
+| 25.17 | TextAssociation | dropped | not converted (§23.1) |
+| 25.18 | TrafficSeparationSchemeAggregation | structural | C_AGGR |
+| 25.19 | TwoWayRouteAggregation | structural | C_AGGR |
+| 25.20 | UpdateAggregation | dropped | not converted (§3.12) |
+| 25.21 | UpdatedInformation | dropped | not converted (§3.12) |
+
+</details>
+
+<details>
+<summary>Simple attributes (§27, §28, §30): 235 clauses</summary>
+
+| Clause | S-101 | Treatment | S-57 |
+|---|---|---|---|
+| 27.1 | basedOnFixedMarks | rule | CATTRK |
+| 27.2 | beaconShape | rule | BCNSHP |
+| 27.3 | bridgeConstruction | rule | CATBRG on Bridge |
+| 27.4 | bridgeFunction | rule | CATBRG on Bridge |
+| 27.5 | buildingShape | rule | BUISHP |
+| 27.6 | buoyShape | rule | BOYSHP |
+| 27.7 | buriedDepth | rule | BURDEP |
+| 27.8 | callSign | rule | CALSGN |
+| 27.9 | categoryOfAirportAirfield | rule | CATAIR |
+| 27.10 | categoryOfAnchorage | rule | CATACH |
+| 27.11 | categoryOfBuiltUpArea | rule | CATBUA |
+| 27.12 | categoryOfCable | rule | CATCBL |
+| 27.13 | categoryOfCanal | rule | CATCAN |
+| 27.14 | categoryOfCardinalMark | rule | CATCAM |
+| 27.15 | categoryOfCargo | rule | INFORM text for some values |
+| 27.16 | categoryOfCheckpoint | rule | CATCHP |
+| 27.17 | categoryOfCoastline | rule | CATCOA |
+| 27.18 | categoryOfConveyor | rule | CATCON |
+| 27.19 | categoryOfCrane | rule | CATCRN |
+| 27.20 | categoryOfDam | rule | CATDAM |
+| 27.21 | categoryOfDock | rule | CATDOC |
+| 27.22 | categoryOfDolphin | rule | CATMOR |
+| 27.23 | categoryOfDumpingGround | rule | CATDPG |
+| 27.24 | categoryOfFence | rule | CATFNC |
+| 27.25 | categoryOfFerry | rule | CATFRY |
+| 27.26 | categoryOfFishingFacility | rule | CATFIF |
+| 27.27 | categoryOfFogSignal | rule | CATFOG |
+| 27.28 | categoryOfFortifiedStructure | rule | CATFOR |
+| 27.29 | categoryOfGate | rule | CATGAT |
+| 27.30 | categoryOfHarbourFacility | rule | CATHAF |
+| 27.31 | categoryOfHulk | rule | CATHLK |
+| 27.32 | categoryOfIce | rule | CATICE |
+| 27.33 | categoryOfInstallationBuoy | rule | CATINB |
+| 27.34 | categoryOfLandRegion | rule | CATLND |
+| 27.35 | categoryOfLandmark | rule | CATLMK |
+| 27.36 | categoryOfLateralMark | rule | CATLAM |
+| 27.37 | categoryOfLight | rule | CATLIT |
+| 27.38 | categoryOfMarineFarmCulture | rule | CATMFA |
+| 27.39 | categoryOfMilitaryPracticeArea | rule | CATMPA |
+| 27.40 | categoryOfMooringArea | rule | CATACH |
+| 27.41 | categoryOfNavigationLine | rule | CATNAV |
+| 27.42 | categoryOfObstruction | rule | CATOBS |
+| 27.43 | categoryOfOffshorePlatform | rule | CATOFP |
+| 27.44 | categoryOfOffshoreProductionArea | rule | CATPRA on OffshoreProductionArea |
+| 27.45 | categoryOfOilBarrier | rule | CATOLB |
+| 27.46 | categoryOfOpeningBridge | rule | CATBRG |
+| 27.47 | categoryOfPile | rule | CATPLE |
+| 27.48 | categoryOfPilotBoardingPlace | rule | CATPIL |
+| 27.49 | categoryOfPipelinePipe | rule | CATPIP |
+| 27.50 | categoryOfPreference | dropped | S-101 enhancement (§27.50) |
+| 27.51 | categoryOfProductionArea | rule | CATPRA |
+| 27.52 | categoryOfPylon | rule | CATPYL |
+| 27.53 | categoryOfRadarStation | rule | CATRAS |
+| 27.54 | categoryOfRadarTransponderBeacon | rule | CATRTB |
+| 27.55 | categoryOfRadioStation | rule | CATROS |
+| 27.56 | categoryOfRescueStation | rule | CATRSC |
+| 27.57 | categoryOfRestrictedArea | rule | CATREA |
+| 27.58 | categoryOfRoad | rule | CATROD |
+| 27.59 | categoryOfSchedule | dropped | S-101 enhancement (§27.59) |
+| 27.60 | categoryOfSeaArea | rule | CATSEA |
+| 27.61 | categoryOfShorelineConstruction | rule | CATSLC |
+| 27.62 | categoryOfSignalStationTraffic | rule | CATSIT |
+| 27.63 | categoryOfSignalStationWarning | rule | CATSIW |
+| 27.64 | categoryOfSiloTank | rule | CATSIL |
+| 27.65 | categoryOfSlope | rule | CATSLO |
+| 27.66 | categoryOfSmallCraftFacility | rule | CATSCF |
+| 27.67 | categoryOfSpecialPurposeMark | rule | CATSPM |
+| 27.68 | categoryOfStructure | rule | INFORM text for some values |
+| 27.69 | categoryOfTidalStream | rule | CAT_TS |
+| 27.70 | categoryOfVegetation | rule | CATVEG |
+| 27.71 | categoryOfWaterTurbulence | rule | CATWAT |
+| 27.72 | categoryOfWeedKelp | rule | CATWED |
+| 27.73 | categoryOfWreck | rule | CATWRK |
+| 27.74 | categoryOfZoneOfConfidenceInData | rule | CATZOC |
+| 27.75 | colour | rule | COLOUR |
+| 27.76 | colourPattern | rule | COLPAT |
+| 27.77 | communicationChannel | rule | COMCHA |
+| 27.78 | condition | rule | CONDTN |
+| 27.79 | contactInstructions | rule | INFORM text |
+| 27.80 | dateDisused | dropped | S-101 enhancement (§27.80) |
+| 27.81 | dateEnd | assembled | DATEND / PEREND / SUREND |
+| 27.82 | dateFixed | dropped | S-101 enhancement (§27.82) |
+| 27.83 | dateStart | assembled | DATSTA / PERSTA / SURSTA |
+| 27.84 | dateVariable | dropped | S-101 enhancement (§27.84) |
+| 27.85 | dayOfWeek | dropped | S-101 enhancement (§27.85) |
+| 27.86 | dayOfWeekIsRange | dropped | S-101 enhancement (§27.86) |
+| 27.87 | depthRangeMaximumValue | rule | DRVAL2 |
+| 27.88 | depthRangeMinimumValue | rule | DRVAL1 |
+| 27.89 | destination | dropped | S-101 enhancement (§27.89) |
+| 27.90 | distanceMarkVisible | rule | CATDIS |
+| 27.91 | distanceUnitOfMeasurement | assembled | INFORM (measuredDistanceValue) |
+| 27.92 | dredgedDate | rule | SORDAT |
+| 27.93 | elevation | rule | ELEVAT |
+| 27.94 | estimatedRangeOfTransmission | rule | ESTRNG |
+| 27.95 | exhibitionConditionOfLight | rule | EXCLIT |
+| 27.96 | expositionOfSounding | rule | EXPSOU |
+| 27.97 | fileLocator | dropped | S-101 enhancement (§27.97) |
+| 27.98 | fileReference | assembled | TXTDSC / NTXTDS (information) |
+| 27.99 | flareBearing | dropped | S-101 enhancement (§27.99) |
+| 27.100 | flareStack | assembled | a LNDMRK CATLMK 6 |
+| 27.101 | frequencyShoreStationReceives | dropped | S-101 enhancement (§27.101) |
+| 27.102 | frequencyShoreStationTransmits | rule | SIGFRQ |
+| 27.103 | function | rule | FUNCTN |
+| 27.104 | headline | dropped | S-101 enhancement (§27.104) |
+| 27.105 | height | rule | HEIGHT |
+| 27.106 | horizontalClearanceLength | dropped | S-101 enhancement (§27.106) |
+| 27.107 | horizontalClearanceValue | assembled | HORCLR |
+| 27.108 | horizontalClearanceWidth | dropped | S-101 enhancement (§27.108) |
+| 27.109 | horizontalLength | rule | HORLEN |
+| 27.110 | horizontalWidth | rule | HORWID |
+| 27.111 | iceFactor | rule | ICEFAC |
+| 27.112 | iMOAdopted | rule | CATTSS |
+| 27.113 | inDispute | assembled | a CTNARE "In dispute" |
+| 27.114 | interoperabilityIdentifier | dropped | S-101 enhancement (§27.114) |
+| 27.115 | isMRCC | rule | INFORM text |
+| 27.116 | jurisdiction | rule | JRSDTN |
+| 27.117 | language | dropped | S-101 enhancement (§27.117) |
+| 27.118 | liftingCapacity | rule | LIFCAP |
+| 27.119 | lightCharacteristic | assembled | LITCHR (rhythmOfLight, sectorCharacteristics) |
+| 27.120 | lightVisibility | rule | LITVIS |
+| 27.121 | linkage | dropped | S-101 enhancement (§27.121) |
+| 27.122 | magneticAnomalyValue | assembled | VALLMA |
+| 27.123 | majorLight | dropped | S-101 enhancement (§27.123) |
+| 27.124 | marksNavigationalSystemOf | rule | MARSYS |
+| 27.125 | maximumPermittedDraught | rule | INFORM text |
+| 27.126 | maximumPermittedVesselLength | rule | INFORM text |
+| 27.127 | measuredDistance | rule | INFORM text |
+| 27.128 | minimumBerthDepth | rule | DRVAL1 |
+| 27.129 | mMSICode | assembled | OBJNAM "name; MMSI n" |
+| 27.130 | moireEffect | assembled | CATLIT 16 |
+| 27.131 | multiplicityKnown | assembled | INFORM (multiplicityOfFeatures) |
+| 27.132 | name | assembled | OBJNAM / NOBJNM (featureName) |
+| 27.133 | nameOfResource | dropped | S-101 enhancement (§27.133) |
+| 27.134 | nameUsage | dropped | S-101 enhancement (§27.134) |
+| 27.135 | nationality | rule | NATION |
+| 27.136 | natureOfConstruction | rule | NATCON |
+| 27.137 | natureOfSurface | rule | NATSUR |
+| 27.138 | natureOfSurfaceQualifyingTerms | assembled | NATQUA (surfaceCharacteristics) |
+| 27.139 | numberOfFeatures | assembled | INFORM (multiplicityOfFeatures) |
+| 27.140 | openingBridge | rule | CATBRG |
+| 27.141 | orientationValue | rule | ORIENT |
+| 27.142 | pictorialRepresentation | rule | PICREP |
+| 27.143 | pilotMovement | dropped | S-101 enhancement (§27.143) |
+| 27.144 | product | rule | PRODCT |
+| 27.145 | radarBand | assembled | RADWAL |
+| 27.146 | radarConspicuous | rule | CONRAD |
+| 27.147 | radius | rule | RADIUS |
+| 27.148 | referenceDirection | dropped | S-101 enhancement (§27.148) |
+| 27.149 | referenceLocation | rule | INFORM text |
+| 27.150 | referenceTide | assembled | TS_TSP HW / LW |
+| 27.151 | referenceTideType | dropped | S-101 enhancement (§27.151) |
+| 27.152 | referenceYearForMagneticVariation | rule | RYRMGV |
+| 27.153 | regulationCitation | dropped | S-101 enhancement (§27.153) |
+| 27.154 | reportedDate | rule | SORDAT |
+| 27.155 | restriction | rule | RESTRN |
+| 27.156 | scaleMinimum | rule | SCAMIN |
+| 27.157 | sectorBearing | rule | SECTR1 |
+| 27.158 | sectorLineLength | dropped | S-101 enhancement (§27.158) |
+| 27.159 | signalDuration | assembled | SIGSEQ (signalSequence) |
+| 27.160 | signalFrequency | rule | SIGFRQ |
+| 27.161 | signalGeneration | rule | SIGGEN |
+| 27.162 | signalGroup | rule | SIGGRP |
+| 27.163 | signalPeriod | rule | SIGPER |
+| 27.164 | signalStatus | assembled | SIGSEQ brackets (signalSequence) |
+| 27.165 | speedLimit | assembled | INFORM (vesselSpeedLimit) |
+| 27.166 | speedMaximum | assembled | CURVEL (speed) |
+| 27.167 | speedMinimum | dropped | S-101 enhancement (§27.167) |
+| 27.168 | speedUnits | assembled | INFORM (vesselSpeedLimit) |
+| 27.169 | stationName | assembled | TS_TSP |
+| 27.170 | stationNumber | assembled | TS_TSP |
+| 27.171 | status | rule | STATUS |
+| 27.172 | streamDepth | dropped | S-101 enhancement (§27.172) |
+| 27.173 | sweptDate | rule | SORDAT |
+| 27.174 | techniqueOfVerticalMeasurement | rule | TECSOU |
+| 27.175 | telecommunicationIdentifier | dropped | S-101 enhancement (§27.175) |
+| 27.176 | telecommunicationService | dropped | S-101 enhancement (§27.176) |
+| 27.177 | text | assembled | INFORM / NINFOM (information) |
+| 27.178 | textOffsetBearing | dropped | S-101 enhancement (§27.178) |
+| 27.179 | textOffsetDistance | dropped | S-101 enhancement (§27.179) |
+| 27.180 | textRotation | dropped | S-101 enhancement (§27.180) |
+| 27.181 | textType | dropped | S-101 enhancement (§27.181) |
+| 27.182 | timeOfDayEnd | dropped | S-101 enhancement (§27.182) |
+| 27.183 | timeOfDayStart | dropped | S-101 enhancement (§27.183) |
+| 27.184 | timeRelativeToTide | assembled | TS_TSP hour |
+| 27.185 | topmarkDaymarkShape | rule | TOPSHP |
+| 27.186 | trafficFlow | rule | TRAFIC |
+| 27.187 | underlyingLayer | assembled | the / separator in NATSUR / NATQUA |
+| 27.188 | valueOfAnnualChangeInMagneticVariation | rule | VALACM |
+| 27.189 | valueOfDepthContour | rule | VALDCO |
+| 27.190 | valueOfMagneticVariation | rule | VALMAG |
+| 27.191 | valueOfMaximumRange | rule | VALMXR |
+| 27.192 | valueOfNominalRange | rule | VALNMR |
+| 27.193 | valueOfSounding | rule | VALSOU |
+| 27.194 | verticalClearanceUnlimited | dropped | S-101 enhancement (§27.194) |
+| 27.195 | verticalClearanceValue | assembled | VERCLR / VERCCL / VERCOP / VERCSA |
+| 27.196 | verticalDatum | rule | VERDAT |
+| 27.197 | verticalLength | rule | VERLEN |
+| 27.198 | vesselClass | dropped | S-101 enhancement (§27.198) |
+| 27.199 | virtualAISAidToNavigationType | assembled | NEWOBJ CLSDEF, CLSNAM, INFORM, SYMINS |
+| 27.200 | visitorsMooring | assembled | SMCFAC CATSCF 29 |
+| 27.201 | visualProminence | rule | CONVIS |
+| 27.202 | waterLevelEffect | rule | WATLEV |
+| 27.203 | waterwayDistance | assembled | INFORM (measuredDistanceValue) |
+| 27.204 | waveLengthValue | assembled | RADWAL |
+| 28.1 | categoryOfTemporalVariation | dropped | S-101 enhancement (§28.1) |
+| 28.2 | dataAssessment | dropped | S-101 enhancement (§28.2) |
+| 28.3 | drawingIndex | dropped | S-101 enhancement (§28.3) |
+| 28.4 | fullSeafloorCoverageAchieved | dropped | S-101 enhancement (§28.4) |
+| 28.5 | horizontalDistanceUncertainty | assembled | HORACC |
+| 28.6 | leastDepthOfDetectedFeaturesMeasured | dropped | S-101 enhancement (§28.6) |
+| 28.7 | lineSpacingMaximum | dropped | S-101 enhancement (§28.7) |
+| 28.8 | lineSpacingMinimum | dropped | S-101 enhancement (§28.8) |
+| 28.9 | maximumDisplayScale | dropped | S-101 enhancement (§28.9) |
+| 28.10 | measurementDistanceMaximum | rule | SDISMX |
+| 28.11 | measurementDistanceMinimum | rule | SDISMN |
+| 28.12 | minimumDisplayScale | dropped | S-101 enhancement (§28.12) |
+| 28.13 | optimumDisplayScale | assembled | DSPM CSCL and M_CSCL CSCALE (§3.5) |
+| 28.14 | orientationUncertainty | dropped | S-101 enhancement (§28.14) |
+| 28.15 | qualityOfHorizontalMeasurement | rule | QUAPOS |
+| 28.16 | qualityOfVerticalMeasurement | rule | QUASOU |
+| 28.17 | scaleValueMaximum | rule | SCVAL1 |
+| 28.18 | scaleValueMinimum | rule | SCVAL2 |
+| 28.19 | significantFeaturesDetected | dropped | S-101 enhancement (§28.19) |
+| 28.20 | sizeOfFeaturesDetected | dropped | S-101 enhancement (§28.20) |
+| 28.21 | source | assembled | SORIND |
+| 28.22 | surveyAuthority | rule | SURATH |
+| 28.23 | surveyType | rule | SURTYP |
+| 28.24 | updateNumber | dropped | S-101 enhancement (§28.24) |
+| 28.25 | updateType | dropped | S-101 enhancement (§28.25) |
+| 28.26 | uncertaintyFixed | assembled | POSACC / SOUACC / VERACC |
+| 28.27 | uncertaintyVariableFactor | dropped | no depth or length to scale it by on the feature (§28.27) |
+| 30.1 | defaultClearanceDepth | dropped | portrayal only |
+| 30.2 | inTheWater | structural | a PILPNT where a structure stands in the water |
+| 30.3 | sectorArcExtension | dropped | portrayal only |
+| 30.4 | surroundingDepth | dropped | portrayal only |
+
+</details>
+
+<details>
+<summary>Complex attributes (§29): 42 clauses</summary>
+
+| Clause | S-101 | Treatment | S-57 |
+|---|---|---|---|
+| 29.1 | directionalCharacter | assembled | CATLIT 1 (and 16 for a moiré effect), ORIENT |
+| 29.2 | featureName | assembled | OBJNAM / NOBJNM by name usage and language |
+| 29.3 | featuresDetected | dropped | S-101 enhancement |
+| 29.4 | fixedDateRange | assembled | DATSTA / DATEND |
+| 29.5 | frequencyPair | assembled | SIGFRQ |
+| 29.6 | horizontalClearanceFixed | assembled | HORCLR, HORACC |
+| 29.7 | horizontalClearanceOpen | assembled | HORCLR, HORACC |
+| 29.8 | horizontalPositionUncertainty | assembled | POSACC |
+| 29.9 | information | assembled | INFORM / NINFOM, TXTDSC / NTXTDS by language |
+| 29.10 | lightSector | assembled | LIGHTS, one per light sector |
+| 29.11 | measuredDistanceValue | assembled | INFORM "n units" |
+| 29.12 | multiplicityOfFeatures | assembled | INFORM "n features" or "Multiple features" |
+| 29.13 | onlineResource | dropped | S-101 enhancement |
+| 29.14 | orientation | assembled | ORIENT |
+| 29.15 | periodicDateRange | assembled | PERSTA / PEREND |
+| 29.16 | radarWaveLength | assembled | RADWAL "wavelength-band" pairs |
+| 29.17 | rhythmOfLight | assembled | LITCHR, SIGGRP, SIGPER, SIGSEQ |
+| 29.18 | scheduleByDayOfWeek | dropped | S-101 enhancement |
+| 29.19 | sectorCharacteristics | assembled | LIGHTS, one per light sector |
+| 29.20 | sectorInformation | assembled | INFORM / NINFOM on the sector's LIGHTS |
+| 29.21 | sectorLimit | assembled | SECTR1 / SECTR2 |
+| 29.22 | sectorLimitOne | assembled | SECTR1 |
+| 29.23 | sectorLimitTwo | assembled | SECTR2 |
+| 29.24 | shapeInformation | assembled | INFORM / NINFOM on the TOPMAR |
+| 29.25 | signalSequence | assembled | SIGSEQ, phases joined by +, eclipses in brackets |
+| 29.26 | spatialAccuracy | dropped | on spatial records, which the S-101 reader doesn't associate with Spatial Quality (§24.5) |
+| 29.27 | speed | assembled | CURVEL |
+| 29.28 | surfaceCharacteristics | assembled | positional NATSUR / NATQUA, / before an underlying layer |
+| 29.29 | surveyDateRange | assembled | SURSTA / SUREND |
+| 29.30 | telecommunications | dropped | S-101 enhancement |
+| 29.31 | tidalStreamPanelValues | assembled | TS_TSP |
+| 29.32 | tidalStreamValue | assembled | TS_TSP direction and rate per hour |
+| 29.33 | timeIntervalsByDayOfWeek | dropped | S-101 enhancement |
+| 29.34 | topmark | assembled | TOPMAR, slave of the structure |
+| 29.35 | valueOfLocalMagneticAnomaly | assembled | VALLMA, degrees to minutes |
+| 29.36 | verticalClearanceClosed | assembled | VERCCL, VERACC |
+| 29.37 | verticalClearanceFixed | assembled | VERCLR, VERACC |
+| 29.38 | verticalClearanceOpen | assembled | VERCOP, VERACC |
+| 29.39 | verticalClearanceSafe | assembled | VERCSA, VERACC |
+| 29.40 | verticalUncertainty | assembled | SOUACC, or VERACC on a clearance |
+| 29.41 | vesselSpeedLimit | assembled | INFORM "Speed limit is n units", first instance |
+| 29.42 | zoneOfConfidence | assembled | CATZOC, POSACC, SOUACC |
+
+</details>
+
+<!-- annex-c-coverage:end -->
 
 ## See also
 

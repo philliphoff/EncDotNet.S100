@@ -34,7 +34,6 @@ public readonly record struct S57AttributeNulled(string ObjectClass, string Attr
 public sealed class S101ToS57TranslationDiagnostics
 {
     private readonly Dictionary<S101FeatureDrop, int> _droppedFeatures = new();
-    private readonly Dictionary<string, int> _deferredFeatures = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _unmappedFeatures = new(StringComparer.Ordinal);
     private readonly Dictionary<S101AttributeDrop, int> _droppedAttributes = new();
     private readonly Dictionary<S101UnmappedAttribute, int> _unmappedAttributes = new();
@@ -43,6 +42,9 @@ public sealed class S101ToS57TranslationDiagnostics
     private readonly Dictionary<S57AttributeNulled, int> _mandatoryNulled = new();
     private readonly Dictionary<string, int> _featuresSynthesised = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _unmappedInformationTypes = new(StringComparer.Ordinal);
+    private readonly Dictionary<S101FeatureDrop, int> _restructured = new();
+    private readonly Dictionary<string, int> _primitivesChanged = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _skinOfTheEarthCuts = new(StringComparer.Ordinal);
 
     /// <summary>Number of S-101 feature records read.</summary>
     public int FeaturesRead { get; internal set; }
@@ -61,13 +63,6 @@ public sealed class S101ToS57TranslationDiagnostics
 
     /// <summary>S-101 feature classes dropped by an Annex C rule, with the clause.</summary>
     public IReadOnlyDictionary<S101FeatureDrop, int> DroppedFeatures => _droppedFeatures;
-
-    /// <summary>
-    /// S-101 feature classes whose conversion needs a structural inverse that
-    /// is deferred to a later phase (for example <c>SpanFixed</c>, folded back
-    /// into its <c>BRIDGE</c> in Phase 2), so they are not written yet.
-    /// </summary>
-    public IReadOnlyDictionary<string, int> DeferredFeatures => _deferredFeatures;
 
     /// <summary>S-101 feature classes with no conversion rule.</summary>
     public IReadOnlyDictionary<string, int> UnmappedFeatureClasses => _unmappedFeatures;
@@ -104,9 +99,42 @@ public sealed class S101ToS57TranslationDiagnostics
     /// <summary>Information types linked to a feature that Phase 1 does not fold into <c>INFORM</c>.</summary>
     public IReadOnlyDictionary<string, int> UnmappedInformationTypes => _unmappedInformationTypes;
 
-    internal void RecordDroppedFeature(string s101Code, string clause) => Increment(_droppedFeatures, new S101FeatureDrop(s101Code, clause));
+    /// <summary>
+    /// S-101 features converted by other features rather than as an object of
+    /// their own, by class and clause: a <c>Bridge</c> by its spans (§6.6), a
+    /// <c>PhysicalAISAidToNavigation</c> as text on its structure (§21.2).
+    /// </summary>
+    public IReadOnlyDictionary<S101FeatureDrop, int> Restructured => _restructured;
 
-    internal void RecordDeferredFeature(string s101Code) => Increment(_deferredFeatures, s101Code);
+    /// <summary>
+    /// Features whose geometric primitive changed because S-57 doesn't allow
+    /// the S-101 one (Annex C Table 2-1), by S-101 class.
+    /// </summary>
+    public IReadOnlyDictionary<string, int> PrimitivesChanged => _primitivesChanged;
+
+    /// <summary>
+    /// Skin-of-the-earth objects cut around a <c>FLODOC</c>, <c>HULKES</c> or
+    /// <c>PONTON</c> area (§2.5.1.1), by S-57 class.
+    /// </summary>
+    public IReadOnlyDictionary<string, int> SkinOfTheEarthCuts => _skinOfTheEarthCuts;
+
+    /// <summary>
+    /// Information types not converted, with the Annex C clause that says so
+    /// (§24.2 Service Hours, §24.3 Non-standard Working Day).
+    /// </summary>
+    public IReadOnlyDictionary<S101FeatureDrop, int> DroppedInformationTypes => _droppedInformationTypes;
+
+    private readonly Dictionary<S101FeatureDrop, int> _droppedInformationTypes = new();
+
+    internal void RecordDroppedInformationType(string s101Code, string clause) => Increment(_droppedInformationTypes, new S101FeatureDrop(s101Code, clause));
+
+    internal void RecordRestructured(string s101Code, string clause) => Increment(_restructured, new S101FeatureDrop(s101Code, clause));
+
+    internal void RecordPrimitiveChanged(string s101Code) => Increment(_primitivesChanged, s101Code);
+
+    internal void RecordSkinOfTheEarthCut(string s57Acronym) => Increment(_skinOfTheEarthCuts, s57Acronym);
+
+    internal void RecordDroppedFeature(string s101Code, string clause) => Increment(_droppedFeatures, new S101FeatureDrop(s101Code, clause));
 
     internal void RecordUnmappedFeature(string s101Code) => Increment(_unmappedFeatures, s101Code);
 

@@ -5,7 +5,8 @@ These scripts generate
 attribute, which `S101ToS57Translator` cites. Annex C is prose only, so the
 table is built from its table of contents, matched by name against the bundled
 S-101 Feature Catalogue. The scripts also list the attributes whose clause says,
-without exception, that they "will not be converted".
+without exception, that they "will not be converted", and, per feature and information type clause, the
+attributes it says will not be converted on that class.
 
 Regenerate the table when Annex C or the bundled Feature Catalogue changes:
 
@@ -13,7 +14,8 @@ Regenerate the table when Annex C or the bundled Feature Catalogue changes:
 curl -L -o annexc.pdf "https://iho.int/uploads/user/pubs/standards/s-65/S-65%20Annex%20C_Ed%201.0.0_FINAL.pdf"
 pdftotext -layout annexc.pdf annexc.txt
 python3 -I tools/annexc-clauses/extract_clauses.py annexc.txt src/EncDotNet.S100.Specifications/content/S101/fc/FeatureCatalogue.xml notconv.tsv > clauses.tsv
-python3 -I tools/annexc-clauses/generate_cs.py clauses.tsv notconv.tsv src/EncDotNet.S100.Datasets.S57/S101ToS57AnnexCClauses.cs
+python3 -I tools/annexc-clauses/extract_class_drops.py annexc.txt src/EncDotNet.S100.Specifications/content/S101/fc/FeatureCatalogue.xml > classdrops.tsv
+python3 -I tools/annexc-clauses/generate_cs.py clauses.tsv notconv.tsv src/EncDotNet.S100.Datasets.S57/S101ToS57AnnexCClauses.cs classdrops.tsv
 ```
 
 `pdftotext` is part of Poppler. Don't commit the PDF or the text: they are IHO

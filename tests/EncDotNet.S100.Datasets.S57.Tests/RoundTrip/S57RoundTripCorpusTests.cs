@@ -122,7 +122,7 @@ public class S57RoundTripCorpusTests
         int FeaturesRead,
         int FeaturesWritten,
         Dictionary<string, int> DroppedFeatures,
-        Dictionary<string, int> DeferredFeatures,
+        Dictionary<string, int> Restructured,
         Dictionary<string, int> UnmappedFeatureClasses,
         Dictionary<string, int> DroppedAttributes,
         Dictionary<string, int> UnmappedAttributes,
@@ -131,13 +131,16 @@ public class S57RoundTripCorpusTests
         Dictionary<string, int> MandatoryAttributesNulled,
         Dictionary<string, int> FeaturesSynthesised,
         int InformOverLength,
-        int NonBooleanValues)
+        int NonBooleanValues,
+        Dictionary<string, int> PrimitivesChanged,
+        Dictionary<string, int> SkinOfTheEarthCuts,
+        Dictionary<string, int> DroppedInformationTypes)
     {
         public static ReverseSummary From(S101ToS57TranslationDiagnostics d) => new(
             d.FeaturesRead,
             d.FeaturesWritten,
             Sorted(d.DroppedFeatures.ToDictionary(kv => $"{kv.Key.S101Code} (§{kv.Key.Clause})", kv => kv.Value)),
-            Sorted(d.DeferredFeatures.ToDictionary(kv => kv.Key, kv => kv.Value)),
+            Sorted(d.Restructured.ToDictionary(kv => $"{kv.Key.S101Code} (§{kv.Key.Clause})", kv => kv.Value)),
             Sorted(d.UnmappedFeatureClasses.ToDictionary(kv => kv.Key, kv => kv.Value)),
             Sorted(d.DroppedAttributes.ToDictionary(kv => $"{kv.Key.S101Code} (§{kv.Key.Clause})", kv => kv.Value)),
             Sorted(d.UnmappedAttributes.ToDictionary(kv => $"{kv.Key.S101FeatureCode}.{kv.Key.S101AttributeCode}", kv => kv.Value)),
@@ -146,7 +149,10 @@ public class S57RoundTripCorpusTests
             Sorted(d.MandatoryAttributesNulled.ToDictionary(kv => $"{kv.Key.ObjectClass}.{kv.Key.Attribute}", kv => kv.Value)),
             Sorted(d.FeaturesSynthesised.ToDictionary(kv => kv.Key, kv => kv.Value)),
             d.InformOverLength,
-            d.NonBooleanValues);
+            d.NonBooleanValues,
+            Sorted(d.PrimitivesChanged.ToDictionary(kv => kv.Key, kv => kv.Value)),
+            Sorted(d.SkinOfTheEarthCuts.ToDictionary(kv => kv.Key, kv => kv.Value)),
+            Sorted(d.DroppedInformationTypes.ToDictionary(kv => $"{kv.Key.S101Code} (§{kv.Key.Clause})", kv => kv.Value)));
 
         private static Dictionary<string, int> Sorted(Dictionary<string, int> map)
             => map.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal).ToDictionary();
