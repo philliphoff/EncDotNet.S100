@@ -123,6 +123,7 @@ dotnet run --project tools/EncDotNet.S100.Cli -- list-specs
 | [`route check`](#route-check) | Checks an RTZ or S-421 route against datasets, and its under-keel clearance when it has a draft. |
 | [`list-specs`](#list-specs) | Lists the supported product specifications. |
 | [`s57 convert`](#s57-convert) | Converts an S-57 cell to an S-101 dataset, or an inland ENC cell to S-401. |
+| [`s101 convert`](#s101-convert) | Converts an S-101 dataset to an S-57 cell or exchange set, for testing and S-57-only tools. |
 | [`mcp serve`](#mcp-serve) | Serves the S-100 MCP tools over standard input and output for a set of datasets. |
 | [`feed serve`](#feed-serve) | Serves a folder, exchange set or dataset as an S-100 feed over HTTP. |
 | [`feed export`](#feed-export) | Writes a folder, exchange set or dataset as a static S-100 feed. |
@@ -892,6 +893,49 @@ s100 s57 convert --target s101 -o my-s101-dataset.000 my-inland-s57-dataset.000
 The output is an ordinary dataset: use `info`, `validate` and `render` on it.
 [Bringing S-57 into the pipeline](s57-to-s101.md) covers the summary, the
 report, inland cells and the translation's known gaps.
+
+## s101 convert
+
+```text
+s100 s101 convert --to s57 -o <output> <source> [options]
+```
+
+`s101 convert` translates an S-101 base dataset (`.000`) and writes it as an
+S-57 Edition 3.1 base cell, following S-65 Annex C. Update datasets next to
+the base dataset are applied first. The command then prints a summary of what
+converted, what Annex C dropped or folded into `INFORM`, and what had no rule.
+It warns when the dataset isn't S-101 Edition 2.0.0, the edition Annex C
+converts.
+
+The output is for testing and for tools that read only S-57, such as GDAL/OGR
+and OpenCPN. It isn't a production ENC: it isn't checked against S-58, and
+Annex C expects the producer to finish it by hand.
+
+| Option | Default | Description |
+|---|---|---|
+| `-o`, `--output <path>` | required | The S-57 cell to write, or with `--exchange-set` the directory to write the exchange set into. |
+| `--to <format>` | `s57` | The format to write. Only `s57` is supported. |
+| `--exchange-set` | off | Writes `ENC_ROOT/CATALOG.031` and `ENC_ROOT/<cell>/<cell>.000` under the output directory. |
+| `--cell-name <name>` | source file name | With `--exchange-set`, the cell's name without extension, such as `XX5CELL1`. |
+| `--report <path>` | off | Also writes the full translation diagnostics, with the Annex C clause of each drop, as JSON. |
+| `--no-updates` | off | Converts the base dataset without its update datasets. |
+| `--no-optional-inform` | off | Skips the conversions to `INFORM` that Annex C marks optional. |
+| `--inform-separator <text>` | `;` | The separator between strings folded into one `INFORM` or `NINFOM`. |
+| `--max-inform-length <n>` | `300` | The recommended maximum length of `INFORM` and `NINFOM`. |
+| `--inform-length <policy>` | `keep` | `keep` keeps a longer text and reports it; `truncate` cuts it at `--max-inform-length`. |
+| `--national-language <code>` | first | The ISO 639-2 language, such as `fra`, to prefer for `NOBJNM`, `NINFOM` and `NTXTDS`. |
+| `--name-without-usage <policy>` | `by-language` | A name with no `nameUsage`: `by-language` writes an English or unlabelled name to `OBJNAM` and any other to `NOBJNM`; `drop` doesn't convert it. |
+| `--debug` | off | Prints a full stack trace on error. |
+
+```bash
+s100 s101 convert --to s57 -o XX5CELL1.000 101XX00CELL1.000
+s100 s101 convert --to s57 -o XX5CELL1.000 101XX00CELL1.000 --report report.json
+s100 s101 convert --to s57 --exchange-set --cell-name XX5CELL1 -o s57set 101XX00CELL1.000
+```
+
+Read the cell back with `info`, and check an exchange set's catalogue with
+`validate`. [Converting S-101 to S-57](s101-to-s57.md) covers the summary,
+what Annex C drops, the options and what a producer still has to do.
 
 ## mcp serve
 

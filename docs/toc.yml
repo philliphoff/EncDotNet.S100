@@ -16,6 +16,8 @@
       href: catalogues-and-validation.md
     - name: Bringing S-57 into the pipeline
       href: s57-to-s101.md
+    - name: Converting S-101 to S-57
+      href: s101-to-s57.md
     - name: Route checks and under-keel clearance
       href: route-checks.md
     - name: How a route check works

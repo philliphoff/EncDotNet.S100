@@ -1540,14 +1540,19 @@ public sealed partial class S101ToS57Translator
             var pointers = new List<S57VectorPointer>();
             foreach (var association in curve.PointAssociations.OrderBy(p => p.Topology))
             {
-                pointers.Add(new S57VectorPointer
+                var node = ConnectedNode(association.RecordId);
+                // S-100 Part 10a TOPI 3 is one point that both begins and ends
+                // a closed curve. S-57 VRPT has no such value, so a closed edge
+                // points at the same node as its beginning and its end.
+                if (association.Topology == 3)
                 {
-                    Name = new S57RecordName { RecordNameCode = S57RcnmConnectedNode, RecordId = (int)ConnectedNode(association.RecordId) },
-                    Orientation = (S57Orientation)Null,
-                    Usage = (S57UsageIndicator)Null,
-                    Topology = (S57TopologyIndicator)association.Topology,
-                    Mask = (S57MaskingIndicator)Null,
-                });
+                    pointers.Add(NodePointer(node, S57TopologyIndicator.Beginning));
+                    pointers.Add(NodePointer(node, S57TopologyIndicator.End));
+                }
+                else
+                {
+                    pointers.Add(NodePointer(node, (S57TopologyIndicator)association.Topology));
+                }
             }
             _edges[curveId] = new S57VectorRecord
             {

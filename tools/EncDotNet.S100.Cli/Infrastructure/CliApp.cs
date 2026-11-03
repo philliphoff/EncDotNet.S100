@@ -110,6 +110,18 @@ internal static class CliApp
                     .WithExample("s57", "convert", "--target", "s101", "-o", "my-s101-dataset.000", "my-inland-s57-dataset.000");
             });
 
+            config.AddBranch("s101", s101 =>
+            {
+                s101.SetDescription("S-101 (IHO S-101 ENC) specific operations.");
+
+                s101.AddCommand<S101ConvertCommand>("convert")
+                    .WithDescription("Convert an S-101 base dataset to an S-57 base cell, following S-65 Annex C, for testing and for tools that read only S-57. The output is not a production ENC.")
+                    .WithExample("s101", "convert", "--to", "s57", "-o", "XX5CELL1.000", "101XX00CELL1.000")
+                    .WithExample("s101", "convert", "--to", "s57", "-o", "XX5CELL1.000", "101XX00CELL1.000", "--report", "report.json")
+                    .WithExample("s101", "convert", "--to", "s57", "--exchange-set", "--cell-name", "XX5CELL1", "-o", "s57set", "101XX00CELL1.000")
+                    .WithExample("s101", "convert", "--to", "s57", "--no-optional-inform", "--inform-length", "truncate", "-o", "XX5CELL1.000", "101XX00CELL1.000");
+            });
+
             config.AddBranch("feed", feed =>
             {
                 feed.SetDescription("Publish datasets to other machines as an S-100 feed.");

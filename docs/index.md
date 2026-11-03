@@ -67,6 +67,8 @@ flowchart LR
   catalogues, and validate datasets.
 - [Bringing S-57 into the pipeline](s57-to-s101.md): read S-57 cells through the
   S-101 portrayal.
+- [Converting S-101 to S-57](s101-to-s57.md): write S-101 data as S-57 cells for
+  testing and S-57-only tools, following S-65 Annex C.
 - [S-57 and ISO 8211 libraries](../external/EncDotNet/docs/index.md): read S-57
   cells, update cells and exchange sets, and ISO 8211 files, with EncDotNet.
 - [Route checks and under-keel clearance](route-checks.md): what each route

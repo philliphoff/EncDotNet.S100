@@ -18,6 +18,7 @@ internal static class SkillContent
             ["identify"] = "Commands.Identify.md",
             ["list-specs"] = "Commands.ListSpecs.md",
             ["s57 convert"] = "Commands.S57Convert.md",
+            ["s101 convert"] = "Commands.S101Convert.md",
             ["mcp serve"] = "Commands.McpServe.md",
             ["route check"] = "Commands.RouteCheck.md",
         };

@@ -525,7 +525,9 @@ interface.
 Conversion Guidance*, Ed 1.0.0). Its main use today is as a round-trip check of
 the forward translation, not as a producer of S-57 cells for distribution:
 Annex C expects the producer to clean up the output by hand, and the output
-isn't checked against S-58.
+isn't checked against S-58. To convert a dataset from the command line, with
+`s100 s101 convert --to s57`, see
+[Converting S-101 to S-57](../../docs/s101-to-s57.md).
 
 ```csharp
 var s101 = new S57ToS101Translator().Translate(S57Dataset.Open("cell.000"));
@@ -1197,5 +1199,7 @@ it's dropped (`S101ToS57Coverage.Clauses`; a test keeps this table current):
 
 - [Bringing S-57 into the pipeline](../../docs/s57-to-s101.md): convert, view
   and validate S-57 cells with `s100` and SoundCharts.
+- [Converting S-101 to S-57](../../docs/s101-to-s57.md): convert S-101 datasets
+  to S-57 cells with `s100 s101 convert`.
 - [S-401 bundled catalogues](../EncDotNet.S100.Specifications/content/S401/README.md):
   the catalogues inland cells are translated for.
