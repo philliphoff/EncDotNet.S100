@@ -1942,6 +1942,72 @@ public class S57ToS101TranslatorTests
         Assert.Equal("1", GetSubAttribute(s101, topmark, "colourPattern"));
     }
 
+    // #1222: the TOPMAR's INFORM describes the topmark, so it becomes the
+    // complex's shapeInformation (S-65 Annex C §29.24 converts it back).
+    [Fact]
+    public void Translate_TopmarSlave_InformBecomesShapeInformation()
+    {
+        var s101 = new S57ToS101Translator().Translate(TopmarkScenario(
+            masterObjl: 18,
+            topmarkAttrs: new[]
+            {
+                Attr(171, "1"),   // TOPSHP
+                Attr(102, "Seasonal aid: Replaced by can when endangered by ice"), // INFORM
+            }));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(
+            new (string, string)[]
+            {
+                ("topmark", ""),
+                ("topmarkDaymarkShape", "1"),
+                ("shapeInformation", ""),
+                ("language", "eng"),
+                ("text", "Seasonal aid: Replaced by can when endangered by ice"),
+            },
+            AttributeSequence(s101, feat.Attributes).SkipWhile(a => a.Item1 != "topmark").ToArray());
+        Assert.Empty(feat.InformationAssociations); // not the buoy's own information
+    }
+
+    // #1222: the S-57 encoding of a virtual AIS aid to navigation (a point
+    // NEWOBJ, OBJL 163) is the inverse of S-65 Annex C §21.3 / §27.199.
+    [Theory]
+    [InlineData("Virtual AtoN, Isolated Danger", "SY(BRTHNO01);SY(BCNISD21);TX('V-AIS',3,2,2,'15110',2,0,CHMGD,11)", "9")]
+    [InlineData("Virtual AtoN, Port Lateral", "SY(BRTHNO01);SY(BOYLAT23);TX('V-AIS',3,2,2,'15110',2,0,CHMGD,11)", "7")]
+    [InlineData("virtual aton, port lateral", "", "5")]
+    public void Translate_VirtualAisNewobj_BecomesVirtualAISAidToNavigation(string clsnam, string symins, string type)
+    {
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(163,
+                Attr(191, clsnam), Attr(192, symins), Attr(190, "A Virtual object"),
+                Attr(116, "Fishing Grounds Obstruction (V-AIS) East, MMSI 993672988")), diag);
+
+        var feat = SingleOfClass(s101, "VirtualAISAidToNavigation");
+        Assert.Equal(type, TopLevelValue(s101, feat, "virtualAISAidToNavigationType"));
+        Assert.Equal("Fishing Grounds Obstruction (V-AIS) East, MMSI 993672988",
+            GetSubAttribute(s101, ComplexInstance(s101, feat.Attributes, "featureName", 1).ToList(), "name"));
+        Assert.Empty(diag.UnmappedObjectClasses);
+        Assert.Empty(diag.UnmappedAttributes);
+    }
+
+    // Any other NEWOBJ has no S-101 class and stays an unknown object (#1242).
+    [Fact]
+    public void Translate_OtherNewobj_StaysUnknownObject()
+    {
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(163, Attr(191, "Wind turbine under construction")), diag);
+
+        Assert.Equal(S57UnknownObject.FeatureTypeCode, s101.FeatureTypeCatalogue[Assert.Single(s101.Features).FeatureTypeCode]);
+        Assert.Equal(1, diag.UnmappedObjectClasses[163]);
+    }
+
+    // #1222: COSARE has an S-101 class (S-65 Annex C §16.14 is the inverse).
+    [Fact]
+    public void Translate_Cosare_BecomesContinentalShelfArea()
+        => Assert.Equal("ContinentalShelfArea", S57S101Mapping.Default.ResolveFeatureCode(32));
+
     [Fact]
     public void Translate_TopmarSlave_MultiValuedColour_SplitsIntoOccurrences()
     {
@@ -5584,6 +5650,49 @@ public class S57ToS101TranslatorTests
             AttributeSequence(s101, feat.Attributes));
     }
 
+    // #1222: an M_QUAL's own POSACC / SOUACC replace the CATZOC-implied
+    // uncertainties (fixed term only); S-65 Annex C §3.1 / §3.2 convert them back.
+    [Fact]
+    public void Translate_MQualPosaccSouacc_TakePrecedenceOverCatzocTable()
+    {
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(308, Attr(72, "3"), Attr(401, "1"), Attr(144, "0.3")), diag);
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(
+            new (string, string)[]
+            {
+                ("zoneOfConfidence", ""),
+                ("categoryOfZoneOfConfidenceInData", "3"),
+                ("horizontalPositionUncertainty", ""),
+                ("uncertaintyFixed", "1"),
+                ("verticalUncertainty", ""),
+                ("uncertaintyFixed", "0.3"),
+            },
+            AttributeSequence(s101, feat.Attributes));
+        Assert.Empty(diag.UnmappedAttributes);
+    }
+
+    // ZOC D has no table accuracy, but its own POSACC still has a home.
+    [Fact]
+    public void Translate_MQualPosacc_OnZocD_IsCarried()
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(308, Attr(72, "5"), Attr(401, "500")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal(
+            new (string, string)[]
+            {
+                ("zoneOfConfidence", ""),
+                ("categoryOfZoneOfConfidenceInData", "5"),
+                ("horizontalPositionUncertainty", ""),
+                ("uncertaintyFixed", "500"),
+            },
+            AttributeSequence(s101, feat.Attributes));
+    }
+
     // Projects a feature's attribute rows onto their (catalogue-name, value)
     // pairs in emission order, for asserting nested complex pre-order layouts.
     private static (string, string)[] AttributeSequence(
@@ -5820,6 +5929,22 @@ public class S57ToS101TranslatorTests
         var second = ComplexInstance(s101, feat.Attributes, "surfaceCharacteristics", 2).ToList();
         Assert.Equal("3", GetSubAttribute(s101, second, "natureOfSurface"));
         Assert.Null(GetSubAttribute(s101, second, "natureOfSurfaceQualifyingTerms"));
+    }
+
+    // #1222: the lists pair by position (S-57 UOC 7.1.2), so an empty
+    // position isn't skipped.
+    [Fact]
+    public void Translate_NatquaWithEmptyPositions_QualifiesTheMatchingSurface()
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(121, Attr(113, "4,1,4"), Attr(114, ",1,")));
+
+        var feat = Assert.Single(s101.Features);
+        var instances = Enumerable.Range(1, 3)
+            .Select(i => ComplexInstance(s101, feat.Attributes, "surfaceCharacteristics", i).ToList())
+            .Select(c => (GetSubAttribute(s101, c, "natureOfSurface"), GetSubAttribute(s101, c, "natureOfSurfaceQualifyingTerms")))
+            .ToArray();
+        Assert.Equal(new (string?, string?)[] { ("4", null), ("1", "1"), ("4", null) }, instances);
     }
 
     [Fact]
