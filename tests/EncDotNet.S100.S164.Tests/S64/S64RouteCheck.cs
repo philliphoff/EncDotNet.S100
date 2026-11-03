@@ -12,9 +12,9 @@ namespace EncDotNet.S100.S164.Tests.S64;
 /// </summary>
 /// <remarks>
 /// The S-64 cells chart the waypoints WP1, WP2 and so on as points of object
-/// class 163 with a test-only symbol. Translation drops them (the class has no
-/// S-101 counterpart), so <see cref="NamedWaypointsAsync"/> reads them from the
-/// S-57 records.
+/// class 163 with a test-only symbol. Translation keeps them only as unknown
+/// objects (the class has no S-101 counterpart; they draw as "?"), so
+/// <see cref="NamedWaypointsAsync"/> reads them from the S-57 records.
 /// </remarks>
 internal static class S64RouteCheck
 {

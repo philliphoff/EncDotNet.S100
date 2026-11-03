@@ -69,19 +69,33 @@ public sealed class S64Part3DisplayTests
             .Distinct()
             .ToArray();
 
-        // The tidal stream is the "?" of #1244, drawn in 21010.
-        Assert.Equal(["CableOverhead (12210)", "TidalStreamFloodEbb (21010)"], inStandard.Order(StringComparer.Ordinal));
+        // The tidal stream is the "?" of #1244, and the objects of classes
+        // translation has no rule for are "?" too, all drawn in 21010.
+        Assert.Equal(
+            ["CableOverhead (12210)", "S57UnknownObject (21010)", "TidalStreamFloodEbb (21010)"],
+            inStandard.Order(StringComparer.Ordinal));
     }
 
-    [Fact(Skip = "Unknown S-57 object classes are dropped by translation (#1242).")]
+    [Fact]
     public async Task InvalidObjects_UnknownClassesDrawAQuestionMark()
     {
         // 3.2.1 a): the cell charts a point, a line and an area of unknown
-        // classes (500 to 502), each to be drawn with SY(QUESMRK1).
+        // classes (500 to 502): SY(QUESMRK1) on the point and in the area,
+        // LC(QUESMRK1) along the line. Each can be picked, and its pick report
+        // names the class.
         var processor = await S64Cells.OpenAsync("3.2 Invalid Object/ENC_ROOT/AA3INVOB.000", [], TestContext.Current.CancellationToken);
         var instructions = await S64Cells.PortrayAsync(processor, S164Portrayal.DisplayTestSettings, TestContext.Current.CancellationToken);
 
-        Assert.True(instructions.OfType<PointInstruction>().Count(p => p.SymbolReference == S64Cells.QuestionMark) >= 3);
+        string? ClassOf(DrawingInstruction i) => processor.GetFeatureInfo(i.FeatureReference)?.FeatureTypeName;
+
+        var symbols = instructions.OfType<PointInstruction>()
+            .Where(p => p.SymbolReference == S64Cells.QuestionMark).Select(ClassOf).ToHashSet();
+        var lines = instructions.OfType<LineInstruction>()
+            .Where(l => l.LineStyleReference == S64Cells.QuestionMark).Select(ClassOf).ToHashSet();
+
+        Assert.Contains("Unknown S-57 object (500)", symbols);
+        Assert.Contains("Unknown S-57 object (502)", symbols);
+        Assert.Contains("Unknown S-57 object (501)", lines);
     }
 
     private static async Task<(Datasets.Pipelines.S57DatasetProcessor Processor, IReadOnlyList<DrawingInstruction> Instructions)> PortrayAsync(string cell)

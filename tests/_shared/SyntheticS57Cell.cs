@@ -85,6 +85,36 @@ internal static class SyntheticS57Cell
     }
 
     /// <summary>
+    /// Writes a copy of the NOAA fixture into <paramref name="directory"/> in
+    /// which the first point, line and area features (soundings and meta
+    /// objects aside) are given the object classes 500, 501 and 502, which the
+    /// S-57 Object Catalogue doesn't define, as S-64 3.2.1 does. Returns the
+    /// cell's full path.
+    /// </summary>
+    public static string WriteWithUnknownClasses(string directory, string fileName)
+    {
+        const ushort soundingObjl = 129;
+        const ushort firstMetaObjl = 300;
+        var document = Iso8211DocumentReader.ReadFromFile(FixturePath());
+
+        // FRID (binary): RCNM b11, RCID b14, PRIM b11, GRUP b11, OBJL b12, …
+        for (byte prim = 1; prim <= 3; prim++)
+        {
+            var frid = Writable(document.DataRecords
+                .Select(r => r.Fields.FirstOrDefault(f => f.Tag == "FRID"))
+                .First(f => f is not null
+                    && f.Data.Span[5] == prim
+                    && BitConverter.ToUInt16(f.Data.Span[7..]) is var objl
+                    && objl != soundingObjl && objl < firstMetaObjl)!);
+            BitConverter.TryWriteBytes(frid[7..], (ushort)(499 + prim));
+        }
+
+        var path = Path.Combine(directory, fileName);
+        Iso8211DocumentWriter.WriteToFile(path, document);
+        return path;
+    }
+
+    /// <summary>
     /// Locates <c>PRSP</c> in a binary-implementation DSID field (S-57 Edition 3.1
     /// Part 3 §7.3.1.1): RCNM (b11), RCID (b14), EXPP (b11), INTU (b11); the
     /// variable-length DSNM, EDTN and UPDN, each closed by a unit terminator;

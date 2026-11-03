@@ -1152,12 +1152,14 @@ public sealed class S57ToS101Translator
                 var resolved = _mapping.ResolveFeature(objl, acronymView, MapPrimitive(feat.Primitive));
                 if (resolved is null)
                 {
-                    if (_diagnostics is not null)
+                    if (_mapping.FeatureRules.ContainsKey(objl))
                     {
-                        if (_mapping.FeatureRules.ContainsKey(objl))
-                            _diagnostics.RecordRuleDroppedObjectClass(objl);
-                        else
-                            _diagnostics.RecordUnmappedObjectClass(objl);
+                        _diagnostics?.RecordRuleDroppedObjectClass(objl);
+                    }
+                    else
+                    {
+                        _diagnostics?.RecordUnmappedObjectClass(objl);
+                        EmitUnknownObject(feat, objl);
                     }
                     continue;
                 }
@@ -2496,6 +2498,46 @@ public sealed class S57ToS101Translator
         // all-zero long name.
         private static S57LongName Lnam(EncDotNet.S57.S57RecordName n)
             => n.LongName ?? default;
+
+        // An S-57 object whose class has no rule is kept as an
+        // S57UnknownObject feature (see S57UnknownObject) with its own
+        // geometry. The S-101 Feature Catalogue doesn't define that type, so
+        // the portrayal falls back to its Default rule and draws QUESMRK1, as
+        // S-52 (and S-64 3.2.1) asks for an object of unknown class, and the
+        // pick report lists its OBJL and S-57 attributes. A rule that drops a
+        // class on purpose still drops it; an object without geometry (a
+        // C_ASSO, say) has nothing to draw and is left out.
+        private void EmitUnknownObject(EncDotNet.S57.S57FeatureRecord feat, ushort objl)
+        {
+            var spatials = TranslateSpatialPointers(feat);
+            if (spatials.Count == 0)
+                return;
+
+            var attributes = new List<S101Attribute>(feat.Attributes.Count + 1)
+            {
+                new(GetOrAssignAttributeCode(S57UnknownObject.ObjectClassAttribute), 1,
+                    objl.ToString(CultureInfo.InvariantCulture)),
+            };
+            foreach (var a in feat.Attributes)
+            {
+                var code = S57UnknownObject.AttributeCode((ushort)a.AttributeCode, _mapping);
+                attributes.Add(new S101Attribute(GetOrAssignAttributeCode(code), 1, a.Value));
+            }
+
+            if (_diagnostics is not null) _diagnostics.FeaturesEmitted++;
+            Features.Add(new S101FeatureRecord
+            {
+                RecordId = _nextFeatureId++,
+                FeatureTypeCode = GetOrAssignFeatureTypeCode(S57UnknownObject.FeatureTypeCode),
+                ProducingAgency = (ushort)feat.RecordName.AgencyCode,
+                FeatureIdentificationNumber = (uint)feat.RecordName.FeatureId,
+                FeatureIdentificationSubdivision = (ushort)feat.RecordName.FeatureSubdivision,
+                Attributes = attributes,
+                SpatialAssociations = spatials,
+                FeatureAssociations = [],
+                InformationAssociations = [],
+            });
+        }
 
         // Second pass over deferred S-57 C_AGGR collection objects. S-101 has no
         // generic aggregation; a C_AGGR whose members are navigational tracks
