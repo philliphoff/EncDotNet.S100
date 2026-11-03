@@ -19,14 +19,11 @@ namespace EncDotNet.S100.Datasets.S57;
 /// hazard without <c>surroundingDepth</c> as an isolated danger.
 /// </para>
 /// <para>
-/// So the translator supplies them, following the S-52 logic:
+/// So the translator supplies them, as S-65 Annex B (Ed 2.0.0) asks:
 /// <c>surroundingDepth</c> is the least DRVAL1 of the depth areas under the
-/// hazard (a point inside, a curve or surface overlapping). When there is no
-/// VALSOU, <c>defaultClearanceDepth</c> is that depth for an always-submerged
-/// hazard whose sounding is within or deeper than the surrounding range
-/// (WATLEV 3, EXPSOU 1 or 3); otherwise 0.01 for a foul area (CATOBS 6) or an
-/// always-submerged hazard, 0 for one awash (WATLEV 5), and -15 for the rest
-/// (covers and uncovers, dry, or unknown).
+/// hazard (a point inside, a curve or surface overlapping), and, when there is
+/// no VALSOU, <c>defaultClearanceDepth</c> follows the S-101 DCEG (Ed 2.0.0)
+/// clause 30.1 tables (see <see cref="DefaultClearanceDepth"/>).
 /// </para>
 /// </remarks>
 internal sealed class S57HazardDepths
@@ -70,21 +67,50 @@ internal sealed class S57HazardDepths
     }
 
     /// <summary>
-    /// The default clearance depth of a hazard without VALSOU (S-52 OBSTRN07 /
-    /// WRECKS05 via DEPVAL02).
+    /// The default clearance depth of a hazard without VALSOU, from S-101 DCEG
+    /// (Ed 2.0.0) clause 30.1, Tables 30-1 (Obstruction), 30-2
+    /// (Underwater/Awash Rock) and 30-3 (Wreck).
     /// </summary>
+    /// <remarks>
+    /// An always-submerged hazard whose sounding is within or deeper than the
+    /// surrounding range (WATLEV 3, EXPSOU 1 or 3) takes the surrounding depth.
+    /// Otherwise a non-dangerous wreck (CATWRK 1) takes 20.1 m, or the
+    /// surrounding depth less 66 m when that is larger; any other categorised
+    /// wreck -15; and an uncategorised wreck 0 when always submerged or awash
+    /// (WATLEV 3 or 5). An obstruction or rock takes 0.1 for a foul area
+    /// (CATOBS 6) or when always submerged, 0 when awash. Anything else (covers
+    /// and uncovers, dry, or unknown) takes -15.
+    /// </remarks>
+    /// <param name="s101Code">The hazard's S-101 feature type: <c>Obstruction</c>, <c>UnderwaterAwashRock</c> or <c>Wreck</c>.</param>
     /// <param name="surroundingDepth">The least depth of the depth areas under the hazard.</param>
     /// <param name="watlev">The S-57 WATLEV value, if any.</param>
     /// <param name="expsou">The S-57 EXPSOU value, if any.</param>
     /// <param name="catobs">The S-57 CATOBS value, if any.</param>
-    public static double DefaultClearanceDepth(double? surroundingDepth, string? watlev, string? expsou, string? catobs)
+    /// <param name="catwrk">The S-57 CATWRK value, if any.</param>
+    public static double DefaultClearanceDepth(
+        string s101Code, double? surroundingDepth, string? watlev, string? expsou, string? catobs, string? catwrk)
     {
         if (surroundingDepth is { } depth && watlev == "3" && expsou is "1" or "3")
             return depth;
-        if (catobs == "6" || watlev == "3") return 0.01;
+
+        if (s101Code == "Wreck")
+        {
+            return catwrk switch
+            {
+                "1" => Math.Max(NonDangerousWreckDepth, (surroundingDepth ?? 0) - 66),
+                "2" or "3" or "4" or "5" => -15,
+                _ => watlev is "3" or "5" ? 0 : -15,
+            };
+        }
+
+        if (catobs == "6" && s101Code == "Obstruction") return 0.1;
+        if (watlev == "3") return 0.1;
         if (watlev == "5") return 0;
         return -15;
     }
+
+    /// <summary>The DCEG's default clearance depth for a non-dangerous wreck: deeper than 20 m.</summary>
+    private const double NonDangerousWreckDepth = 20.1;
 
     /// <summary>Formats a depth for an S-101 real attribute value.</summary>
     public static string Format(double depth) => depth.ToString("R", CultureInfo.InvariantCulture);

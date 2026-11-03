@@ -1302,10 +1302,12 @@ public sealed class S57ToS101Translator
             if (bindsDefault && !hasSounding)
             {
                 var clearance = S57HazardDepths.DefaultClearanceDepth(
+                    s101Code,
                     surrounding,
                     acronymView.GetValueOrDefault("WATLEV")?.Trim(),
                     acronymView.GetValueOrDefault("EXPSOU")?.Trim(),
-                    acronymView.GetValueOrDefault("CATOBS")?.Trim());
+                    acronymView.GetValueOrDefault("CATOBS")?.Trim(),
+                    acronymView.GetValueOrDefault("CATWRK")?.Trim());
                 result.Insert(0, new S101Attribute(
                     GetOrAssignAttributeCode(S101AttrDefaultClearanceDepth), 1, S57HazardDepths.Format(clearance)));
             }

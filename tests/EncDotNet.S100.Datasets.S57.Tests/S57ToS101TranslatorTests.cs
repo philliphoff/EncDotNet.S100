@@ -331,6 +331,7 @@ public class S57ToS101TranslatorTests
     private const ushort ObjlUwtroc = 153;
     private const ushort ObjlWrecks = 159;
     private const int AttlCatobs = 42;
+    private const int AttlCatwrk = 71;
     private const int AttlDrval1 = 87;
     private const int AttlExpsou = 93;
     private const int AttlValsou = 179;
@@ -372,15 +373,23 @@ public class S57ToS101TranslatorTests
         => Assert.Single(doc.Features, f => ClassOf(doc, f) != "DepthArea");
 
     [Theory]
-    [InlineData(ObjlUwtroc, "3", "1", null, "5")]     // always under water, within range: the surrounding depth
-    [InlineData(ObjlWrecks, "3", "3", null, "5")]     // always under water, deeper than range: the surrounding depth
-    [InlineData(ObjlUwtroc, "3", null, null, "0.01")] // always under water, exposition unknown
-    [InlineData(ObjlUwtroc, "5", null, null, "0")]    // awash
-    [InlineData(ObjlUwtroc, "4", null, null, "-15")]  // covers and uncovers
-    [InlineData(ObjlObstrn, null, null, null, "-15")] // water level unknown
-    [InlineData(ObjlObstrn, "4", null, "6", "0.01")]  // foul area
+    // S-101 DCEG clause 30.1, Tables 30-1 to 30-3.
+    [InlineData(ObjlUwtroc, "3", "1", null, null, "5")]     // always under water, within range: the surrounding depth
+    [InlineData(ObjlWrecks, "3", "3", null, null, "5")]     // always under water, deeper than range: the surrounding depth
+    [InlineData(ObjlUwtroc, "3", null, null, null, "0.1")]  // always under water, exposition unknown
+    [InlineData(ObjlUwtroc, "5", null, null, null, "0")]    // awash
+    [InlineData(ObjlUwtroc, "4", null, null, null, "-15")]  // covers and uncovers
+    [InlineData(ObjlObstrn, null, null, null, null, "-15")] // water level unknown
+    [InlineData(ObjlObstrn, "4", null, "6", null, "0.1")]   // foul area
+    [InlineData(ObjlWrecks, "3", null, null, null, "0")]    // uncategorised wreck, always under water
+    [InlineData(ObjlWrecks, "5", null, null, null, "0")]    // uncategorised wreck, awash
+    [InlineData(ObjlWrecks, "4", null, null, null, "-15")]  // uncategorised wreck, covers and uncovers
+    [InlineData(ObjlWrecks, "3", null, null, "1", "20.1")]  // non-dangerous wreck
+    [InlineData(ObjlWrecks, null, null, null, "1", "20.1")] // non-dangerous wreck, water level unknown
+    [InlineData(ObjlWrecks, "3", null, null, "2", "-15")]   // dangerous wreck
+    [InlineData(ObjlWrecks, "3", "1", null, "2", "5")]      // dangerous wreck within range: the surrounding depth
     public void Translate_HazardWithoutValsou_GetsDefaultClearanceDepth(
-        ushort objectClass, string? watlev, string? expsou, string? catobs, string expected)
+        ushort objectClass, string? watlev, string? expsou, string? catobs, string? catwrk, string expected)
     {
         // S-101 OBSTRN07 / WRECKS05 raise an error, and the hazard is drawn
         // with the "?" default symbol, when neither valueOfSounding nor
@@ -389,6 +398,7 @@ public class S57ToS101TranslatorTests
         if (watlev is not null) attributes.Add(Attr(AttlWatlev, watlev));
         if (expsou is not null) attributes.Add(Attr(AttlExpsou, expsou));
         if (catobs is not null) attributes.Add(Attr(AttlCatobs, catobs));
+        if (catwrk is not null) attributes.Add(Attr(AttlCatwrk, catwrk));
 
         var s101 = new S57ToS101Translator().Translate(
             HazardCell(HazardPoint(objectClass, node: 1, attributes.ToArray())));
@@ -418,7 +428,7 @@ public class S57ToS101TranslatorTests
 
         var hazard = SingleHazard(s101);
         Assert.DoesNotContain("surroundingDepth", AttributeNames(s101, hazard));
-        Assert.Equal("0.01", TopLevelValue(s101, hazard, "defaultClearanceDepth"));
+        Assert.Equal("0.1", TopLevelValue(s101, hazard, "defaultClearanceDepth"));
     }
 
     [Fact]
@@ -3417,6 +3427,45 @@ public class S57ToS101TranslatorTests
             LineFeatureWithS57Attributes(ObjlRectrc, Attr(AttlOrient, "45")));
 
         Assert.Equal("RecommendedTrack", ClassOf(s101, Assert.Single(s101.Features)));
+    }
+
+    private const ushort ObjlRunway = 117;
+    private const int AttlCatrun = 58;
+
+    [Fact]
+    public void Translate_PointHelicopterLandingPad_BecomesHelipad()
+    {
+        // S-65 Annex B §4.8.12: Runway permits no point; a point RUNWAY with
+        // CATRUN 2 (helicopter landing pad) is a Helipad.
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(ObjlRunway, Attr(AttlCatrun, "2")));
+
+        var feat = Assert.Single(s101.Features);
+        Assert.Equal("Helipad", ClassOf(s101, feat));
+        Assert.Empty(AttributeNames(s101, feat));
+    }
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData(null)]
+    public void Translate_PointRunway_IsNotConverted(string? category)
+    {
+        // Any other point RUNWAY (an aeroplane runway, or no category) isn't converted.
+        var attributes = category is null ? [] : new[] { Attr(AttlCatrun, category) };
+        var diag = new S57TranslationDiagnostics();
+        var s101 = new S57ToS101Translator().Translate(PointFeatureWithS57Attributes(ObjlRunway, attributes), diag);
+
+        Assert.Empty(s101.Features);
+        Assert.Equal(1, diag.RuleDroppedObjectClasses[ObjlRunway]);
+    }
+
+    [Fact]
+    public void Translate_AreaRunway_StaysRunway()
+    {
+        var s101 = new S57ToS101Translator().Translate(
+            AreaFeatureWithS57Attributes(ObjlRunway, Attr(AttlCatrun, "2")));
+
+        Assert.Equal("Runway", ClassOf(s101, Assert.Single(s101.Features)));
     }
 
     // Three nodes on a line, two edges joining them (1→2, 2→3), and a node for

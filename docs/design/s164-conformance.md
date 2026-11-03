@@ -1,12 +1,13 @@
 # S-164 conformance — Design Note
 
-> Status: **Assessment** (slices 1–6 of
+> Status: **Assessment** (slices 1–7 of
 > [#1120](https://github.com/philliphoff/EncDotNet.S100/issues/1120)). Most
 > statuses come from reading the code. Slice 2 added the test harness and a
 > smoke test over every v2.0.0 exchange set (§6.1); slices 3–6 run Part 2,
 > Part 3, Part 4 and Part 5–7 tests against the data, and those rows say
 > **Passes** or **Fails**. Accuracy1–15 run on the manual's listed
-> positions (§6.5).
+> positions (§6.5). Slice 7 runs the S-64 tests Part 8 points at against the
+> S-57 path (§6.6).
 
 SoundCharts isn't an ECDIS and won't go through type approval. The IHO's
 S-164 test datasets are still the most complete public description of what
@@ -22,6 +23,7 @@ which #1120 turns those ratings into tests that run.
 | Instruction manual, published | Edition 1.0.0, March 2023 | On iho.int. Written against S-100 5.0.0 and S-98 1.0.0. |
 | Instruction manual, current draft | Edition 2.0.1, July 2026 (draft) | Split into Parts 1–9 in the [S-164 sub-group repository](https://github.com/iho-ohi/S-164-Sub-Group) under `manual/docs/2.0.1`. Normative references: S-100 5.2.1, S-98 3.0, IEC 61174 and IEC 63173-2 (SECOM). |
 | Test data | Exchange sets v2.0.0, 16 October 2026 | 39 signed exchange sets on the repository's releases page, built for S-101 FC 2.0.0. They cover Part 2 loading and updating, the non-ENC overlays, display categories, Chart 1 and the Part 5–7 route checks. There's no encrypted, dual-fuel or polar data yet. |
+| S-57 test data (Part 8) | S-64:100 Edition 4.0.0, October 2025 | *IHO S-57 Test Data Sets in S-100 ECDIS*, linked from the S-64:100 entry on iho.int's standards page. It supersedes S-64 3.0.3 for S-100 ECDIS: the same S-57 cells, plus §8 skin-of-the-earth update tests and §9 chart-accuracy tests. Only the unencrypted set (S-57 cells and reference plots) is used; the encrypted set is S-63. |
 
 The matrix uses the 2.0.1 test names. Several 2.0.1 tests are still marked
 TODO or TBD in the draft, and many name exchange sets that v2.0.0 doesn't
@@ -31,7 +33,9 @@ include yet; the **v2.0.0 data** column shows which do.
 only test names and references and describes each test in our own words.
 The data repository has no licence file, so #1120 fetches the exchange sets
 at test time rather than committing them. `tests/datasets/S101` already
-holds 18 S-101 cells from an earlier S-164 release.
+holds 18 S-101 cells from an earlier S-164 release. The S-64 manual and data
+are IHO copyright too, published for ECDIS testing; they're handled the same
+way, downloaded from the IHO portal at test time and never committed.
 
 ## 2. Status key
 
@@ -58,11 +62,13 @@ they drift.
 | 6 | Areas with special conditions | 5 | 3 | 0 | 0 | 0 | 2 | 0 |
 | 7 | Safety contour | 6 | 1 | 0 | 0 | 3 | 2 | 0 |
 | 8 | S-57 testing | 0 | — | — | — | — | — | — |
+| 8 | S-64 tests on the S-57 path (§7, Part 8) | 35 | 16 | 6 | 6 | 0 | 5 | 2 |
 | 9 | Dual fuel mode and SECOM | 17 | 0 | 0 | 2 | 9 | 6 | 0 |
 | | **Total** | **212** | **40** | **0** | **43** | **78** | **48** | **3** |
 
 Part 8 has no tests of its own in 2.0.1. It points S-57 testing at the
-existing S-64 datasets, which a later slice covers.
+S-64 datasets, which slice 7 runs against the S-57 path (§6.6). Those rows
+are counted separately and aren't in the total.
 
 ## 4. Cross-cutting findings
 
@@ -189,7 +195,7 @@ doesn't try to close them.
 | 4 | **Done.** S-164 tests portray every cell in the display sets and Chart 1 at the tests' mariner settings: no portrayal rule fails, and DBASE, STNDR and OTHER features fall in their display categories. The safety contour (#1126) and chart text (#1140) tests failed at first and pass since those fixes; symbolised boundaries (#1141) were found from headless renders compared with the reference plots by eye. | 2 |
 | 5 | **Done for pick reports.** S-164 tests pick features in the PowerUp, InitialPowerUp, Settings and Chart 1 cells with `identify_features` and check the pick report the viewer shows and `describe_feature`. Names, listed values, repeated and complex values ([#1156](https://github.com/philliphoff/EncDotNet.S100/issues/1156)), associations ([#1157](https://github.com/philliphoff/EncDotNet.S100/issues/1157)), value formatting ([#1158](https://github.com/philliphoff/EncDotNet.S100/issues/1158)), priority order ([#1159](https://github.com/philliphoff/EncDotNet.S100/issues/1159)) and Chart 1 interrogation pass (§6.4). Accuracy1–15 pass on the WGS-84 ellipsoid with the measure and Range & bearing tools, to under a metre and 0.001° (§6.5, finding 5). | 2 |
 | 6 | **Done.** S-164 tests run `RouteChecker` over the NavigationalHazards, SpecialConditions and SafetyContour routes, alone and with NavigationalHazardsOverview for the largest-scale tests, and compare the findings with the reference plots and the S-101 portrayal catalogue's alert references. Danger depths now come from `defaultClearanceDepth` when there's no `valueOfSounding`. Dangers are judged against the safety contour wherever they lie (#1151). Since #1127 every Part 5–7 route-planning test runs and passes (§6.3). Dual-fuel tests follow when that data is released. | 2 |
-| 7 | S-64 for the S-57 path (Part 8). | 2 |
+| 7 | **Done.** `tests/EncDotNet.S100.S164.Tests/S64`: the S-64:100 Edition 4.0.0 unencrypted test data pinned by SHA-256 in `S64/s64-100-v4.0.0.json`, downloaded under the same switch as the S-164 data, cached in CI and skipped without it. A smoke test opens all 40 base cells through `S57DatasetProcessor`, applies their updates, and portrays them; tests for §2 updating, §3.1–3.2 display, §5–7 route checks and §8 skin of the earth follow (§6.6). | 2 |
 
 Slices 3–7 are independent of each other once slice 2 lands. Gaps found in
 any slice become their own issues, and this matrix is updated as tests start
@@ -392,6 +398,76 @@ with PowerUp loaded, the cards show the same values at their display
 precision (0.01 NM, 1 m, 0.1°), and the 2,000,000 m range and the first
 2,000,000 m ring draw on top of each other, as Accuracy10–12 ask. Display
 rounding takes at most 9 m and 0.05° of the tolerance.
+
+### 6.6 What the S-64 tests showed
+
+S-64:100 is the S-57 test data for S-100 ECDIS. The tests open its cells the
+way the viewer does: `S57DatasetProcessor` folds the updates into the S-57
+cell, translates it to S-101 and portrays it with the S-101 portrayal
+catalogue; the route checks load the same translation through
+`LoadedDatasetProjector`. Each test folder holds an `ENC_ROOT` exchange set
+and the reference plots. The tests put them together as the manual does,
+taking a base cell from one folder and its updates from another.
+
+The S-64 cells for §5–7 are the charts S-164 converted to S-101, at the same
+places (NAVHZ is a quarter of a degree further east). So the S-57 route
+checks are compared with the S-101 ones as well as with the plots, which
+shows translation problems directly. The S-57 cells chart WP1, WP2 and so
+on as points of object class 163 with a test-only symbol; translation drops
+that class, so the tests read the waypoints from the S-57 records.
+
+- **Smoke test.** All 40 base cells load, take their updates and portray.
+  Three drew "?". A point RUNWAY (`GB55062B`) has no S-101 counterpart; it's
+  now converted as S-65 Annex B §4.8.12 asks, to `Helipad` or nothing
+  ([#1238](https://github.com/philliphoff/EncDotNet.S100/issues/1238), fixed).
+  A point PIPSOL (`GB4X0000`) should become an obstruction or a landmark
+  depending on what's under it
+  ([#1243](https://github.com/philliphoff/EncDotNet.S100/issues/1243)). A
+  TS_FEB without CURVEL (`AA5OTHER`) fails the S-101 rule, which needs a
+  speed ([#1244](https://github.com/philliphoff/EncDotNet.S100/issues/1244)).
+  The last two are listed as expected.
+- **Hazard depths** ([#1237](https://github.com/philliphoff/EncDotNet.S100/issues/1237), fixed).
+  The translator gave hazards without VALSOU S-52's default depths. S-65
+  Annex B asks for those of S-101 DCEG clause 30.1, which differ: 0.1 m for
+  a submerged obstruction or rock, 0 m for an uncategorised submerged
+  wreck, and 20.1 m for a non-dangerous wreck. Before the fix the S-57 path
+  reported half the S-101 path's wreck dangers at a 0 m safety contour and
+  flagged every non-dangerous wreck. Now the dangers on the NAVHZ route match
+  the S-101 cell's, type and place, at all fifteen of the manual's safety
+  contours, apart from one floating obstruction only the S-57 cell charts.
+- **Dropped object classes** ([#1239](https://github.com/philliphoff/EncDotNet.S100/issues/1239), fixed).
+  LITVES, SUBTLN and TSEZNE had no rule, so the light vessel on the NAVHZ
+  route and the submarine transit lane and traffic separation zone on the
+  ARSPC route weren't indicated. They are now.
+- **Area findings** ([#1240](https://github.com/philliphoff/EncDotNet.S100/issues/1240), fixed).
+  Chart area findings didn't carry their feature type, in any product.
+- **Updates** ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)).
+  Sequential updates and a re-issue apply correctly, and a corrupt cell
+  fails its CRC. But S-57 updates are folded in without any check of
+  edition or sequence: the invalid sequence and an older edition's update
+  apply silently, a cancellation isn't reported, and an update-only
+  exchange set can't be CRC-checked. S-101 has these checks
+  (`S101UpdateApplicator`); S-57 needs the same. Those tests are skipped on
+  the issue.
+- **Unknown object classes** ([#1242](https://github.com/philliphoff/EncDotNet.S100/issues/1242)).
+  S-52 draws an object of unknown class as "?" and lets it be picked;
+  translation drops it, so §3.2 shows nothing.
+- **Display categories.** DBASE, STNDR and OTHER land in their categories
+  except where the S-101 catalogue places a feature differently from S-52:
+  dock areas and lock basins are Standard Display, plain depth contours and
+  landmarks Other information, overhead cables Standard. Those are listed
+  in the tests, not treated as faults.
+- **Skin of the earth.** All five §8 tests behave as the manual describes:
+  the wreck and rocks whose depth areas the updates change stop being
+  isolated dangers, and in 8.5 the isolated dangers stay. The surrounding
+  depth is worked out after the updates are folded in, so this follows.
+  (The S-101 rule also draws ISODGR01 in viewing group 24020 for dangers in
+  shallow water, the mariner's *shallow water dangers* option; the tests
+  count only the isolated dangers in 14010.)
+- **Not run.** §9 chart-accuracy cells (`AA2CATZC`, `AA5CATZC`) aren't in
+  the unencrypted set. §2.5 is S-63 encrypted data. §2.3 manual updates and
+  §2.8 rejection of an automatic update are mariner chart corrections, N/A
+  (§5). §3.3–3.9 are covered only by the smoke test so far.
 
 ## 7. Matrix
 
@@ -619,6 +695,49 @@ rounding takes at most 9 m and 0.05° of the tolerance.
 | SafetyContourMon | S-98 12.10.9 | — | Gap | — | No monitoring mode. |
 | SafetyContourMonLS | S-98 12.10.9 | — | Gap | — | No monitoring mode. |
 | DualFuelSimple | S-98 18.2 | — | Partial | `src/EncDotNet.S100.Viewer/Services/ExchangeSetService.cs` | S-57 and S-100 sets load side by side; one set with both catalogues takes the S-57 path only. |
+
+### Part 8 — S-57 testing (S-64:100 Edition 4.0.0)
+
+Section numbers are the S-64 manual's. Evidence is in
+`tests/EncDotNet.S100.S164.Tests/S64/`.
+
+| Test | Reference | S-64 data | Status | Evidence | Note |
+|---|---|---|---|---|---|
+| 2.1.1 Power up | IEC 61174 4.4.2 | 2.1.1 Power Up | Passes | `S64Part2UpdateTests.cs` | Every cell matches its CRC and portrays. |
+| 2.1.5 Loading corrupt data | IEC 61174 4.4.2 | 2.1.5 Loading Corrupt Data | Passes | `S64Part2UpdateTests.cs` | The cell fails its CRC. |
+| 2.2.1 Corrupt update | S-52 App 1 3.4.2d | 2.2.1 Corrupt Update | Fails | `S64Part2UpdateTests.cs` | An update-only set can't be CRC-checked ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
+| 2.2.2 Sequential update | S-52 App 1 3.4.2f | 2.2.2 Loading of Updates | Passes | `S64Part2UpdateTests.cs` | Updates 1–5 apply in order. No update summary report. |
+| 2.2.3 Invalid sequence | S-52 App 1 3.4.2c | 2.2.3 Loading of Invalid Sequence | Fails | `S64Part2UpdateTests.cs` | Applied without a check ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
+| 2.2.4 Newer edition update | S-52 App 1 3.4.2c | 2.2.4, 2.2.5 Good Base Cells | Fails | `S64Part2UpdateTests.cs` | Refused only by accident; edition 2 with its update passes ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
+| 2.2.5 Older edition update | S-52 App 1 3.4.2c | 2.2.5 | Fails | `S64Part2UpdateTests.cs` | Applied without a check ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
+| 2.2.6 Re-issue | S-52 App 1 3.4.1a | 2.2.6 Re-issue | Passes | `S64Part2UpdateTests.cs` | Update 4 on the re-issue gives the same cell as updates 1–4. |
+| 2.2.7 Cancellation | S-52 App 1 3.4.1a | 2.2.7 Cancellation | Fails | `S64Part2UpdateTests.cs` | Not reported as cancelled ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
+| 2.2.8 Rejection of automatic update | S-52 App 1 3.4.2h | 2.2.2 | N/A | — | Manual chart correction (§5). |
+| 2.3 Manual updates | S-52 App 1 3.4.3 | — | N/A | — | Manual chart correction (§5). |
+| 2.5 Encrypted ENCs | S-63 | Encrypted set | Gap | — | S-63 isn't supported; the encrypted set isn't pinned. |
+| 3.1 Display of ENC data | S-52 10.3 | 3.1 ENC Display | Passes | `S64Part3DisplayTests.cs` | Categories as S-101 assigns them; differences from S-52 listed (§6.6). |
+| 3.2 Invalid objects | S-52 10.3.3.4, 10.8.6 | 3.2 Invalid Object | Fails | `S64Part3DisplayTests.cs` | Unknown classes dropped, no "?" or pick ([#1242](https://github.com/philliphoff/EncDotNet.S100/issues/1242)). |
+| 3.3 Mariner selections | S-52 10.3 | 3.3 Settings | Supported | `S64SmokeTests.cs` | Portrays without rule failures; not compared with the plots. |
+| 3.4 Non-official data | S-52 10.3 | 3.4 Non-Official Data | Supported | `S64SmokeTests.cs` | Portrays; no non-official indication. |
+| 3.6 Display priority | S-52 10.3.4 | 3.6 Display Priorities | Supported | `S64SmokeTests.cs` | Portrays; order follows S-101 (finding 1). |
+| 3.7 Scale and overlap | S-52 10.3.6 | 3.7 Overlap, 3.7.7 Scale minimum | Supported | `S64SmokeTests.cs` | Portrays; SCAMIN follows the S-57 cell display window. |
+| 3.8.5 Non-ENC data | S-52 10.3 | 3.8.5 Non ENC data | Supported | `S64SmokeTests.cs` | AML cells load and portray. |
+| 3.9 Polar ENC data | S-52 10.3 | 3.9 Polar ENC Data | Supported | `S64SmokeTests.cs` | Portrays; not compared with the polar plots. |
+| 5.1 Navigational hazards | S-52 10.5.9 | 5.0 Navigational Hazards | Passes | `S64Part5NavigationalHazardsTests.cs` | Dangers match S-164's S-101 cell at all 15 safety contours. |
+| 5.2 Navigational hazards, largest scale | S-52 10.5.9 | 5.0, Overview | Passes | `S64Part5NavigationalHazardsTests.cs` | No overview finding inside NAVHZ. |
+| 5.3–5.4 Monitoring mode | S-52 10.5.9 | — | Gap | — | No monitoring mode. |
+| 6.1 Special conditions | S-52 10.5.10 | 6.0 Special Conditions | Passes | `S64Part6SpecialConditionsTests.cs` | Every kind of area indicated; a kind can be turned off. |
+| 6.2 Special conditions, largest scale | S-52 10.5.10 | 6.0, Overview | Passes | `S64Part6SpecialConditionsTests.cs` | No overview finding inside ARSPC. |
+| 6.3–6.4 Monitoring mode | S-52 10.5.10 | — | Gap | — | No monitoring mode. |
+| 7.1 Safety contour | S-52 10.5.8 | 7.0 Safety Contour | Passes | `S64Part7SafetyContourTests.cs` | Crossings at 0–43 m, with S-164's probes. |
+| 7.2 Safety contour, largest scale | S-52 10.5.8 | 7.0, Overview | Passes | `S64Part7SafetyContourTests.cs` | No overview finding inside SAFCO. |
+| 7.3–7.4 Monitoring mode | S-52 10.5.8 | — | Gap | — | No monitoring mode. |
+| 8.1 Wreck after update | S-52 13.2.19 | SOE_Test_1 | Passes | `S64Part8SkinOfTheEarthTests.cs` | The wreck stops being an isolated danger after update 4. |
+| 8.2 Rock after update | S-52 13.2.19 | SOE_Test_2 | Passes | `S64Part8SkinOfTheEarthTests.cs` | |
+| 8.3 Rock after update (2) | S-52 13.2.19 | SOE_Test_3 | Passes | `S64Part8SkinOfTheEarthTests.cs` | |
+| 8.4 Rock after update (3) | S-52 13.2.19 | SOE_Test_4 | Passes | `S64Part8SkinOfTheEarthTests.cs` | |
+| 8.5 Isolated danger after update | S-52 13.2.19 | SOE_Test_5 | Passes | `S64Part8SkinOfTheEarthTests.cs` | The isolated dangers stay. |
+| 9 Chart accuracy | S-52 5.10.13 | — | Gap | — | Cells not in the unencrypted set; no accuracy-aware check ([#1132](https://github.com/philliphoff/EncDotNet.S100/issues/1132) is related). |
 
 ### Part 9 — Dual fuel mode and SECOM
 
