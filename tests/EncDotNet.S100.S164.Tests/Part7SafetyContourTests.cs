@@ -20,7 +20,7 @@ public sealed class Part7SafetyContourTests
     private const string Cell = "10100AA_SAFCO.000";
     private const string Overview = "101AA00AA2OVRVU.000";
 
-    private static readonly GeoPosition[] Waypoints =
+    internal static readonly GeoPosition[] Waypoints =
     [
         new(39.65, -104.98333),
         new(39.65, -104.76667),
@@ -32,7 +32,7 @@ public sealed class Part7SafetyContourTests
     /// Places on the route, each in water whose least depth decides when it
     /// lies beyond the safety contour: the leg, the longitude and that depth.
     /// </summary>
-    private static readonly (string Name, int Leg, double Longitude, double Depth)[] Probes =
+    internal static readonly (string Name, int Leg, double Longitude, double Depth)[] Probes =
     [
         ("12 m dredged area", 0, -104.95, 12),
         ("10 m depth area, west", 0, -104.925, 10),
@@ -60,6 +60,18 @@ public sealed class Part7SafetyContourTests
 
         var report = S164RouteCheck.Checker(datasets).Check(plan, settings, ct);
 
+        AssertCrossingsFollowTheSafetyContour(report, plan, settings, safetyContour);
+    }
+
+    /// <summary>
+    /// Asserts that <paramref name="report"/> reports a safety-contour crossing
+    /// at each of <see cref="Probes"/> exactly when its depth is less than
+    /// <paramref name="safetyContour"/>. Shared with the S-64 test on the S-57
+    /// cell, which charts the same areas at the same places.
+    /// </summary>
+    internal static void AssertCrossingsFollowTheSafetyContour(
+        RouteCheckReport report, PassagePlan plan, RouteCheckSettings settings, double safetyContour)
+    {
         var track = RouteTrack.Build(plan, settings, Length.FromMetres(50));
         var crossings = report.Findings
             .Where(f => f.Code == RouteFindingCodes.CrossesSafetyContour)

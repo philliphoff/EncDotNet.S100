@@ -55,6 +55,15 @@ jobs:
           path: ~/.cache/EncDotNet.S100/s164
           key: s164-${{ hashFiles('tests/EncDotNet.S100.S164.Tests/s164-*.json') }}
 
+      - name: Cache S-64 test data
+        # The IHO S-64:100 unencrypted S-57 test data (about 17 MB), used by the
+        # S-164 Part 8 tests in the same project and downloaded under the same
+        # switch. Keyed on its own manifest.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/EncDotNet.S100/s64
+          key: s64-${{ hashFiles('tests/EncDotNet.S100.S164.Tests/S64/s64-*.json') }}
+
       - name: Test
         env:
           S100_S164_DOWNLOAD: '1'

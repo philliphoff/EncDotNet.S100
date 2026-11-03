@@ -358,6 +358,7 @@ internal static class DefaultRules
         yield return F(66, "ICEARE", "IceArea");
         yield return F(68, "ISTZNE", "InshoreTrafficZone");
         yield return F(76, "LITFLT", "LightFloat");
+        yield return F(77, "LITVES", "LightVessel");
         yield return F(78, "LOCMAG", "LocalMagneticAnomaly");
         yield return F(80, "LOGPON", "LogPond");
         yield return F(81, "MAGVAR", "MagneticVariation");
@@ -427,7 +428,24 @@ internal static class DefaultRules
         yield return F(110, "RCTLPT", "RecommendedTrafficLanePart");
         yield return F(111, "RSCSTA", "RescueStation");
         yield return F(113, "RETRFL", "Retroreflector");
-        yield return F(117, "RUNWAY", "Runway");
+        // RUNWAY — S-65 Annex B (Ed 2.0.0) § 4.8.12: point is not a permitted
+        // Runway primitive. A point RUNWAY that is a helicopter landing pad
+        // (CATRUN = 2) converts to Helipad; any other point RUNWAY is not
+        // converted.
+        yield return new S57FeatureRule
+        {
+            Objl = 117,
+            S57Acronym = "RUNWAY",
+            DefaultS101Code = "Runway",
+            Redirects = [new S57FeatureRedirect
+            {
+                ConditionPrimitives = [S57GeometryPrimitive.Point],
+                ConditionAttribute = "CATRUN",
+                ConditionValues = ["2"],
+                TargetS101Code = "Helipad",
+            }],
+            DroppedPrimitives = [S57GeometryPrimitive.Point],
+        };
         yield return F(118, "SNDWAV", "Sandwave");
         yield return F(119, "SEAARE", "SeaAreaNamedWaterArea");
         yield return F(120, "SPLARE", "SeaplaneLandingArea");
@@ -436,11 +454,15 @@ internal static class DefaultRules
         yield return F(124, "SISTAW", "SignalStationWarning");
         yield return F(125, "SILTNK", "SiloTank");
         yield return F(130, "SPRING", "Spring");
+        yield return F(133, "SUBTLN", "SubmarineTransitLane");
         yield return F(134, "SWPARE", "SweptArea");
         yield return F(135, "TESARE", "TerritorialSeaArea");
         yield return F(143, "TIDEWY", "Tideway");
         yield return F(146, "TSSBND", "TrafficSeparationSchemeBoundary");
         yield return F(148, "TSSLPT", "TrafficSeparationSchemeLanePart");
+        // TSEZNE — S-65 Annex B (Ed 2.0.0) § 10.2.1.4: its CATTSS isn't converted,
+        // and SeparationZoneOrLine doesn't bind iMOAdopted.
+        yield return F(150, "TSEZNE", "SeparationZoneOrLine");
         yield return F(151, "TUNNEL", "Tunnel");
         yield return F(152, "TWRTPT", "TwoWayRoutePart");
         yield return F(154, "UNSARE", "UnsurveyedArea");
@@ -518,6 +540,9 @@ internal static class DefaultRules
         // redirected to Landmark (see CTRPNT feature rule). The default
         // mapping is therefore null; the redirect supplies the override.
         yield return A(16, "CATCTR", null);
+        // CATRUN: S-101 Runway and Helipad have no category; registered only
+        // so the RUNWAY rule can tell a helicopter landing pad (CATRUN = 2).
+        yield return A(58, "CATRUN", null);
         yield return A(19, "CATCRN", "categoryOfCrane");
         yield return A(29, "CATGAT", "categoryOfGate");
         yield return A(30, "CATHAF", "categoryOfHarbourFacility");

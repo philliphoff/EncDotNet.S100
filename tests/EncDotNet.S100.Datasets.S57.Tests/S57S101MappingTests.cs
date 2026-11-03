@@ -640,10 +640,13 @@ public class S57S101MappingTests
     [InlineData(27, "CautionArea")]          // CTNARE (ambiguous alias → CautionArea)
     [InlineData(39, "Daymark")]              // DAYMAR
     [InlineData(58, "FogSignal")]            // FOGSIG
+    [InlineData(77, "LightVessel")]          // LITVES
     [InlineData(81, "MagneticVariation")]    // MAGVAR
     [InlineData(87, "OffshorePlatform")]     // OFSPLF
     [InlineData(94, "PipelineSubmarineOnLand")] // PIPSOL
     [InlineData(109, "RecommendedTrack")]    // RECTRC
+    [InlineData(133, "SubmarineTransitLane")] // SUBTLN
+    [InlineData(150, "SeparationZoneOrLine")] // TSEZNE
     [InlineData(119, "SeaAreaNamedWaterArea")] // SEAARE
     [InlineData(121, "SeabedArea")]          // SBDARE
     [InlineData(125, "SiloTank")]            // SILTNK

@@ -352,7 +352,7 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
                     classified ?? CatalogRouteAreaSource.ClassifyOther(feature.FeatureType),
                     feature.FeatureType,
                     surfaces,
-                    new RouteFindingFeature(DatasetId, Id(feature)),
+                    new RouteFindingFeature(DatasetId, Id(feature)) { FeatureType = feature.FeatureType },
                     this,
                     _dataset.Document,
                     record);
