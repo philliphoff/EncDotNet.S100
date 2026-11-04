@@ -86,6 +86,13 @@ public sealed class MapPresentationState
         TextScale = textScale ?? source.TextScale;
         EcdisDisplay = ecdisDisplay is null ? source.EcdisDisplay : Snapshot(ecdisDisplay);
         Mariner = mariner ?? source.Mariner;
+        DepthAdjustment = source.DepthAdjustment;
+    }
+
+    private MapPresentationState(MapPresentationState source, IDepthAdjustment? depthAdjustment)
+        : this(source)
+    {
+        DepthAdjustment = depthAdjustment;
     }
 
     /// <summary>The S-100 colour palette applied across the map.</summary>
@@ -143,6 +150,19 @@ public sealed class MapPresentationState
     }
 
     /// <summary>
+    /// The water level added to charted depths across the map (S-98
+    /// Appendix D), or <see langword="null"/> when depths are portrayed as
+    /// charted.
+    /// </summary>
+    public IDepthAdjustment? DepthAdjustment { get; }
+
+    /// <summary>Returns a copy with a different depth adjustment.</summary>
+    /// <param name="depthAdjustment">The adjustment, or <see langword="null"/> for charted depths.</param>
+    /// <returns>A new presentation state.</returns>
+    public MapPresentationState WithDepthAdjustment(IDepthAdjustment? depthAdjustment) =>
+        new(this, depthAdjustment);
+
+    /// <summary>
     /// Returns a copy of this snapshot with <see cref="Mariner"/> replaced.
     /// </summary>
     /// <param name="mariner">The mariner-configurable portrayal settings.</param>
@@ -188,6 +208,7 @@ public sealed class MapPresentationState
             TextScale = TextScale,
             EcdisDisplay = EcdisDisplay,
             Mariner = Mariner,
+            DepthAdjustment = DepthAdjustment,
         };
 
         var displayModeId = EcdisDisplay.ActiveDisplayModes.GetValueOrDefault(

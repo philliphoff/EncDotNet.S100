@@ -33,8 +33,9 @@ internal sealed class DepthAssimilationService
     /// (the result is then <c>null</c>).
     /// </param>
     /// <param name="series">The water-level series at the point, most preferred first; may be empty.</param>
+    /// <param name="applyUndeclaredDatum">Applies water level where either vertical datum isn't declared (#1132 Q2); otherwise it's refused.</param>
     /// <returns>The assimilated result, or <c>null</c> when <paramref name="baseDepth"/> is <c>null</c>.</returns>
-    public LocationDepthResult? Assimilate(BaseDepthResult? baseDepth, IReadOnlyList<IWaterLevelSeries> series)
+    public LocationDepthResult? Assimilate(BaseDepthResult? baseDepth, IReadOnlyList<IWaterLevelSeries> series, bool applyUndeclaredDatum = false)
     {
         ArgumentNullException.ThrowIfNull(series);
 
@@ -54,7 +55,12 @@ internal sealed class DepthAssimilationService
         }
 
         var compatible = series
-            .Where(s => VerticalDatumCheck.Compare(baseDepth.VerticalDatumCode, s.Source.VerticalDatum) == DatumAgreement.Same)
+            .Where(s => VerticalDatumCheck.Compare(baseDepth.VerticalDatumCode, s.Source.VerticalDatum) switch
+            {
+                DatumAgreement.Same => true,
+                DatumAgreement.Unknown => applyUndeclaredDatum,
+                _ => false,
+            })
             .ToList();
         if (compatible.Count == 0)
         {
@@ -107,7 +113,8 @@ internal sealed class DepthAssimilationService
             baseDepth,
             new LocationTideSelection(first.DatasetId, first.VerticalDatum, compatible),
             curve,
-            uncertainty);
+            uncertainty,
+            DatumUnconfirmed: VerticalDatumCheck.Compare(baseDepth.VerticalDatumCode, first.VerticalDatum) != DatumAgreement.Same);
     }
 
     /// <summary>

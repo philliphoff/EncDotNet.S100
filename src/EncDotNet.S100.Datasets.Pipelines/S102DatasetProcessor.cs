@@ -37,7 +37,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// directly.
 /// </para>
 /// </remarks>
-public sealed class S102DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, IDisposable, ILoadedDatasetProjection, ICoverageSampler
+public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustableProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, IDisposable, ILoadedDatasetProjection, ICoverageSampler
 {
     private readonly S102Dataset _dataset;
     private readonly S102CoverageSource _source;

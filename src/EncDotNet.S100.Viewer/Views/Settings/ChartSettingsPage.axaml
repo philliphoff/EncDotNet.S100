@@ -162,6 +162,38 @@
                 <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IgnoreScaleMinimum}"  AutomationProperties.AutomationId="Settings.IgnoreScaleMinimum" AutomationProperties.Name="{x:Static loc:Strings.Settings_IgnoreScaleMinimum}"/>
             </Grid>
 
+            <!-- Water level adjustment (#1132): a viewer setting beside the mariner
+                 depths, docs/design/chart-wide-water-level-adjustment.md §6. -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_WaterLevelAdjustment}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="{x:Static loc:Strings.Settings_WaterLevelAdjustment_Help}"
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+                <ComboBox ItemsSource="{Binding AvailableWaterLevelAdjustments}"
+                          AutomationProperties.AutomationId="Settings.WaterLevelAdjustment"
+                          AutomationProperties.Name="{x:Static loc:Strings.Settings_WaterLevelAdjustment}"
+                          SelectedValue="{Binding WaterLevelAdjustment}"
+                          SelectedValueBinding="{Binding Mode}"
+                          ToolTip.Tip="{x:Static loc:Strings.Settings_WaterLevelAdjustment_Help}"
+                          MinWidth="180"
+                          HorizontalAlignment="Left">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding DisplayName}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  IsEnabled="{Binding IsWaterLevelAdjustmentOn}"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_WaterLevelApplyUndeclaredDatum}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_WaterLevelApplyUndeclaredDatum}" TextWrapping="Wrap" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding WaterLevelApplyUndeclaredDatum}"  AutomationProperties.AutomationId="Settings.WaterLevelApplyUndeclaredDatum" AutomationProperties.Name="{x:Static loc:Strings.Settings_WaterLevelApplyUndeclaredDatum}"/>
+            </Grid>
+
             <!-- National Language -->
             <StackPanel Spacing="6">
                 <TextBlock Text="{x:Static loc:Strings.Settings_NationalLanguage}"

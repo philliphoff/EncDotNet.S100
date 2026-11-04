@@ -25,12 +25,18 @@ namespace EncDotNet.S100.Viewer.Services.Depth;
 /// Why covering S-104 water level was not applied, or <c>null</c> when it was
 /// applied or none covers the point.
 /// </param>
+/// <param name="DatumUnconfirmed">
+/// True when water level was applied although a vertical datum isn't
+/// declared, under the mariner's "Apply anyway when datum is not declared"
+/// override (#1132 Q2).
+/// </param>
 internal sealed record LocationDepthResult(
     BaseDepthResult Base,
     LocationTideSelection? Tide,
     IReadOnlyList<DepthOverTimePoint> DepthOverTime,
     double? UncertaintyMeters,
-    WaterLevelRefusal? Refusal = null)
+    WaterLevelRefusal? Refusal = null,
+    bool DatumUnconfirmed = false)
 {
     /// <summary>
     /// The water level applied at <paramref name="utc"/>, interpolated between

@@ -41,6 +41,7 @@ public partial class MainWindow : ShadUI.Window
     private EncDotNet.S100.Viewer.Services.PickHighlightController? _pickHighlightController;
     private EncDotNet.S100.Viewer.Services.DatasetExtentIndicatorController? _extentIndicatorController;
     private LibraryCoverageOverlayController? _libraryCoverageController;
+    private EncDotNet.S100.Viewer.Services.Depth.AdjustedAreaBoundaryController? _adjustedAreaBoundary;
     private EncDotNet.S100.Viewer.Services.OverscaleCurtainController? _overscaleCurtainController;
     private Mapsui.Layers.MemoryLayer? _routeOverlayLayer;
     private EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider? _routeAppearance;
@@ -250,6 +251,8 @@ public partial class MainWindow : ShadUI.Window
             _extentIndicatorController = null;
             _libraryCoverageController?.Dispose();
             _libraryCoverageController = null;
+            _adjustedAreaBoundary?.Dispose();
+            _adjustedAreaBoundary = null;
             _overscaleCurtainController?.Dispose();
             _overscaleCurtainController = null;
             // Clear the late-bound accessors this window owns so panel /
@@ -504,6 +507,11 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
             () => App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current);
+
+        // Chart-wide water level adjustment (#1132): the edge of the adjusted area.
+        _adjustedAreaBoundary = new EncDotNet.S100.Viewer.Services.Depth.AdjustedAreaBoundaryController(
+            _mapHost,
+            App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentState>());
 
         // On-chart overscale curtain: paint a subtle vertical-line pattern over
         // the region of each cell displayed beyond its compilation scale (#441).

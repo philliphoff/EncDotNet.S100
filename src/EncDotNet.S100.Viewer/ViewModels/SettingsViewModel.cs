@@ -11,7 +11,7 @@ using ShadUI;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
-internal sealed class SettingsViewModel : ViewModelBase
+internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLevelAdjustmentSettings
 {
     private readonly ViewerSettings _settings;
     private readonly IDataMaintenanceService? _dataMaintenance;
@@ -485,6 +485,63 @@ internal sealed class SettingsViewModel : ViewModelBase
     {
         get => _ignoreScaleMinimum;
         set { if (SetProperty(ref _ignoreScaleMinimum, value)) { _settings.IgnoreScaleMinimum = value; RaiseMarinerChanged(); } }
+    }
+
+    // ── Chart-wide water level adjustment (#1132) ──────────────────────────
+    // A viewer setting, not a MarinerSettings member: which water level to
+    // add to the charted depths is a host decision
+    // (docs/design/chart-wide-water-level-adjustment.md §6).
+
+    /// <summary>The water level adjustment choices.</summary>
+    public IReadOnlyList<WaterLevelAdjustmentOption> AvailableWaterLevelAdjustments { get; } =
+    [
+        new(Services.Depth.WaterLevelAdjustmentMode.Off, Strings.Settings_WaterLevelAdjustment_Off),
+        new(Services.Depth.WaterLevelAdjustmentMode.AtViewTime, Strings.Settings_WaterLevelAdjustment_AtViewTime),
+    ];
+
+    private Services.Depth.WaterLevelAdjustmentMode _waterLevelAdjustment;
+
+    /// <inheritdoc />
+    public Services.Depth.WaterLevelAdjustmentMode WaterLevelAdjustment
+    {
+        get => _waterLevelAdjustment;
+        set
+        {
+            if (SetProperty(ref _waterLevelAdjustment, value))
+            {
+                _settings.WaterLevelAdjustment = value.ToString();
+                OnPropertyChanged(nameof(IsWaterLevelAdjustmentOn));
+                RaiseWaterLevelAdjustmentChanged();
+            }
+        }
+    }
+
+    /// <summary>True when chart-wide water level adjustment is on.</summary>
+    public bool IsWaterLevelAdjustmentOn => _waterLevelAdjustment != Services.Depth.WaterLevelAdjustmentMode.Off;
+
+    private bool _waterLevelApplyUndeclaredDatum;
+
+    /// <inheritdoc />
+    public bool WaterLevelApplyUndeclaredDatum
+    {
+        get => _waterLevelApplyUndeclaredDatum;
+        set
+        {
+            if (SetProperty(ref _waterLevelApplyUndeclaredDatum, value))
+            {
+                _settings.WaterLevelApplyUndeclaredDatum = value;
+                RaiseWaterLevelAdjustmentChanged();
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public event Action? WaterLevelAdjustmentChanged;
+
+    private void RaiseWaterLevelAdjustmentChanged()
+    {
+        _settings.Save();
+        WaterLevelAdjustmentChanged?.Invoke();
     }
 
     // ── Base-plane tiled-pipeline knobs ────────────────────────────────────
@@ -990,6 +1047,10 @@ internal sealed class SettingsViewModel : ViewModelBase
         _fullLightLines = settings.FullLightLines ?? def.FullLightLines;
         _radarOverlay = settings.RadarOverlay ?? def.RadarOverlay;
         _ignoreScaleMinimum = settings.IgnoreScaleMinimum ?? def.IgnoreScaleMinimum;
+        _waterLevelAdjustment = Enum.TryParse<Services.Depth.WaterLevelAdjustmentMode>(settings.WaterLevelAdjustment, out var waterLevelAdjustment)
+            ? waterLevelAdjustment
+            : Services.Depth.WaterLevelAdjustmentMode.Off;
+        _waterLevelApplyUndeclaredDatum = settings.WaterLevelApplyUndeclaredDatum ?? false;
 
         // Tiled base-plane scene mode: push the persisted preference into the
         // renderer (the write is ignored when pinned by an explicit env var — the
@@ -1529,3 +1590,8 @@ internal sealed class SettingsViewModel : ViewModelBase
         }
     }
 }
+
+/// <summary>A water level adjustment choice in Mariner Settings.</summary>
+/// <param name="Mode">The setting.</param>
+/// <param name="DisplayName">Its label.</param>
+internal sealed record WaterLevelAdjustmentOption(Services.Depth.WaterLevelAdjustmentMode Mode, string DisplayName);

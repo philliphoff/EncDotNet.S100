@@ -1013,6 +1013,25 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         }
     }
 
+    /// <inheritdoc />
+    public async Task<bool> SetDepthAdjustmentAsync(
+        MapPresentationState presentation,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        using var __cmd = ViewerObservability.BeginCommand("presentation.depthAdjustment");
+        Volatile.Write(ref _presentation, presentation);
+        if (_mapSession is null)
+            return true;
+
+        return await _mapSession.RefreshDepthAdjustedAsync(
+            presentation,
+            ToMercatorViewport(_viewportNotifier.Current),
+            cancellationToken).ConfigureAwait(true);
+    }
+
     /// <summary>
     /// Re-portrays cells that a prior viewport-gated presentation change deferred
     /// as off-view and that now intersect <paramref name="snapshot"/>. Must be

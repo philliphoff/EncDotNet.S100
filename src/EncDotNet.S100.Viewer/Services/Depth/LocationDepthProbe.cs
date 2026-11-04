@@ -52,13 +52,15 @@ internal sealed class LocationDepthProbe
     /// The water-level source the passage check reads, or <c>null</c> when
     /// none is available (the depth is then static).
     /// </param>
+    /// <param name="applyUndeclaredDatum">Applies water level where either vertical datum isn't declared (#1132 Q2).</param>
     /// <returns>The probe outcome.</returns>
     public Probe Evaluate(
         IEnumerable<KeyValuePair<DatasetEntry, IDatasetProcessor>> processors,
         IReadOnlyList<PickHit> hits,
         double latitude,
         double longitude,
-        IWaterLevelSource? waterLevel = null)
+        IWaterLevelSource? waterLevel = null,
+        bool applyUndeclaredDatum = false)
     {
         ArgumentNullException.ThrowIfNull(processors);
         ArgumentNullException.ThrowIfNull(hits);
@@ -114,7 +116,7 @@ internal sealed class LocationDepthProbe
             datasetId => datasetId is not null && chartCells.TryGetValue(datasetId, out var cell)
                 ? SafeSoundingDatum(cell, latitude, longitude)
                 : null);
-        var result = _assimilation.Assimilate(baseDepth, SafeLocate(waterLevel, latitude, longitude));
+        var result = _assimilation.Assimilate(baseDepth, SafeLocate(waterLevel, latitude, longitude), applyUndeclaredDatum);
 
         return new Probe(waterLand, result);
     }

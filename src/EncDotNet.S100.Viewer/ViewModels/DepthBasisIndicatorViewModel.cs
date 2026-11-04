@@ -73,8 +73,17 @@ internal sealed class DepthBasisIndicatorViewModel : ViewModelBase
     /// <summary>True when the state has an icon (S-104 in view, not applied); it stays in every form.</summary>
     public bool ShowsIcon => _forms.ShowsIcon;
 
+    /// <summary>True when the state's icon is the info icon (S-104 in view, not applied).</summary>
+    public bool ShowsInfoIcon => _forms.ShowsIcon && _forms.Tone != DepthBasisTone.Caution;
+
     /// <summary>True for the informational accent (S-104 in view, not applied); false for neutral.</summary>
     public bool IsInfoTone => _forms.Tone == DepthBasisTone.Info;
+
+    /// <summary>True for the adjusted accent (#1132): the chart adds water level.</summary>
+    public bool IsAdjustedTone => _forms.Tone == DepthBasisTone.Adjusted;
+
+    /// <summary>True for the caution accent (#1132): adjustment is on but doesn't apply in view.</summary>
+    public bool IsCautionTone => _forms.Tone == DepthBasisTone.Caution;
 
     /// <summary>The accessible name, with the state, e.g. "Depth basis: Charted, water level not applied".</summary>
     public string AccessibleName
@@ -126,7 +135,13 @@ internal sealed class DepthBasisIndicatorViewModel : ViewModelBase
     }
 
     /// <summary>Where the viewer applies water level today.</summary>
-    public IReadOnlyList<string> WhereAppliedLines { get; } = DepthBasisText.WhereAppliedLines();
+    public IReadOnlyList<string> WhereAppliedLines
+    {
+        get => _whereAppliedLines;
+        private set => SetProperty(ref _whereAppliedLines, value);
+    }
+
+    private IReadOnlyList<string> _whereAppliedLines = DepthBasisText.WhereAppliedLines(chartAdjustmentOn: false);
 
     /// <summary>Shows a basis.</summary>
     /// <param name="basis">The basis.</param>
@@ -137,7 +152,7 @@ internal sealed class DepthBasisIndicatorViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(basis);
         var wasVisible = IsVisible;
         _basis = basis;
-        _forms = DepthBasisText.Pill(basis);
+        _forms = DepthBasisText.Pill(basis, format);
         OnPropertyChanged(nameof(Basis));
         OnPropertyChanged(nameof(FullText));
         OnPropertyChanged(nameof(ShortText));
@@ -145,8 +160,12 @@ internal sealed class DepthBasisIndicatorViewModel : ViewModelBase
         OnPropertyChanged(nameof(FormTexts));
         OnPropertyChanged(nameof(DisplayedText));
         OnPropertyChanged(nameof(ShowsIcon));
+        OnPropertyChanged(nameof(ShowsInfoIcon));
         OnPropertyChanged(nameof(IsInfoTone));
-        AccessibleName = DepthBasisText.AccessibleName(basis);
+        OnPropertyChanged(nameof(IsAdjustedTone));
+        OnPropertyChanged(nameof(IsCautionTone));
+        WhereAppliedLines = DepthBasisText.WhereAppliedLines(basis.Kind == DepthBasisKind.Adjusted || basis.Reason == DepthBasisReason.WaterLevel);
+        AccessibleName = DepthBasisText.AccessibleName(basis, format);
 
         if (basis.Kind == DepthBasisKind.None)
         {
@@ -158,7 +177,7 @@ internal sealed class DepthBasisIndicatorViewModel : ViewModelBase
         }
         else
         {
-            BasisLine = DepthBasisText.BasisLine(basis);
+            BasisLine = DepthBasisText.BasisLine(basis, format);
             DatumHeading = DepthBasisText.DatumHeading(basis);
             DatumLines = DepthBasisText.DatumLines(basis);
             SourceLines = DepthBasisText.SourceLines(basis);

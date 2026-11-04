@@ -95,6 +95,21 @@ internal static class TimeFormatting
         return $"{sl.ToString("g", culture)} – {el.ToString("g", culture)}";
     }
 
+    /// <summary>
+    /// Formats a time of day only, for compact status text such as the depth
+    /// basis pill: the local short time, or <c>HH:mm UTC</c>.
+    /// </summary>
+    /// <param name="value">The time; Unspecified is taken as UTC.</param>
+    /// <param name="format">The user's Local/UTC setting.</param>
+    /// <returns>The formatted time of day.</returns>
+    public static string FormatClock(DateTime value, TimeFormat format)
+    {
+        var utc = NormalizeToUtc(value);
+        return format == TimeFormat.Utc
+            ? string.Create(CultureInfo.InvariantCulture, $"{utc.ToString("HH:mm", CultureInfo.InvariantCulture)} {Strings.Time_Utc_Suffix}")
+            : utc.ToLocalTime().ToString("t", CultureInfo.CurrentCulture);
+    }
+
     private static string FormatUtc(DateTime utc)
     {
         return string.Create(
