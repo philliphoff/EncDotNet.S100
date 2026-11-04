@@ -7,7 +7,10 @@ submit changes.
 
 ## Prerequisites
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/) or later.
+- The [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). The
+  repository's `global.json` selects the newest 10.0 SDK you have installed,
+  even when a later SDK such as a .NET 11 preview is also installed, so a
+  later SDK on its own isn't enough.
 - A git client.
 - No native dependencies are required — HDF5 (PureHDF) and Lua (MoonSharp)
   are fully managed, so everything runs on macOS, Windows, and Linux.
