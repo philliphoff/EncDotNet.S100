@@ -96,6 +96,8 @@
           href: design/s98-interoperability.md
         - name: Rendering-backend contract
           href: design/rendering-backend-contract.md
+        - name: Map rendering architecture
+          href: design/map-render-architecture.md
         - name: Dataset collections
           href: design/dataset-collections.md
         - name: Wind and wave data
