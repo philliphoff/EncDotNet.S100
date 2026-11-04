@@ -65,11 +65,11 @@ public sealed class S57DatasetProcessorUnknownObjectTests : IDisposable
     {
         var processor = CreateProcessor();
         var summary = processor.EnumerateFeatures().Single(f =>
-            f.FeatureType == S57UnknownObject.FeatureTypeCode && f.FeatureTypeName == "Unknown S-57 object (500)");
+            f.FeatureType == S57UnknownObject.FeatureTypeCode && f.FeatureTypeName == "Unknown S-57 object $AREAS (500)");
 
         var info = processor.GetFeatureInfoAt(summary.Ordinal)!;
 
-        Assert.Equal("Unknown S-57 object (500)", info.FeatureTypeName);
+        Assert.Equal("Unknown S-57 object $AREAS (500)", info.FeatureTypeName);
         Assert.Equal("500", ObjectClass(info));
         // Its S-57 attributes come through by acronym, as encoded.
         Assert.Contains(info.Attributes, a => a.Code.Length == 6 && a.Code == a.Code.ToUpperInvariant());

@@ -6,6 +6,11 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **.NET 10 only.** The packages no longer target .NET 8, which reached end
+  of support in November 2026; they target .NET 10 and run on later
+  versions. CI also runs the tests on .NET 11. The packages now build on
+  EncDotNet 0.11.0, which made the same change.
+
 - **Sea surface temperature on the chart.** GRIB2 and NetCDF files with sea
   surface temperature now draw it as a colour fill with a band for each
   degree from 0 °C to 30 °C, so fronts such as the edge of the Gulf Stream

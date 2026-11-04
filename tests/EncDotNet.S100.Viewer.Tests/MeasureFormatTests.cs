@@ -27,7 +27,9 @@ public class MeasureFormatTests
 
     [Theory]
     [InlineData(295.614, "295.6°")]
-    [InlineData(295.65, "295.7°")]
+    // A midpoint a double holds exactly (295.65 isn't: it's just below), so
+    // rounding away from zero is what's tested on every runtime.
+    [InlineData(295.25, "295.3°")]
     [InlineData(5, "005.0°")]
     [InlineData(359.96, "000.0°")]
     [InlineData(-90, "270.0°")]
