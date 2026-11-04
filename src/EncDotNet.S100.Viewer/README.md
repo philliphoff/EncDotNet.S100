@@ -2000,6 +2000,16 @@ batch with
 backed by `BulkObservableCollection`, so thousands of cells raise one
 collection notification instead of one each.
 
+A coarse cell whose part of the view is covered by finer cells loads after
+them, not alongside them (`LoadTier.Covered`, #1265). The finer cells count
+only when the catalogue gives their coverage polygons
+(`DatasetEntry.CatalogueCoverage`, for example from the NOAA product
+catalogue), they're shown at full opacity, and they draw at the current scale
+or are loading as visible cells. `CoveredCellGate` does the coverage test,
+ignoring slivers under a pixel wide. The covered cell still loads once the
+visible loads and tiles are done, and the queue is ranked again after each
+load, so a finer cell that doesn't draw at this scale promotes it back.
+
 The S-57 catalogue descriptor cache is `Services/Caching/DiskS57CatalogCache`,
 stored under `caches/S57CatalogCache` and keyed by the `CATALOG.031` file's
 modified time and size. The Library's index and catalogue caches are

@@ -652,6 +652,214 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
         Assert.Equal(0, coordinator.LoadedCount);
     }
 
+    // A cell with catalogue coverage (its whole bounding box) and a
+    // compilation scale, as the NOAA product catalogue supplies (#1265).
+    private static DatasetEntry RankedCell(
+        string name, int compilationScale, double south, double west, double north, double east, bool withCoverage = true)
+        => new(
+            filePath: name + ".000",
+            productSpec: "S-57",
+            source: null,
+            relativePath: name + ".000",
+            displayName: name,
+            geographicBounds: new BoundingBox
+            {
+                WestBoundLongitude = west,
+                EastBoundLongitude = east,
+                SouthBoundLatitude = south,
+                NorthBoundLatitude = north,
+            },
+            compilationScale: compilationScale,
+            catalogueCoverage: withCoverage
+                ? CoveredCellGate.FromCatalogueCoverage(new Collections.GeoCoverage(
+                [
+                    new Collections.GeoPolygon(
+                    [
+                        new DataModel.GeoPosition(south, west),
+                        new DataModel.GeoPosition(south, east),
+                        new DataModel.GeoPosition(north, east),
+                        new DataModel.GeoPosition(north, west),
+                    ]),
+                ]))
+                : null);
+
+    // Two finer cells that cover the 40..41 N, 75..74 W view between them, and
+    // a coarse cell under them that reaches well beyond it.
+    private static (DatasetEntry West, DatasetEntry East, DatasetEntry Coarse) CoveredView(bool finerCoverage = true) =>
+        (RankedCell("US5WEST", 20_000, 39.5, -75.5, 41.5, -74.5, finerCoverage),
+         RankedCell("US5EAST", 20_000, 39.5, -74.5, 41.5, -73.5, finerCoverage),
+         RankedCell("US3COARSE", 80_000, 35, -80, 45, -70));
+
+    private static ExchangeSetLazyLoadCoordinator CreateLoading(
+        FakeNotifier notifier,
+        ConcurrentQueue<DatasetEntry> order,
+        Func<bool> tilesBusy,
+        Action<DatasetEntry>? onLoaded = null,
+        LazyLoadOptions? options = null)
+        => new(
+            notifier,
+            (entry, _) =>
+            {
+                entry.IsLoaded = true;
+                onLoaded?.Invoke(entry);
+                order.Enqueue(entry);
+                return Task.CompletedTask;
+            },
+            _ => { },
+            options ?? new LazyLoadOptions
+            {
+                ViewportDebounce = TimeSpan.Zero,
+                SpeculativeRetryDelay = TimeSpan.FromMilliseconds(20),
+            },
+            hasVisibleTileWork: tilesBusy);
+
+    [Fact]
+    public async Task CoarseCellCoveredByFinerCells_WaitsForThem()
+    {
+        var notifier = new FakeNotifier();
+        var order = new ConcurrentQueue<DatasetEntry>();
+        var tilesBusy = true;
+        using var coordinator = CreateLoading(notifier, order, () => Volatile.Read(ref tilesBusy));
+
+        var (west, east, coarse) = CoveredView();
+        coordinator.Register(new[] { coarse, west, east });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        // The finer cells load at once; the covered coarse cell waits like
+        // speculative work while their tiles draw.
+        Assert.True(await WaitUntilAsync(() => order.Count == 2));
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.DoesNotContain(coarse, order);
+        Assert.True(coarse.IsDeferred);
+
+        // Deferred, not skipped: it loads once the renderer is idle.
+        Volatile.Write(ref tilesBusy, false);
+        Assert.True(await WaitUntilAsync(() => order.Contains(coarse)));
+        Assert.Equal(coarse, order.Last());
+    }
+
+    [Fact]
+    public async Task CoarseCellWaitsWhileFinerCellsAreStillLoading()
+    {
+        var notifier = new FakeNotifier();
+        var order = new ConcurrentQueue<DatasetEntry>();
+        var release = new TaskCompletionSource();
+        var (west, east, coarse) = CoveredView();
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            async (entry, _) =>
+            {
+                if (!ReferenceEquals(entry, coarse))
+                    await release.Task;
+                entry.IsLoaded = true;
+                order.Enqueue(entry);
+            },
+            _ => { },
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 4 });
+
+        coordinator.Register(new[] { coarse, west, east });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        // Free slots and an idle renderer, but the finer cells are still loading.
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.Empty(order);
+
+        release.SetResult();
+        Assert.True(await WaitUntilAsync(() => order.Count == 3));
+        Assert.Equal(coarse, order.Last());
+    }
+
+    [Fact]
+    public async Task CoarseCellWithAnUncoveredPartOfTheView_LoadsAsVisible()
+    {
+        var notifier = new FakeNotifier();
+        var order = new ConcurrentQueue<DatasetEntry>();
+        using var coordinator = CreateLoading(notifier, order, () => true);
+
+        // Only the west half of the view has a finer cell.
+        var (west, _, coarse) = CoveredView();
+        coordinator.Register(new[] { coarse, west });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        Assert.True(await WaitUntilAsync(() => order.Count == 2));
+        Assert.Contains(coarse, order);
+    }
+
+    [Fact]
+    public async Task FinerCellsKnownOnlyByBoundingBox_NeverCover()
+    {
+        var notifier = new FakeNotifier();
+        var order = new ConcurrentQueue<DatasetEntry>();
+        using var coordinator = CreateLoading(notifier, order, () => true);
+
+        var (west, east, coarse) = CoveredView(finerCoverage: false);
+        coordinator.Register(new[] { coarse, west, east });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        Assert.True(await WaitUntilAsync(() => order.Count == 3));
+    }
+
+    [Fact]
+    public async Task FinerCellThatDoesNotDrawAtThisScale_PromotesTheCoarseCell()
+    {
+        var notifier = new FakeNotifier();
+        var order = new ConcurrentQueue<DatasetEntry>();
+        var (west, east, coarse) = CoveredView();
+
+        // Once loaded, the east cell turns out to stop drawing well before this
+        // zoom level (its display window ends at 1 m/px; the view is at 5).
+        using var coordinator = CreateLoading(
+            notifier,
+            order,
+            () => true,
+            onLoaded: entry =>
+            {
+                if (ReferenceEquals(entry, east))
+                    entry.ContentMaxVisibleResolution = 1.0;
+            });
+
+        coordinator.Register(new[] { coarse, west, east });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        Assert.True(await WaitUntilAsync(() => order.Count == 3));
+        Assert.Equal(coarse, order.Last());
+    }
+
+    [Fact]
+    public async Task HiddenFinerCell_DoesNotCover()
+    {
+        var notifier = new FakeNotifier();
+        var order = new ConcurrentQueue<DatasetEntry>();
+        var (west, east, coarse) = CoveredView();
+        using var coordinator = CreateLoading(notifier, order, () => true);
+
+        // The user has switched the west cell off, so only the east half of the
+        // view has finer chart on it.
+        west.IsVisible = false;
+        coordinator.Register(new[] { coarse, west, east });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        Assert.True(await WaitUntilAsync(() => order.Count == 3));
+    }
+
+    [Fact]
+    public async Task DeferCoveredCellsOff_LoadsCoarseCellAsVisible()
+    {
+        var notifier = new FakeNotifier();
+        var order = new ConcurrentQueue<DatasetEntry>();
+        using var coordinator = CreateLoading(
+            notifier,
+            order,
+            () => true,
+            options: new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, DeferCoveredCells = false });
+
+        var (west, east, coarse) = CoveredView();
+        coordinator.Register(new[] { coarse, west, east });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        Assert.True(await WaitUntilAsync(() => order.Count == 3));
+    }
+
     private static void InterlockedMax(ref int target, int value)
     {
         int current;

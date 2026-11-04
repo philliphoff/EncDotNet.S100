@@ -236,7 +236,9 @@ internal sealed class LibraryLoadService : ILibraryLoader, IDisposable
                 item.MinimumDisplayScale,
                 item.MaximumDisplayScale,
                 item.Properties.TryGetValue("notForNavigation", out var nfn)
-                    && string.Equals(nfn, "true", StringComparison.OrdinalIgnoreCase));
+                    && string.Equals(nfn, "true", StringComparison.OrdinalIgnoreCase),
+                item.CompilationScale,
+                item.Coverage);
         }
 
         private void OnEntryChanged(object? sender, PropertyChangedEventArgs e)
