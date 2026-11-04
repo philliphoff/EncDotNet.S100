@@ -621,8 +621,15 @@ and safety contour on the chart are relative to:
 In **Settings** > **Chart display** > **Mariner Settings**, **Water level
 adjustment** set to **At view time** adds the S-104 water level at the
 Timeline's view time to the charted depths (S-98 Appendix D). The S-102
-depth shading and its safety contour follow the tide as you move the
-Timeline. A dash-dot teal line marks the edge of the area that has a water
+depth shading and its safety contour, and the S-101 depth areas, depth
+contours, soundings and dangers, follow the tide as you move the Timeline.
+Adjusted soundings show the adjusted figure with a small ◆ after it, and
+contour labels show the adjusted depth. An S-101 area or contour gets the
+lowest water level over its part inside the adjusted area, rounded down to
+0.1 m; one that crosses the edge is split there, so the part outside stays
+charted. Selecting an adjusted feature shows its water level and adjusted
+values. Where S-102 is drawn, its safety contour is the main one and the
+S-101 safety contour is drawn thin and grey under it. A dash-dot teal line marks the edge of the area that has a water
 level (S-104 grid nodes and 10 km around each station); outside it the chart
 is charted.
 
@@ -634,8 +641,9 @@ datum isn't declared, water level isn't applied either unless you turn on
 same setting.
 
 While the Timeline is dragged, the chart keeps the last water level it drew
-and the pill names that time until the new one lands. The S-101 depths are
-not adjusted yet (#1132).
+and the pill names that time until the new one lands. Translated S-57 cells
+are drawn as charted. Alert highlights still follow the charted safety
+contour (#1272).
 
 On a narrow window the value shortens to **Charted · not applied**, then
 **Charted** with the information icon. It never cuts off part of a word. The

@@ -1,11 +1,12 @@
 # Chart-wide water level adjustment — Design Note
 
-> Status: **Phases 1, 2 and 3a built** ([#1132](https://github.com/philliphoff/EncDotNet.S100/issues/1132)).
+> Status: **Phases 1–3 built** ([#1132](https://github.com/philliphoff/EncDotNet.S100/issues/1132)).
 > Phase 1 built the water-level field, S-104 uncertainty, the S-101 sounding
 > datum and the pick report's move to the field. Phase 2 built the S-102
 > safety contour. Phase 3a built the setting, the adjusted S-102 surface and
 > safety contour, the adjusted-area boundary and the indicator's adjusted
-> states (§10). The rest is proposed. The note proposes how SoundCharts applies
+> states. Phase 3b built the S-101 adjustment (§10). Phases 4 and 5 are
+> proposed. The note proposes how SoundCharts applies
 > S-104 water levels to the depths, the safety contour and the S-102 surface
 > across the displayed chart, not only at a picked point and along a route.
 > The status-bar indication that tells the mariner what the chart shows is
@@ -261,6 +262,22 @@ question 5, §11).
 Only the depth classes above are re-portrayed. Everything else in the cell
 keeps its cached instructions.
 
+As built (phase 3b, `S101DepthAdjustmentPortrayal`), every depth class uses
+the value form: the rules read `depthRangeMinimumValue`,
+`depthRangeMaximumValue`, `valueOfDepthContour`, `valueOfSounding`,
+`surroundingDepth`, `defaultClearanceDepth` and sounding `Z` with `h`
+added (`S101DepthShift`), against the unchanged thresholds. That keeps one
+Lua session per adjustment and makes a hazard's own depth and its
+surrounding depth agree. It also means contour labels show the adjusted
+value, which S-164 AdjustmentOfDepthValues asks for ("all depth values …
+adjusted"), instead of the charted `VALDCO` proposed above. The minimum `h`
+over an area is read at its vertices and an 8 × 8 lattice inside it, so a
+water-level cell smaller than that lattice can be missed. Split features get
+synthetic ids (`id + 2⁴⁰` inside, `id + 2⁴¹` outside) and their clipped
+geometry. The adjusted list is memory-only: it isn't written to the
+instruction, pattern-clip or tile disk caches. Translated S-57 cells aren't
+adjusted, and the indicator lists them as not adjusted.
+
 ### 3.3 Uncertainty
 
 S-98 Appendix D-2 asks for the S-104 uncertainty to be combined with the
@@ -442,7 +459,7 @@ Answers recorded before phase 3 (2026-11-03). Q1 was settled in phase 1
 | Q3 Adjusted soundings | A small marker (◆) after the figure (artboard C3). Italic was rejected because sloping figures already mean something else on paper charts (INT 1), and underlining reads as a drying height. |
 | Q4 Two safety contours | The S-102 contour is primary. Inside S-102 coverage the S-101 safety contour is drawn faint (thinner and lighter), so R-101-102-B's rule that it stays visible still holds. Outside S-102 coverage the S-101 contour is drawn normally (artboard B6). |
 | Q5 Straddling features | Clip them at the footprint boundary. The part inside is adjusted with the minimum `h` over that part; the part outside stays charted. This replaces "left charted" in §3.2. |
-| Q6 Alerts | Deferred past phase 3. Alert highlights stay on the charted contour, and a follow-up issue tracks it. The route check already applies S-104 at each ETA. |
+| Q6 Alerts | Deferred past phase 3. Alert highlights stay on the charted contour; [#1272](https://github.com/philliphoff/EncDotNet.S100/issues/1272) tracks it. The route check already applies S-104 at each ETA. |
 
 1. **Grid sampling.** Nearest node keeps the chart, the pick report and the
    route check identical. Bilinear gives smoother contours. Should all three

@@ -36,6 +36,25 @@ public sealed class S101LuaRuleExecutor : ILuaVectorRuleExecutor
         S101Dataset dataset,
         S101PortrayalCatalogue catalogue,
         FeatureCatalogue featureCatalogue)
+        : this(luaEngine, dataset, catalogue, featureCatalogue, depthShift: null)
+    {
+    }
+
+    /// <summary>
+    /// Creates an executor whose rules read depths with a water level added
+    /// (chart-wide water level adjustment).
+    /// </summary>
+    /// <param name="luaEngine">The Lua engine.</param>
+    /// <param name="dataset">The S-101 dataset.</param>
+    /// <param name="catalogue">The S-101 portrayal catalogue.</param>
+    /// <param name="featureCatalogue">The S-101 feature catalogue.</param>
+    /// <param name="depthShift">The water level to add, or <see langword="null"/> for charted depths.</param>
+    public S101LuaRuleExecutor(
+        ILuaEngine luaEngine,
+        S101Dataset dataset,
+        S101PortrayalCatalogue catalogue,
+        FeatureCatalogue featureCatalogue,
+        S101DepthShift? depthShift)
     {
         ArgumentNullException.ThrowIfNull(luaEngine);
         ArgumentNullException.ThrowIfNull(dataset);
@@ -45,7 +64,7 @@ public sealed class S101LuaRuleExecutor : ILuaVectorRuleExecutor
         _inner = new LuaRuleExecutor(
             luaEngine,
             catalogue,
-            new S101LuaDataProviderFactory(dataset, featureCatalogue),
+            new S101LuaDataProviderFactory(dataset, featureCatalogue, depthShift),
             "S-101",
             S101ContextParameterBindings.Build(),
             new S101FeatureAnchorProvider(dataset),
@@ -57,6 +76,18 @@ public sealed class S101LuaRuleExecutor : ILuaVectorRuleExecutor
     public Task<IReadOnlyList<DrawingInstruction>> ExecuteAsync(
         MarinerSettings mariner, CancellationToken cancellationToken = default)
         => _inner.ExecuteAsync(mariner, cancellationToken);
+
+    /// <summary>
+    /// Opens a Lua state ready to portray chosen features
+    /// (<see cref="LuaPortrayalSession.Portray"/>), for re-portraying a few
+    /// features without running the whole dataset.
+    /// </summary>
+    /// <param name="mariner">The mariner settings, for the context parameters.</param>
+    /// <param name="cancellationToken">Cancels loading the rules.</param>
+    /// <returns>The session; the caller disposes it.</returns>
+    public Task<LuaPortrayalSession> OpenSessionAsync(
+        MarinerSettings mariner, CancellationToken cancellationToken = default)
+        => _inner.OpenSessionAsync(mariner, cancellationToken);
 
     /// <inheritdoc/>
     public Task<IReadOnlyList<EmittedInstruction>> ExecuteRawAsync(
@@ -73,14 +104,17 @@ internal sealed class S101LuaDataProviderFactory : ILuaDataProviderFactory
     private readonly S101Dataset _dataset;
     private readonly FeatureCatalogue _featureCatalogue;
 
-    public S101LuaDataProviderFactory(S101Dataset dataset, FeatureCatalogue featureCatalogue)
+    private readonly S101DepthShift? _depthShift;
+
+    public S101LuaDataProviderFactory(S101Dataset dataset, FeatureCatalogue featureCatalogue, S101DepthShift? depthShift)
     {
         _dataset = dataset;
         _featureCatalogue = featureCatalogue;
+        _depthShift = depthShift;
     }
 
     public ILuaDataProvider Create(MarinerSettings mariner)
-        => new S101LuaDataProvider(_dataset, _featureCatalogue);
+        => new S101LuaDataProvider(_dataset, _featureCatalogue, _depthShift);
 }
 
 /// <summary>

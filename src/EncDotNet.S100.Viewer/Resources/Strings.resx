@@ -7468,4 +7468,7 @@
   <data name="Label_WaterLevelApplyUndeclaredDatum" xml:space="preserve">
     <value>Apply over undeclared datum</value>
   </data>
+  <data name="Status_DepthBasisPopup_NotAdjustedProductFormat" xml:space="preserve">
+    <value>Not adjusted: {0} ({1} depths are drawn as charted).</value>
+  </data>
 </root>

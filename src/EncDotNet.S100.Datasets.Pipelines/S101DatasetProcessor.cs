@@ -44,7 +44,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// in-memory cache is used.
 /// </para>
 /// </remarks>
-public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection, IChartDepthCell, IDateDependentDatasetProcessor
+public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustableProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, ILoadedDatasetProjection, IChartDepthCell, IDateDependentDatasetProcessor
 {
     private readonly S101Dataset _dataset;
     private readonly S101UpdateReport? _updateReport;
@@ -99,6 +99,11 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
     // BuildRuleOutputCacheKey); display filters are re-applied per render.
     // Guarded by _renderGate.
     private string? _cachedPortrayalKey;
+
+    // Chart-wide water level adjustment (#1132): the last adjusted display
+    // list and what it was built from. Memory only; guarded by _renderGate.
+    private (string Key, S101DepthAdjustmentPortrayal.Result? Result)? _adjustedPortrayal;
+    private volatile S101DepthAdjustmentPortrayal.Result? _drawnAdjustment;
     private IReadOnlyList<DrawingInstruction>? _cachedPortrayalInstructions;
 
     // Cross-load cache of the unfiltered rule output. The
@@ -849,6 +854,37 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             PortrayalCacheMisses++;
         }
 
+        // S-98 Appendix D: with a water level adjustment, the depth features
+        // in its footprint are re-portrayed with the water level added. The
+        // charted list above stays cached; the adjusted one is memory-only
+        // and keyed on the adjustment, so scrubbing back reuses it.
+        S101DepthAdjustmentPortrayal.Result? adjusted = null;
+        if (context?.DepthAdjustment is { } depthAdjustment)
+        {
+            _featureIndex ??= BuildFeatureIndex();
+            var adjustedKey = $"{ruleKey}|{depthAdjustment.Key}";
+            if (_adjustedPortrayal is { } cachedAdjustment && cachedAdjustment.Key == adjustedKey)
+            {
+                adjusted = cachedAdjustment.Result;
+            }
+            else
+            {
+                adjusted = await S101DepthAdjustmentPortrayal.ApplyAsync(
+                    unfiltered,
+                    _featureIndex,
+                    depthAdjustment,
+                    (lat, lon) => SoundingDatumAt(lat, lon) ?? SoundingDatum,
+                    (shift, ct) => new S101LuaRuleExecutor(_luaEngine, _dataset, s101Cat, fc, shift).OpenSessionAsync(mariner, ct),
+                    cancellationToken).ConfigureAwait(false);
+                _adjustedPortrayal = (adjustedKey, adjusted);
+            }
+
+            if (adjusted is not null)
+                unfiltered = adjusted.Instructions;
+        }
+
+        _drawnAdjustment = adjusted;
+
         // S-100 Part 9 timeValid: leave out what isn't drawn at the view
         // time. The cached list keeps every instruction, so moving the view
         // time never re-runs the Lua rules.
@@ -868,7 +904,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         var otherInstructions = prepared.Where(i => i is not AreaInstruction).ToList();
 
         var sourceFeatures = new S101VectorSource(_dataset).GetFeatures().ToList();
-        var geometryProvider = new FeatureGeometryProvider<Feature>(sourceFeatures);
+        IFeatureGeometryProvider geometryProvider = new FeatureGeometryProvider<Feature>(sourceFeatures);
+        if (adjusted is { Geometry.Count: > 0 })
+            geometryProvider = new OverlayGeometryProvider(geometryProvider, adjusted.Geometry);
         var coverageAreas = CoverageAreaResolver.Resolve(sourceFeatures);
 
 
@@ -878,7 +916,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         // clip's only inputs). The Mapsui renderer appends
         // its own clip-algorithm / serialization-format qualifiers before
         // consulting the actual pattern-clip cache it owns.
-        var patternClipKey = $"{_patternClipScope}|{await GetPortrayalContentHashAsync(cancellationToken).ConfigureAwait(false)}|{ruleKey}|areas:{BuildVisibleAreaSignature(unfiltered, prepared)}";
+        var patternClipKey = adjusted is not null ? null : $"{_patternClipScope}|{await GetPortrayalContentHashAsync(cancellationToken).ConfigureAwait(false)}|{ruleKey}|areas:{BuildVisibleAreaSignature(unfiltered, prepared)}";
 
         var prewarm = await CataloguePreWarm.ForInstructionsAsync(s101Cat, prepared, cancellationToken).ConfigureAwait(false);
 
@@ -888,6 +926,17 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         // features without re-running portrayal. See S98DefaultRules.
         _featureIndex ??= BuildFeatureIndex();
         var featureTags = BuildFeatureTags(_featureIndex.Values);
+        if (adjusted is { SourceIds.Count: > 0 })
+        {
+            var withSplit = new Dictionary<long, VectorFeatureTag>(featureTags);
+            foreach (var (synthetic, source) in adjusted.SourceIds)
+            {
+                if (featureTags.TryGetValue(source, out var tag))
+                    withSplit[synthetic] = tag;
+            }
+
+            featureTags = withSplit;
+        }
 
         // Out-of-scale-band declutter cutoff (S-101 DataCoverage /
         // minimumDisplayScale, FC §3.1.1): the most-permissive denominator the
@@ -945,7 +994,9 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             // Dataset bytes (with updates), FC/PC content and the portrayal
             // assemblies: everything the scene depends on beyond the
             // instructions and the renderer's style state.
-            ContentScope = await GetPortrayalContentHashAsync(cancellationToken).ConfigureAwait(false),
+            // An adjusted scene changes with every water level, so it stays
+            // out of the tile disk cache (null scope bypasses it).
+            ContentScope = adjusted is not null ? null : await GetPortrayalContentHashAsync(cancellationToken).ConfigureAwait(false),
             Info = info,
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
@@ -1363,6 +1414,11 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
         if (_externalTextResolver is not null)
             attributes = FeatureInfoBuilder.ResolveFileReferences(attributes, _externalTextResolver);
 
+        // S-98 Appendix D-3 / S-164 WLAFeatureInformation: a depth feature the
+        // drawn chart adjusted says by how much and what it now shows.
+        if (_drawnAdjustment is { } drawn)
+            attributes = [.. attributes, .. AdjustmentRows(drawn, feature)];
+
         var featureRef = feature.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
         return new FeatureInfo
         {
@@ -1374,6 +1430,48 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             DrawingPriority = DrawingPriority(featureRef),
             Geometry = ((IS100Feature)feature).GeometryType,
         };
+    }
+
+    private static IEnumerable<PickAttribute> AdjustmentRows(S101DepthAdjustmentPortrayal.Result drawn, EncDotNet.S100.Pipelines.Vector.Feature feature)
+    {
+        var c = System.Globalization.CultureInfo.InvariantCulture;
+        if (drawn.AdjustedSoundings.Contains(feature.Id))
+        {
+            yield return new PickAttribute
+            {
+                Code = "waterLevelAdjustment",
+                Name = "Water level adjustment",
+                RawValue = "sounding",
+                DisplayValue = "Each sounding in the adjusted area shows charted depth + water level at its position (marked ◆).",
+            };
+            yield break;
+        }
+
+        if (!drawn.Heights.TryGetValue(feature.Id, out var h))
+            yield break;
+
+        yield return new PickAttribute
+        {
+            Code = "waterLevelAdjustment",
+            Name = "Water level",
+            RawValue = h.ToString("0.0", c),
+            DisplayValue = $"{h.ToString("+0.0;-0.0;0.0", c)} m (lowest over the feature in the adjusted area, rounded down to 0.1 m)",
+        };
+        foreach (var attribute in S101DepthShift.DepthAttributes)
+        {
+            if (feature.Attributes.TryGetValue(attribute, out var raw)
+                && raw is not null
+                && double.TryParse(raw.ToString(), System.Globalization.NumberStyles.Float, c, out var charted))
+            {
+                yield return new PickAttribute
+                {
+                    Code = "adjusted." + attribute,
+                    Name = $"Adjusted {attribute}",
+                    RawValue = (charted + h).ToString("0.0#", c),
+                    DisplayValue = $"{(charted + h).ToString("0.0#", c)} m (charted {charted.ToString("0.0#", c)} m)",
+                };
+            }
+        }
     }
 
     /// <inheritdoc/>
@@ -1404,4 +1502,15 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IVectorPortrayalSo
             index[f.Id] = f;
         return index;
     }
+}
+
+/// <summary>Feature geometry with some ids answered from a fixed map (split depth features, #1132).</summary>
+internal sealed class OverlayGeometryProvider(IFeatureGeometryProvider inner, IReadOnlyDictionary<long, FeatureGeometry> overlay) : IFeatureGeometryProvider
+{
+    /// <inheritdoc />
+    public FeatureGeometry? GetGeometry(string featureReference) =>
+        long.TryParse(featureReference, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var id)
+        && overlay.TryGetValue(id, out var geometry)
+            ? geometry
+            : inner.GetGeometry(featureReference);
 }

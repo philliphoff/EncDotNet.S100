@@ -79,7 +79,7 @@ public sealed class S101AlertPortrayal : IDisposable
             return new LuaRuleExecutor(
                 luaEngine,
                 portrayal,
-                new S101LuaDataProviderFactory(dataset, features),
+                new S101LuaDataProviderFactory(dataset, features, depthShift: null),
                 "S-101",
                 S101ContextParameterBindings.Build());
         };
