@@ -672,9 +672,12 @@ public sealed class S57ToS101Translator
     // S-57 VALLMA (Value of local magnetic anomaly, ATTL 175) maps to the S-101
     // `valueOfLocalMagneticAnomaly` complex attribute, which the bundled FC
     // binds on LocalMagneticAnomaly [1..2]. The complex carries a mandatory
-    // `magneticAnomalyValue` [1..1] real sub-attribute (the VALLMA value, in
-    // nanoteslas, carried verbatim) plus an optional `referenceDirection`
-    // [0..1] enum that has no S-57 source and is left unpopulated. Flat
+    // `magneticAnomalyValue` [1..1] real sub-attribute plus an optional
+    // `referenceDirection`
+    // [0..1] enum that has no S-57 source and is left unpopulated. VALLMA is
+    // in minutes of arc (S-57 Appendix A) but magneticAnomalyValue is in
+    // degrees (the FC's unit of measure), so the value is divided by 60; the
+    // reverse multiplies by 60 (S-65 Annex C §27.122). Flat
     // one-level complex, so no consumer change is required (like CATZOC /
     // horizontalClearance).
     private const ushort S57AttrVallma = 175;  // VALLMA — value of local magnetic anomaly
@@ -2800,6 +2803,7 @@ public sealed class S57ToS101Translator
             var assocCode = GetOrAssignFeatureAssociationCode(S101AssocRangeSystemAggregation);
             var componentRole = GetOrAssignRoleCode(S101RoleTheComponent);
             var typeCode = GetOrAssignFeatureTypeCode(S101ClassRangeSystem);
+            var owner = new ResolvedFeature(S101ClassRangeSystem, NoAttributeOverrides);
 
             // Phase 2: emit each RangeSystem with a `theComponent` association to
             // every member that resolved to an emitted S-101 feature. Every
@@ -2815,6 +2819,12 @@ public sealed class S57ToS101Translator
                         assocs.Add(new S101FeatureAssociation(assocCode, memberId, componentRole));
                 }
 
+                // The collection's own attributes (OBJNAM, INFORM, DATSTA/DATEND,
+                // SCAMIN, …) translate against RangeSystem, which binds
+                // featureName, information, fixedDateRange and scaleMinimum;
+                // Annex C §15.6 carries them back onto the C_AGGR.
+                var attributes = TranslateAttributes(aggr.Attributes, owner, CAggrObjl, out var infoAssociations);
+
                 if (_diagnostics is not null) _diagnostics.RangeSystemsEmitted++;
                 Features.Add(new S101FeatureRecord
                 {
@@ -2823,10 +2833,10 @@ public sealed class S57ToS101Translator
                     ProducingAgency = (ushort)aggr.RecordName.AgencyCode,
                     FeatureIdentificationNumber = (uint)aggr.RecordName.FeatureId,
                     FeatureIdentificationSubdivision = (ushort)aggr.RecordName.FeatureSubdivision,
-                    Attributes = [],
+                    Attributes = attributes,
                     SpatialAssociations = [],
                     FeatureAssociations = assocs,
-                    InformationAssociations = [],
+                    InformationAssociations = infoAssociations,
                 });
             }
         }
@@ -3303,7 +3313,13 @@ public sealed class S57ToS101Translator
                     case S57AttrNatsur: if (bindsSurfaceChar && !string.IsNullOrEmpty(a.Value)) natsurList = a.Value; break;
                     case S57AttrNatqua: if (bindsSurfaceChar && !string.IsNullOrEmpty(a.Value)) natquaList = a.Value; break;
                     case S57AttrHorclr: if (bindsHorClearance && !string.IsNullOrEmpty(a.Value)) horclrValue = a.Value; break;
-                    case S57AttrVallma: if (bindsValueOfLocalMagneticAnomaly && !string.IsNullOrEmpty(a.Value)) vallmaValue = a.Value; break;
+                    case S57AttrVallma:
+                        if (bindsValueOfLocalMagneticAnomaly && !string.IsNullOrEmpty(a.Value))
+                        {
+                            vallmaValue = MinutesToDegrees(a.Value);
+                            if (vallmaValue is null) _diagnostics?.RecordRuleDroppedAttribute(S57AttrVallma);
+                        }
+                        break;
                     case S57AttrRadwal: if (bindsRadarWaveLength && !string.IsNullOrEmpty(a.Value)) radwalValue = a.Value; break;
                     case S57AttrCurvel: if (bindsSpeed && !string.IsNullOrEmpty(a.Value)) curvelValue = a.Value; break;
                     case S57AttrMltylt: if (bindsMultiplicityOfFeatures && !string.IsNullOrEmpty(a.Value)) mltyltValue = a.Value; break;
@@ -3780,7 +3796,7 @@ public sealed class S57ToS101Translator
 
             // Append the `valueOfLocalMagneticAnomaly` complex-attribute
             // instance. Its mandatory sub-attribute `magneticAnomalyValue` is a
-            // real that carries the VALLMA value verbatim; `referenceDirection`
+            // real that carries the VALLMA value in degrees; `referenceDirection`
             // has no S-57 source and is left unpopulated.
             if (bindsValueOfLocalMagneticAnomaly && vallmaValue is not null)
             {
@@ -4197,6 +4213,16 @@ public sealed class S57ToS101Translator
             var valueCode = GetOrAssignAttributeCode(S101AttrHorizontalClearanceValue);
             builder.Add(new S101Attribute(valueCode, 1, horizontalClearanceValue));
         }
+
+        // Converts an S-57 VALLMA (minutes of arc) to the degrees S-101's
+        // magneticAnomalyValue carries. Full decimal precision is kept so that
+        // the reverse ×60 gives the original value back (100' is
+        // 1.6666666666666666666666666667°, which ×60 rounds to exactly 100).
+        // Returns null when the value is not a number.
+        private static string? MinutesToDegrees(string minutes)
+            => decimal.TryParse(minutes, NumberStyles.Float, CultureInfo.InvariantCulture, out var m)
+                ? (m / 60).ToString("0.############################", CultureInfo.InvariantCulture)
+                : null;
 
         // Emits a `valueOfLocalMagneticAnomaly` complex-attribute instance
         // (marker + its mandatory `magneticAnomalyValue` real sub-attribute),
