@@ -1,6 +1,4 @@
 using System.Globalization;
-using Avalonia.Automation;
-using Avalonia.Controls;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Core.Metadata;
 using EncDotNet.S100.Crs.ProjNet;
@@ -12,11 +10,8 @@ using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.TestSupport;
-using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
-using EncDotNet.S100.Viewer.Tests.Headless;
 using EncDotNet.S100.Viewer.ViewModels;
-using EncDotNet.S100.Viewer.Views;
 using Mapsui;
 
 namespace EncDotNet.S100.Viewer.Tests;
@@ -106,20 +101,6 @@ public sealed class GribViewerLoadPathTests : IDisposable
         Assert.Equal("GRIB2", metadata.Spec.Name);
         Assert.Equal(new TimeCoverage(GribFixtures.Run, GribFixtures.Run.AddHours(6)), metadata.TimeCoverage);
         Assert.Equal(GribFixtures.CropWest - 0.125, metadata.Extent!.WestLongitude, 6);
-    }
-
-    [AvaloniaFact]
-    public void The_layer_stack_badges_a_GRIB2_dataset()
-    {
-        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
-        var waves = datasets.Add(GribFixtures.CopyFixture(GribFixtures.Waves, Path.Combine(_dir, "gfswave.grib2")), "GRIB2");
-
-        using var host = ViewHost.Show(new DatasetsView { DataContext = datasets }, width: 420, height: 900);
-        host.Click(host.Find<TabItem>("Datasets.DatasetsTab"));
-
-        var badge = host.Find<Border>("Datasets.Row.NotS100Badge");
-        Assert.Equal(Strings.Label_NotS100Product, AutomationProperties.GetName(badge));
-        Assert.True(waves.IsNotS100);
     }
 
     [Fact]

@@ -104,8 +104,10 @@ the registry rather than parse names.
 Where non-S-100 data is labelled:
 
 - **Layer stack.** The layer's name carries the format, model and run,
-  for example "GFS-Wave · 2026-10-25 06Z", plus a "Not an S-100
-  product" badge.
+  for example "GFS-Wave · 2026-10-25 06Z". (A "Not an S-100 product"
+  badge on the dataset's row was built and then removed: the user loaded
+  the dataset on purpose, so whether it's S-100 tells them nothing, and
+  the pick report already says it isn't for navigation.)
 - **Pick reports.** A first line: "Weather model data, not for
   navigation."
 - **Headless images.** No change. Captions are the host's job.
