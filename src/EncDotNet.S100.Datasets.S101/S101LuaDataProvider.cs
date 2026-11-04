@@ -37,6 +37,7 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
 
     // Collected drawing instruction output
     private readonly List<EmittedInstruction> _emitted = new();
+    private readonly S101DepthShift? _depthShift;
 
     /// <summary>
     /// Initialises the provider.
@@ -54,7 +55,21 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     /// nor <c>defaultClearanceDepth</c>) from polluting console output.
     /// </param>
     public S101LuaDataProvider(S101Dataset dataset, FeatureCatalogue featureCatalogue, Action<string>? trace = null)
+        : this(dataset, featureCatalogue, depthShift: null, trace)
     {
+    }
+
+    /// <summary>
+    /// Creates a provider that presents depths with a water level added
+    /// (chart-wide water level adjustment).
+    /// </summary>
+    /// <param name="dataset">The S-101 dataset.</param>
+    /// <param name="featureCatalogue">The S-101 feature catalogue.</param>
+    /// <param name="depthShift">The water level to add to depth values, or <see langword="null"/> for charted depths.</param>
+    /// <param name="trace">Optional trace sink.</param>
+    public S101LuaDataProvider(S101Dataset dataset, FeatureCatalogue featureCatalogue, S101DepthShift? depthShift, Action<string>? trace = null)
+    {
+        _depthShift = depthShift;
         ArgumentNullException.ThrowIfNull(dataset);
         ArgumentNullException.ThrowIfNull(featureCatalogue);
         _doc = dataset.Document;
@@ -400,7 +415,17 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
     {
         var feat = GetFeature((uint)featureId);
         var attrs = ResolveAttributeScope(feat.Attributes, attributePath);
-        return GetSimpleAttributeValues(attrs, attributeCode);
+        var values = GetSimpleAttributeValues(attrs, attributeCode);
+        if (_depthShift?.ForFeature((uint)featureId) is { } height && S101DepthShift.DepthAttributes.Contains(attributeCode))
+        {
+            for (var i = 0; i < values.Count; i++)
+            {
+                if (values[i] is string value)
+                    values[i] = S101DepthShift.Shift(value, height);
+            }
+        }
+
+        return values;
     }
 
     private double HostFeatureGetComplexAttributeCount(double featureId, string attributePath, string attributeCode)
@@ -956,11 +981,15 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
             var points = new List<object>(mp.Points.Count);
             foreach (var (y, x, z) in mp.Points)
             {
+                var depth = z / cmfz;
+                if (_depthShift?.ForSounding(y / cmfy, x / cmfx) is { } height)
+                    depth = Math.Round(depth + height, 2);
+
                 points.Add(new Dictionary<string, object?>
                 {
                     ["X"] = (x / cmfx).ToString(CultureInfo.InvariantCulture),
                     ["Y"] = (y / cmfy).ToString(CultureInfo.InvariantCulture),
-                    ["Z"] = (z / cmfz).ToString(CultureInfo.InvariantCulture),
+                    ["Z"] = depth.ToString(CultureInfo.InvariantCulture),
                 });
             }
 
