@@ -687,7 +687,7 @@ code does the job. Delete: no longer needed.
 | `PortrayalCacheWarmer` | reshape | `Background` cell demand producer; no worker of its own |
 | `PortrayalWarmLedger`, `PortrayalWarmSignature` | keep | skip cells already in the store |
 | `DatasetLoaderService` | reshape | catalogue entry state; loading moves into asset managers |
-| `MoonSharpLuaEngine`, `EncDotNet.S100.Scripting.MoonSharp` | replace | `EncDotNet.S100.Scripting.LuaCSharp` behind the same `ILuaEngine` ([#1278](https://github.com/philliphoff/EncDotNet.S100/issues/1278)) |
+| `MoonSharpLuaEngine`, `EncDotNet.S100.Scripting.MoonSharp` | keep for now | selectable alongside `EncDotNet.S100.Scripting.LuaCSharp` behind the same `ILuaEngine` ([#1278](https://github.com/philliphoff/EncDotNet.S100/issues/1278)); delete once the A/B criteria in step 0 are met |
 | `LuaNoOpCallStripper`, provider `Debug` shims ([#1277](https://github.com/philliphoff/EncDotNet.S100/pull/1277)) | reshape | re-measure on Lua-CSharp; delete if they no longer pay |
 | `LuaRuleExecutor` | reshape | shard runner; pooled prepared states |
 | `VectorPipeline`, `DrawingInstructionParser`, `DrawingInstructionSerializer` | keep | portrayal manager |
@@ -707,7 +707,7 @@ moves risky structural work after the measurements it depends on.
 
 | # | Slice | User-visible gain | Measure | Depends on |
 |---|---|---|---|---|
-| 0 | Switch the Lua engine to Lua-CSharp ([#1278](https://github.com/philliphoff/EncDotNet.S100/issues/1278)) | cold settle, pre-warm, memory | cold portrayal time and bytes; goldens, S-164 | — |
+| 0 | Add Lua-CSharp as a selectable engine, keeping MoonSharp ([#1278](https://github.com/philliphoff/EncDotNet.S100/issues/1278)) | cold settle, pre-warm, memory | differential output test; per-engine time and bytes; goldens, S-164 | — |
 | 1 | Settle harness and metrics | none | baselines below | — (best before 0 merges) |
 | 2 | Lua shards within a cell | cold jump settle | cold settle p50/p95; shard output equals full run | 0, 1 |
 | 3 | Pre-warm on idle cores | warm sooner after open | pre-warm wall time; GC pause share | 0, 1 |
@@ -720,13 +720,14 @@ moves risky structural work after the measurements it depends on.
 | 10 | CLI and MCP on the engine | parallel `render`, density | CLI wall time; render parity | 7 (better after 8) |
 | 11 | Content store unification and cell scenes on disk | warm settle | warm settle; disk bytes | 8 |
 
-**0. Switch the Lua engine to Lua-CSharp.** This is
-[#1278](https://github.com/philliphoff/EncDotNet.S100/issues/1278), done as that
-issue describes: a new `EncDotNet.S100.Scripting.LuaCSharp` package behind the
-existing `ILuaEngine` and `ILuaContext`, the two compatibility shims (`__eq`
-dispatch and `require` recording modules that return nothing), a sandbox
-equivalent to MoonSharp's hard sandbox, and every host switched before
-MoonSharp is removed. It goes first because:
+**0. Add Lua-CSharp as a selectable Lua engine.** This is
+[#1278](https://github.com/philliphoff/EncDotNet.S100/issues/1278), with one
+change: MoonSharp stays. Step 0 adds a new `EncDotNet.S100.Scripting.LuaCSharp`
+package behind the existing `ILuaEngine` and `ILuaContext`, with the two
+compatibility shims (`__eq` dispatch and `require` recording modules that
+return nothing) and a sandbox equivalent to MoonSharp's hard sandbox. Both
+engines ship, and every host can pick either. MoonSharp is removed later, in its
+own change, once the A/B results below say it can go. It goes first because:
 
 - **It's the largest single gain on the table.** Cold portrayal is 2.3–2.8×
   faster and allocates about 9× less. Lua was 73% of cold-load allocations, so
@@ -753,7 +754,42 @@ Two choices in that issue interact with this design:
   Keep the per-feature emit check until slice 5 shows whether the scheduler
   needs a finer yield point; it's the scheduler's `YieldRequested` hook too.
 
-After step 0 merges, re-baseline every "Today" figure in
+#### Engine selection and A/B testing
+
+- **One option, every host.** A `LuaEngineKind { MoonSharp, LuaCSharp }`
+  option picks the engine where `ILuaEngine` is constructed today:
+  `DatasetPipelineFactory` and its callers. It surfaces as a viewer setting, an
+  `s100 --lua-engine` flag for `render`, `tiles` and `mcp serve`, an
+  environment variable for tests, and a `--lua-engine` option on PerfRunner. The
+  pre-warm's separate pipeline factory follows the same setting.
+- **The caches keep the engines apart.** The portrayal and pattern-clip cache
+  keys already hash the Lua engine assembly's MVID, so each engine writes its own
+  entries and an A/B run can't read the other engine's output. [F] Warm A/B runs
+  therefore need each engine's cache warmed separately.
+- **Differential test in CI.** A test portrays every cell in the test corpora
+  with both engines and compares the output hash (feature references,
+  instruction strings and observed context parameters), as the spike did. A
+  difference fails the build and names the feature. This keeps engine parity
+  checked on every change to the rules, the framework scripts or either shim,
+  not only once at the switch.
+- **Perf A/B in CI.** `tools/perf/interleave.sh` already alternates base and
+  candidate runs to cancel machine noise. Add an engine axis so the
+  `s101-portray-*` and `s101-real-*` scenarios run on both engines in the same
+  job, reporting time and bytes allocated per engine.
+- **Viewer A/B.** The slice 1 harness runs the jumps route once per engine from
+  empty caches and after pre-warm.
+- **Default.** Step 0 ships with MoonSharp as the default and Lua-CSharp opt-in.
+  Flip the default once the differential test and goldens pass on every
+  Lua-portrayed product and the viewer A/B confirms the gain on whole jumps.
+- **Retiring MoonSharp.** Remove it once Lua-CSharp has been the default for a
+  release with no engine regressions reported, and no shim is waiting on an
+  upstream fix that MoonSharp would be needed to cross-check.
+
+The rest of the plan is tuned against Lua-CSharp. Slices that measure
+portrayal (shards, pre-warm, scheduler admission) measure on Lua-CSharp and
+only check that MoonSharp still works.
+
+After the default flips, re-baseline every "Today" figure in
 [Measuring success](#measuring-success) before setting gates.
 
 **1. Settle harness and metrics.** Extend `viewer-stress` with a `jumps` route:
@@ -780,7 +816,7 @@ settle. Measure it on Lua-CSharp; if state set-up eats the gain, drop it. [M]
 **3. Pre-warm on idle cores.** Let `PortrayalCacheWarmer` run N cells at once
 while the map is idle, where N follows GC pause share. It still yields to
 visible work through the existing busy predicate. Small, separate, and it shrinks
-the 63 s window in which jumps are still cold. Step 0 shortens that window by
+the 63 s window in which jumps are still cold. Lua-CSharp shortens that window by
 itself; this slice multiplies the effect. [M]
 
 **4. Global tile budget, core-only tiles, idle GC.** Three changes in the
@@ -794,7 +830,7 @@ current renderer:
   ([#1276](https://github.com/philliphoff/EncDotNet.S100/issues/1276) item 1).
 
 This doesn't need the new architecture and gives back most of the 3.5 GB of
-native tile memory. Step 0 should already shrink the managed half.
+native tile memory. Lua-CSharp should already shrink the managed half.
 
 **5. One work scheduler.** Add `IWorkScheduler` with dedicated threads. Move,
 in order: tile raster jobs (deleting `ComputeWorkersToStart`, the per-layer
@@ -841,7 +877,7 @@ shows parsing and scene building dominate.
 
 - **[#1275](https://github.com/philliphoff/EncDotNet.S100/issues/1275) and
   [#1278](https://github.com/philliphoff/EncDotNet.S100/issues/1278)** (Lua
-  allocations, engine switch) are step 0. Slice 2's shards build on the new
+  allocations, new engine) are step 0. Slice 2's shards build on the new
   engine.
 - **[#607](https://github.com/philliphoff/EncDotNet.S100/issues/607)** is slice
   7, and its Q2 knob decision is the `ChartSessionOptions` surface. The engine
@@ -872,9 +908,9 @@ shows parsing and scene building dominate.
    show up in S-102, S-131, S-125 or S-401 rules that the spike didn't run.
    Mitigation: [#1278](https://github.com/philliphoff/EncDotNet.S100/issues/1278)'s done-when covers every Lua-portrayed product, the
    visual-regression goldens and S-164; report deviations upstream and keep each
-   shim until a fixed release ships. Because the engine sits behind
-   `ILuaEngine`, keep MoonSharp buildable until the switch has shipped in a
-   release, so a regression can be bisected by engine.
+   shim until a fixed release ships. MoonSharp stays selectable, so a
+   regression can be checked against the other engine with one setting, and the
+   default can flip back without a release.
 2. **Lua shard parity.** Shards must give byte-identical output to a full run.
    Risks: rules that keep state across features in Lua globals, `TextPlacement`
    ordering, and de-duplication across shard boundaries. Mitigation: a parity
@@ -925,11 +961,14 @@ shows parsing and scene building dominate.
    of the coverage plane), or stay a separate layer drawn above them?
 9. **Settle targets.** The targets below are proposals. Which do you want as
    gates? They should be set against the post-step-0 baseline.
-10. **Harness before engine?** Step 0 can start now. Do you want to
-    hold its merge until slice 1's harness can record its effect on whole
-    jumps, or merge on the per-cell measurements?
+10. **When to flip the default?** Step 0 can merge with Lua-CSharp
+    opt-in. Should the default flip need slice 1's whole-jump A/B, or only the
+    differential test, goldens and per-cell measurements?
 11. **GC mode after step 0.** Should #1276 item 2 (re-check Server GC and its
-    settings) be a gate on step 0, or a follow-up?
+    settings) gate the default flip, or follow it?
+12. **Retiring MoonSharp.** Is "one release as default with no engine
+    regressions" the right bar, or do you want MoonSharp kept longer, for
+    example as a reference engine for conformance work?
 
 ### Measuring success
 
@@ -937,15 +976,16 @@ All figures from the slice 1 harness, Release, on the 16-core Mac used for
 [#1276](https://github.com/philliphoff/EncDotNet.S100/issues/1276), NOAA
 "Washington", load as you pan, 1:44 300, Seattle → Tacoma → Port Townsend.
 
-"Today" is MoonSharp on `main`. Re-baseline after step 0; the spike suggests
-cold portrayal times drop by more than half on their own.
+"Today" is MoonSharp on `main`. Re-baseline once Lua-CSharp is the default;
+the spike suggests cold portrayal times drop by more than half on their own.
+Until then, report both engines side by side.
 
 | Metric | Today [M] | Proposed target |
 |---|---|---|
 | Jump settle, cold | 5–18 s | p95 ≤ 3 s |
 | Jump settle, after pre-warm | 1.2–1.8 s | p95 ≤ 0.8 s |
 | Pre-warm, 298 cells | 63 s | ≤ 15 s |
-| Cold portrayal, US3WA1EF | 3.7 s, 5,027 MB (1.3 s, 553 MB on Lua-CSharp in the spike) | ≤ 1.3 s, ≤ 600 MB after step 0; lower after shards |
+| Cold portrayal, US3WA1EF | 3.7 s, 5,027 MB (1.3 s, 553 MB on Lua-CSharp in the spike) | ≤ 1.3 s, ≤ 600 MB on Lua-CSharp; lower after shards |
 | Bytes allocated, three cold jumps | about 43 GB | ≤ 15 GB |
 | Cores busy during a cold jump | about 3 of 16 (workstation GC) | ≥ 12 of 16 |
 | GC pause share during a cold jump | 40–60% (workstation), lower with server GC | ≤ 10% |
