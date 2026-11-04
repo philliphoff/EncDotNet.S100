@@ -25,6 +25,10 @@ A user jumps to a new place in a 298-cell NOAA collection. Today:
 - Lua portrayal takes 0.2–7 s per cell. Parsing takes 10–500 ms. [M]
 - Cold loads allocate about 2 GB/s. 73% of allocations come from MoonSharp and
   18% from NTS `CascadedPolygonUnion` in pattern clipping. [M]
+- A spike for [#1278](https://github.com/philliphoff/EncDotNet.S100/issues/1278)
+  ran the same S-101 rules on Lua-CSharp 0.5.8. Output was byte-identical, with
+  about 9× fewer bytes allocated and `PortrayalMain` 2.3–2.8× faster. US3WA1EF
+  went from 3.7 s and 5,027 MB to 1.3 s and 553 MB. [M]
 - With workstation GC about 3 of 16 cores were busy. Server GC cut pauses from
   13.5 s to 1.1 s but holds 3–5 GB committed. [M]
 - Peak working set is 7–10 GB with about 40 cells loaded: about 5.5 GB GC heap
@@ -43,9 +47,11 @@ Five structural causes sit under these numbers. They're read from the code.
    (areas, line work). Each layer has its own `TileState`, its own pending sets,
    its own workers, its own 256 MB tile cache and its own GPU cache. Memory and
    worker count scale with cells × layers, not with the screen. [F]
-3. **One cell is one serial Lua run.** `PortrayalMain` runs every feature of a
-   cell in one MoonSharp `Script` on one thread. A 7 s cell holds one core for
-   7 s while the visible view waits for it. [F]
+3. **One cell is one serial Lua run, on an interpreter that allocates for every
+   value.** `PortrayalMain` runs every feature of a cell in one MoonSharp
+   `Script` on one thread. Every Lua value is a heap `DynValue`, and every call
+   allocates a `CallStackItem`. A 7 s cell holds one core for 7 s while the
+   visible view waits for it, and its garbage stalls the other cores. [F]
 4. **The UI thread composes.** `ComposeLayers` (stack projection, S-98 rules,
    overlap suppression with O(n²) NTS `Intersects`, layer diff) runs on the UI
    thread after every cell load: about 230 ms per 14-cell load. [M]
@@ -240,13 +246,16 @@ Rules:
   dropped. The demand planner drops interest when it publishes a new demand set
   that no longer contains the asset. No component holds a
   `CancellationTokenSource` per load any more.
-- **Allocation-aware admission.** Lua jobs allocate heavily and GC pauses stop
-  every core. The scheduler caps concurrent `Portray` jobs in the `Background`
+- **Allocation-aware admission.** GC pauses stop every core, so the scheduler
+  caps concurrent allocation-heavy jobs (`Portray`, `Clip`) in the `Background`
   class by observed GC pause share (`GC.GetTotalPauseDuration` over a sliding
-  window), not by a fixed count. Visible portrayal is never capped. [M: GC
-  paused 40–60% of wall clock under workstation GC; H: that a pause-share
-  feedback loop keeps throughput up without the committed-memory growth in
-  [#1276](https://github.com/philliphoff/EncDotNet.S100/issues/1276)]
+  window), not by a fixed count. Visible work is never capped. [M: GC paused
+  40–60% of wall clock under workstation GC; H: that a pause-share feedback loop
+  keeps throughput up without the committed-memory growth in
+  [#1276](https://github.com/philliphoff/EncDotNet.S100/issues/1276)]. After the
+  Lua-CSharp switch this is a backstop rather than a main control: Lua
+  allocates about 9× less, and NTS pattern clipping becomes the largest
+  allocator. [M: 9×; H: the new allocation split, which step 0 measures]
 
 ### Asset managers
 
@@ -551,13 +560,18 @@ One content-addressed disk store serves every asset kind.
    and `LuaPortrayalSession` already calls it with a feature subset. A cell's
    features split into shards of about 500 features. Each shard runs in its own
    Lua state on its own worker, and the outputs merge in feature order before
-   the existing de-duplication and priority sort. A 7 s cell on 15 workers then
-   settles in well under a second. [F: the entry point takes IDs; H: the
+   the existing de-duplication and priority sort. On Lua-CSharp the slowest
+   measured cell takes 1.3 s on one core, so shards could bring it to a few
+   hundred milliseconds. [F: the entry point takes IDs; M: 1.3 s; H: the
    speed-up, and that shard outputs match a full run byte for byte]
    - `TextPlacement` features must go in the same shard as the feature they
      belong to, because `PortrayalMain` handles them after their parent.
    - Each shard pays the Lua state set-up cost. Pool and reuse prepared states
-     per catalogue and context. [H: set-up is a small share; measure]
+     per catalogue and context. [H: set-up is a small share; measure on
+     Lua-CSharp, not MoonSharp]
+   - Every shard runs with the same engine shims as a full run (the `__eq` and
+     `require` fixes from [#1278](https://github.com/philliphoff/EncDotNet.S100/issues/1278)), so shard parity and engine parity are tested
+     together.
 4. Pattern clips split by `(PatternReference, priority)` group, which
    `ClipPatternAreas` already forms. [F]
 5. **Pre-warm uses idle cores.** When nothing visible or predicted is queued,
@@ -673,6 +687,8 @@ code does the job. Delete: no longer needed.
 | `PortrayalCacheWarmer` | reshape | `Background` cell demand producer; no worker of its own |
 | `PortrayalWarmLedger`, `PortrayalWarmSignature` | keep | skip cells already in the store |
 | `DatasetLoaderService` | reshape | catalogue entry state; loading moves into asset managers |
+| `MoonSharpLuaEngine`, `EncDotNet.S100.Scripting.MoonSharp` | replace | `EncDotNet.S100.Scripting.LuaCSharp` behind the same `ILuaEngine` ([#1278](https://github.com/philliphoff/EncDotNet.S100/issues/1278)) |
+| `LuaNoOpCallStripper`, provider `Debug` shims ([#1277](https://github.com/philliphoff/EncDotNet.S100/pull/1277)) | reshape | re-measure on Lua-CSharp; delete if they no longer pay |
 | `LuaRuleExecutor` | reshape | shard runner; pooled prepared states |
 | `VectorPipeline`, `DrawingInstructionParser`, `DrawingInstructionSerializer` | keep | portrayal manager |
 | `VectorSceneBuilder` | keep | add cancellation; split by instruction range |
@@ -685,48 +701,89 @@ code does the job. Delete: no longer needed.
 
 ### Staged migration
 
-Each slice ships alone, is measured with the harness from slice 0, and leaves
+Each slice ships alone, is measured with the harness from slice 1, and leaves
 the app working. The order puts the biggest gains users can see first, and
 moves risky structural work after the measurements it depends on.
 
 | # | Slice | User-visible gain | Measure | Depends on |
 |---|---|---|---|---|
-| 0 | Settle harness and metrics | none | baselines below | — |
-| 1 | Lua shards within a cell | cold jump settle | cold settle p50/p95; shard output equals full run | 0 |
-| 2 | Pre-warm on idle cores | warm sooner after open | pre-warm wall time; GC pause share | 0 |
-| 3 | Global tile budget, core-only tiles, idle GC | working set | peak and idle working set | 0 |
-| 4 | One work scheduler | settle, no starvation | cores busy; visible job wait p95 | 0 |
-| 5 | Stack off the UI thread, incremental | no UI hitch on load | longest UI-thread task | 4 |
-| 6 | Extract the engine ([#607](https://github.com/philliphoff/EncDotNet.S100/issues/607)) | none | VisualRegression unchanged | 4 |
-| 7 | Chart tiles and one chart layer | atomic reveal, memory, pan | reveal trace; native bytes; pan p95 | 3, 5, 6 |
-| 8 | Prediction v2 | warm next view | prediction hit and waste rates | 7 |
-| 9 | CLI and MCP on the engine | parallel `render`, density | CLI wall time; render parity | 6 (better after 7) |
-| 10 | Content store unification and cell scenes on disk | warm settle | warm settle; disk bytes | 7 |
+| 0 | Switch the Lua engine to Lua-CSharp ([#1278](https://github.com/philliphoff/EncDotNet.S100/issues/1278)) | cold settle, pre-warm, memory | cold portrayal time and bytes; goldens, S-164 | — |
+| 1 | Settle harness and metrics | none | baselines below | — (best before 0 merges) |
+| 2 | Lua shards within a cell | cold jump settle | cold settle p50/p95; shard output equals full run | 0, 1 |
+| 3 | Pre-warm on idle cores | warm sooner after open | pre-warm wall time; GC pause share | 0, 1 |
+| 4 | Global tile budget, core-only tiles, idle GC | working set | peak and idle working set | 1 |
+| 5 | One work scheduler | settle, no starvation | cores busy; visible job wait p95 | 1 |
+| 6 | Stack off the UI thread, incremental | no UI hitch on load | longest UI-thread task | 5 |
+| 7 | Extract the engine ([#607](https://github.com/philliphoff/EncDotNet.S100/issues/607)) | none | VisualRegression unchanged | 5 |
+| 8 | Chart tiles and one chart layer | atomic reveal, memory, pan | reveal trace; native bytes; pan p95 | 4, 6, 7 |
+| 9 | Prediction v2 | warm next view | prediction hit and waste rates | 8 |
+| 10 | CLI and MCP on the engine | parallel `render`, density | CLI wall time; render parity | 7 (better after 8) |
+| 11 | Content store unification and cell scenes on disk | warm settle | warm settle; disk bytes | 8 |
 
-**0. Settle harness and metrics.** Extend `viewer-stress` with a `jumps` route:
+**0. Switch the Lua engine to Lua-CSharp.** This is
+[#1278](https://github.com/philliphoff/EncDotNet.S100/issues/1278), done as that
+issue describes: a new `EncDotNet.S100.Scripting.LuaCSharp` package behind the
+existing `ILuaEngine` and `ILuaContext`, the two compatibility shims (`__eq`
+dispatch and `require` recording modules that return nothing), a sandbox
+equivalent to MoonSharp's hard sandbox, and every host switched before
+MoonSharp is removed. It goes first because:
+
+- **It's the largest single gain on the table.** Cold portrayal is 2.3–2.8×
+  faster and allocates about 9× less. Lua was 73% of cold-load allocations, so
+  total allocations should fall to roughly a third. Every later slice that
+  portrays (shards, pre-warm, display changes that re-run Lua, the CLI) gets it
+  for free. [M: spike; H: the total, which slice 1 confirms]
+- **It changes the numbers the rest of the plan is tuned on.** GC pause share,
+  committed memory, how many portrayals can run at once, and whether shards are
+  still worth their cost all depend on how much Lua allocates. Tuning the
+  scheduler's admission or the memory budget against MoonSharp would be tuning
+  against a cost that's about to go away.
+- **It needs no architecture change.** The engine already sits behind an
+  interface in Core, and the spike drove the real processors through it.
+- **It's independent of the render work,** so it can run in parallel with
+  slice 1.
+
+Two choices in that issue interact with this design:
+
+- **Sync bridge first.** Keep `ILuaContext` synchronous for step 0, as the
+  host functions are synchronous and calls complete synchronously. Revisit an
+  async context in slice 5, where scheduler jobs are `ValueTask`-based and a
+  yield point inside Lua would be useful.
+- **Cancellation.** Pass the `CancellationToken` through Lua-CSharp's calls.
+  Keep the per-feature emit check until slice 5 shows whether the scheduler
+  needs a finer yield point; it's the scheduler's `YieldRequested` hook too.
+
+After step 0 merges, re-baseline every "Today" figure in
+[Measuring success](#measuring-success) before setting gates.
+
+**1. Settle harness and metrics.** Extend `viewer-stress` with a `jumps` route:
 Seattle → Tacoma → Port Townsend at 1:44 300 on the "Washington" source, from
 empty caches and after pre-warm. Add a **settled** signal to the viewer: every
 visible cell loaded and every visible slot showing its target tile. Record time
 to settle, pan frame p50/p95/max, cores busy (process CPU time ÷ wall time ÷
-cores), GC pause share, peak working set, and the managed/native/committed split.
-Add the memory split to `get_render_stats`
+cores), GC pause share, bytes allocated, peak working set, and the
+managed/native/committed split. Add the memory split to `get_render_stats`
 ([#1276](https://github.com/philliphoff/EncDotNet.S100/issues/1276) item 3).
-None of these metrics exist in PerfRunner today. [F]
+None of these metrics exist in PerfRunner today. [F] If the harness lands
+before step 0 merges, it records step 0's effect on whole jumps, not only on
+single cells.
 
-**1. Lua shards within a cell.** Change `LuaRuleExecutor` to split
+**2. Lua shards within a cell.** Change `LuaRuleExecutor` to split
 `PortrayalMain` across K prepared Lua states, keeping `TextPlacement` with its
 parent, and merge in feature order. Run shards through today's thread pool with
 `Parallel.ForEachAsync`, capped at the visible-load concurrency. Gate it behind
 an option, compare output against a full run for the whole Washington and IC-ENC
-corpora, and keep the disk cache keys unchanged. This is first because the
-largest share of cold settle time is a single slow cell holding one core. [M]
+corpora, and keep the disk cache keys unchanged. After step 0 the slowest cell
+still holds one core for about 1.3 s, so this remains the next gain for cold
+settle. Measure it on Lua-CSharp; if state set-up eats the gain, drop it. [M]
 
-**2. Pre-warm on idle cores.** Let `PortrayalCacheWarmer` run N cells at once
+**3. Pre-warm on idle cores.** Let `PortrayalCacheWarmer` run N cells at once
 while the map is idle, where N follows GC pause share. It still yields to
 visible work through the existing busy predicate. Small, separate, and it shrinks
-the 63 s window in which jumps are still cold. [M]
+the 63 s window in which jumps are still cold. Step 0 shortens that window by
+itself; this slice multiplies the effect. [M]
 
-**3. Global tile budget, core-only tiles, idle GC.** Three changes in the
+**4. Global tile budget, core-only tiles, idle GC.** Three changes in the
 current renderer:
 
 - Store the core plus a 2-pixel apron instead of the full gutter.
@@ -737,101 +794,117 @@ current renderer:
   ([#1276](https://github.com/philliphoff/EncDotNet.S100/issues/1276) item 1).
 
 This doesn't need the new architecture and gives back most of the 3.5 GB of
-native tile memory.
+native tile memory. Step 0 should already shrink the managed half.
 
-**4. One work scheduler.** Add `IWorkScheduler` with dedicated threads. Move,
+**5. One work scheduler.** Add `IWorkScheduler` with dedicated threads. Move,
 in order: tile raster jobs (deleting `ComputeWorkersToStart`, the per-layer
 floors and the fairness registry), lazy-load portrayal, pre-warm, validation,
 and pattern clipping. The per-layer pending sets become interests on scheduler
 jobs. After this, priority runs across stages and nothing has a private worker
 count.
 
-**5. Stack off the UI thread.** Run `ProjectLayerStack`,
+**6. Stack off the UI thread.** Run `ProjectLayerStack`,
 `ApplyOverlapSuppression` and the layer diff as a `Stack` job. Find finer
 coverages through an envelope R-tree, only for the new cell. Publish the
 result and apply it to Mapsui in one dispatcher post. Add stack-version
 batching here.
 
-**6. Extract the engine.** This is
+**7. Extract the engine.** This is
 [#607](https://github.com/philliphoff/EncDotNet.S100/issues/607). Move the Tier 1
 files as listed there, swap `ILayer` for an opaque identity token, use the core
 `Viewport`, and turn the `RenderingOptimizations` statics into
-`ChartSessionOptions`. Doing this after slice 4 means the scheduler, rather than
+`ChartSessionOptions`. Doing this after slice 5 means the scheduler, rather than
 the per-layer worker code, moves into the new project.
 
-**7. Chart tiles and one chart layer.** Replace per-layer tiles with chart
+**8. Chart tiles and one chart layer.** Replace per-layer tiles with chart
 tiles and `StackSlice` keys. Replace per-cell Mapsui layers with one
 `ChartLayer`, and per-op pick features with engine picks. Delete
 `TileRevealGroup`, the predecessor stand-in and S-98 filtered layers. First,
 prototype the per-slot raster cost with 5, 10 and 20 overlapping cells; if
 re-raster on a landing cell is too slow, see the fallback in the risks.
 
-**8. Prediction v2.** Feed fling and animation destinations into `ViewMotion`.
+**9. Prediction v2.** Feed fling and animation destinations into `ViewMotion`.
 Add a zoom-rate estimate. Add route and history inputs. Drive cell demand and
-release hints from the model. Report hit and waste rates.
+release hints from the model. Report hit and waste rates. With faster
+portrayal, the cell horizon can be shorter than it would be on MoonSharp.
 
-**9. CLI and MCP on the engine.** Move `render`, `tiles export`, `tiles serve`
+**10. CLI and MCP on the engine.** Move `render`, `tiles export`, `tiles serve`
 and `mcp serve` to `ChartSession`. Delete `HeadlessCompositor` and
 `HeadlessTileRenderer`. Captures honour density.
 
-**10. Content store.** One store and budget for every kind, a running size
+**11. Content store.** One store and budget for every kind, a running size
 index ([#691](https://github.com/philliphoff/EncDotNet.S100/issues/691) item 4),
-the faster tile codec, and cell scenes on disk if slice 0's warm-load breakdown
+the faster tile codec, and cell scenes on disk if slice 1's warm-load breakdown
 shows parsing and scene building dominate.
 
 ### How the plan absorbs the open epics
 
+- **[#1275](https://github.com/philliphoff/EncDotNet.S100/issues/1275) and
+  [#1278](https://github.com/philliphoff/EncDotNet.S100/issues/1278)** (Lua
+  allocations, engine switch) are step 0. Slice 2's shards build on the new
+  engine.
 - **[#607](https://github.com/philliphoff/EncDotNet.S100/issues/607)** is slice
-  6, and its Q2 knob decision is the `ChartSessionOptions` surface. The engine
+  7, and its Q2 knob decision is the `ChartSessionOptions` surface. The engine
   is the "renderer-neutral project". Its identity token is the chart session, not
   a layer, because chart tiles make the per-layer key unnecessary.
 - **[#691](https://github.com/philliphoff/EncDotNet.S100/issues/691) item 1**
-  (memory with many cells) is slice 3 in the short term and slice 7 for good:
+  (memory with many cells) is slice 4 in the short term and slice 8 for good:
   per-layer budgets become one global budget, then the number of raster caches
   stops depending on the number of cells. Items 2 and 3 are already fixed and
-  their rules carry over. Item 4 is slice 10.
+  their rules carry over. Item 4 is slice 11.
 - **[#1276](https://github.com/philliphoff/EncDotNet.S100/issues/1276)** (GC
-  committed memory) is slice 3 (idle collection) and slice 0 (reporting). Slice
-  1 and [#1275](https://github.com/philliphoff/EncDotNet.S100/issues/1275) lower
-  the allocation rate that drives committed memory. Slice 4's GC-aware admission
-  is the backstop.
-- **The per-layer worker and budget model** goes in two steps: slice 3 removes
-  per-layer budgets, slice 4 removes per-layer workers, and slice 7 removes
-  per-layer state altogether.
+  committed memory) starts with step 0, which cuts the allocation rate that
+  drives committed memory. Slice 4 adds the idle collection and slice 1 the
+  reporting. Its item 2 (re-check GC settings) belongs right after step 0: with
+  9× fewer Lua allocations, Server GC's committed-memory cost may no longer be
+  worth its pause savings, or a heap-count cap may suffice. Slice 5's GC-aware
+  admission is the backstop.
+- **The per-layer worker and budget model** goes in three steps: slice 4
+  removes per-layer budgets, slice 5 removes per-layer workers, and slice 8
+  removes per-layer state altogether.
 
 ## Risks and open questions
 
 ### Risks
 
-1. **Lua shard parity.** Shards must give byte-identical output to a full run.
+1. **Lua-CSharp maturity.** It's a 0.5.x release with known deviations from
+   Lua 5.2. The spike found two that broke S-101 and needed shims. Others may
+   show up in S-102, S-131, S-125 or S-401 rules that the spike didn't run.
+   Mitigation: [#1278](https://github.com/philliphoff/EncDotNet.S100/issues/1278)'s done-when covers every Lua-portrayed product, the
+   visual-regression goldens and S-164; report deviations upstream and keep each
+   shim until a fixed release ships. Because the engine sits behind
+   `ILuaEngine`, keep MoonSharp buildable until the switch has shipped in a
+   release, so a regression can be bisected by engine.
+2. **Lua shard parity.** Shards must give byte-identical output to a full run.
    Risks: rules that keep state across features in Lua globals, `TextPlacement`
    ordering, and de-duplication across shard boundaries. Mitigation: a parity
    test over whole corpora, and an option to turn shards off per catalogue.
-2. **Shard memory.** Each Lua state holds its own feature proxies. K states may
-   allocate more in total than one, which pushes GC. Measure allocations per
-   cell with K = 1, 4 and 8.
-3. **Chart tile re-raster cost.** A slot with many overlapping cells costs more
+3. **Shard memory.** Each Lua state holds its own feature proxies. K states may
+   allocate more in total than one, which pushes GC. Lua-CSharp's struct values
+   make this cheaper than on MoonSharp, but measure allocations per cell with
+   K = 1, 4 and 8.
+4. **Chart tile re-raster cost.** A slot with many overlapping cells costs more
    to raster than one layer's tile, and a landing cell re-rasters all of it.
    Fallback if the prototype is too slow: cache per-cell raster fragments as
    inputs, and make a chart tile a cheap composite of fragments. This trades some
    memory back for fewer full re-rasters.
-4. **Scale class growth.** The union of SCAMIN thresholds across a slot's cells
+5. **Scale class growth.** The union of SCAMIN thresholds across a slot's cells
    may split bands into many classes, multiplying tiles. Measure the class count
    per slot on the Washington source.
-5. **Seams.** Clipping coarse cells by finer coverage in tile space must match
+6. **Seams.** Clipping coarse cells by finer coverage in tile space must match
    today's anti-aliasing at coverage edges. VisualRegression must pass before
    per-layer clipping goes.
-6. **Managed estimates drift.** If asset size estimates are far off, the budget
+7. **Managed estimates drift.** If asset size estimates are far off, the budget
    either over-evicts or lets the heap grow. Calibrate against the GC heap, and
    keep native memory, which is exact, as the hard limit.
-7. **Mapsui.** One custom layer for all chart planes changes how picks,
+8. **Mapsui.** One custom layer for all chart planes changes how picks,
    legends and layer toggles reach the UI. The app's per-dataset visibility and
    opacity become stack settings, not Mapsui layer properties.
 
 ### Open questions for the owner
 
 1. **Composite or per-cell tiles?** Chart tiles are the core of the reveal and
-   memory story. Do you accept re-raster on cell arrival, subject to the slice 7
+   memory story. Do you accept re-raster on cell arrival, subject to the slice 8
    prototype, or prefer per-cell fragments from the start?
 2. **Memory limit.** Is 25% of RAM, capped at 6 GB, the right default? Should
    the user be able to set it?
@@ -851,19 +924,29 @@ shows parsing and scene building dominate.
 8. **S-102 in chart tiles.** Should gridded products join chart tiles (phase 2
    of the coverage plane), or stay a separate layer drawn above them?
 9. **Settle targets.** The targets below are proposals. Which do you want as
-   gates?
+   gates? They should be set against the post-step-0 baseline.
+10. **Harness before engine?** Step 0 can start now. Do you want to
+    hold its merge until slice 1's harness can record its effect on whole
+    jumps, or merge on the per-cell measurements?
+11. **GC mode after step 0.** Should #1276 item 2 (re-check Server GC and its
+    settings) be a gate on step 0, or a follow-up?
 
 ### Measuring success
 
-All figures from the slice 0 harness, Release, on the 16-core Mac used for
+All figures from the slice 1 harness, Release, on the 16-core Mac used for
 [#1276](https://github.com/philliphoff/EncDotNet.S100/issues/1276), NOAA
 "Washington", load as you pan, 1:44 300, Seattle → Tacoma → Port Townsend.
+
+"Today" is MoonSharp on `main`. Re-baseline after step 0; the spike suggests
+cold portrayal times drop by more than half on their own.
 
 | Metric | Today [M] | Proposed target |
 |---|---|---|
 | Jump settle, cold | 5–18 s | p95 ≤ 3 s |
 | Jump settle, after pre-warm | 1.2–1.8 s | p95 ≤ 0.8 s |
 | Pre-warm, 298 cells | 63 s | ≤ 15 s |
+| Cold portrayal, US3WA1EF | 3.7 s, 5,027 MB (1.3 s, 553 MB on Lua-CSharp in the spike) | ≤ 1.3 s, ≤ 600 MB after step 0; lower after shards |
+| Bytes allocated, three cold jumps | about 43 GB | ≤ 15 GB |
 | Cores busy during a cold jump | about 3 of 16 (workstation GC) | ≥ 12 of 16 |
 | GC pause share during a cold jump | 40–60% (workstation), lower with server GC | ≤ 10% |
 | Peak working set, about 40 cells | 7–10 GB | ≤ 3 GB |
