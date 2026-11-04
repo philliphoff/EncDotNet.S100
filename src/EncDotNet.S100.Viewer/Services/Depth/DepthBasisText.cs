@@ -316,7 +316,9 @@ internal static class DepthBasisText
         var waterDatums = string.Join(", ", basis.WaterLevelSources.Select(w => w.VerticalDatumCode).Distinct().Select(DatumLabel));
         foreach (var refused in basis.NotAdjustedSources)
         {
-            yield return string.Format(c, Strings.Status_DepthBasisPopup_NotAdjustedFormat, refused.DatasetId, DatumLabel(refused.VerticalDatumCode), waterDatums);
+            yield return DepthBasisEvaluator.AdjustableSpecs.Contains(refused.Spec)
+                ? string.Format(c, Strings.Status_DepthBasisPopup_NotAdjustedFormat, refused.DatasetId, DatumLabel(refused.VerticalDatumCode), waterDatums)
+                : string.Format(c, Strings.Status_DepthBasisPopup_NotAdjustedProductFormat, refused.DatasetId, refused.Spec);
         }
     }
 

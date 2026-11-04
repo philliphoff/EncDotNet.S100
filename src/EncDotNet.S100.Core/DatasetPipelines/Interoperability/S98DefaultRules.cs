@@ -634,6 +634,17 @@ public static class S98DefaultRules
                 changed = true;
                 continue;
             }
+
+            // #1132 Q4: where S-102 is displayed its own safety contour is the
+            // primary one; the S-101 safety contour kept by the MSC.232(82)
+            // exception is drawn faint (thinner, light grey) under it.
+            if (instruction is LineInstruction line && IsCoveredSafetyContour(line, tags, isCovered))
+            {
+                kept.Add(Faint(line));
+                changed = true;
+                continue;
+            }
+
             kept.Add(instruction);
         }
 
@@ -657,6 +668,37 @@ public static class S98DefaultRules
             ApplyOutOfBandCap = subLayer.ApplyOutOfBandCap,
         };
     }
+
+    /// <summary>The colour of the S-101 safety contour where S-102 covers it (#1132 Q4).</summary>
+    public const string FaintSafetyContourColor = "CHGRF";
+
+    private static bool IsCoveredSafetyContour(
+        LineInstruction line, IReadOnlyDictionary<long, VectorFeatureTag> tags, Func<long, bool> isCovered) =>
+        long.TryParse(line.FeatureReference, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id)
+        && tags.TryGetValue(id, out var tag)
+        && string.Equals(tag.FeatureType, "DepthContour", StringComparison.Ordinal)
+        && string.Equals(line.LineColor, "DEPSC", StringComparison.Ordinal)
+        && isCovered(id);
+
+    private static LineInstruction Faint(LineInstruction l) => new()
+    {
+        FeatureReference = l.FeatureReference,
+        Plane = l.Plane,
+        ViewingGroup = l.ViewingGroup,
+        AdditionalViewingGroups = l.AdditionalViewingGroups,
+        DrawingPriority = l.DrawingPriority,
+        ScaleMinimum = l.ScaleMinimum,
+        ScaleMaximum = l.ScaleMaximum,
+        TimeValid = l.TimeValid,
+        AlertReference = l.AlertReference,
+        LineStyleReference = l.LineStyleReference,
+        LineWidth = l.LineWidth / 2,
+        LineColor = FaintSafetyContourColor,
+        Dashes = l.Dashes,
+        DashIntervalLength = l.DashIntervalLength,
+        CoordinatesOverride = l.CoordinatesOverride,
+        Suppression = l.Suppression,
+    };
 
     private static bool ShouldSuppress(
         DrawingInstruction instruction,

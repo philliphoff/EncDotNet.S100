@@ -129,6 +129,49 @@ public class S98DefaultRulesTests
     }
 
     [Fact]
+    public void R_101_102_B_draws_the_kept_s101_safety_contour_faint_under_s102()
+    {
+        // #1132 Q4: the S-102 safety contour is primary where S-102 covers;
+        // the S-101 one stays visible but faint.
+        var (areaItem, lineItem) = BuildS101ItemsWithDepthFeatures(depthContoursMetres: new double[] { 5.0, 10.0 });
+        var payload = Assert.IsType<VectorStackPayload>(lineItem.Payload);
+        var tags = payload.Result.FeatureTags!;
+        var recoloured = payload.SubLayer.Instructions
+            .Select(i => i is LineInstruction l
+                && tags[long.Parse(l.FeatureReference, CultureInfo.InvariantCulture)].DepthContourValue is 10.0
+                    ? new LineInstruction { FeatureReference = l.FeatureReference, LineColor = "DEPSC", LineWidth = 0.64 }
+                    : i)
+            .ToList();
+        var sub = payload.SubLayer;
+        lineItem = lineItem with
+        {
+            Payload = payload.WithSubLayer(new VectorSubLayer
+            {
+                LayerKey = sub.LayerKey,
+                LayerName = sub.LayerName,
+                Instructions = recoloured,
+                Plane = sub.Plane,
+                WithinPlanePriority = sub.WithinPlanePriority,
+                SourceFeatureType = sub.SourceFeatureType,
+            }),
+        };
+
+        var ruled = _auth.ApplyRules(
+            new[] { areaItem, SynthItem("s102-tile.h5", S98DisplayPlane.Bathymetry), lineItem },
+            new[]
+            {
+                new LoadedDatasetInfo("s101-cell.000", "S-101", Active: true),
+                new LoadedDatasetInfo("s102-tile.h5", "S-102", Active: true),
+            },
+            MarinerSettings.Default with { SafetyContour = Depth.FromMetres(10.0) });
+
+        var safety = Assert.Single(Assert.IsType<VectorStackPayload>(ruled[2].Payload).SubLayer.Instructions.OfType<LineInstruction>(),
+            l => tags[long.Parse(l.FeatureReference, CultureInfo.InvariantCulture)].DepthContourValue is 10.0);
+        Assert.Equal(S98DefaultRules.FaintSafetyContourColor, safety.LineColor);
+        Assert.Equal(0.32, safety.LineWidth, 6);
+    }
+
+    [Fact]
     public void R_101_102_B_suppresses_only_depth_features_inside_the_s102_coverage_extent()
     {
         // S-102 covers lat/lon 0..2. DepthArea 1 and DepthContour 4 lie inside;

@@ -1,15 +1,12 @@
+using EncDotNet.S100.Core;
 using EncDotNet.S100.Crs.ProjNet;
-using EncDotNet.S100.Datasets.Pipelines.Query;
-using EncDotNet.S100.Datasets.Pipelines.Spec;
-using EncDotNet.S100.Features;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
-using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Spec;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Quantities;

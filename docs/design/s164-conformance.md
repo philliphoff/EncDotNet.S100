@@ -56,15 +56,15 @@ they drift.
 | Part | Area | Tests | Passes | Fails | Supported | Partial | Gap | N/A |
 |---|---|---|---|---|---|---|---|---|
 | 2 | Catalogue and dataset loading and updating | 70 | 5 | 0 | 10 | 34 | 21 | 0 |
-| 3 | Chart display | 61 | 7 | 0 | 31 | 18 | 4 | 1 |
+| 3 | Chart display | 61 | 11 | 0 | 31 | 14 | 4 | 1 |
 | 4 | Chart related functions | 47 | 21 | 0 | 0 | 14 | 10 | 2 |
 | 5 | Navigational hazards | 6 | 3 | 0 | 0 | 0 | 3 | 0 |
 | 6 | Areas with special conditions | 5 | 3 | 0 | 0 | 0 | 2 | 0 |
-| 7 | Safety contour | 6 | 1 | 0 | 0 | 3 | 2 | 0 |
+| 7 | Safety contour | 6 | 2 | 0 | 0 | 2 | 2 | 0 |
 | 8 | S-57 testing | 0 | — | — | — | — | — | — |
 | 8 | S-64 tests on the S-57 path (§7, Part 8) | 35 | 22 | 0 | 6 | 0 | 5 | 2 |
 | 9 | Dual fuel mode and SECOM | 17 | 0 | 0 | 2 | 9 | 6 | 0 |
-| | **Total** | **212** | **40** | **0** | **43** | **78** | **48** | **3** |
+| | **Total** | **212** | **45** | **0** | **43** | **73** | **48** | **3** |
 
 Part 8 has no tests of its own in 2.0.1. It points S-57 testing at the
 S-64 datasets, which slice 7 runs against the S-57 path (§6.6). Those rows
@@ -565,7 +565,7 @@ S-57 records.
 | RevisionUpdate | S-98, Appendix C | — | Gap | `src/EncDotNet.S100.Datasets.S128` | S-128 updates aren't applied. |
 | RevisionCompleteness | S-98, Appendix C | — | Gap | — | No S-124 bulletin vs S-128 cross-check. |
 | S-102 | S-98 6.1; S-98 13 | InitialCatalogues, S102 | Partial | `src/EncDotNet.S100.Datasets.S102/S102PortrayalCatalogue.cs` | Shading follows the safety contour and S-101 depth areas are suppressed; no enhanced safety contour or coverage border. |
-| Water Level Adjustment (S-104) | S-98 Appendix D-2 | EnhancedSafetyContour, InitialCatalogues, WLAOverlap | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/ChartWaterLevelAdjustmentService.cs` | S-104 overlay, tide-adjusted depth at a point, and (setting **Water level adjustment**) the S-102 surface and safety contour adjusted at the view time with the adjusted-area boundary; S-101 depths not yet adjusted (#1132 phase 3b). |
+| Water Level Adjustment (S-104) | S-98 Appendix D-2 | EnhancedSafetyContour, InitialCatalogues, WLAOverlap | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/ChartWaterLevelAdjustmentService.cs` | S-104 overlay, tide-adjusted depth at a point, and (setting **Water level adjustment**) the S-101 depths and the S-102 surface and safety contour adjusted at the view time, with the adjusted-area boundary. Lowest over a period is #1132 phase 4. |
 | S-111 | S-98 6.1; S-98 13 | InitialCatalogues, S111 | Supported | `src/EncDotNet.S100.Datasets.Pipelines/S111DatasetProcessor.cs` | Reader and portrayal. |
 | Marine Protected Areas | S-98 6.1.1 | — | Supported | `src/EncDotNet.S100.Datasets.Pipelines/S122DatasetProcessor.cs` | Reader and portrayal. |
 | Navigational Warnings | S-98 11.12.1 S-98 11.2.2 | S124NAVARNSelection | Supported | `src/EncDotNet.S100.Datasets.Pipelines/S124DatasetProcessor.cs` | Reader, portrayal and warnings panel. |
@@ -629,12 +629,12 @@ S-57 records.
 | OverlappingData | S-98 20.3.1 | — | Gap | `src/EncDotNet.S100.Renderers.Mapsui/OverlapSuppression.cs` | Same-band overlaps both draw; no overlap indication. |
 | GraphicalIndex | S-98 12.4.1 | PowerUp | Supported | `src/EncDotNet.S100.Viewer/Services/LibraryCoverageOverlayController.cs` | Library coverage overlay with edition and update. |
 | DisplayScaleChange | S-98 12 | PowerUp | Partial | `src/EncDotNet.S100.Viewer/MapScaleFormatter.cs` | Zoom and scale readout; no chart-scale or range picker outside MCP. |
-| WaterLevelAdjustment | S-98 Appendix D-2 | PowerUp | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/ChartWaterLevelAdjustmentService.cs`, `src/EncDotNet.S100.Viewer/Services/Depth/DepthBasisEvaluator.cs` | With **Water level adjustment** on, the S-102 surface and its safety contour are adjusted at the Timeline's view time, the adjusted-area boundary is drawn and the status bar **DEPTHS** says "+ water level 14:20" with the datum status. S-101 depths aren't adjusted yet (#1132 phase 3b). |
-| AdjustmentOfDepthValues | S-98 Appendix D-3.1 | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/LocationDepthProbe.cs` | Point probe only. |
-| WLAFeatureInformation | S-98 Appendix D-3 | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs` | Depth card shows charted depth, water level and source, and says the chart shows charted depths (#1191); not per feature. Chart adjustment is #1132. |
+| WaterLevelAdjustment | S-98 Appendix D-2 | WaterLevelAdjustment | Passes | `tests/EncDotNet.S100.S164.Tests/Part3WaterLevelAdjustmentTests.cs` | With **Water level adjustment** on, the S-101 depths in the S-104 footprint are re-portrayed with the water level at the view time (the cell declares no datum, so with **Apply anyway when datum is not declared**). The boundary is drawn and the status bar **DEPTHS** says "+ water level 14:20" with the datum status. The S-102 in this set is on MLLW and the S-104 on LAT, so the surface stays charted and the flyout says why. Not run: the manual's Interoperability Level 2 and the 100 m boundary setting. |
+| AdjustmentOfDepthValues | S-98 Appendix D-3.1 | WaterLevelAdjustment | Passes | `tests/EncDotNet.S100.S164.Tests/Part3WaterLevelAdjustmentTests.cs` | Soundings, depth areas, contours (labels included) and hazard depths in the footprint are portrayed adjusted; soundings outside it keep their charted figures. Adjusted soundings carry a ◆ marker. |
+| WLAFeatureInformation | S-98 Appendix D-3 | WaterLevelAdjustment | Passes | `tests/EncDotNet.S100.S164.Tests/Part3WaterLevelAdjustmentTests.cs` | An adjusted feature's pick report adds the water level applied and each adjusted depth value with its charted value; the Depth card gives charted depth, water level with source and time, adjusted depth and combined uncertainty at the point. |
 | UncertaintyWLA | S-98 Appendix D-2 | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs` | S-102 and S-104 uncertainty combined, √(σ₁₀₂² + σ₁₀₄²), at a picked point; not yet on the chart. |
 | WLATimePeriod | S-98 Appendix D-2.5 | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/DepthOverTimeViewModel.cs` | Depth over time at a point; no period adjustment. |
-| IncompatibleDatums | — | — | Partial | `src/EncDotNet.S100.Datasets.Pipelines/Navigation/WaterLevelDepthAdjustment.cs` | Water level on another datum is refused at a picked point and on the S-102 surface, and the **DEPTHS** flyout names each refused source; an undeclared datum is refused unless **Apply anyway when datum is not declared** is on. In the v2.0.0 WaterLevelAdjustment set the S-102 is on MLLW and the S-104 on LAT, so its surface stays charted. The WLAInvalid set the test names isn't in v2.0.0. S-101 on the chart is #1132 phase 3b. |
+| IncompatibleDatums | — | WaterLevelAdjustment | Passes | `tests/EncDotNet.S100.S164.Tests/Part3WaterLevelAdjustmentTests.cs` | The WLAInvalid set the test names isn't in v2.0.0, so the test runs on the WaterLevelAdjustment set's own mismatch: the S-102 (MLLW) is refused against the S-104 (LAT) even with the override, and the S-101 cell (no datum) is refused without it. The viewer refuses adjustment rather than installation. |
 | WLAPlanning1 | S-98 Appendix D-2.7 | — | Supported | `src/EncDotNet.S100.Navigation/ClearanceCheck.UkcModel.cs` | Route clearance applies S-104 at each ETA. |
 | PolarData1 | — | — | Supported | `src/EncDotNet.S100.Rendering.Scene/WebMercator.cs` | Web Mercator to 85.05°. |
 | HighLatitudeScaleBar | S-98 12.10.1 | — | Partial | `src/EncDotNet.S100.Viewer/Views/ScaleBarView.axaml.cs` | Scale bar corrected at view centre only. |
@@ -719,7 +719,7 @@ S-57 records.
 |---|---|---|---|---|---|
 | SafetyContourLS | S-98 12.10.9 | SafetyContour, NavigationalHazardsOverview | Passes | `tests/EncDotNet.S100.S164.Tests/Part7SafetyContourTests.cs` | No overview finding inside SAFCO. The manual's plot is TBD. |
 | SafetyContourNextLeg | S-98 12.10.9 | — | Partial | `src/EncDotNet.S100.Navigation/ChartCheck.cs` | All legs checked at planning; no next-leg rule. The S-164 test is TBD. |
-| SafetyContourWLA | S-98 Appendix D-3 | — | Partial | `src/EncDotNet.S100.Datasets.Pipelines/S102DatasetProcessor.cs` | S-102 shoals and S-104 water level in clearance; the S-102 safety contour is traced on the adjusted surface. The S-101 safety contour isn't adjusted yet (#1132 phase 3b). |
+| SafetyContourWLA | S-98 Appendix D-3 | WaterLevelAdjustment | Passes | `tests/EncDotNet.S100.S164.Tests/Part3WaterLevelAdjustmentTests.cs` | At a safety contour of 11.4 m the S-101 safety contour moves with the water level inside the footprint; the S-102 safety contour is traced on the adjusted surface where its datum matches, and the S-101 one is drawn faint under S-102. Route alerts against the adjusted contour are #1272. |
 | SafetyContourMon | S-98 12.10.9 | — | Gap | — | No monitoring mode. |
 | SafetyContourMonLS | S-98 12.10.9 | — | Gap | — | No monitoring mode. |
 | DualFuelSimple | S-98 18.2 | — | Partial | `src/EncDotNet.S100.Viewer/Services/ExchangeSetService.cs` | S-57 and S-100 sets load side by side; one set with both catalogues takes the S-57 path only. |

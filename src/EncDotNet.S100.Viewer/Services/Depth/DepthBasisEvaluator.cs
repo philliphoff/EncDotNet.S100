@@ -50,6 +50,10 @@ internal static class DepthBasisEvaluator
     /// <summary>The water-level product.</summary>
     internal const string WaterLevelSpec = "S-104";
 
+    /// <summary>The depth products chart-wide adjustment applies to (#1132).</summary>
+    internal static readonly IReadOnlySet<string> AdjustableSpecs =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "S-101", "S-401", "S-102" };
+
     /// <summary>
     /// How far a fixed-station S-104 series reaches beyond its stations, the
     /// limit the route check uses (<see cref="RouteCheckSourceOptions.MaxStationDistanceMeters"/>).
@@ -130,6 +134,14 @@ internal static class DepthBasisEvaluator
         var unconfirmed = false;
         foreach (var depth in depthSources)
         {
+            // Translated S-57 cells are drawn as charted: only S-101 (and
+            // S-401) and S-102 portrayal take the water level.
+            if (!AdjustableSpecs.Contains(depth.Spec))
+            {
+                refused.Add(depth);
+                continue;
+            }
+
             var agreements = current
                 .Select(w => VerticalDatumCheck.Compare(depth.VerticalDatumCode, w.VerticalDatumCode))
                 .Where(adjustment.Permits)
