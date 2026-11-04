@@ -35,7 +35,7 @@ internal static partial class LuaNoOpCallStripper
     [GeneratedRegex(
         @"^([ \t]*)(?:CheckType|CheckTypeOrNil|CheckSelf|CheckNotSelf|CheckTypeOneOf|CheckTypeOneOfOrNil" +
         @"|Debug\.StartPerformance|Debug\.StopPerformance|Debug\.ResetPerformance)" +
-        @"\((?:[ \t]*" + Argument + @"(?:[ \t]*,[ \t]*" + Argument + @")*)?[ \t]*\)[ \t]*;?[ \t]*(?:--[^\r\n]*)?$",
+        @"\((?:[ \t]*" + Argument + @"(?:[ \t]*,[ \t]*" + Argument + @")*)?[ \t]*\)[ \t]*;?[ \t]*(?:--[^\r\n]*)?(\r?)$",
         RegexOptions.Multiline | RegexOptions.CultureInvariant)]
     private static partial Regex NoOpCall();
 
@@ -47,5 +47,7 @@ internal static partial class LuaNoOpCallStripper
         !sources.Any(s => s.Contains("TypeSystemChecks(true)", StringComparison.Ordinal));
 
     /// <summary>Returns <paramref name="source"/> with the no-op calls removed.</summary>
-    public static string Strip(string source) => NoOpCall().Replace(source, "$1");
+    // Multiline '$' matches only before '\n', so a CRLF line's '\r' is matched
+    // and put back with the indentation.
+    public static string Strip(string source) => NoOpCall().Replace(source, "$1$2");
 }

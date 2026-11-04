@@ -79,6 +79,15 @@ public class LuaNoOpCallStripperTests
     }
 
     [Fact]
+    public async Task CallsOnCrlfLines_AreRemoved()
+    {
+        var calls = await RunAsync(
+            "local x = 'a'\r\nCheckType(x, 'string')\r\nDebug.StartPerformance('x') -- comment\r\n");
+
+        Assert.Empty(calls);
+    }
+
+    [Fact]
     public async Task CallsWhoseArgumentsCouldHaveSideEffects_AreKept()
     {
         var calls = await RunAsync("""
