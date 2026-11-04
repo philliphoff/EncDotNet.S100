@@ -6,6 +6,15 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **S-57 updates are checked before they apply.** An S-57 update now applies
+  only when it's for the cell's edition and follows on from the updates
+  before it, record by record. Updates a re-issue already holds are skipped,
+  and an update of edition 0 is reported as cancelling the cell. SoundCharts
+  warns when an update is refused or cancels a cell, `s100 s57 convert` prints
+  what applied, and `S57Dataset.UpdateReport` gives the details. Exchange sets
+  that hold only updates are now CRC-checked too. See
+  [Apply update cells](s57-to-s101.md#apply-update-cells).
+
 - **.NET 10 only.** The packages no longer target .NET 8, which reached end
   of support in November 2026; they target .NET 10 and run on later
   versions. CI also runs the tests on .NET 11. The packages now build on

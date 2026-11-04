@@ -10,9 +10,8 @@ namespace EncDotNet.S100.S164.Tests.S64;
 /// test takes the base cell from one folder and its updates from others, as
 /// the manual delivers them, and folds them in with
 /// <see cref="S57Dataset.Open(Stream, IReadOnlyList{Stream})"/>, which is what
-/// <see cref="Datasets.Pipelines.S57DatasetProcessor"/> does. S-57 updates
-/// aren't checked for edition, sequence or cancellation yet (#1241); those
-/// tests are skipped on it.
+/// <see cref="Datasets.Pipelines.S57DatasetProcessor"/> does, and checks the
+/// <see cref="S57UpdateReport"/> it leaves (#1241).
 /// </summary>
 public sealed class S64Part2UpdateTests
 {
@@ -22,6 +21,7 @@ public sealed class S64Part2UpdateTests
     private const string NewUpdate = "2.2.4 Loading of New Update/ENC_ROOT/GB5X01SW.001";
     private const string OldUpdate = "2.2.5 Old Update/ENC_ROOT/GB5X01SW.001";
     private const string Cancellation = "2.2.7 Cancellation/ENC_ROOT/GB4X0000.001";
+    private const string CancelledCell = "2.1.1 Power Up/ENC_ROOT/GB4X0000.000";
 
     private static string Sequential(int update) => $"2.2.2 Loading of Updates/ENC_ROOT/GB5X01SW.00{update}";
 
@@ -49,6 +49,18 @@ public sealed class S64Part2UpdateTests
     }
 
     [Fact]
+    public async Task CorruptUpdate_FailsItsCrc()
+    {
+        // 2.2.1: the exchange set holds only updates, and one doesn't match
+        // the CRC its catalogue gives.
+        var result = await VerifyAsync("2.2.1 Corrupt Update/ENC_ROOT/");
+
+        var mismatched = result.FileResults.Where(r => r.ChecksumOutcome == VerificationOutcome.ChecksumMismatch).ToArray();
+        Assert.NotEmpty(mismatched);
+        Assert.All(mismatched, r => Assert.StartsWith("GB5X01SW.00", r.FileName, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task SequentialUpdates_ApplyInOrder()
     {
         // 2.2.2: updates 1 to 5 of edition 1 apply one after another; each
@@ -58,6 +70,8 @@ public sealed class S64Part2UpdateTests
         for (var applied = 0; applied <= 5; applied++)
         {
             var dataset = await OpenAsync(PowerUp, [.. Enumerable.Range(1, applied).Select(Sequential)], ct);
+            Assert.True(dataset.UpdateReport!.Success, Describe(dataset.UpdateReport));
+            Assert.Equal(applied, dataset.UpdateReport.AppliedThroughUpdateNumber);
             counts.Add(dataset.FeatureCount);
         }
 
@@ -65,15 +79,54 @@ public sealed class S64Part2UpdateTests
     }
 
     [Fact]
-    public async Task ReIssue_TakesUpdate4()
+    public async Task InvalidSequence_IsRefusedWhereTheRecordsStopFollowingOn()
     {
-        // 2.2.6: the re-issue holds edition 1 up to update 3, so update 4 goes
-        // on it and gives the same cell as updates 1 to 4 on the original.
+        // 2.2.3: updates 3 and 4 carry the right numbers but each other's
+        // records. Update 4's records change nothing update 3 touches, so the
+        // one numbered 3 can't be told apart from a good update and applies;
+        // the one numbered 4 then changes records already a version on, and is
+        // refused with everything after it.
         var ct = TestContext.Current.CancellationToken;
 
-        var reIssued = await OpenAsync(ReIssue, ["2.2.6 Re-issue/GB5X01SW_004/ENC_ROOT/GB5X01SW.004"], ct);
+        var dataset = await OpenAsync(PowerUp, [.. Enumerable.Range(1, 5).Select(InvalidSequence)], ct);
+
+        var report = dataset.UpdateReport!;
+        Assert.False(report.Success);
+        Assert.Equal(3, report.AppliedThroughUpdateNumber);
+        var refusal = Assert.Single(report.Messages, m => m.Severity >= S57UpdateSeverity.Warning);
+        Assert.Equal((S57UpdateSeverity.Error, 4), (refusal.Severity, refusal.UpdateNumber));
+        Assert.Contains("follow on", refusal.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task MissingUpdate_StopsTheSequence()
+    {
+        // 2.2.3 loaded out of order: update 4 after update 2 leaves a gap.
+        var ct = TestContext.Current.CancellationToken;
+
+        var dataset = await OpenAsync(PowerUp, [Sequential(1), Sequential(2), Sequential(4), Sequential(5)], ct);
+
+        var report = dataset.UpdateReport!;
+        Assert.Equal(2, report.AppliedThroughUpdateNumber);
+        var gap = Assert.Single(report.Messages, m => m.Severity >= S57UpdateSeverity.Warning);
+        Assert.Equal((S57UpdateSeverity.Warning, 4), (gap.Severity, gap.UpdateNumber));
+        Assert.Contains("update 3 is missing", gap.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReIssue_TakesUpdate4()
+    {
+        // 2.2.6: the re-issue holds edition 1 up to update 3, so update 1 is
+        // already in it and update 4 goes on it, giving the same cell as
+        // updates 1 to 4 on the original.
+        var ct = TestContext.Current.CancellationToken;
+
+        var reIssued = await OpenAsync(
+            ReIssue, ["2.2.6 Re-issue/GB5X01SW_001/ENC_ROOT/GB5X01SW.001", "2.2.6 Re-issue/GB5X01SW_004/ENC_ROOT/GB5X01SW.004"], ct);
         var updated = await OpenAsync(PowerUp, [.. Enumerable.Range(1, 4).Select(Sequential)], ct);
 
+        Assert.True(reIssued.UpdateReport!.Success, Describe(reIssued.UpdateReport));
+        Assert.Equal((3, 4), (reIssued.UpdateReport.BaseUpdateNumber, reIssued.UpdateReport.AppliedThroughUpdateNumber));
         Assert.Equal("4", reIssued.Document.DataSetIdentification?.UpdateNumber?.Trim());
         Assert.Equal(updated.FeatureCount, reIssued.FeatureCount);
     }
@@ -84,53 +137,58 @@ public sealed class S64Part2UpdateTests
         // 2.2.4, step 3: edition 2 of the cell takes update 1 of edition 2.
         var dataset = await OpenAsync(GoodBase, [NewUpdate], TestContext.Current.CancellationToken);
 
+        Assert.True(dataset.UpdateReport!.Success, Describe(dataset.UpdateReport));
+        Assert.Equal((2, 1), (dataset.UpdateReport.Edition, dataset.UpdateReport.AppliedThroughUpdateNumber));
         Assert.True(dataset.FeatureCount > 0);
     }
 
-    [Fact(Skip = "S-57 updates aren't checked for sequence (#1241).")]
-    public async Task InvalidSequence_StopsAfterUpdate3()
-    {
-        // 2.2.3: updates 4 and 5 don't follow on from 1 to 3 and must be refused.
-        var ct = TestContext.Current.CancellationToken;
-
-        await Assert.ThrowsAsync<InvalidDataException>(() =>
-            OpenAsync(PowerUp, [.. Enumerable.Range(1, 5).Select(InvalidSequence)], ct));
-    }
-
-    [Fact(Skip = "S-57 updates aren't checked for edition (#1241).")]
+    [Fact]
     public async Task NewerEditionUpdate_IsRefusedForItsEdition()
     {
-        // 2.2.4, step 1: update 1 of edition 2 doesn't go on edition 1. It's
-        // refused today, but only because a control field happens not to fit.
+        // 2.2.4, step 1: update 1 of edition 2 doesn't go on edition 1.
         var ct = TestContext.Current.CancellationToken;
+        var cell = await OpenAsync(PowerUp, [], ct);
 
-        var error = await Assert.ThrowsAsync<InvalidDataException>(() => OpenAsync(PowerUp, [NewUpdate], ct));
-        Assert.Contains("edition", error.Message, StringComparison.OrdinalIgnoreCase);
+        var dataset = await OpenAsync(PowerUp, [NewUpdate], ct);
+
+        AssertRefusedForEdition(dataset.UpdateReport!, 1);
+        Assert.Equal(cell.FeatureCount, dataset.FeatureCount);
     }
 
-    [Fact(Skip = "S-57 updates aren't checked for edition (#1241).")]
+    [Fact]
     public async Task OlderEditionUpdate_IsRefused()
     {
         // 2.2.5: update 1 of edition 1 doesn't go on edition 2.
         var ct = TestContext.Current.CancellationToken;
 
-        await Assert.ThrowsAsync<InvalidDataException>(() => OpenAsync(GoodBase, [OldUpdate], ct));
+        var dataset = await OpenAsync(GoodBase, [OldUpdate], ct);
+
+        AssertRefusedForEdition(dataset.UpdateReport!, 2);
     }
 
     [Fact]
-    public async Task Cancellation_IsAnEditionZeroUpdate()
+    public async Task Cancellation_CancelsTheCell()
     {
-        // 2.2.7: a cancellation is an update of edition 0. Nothing reports the
-        // cell as cancelled yet (#1241); this checks the data the report will
-        // rely on.
-        using var source = await S64TestData.OpenSourceAsync(TestContext.Current.CancellationToken);
-        await using var stream = await source.OpenAsync(Cancellation, TestContext.Current.CancellationToken);
+        // 2.2.7: a cancellation is an update of edition 0 with no features.
+        var dataset = await OpenAsync(CancelledCell, [Cancellation], TestContext.Current.CancellationToken);
 
-        var update = EncDotNet.S57.S57DocumentReader.Read(stream);
-
-        Assert.Equal("0", update.DataSetIdentification?.EditionNumber?.Trim());
-        Assert.Empty(update.FeatureRecords);
+        var report = dataset.UpdateReport!;
+        Assert.True(report.IsCancelled, Describe(report));
+        Assert.Equal(1, report.CancelledByUpdateNumber);
+        Assert.False(report.Success);
     }
+
+    private static void AssertRefusedForEdition(S57UpdateReport report, int edition)
+    {
+        Assert.Equal(edition, report.Edition);
+        Assert.Equal(0, report.AppliedThroughUpdateNumber);
+        var refusal = Assert.Single(report.Messages);
+        Assert.Equal(S57UpdateSeverity.Error, refusal.Severity);
+        Assert.Contains("edition", refusal.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string Describe(S57UpdateReport? report)
+        => report is null ? "no report" : string.Join(" ", report.Messages.Select(m => $"[{m.Severity}] {m.Text}"));
 
     private static async Task<S57Dataset> OpenAsync(string cell, IReadOnlyList<string> updates, CancellationToken cancellationToken)
     {

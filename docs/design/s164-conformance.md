@@ -62,7 +62,7 @@ they drift.
 | 6 | Areas with special conditions | 5 | 3 | 0 | 0 | 0 | 2 | 0 |
 | 7 | Safety contour | 6 | 1 | 0 | 0 | 3 | 2 | 0 |
 | 8 | S-57 testing | 0 | — | — | — | — | — | — |
-| 8 | S-64 tests on the S-57 path (§7, Part 8) | 35 | 17 | 5 | 6 | 0 | 5 | 2 |
+| 8 | S-64 tests on the S-57 path (§7, Part 8) | 35 | 22 | 0 | 6 | 0 | 5 | 2 |
 | 9 | Dual fuel mode and SECOM | 17 | 0 | 0 | 2 | 9 | 6 | 0 |
 | | **Total** | **212** | **40** | **0** | **43** | **78** | **48** | **3** |
 
@@ -445,14 +445,26 @@ S-57 records.
   ARSPC route weren't indicated. They are now.
 - **Area findings** ([#1240](https://github.com/philliphoff/EncDotNet.S100/issues/1240), fixed).
   Chart area findings didn't carry their feature type, in any product.
-- **Updates** ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)).
-  Sequential updates and a re-issue apply correctly, and a corrupt cell
-  fails its CRC. But S-57 updates are folded in without any check of
-  edition or sequence: the invalid sequence and an older edition's update
-  apply silently, a cancellation isn't reported, and an update-only
-  exchange set can't be CRC-checked. S-101 has these checks
-  (`S101UpdateApplicator`); S-57 needs the same. Those tests are skipped on
-  the issue.
+- **Updates** ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241), fixed).
+  S-57 updates used to be folded in with no check of edition or sequence:
+  the invalid sequence and an older edition's update applied silently, a
+  cancellation wasn't reported, and an exchange set holding only updates
+  couldn't be CRC-checked. `S57UpdateApplicator` now does for S-57 what
+  `S101UpdateApplicator` does for S-101. It applies updates while they're
+  for the cell's edition and follow on, skips those a re-issue already
+  holds, stops at a gap, refuses an update for another edition, and reports
+  an edition 0 update as cancelling the cell. It also checks each record an
+  update changes: a modified or deleted record must be one version below
+  the update's `RVER`, and an inserted one must be new. Producers change a
+  record twice in one update, a version apart each time, so the check
+  follows the versions through the update. In the invalid-sequence data,
+  updates 3 and 4 carry each other's records under the right numbers.
+  Update 4's records touch nothing update 3 changes, so the one numbered 3
+  applies as if it were good; the one numbered 4 is refused. The viewer
+  warns about a refused update, a gap or a cancellation, as it does for
+  S-101. Verification now reads `CATALOG.031` itself, so an update-only set
+  is checked. Keeping track of which updates a cell has across exchange
+  sets, and what's installed, is #1129's installed-data store.
 - **Unknown object classes** ([#1242](https://github.com/philliphoff/EncDotNet.S100/issues/1242), fixed).
   S-52 draws an object of unknown class as "?" and lets it be picked.
   Translation used to drop it, so §3.2 showed nothing. Now an object of any
@@ -721,13 +733,13 @@ Section numbers are the S-64 manual's. Evidence is in
 |---|---|---|---|---|---|
 | 2.1.1 Power up | IEC 61174 4.4.2 | 2.1.1 Power Up | Passes | `S64Part2UpdateTests.cs` | Every cell matches its CRC and portrays. |
 | 2.1.5 Loading corrupt data | IEC 61174 4.4.2 | 2.1.5 Loading Corrupt Data | Passes | `S64Part2UpdateTests.cs` | The cell fails its CRC. |
-| 2.2.1 Corrupt update | S-52 App 1 3.4.2d | 2.2.1 Corrupt Update | Fails | `S64Part2UpdateTests.cs` | An update-only set can't be CRC-checked ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
-| 2.2.2 Sequential update | S-52 App 1 3.4.2f | 2.2.2 Loading of Updates | Passes | `S64Part2UpdateTests.cs` | Updates 1–5 apply in order. No update summary report. |
-| 2.2.3 Invalid sequence | S-52 App 1 3.4.2c | 2.2.3 Loading of Invalid Sequence | Fails | `S64Part2UpdateTests.cs` | Applied without a check ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
-| 2.2.4 Newer edition update | S-52 App 1 3.4.2c | 2.2.4, 2.2.5 Good Base Cells | Fails | `S64Part2UpdateTests.cs` | Refused only by accident; edition 2 with its update passes ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
-| 2.2.5 Older edition update | S-52 App 1 3.4.2c | 2.2.5 | Fails | `S64Part2UpdateTests.cs` | Applied without a check ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
-| 2.2.6 Re-issue | S-52 App 1 3.4.1a | 2.2.6 Re-issue | Passes | `S64Part2UpdateTests.cs` | Update 4 on the re-issue gives the same cell as updates 1–4. |
-| 2.2.7 Cancellation | S-52 App 1 3.4.1a | 2.2.7 Cancellation | Fails | `S64Part2UpdateTests.cs` | Not reported as cancelled ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
+| 2.2.1 Corrupt update | S-52 App 1 3.4.2d | 2.2.1 Corrupt Update | Passes | `S64Part2UpdateTests.cs` | The set holds only updates; the corrupt one fails its CRC ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
+| 2.2.2 Sequential update | S-52 App 1 3.4.2f | 2.2.2 Loading of Updates | Passes | `S64Part2UpdateTests.cs` | Updates 1–5 apply in order. `S57UpdateReport` lists each; the viewer shows it only when there's a problem. |
+| 2.2.3 Invalid sequence | S-52 App 1 3.4.2c | 2.2.3 Loading of Invalid Sequence | Passes | `S64Part2UpdateTests.cs` | A missing update stops the sequence. In the data, updates 3 and 4 carry each other's records; update 4 is refused because its records don't follow on, update 3 can't be told apart from a good one (§6.6, [#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
+| 2.2.4 Newer edition update | S-52 App 1 3.4.2c | 2.2.4, 2.2.5 Good Base Cells | Passes | `S64Part2UpdateTests.cs` | Refused for its edition; edition 2 takes it ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
+| 2.2.5 Older edition update | S-52 App 1 3.4.2c | 2.2.5 | Passes | `S64Part2UpdateTests.cs` | Refused for its edition ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
+| 2.2.6 Re-issue | S-52 App 1 3.4.1a | 2.2.6 Re-issue | Passes | `S64Part2UpdateTests.cs` | Update 1, already in the re-issue, is skipped; update 4 gives the same cell as updates 1–4. |
+| 2.2.7 Cancellation | S-52 App 1 3.4.1a | 2.2.7 Cancellation | Passes | `S64Part2UpdateTests.cs` | Reported as cancelled; the viewer warns that the cell is no longer for navigation ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
 | 2.2.8 Rejection of automatic update | S-52 App 1 3.4.2h | 2.2.2 | N/A | — | Manual chart correction (§5). |
 | 2.3 Manual updates | S-52 App 1 3.4.3 | — | N/A | — | Manual chart correction (§5). |
 | 2.5 Encrypted ENCs | S-63 | Encrypted set | Gap | — | S-63 isn't supported; the encrypted set isn't pinned. |

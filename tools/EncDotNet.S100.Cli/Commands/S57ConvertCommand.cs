@@ -45,11 +45,8 @@ internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
 
             var dataset = OpenDataset(settings.SourcePath, updates);
 
-            if (updates.Count > 0)
-            {
-                AnsiConsole.MarkupLineInterpolated(
-                    $"[grey]Applied {updates.Count} sibling update(s) ({string.Join(", ", updates.Select(Path.GetFileName))}).[/]");
-            }
+            if (dataset.UpdateReport is { } updateReport)
+                ReportUpdateOutcome(updateReport);
 
             // Chosen from the update-folded document: an update could in principle
             // change the DSID product specification.
@@ -90,6 +87,24 @@ internal sealed class S57ConvertCommand : Command<S57ConvertCommandSettings>
             if (settings.Debug)
                 AnsiConsole.WriteException(ex);
             return 1;
+        }
+    }
+
+    // The updates applied, and why the rest weren't: an update for another
+    // edition, a gap, or a cancellation (S57UpdateApplicator).
+    private static void ReportUpdateOutcome(S57UpdateReport report)
+    {
+        var applied = report.AppliedThroughUpdateNumber - report.BaseUpdateNumber;
+        if (applied > 0 && !report.IsCancelled)
+        {
+            AnsiConsole.MarkupLineInterpolated(
+                $"[grey]Applied {applied} update(s) through update {report.AppliedThroughUpdateNumber}.[/]");
+        }
+
+        foreach (var message in report.Messages.Where(m => m.Severity >= S57UpdateSeverity.Warning))
+        {
+            var colour = message.Severity == S57UpdateSeverity.Error ? "red" : "yellow";
+            AnsiConsole.MarkupLine($"[{colour}]{Markup.Escape(message.Text)}[/]");
         }
     }
 

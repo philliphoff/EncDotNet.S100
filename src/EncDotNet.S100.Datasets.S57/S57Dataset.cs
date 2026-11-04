@@ -16,13 +16,21 @@ public sealed class S57Dataset
     /// <summary>S-57 Appendix A attribute code (ATTL) of <c>SCAMIN</c>.</summary>
     private const int ScaminAttributeCode = 133;
 
-    private S57Dataset(EncDotNet.S57.S57Document document)
+    private S57Dataset(EncDotNet.S57.S57Document document, S57UpdateReport? updateReport = null)
     {
         Document = document;
+        UpdateReport = updateReport;
     }
 
     /// <summary>The underlying parsed S-57 document (from the package).</summary>
     public EncDotNet.S57.S57Document Document { get; }
+
+    /// <summary>
+    /// What happened to the updates when the cell was opened with
+    /// <see cref="Open(Stream, IReadOnlyList{Stream})"/>; otherwise
+    /// <see langword="null"/>.
+    /// </summary>
+    public S57UpdateReport? UpdateReport { get; }
 
     /// <summary>Dataset name from the DSID record.</summary>
     public string DatasetName => Document.DataSetIdentification?.DataSetName ?? "";
@@ -294,16 +302,14 @@ public sealed class S57Dataset
 
     /// <summary>
     /// Opens an S-57 base cell from <paramref name="baseStream"/> and applies the
-    /// sequential update datasets in <paramref name="updateStreams"/>, returning
-    /// the fully-updated dataset.
+    /// sequential update datasets in <paramref name="updateStreams"/> with
+    /// <see cref="S57UpdateApplicator"/>.
     /// </summary>
     /// <remarks>
-    /// The base (<c>.000</c>) and each update (<c>.001</c>, <c>.002</c>, …) are
-    /// read into <see cref="EncDotNet.S57.S57Document"/>s and folded with
-    /// <see cref="EncDotNet.S57.S57Document.ApplyChanges"/> in the order supplied
-    /// — which must be ascending update-number order (S-57 Part 3, dataset
-    /// updating). The merged document is what callers translate to S-101; the
-    /// base and intermediate records are never surfaced.
+    /// Updates are applied while they're for the cell's edition and follow on
+    /// from each other; the first that doesn't stops the sequence, and an update
+    /// with edition 0 cancels the cell. What happened is in
+    /// <see cref="UpdateReport"/>, and never stops the cell from opening.
     /// </remarks>
     /// <param name="baseStream">The base cell (<c>.000</c>) stream.</param>
     /// <param name="updateStreams">The update streams, in ascending update-number order.</param>
@@ -313,14 +319,15 @@ public sealed class S57Dataset
         ArgumentNullException.ThrowIfNull(updateStreams);
 
         var doc = EncDotNet.S57.S57DocumentReader.Read(baseStream);
+        var updates = new List<EncDotNet.S57.S57Document>(updateStreams.Count);
         foreach (var updateStream in updateStreams)
         {
             ArgumentNullException.ThrowIfNull(updateStream);
-            var update = EncDotNet.S57.S57DocumentReader.Read(updateStream);
-            doc = doc.ApplyChanges(update);
+            updates.Add(EncDotNet.S57.S57DocumentReader.Read(updateStream));
         }
 
-        return new S57Dataset(doc);
+        var merged = S57UpdateApplicator.Apply(doc, updates, out var report);
+        return new S57Dataset(merged, report);
     }
 
     /// <summary>

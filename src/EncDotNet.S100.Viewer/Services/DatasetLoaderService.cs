@@ -7,6 +7,7 @@ using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S101;
+using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
@@ -220,6 +221,35 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
                 .WithContent(msg)
                 .Show();
         }
+    }
+
+    /// <summary>
+    /// Surfaces problems with an S-57 cell's updates as a warning toast, as
+    /// <see cref="SurfaceUpdateReport(DatasetEntry, S101UpdateReport)"/> does
+    /// for S-101: an update refused for its edition, a gap in the sequence, or
+    /// an update that cancels the cell. S-57 Part 3, sequential updating.
+    /// </summary>
+    private void SurfaceUpdateReport(DatasetEntry entry, S57UpdateReport report)
+    {
+        string msg;
+        if (report.CancelledByUpdateNumber is { } cancelledBy)
+        {
+            msg = string.Format(Strings.Status_CellCancelled, entry.DisplayName, cancelledBy);
+        }
+        else if (report.Messages.FirstOrDefault(m => m.Severity >= S57UpdateSeverity.Warning) is { Text: { } text })
+        {
+            var appliedCount = report.AppliedThroughUpdateNumber - report.BaseUpdateNumber;
+            msg = string.Format(Strings.Status_ExchangeSetUpdatesPartial, appliedCount, entry.DisplayName, text);
+        }
+        else
+        {
+            return;
+        }
+
+        _notifications.Create(Strings.Toast_Warning)
+            .WithSeverity(NotificationSeverity.Warning)
+            .WithContent(msg)
+            .Show();
     }
 
     public void Initialize(
@@ -800,6 +830,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         if (processor is S101DatasetProcessor { UpdateReport: { } updateReport })
         {
             SurfaceUpdateReport(entry, updateReport);
+        }
+        else if (processor is S57DatasetProcessor { UpdateReport: { } s57UpdateReport })
+        {
+            SurfaceUpdateReport(entry, s57UpdateReport);
         }
 
         // Surface S-128 catalogues in the Library panel's session collection.

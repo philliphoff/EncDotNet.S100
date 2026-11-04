@@ -123,9 +123,13 @@ S-57 cells come as a base cell (`.000`) and update files (`.001`, `.002`, …).
 
 - `S57Dataset.Open(string)` reads a base cell only.
 - `S57Dataset.Open(Stream, IReadOnlyList<Stream>)` reads a base cell and
-  applies the update streams in order.
+  applies the update streams in order with `S57UpdateApplicator`. It refuses
+  an update for another edition or one that doesn't follow on, skips updates
+  a re-issue already holds, and reports an edition 0 update as cancelling the
+  cell. `S57Dataset.UpdateReport` says what was applied.
 - In an exchange set, `S57DatasetProcessor` applies each base cell's updates
-  from the same set with `S57Document.ApplyChanges` before translation.
+  from the same set the same way before translation, and exposes the report
+  as `UpdateReport`.
 - `s100 s57 convert` finds update files next to a loose base cell and applies
   them. It then writes the product that the updated cell's
   `TranslationTarget` names (S-401 for an inland ENC, otherwise S-101), unless
