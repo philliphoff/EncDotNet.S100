@@ -252,8 +252,9 @@ Each depth feature gets the **minimum** `h` over the part of its geometry
 inside the footprint, floored to a 0.1 m bucket. Rounding down never
 overstates the water. Features are grouped by bucket and the depth rules run
 once per bucket; a typical harbour view has a handful of buckets. A feature
-that straddles the footprint's edge is left charted in phase 3 (open
-question 5).
+that straddles the footprint's edge is clipped there: the part inside gets
+the minimum `h` over that part, and the part outside stays charted (open
+question 5, §11).
 
 Only the depth classes above are re-portrayed. Everything else in the cell
 keeps its cached instructions.
@@ -402,6 +403,17 @@ use one vocabulary.
 Phase 3 needs #1191's indicator: the chart doesn't adjust without saying so.
 
 ## 11. Open questions
+
+Answers recorded before phase 3 (2026-11-03). Q1 was settled in phase 1
+(#1196): nearest node, unchanged. Q2–Q6 were decided by the user:
+
+| Question | Decision |
+|---|---|
+| Q2 Undeclared datums | Add an override, off by default, labelled **Apply anyway when datum is not declared**. It sits under **Water level adjustment** in Mariner Settings. It applies to `Unknown` only; `Different` is always refused. Wherever it's used, the basis and the indicator say "datum unconfirmed". The Depth card at a pick follows the same setting, so the chart and the pick agree. In the S-164 v2.0.0 WaterLevelAdjustment set, the S-101 cell declares no sounding datum (`Unknown`), and the S-102 (MLLW, code 12) and S-104 (LAT, code 23) are `Different`. With the override on, the S-101 depths are adjusted and the S-102 stays charted, with its reason shown. |
+| Q3 Adjusted soundings | A small marker (◆) after the figure (artboard C3). Italic was rejected because sloping figures already mean something else on paper charts (INT 1), and underlining reads as a drying height. |
+| Q4 Two safety contours | The S-102 contour is primary. Inside S-102 coverage the S-101 safety contour is drawn faint (thinner and lighter), so R-101-102-B's rule that it stays visible still holds. Outside S-102 coverage the S-101 contour is drawn normally (artboard B6). |
+| Q5 Straddling features | Clip them at the footprint boundary. The part inside is adjusted with the minimum `h` over that part; the part outside stays charted. This replaces "left charted" in §3.2. |
+| Q6 Alerts | Deferred past phase 3. Alert highlights stay on the charted contour, and a follow-up issue tracks it. The route check already applies S-104 at each ETA. |
 
 1. **Grid sampling.** Nearest node keeps the chart, the pick report and the
    route check identical. Bilinear gives smoother contours. Should all three
