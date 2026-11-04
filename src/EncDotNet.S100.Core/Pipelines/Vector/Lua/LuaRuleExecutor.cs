@@ -186,6 +186,16 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
                 dict[name] = src;
             }
         }
+
+        // Remove the framework's empty type-check and profiling calls (#1275).
+        if (LuaNoOpCallStripper.CanStrip(dict.Values))
+        {
+            foreach (var name in dict.Keys.ToList())
+            {
+                dict[name] = LuaNoOpCallStripper.Strip(dict[name]);
+            }
+        }
+
         return dict;
     }
 
