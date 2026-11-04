@@ -19,8 +19,7 @@ code is migrated toward it opportunistically.
 > unnecessary directives), and **naming** (IDE1006). IDE1006 is verification
 > only because `dotnet format` cannot Fix-All naming; naming failures must be
 > corrected manually. Other style diagnostics remain ungated because the
-> solution-wide style fix-all is unreliable on the multi-targeted
-> (`net8.0;net10.0`) projects.
+> solution-wide style fix-all is unreliable.
 > `EnforceCodeStyleInBuild` is left off so `dotnet build` stays fast and does
 > not turn style suggestions into build errors. When this document and the
 > `.editorconfig` disagree, the encoded rule wins and this document should be

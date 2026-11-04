@@ -38,7 +38,9 @@ public sealed partial class S64SmokeTests
     /// (#1242), as S-52 draws an object of unknown class. The S-64 cells chart
     /// test-only classes (161, 163, 255, and 500 to 502 and 999 in 3.2), which
     /// should draw as "?", and some S-57 classes the mapping doesn't convert
-    /// yet, which show where translation has gaps.
+    /// yet, which show where translation has gaps. The S-57 Object Catalogue
+    /// names some of the test codes (161 ARCSLN, 163 NEWOBJ, 500 to 502 the
+    /// cartographic $ classes), so their names carry that acronym.
     /// </remarks>
     private static readonly Dictionary<string, string[]> ExpectedQuestionMarks = new(StringComparer.Ordinal)
     {
@@ -70,9 +72,9 @@ public sealed partial class S64SmokeTests
         // buoy or beacon, which has no S-101 feature of its own.
         ["3.1 ENC Display/Standard/ENC_ROOT/AA5STNDR.000"] =
         [
-            "Unknown S-57 object (161)",
-            TestWaypoint,
+            "Unknown S-57 object ARCSLN (161)",
             "Unknown S-57 object ICNARE (67)",
+            TestWaypoint,
             "Unknown S-57 object RADRFL (101)",
             "Unknown S-57 object RADRNG (100)",
             "Unknown S-57 object TOPMAR (144)",
@@ -81,9 +83,9 @@ public sealed partial class S64SmokeTests
         // 501 (line) draws LC(QUESMRK1), which isn't counted here.
         ["3.2 Invalid Object/ENC_ROOT/AA3INVOB.000"] =
         [
+            "Unknown S-57 object $AREAS (500)",
+            "Unknown S-57 object $CSYMB (502)",
             TestWaypoint,
-            "Unknown S-57 object (500)",
-            "Unknown S-57 object (502)",
             "Unknown S-57 object TOPMAR (144)",
         ],
         ["3.2 Invalid Object/Invalid Base/ENC_ROOT/GB5X01NE.000"] = ["Unknown S-57 object (999)"],
@@ -97,7 +99,7 @@ public sealed partial class S64SmokeTests
         ],
         ["3.6 Display Priorities/ENC_ROOT/2J4X0001.000"] = [TestWaypoint],
         ["3.6 Display Priorities/ENC_ROOT/2J5X0001.000"] =
-            ["Unknown S-57 object (161)", TestWaypoint, "Unknown S-57 object (255)"],
+            ["Unknown S-57 object (255)", "Unknown S-57 object ARCSLN (161)", TestWaypoint],
         ["3.6 Display Priorities/ENC_ROOT/2J5X0002.000"] = [TestWaypoint],
         ["5.0 Navigational Hazards/ENC_ROOT/AA3NAVHZ.000"] = [TestWaypoint],
         ["5.0 Navigational Hazards/Overview/ENC_ROOT/AA2OVRVU.000"] = [TestWaypoint],
@@ -106,7 +108,7 @@ public sealed partial class S64SmokeTests
     };
 
     /// <summary>The waypoints WP1, WP2 and so on: points of the test-only class 163.</summary>
-    private const string TestWaypoint = "Unknown S-57 object (163)";
+    private const string TestWaypoint = "Unknown S-57 object NEWOBJ (163)";
 
     private const string TidalStreamPanel = "Unknown S-57 object TS_PAD (138)";
 

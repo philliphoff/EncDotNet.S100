@@ -1,8 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework />
-    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <IsPackable>true</IsPackable>
     <Description>A managed reader for NetCDF-CF wind and wave grids: NetCDF-3 (classic and 64-bit offset) from the Unidata classic format specification, NetCDF-4 on PureHDF (deflate and shuffle), and the CF interpretation (coordinates, time units, packing and missing values, standard names) that turns a file into an EncDotNet.S100.Datasets.Weather grid set with lazily read time steps. Not for navigation. Depends on EncDotNet.S100.Datasets.Weather and PureHDF; no native code.</Description>
   </PropertyGroup>

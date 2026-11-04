@@ -60,7 +60,7 @@ internal static class S64Cells
     /// The S-101 feature types in <paramref name="instructions"/> that drew
     /// <see cref="QuestionMark"/>; an S-57 object of a class translation has
     /// no rule for goes by its pick-report name, such as
-    /// <c>"Unknown S-57 object (163)"</c>.
+    /// <c>"Unknown S-57 object NEWOBJ (163)"</c>.
     /// </summary>
     public static IReadOnlyList<string> QuestionMarks(S57DatasetProcessor processor, IEnumerable<DrawingInstruction> instructions) =>
         instructions.OfType<PointInstruction>()

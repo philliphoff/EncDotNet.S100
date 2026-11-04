@@ -57,18 +57,19 @@ public static class S57UnknownObject
         : AttributeCode(attl);
 
     /// <summary>
-    /// The S-57 acronym of an object class, e.g. <c>"TS_PAD"</c> for 138, or
-    /// <see langword="null"/> when the S-57 Object Catalogue doesn't define it.
+    /// The S-57 acronym of an object class, e.g. <c>"TS_PAD"</c> for 138 or
+    /// <c>"$AREAS"</c> for 500, or <see langword="null"/> when the S-57 Object
+    /// Catalogue doesn't define it.
     /// </summary>
     /// <param name="objl">The S-57 object class code.</param>
     /// <returns>The acronym, or <see langword="null"/>.</returns>
     public static string? Acronym(int objl) =>
-        Enum.IsDefined((S57ObjectCode)objl) ? Enum.GetName((S57ObjectCode)objl) : null;
+        S57ObjectCatalogue.Iho.GetObjectClass(objl)?.Acronym;
 
     /// <summary>
     /// The name an <see cref="FeatureTypeCode"/> feature goes by in a pick
     /// report: <c>"Unknown S-57 object TS_PAD (138)"</c>, or
-    /// <c>"Unknown S-57 object (500)"</c> for a class the S-57 Object
+    /// <c>"Unknown S-57 object (999)"</c> for a class the S-57 Object
     /// Catalogue doesn't define.
     /// </summary>
     /// <param name="objectClass">The <see cref="ObjectClassAttribute"/> value, or <see langword="null"/>.</param>
