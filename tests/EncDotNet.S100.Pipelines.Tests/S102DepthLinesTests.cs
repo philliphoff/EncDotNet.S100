@@ -1,4 +1,3 @@
-using System.Reflection;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
@@ -10,7 +9,6 @@ using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
-using PureHDF;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
