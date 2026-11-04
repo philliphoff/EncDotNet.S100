@@ -331,7 +331,8 @@ public class S57ToS101TranslatorTests
 
     [Theory]
     [InlineData("138", "Unknown S-57 object TS_PAD (138)")]
-    [InlineData("500", "Unknown S-57 object (500)")]
+    [InlineData("500", "Unknown S-57 object $AREAS (500)")]
+    [InlineData("999", "Unknown S-57 object (999)")]
     [InlineData(null, "Unknown S-57 object")]
     public void UnknownObjectName_UsesTheAcronymWhenTheCatalogueDefinesTheClass(string? objl, string expected)
         => Assert.Equal(expected, S57UnknownObject.Name(objl));

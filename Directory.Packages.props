@@ -40,8 +40,8 @@
     <PackageVersion Include="ModelContextProtocol" Version="2.3.0" />
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
     <!-- EncDotNet -->
-    <PackageVersion Include="EncDotNet.Iso8211" Version="0.9.0" />
-    <PackageVersion Include="EncDotNet.S57" Version="0.9.0" />
+    <PackageVersion Include="EncDotNet.Iso8211" Version="0.11.0" />
+    <PackageVersion Include="EncDotNet.S57" Version="0.11.0" />
     <!-- Mapping / rendering -->
     <!-- WGS-84 geodesics and rhumb lines (Karney; MIT) -->
     <PackageVersion Include="GeographicLib.NET" Version="2.3.2" />

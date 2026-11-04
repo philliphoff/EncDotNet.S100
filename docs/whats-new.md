@@ -15,6 +15,11 @@ month. For package versions and release assets, see
   that hold only updates are now CRC-checked too. See
   [Apply update cells](s57-to-s101.md#apply-update-cells).
 
+- **.NET 10 only.** The packages no longer target .NET 8, which reached end
+  of support in November 2026; they target .NET 10 and run on later
+  versions. CI also runs the tests on .NET 11. The packages now build on
+  EncDotNet 0.11.0, which made the same change.
+
 - **Convert S-101 to S-57.** `s100 s101 convert --to s57` writes an S-101
   dataset as an S-57 Edition 3.1 base cell, following S-65 Annex C, and
   prints what Annex C dropped or folded into `INFORM`. `--exchange-set`

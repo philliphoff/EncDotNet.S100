@@ -632,11 +632,7 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
         X509Certificate2 cert;
         try
         {
-#if NET10_0_OR_GREATER
             cert = X509CertificateLoader.LoadCertificate(certEntry.Value);
-#else
-            cert = new X509Certificate2(certEntry.Value);
-#endif
         }
         catch (CryptographicException ex)
         {
@@ -768,11 +764,7 @@ public class ExchangeSetVerifier : IExchangeSetVerifier
             {
                 foreach (var entry in certificateChain)
                 {
-#if NET10_0_OR_GREATER
                     var intermediate = X509CertificateLoader.LoadCertificate(entry.Value);
-#else
-                    var intermediate = new X509Certificate2(entry.Value);
-#endif
                     if (string.Equals(intermediate.Thumbprint, cert.Thumbprint, StringComparison.Ordinal))
                     {
                         intermediate.Dispose();

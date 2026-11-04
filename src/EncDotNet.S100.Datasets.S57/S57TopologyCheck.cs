@@ -164,7 +164,7 @@ public static class S57TopologyCheck
     private static string Describe(S57FeatureRecord feature)
     {
         var objl = (int)feature.ObjectCode;
-        var name = Enum.IsDefined((S57ObjectCode)objl) ? ((S57ObjectCode)objl).ToString() : objl.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var name = S57UnknownObject.Acronym(objl) ?? objl.ToString(System.Globalization.CultureInfo.InvariantCulture);
         return $"{name} {feature.RecordName.AgencyCode}/{feature.RecordName.FeatureId}/{feature.RecordName.FeatureSubdivision}";
     }
 }

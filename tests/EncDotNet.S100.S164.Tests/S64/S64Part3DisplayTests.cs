@@ -93,9 +93,9 @@ public sealed class S64Part3DisplayTests
         var lines = instructions.OfType<LineInstruction>()
             .Where(l => l.LineStyleReference == S64Cells.QuestionMark).Select(ClassOf).ToHashSet();
 
-        Assert.Contains("Unknown S-57 object (500)", symbols);
-        Assert.Contains("Unknown S-57 object (502)", symbols);
-        Assert.Contains("Unknown S-57 object (501)", lines);
+        Assert.Contains("Unknown S-57 object $AREAS (500)", symbols);
+        Assert.Contains("Unknown S-57 object $CSYMB (502)", symbols);
+        Assert.Contains("Unknown S-57 object $LINES (501)", lines);
     }
 
     private static async Task<(Datasets.Pipelines.S57DatasetProcessor Processor, IReadOnlyList<DrawingInstruction> Instructions)> PortrayAsync(string cell)

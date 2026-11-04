@@ -9,7 +9,7 @@ depend on a UI framework; for Avalonia, add
 For a step-by-step introduction, see
 [Add S-100 data to a Mapsui app](../../docs/mapsui-app.md).
 
-The package targets `net8.0` and `net10.0`. It draws vector data through the
+The package targets `net10.0`. It draws vector data through the
 scene IR in [`EncDotNet.S100.Rendering.Scene`](../EncDotNet.S100.Rendering.Scene/README.md)
 and [`EncDotNet.S100.Renderers.Skia`](../EncDotNet.S100.Renderers.Skia/README.md).
 It doesn't include a CRS implementation: supply one, such as

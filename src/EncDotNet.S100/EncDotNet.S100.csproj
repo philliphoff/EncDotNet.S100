@@ -1,8 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework />
-    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <IsPackable>true</IsPackable>
     <Description>Open an IHO S-100 dataset, read its features and render it to an image using the bundled feature and portrayal catalogues. Wraps EncDotNet.S100.Specifications and EncDotNet.S100.Datasets.Pipelines behind a small, format-agnostic API; the underlying readers and catalogues remain available for custom wiring.</Description>
     <PackageTags>S-100;S-101;S-102;ENC;nautical;hydrography;IHO;ECDIS</PackageTags>
