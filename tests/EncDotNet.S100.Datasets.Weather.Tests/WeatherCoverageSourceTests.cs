@@ -105,6 +105,25 @@ public class WeatherCoverageSourceTests
     }
 
     [Fact]
+    public void Current_speed_and_direction_are_derived_from_U_and_V()
+    {
+        // Cells: setting east at 1 m/s, setting south at 2 m/s.
+        var u = TestGrids.Parameter(WeatherParameters.CurrentU, (0, [1f, 0f]));
+        var v = TestGrids.Parameter(WeatherParameters.CurrentV, (0, [0f, -2f]));
+        var source = Source(TestGrids.Regular(1, 2), u, v);
+
+        var sample = source.Sample(GridRegion.Full, Ct);
+
+        Assert.Equal(["current.u", "current.v", "current.speed", "current.to_direction"], source.FieldNames);
+        var speed = sample.GetValues(WeatherParameters.CurrentSpeed);
+        var direction = sample.GetValues(WeatherParameters.CurrentToDirection);
+        Assert.Equal(1f, speed[0], 5);
+        Assert.Equal(90f, direction[0], 4);
+        Assert.Equal(2f, speed[1], 5);
+        Assert.Equal(180f, direction[1], 4);
+    }
+
+    [Fact]
     public void Stored_wind_speed_and_direction_are_not_derived()
     {
         var u = TestGrids.Parameter(WeatherParameters.WindU, (0, [1f]));

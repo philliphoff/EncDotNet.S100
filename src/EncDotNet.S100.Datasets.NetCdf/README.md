@@ -81,8 +81,10 @@ format layer underneath, if you need the raw variables and attributes.
 - **Values.** `_FillValue`, `missing_value`, `valid_min`, `valid_max` and
   `valid_range` are applied to the stored values (and the NetCDF default fill
   value when there's no `_FillValue`), then `scale_factor` and `add_offset`.
-- **Model and run.** The model is the global `source`, `institution` or
-  `title` attribute. The run time is a `forecast_reference_time` variable or
+- **Model and run.** The model is the first of the global `source`,
+  `institution`, `creator_name` and `title` attributes that's at most 80
+  characters long, so a `source` that lists input files or sensors (the HF
+  radar currents name every radial file) is passed over. The run time is a `forecast_reference_time` variable or
   global attribute; without one, `ReferenceTime` is null and the grid set's
   run time is the first valid time.
 
@@ -92,7 +94,7 @@ Failures say what to do or what the file holds:
 |---|---|
 | `NetCdfFormatException` | Not NetCDF, CDF-5, a damaged or truncated file, groups only, an unsupported filter |
 | `CfConventionsException` | No latitude, longitude or time coordinate; unsupported time units or calendar; no variable the parameter table knows. The message lists the variables found, with their standard names |
-| `UnsupportedWeatherGridException` | 2-D latitude and longitude (a curvilinear grid), a `grid_mapping` other than `latitude_longitude` (named in the message), uneven spacing, or a regional grid across the antimeridian |
+| `UnsupportedWeatherGridException` | 2-D latitude and longitude (a curvilinear grid), a `grid_mapping` variable other than `latitude_longitude` (named in the message), uneven spacing, or a regional grid across the antimeridian. A `grid_mapping` that names a variable the file doesn't have is ignored: ERDDAP subsets leave it out, and the 1-D latitude and longitude already place the grid |
 
 ## Dependencies
 

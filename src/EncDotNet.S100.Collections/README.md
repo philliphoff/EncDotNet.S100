@@ -232,8 +232,9 @@ datasets). Each index lists one item per model or dataset:
   `info/<id>/index.json` gives its axes (a negative `averageSpacing` is a
   descending axis), `actual_range` and time coverage. The item downloads a
   NetCDF subset of the area from now to the last chosen hour, or, for an
-  analysis whose time coverage has ended (the sea surface temperature
-  datasets), the chosen hours up to its last time. Latitude and longitude
+  analysis or observation whose time coverage has ended (the sea surface
+  temperature, geostrophic current and HF radar datasets), the chosen hours
+  up to its last time. Latitude and longitude
   are strided so that neither takes more than
   `WeatherRequests.ErddapMaxAxisPoints` (1500) points: a 0.01° analysis over
   30° is read every third point. An issue date

@@ -32,6 +32,7 @@ namespace EncDotNet.S100.Datasets.Weather;
 ///   <item><term><see cref="PressureIsobarStyle"/></term><description>Isobars every 4 hPa on <c>pressure.msl</c>, labelled. On by default.</description></item>
 ///   <item><term><see cref="SeaTemperatureStyle"/></term><description>A <c>sea.temperature</c> fill in 1 °C bands. On by default.</description></item>
 ///   <item><term><see cref="SeaTemperatureIsothermStyle"/></term><description>Isotherms every 2 °C on <c>sea.temperature</c>, labelled. Off by default.</description></item>
+///   <item><term><see cref="CurrentArrowStyle"/></term><description>Arrows along <c>current.to_direction</c> in S-111's speed bands. On by default; hidden inside S-111 coverage.</description></item>
 /// </list>
 /// <para>
 /// Layer order (design note §5): fills go on
@@ -60,7 +61,7 @@ public abstract class WeatherCoverageStyle : ICoverageStyle
     /// The version of the weather styles, folded into <see cref="ContentScope"/>.
     /// Bump it whenever the symbols, the palette or the bands change.
     /// </summary>
-    public const int StyleVersion = 3;
+    public const int StyleVersion = 4;
 
     /// <summary>The opacity of the colour fills: 0.5, so the chart under them stays readable.</summary>
     public const double FillOpacity = 0.5;
@@ -256,13 +257,14 @@ public abstract class WeatherCoverageStyle : ICoverageStyle
     /// <summary>
     /// New instances of every weather style, in layer-stack order: the sea
     /// surface temperature, wave height and wind speed fills, the isotherms
-    /// and pressure isobars, then the wind barbs and wave arrows.
+    /// and pressure isobars, then the current arrows, wind barbs and wave
+    /// arrows.
     /// </summary>
     public static IReadOnlyList<WeatherCoverageStyle> CreateAll() =>
     [
         new SeaTemperatureStyle(), new WaveHeightStyle(), new WindSpeedStyle(),
         new SeaTemperatureIsothermStyle(), new PressureIsobarStyle(),
-        new WindBarbStyle(), new WaveDirectionStyle(),
+        new CurrentArrowStyle(), new WindBarbStyle(), new WaveDirectionStyle(),
     ];
 
     /// <summary>

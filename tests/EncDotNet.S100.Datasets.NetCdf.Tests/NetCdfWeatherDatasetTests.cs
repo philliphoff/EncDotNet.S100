@@ -283,6 +283,44 @@ public sealed class NetCdfWeatherDatasetTests : IDisposable
     }
 
     [Fact]
+    public void Model_currents_read_at_their_top_layer_with_speed_and_direction()
+    {
+        var path = WriteCurrentNetCdf4(PathFor("hycom.nc"));
+
+        using var dataset = NetCdfWeatherDataset.Open(path);
+        var set = dataset.GridSet;
+
+        var u = set.FindParameter(WeatherParameters.CurrentU);
+        Assert.NotNull(u);
+        Assert.NotNull(set.FindParameter(WeatherParameters.CurrentV));
+        // A depth of 0 m is the surface.
+        Assert.Equal(WeatherLevel.Surface, u.Level);
+        Assert.Equal("HYCOM archive file, GLBz0.04", set.Origin.Model);
+
+        // Normalised steps run south to north, as the fixture's latitudes do.
+        var values = set.ReadStep(u, 0, Ct);
+        var (knots, to) = Current(0, 0);
+        double expected = knots * 1852.0 / 3600.0 * Math.Sin(to * Math.PI / 180);
+        Assert.Equal(expected, values[0], 4);
+        var (row, col) = MissingNode(ChartGrid);
+        Assert.True(float.IsNaN(values[row * ChartGrid.Columns + col]));
+    }
+
+    [Fact]
+    public void HF_radar_currents_read_although_their_grid_mapping_variable_is_left_out()
+    {
+        var path = WriteCurrentNetCdf4(PathFor("hfradar.nc"), hfRadar: true);
+
+        using var dataset = NetCdfWeatherDataset.Open(path);
+
+        Assert.NotNull(dataset.GridSet.FindParameter(WeatherParameters.CurrentU));
+        Assert.NotNull(dataset.GridSet.FindParameter(WeatherParameters.CurrentV));
+        // The source lists every radial file and the institution is a long
+        // name, so the model is the program that made the data.
+        Assert.Equal("NOAA IOOS Surface Currents Program", dataset.GridSet.Origin.Model);
+    }
+
+    [Fact]
     public void An_unsupported_calendar_fails()
     {
         var model = WaveFile(new Grid(10, 20, 1, 3, 4, Steps: 1), northToSouth: false, packedHeight: false);

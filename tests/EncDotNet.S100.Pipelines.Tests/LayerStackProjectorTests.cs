@@ -107,6 +107,52 @@ public class LayerStackProjectorTests
     }
 
     [Fact]
+    public void Project_rebuilds_arrows_a_rule_replaced()
+    {
+        // R-111-WX-B (issue #1228) hands back model current arrows with their
+        // speed blanked inside S-111; the projector must draw those, not the
+        // prebuilt arrows.
+        const string datasetId = "currents.nc";
+        var grid = (GridCoverageSubLayer)((CoverageStackPayload)BuildCoverageGridItem(datasetId).Payload).SubLayer;
+        var arrows = new ArrowCoverageSubLayer
+        {
+            LayerKey = "weather.current.arrows",
+            LayerName = "Currents",
+            Plane = S98DisplayPlane.DynamicArrows,
+            Coverage = grid.Coverage,
+            Viewport = grid.Viewport,
+            SymbolProvider = _ => null,
+            FallbackExtent = new GeographicBounds(0, 0, 2, 2),
+            YieldsToS111 = true,
+        };
+        var result = new CoveragePortrayalResult
+        {
+            SubLayers = new[] { arrows },
+            Spec = new SpecRef("NetCDF", default),
+            SourceDatasetId = datasetId,
+            Info = "test",
+        };
+        var original = new SubLayerStackItem(new CoverageStackPayload(result, arrows), S98DisplayPlane.DynamicArrows, 20, datasetId);
+        var masked = arrows.WithCoverage(grid.Coverage);
+        var ruled = original with { Payload = ((CoverageStackPayload)original.Payload).WithSubLayer(masked) };
+        var prebuilt = new Dictionary<(string, string), LayerStackEntry>
+        {
+            [LayerStackProjector.KeyOf(original)] = new LayerStackEntry(new MemoryLayer(), original),
+        };
+        var rebuiltLayer = new MemoryLayer();
+        CoverageSubLayerBase? seen = null;
+
+        var projected = LayerStackProjector.Project(new[] { ruled }, prebuilt, subLayer =>
+        {
+            seen = subLayer;
+            return rebuiltLayer;
+        });
+
+        Assert.Same(rebuiltLayer, Assert.Single(projected).Layer);
+        Assert.Same(masked, seen);
+    }
+
+    [Fact]
     public void Project_suppressed_vector_layer_keeps_its_tiled_scene_minus_the_dropped_features()
     {
         // R-101-102-B dropped DepthArea "1"; the pattern fill "2" survives. The

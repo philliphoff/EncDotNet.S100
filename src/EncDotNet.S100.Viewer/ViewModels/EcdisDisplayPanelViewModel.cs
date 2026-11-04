@@ -151,6 +151,16 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         set => _state.SetLayerVisible(SeaTemperatureIsothermStyle.Key, value);
     }
 
+    /// <summary>
+    /// The Weather section's Currents switch: surface current arrows on every
+    /// weather dataset with currents. On by default (<see cref="CurrentArrowStyle"/>).
+    /// </summary>
+    public bool IsCurrentArrowsVisible
+    {
+        get => GetWeatherLayer(CurrentArrowStyle.Key);
+        set => _state.SetLayerVisible(CurrentArrowStyle.Key, value);
+    }
+
     // The switch, or the style's own default when the mariner hasn't set it.
     private bool GetWeatherLayer(string layerKey) =>
         _state.GetLayerVisible(layerKey) ?? WeatherDefaults[layerKey];
@@ -258,6 +268,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsWindSpeedFillVisible));
         OnPropertyChanged(nameof(IsWaveArrowsVisible));
         OnPropertyChanged(nameof(IsIsothermsVisible));
+        OnPropertyChanged(nameof(IsCurrentArrowsVisible));
         OnPropertyChanged(nameof(ActiveCategory));
         OnPropertyChanged(nameof(IsDisplayBase));
         OnPropertyChanged(nameof(IsStandard));
