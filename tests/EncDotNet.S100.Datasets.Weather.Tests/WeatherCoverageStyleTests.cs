@@ -121,6 +121,54 @@ public class WeatherCoverageStyleTests
     }
 
     [Theory]
+    // S-111 Ed 2.0.0 select_arrow.xsl: three bands at 0.4, five at 0.2 per
+    // knot, the fastest at 2.6.
+    [InlineData(0.2, 1, 0.4)]
+    [InlineData(0.5, 2, 0.4)]
+    [InlineData(1.5, 3, 0.4)]
+    [InlineData(2.0, 4, 0.4)]
+    [InlineData(4.0, 5, 0.8)]
+    [InlineData(6.0, 6, 1.2)]
+    [InlineData(9.0, 7, 1.8)]
+    [InlineData(12.0, 8, 2.4)]
+    [InlineData(13.0, 9, 2.6)]
+    [InlineData(20.0, 9, 2.6)]
+    public void Current_arrows_follow_the_S111_speed_bands(double knots, int band, double scale)
+    {
+        float metresPerSecond = (float)Speed.FromKnots(knots).TotalMetresPerSecond;
+
+        var resolved = new CurrentArrowStyle().ResolveSymbolScheme(MarinerSettings.Default).Resolve(metresPerSecond, 0);
+
+        Assert.NotNull(resolved);
+        Assert.Equal(CurrentArrowStyle.SymbolName(band), resolved.SymbolRef);
+        Assert.Equal(scale, resolved.ScaleFor(metresPerSecond), 3);
+    }
+
+    [Fact]
+    public void Current_arrows_point_the_way_the_water_flows_and_are_on_by_default()
+    {
+        var style = new CurrentArrowStyle();
+        var scheme = style.ResolveSymbolScheme(MarinerSettings.Default);
+
+        Assert.Equal(WeatherParameters.CurrentSpeed, scheme.ValueFieldName);
+        Assert.Equal(WeatherParameters.CurrentToDirection, scheme.RotationFieldName);
+        Assert.Equal(0, scheme.RotationOffsetDegrees);
+        Assert.True(style.IsVisibleByDefault);
+        Assert.False(style.ClipToWater);
+        Assert.Equal(["Under 0.5 kn", "0.5–1 kn", "1–2 kn", "2–3 kn", "3–5 kn", "5–7 kn", "7–10 kn", "10–13 kn", "13 kn and faster"],
+            CurrentArrowStyle.Bands.Select(b => b.Label));
+    }
+
+    [Fact]
+    public void Current_band_colours_are_the_S111_colour_profile_s()
+    {
+        // SCBN1 and SCBN9 of the S-111 Ed 2.0.0 colour profile, by day.
+        Assert.Equal("#7652E2", WeatherPalette.Palette.Tokens[WeatherPalette.CurrentToken(1)].Day.ToHex());
+        Assert.Equal("#FF1E1E", WeatherPalette.Palette.Tokens[WeatherPalette.CurrentToken(9)].Day.ToHex());
+        Assert.Contains("fWXCUR5", WeatherCoverageStyle.Symbols.Provider(CurrentArrowStyle.SymbolName(5)));
+    }
+
+    [Theory]
     [InlineData(-1.9, 1)]
     [InlineData(-0.01, 1)]
     [InlineData(0.0, 2)]
@@ -223,7 +271,7 @@ public class WeatherCoverageStyleTests
     [Fact]
     public void Symbols_sit_above_S111_on_the_dynamic_arrows_plane()
     {
-        foreach (WeatherCoverageStyle style in new WeatherCoverageStyle[] { new WindBarbStyle(), new WaveDirectionStyle() })
+        foreach (WeatherCoverageStyle style in new WeatherCoverageStyle[] { new WindBarbStyle(), new WaveDirectionStyle(), new CurrentArrowStyle() })
         {
             Assert.Equal(WeatherLayerKind.Symbols, style.Kind);
             Assert.Equal(S98DisplayPlane.DynamicArrows, style.Plane);
@@ -431,14 +479,14 @@ public class WeatherCoverageStyleTests
     public void Palette_tokens_are_prefixed_so_they_never_resolve_against_S101_colours()
     {
         Assert.All(WeatherPalette.Palette.Tokens.Keys, token => Assert.StartsWith("WX", token, StringComparison.Ordinal));
-        Assert.Equal(5 + 15 + 13 + 32, WeatherPalette.Palette.Tokens.Count);
+        Assert.Equal(6 + 15 + 13 + 32 + 9, WeatherPalette.Palette.Tokens.Count);
     }
 
     [Fact]
     public void Content_scope_carries_the_style_version()
     {
         Assert.Equal(ApplicationContentScope.For("Weather", WeatherCoverageStyle.StyleVersion), WeatherCoverageStyle.ContentScope);
-        Assert.StartsWith("app:Weather@3|toolkit:", WeatherCoverageStyle.ContentScope, StringComparison.Ordinal);
+        Assert.StartsWith("app:Weather@4|toolkit:", WeatherCoverageStyle.ContentScope, StringComparison.Ordinal);
     }
 
     [Fact]

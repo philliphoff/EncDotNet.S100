@@ -15,7 +15,9 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// components but no stored speed or direction, <see cref="Sample"/> adds
 /// <c>"wind.speed"</c> and <c>"wind.from_direction"</c> as
 /// <see cref="SampledCoverage.ComputedFields"/>, derived cell by cell (see
-/// <see cref="WindComponents"/>). Those aren't in
+/// <see cref="WindComponents"/>); the surface current group gets
+/// <c>"current.speed"</c> and <c>"current.to_direction"</c> the same way
+/// (<see cref="CurrentComponents"/>). Those aren't in
 /// <see cref="CoverageMetadata.ValueFields"/>, which lists stored fields;
 /// <see cref="FieldNames"/> lists both.
 /// </para>
@@ -430,34 +432,35 @@ public sealed class WeatherCoverageSource : ICoverageSource
 
     private static ComputedCoverageField[] BuildDerivedFields(HashSet<string> ids)
     {
-        if (!ids.Contains(WeatherParameters.WindU) || !ids.Contains(WeatherParameters.WindV))
-            return [];
-
-        string[] inputs = [WeatherParameters.WindU, WeatherParameters.WindV];
-        var derived = new List<ComputedCoverageField>(2);
-        if (!ids.Contains(WeatherParameters.WindSpeed))
-        {
-            derived.Add(new ComputedCoverageField
-            {
-                Name = WeatherParameters.WindSpeed,
-                Inputs = inputs,
-                Compute = WindComponents.SpeedCell,
-                NoDataValue = float.NaN,
-            });
-        }
-
-        if (!ids.Contains(WeatherParameters.WindFromDirection))
-        {
-            derived.Add(new ComputedCoverageField
-            {
-                Name = WeatherParameters.WindFromDirection,
-                Inputs = inputs,
-                Compute = WindComponents.FromDirectionCell,
-                NoDataValue = float.NaN,
-            });
-        }
-
+        var derived = new List<ComputedCoverageField>(4);
+        AddDerived(derived, ids, WeatherParameters.WindU, WeatherParameters.WindV,
+            WeatherParameters.WindSpeed, WindComponents.SpeedCell,
+            WeatherParameters.WindFromDirection, WindComponents.FromDirectionCell);
+        AddDerived(derived, ids, WeatherParameters.CurrentU, WeatherParameters.CurrentV,
+            WeatherParameters.CurrentSpeed, WindComponents.SpeedCell,
+            WeatherParameters.CurrentToDirection, CurrentComponents.ToDirectionCell);
         return derived.ToArray();
+    }
+
+    // Speed and direction from a (u, v) pair, unless the group stores them.
+    private static void AddDerived(
+        List<ComputedCoverageField> derived,
+        HashSet<string> ids,
+        string u,
+        string v,
+        string speed,
+        CoverageFieldComputation speedCell,
+        string direction,
+        CoverageFieldComputation directionCell)
+    {
+        if (!ids.Contains(u) || !ids.Contains(v))
+            return;
+
+        string[] inputs = [u, v];
+        if (!ids.Contains(speed))
+            derived.Add(new ComputedCoverageField { Name = speed, Inputs = inputs, Compute = speedCell, NoDataValue = float.NaN });
+        if (!ids.Contains(direction))
+            derived.Add(new ComputedCoverageField { Name = direction, Inputs = inputs, Compute = directionCell, NoDataValue = float.NaN });
     }
 
     // Level 0 is the grid; levels 1 and 2 keep every second and fourth point,

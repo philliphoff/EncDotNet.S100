@@ -20,6 +20,17 @@ month. For package versions and release assets, see
   versions. CI also runs the tests on .NET 11. The packages now build on
   EncDotNet 0.11.0, which made the same change.
 
+- **Surface currents on the chart.** GRIB2 and NetCDF files with currents
+  now draw them as arrows in S-111's speed bands and colours, from ocean
+  models such as HYCOM and Copernicus Marine, satellite altimetry or HF
+  radar. Where an S-111 grid is loaded, only its arrows are drawn inside its
+  area. A **Currents** switch in Display controls turns them off. The Library
+  has two new sources: **Surface currents, altimetry — NOAA AOML ERDDAP**
+  (worldwide, daily) and **Surface currents, HF radar — NOAA ERDDAP** (US
+  coasts, hourly). Picks and `sample_coverage` give speed in knots and the
+  direction the current sets to. See
+  [Show wind and waves on the chart](weather.md).
+
 - **Sea surface temperature on the chart.** GRIB2 and NetCDF files with sea
   surface temperature now draw it as a colour fill with a band for each
   degree from 0 °C to 30 °C, so fronts such as the edge of the Gulf Stream

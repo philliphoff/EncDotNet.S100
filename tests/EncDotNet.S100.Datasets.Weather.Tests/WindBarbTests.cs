@@ -214,6 +214,7 @@ public class WindBarbTests
         var expected = WindBarb.All.Select(b => b.SymbolName)
             .Concat(WindBarb.All.Where(b => !b.IsCalm).Select(b => b.SouthernSymbolName))
             .Append(WaveDirectionStyle.ArrowSymbol)
+            .Concat(Enumerable.Range(1, WeatherPalette.CurrentBandCount).Select(CurrentArrowStyle.SymbolName))
             .Order(StringComparer.Ordinal);
         Assert.Equal(expected, WeatherCoverageStyle.Symbols.Names.Order(StringComparer.Ordinal));
 

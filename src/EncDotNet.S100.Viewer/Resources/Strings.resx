@@ -251,6 +251,10 @@
     <value>Isotherms</value>
     <comment>Weather sub-layer name (#1227): sea surface temperature isotherms every 2 °C.</comment>
   </data>
+  <data name="SubLayer_Weather_Currents" xml:space="preserve">
+    <value>Currents</value>
+    <comment>Weather sub-layer name (#1228): surface current arrows from an ocean model, altimetry or HF radar.</comment>
+  </data>
   <data name="Tooltip_ToggleSubLayerVisibility" xml:space="preserve">
     <value>Show or hide this sub-layer</value>
   </data>
@@ -7008,6 +7012,13 @@
   </data>
   <data name="Tooltip_EcdisPanel_Weather_Isotherms" xml:space="preserve">
     <value>Draw sea surface temperature isotherms, every 2 °C, on every weather dataset that has sea temperature. Off by default: the colour fill already shows the temperature.</value>
+  </data>
+  <data name="EcdisPanel_Weather_Currents" xml:space="preserve">
+    <value>Currents</value>
+    <comment>Display controls switch (#1228): surface current arrows on every weather dataset.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_Currents" xml:space="preserve">
+    <value>Draw surface current arrows, coloured by speed as S-111's are, on every weather dataset that has currents. Where an S-111 dataset is loaded, only its arrows are drawn.</value>
   </data>
   <data name="EcdisPanel_NavigationalWarnings" xml:space="preserve">
     <value>Navigational warnings</value>

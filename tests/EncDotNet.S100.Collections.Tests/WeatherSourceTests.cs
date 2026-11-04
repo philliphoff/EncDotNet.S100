@@ -68,7 +68,8 @@ public sealed class WeatherSourceTests : IDisposable
         var weather = KnownCatalogueSources.All.Where(s => s.Format == KnownCatalogueFormat.Weather).ToArray();
 
         Assert.Equal(
-            ["noaa-nomads-gfswave", "noaa-nomads-gfs", "noaa-aws-gfswave", "noaa-aws-gfs", "nws-marine-alerts", "noaa-erddap-ww3", "noaa-erddap-sst"],
+            ["noaa-nomads-gfswave", "noaa-nomads-gfs", "noaa-aws-gfswave", "noaa-aws-gfs", "nws-marine-alerts", "noaa-erddap-ww3", "noaa-erddap-sst",
+                "noaa-erddap-currents", "ioos-erddap-hfradar"],
             weather.Select(s => s.Id));
         Assert.All(weather, s =>
         {
@@ -100,6 +101,25 @@ public sealed class WeatherSourceTests : IDisposable
         Assert.Equal(["jplMURSST41"], service.Datasets.Where(d => d.Default).Select(d => d.Id));
         Assert.Equal(["analysed_sst", "sst", "analysed_sst"], service.Datasets.Select(d => Assert.Single(d.Variables)));
         Assert.Equal((24, 24, 24), (service.StepHours, service.MaxHours, service.DefaultHours));
+    }
+
+    [Fact]
+    public void The_current_sources_offer_altimetry_daily_and_HF_radar_hourly()
+    {
+        var altimetry = Known("noaa-erddap-currents").Weather!;
+        var radar = Known("ioos-erddap-hfradar").Weather!;
+
+        // miamicurrents lives on AOML's own ERDDAP: the CoastWatch West Coast
+        // node only redirects to it.
+        Assert.Equal(new Uri("https://cwcgom.aoml.noaa.gov/erddap/"), Known("noaa-erddap-currents").CatalogUri);
+        Assert.Equal(["miamicurrents"], altimetry.Datasets.Where(d => d.Default).Select(d => d.Id));
+        Assert.Equal(["u_current", "v_current"], Assert.Single(altimetry.Datasets).Variables);
+        Assert.Equal((24, 24, 24), (altimetry.StepHours, altimetry.MaxHours, altimetry.DefaultHours));
+
+        Assert.Equal(["ucsdHfrE2", "ucsdHfrE6", "ucsdHfrW6", "ucsdHfrH1", "ucsdHfrP6"], radar.Datasets.Select(d => d.Id));
+        Assert.Equal(["ucsdHfrE2"], radar.Datasets.Where(d => d.Default).Select(d => d.Id));
+        Assert.All(radar.Datasets, d => Assert.Equal(["water_u", "water_v"], d.Variables));
+        Assert.Equal((1, 24, 24), (radar.StepHours, radar.MaxHours, radar.DefaultHours));
     }
 
     [Fact]

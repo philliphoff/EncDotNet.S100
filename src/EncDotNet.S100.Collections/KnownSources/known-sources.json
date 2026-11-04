@@ -331,6 +331,66 @@
       }
     },
     {
+      "id": "noaa-erddap-currents",
+      "name": "Surface currents, altimetry — NOAA AOML ERDDAP",
+      "provider": "NOAA AOML CoastWatch Caribbean/Gulf of Mexico Node",
+      "region": ["Worldwide"],
+      "format": "weather",
+      "catalogUri": "https://cwcgom.aoml.noaa.gov/erddap/",
+      "homepage": "https://cwcgom.aoml.noaa.gov/erddap/griddap/miamicurrents.html",
+      "coverage": "boundingBoxes",
+      "editions": false,
+      "sizes": false,
+      "note": "Near-real-time geostrophic surface currents from satellite altimetry (0.2°, daily, 65°S to 65°N), fetched as a NetCDF subset of the map view for the latest day. They show the large ocean currents and eddies, such as the Gulf Stream, but not wind-driven or tidal flow. Analyses, not forecasts.",
+      "product": "NetCDF",
+      "notForNavigation": true,
+      "licence": "Public domain (NOAA); free to use and redistribute, not for legal use",
+      "attribution": "NOAA AOML near-real-time geostrophic currents, via NOAA CoastWatch ERDDAP",
+      "weather": {
+        "service": "erddapGriddap",
+        "model": "erddap-currents",
+        "modelName": "Geostrophic currents (ERDDAP)",
+        "stepHours": 24,
+        "maxHours": 24,
+        "defaultHours": 24,
+        "datasets": [
+          { "id": "miamicurrents", "name": "NOAA AOML geostrophic currents, 0.2°, daily", "variables": ["u_current", "v_current"], "default": true }
+        ]
+      }
+    },
+    {
+      "id": "ioos-erddap-hfradar",
+      "name": "Surface currents, HF radar — NOAA ERDDAP",
+      "provider": "NOAA CoastWatch West Coast Node",
+      "region": ["North America", "United States"],
+      "format": "weather",
+      "catalogUri": "https://coastwatch.pfeg.noaa.gov/erddap/",
+      "homepage": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/ucsdHfrE2.html",
+      "coverage": "boundingBoxes",
+      "editions": false,
+      "sizes": false,
+      "note": "Hourly surface currents measured by the US IOOS network of coastal HF radars (the top metre of the sea, out to about 150 km offshore), fetched as a NetCDF subset of the map view for the last day. Observations, not forecasts: coverage changes hour by hour with the radars' range.",
+      "product": "NetCDF",
+      "notForNavigation": true,
+      "licence": "Public domain (NOAA); free to use and redistribute, not for legal use",
+      "attribution": "US IOOS Surface Currents Program HF radar network, via NOAA CoastWatch ERDDAP",
+      "weather": {
+        "service": "erddapGriddap",
+        "model": "erddap-hfradar",
+        "modelName": "HF radar currents (ERDDAP)",
+        "stepHours": 1,
+        "maxHours": 24,
+        "defaultHours": 24,
+        "datasets": [
+          { "id": "ucsdHfrE2", "name": "US East Coast and Gulf of Mexico, 2 km, hourly", "variables": ["water_u", "water_v"], "default": true },
+          { "id": "ucsdHfrE6", "name": "US East Coast and Gulf of Mexico, 6 km, hourly (longer range)", "variables": ["water_u", "water_v"] },
+          { "id": "ucsdHfrW6", "name": "US West Coast, 6 km, hourly", "variables": ["water_u", "water_v"] },
+          { "id": "ucsdHfrH1", "name": "Hawaiʻi, 1 km, hourly", "variables": ["water_u", "water_v"] },
+          { "id": "ucsdHfrP6", "name": "Puerto Rico and the US Virgin Islands, 6 km, hourly", "variables": ["water_u", "water_v"] }
+        ]
+      }
+    },
+    {
       "id": "ccg-s124-secom",
       "name": "S-124 Navigational warnings — Canada",
       "provider": "Canadian Coast Guard",

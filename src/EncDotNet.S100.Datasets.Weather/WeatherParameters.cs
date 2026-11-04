@@ -12,7 +12,8 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// GRIB2 codes are (discipline, category, number) from WMO code table 4.2:
 /// discipline 0 category 2 is momentum, discipline 0 category 3 is mass and
 /// discipline 10 category 0 is oceanographic waves and discipline 10
-/// category 3 is surface properties (water temperature). CF names are from
+/// category 3 is surface properties (water temperature); discipline 10
+/// category 1 is currents. CF names are from
 /// the CF standard name table.
 /// </para>
 /// <para>
@@ -27,7 +28,15 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// plain CF name first, then the GHRSST foundation, subskin and skin
 /// temperatures that satellite analyses such as MUR and the NOAA Geo-polar
 /// Blended analysis carry; GFS's surface <c>TMP</c> (0,0,0) is left out, as
-/// it is land skin temperature too.
+/// it is land skin temperature too. The current components take the plain
+/// CF names first, then the <c>surface_</c> ones HF radar products carry.
+/// Current direction is the direction the water flows <em>to</em>, the
+/// oceanographic convention, unlike the wind and wave directions.
+/// </para>
+/// <para>
+/// The current rows have no level: a model gives currents at its top layer
+/// (0 m for HYCOM, about 0.5 m for Copernicus, 15 m for OSCAR), and each
+/// reader keeps the level it finds, so a 15 m current is labelled as one.
 /// </para>
 /// </remarks>
 public static class WeatherParameters
@@ -71,6 +80,18 @@ public static class WeatherParameters
     /// <summary>Canonical id of the sea surface temperature, in kelvin.</summary>
     public const string SeaSurfaceTemperature = "sea.temperature";
 
+    /// <summary>Canonical id of the eastward (U) component of the sea water velocity.</summary>
+    public const string CurrentU = "current.u";
+
+    /// <summary>Canonical id of the northward (V) component of the sea water velocity.</summary>
+    public const string CurrentV = "current.v";
+
+    /// <summary>Canonical id of the current speed.</summary>
+    public const string CurrentSpeed = "current.speed";
+
+    /// <summary>Canonical id of the direction the current flows to, in degrees true.</summary>
+    public const string CurrentToDirection = "current.to_direction";
+
     /// <summary>Group id of the 10 m wind: U, V, speed and direction.</summary>
     public const string WindGroup = "wind";
 
@@ -92,12 +113,16 @@ public static class WeatherParameters
     /// <summary>Group id of the sea surface temperature.</summary>
     public const string SeaTemperatureGroup = "sea.temperature";
 
+    /// <summary>Group id of the surface current: U, V, speed and direction.</summary>
+    public const string CurrentGroup = "current";
+
     private static readonly WeatherLevel TenMetres = WeatherLevel.AboveGround(Length.FromMetres(10));
 
     /// <summary>
     /// Every row of the table, in the order of design note §3.5, with the
-    /// wind-sea direction (NCEP's WVDIR, issue #1074) after the wind-sea height
-    /// and the sea surface temperature (issue #1227) last.
+    /// wind-sea direction (NCEP's WVDIR, issue #1074) after the wind-sea height,
+    /// then the sea surface temperature (issue #1227) and the surface current
+    /// (issue #1228).
     /// </summary>
     public static IReadOnlyList<WeatherParameterDefinition> All { get; } =
     [
@@ -130,6 +155,14 @@ public static class WeatherParameters
         new(SeaSurfaceTemperature, "Sea surface temperature", WeatherUnit.Kelvin, SeaTemperatureGroup, null,
             [new(10, 3, 0)],
             ["sea_surface_temperature", "sea_surface_foundation_temperature", "sea_surface_subskin_temperature", "sea_surface_skin_temperature"]),
+        new(CurrentU, "Current, eastward component", WeatherUnit.MetresPerSecond, CurrentGroup, null,
+            [new(10, 1, 2)], ["eastward_sea_water_velocity", "surface_eastward_sea_water_velocity"]),
+        new(CurrentV, "Current, northward component", WeatherUnit.MetresPerSecond, CurrentGroup, null,
+            [new(10, 1, 3)], ["northward_sea_water_velocity", "surface_northward_sea_water_velocity"]),
+        new(CurrentSpeed, "Current speed", WeatherUnit.MetresPerSecond, CurrentGroup, null,
+            [new(10, 1, 1)], ["sea_water_speed"]),
+        new(CurrentToDirection, "Current direction (to)", WeatherUnit.DegreesTrue, CurrentGroup, null,
+            [new(10, 1, 0)], ["sea_water_velocity_to_direction", "direction_of_sea_water_velocity"]),
     ];
 
     /// <summary>Finds the row with canonical id <paramref name="id"/>.</summary>

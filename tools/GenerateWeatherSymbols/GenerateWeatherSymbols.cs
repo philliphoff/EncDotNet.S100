@@ -3,7 +3,8 @@
 // Generates the weather symbols embedded in EncDotNet.S100.Datasets.Weather
 // (issues #1068 and #1072): the northern-hemisphere wind barbs WXBARBN005 to
 // WXBARBN200, their southern-hemisphere mirror images WXBARBS005 to
-// WXBARBS200, the calm circle WXCALM and the wave direction arrow WXWAVE01.
+// WXBARBS200, the calm circle WXCALM, the wave direction arrow WXWAVE01 and
+// the current arrows WXCURR1 to WXCURR9 (issue #1228).
 //
 //   dotnet run tools/GenerateWeatherSymbols/GenerateWeatherSymbols.cs \
 //       src/EncDotNet.S100.Datasets.Weather/Symbols
@@ -67,8 +68,10 @@ foreach (var barb in barbs)
 
 Write(WindBarb.CalmSymbol, CalmSvg());
 Write(WaveDirectionStyle.ArrowSymbol, WaveArrowSvg());
+for (int band = 1; band <= WeatherPalette.CurrentBandCount; band++)
+    Write(CurrentArrowStyle.SymbolName(band), CurrentArrowSvg(band));
 
-Console.WriteLine($"Wrote {2 * barbs.Length + 2} symbols to {output}.");
+Console.WriteLine($"Wrote {2 * barbs.Length + 2 + WeatherPalette.CurrentBandCount} symbols to {output}.");
 return 0;
 
 // The distance from the tip to the innermost feather's base.
@@ -149,6 +152,19 @@ string WaveArrowSvg()
         $"<path id=\"shaft\" class=\"sl f0 sWXWAVE\" stroke-width=\"0.45\" d=\"M 0 4.5 L 0 -2.6\"/>"
         + $"<path id=\"head\" class=\"sl fWXWAVE sWXWAVE\" stroke-width=\"{N(StrokeWidth)}\" d=\"M 0 -4.5 L 1.6 -1.7 L 0 -2.6 L -1.6 -1.7 Z\"/>";
     return Svg(WaveDirectionStyle.ArrowSymbol, "Wave direction: the arrow points the way the waves travel.", 5, body);
+}
+
+string CurrentArrowSvg(int band)
+{
+    // S-111's SCAROW outline (11 mm tall), filled with the band colour and
+    // outlined in WXCUROUT. Points up (north) at rotation 0: the direction is
+    // the way the water flows.
+    const string Outline = "M 0 5 L -0.5 5 L -1 -1.5 L -2 -1.5 L 0 -5 L 2 -1.5 L 1 -1.5 L 0.5 5 Z";
+    string token = WeatherPalette.CurrentToken(band);
+    string body =
+        $"<path id=\"fill\" class=\"f{token}\" d=\"{Outline}\"/>"
+        + $"<path id=\"outline\" class=\"sl f0 s{WeatherPalette.CurrentOutlineToken}\" stroke-width=\"0.32\" d=\"{Outline}\"/>";
+    return Svg(CurrentArrowStyle.SymbolName(band), $"Current, speed band {band}: the arrow points the way the water flows.", 5.5, body);
 }
 
 string Path(string id, string classes, string d) =>

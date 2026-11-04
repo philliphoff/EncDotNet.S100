@@ -1,7 +1,8 @@
 # Show wind and waves on the chart
 
-SoundCharts can draw forecast wind and waves, sea surface temperature, marine
-weather warnings and live observations over your charts. This page covers which files it reads,
+SoundCharts can draw forecast wind and waves, sea surface temperature,
+surface currents, marine weather warnings and live observations over your
+charts. This page covers which files it reads,
 where to get them, how to show them in SoundCharts and `s100`, and what isn't
 supported.
 
@@ -15,7 +16,7 @@ supported.
 
 | Data | Formats | What's drawn |
 |---|---|---|
-| Forecast and analysis grids | GRIB2, NetCDF-3 and NetCDF-4 with CF conventions | Wave height fill, wind barbs, isobars and a sea surface temperature fill; optionally a wind speed fill, wave arrows and isotherms |
+| Forecast and analysis grids | GRIB2, NetCDF-3 and NetCDF-4 with CF conventions | Wave height fill, wind barbs, isobars, a sea surface temperature fill and current arrows; optionally a wind speed fill, wave arrows and isotherms |
 | Marine weather warnings | CAP 1.2 XML (one alert or an Atom feed of them), NWS alerts GeoJSON | Warning areas, hatched by severity and labelled with the event, while they're in force |
 | Buoy and coastal station observations | NOAA NDBC, fetched live | A wind barb and wave height at each station |
 | Own-ship wind | NMEA 0183 from your instruments | True wind as a barb beside own ship, with water and air temperature |
@@ -35,9 +36,13 @@ drawn or sampled are:
 | Wind sea and swell height | WVHGT, SWELL (first partition) | `sea_surface_wind_wave_significant_height`, `sea_surface_swell_wave_significant_height` |
 | Mean sea level pressure | PRMSL, MSL | `air_pressure_at_mean_sea_level` |
 | Sea surface temperature | WTMP | `sea_surface_temperature`, `sea_surface_foundation_temperature`, `sea_surface_subskin_temperature`, `sea_surface_skin_temperature` |
+| Surface current: U, V, speed, direction | UOGRD, VOGRD, SPC, DIRC | `eastward_sea_water_velocity`, `northward_sea_water_velocity` (or their `surface_` forms), `sea_water_speed`, `sea_water_velocity_to_direction` |
 
-When a file has only U and V, wind speed and direction are worked out from
-them. Directions are the direction the wind or waves come from. Sea surface
+When a file has only U and V, wind or current speed and direction are worked
+out from them. Wind and wave directions are the direction they come from;
+current directions are the direction the water flows to, as in S-111.
+Currents are read at whatever depth the file gives them, which is the
+model's top layer: 0 m for HYCOM, about 0.5 m for Copernicus Marine. Sea surface
 temperature can be in kelvin, degrees Celsius or degrees Fahrenheit. GFS's
 surface temperature (TMP) isn't read as sea temperature, because over land
 it's the temperature of the ground. Other
@@ -120,6 +125,24 @@ made from its data. The Library can fetch some of these sources for you.
   Library asks ERDDAP for every second or third point, so that no download
   has more than 1500 points across or down.
 
+  Two more Library sources fetch surface currents for the map view:
+
+  | Source | Data | ERDDAP id |
+  |---|---|---|
+  | **Surface currents, altimetry — NOAA AOML ERDDAP** | Geostrophic currents from satellite altimetry, 0.2°, daily, the latest day | `miamicurrents` |
+  | **Surface currents, HF radar — NOAA ERDDAP** | Currents measured by the US coastal HF radars, hourly, the last day | `ucsdHfrE2` (US East Coast and Gulf of Mexico, 2 km, the default), `ucsdHfrE6` (the same coasts at 6 km, with a longer range), `ucsdHfrW6` (West Coast), `ucsdHfrH1` (Hawaiʻi), `ucsdHfrP6` (Puerto Rico) |
+
+  Geostrophic currents show the large ocean currents and eddies, such as the
+  Gulf Stream, but not wind-driven or tidal flow. HF radar sees the top metre
+  of the sea out to about 150 km from the radars, and its coverage changes
+  from hour to hour. Neither is a forecast.
+- **HYCOM.** The global HYCOM ocean model's 8-day current forecast is on
+  [ncss.hycom.org](https://ncss.hycom.org/thredds/catalogs/ESPC-D-V02_uv3z.xml).
+  Its NetCDF Subset Service cuts an area, time range and depth by URL, for
+  example
+  `…/ncss/grid/FMRC_ESPC-D-V02_uv3z/FMRC_ESPC-D-V02_uv3z_best.ncd?var=water_u&var=water_v&north=40&south=33&west=-76&east=-68&vertCoord=0&time_start=…&time_end=…&accept=netcdf4`.
+  Requests can take a minute.
+
 ### Warnings and observations
 
 - **CAP warnings.** The National Weather Service API returns active alerts,
@@ -141,7 +164,7 @@ made from its data. The Library can fetch some of these sources for you.
    The Datasets panel lists it, and the Layer stack lists the layers it
    draws; the wave height fill's entry shows a colour legend.
 2. Open **Display controls**. While a GRIB2 or NetCDF dataset is loaded, its
-   **Weather** section has four switches for every weather dataset:
+   **Weather** section has five switches for every weather dataset:
 
    | Switch | Default | Draws |
    |---|---|---|
@@ -149,6 +172,7 @@ made from its data. The Library can fetch some of these sources for you.
    | **Wind speed fill** | Off | Wind speed in Beaufort bands |
    | **Wave arrows** | Off | Arrows the way the waves travel, sized by height |
    | **Isotherms** | Off | Sea surface temperature every 2 °C |
+   | **Currents** | On | Surface current arrows, coloured by speed |
 
    The wave height and sea surface temperature fills and the wind barbs are
    always drawn; hide them for one dataset with its eye in the Datasets
@@ -160,6 +184,12 @@ made from its data. The Library can fetch some of these sources for you.
 4. Click the map to pick. Object information starts with "Weather model
    data, not for navigation." and lists each parameter at the nearest grid
    point and time step, in knots, metres and degrees Celsius.
+
+Current arrows point the way the water flows. They use S-111's nine speed
+bands, colours and sizes, from purple under 0.5 kn to red at 13 kn and
+faster, so a current reads the same as in an S-111 dataset. Where an S-111
+grid is loaded and shown, only its arrows are drawn inside its area; S-111
+station and mesh datasets don't hide model currents.
 
 The wave height and sea surface temperature fills are clipped to water when
 an S-101 chart is loaded.
@@ -241,7 +271,12 @@ See [info](cli.md#info), [render](cli.md#render) and
   several levels, and compression filters other than deflate and shuffle
   (such as Zstandard).
 - **BUFR** observations.
-- **Weather in route checks.** A route check doesn't consider wind or waves.
+- **Weather in route checks.** A route check doesn't consider wind, waves or
+  model currents.
+- **Ocean model servers.** The Library fetches currents only from ERDDAP.
+  NOAA RTOFS is published only as whole-globe files on a curvilinear grid,
+  and HYCOM's subset service isn't a Library source yet; download from it as
+  shown above.
 - **The S-100 weather products** S-412, S-413 and S-414 aren't published
   yet.
 

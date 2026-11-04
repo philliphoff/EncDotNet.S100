@@ -1,12 +1,14 @@
 using System.Globalization;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Pipelines.Vector;
 
 namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
 
 /// <summary>
 /// The inter-product rules shipped in PR-L2 (S-98 Edition 2.0.0), plus the
-/// SoundCharts weather clip <see cref="R_101_WX_B_ClipWeatherFillsToWater"/>. Three
+/// SoundCharts weather rules <see cref="R_101_WX_B_ClipWeatherFillsToWater"/>
+/// and <see cref="R_111_WX_B_HideModelCurrentsUnderS111"/>. Three
 /// rules (<see cref="R_101_102_A"/>, <see cref="R_104_A"/>,
 /// <see cref="R_111_A"/>) are pure plane-assignment properties already
 /// satisfied by the default plane table; they carry an identity
@@ -154,6 +156,26 @@ public static class S98DefaultRules
         Effect: ClipFlaggedSurfacesToWater);
 
     /// <summary>
+    /// R-111-WX-B (Level 2, SoundCharts) — when an S-111 dataset is loaded and
+    /// active, hide the model current arrows that ask for it
+    /// (<see cref="ArrowCoverageSubLayer.YieldsToS111"/>; the weather current
+    /// arrows, issue #1228) inside the S-111 dataset's
+    /// <see cref="CoveragePortrayalResult.CoverageExtent"/>, so the official
+    /// surface current forecast is the only one drawn there. Outside every
+    /// S-111 extent the model arrows stay. An S-111 dataset that reports no
+    /// extent (the station and mesh formats) hides nothing: its points don't
+    /// cover the area between them. Only arrows on a geographic grid are
+    /// masked, cell by cell on the cell's centre. Cites S-98 Ed.2.0.0 Annex A
+    /// §A-6.9.1 by analogy with <see cref="R_101_102_B_SuppressDepthFeatures"/>:
+    /// the more authoritative product replaces the other where it is displayed.
+    /// </summary>
+    public static readonly S98InteroperabilityRule R_111_WX_B_HideModelCurrentsUnderS111 = new(
+        RuleId: "R-111-WX-B",
+        SpecCitation: "S-98 Ed.2.0.0 Annex A §A-6.9.1 (by analogy with R-101-102-B)",
+        Condition: HasActiveProductSet("S-111"),
+        Effect: HideModelCurrentsUnderS111);
+
+    /// <summary>
     /// The default rule collection in evaluation order. Declaration order is
     /// the evaluation order; each rule's output is the next rule's input.
     /// </summary>
@@ -167,6 +189,7 @@ public static class S98DefaultRules
             R_101_104_B_ClipSurfaceToWater,
             R_101_WX_B_ClipWeatherFillsToWater,
             R_111_A,
+            R_111_WX_B_HideModelCurrentsUnderS111,
         };
 
     private static Func<S98RuleContext, bool> HasActiveProductSet(params string[] productSpecs)
@@ -352,6 +375,130 @@ public static class S98DefaultRules
             }
         }
         return result;
+    }
+
+    private static IReadOnlyList<SubLayerStackItem> HideModelCurrentsUnderS111(
+        IReadOnlyList<SubLayerStackItem> stack,
+        S98RuleContext context)
+    {
+        var extents = new List<GeographicBounds>();
+        var seen = new HashSet<CoveragePortrayalResult>(ReferenceEqualityComparer.Instance);
+        foreach (var item in stack)
+        {
+            if (item.Payload is CoverageStackPayload coverage
+                && seen.Add(coverage.Result)
+                && coverage.Result.CoverageExtent is { } extent
+                && IsProductItem(item, context, "S-111"))
+            {
+                extents.Add(extent);
+            }
+        }
+
+        if (extents.Count == 0)
+        {
+            return stack;
+        }
+
+        var result = new List<SubLayerStackItem>(stack.Count);
+        foreach (var item in stack)
+        {
+            if (item.Payload is CoverageStackPayload { SubLayer: ArrowCoverageSubLayer { YieldsToS111: true } arrows } coverage
+                && IsActiveItem(item, context)
+                && MaskInside(arrows.Coverage, extents) is { } masked)
+            {
+                result.Add(item with { Payload = coverage.WithSubLayer(arrows.WithCoverage(masked)) });
+            }
+            else
+            {
+                result.Add(item);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// A copy of <paramref name="layer"/> whose symbol value field is no-data
+    /// at every cell centred inside one of <paramref name="extents"/>, so no
+    /// arrow is drawn there; <see langword="null"/> when no cell is inside, or
+    /// the grid isn't geographic.
+    /// </summary>
+    internal static StyledCoverageLayer? MaskInside(StyledCoverageLayer layer, IReadOnlyList<GeographicBounds> extents)
+    {
+        if (layer.SymbolScheme is not { } scheme
+            || !string.Equals(layer.Georeferencer.CRS, "EPSG:4326", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var sample = layer.Coverage;
+        var field = scheme.ValueFieldName;
+        if (!sample.HasField(field))
+        {
+            return null;
+        }
+
+        var source = sample.GetValues(field);
+        float[]? masked = null;
+        int rows = sample.Metadata.NumRows;
+        int columns = sample.Metadata.NumColumns;
+        for (int row = 0; row < rows; row++)
+        {
+            for (int col = 0; col < columns; col++)
+            {
+                var (longitude, latitude) = layer.Georeferencer.ToNative(row, col);
+                if (!Inside(extents, longitude, latitude))
+                {
+                    continue;
+                }
+
+                masked ??= (float[])source.Clone();
+                masked[row * columns + col] = layer.NoDataValue;
+            }
+        }
+
+        if (masked is null)
+        {
+            return null;
+        }
+
+        // The masked field is stored, so it can't stay a computed one too.
+        var values = new Dictionary<string, float[]>(sample.Values, StringComparer.Ordinal) { [field] = masked };
+        var maskedSample = new SampledCoverage
+        {
+            Region = sample.Region,
+            Metadata = sample.Metadata,
+            Values = values,
+            ComputedFields = sample.ComputedFields.Where(f => !string.Equals(f.Name, field, StringComparison.Ordinal)).ToArray(),
+        };
+        return new StyledCoverageLayer
+        {
+            Coverage = maskedSample,
+            ColorScheme = layer.ColorScheme,
+            NoDataValue = layer.NoDataValue,
+            Georeferencer = layer.Georeferencer,
+            SymbolScheme = layer.SymbolScheme,
+        };
+    }
+
+    // Whether a point is inside one of the extents, whichever way round the
+    // grid counts longitude (−180 to 180, or 0 to 360).
+    private static bool Inside(IReadOnlyList<GeographicBounds> extents, double longitude, double latitude)
+    {
+        foreach (var extent in extents)
+        {
+            if (latitude < extent.MinLatitude || latitude > extent.MaxLatitude)
+            {
+                continue;
+            }
+
+            double width = extent.MaxLongitude - extent.MinLongitude;
+            double east = ((longitude - extent.MinLongitude) % 360 + 360) % 360;
+            if (east <= width)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     // Whether the item's source dataset is loaded and active, whatever its product.

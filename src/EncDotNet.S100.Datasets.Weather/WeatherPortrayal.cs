@@ -202,6 +202,7 @@ public static class WeatherPortrayal
             BaseSymbolScale = context?.SymbolScale ?? 1.0,
             SymbolProvider = WeatherCoverageStyle.Symbols.Provider,
             FallbackExtent = bounds,
+            YieldsToS111 = style is CurrentArrowStyle,
         };
     }
 
