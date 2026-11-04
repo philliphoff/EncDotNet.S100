@@ -34,6 +34,7 @@ internal static class GribShortNames
         (10, 0, 11) => "PERPW",
         (10, 0, 14) => "MWSDIR",
         (10, 0, 15) => "MWSPER",
+        (10, 3, 0) => "WTMP",
         _ => null,
     };
 

@@ -82,7 +82,7 @@ foreach (var source in WeatherCoverageSource.CreateForGroups(set))
 | `WeatherLevel` | The vertical level: surface, a height above ground, mean sea level or another level the reader describes. |
 | `WeatherCoverageSource` | An `ICoverageSource` over one parameter group. |
 | `WindComponents` | Wind speed and "from" direction from U and V. |
-| `WeatherCoverageStyle` | The base of the four styles: `WaveHeightStyle`, `WindBarbStyle`, `WindSpeedStyle` and `WaveDirectionStyle`. Each is an `ICoverageStyle` with its S-98 plane, priority, opacity and default visibility. |
+| `WeatherCoverageStyle` | The base of the seven styles: `SeaTemperatureStyle`, `WaveHeightStyle`, `WindSpeedStyle`, `SeaTemperatureIsothermStyle`, `PressureIsobarStyle`, `WindBarbStyle` and `WaveDirectionStyle`. Each is an `ICoverageStyle` with its S-98 plane, priority, opacity and default visibility. |
 | `WeatherPalette` | The styles' Day, Dusk and Night colours, as an `ApplicationPalette`. |
 | `WindBarb` | The pennants, full barbs and half barbs of a wind speed, rounded to 5 kn. |
 | `WeatherPortrayal` | Builds the coverage sub-layers of a source and its styles. |
@@ -108,6 +108,7 @@ lists several codes or names, they're alternatives in order of preference.
 | `wave.wind_sea.dir` | `wave.wind_sea` | any | 10,0,4 (NCEP's WVDIR) | `sea_surface_wind_wave_from_direction` | degrees true |
 | `wave.swell.hs` | `wave.swell` | any | 10,0,8 | `sea_surface_swell_wave_significant_height` | m |
 | `pressure.msl` | `pressure` | mean sea level | 0,3,1 (NCEP's PRMSL), 0,3,0 (ECMWF's `msl`; plain pressure, so only at mean sea level) | `air_pressure_at_mean_sea_level`, `air_pressure_at_sea_level` | Pa |
+| `sea.temperature` | `sea.temperature` | any | 10,3,0 (NCEP's WTMP) | `sea_surface_temperature`, `sea_surface_foundation_temperature`, `sea_surface_subskin_temperature`, `sea_surface_skin_temperature` | K |
 
 Directions are "from", in degrees clockwise from true north. Readers convert
 values to the stored unit; values cross the public API as `Speed`, `Length`
@@ -168,6 +169,8 @@ so the coverage pipeline and both renderers draw them with no weather code.
 | `WindSpeedStyle` | Colour fill in Beaufort bands, force 0 to 12 | `wind.speed` | — | Off |
 | `WaveDirectionStyle` | One arrow, half size below 1.5 m, growing to double size at 6 m | `wave.hs` | `wave.dir` + 180° | Off |
 | `PressureIsobarStyle` | Isobars every 4 hPa, labelled in hPa (`1012`) | `pressure.msl` | — | On |
+| `SeaTemperatureStyle` | Colour fill, 32 bands: below 0 °C, each degree to 30 °C, and 30 °C and higher | `sea.temperature` | — | On |
+| `SeaTemperatureIsothermStyle` | Isotherms every 2 °C, labelled in °C (`18°`) | `sea.temperature` | — | Off |
 
 - **Default and switches.** The Default column is `IsVisibleByDefault`.
   `IsDrawnWith(display)` applies the map-wide switches in
@@ -180,7 +183,9 @@ so the coverage pipeline and both renderers draw them with no weather code.
 - **Knots.** `wind.speed` stays in m/s, its stored unit. The barb and
   Beaufort bands are defined in knots and their limits converted to m/s, so
   the grid isn't copied into knots and sampling still reports m/s. Legend
-  labels are in knots.
+  labels are in knots. In the same way `sea.temperature` stays in kelvin, its
+  bands and isotherms are defined in degrees Celsius, and its labels and pick
+  values are in degrees Celsius.
 - **Direction.** The barb symbols are drawn with the staff running up from
   the station, and the renderers rotate symbols clockwise by the rotation
   field, so a barb's staff points into the wind: a westerly (270°) points
@@ -194,8 +199,9 @@ so the coverage pipeline and both renderers draw them with no weather code.
 - **Layer order.** Fills go on the `OnDemandSurface` plane at priority 0,
   under the S-104 surface, at `Opacity` 0.5. Barbs and arrows go on the
   `DynamicArrows` plane at priority 20, above the S-111 arrows (10). Isobars
-  go on `OtherChartOverlays` at priority 90, under the observations (100).
-- **Land.** The wave height fill sets `ClipToWater`, so when an S-101 chart
+  and isotherms go on `OtherChartOverlays` at priority 90, under the
+  observations (100).
+- **Land.** The wave height and sea temperature fills set `ClipToWater`, so when an S-101 chart
   is loaded the S-98 rule `R-101-WX-B` clips it to water with the chart's
   `LandArea` geometry, as `R-101-104-B` clips the S-104 surface. The wind
   fill and isobars aren't clipped.
@@ -209,7 +215,11 @@ so the coverage pipeline and both renderers draw them with no weather code.
 - **Colours.** `WeatherPalette` keeps clear of the S-101 depth (blue,
   green), danger (red, amber) and mariner (magenta) hues and the S-104 teal:
   wave height is a violet ramp, wind speed a low-chroma sepia and the
-  isobars a neutral grey-blue. Night
+  isobars a neutral grey-blue. Sea temperature is the exception: it's
+  diverging, as temperature maps are, from slate blue for cold water through
+  near white at 15 °C to pale yellow, orange and brick for warm water, so
+  each degree of a front is a different colour; like every fill it's drawn
+  at half opacity. The isotherms are a dark neutral grey. Night
   colours stay under relative luminance 0.2.
 - **Symbols.** The 40 northern barbs (`WXBARBN005` to `WXBARBN200`), their
   40 mirrored southern barbs (`WXBARBS005` to `WXBARBS200`), the calm circle

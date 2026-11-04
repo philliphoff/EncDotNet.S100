@@ -140,6 +140,17 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         set => _state.SetLayerVisible(WaveDirectionStyle.Key, value);
     }
 
+    /// <summary>
+    /// The Weather section's Isotherms switch: sea surface temperature
+    /// isotherms on every weather dataset with sea temperature. Off by
+    /// default (<see cref="SeaTemperatureIsothermStyle"/>).
+    /// </summary>
+    public bool IsIsothermsVisible
+    {
+        get => GetWeatherLayer(SeaTemperatureIsothermStyle.Key);
+        set => _state.SetLayerVisible(SeaTemperatureIsothermStyle.Key, value);
+    }
+
     // The switch, or the style's own default when the mariner hasn't set it.
     private bool GetWeatherLayer(string layerKey) =>
         _state.GetLayerVisible(layerKey) ?? WeatherDefaults[layerKey];
@@ -246,6 +257,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsIsobarsVisible));
         OnPropertyChanged(nameof(IsWindSpeedFillVisible));
         OnPropertyChanged(nameof(IsWaveArrowsVisible));
+        OnPropertyChanged(nameof(IsIsothermsVisible));
         OnPropertyChanged(nameof(ActiveCategory));
         OnPropertyChanged(nameof(IsDisplayBase));
         OnPropertyChanged(nameof(IsStandard));

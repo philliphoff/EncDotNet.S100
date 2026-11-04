@@ -1,7 +1,7 @@
 # Show wind and waves on the chart
 
-SoundCharts can draw forecast wind and waves, marine weather warnings and
-live observations over your charts. This page covers which files it reads,
+SoundCharts can draw forecast wind and waves, sea surface temperature, marine
+weather warnings and live observations over your charts. This page covers which files it reads,
 where to get them, how to show them in SoundCharts and `s100`, and what isn't
 supported.
 
@@ -15,7 +15,7 @@ supported.
 
 | Data | Formats | What's drawn |
 |---|---|---|
-| Forecast and analysis grids | GRIB2, NetCDF-3 and NetCDF-4 with CF conventions | Wave height fill, wind barbs and isobars; optionally a wind speed fill and wave arrows |
+| Forecast and analysis grids | GRIB2, NetCDF-3 and NetCDF-4 with CF conventions | Wave height fill, wind barbs, isobars and a sea surface temperature fill; optionally a wind speed fill, wave arrows and isotherms |
 | Marine weather warnings | CAP 1.2 XML (one alert or an Atom feed of them), NWS alerts GeoJSON | Warning areas, hatched by severity and labelled with the event, while they're in force |
 | Buoy and coastal station observations | NOAA NDBC, fetched live | A wind barb and wave height at each station |
 | Own-ship wind | NMEA 0183 from your instruments | True wind as a barb beside own ship, with water and air temperature |
@@ -34,9 +34,13 @@ drawn or sampled are:
 | Wave period | PERPW, MWP, PP1D | `sea_surface_wave_period_at_variance_spectral_density_maximum`, `sea_surface_wave_mean_period` |
 | Wind sea and swell height | WVHGT, SWELL (first partition) | `sea_surface_wind_wave_significant_height`, `sea_surface_swell_wave_significant_height` |
 | Mean sea level pressure | PRMSL, MSL | `air_pressure_at_mean_sea_level` |
+| Sea surface temperature | WTMP | `sea_surface_temperature`, `sea_surface_foundation_temperature`, `sea_surface_subskin_temperature`, `sea_surface_skin_temperature` |
 
 When a file has only U and V, wind speed and direction are worked out from
-them. Directions are the direction the wind or waves come from. Other
+them. Directions are the direction the wind or waves come from. Sea surface
+temperature can be in kelvin, degrees Celsius or degrees Fahrenheit. GFS's
+surface temperature (TMP) isn't read as sea temperature, because over land
+it's the temperature of the ground. Other
 parameters are listed by `s100 info` but not drawn.
 
 GRIB2 files can hold many messages, and you can append several files, such as
@@ -100,7 +104,21 @@ made from its data. The Library can fetch some of these sources for you.
   and time range; the wave variables `VHM0`, `VMDR` and `VTPK` are drawn.
 - **NOAA ERDDAP.** ERDDAP servers, such as NOAA CoastWatch's, subset gridded
   datasets by URL. Choose the `.nc` file type, which is NetCDF-3, and a
-  dataset whose variables have CF standard names.
+  dataset whose variables have CF standard names. The Library's **Sea surface
+  temperature — NOAA ERDDAP** source fetches the latest daily analysis for
+  the map view from one of these CoastWatch datasets:
+
+  | Dataset | Resolution | ERDDAP id |
+  |---|---|---|
+  | NASA JPL MUR SST (default) | 1 km | `jplMURSST41` |
+  | NOAA OISST v2.1, near real time | 0.25° | `ncdcOisst21NrtAgg_LonPM180` |
+  | NOAA Geo-polar Blended SST | 5 km | `nesdisBLENDEDsstDNDaily` |
+
+  These are analyses of the day before, not forecasts. CoastWatch serves the
+  Blended analysis from its central ERDDAP at `coastwatch.noaa.gov`, so it's
+  unavailable when that server is. Over a large area the
+  Library asks ERDDAP for every second or third point, so that no download
+  has more than 1500 points across or down.
 
 ### Warnings and observations
 
@@ -124,23 +142,28 @@ made from its data. The Library can fetch some of these sources for you.
    Layer stack lists the layers it draws, and the wave height fill's entry
    shows a colour legend.
 2. Open **Display controls**. While a GRIB2 or NetCDF dataset is loaded, its
-   **Weather** section has three switches for every weather dataset:
+   **Weather** section has four switches for every weather dataset:
 
    | Switch | Default | Draws |
    |---|---|---|
    | **Isobars** | On | Mean sea level pressure every 4 hPa |
    | **Wind speed fill** | Off | Wind speed in Beaufort bands |
    | **Wave arrows** | Off | Arrows the way the waves travel, sized by height |
+   | **Isotherms** | Off | Sea surface temperature every 2 °C |
 
-   The wave height fill and wind barbs are always drawn; hide them for one
-   dataset with its eye in the Datasets panel.
+   The wave height and sea surface temperature fills and the wind barbs are
+   always drawn; hide them for one dataset with its eye in the Datasets
+   panel. The sea surface temperature fill has a band for each degree from
+   0 °C to 30 °C, so fronts such as the edge of the Gulf Stream show as
+   closely spaced bands.
 3. Use the **Timeline** to step through the forecast. Each time step is a
    valid time of the run.
 4. Click the map to pick. Object information starts with "Weather model
    data, not for navigation." and lists each parameter at the nearest grid
-   point and time step, in knots and metres.
+   point and time step, in knots, metres and degrees Celsius.
 
-The wave height fill is clipped to water when an S-101 chart is loaded.
+The wave height and sea surface temperature fills are clipped to water when
+an S-101 chart is loaded.
 Wind barbs south of the equator are drawn mirrored, as the convention is.
 
 ## Show warnings

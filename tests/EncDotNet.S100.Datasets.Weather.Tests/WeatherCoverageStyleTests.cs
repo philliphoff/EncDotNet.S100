@@ -120,10 +120,97 @@ public class WeatherCoverageStyleTests
         Assert.Equal(scale.Value, band.ScaleFor(metres), 3);
     }
 
+    [Theory]
+    [InlineData(-1.9, 1)]
+    [InlineData(-0.01, 1)]
+    [InlineData(0.0, 2)]
+    [InlineData(15.5, 17)]
+    [InlineData(26.4, 28)]
+    [InlineData(29.99, 31)]
+    [InlineData(30.0, 32)]
+    [InlineData(34.0, 32)]
+    public void Sea_temperature_resolves_to_its_1_degree_band(double celsius, int band)
+    {
+        var style = new SeaTemperatureStyle();
+        var scheme = style.ResolveColorScheme(MarinerSettings.Default);
+
+        Assert.Equal(WeatherParameters.SeaSurfaceTemperature, scheme.FieldName);
+        Assert.Equal(32, scheme.Bands.Count);
+        Assert.Equal(
+            WeatherPalette.Palette.Resolve(WeatherPalette.SeaTemperatureToken(band), PaletteType.Day).ToHex(),
+            scheme.Resolve((float)(celsius + SeaTemperatureStyle.CelsiusZero)));
+    }
+
+    [Fact]
+    public void Sea_temperature_bands_are_labelled_in_celsius()
+    {
+        Assert.Equal("below 0 °C", SeaTemperatureStyle.Bands[0].Label);
+        Assert.Equal("15–16 °C", SeaTemperatureStyle.Bands[16].Label);
+        Assert.Equal("30 °C and higher", SeaTemperatureStyle.Bands[^1].Label);
+        Assert.Null(new SeaTemperatureStyle().ResolveColorScheme(MarinerSettings.Default).Resolve(float.NaN));
+    }
+
+    [Fact]
+    public void Sea_temperature_ramp_is_lightest_in_the_middle_by_day_and_darkest_at_night()
+    {
+        var tokens = Enumerable.Range(1, WeatherPalette.SeaTemperatureBandCount).Select(WeatherPalette.SeaTemperatureToken).ToArray();
+        double Luminance(string token, Func<PaletteColors, RgbaColor> pick) => RelativeLuminance(pick(WeatherPalette.Palette.Tokens[token]));
+
+        var day = tokens.Select(t => Luminance(t, c => c.Day)).ToArray();
+        var dusk = tokens.Select(t => Luminance(t, c => c.Dusk)).ToArray();
+        Assert.True(day[15] > day[0] && day[15] > day[^1], "Day is lightest near 15 °C.");
+        Assert.True(dusk[15] < dusk[0] && dusk[15] < dusk[^1], "Dusk is darkest near 15 °C.");
+        Assert.Equal(day.Length, day.Distinct().Count());
+    }
+
+    [Fact]
+    public void Isotherms_are_every_2_degrees_in_kelvin_labelled_in_celsius_and_off_by_default()
+    {
+        var style = new SeaTemperatureIsothermStyle();
+        var contours = style.Contours;
+
+        Assert.False(style.IsVisibleByDefault);
+        Assert.Equal(WeatherLayerKind.Isolines, style.Kind);
+        Assert.Equal(S98DisplayPlane.OtherChartOverlays, style.Plane);
+        Assert.Equal(WeatherParameters.SeaSurfaceTemperature, style.ValueFieldName);
+        Assert.Equal(20, contours.Count);
+        Assert.Equal(271.15, contours[0].Value, 6);
+        Assert.Equal(309.15, contours[^1].Value, 6);
+        Assert.All(contours, c => Assert.Equal("K", c.Unit));
+        Assert.Equal("18°", style.FormatContourLabel(contours.Single(c => Math.Abs(c.Value - 291.15) < 1e-6)));
+        Assert.Equal("-2°", style.FormatContourLabel(contours[0]));
+        Assert.Equal(WeatherPalette.Palette.Resolve(WeatherPalette.IsothermInkToken, PaletteType.Day).ToHex(), contours[0].Color);
+    }
+
+    [Fact]
+    public async Task Portrayal_draws_sea_temperature_as_a_clipped_fill_with_a_celsius_legend()
+    {
+        const int rows = 4, columns = 6;
+        var values = new float[rows * columns];
+        for (int i = 0; i < values.Length; i++)
+            values[i] = 288.15f + i * 0.5f; // 15 °C rising half a degree a node
+        var sst = TestGrids.Parameter(WeatherParameters.SeaSurfaceTemperature, (0, values));
+        var set = new WeatherGridSet(TestGrids.Origin, TestGrids.Regular(rows, columns), [sst]);
+        var source = new WeatherCoverageSource(set, WeatherParameters.SeaTemperatureGroup, [sst]);
+
+        Assert.Equal(
+            [SeaTemperatureStyle.Key, SeaTemperatureIsothermStyle.Key],
+            WeatherCoverageStyle.CreateFor(source).Select(s => s.LayerKey));
+
+        var result = await WeatherPortrayal.BuildAsync(source, WeatherCoverageStyle.CreateFor(source), "sst.nc", cancellationToken: Ct);
+
+        var fill = Assert.IsType<GridCoverageSubLayer>(result.SubLayers[0]);
+        Assert.True(fill.ClipToWater);
+        Assert.Equal(S98DisplayPlane.OnDemandSurface, fill.Plane);
+        Assert.Equal(SeaTemperatureStyle.Bands.Select(b => b.Label), fill.Legend!.Select(e => e.Label));
+        var isotherms = Assert.IsType<IsolineCoverageSubLayer>(result.SubLayers[1]);
+        Assert.Equal(["16°", "18°", "20°", "22°", "24°", "26°"], isotherms.Isolines.Select(l => l.Label).Distinct().Order(StringComparer.Ordinal));
+    }
+
     [Fact]
     public void Fills_sit_under_S104_on_the_on_demand_surface_at_half_opacity()
     {
-        foreach (WeatherCoverageStyle style in new WeatherCoverageStyle[] { new WaveHeightStyle(), new WindSpeedStyle() })
+        foreach (WeatherCoverageStyle style in new WeatherCoverageStyle[] { new WaveHeightStyle(), new WindSpeedStyle(), new SeaTemperatureStyle() })
         {
             Assert.Equal(WeatherLayerKind.Fill, style.Kind);
             Assert.Equal(S98DisplayPlane.OnDemandSurface, style.Plane);
@@ -181,11 +268,12 @@ public class WeatherCoverageStyleTests
     }
 
     [Fact]
-    public void Only_the_wave_height_fill_is_clipped_to_water()
+    public void Only_the_sea_fills_are_clipped_to_water()
     {
         Assert.True(new WaveHeightStyle().ClipToWater);
+        Assert.True(new SeaTemperatureStyle().ClipToWater);
         Assert.All(
-            WeatherCoverageStyle.CreateAll().Where(s => s is not WaveHeightStyle),
+            WeatherCoverageStyle.CreateAll().Where(s => s is not (WaveHeightStyle or SeaTemperatureStyle)),
             style => Assert.False(style.ClipToWater, style.LayerKey));
     }
 
@@ -332,7 +420,7 @@ public class WeatherCoverageStyleTests
     [Fact]
     public void Night_is_dimmer_than_dusk_for_every_symbol_ink()
     {
-        foreach (var token in new[] { WeatherPalette.BarbInkToken, WeatherPalette.WaveArrowToken, WeatherPalette.IsobarInkToken })
+        foreach (var token in new[] { WeatherPalette.BarbInkToken, WeatherPalette.WaveArrowToken, WeatherPalette.IsobarInkToken, WeatherPalette.IsothermInkToken })
         {
             var colors = WeatherPalette.Palette.Tokens[token];
             Assert.True(RelativeLuminance(colors.Night) < RelativeLuminance(colors.Dusk), token);
@@ -343,14 +431,14 @@ public class WeatherCoverageStyleTests
     public void Palette_tokens_are_prefixed_so_they_never_resolve_against_S101_colours()
     {
         Assert.All(WeatherPalette.Palette.Tokens.Keys, token => Assert.StartsWith("WX", token, StringComparison.Ordinal));
-        Assert.Equal(4 + 15 + 13, WeatherPalette.Palette.Tokens.Count);
+        Assert.Equal(5 + 15 + 13 + 32, WeatherPalette.Palette.Tokens.Count);
     }
 
     [Fact]
     public void Content_scope_carries_the_style_version()
     {
         Assert.Equal(ApplicationContentScope.For("Weather", WeatherCoverageStyle.StyleVersion), WeatherCoverageStyle.ContentScope);
-        Assert.StartsWith("app:Weather@2|toolkit:", WeatherCoverageStyle.ContentScope, StringComparison.Ordinal);
+        Assert.StartsWith("app:Weather@3|toolkit:", WeatherCoverageStyle.ContentScope, StringComparison.Ordinal);
     }
 
     [Fact]

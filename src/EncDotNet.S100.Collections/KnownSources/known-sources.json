@@ -301,6 +301,36 @@
       }
     },
     {
+      "id": "noaa-erddap-sst",
+      "name": "Sea surface temperature — NOAA ERDDAP",
+      "provider": "NOAA CoastWatch West Coast Node",
+      "region": ["Worldwide"],
+      "format": "weather",
+      "catalogUri": "https://coastwatch.pfeg.noaa.gov/erddap/",
+      "homepage": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/jplMURSST41.html",
+      "coverage": "boundingBoxes",
+      "editions": false,
+      "sizes": false,
+      "note": "Daily sea surface temperature analyses on ERDDAP, fetched as a NetCDF subset of the map view for the latest day: NASA JPL MUR (1 km, thinned out over large areas), NOAA OISST (0.25°) and the NOAA Geo-polar Blended analysis (5 km, served from NOAA CoastWatch's central ERDDAP). Analyses, not forecasts.",
+      "product": "NetCDF",
+      "notForNavigation": true,
+      "licence": "Public domain (NOAA); free and open (GHRSST, JPL PO.DAAC)",
+      "attribution": "NASA JPL MUR SST v4.1, NOAA NCEI OISST v2.1 and NOAA NESDIS Geo-polar Blended SST, via NOAA CoastWatch ERDDAP",
+      "weather": {
+        "service": "erddapGriddap",
+        "model": "erddap-sst",
+        "modelName": "Sea surface temperature (ERDDAP)",
+        "stepHours": 24,
+        "maxHours": 24,
+        "defaultHours": 24,
+        "datasets": [
+          { "id": "jplMURSST41", "name": "NASA JPL MUR SST, 1 km, daily", "variables": ["analysed_sst"], "default": true },
+          { "id": "ncdcOisst21NrtAgg_LonPM180", "name": "NOAA OISST v2.1, 0.25°, daily (near real time)", "variables": ["sst"] },
+          { "id": "nesdisBLENDEDsstDNDaily", "name": "NOAA Geo-polar Blended SST, 5 km, daily", "variables": ["analysed_sst"] }
+        ]
+      }
+    },
+    {
       "id": "ccg-s124-secom",
       "name": "S-124 Navigational warnings — Canada",
       "provider": "Canadian Coast Guard",

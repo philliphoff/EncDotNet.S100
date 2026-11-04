@@ -5,9 +5,10 @@ namespace EncDotNet.S100.Datasets.Weather;
 
 /// <summary>
 /// The colours of the weather styles: the band fills of
-/// <see cref="WaveHeightStyle"/> and <see cref="WindSpeedStyle"/>, and the
-/// inks of the wind barbs, wave arrows and pressure isobars, each with a Day,
-/// Dusk and Night value.
+/// <see cref="WaveHeightStyle"/>, <see cref="WindSpeedStyle"/> and
+/// <see cref="SeaTemperatureStyle"/>, and the inks of the wind barbs, wave
+/// arrows, pressure isobars and isotherms, each with a Day, Dusk and Night
+/// value.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,7 +19,17 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// (OKLCH hue 295); wind speed, off by default, is a low-chroma sepia ramp
 /// (OKLCH hue 55), well short of the saturated amber of a danger colour.
 /// Both are sequential: in Day the higher bands are darker, in Dusk and
-/// Night they are lighter against the dark chart. The fills are drawn at
+/// Night they are lighter against the dark chart. Sea surface temperature is
+/// diverging, as temperature maps conventionally are: slate blue (OKLCH hue
+/// 262) for the coldest water, paling to near white at 15 °C, then pale
+/// yellow (hue 98) through orange to brick (hue 30) for the warmest. The warm
+/// side turns in hue as well as lightness, so each degree between 15 °C and
+/// 30 °C, where the Gulf Stream and other fronts mariners look for lie, is a
+/// visibly different colour. Lightness runs from the ends to the middle:
+/// lightest at 15 °C by day, darkest at dusk and night. This ramp is the
+/// exception to the hue rule above: SST is read by its colour convention,
+/// and the fill is drawn at half opacity, so its orange and brick don't
+/// stand alone as danger colours. The fills are drawn at
 /// <see cref="WeatherCoverageStyle.FillOpacity"/>, so the chart under them
 /// stays readable.
 /// </para>
@@ -46,6 +57,12 @@ public static class WeatherPalette
 
     /// <summary>The colour token prefix of the Beaufort wind speed bands, followed by the force: <c>WXBF00</c> to <c>WXBF12</c>.</summary>
     public const string WindSpeedTokenPrefix = "WXBF";
+
+    /// <summary>The colour token prefix of the sea surface temperature bands, followed by the band number: <c>WXSST01</c> to <c>WXSST32</c>.</summary>
+    public const string SeaTemperatureTokenPrefix = "WXSST";
+
+    /// <summary>Colour token of the isotherms and their labels (<see cref="SeaTemperatureIsothermStyle"/>).</summary>
+    public const string IsothermInkToken = "WXISOTH";
 
     // Day, Dusk, Night for each wave height band (WXHS01 lowest).
     private static readonly (string Day, string Dusk, string Night)[] WaveHeightColors =
@@ -85,11 +102,50 @@ public static class WeatherPalette
         ("#683B18", "#E9B999", "#6E513D"),
     ];
 
+    // Day, Dusk, Night for each sea surface temperature band (WXSST01 coldest).
+    private static readonly (string Day, string Dusk, string Night)[] SeaTemperatureColors =
+    [
+        ("#345FB2", "#81AAF7", "#3D5787"),
+        ("#3B69B8", "#78A3EA", "#38537F"),
+        ("#4273BD", "#709CDE", "#324E77"),
+        ("#4A7DC3", "#6995D2", "#2D496F"),
+        ("#5387C9", "#618EC6", "#294467"),
+        ("#5D91CE", "#5A86BA", "#243F5F"),
+        ("#679AD3", "#547FAE", "#203B57"),
+        ("#71A4D8", "#4E78A3", "#1C3650"),
+        ("#7CAEDD", "#487197", "#183148"),
+        ("#87B7E2", "#43698B", "#152C40"),
+        ("#93C0E6", "#3E6280", "#122839"),
+        ("#A0CAEB", "#3A5B74", "#0F2332"),
+        ("#ADD3EF", "#365469", "#0D1E2A"),
+        ("#BBDCF3", "#334C5E", "#0B1A23"),
+        ("#C9E5F7", "#304553", "#0A151C"),
+        ("#D9EDFA", "#2E3E47", "#091015"),
+        ("#F6EDCA", "#413B25", "#130F04"),
+        ("#F3E1B4", "#4D4122", "#1A1302"),
+        ("#F0D59F", "#59471E", "#211600"),
+        ("#EDC88A", "#674C19", "#281900"),
+        ("#EBBB76", "#745115", "#2F1D00"),
+        ("#E8AE64", "#825511", "#372000"),
+        ("#E6A052", "#915A10", "#3F2300"),
+        ("#E29242", "#9F5E13", "#472601"),
+        ("#DE8434", "#AC621B", "#502801"),
+        ("#D97728", "#BA6726", "#5A2A01"),
+        ("#D2691F", "#C76C32", "#642C01"),
+        ("#CB5C1A", "#D37140", "#6C2E0A"),
+        ("#C25019", "#DE774E", "#733217"),
+        ("#B9441B", "#E97E5D", "#7A3721"),
+        ("#AF381D", "#F3856C", "#813B2B"),
+        ("#A52B1E", "#FD8C7B", "#874035"),
+    ];
+
     /// <summary>
     /// The weather colours: <see cref="BarbInkToken"/>, <see cref="WaveArrowToken"/>,
     /// <see cref="IsobarInkToken"/>, <see cref="IsobarHaloToken"/>,
-    /// the wave height bands (<see cref="WaveHeightToken"/>) and the Beaufort
-    /// bands (<see cref="WindSpeedToken"/>).
+    /// <see cref="IsothermInkToken"/>, the wave height bands
+    /// (<see cref="WaveHeightToken"/>), the Beaufort bands
+    /// (<see cref="WindSpeedToken"/>) and the sea surface temperature bands
+    /// (<see cref="SeaTemperatureToken"/>).
     /// </summary>
     public static ApplicationPalette Palette { get; } = new("Weather", BuildTokens());
 
@@ -98,6 +154,9 @@ public static class WeatherPalette
 
     /// <summary>The number of Beaufort bands, force 0 to 12: 13.</summary>
     public static int WindSpeedBandCount => WindSpeedColors.Length;
+
+    /// <summary>The number of sea surface temperature bands: 32.</summary>
+    public static int SeaTemperatureBandCount => SeaTemperatureColors.Length;
 
     /// <summary>The colour token of wave height band <paramref name="band"/>, 1 (lowest) to <see cref="WaveHeightBandCount"/>.</summary>
     /// <param name="band">The band number.</param>
@@ -117,6 +176,15 @@ public static class WeatherPalette
         return WindSpeedTokenPrefix + force.ToString("00", CultureInfo.InvariantCulture);
     }
 
+    /// <summary>The colour token of sea surface temperature band <paramref name="band"/>, 1 (coldest) to <see cref="SeaTemperatureBandCount"/>.</summary>
+    /// <param name="band">The band number.</param>
+    public static string SeaTemperatureToken(int band)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(band, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(band, SeaTemperatureBandCount);
+        return SeaTemperatureTokenPrefix + band.ToString("00", CultureInfo.InvariantCulture);
+    }
+
     private static Dictionary<string, PaletteColors> BuildTokens()
     {
         var tokens = new Dictionary<string, PaletteColors>(StringComparer.Ordinal)
@@ -129,6 +197,9 @@ public static class WeatherPalette
             // the barbs stay on top visually; the halo is the chart's paper.
             [IsobarInkToken] = PaletteColors.FromHex(day: "#4A5160", dusk: "#BFC4CE", night: "#555A63"),
             [IsobarHaloToken] = PaletteColors.FromHex(day: "#FFFFFF", dusk: "#3B4250", night: "#0B0E14"),
+            // A dark neutral grey for the isotherms, so they read over both
+            // ends of the temperature fill; it shares the isobar label halo.
+            [IsothermInkToken] = PaletteColors.FromHex(day: "#3A3D44", dusk: "#E2E4E8", night: "#6A6D74"),
         };
 
         for (int i = 0; i < WaveHeightColors.Length; i++)
@@ -141,6 +212,12 @@ public static class WeatherPalette
         {
             var (day, dusk, night) = WindSpeedColors[i];
             tokens[WindSpeedToken(i)] = PaletteColors.FromHex(day, dusk, night);
+        }
+
+        for (int i = 0; i < SeaTemperatureColors.Length; i++)
+        {
+            var (day, dusk, night) = SeaTemperatureColors[i];
+            tokens[SeaTemperatureToken(i + 1)] = PaletteColors.FromHex(day, dusk, night);
         }
 
         return tokens;

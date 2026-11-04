@@ -338,7 +338,8 @@ public abstract class WeatherGridProcessorBase :
     /// <see cref="PickAttribute.NavigationNotice"/> row), then the
     /// model run and valid time, then each value with its unit: wave heights
     /// in metres, wind speed in knots (raw value in m/s), directions in
-    /// degrees ("from"), periods in seconds.
+    /// degrees ("from"), periods in seconds, sea surface temperature in
+    /// degrees Celsius (raw value in kelvin).
     /// </summary>
     /// <param name="latitude">Latitude, WGS-84 degrees.</param>
     /// <param name="longitude">Longitude, WGS-84 degrees.</param>
@@ -450,7 +451,9 @@ public abstract class WeatherGridProcessorBase :
             WeatherParameters.WindU => new() { Code = field.Name, Name = "Wind, eastward component", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0.0#")} m/s") },
             WeatherParameters.WindV => new() { Code = field.Name, Name = "Wind, northward component", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0.0#")} m/s") },
             WeatherParameters.PressureMsl => new() { Code = field.Name, Name = "Mean sea level pressure", RawValue = raw, DisplayValue = Display(x => $"{Number(x / 100, "0.#")} hPa") },
-            // The knots copy of the wind speed is already in the speed's display value.
+            WeatherParameters.SeaSurfaceTemperature => new() { Code = field.Name, Name = "Sea surface temperature", RawValue = raw, DisplayValue = Display(x => $"{Number(SeaTemperatureStyle.ToCelsius(x), "0.0")} °C") },
+            // The knots copy of the wind speed and the Celsius copy of the
+            // sea temperature are already in their display values.
             _ => null,
         };
     }

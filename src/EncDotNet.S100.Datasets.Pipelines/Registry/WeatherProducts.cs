@@ -28,6 +28,8 @@ public static class WeatherProducts
             [Weather.WindBarbStyle.Key] = S98DisplayPlane.DynamicArrows,
             [Weather.WaveDirectionStyle.Key] = S98DisplayPlane.DynamicArrows,
             [Weather.PressureIsobarStyle.Key] = S98DisplayPlane.OtherChartOverlays,
+            [Weather.SeaTemperatureStyle.Key] = S98DisplayPlane.OnDemandSurface,
+            [Weather.SeaTemperatureIsothermStyle.Key] = S98DisplayPlane.OtherChartOverlays,
             [ProductRegistration.AnyLayerKind] = S98DisplayPlane.OnDemandSurface,
         };
 

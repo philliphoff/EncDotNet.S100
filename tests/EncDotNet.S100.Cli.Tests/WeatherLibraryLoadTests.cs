@@ -270,6 +270,7 @@ public sealed class WeatherLibraryLoadTests : IDisposable
     [InlineData("noaa-aws-gfs")]
     [InlineData("nws-marine-alerts")]
     [InlineData("noaa-erddap-ww3")]
+    [InlineData("noaa-erddap-sst")]
     public async Task Live_each_source_adds_downloads_and_opens(string id)
     {
         Assert.SkipUnless(Environment.GetEnvironmentVariable(LiveVariable) == "1", $"Set {LiveVariable}=1 to reach the live weather services.");

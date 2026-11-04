@@ -68,13 +68,14 @@ public sealed class WeatherSourceTests : IDisposable
         var weather = KnownCatalogueSources.All.Where(s => s.Format == KnownCatalogueFormat.Weather).ToArray();
 
         Assert.Equal(
-            ["noaa-nomads-gfswave", "noaa-nomads-gfs", "noaa-aws-gfswave", "noaa-aws-gfs", "nws-marine-alerts", "noaa-erddap-ww3"],
+            ["noaa-nomads-gfswave", "noaa-nomads-gfs", "noaa-aws-gfswave", "noaa-aws-gfs", "nws-marine-alerts", "noaa-erddap-ww3", "noaa-erddap-sst"],
             weather.Select(s => s.Id));
         Assert.All(weather, s =>
         {
             Assert.NotNull(s.Weather);
             Assert.True(s.Weather!.IsUsable);
-            Assert.Equal("Public domain", s.Licence);
+            // The SST analyses include GHRSST and JPL data, free and open but not NOAA's own.
+            Assert.StartsWith("Public domain", s.Licence, StringComparison.Ordinal);
             Assert.False(string.IsNullOrEmpty(s.Attribution));
             Assert.True(s.NotForNavigation);
             Assert.Equal(LibrarySourceKind.Weather, LibrarySourceKinds.Of(s.Format));
@@ -85,6 +86,20 @@ public sealed class WeatherSourceTests : IDisposable
         Assert.Equal(WeatherServiceKind.ErddapGriddap, Known("noaa-erddap-ww3").Weather!.Kind);
         Assert.Equal(["HTSGW", "PERPW", "DIRPW", "UGRD", "VGRD"],
             Known("noaa-nomads-gfswave").Weather!.Parameters.Where(p => p.Default).Select(p => p.Id));
+    }
+
+    [Fact]
+    public void The_SST_source_offers_three_daily_analyses_with_MUR_by_default()
+    {
+        var service = Known("noaa-erddap-sst").Weather!;
+
+        Assert.Equal(WeatherServiceKind.ErddapGriddap, service.Kind);
+        // MUR and OISST are kept on the CoastWatch West Coast node itself; the
+        // Blended analysis is redirected to NOAA CoastWatch's central ERDDAP.
+        Assert.Equal(["jplMURSST41", "ncdcOisst21NrtAgg_LonPM180", "nesdisBLENDEDsstDNDaily"], service.Datasets.Select(d => d.Id));
+        Assert.Equal(["jplMURSST41"], service.Datasets.Where(d => d.Default).Select(d => d.Id));
+        Assert.Equal(["analysed_sst", "sst", "analysed_sst"], service.Datasets.Select(d => Assert.Single(d.Variables)));
+        Assert.Equal((24, 24, 24), (service.StepHours, service.MaxHours, service.DefaultHours));
     }
 
     [Fact]
@@ -255,6 +270,31 @@ public sealed class WeatherSourceTests : IDisposable
         Assert.Equal(
             string.Join(',', dataset.Variables.Select(v => v + constraint)),
             Uri.UnescapeDataString(uri.Query.TrimStart('?')));
+    }
+
+    [Fact]
+    public void A_fine_erddap_grid_is_strided_to_at_most_1500_points_an_axis()
+    {
+        var mur = Known("noaa-erddap-sst").Weather!.Datasets.Single(d => d.Id == "jplMURSST41");
+        ErddapAxis[] axes =
+        [
+            new("time"), new("latitude", false, -89.99, 89.99, 0.01), new("longitude", false, -179.99, 180, 0.01),
+        ];
+        var erddap = new Uri("https://coastwatch.pfeg.noaa.gov/erddap/");
+
+        // 30° by 40° at 0.01°: 3001 and 4001 points, so every 3rd.
+        var wide = WeatherRequests.ErddapGriddapUri(erddap, mur, axes, new GeoBounds(20, -80, 50, -40), Run, Run);
+        Assert.Equal(
+            "analysed_sst[(2026-10-25T00:00:00Z):1:(2026-10-25T00:00:00Z)][(20):3:(50)][(-80):3:(-40)]",
+            Uri.UnescapeDataString(wide.Query.TrimStart('?')));
+
+        // A harbour-sized area keeps every point.
+        var near = WeatherRequests.ErddapGriddapUri(erddap, mur, axes, UsEast, Run, Run);
+        Assert.Contains("[(32.1):1:(39.9)][(-75.9):1:(-68.2)]", Uri.UnescapeDataString(near.Query), StringComparison.Ordinal);
+
+        // The whole globe: 36000 longitudes, every 24th; 17999 latitudes, every 12th.
+        var globe = WeatherRequests.ErddapGriddapUri(erddap, mur, axes, null, Run, Run);
+        Assert.Contains("[0:12:last][0:24:last]", Uri.UnescapeDataString(globe.Query), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -519,6 +559,38 @@ public sealed class WeatherSourceTests : IDisposable
     }
 
     [Fact]
+    public async Task An_SST_analysis_is_subset_for_its_latest_day_not_from_now()
+    {
+        // The analysis ends 12 hours before now: an analysis has no future, so
+        // the subset is the day up to its last time.
+        var server = WaveServer();
+        server.ErddapInfoJson = """
+            {"table":{"columnNames":["Row Type","Variable Name","Attribute Name","Data Type","Value"],"rows":[
+              ["attribute","NC_GLOBAL","time_coverage_start","String","2019-07-22T12:00:00Z"],
+              ["attribute","NC_GLOBAL","time_coverage_end","String","2026-10-24T12:00:00Z"],
+              ["attribute","NC_GLOBAL","title","String","Sea-Surface Temperature, NOAA Geo-polar Blended Analysis Day+Night, GHRSST, Near Real-Time, Global 5km, 2019-Present, Daily"],
+              ["dimension","time","","double","nValues=2644, evenlySpaced=false, averageSpacing=1 day 0h 9m 16s"],
+              ["dimension","latitude","","float","nValues=3600, evenlySpaced=true, averageSpacing=0.049999999999999996"],
+              ["attribute","latitude","actual_range","float","-89.975, 89.975"],
+              ["dimension","longitude","","float","nValues=7200, evenlySpaced=true, averageSpacing=0.049999999999999996"],
+              ["attribute","longitude","actual_range","float","-179.975, 179.975"],
+              ["variable","analysed_sst","","float","time, latitude, longitude"]
+            ]}}
+            """;
+        var feed = Feed("noaa-erddap-sst", new WeatherSelection(Hours: [0, 24], Area: UsEast));
+
+        var index = await new WeatherFeedIndexer(new HttpClient(server), timeProvider: At(Run.AddHours(5)))
+            .IndexAsync(feed, null, TestContext.Current.CancellationToken);
+
+        var item = Assert.Single(index.Items);
+        Assert.Equal("jplMURSST41", item.Name);
+        Assert.Equal("NetCDF", item.ProductSpec);
+        Assert.Equal(
+            "analysed_sst[(2026-10-23T12:00:00Z):1:(2026-10-24T12:00:00Z)][(32.1):1:(39.9)][(-75.9):1:(-68.2)]",
+            Uri.UnescapeDataString(((RemoteItemLocation)item.Location).Uri.Query.TrimStart('?')));
+    }
+
+    [Fact]
     public async Task An_erddap_issue_date_within_the_forecast_is_its_run()
     {
         var server = WaveServer();
@@ -540,6 +612,7 @@ public sealed class WeatherSourceTests : IDisposable
         var info = WeatherFeedIndexer.ParseErddapInfo(document.RootElement);
 
         Assert.Equal(["time", "depth", "latitude", "longitude"], info.Axes.Select(a => a.Name));
+        Assert.Equal([null, null, 0.5, 0.5], info.Axes.Select(a => a.Spacing));
         Assert.False(info.Axes[2].Descending);
         Assert.False(info.Axes[3].Descending);
         Assert.Equal(359.5, info.Axes[3].Maximum);

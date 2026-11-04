@@ -231,7 +231,12 @@ datasets). Each index lists one item per model or dataset:
 - **ERDDAP `griddap`** (`erddapGriddap`): datasets by id. Each dataset's
   `info/<id>/index.json` gives its axes (a negative `averageSpacing` is a
   descending axis), `actual_range` and time coverage. The item downloads a
-  NetCDF subset of the area from now to the last chosen hour. An issue date
+  NetCDF subset of the area from now to the last chosen hour, or, for an
+  analysis whose time coverage has ended (the sea surface temperature
+  datasets), the chosen hours up to its last time. Latitude and longitude
+  are strided so that neither takes more than
+  `WeatherRequests.ErddapMaxAxisPoints` (1500) points: a 0.01° analysis over
+  30° is read every third point. An issue date
   (`date_issued`, `date_modified`, `date_created`) is taken as the run only
   when it falls within the forecast; `NWW3_Global_Best` gives the dataset's
   own dates, so its item has no run and is never stale.

@@ -144,6 +144,26 @@ public sealed class GribWeatherDatasetTests
         Assert.Throws<GribFormatException>(() => dataset.GridSet.ReadStep(height, 1, Ct));
     }
 
+    [Fact]
+    public void Water_temperature_reads_as_the_sea_temperature_in_kelvin()
+    {
+        // WMO table 4.2-10-3 parameter 0 (NCEP WTMP, as RTOFS writes it) is
+        // already in kelvin, so it reads unconverted.
+        var grid = new Grid(10, 10, 1, 2, 2);
+        var bytes = Encode(new Message { Discipline = 10, Category = 3, Number = 0, Grid = grid, Values = [288.15, 290.5, double.NaN, 300.25] });
+
+        using var dataset = GribWeatherDataset.Read(GribFile.Open(bytes));
+        var sst = Assert.Single(dataset.GridSet.Parameters);
+
+        Assert.Equal(WeatherParameters.SeaSurfaceTemperature, sst.Id);
+        Assert.Equal(WeatherLevel.Surface, sst.Level);
+        Assert.Equal("WTMP", GribShortNames.Get(new GribParameterCode(10, 3, 0)));
+        // Rows are normalised south to north, so compare the values as a set.
+        var values = dataset.GridSet.ReadStep(sst, 0, Ct);
+        Assert.Single(values, float.IsNaN);
+        Assert.Equal([288.15, 290.5, 300.25], values.Where(v => !float.IsNaN(v)).Select(v => Math.Round(v, 2)).Order());
+    }
+
     // -----------------------------------------------------------------
     // Levels: GFS-Wave's surface wind and the 10 m wind
     // -----------------------------------------------------------------
