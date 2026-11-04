@@ -576,6 +576,7 @@ internal static partial class Strings
     public static string Status_ExchangeSetCancelled => Get(nameof(Status_ExchangeSetCancelled));
     public static string Status_ExchangeSetOrphanUpdate => Get(nameof(Status_ExchangeSetOrphanUpdate));
     public static string Status_ExchangeSetUpdatesPartial => Get(nameof(Status_ExchangeSetUpdatesPartial));
+    public static string Status_CellCancelled => Get(nameof(Status_CellCancelled));
 
 
     // Dataset entry

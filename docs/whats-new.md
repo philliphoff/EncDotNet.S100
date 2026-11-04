@@ -6,6 +6,15 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **S-57 updates are checked before they apply.** An S-57 update now applies
+  only when it's for the cell's edition and follows on from the updates
+  before it, record by record. Updates a re-issue already holds are skipped,
+  and an update of edition 0 is reported as cancelling the cell. SoundCharts
+  warns when an update is refused or cancels a cell, `s100 s57 convert` prints
+  what applied, and `S57Dataset.UpdateReport` gives the details. Exchange sets
+  that hold only updates are now CRC-checked too. See
+  [Apply update cells](s57-to-s101.md#apply-update-cells).
+
 - **Convert S-101 to S-57.** `s100 s101 convert --to s57` writes an S-101
   dataset as an S-57 Edition 3.1 base cell, following S-65 Annex C, and
   prints what Annex C dropped or folded into `INFORM`. `--exchange-set`

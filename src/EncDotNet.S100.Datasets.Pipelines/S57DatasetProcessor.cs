@@ -269,6 +269,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         // fields that do not survive translation — see
         // docs/design/non-gml-validation.md §9.3.
         _rawS57Document = s57.Document;
+        UpdateReport = s57.UpdateReport;
         var translator = S57ToS101Translator.ForTarget(_target);
         var s101Doc = translator.Translate(s57);
         _translatedDataset = S101Dataset.FromDocument(s101Doc);
@@ -334,6 +335,13 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
                 stream.Dispose();
         }
     }
+
+    /// <summary>
+    /// What happened to the cell's updates when it was opened with them
+    /// (<see cref="S57UpdateApplicator"/>), or <see langword="null"/> when it
+    /// was opened without. S-57 Part 3, sequential updating.
+    /// </summary>
+    public S57UpdateReport? UpdateReport { get; }
 
     /// <inheritdoc/>
     public async Task<VectorPortrayalResult> BuildVectorPortrayalAsync(RenderContext? context = null, CancellationToken cancellationToken = default)

@@ -1670,6 +1670,10 @@
     <value>Applied {0} update(s) to {1} with warnings: {2}</value>
     <comment>{0} = updates applied, {1} = cell display name, {2} = first warning/error message from the update report.</comment>
   </data>
+  <data name="Status_CellCancelled" xml:space="preserve">
+    <value>Update {1} cancels {0}. It's no longer for use in navigation.</value>
+    <comment>{0} = cell display name, {1} = number of the cancelling update. Shown when an S-57 update of edition 0 cancels the cell.</comment>
+  </data>
 
   <!-- Dataset entry -->
   <data name="DatasetEntry_CurrentTimeFormat" xml:space="preserve">
