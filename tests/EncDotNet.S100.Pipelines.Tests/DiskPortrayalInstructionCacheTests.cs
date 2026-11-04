@@ -51,6 +51,37 @@ public class DiskPortrayalInstructionCacheTests : IDisposable
     }
 
     [Fact]
+    public void Contains_ReportsPersistedEntriesWithoutCountingAHit()
+    {
+        var cache = new DiskPortrayalInstructionCache(_dir, maxBytes: 16 * 1024 * 1024);
+        Assert.False(cache.Contains("k"));
+
+        cache.GetOrCompute("k", () => Sample("f1"));
+
+        Assert.True(cache.Contains("k"));
+        Assert.False(cache.Contains("other"));
+        Assert.Equal(0, cache.Hits);
+        // A fresh instance (a restart) sees the persisted entry too.
+        Assert.True(new DiskPortrayalInstructionCache(_dir, maxBytes: 16 * 1024 * 1024).Contains("k"));
+    }
+
+    [Fact]
+    public void TotalBytes_OnAFreshInstance_ReadsWhatTheDirectoryHolds()
+    {
+        var writer = new DiskPortrayalInstructionCache(_dir, maxBytes: 16 * 1024 * 1024);
+        writer.GetOrCompute("a", () => Sample("f1"));
+        writer.GetOrCompute("b", () => Sample("f2"));
+        var onDisk = Directory.EnumerateFiles(_dir, "*.dlist").Sum(f => new FileInfo(f).Length);
+
+        // No write on this instance has loaded the index; TotalBytes must still be right.
+        var reader = new DiskPortrayalInstructionCache(_dir, maxBytes: 16 * 1024 * 1024);
+
+        Assert.True(onDisk > 0);
+        Assert.Equal(onDisk, reader.TotalBytes);
+        Assert.Equal(16 * 1024 * 1024, reader.MaxBytes);
+    }
+
+    [Fact]
     public void RoundTrip_PreservesFieldsAndOrder()
     {
         var cache = new DiskPortrayalInstructionCache(_dir, maxBytes: 16 * 1024 * 1024);

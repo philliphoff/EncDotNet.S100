@@ -522,6 +522,12 @@ internal static partial class Strings
     public static string Settings_MaintenanceSubsection => Get(nameof(Settings_MaintenanceSubsection));
     public static string Settings_MaintenanceSubsection_Help => Get(nameof(Settings_MaintenanceSubsection_Help));
     public static string Settings_ClearCaches_Button => Get(nameof(Settings_ClearCaches_Button));
+    public static string Settings_PortrayalPrewarmEnabled => Get(nameof(Settings_PortrayalPrewarmEnabled));
+    public static string Tooltip_PortrayalPrewarmEnabled => Get(nameof(Tooltip_PortrayalPrewarmEnabled));
+    public static string Library_PrewarmWorkingFormat => Get(nameof(Library_PrewarmWorkingFormat));
+    public static string Library_PrewarmPausedFormat => Get(nameof(Library_PrewarmPausedFormat));
+    public static string Library_PrewarmCompleteFormat => Get(nameof(Library_PrewarmCompleteFormat));
+    public static string Library_PrewarmCacheFullFormat => Get(nameof(Library_PrewarmCacheFullFormat));
     public static string Tooltip_ClearCaches => Get(nameof(Tooltip_ClearCaches));
     public static string Settings_ClearCaches_ConfirmTitle => Get(nameof(Settings_ClearCaches_ConfirmTitle));
     public static string Settings_ClearCaches_ConfirmMessage => Get(nameof(Settings_ClearCaches_ConfirmMessage));

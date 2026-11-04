@@ -162,6 +162,12 @@
                 </StackPanel>
             </StackPanel>
 
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_PortrayalPrewarmEnabled}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_PortrayalPrewarmEnabled}" />
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding PortrayalPrewarmEnabled}" AutomationProperties.AutomationId="Settings.PortrayalPrewarmEnabled" AutomationProperties.Name="{x:Static loc:Strings.Settings_PortrayalPrewarmEnabled}"/>
+            </Grid>
+
             <Separator Margin="0,8,0,0" />
             <TextBlock Classes="settingsSection" Text="{x:Static loc:Strings.Settings_MaintenanceSubsection}" />
             <TextBlock Classes="settingsHelp" Text="{x:Static loc:Strings.Settings_MaintenanceSubsection_Help}" />

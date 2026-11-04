@@ -411,6 +411,12 @@ public partial class App : Application
 
             desktop.MainWindow = _services.GetRequiredService<MainWindow>();
 
+            // Portray load-as-you-pan cells into the portrayal cache while the
+            // map is idle (#1266). Started on the UI thread: its loop reads the
+            // dataset entries there and portrays on the pool.
+            var portrayalWarmer = _services.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalCacheWarmer>();
+            portrayalWarmer.Start();
+
             // Drain the tiled renderer's background Skia workers before the
             // process tears down. Avalonia raises ShutdownRequested on every
             // exit path (explicit Shutdown(), last-window-close, OS quit), so
@@ -422,6 +428,7 @@ public partial class App : Application
                 // Flush any pending debounced route save so the last edit is
                 // not lost to the debounce window.
                 routePersistence.Flush();
+                portrayalWarmer.Dispose();
                 library.Dispose();
                 EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.ShutdownAndDrain(TimeSpan.FromSeconds(5));
             };
@@ -444,6 +451,19 @@ public partial class App : Application
         return new EncDotNet.S100.Collections.GeoBounds(
             view.MinLatitude, Math.Max(-180, view.MinLongitude - shift), view.MaxLatitude, Math.Min(180, view.MaxLongitude - shift));
     }
+
+    /// <summary>
+    /// Cap on the disk portrayal cache. Sized so a state's NOAA ENC collection
+    /// fits alongside what interactive loads have cached (#1266).
+    /// </summary>
+    private const long PortrayalCacheMaxBytes = 1024L * 1024 * 1024;
+
+    /// <summary>
+    /// The share of <see cref="PortrayalCacheMaxBytes"/> background pre-warming
+    /// may fill. The rest is left to interactive loads, so pre-warming never
+    /// makes the cache evict entries in use (#1266).
+    /// </summary>
+    private const double PortrayalPrewarmCacheShare = 0.75;
 
     private static IServiceProvider ConfigureServices()
     {
@@ -792,7 +812,7 @@ public partial class App : Application
                     EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default.DisplayPlanes)));
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.Interoperability.IDisplayPlaneAuthorityProvider>(
             _ => new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider());
-        services.AddSingleton<EncDotNet.S100.Renderers.Mapsui.IPatternClipCache>(sp =>
+        services.AddSingleton(sp =>
         {
             // One process-wide disk cache shared by every S-101 processor so the
             // cold first open of a previously-seen cell skips the multi-second
@@ -803,7 +823,9 @@ public partial class App : Application
             const long maxBytes = 256L * 1024 * 1024;
             return new EncDotNet.S100.Renderers.Mapsui.DiskPatternClipCache(cacheDir, maxBytes);
         });
-        services.AddSingleton<EncDotNet.S100.Pipelines.Vector.Caching.IPortrayalInstructionCache>(sp =>
+        services.AddSingleton<EncDotNet.S100.Renderers.Mapsui.IPatternClipCache>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Renderers.Mapsui.DiskPatternClipCache>());
+        services.AddSingleton(sp =>
         {
             // One process-wide disk cache shared by every S-101 and S-57 processor so a
             // fresh open of a previously-portrayed cell skips the multi-second
@@ -812,9 +834,10 @@ public partial class App : Application
             // pipeline / VM assemblies) so persisted entries auto-invalidate
             // when anything affecting the instruction list changes.
             var cacheDir = sp.GetRequiredService<ViewerDataPaths>().PortrayalInstructionCacheDirectory;
-            const long maxBytes = 256L * 1024 * 1024;
-            return new EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache(cacheDir, maxBytes);
+            return new EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache(cacheDir, PortrayalCacheMaxBytes);
         });
+        services.AddSingleton<EncDotNet.S100.Pipelines.Vector.Caching.IPortrayalInstructionCache>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache>());
         services.AddSingleton<EncDotNet.S100.Core.Metadata.IDatasetMetadataCache>(sp =>
         {
             // One process-wide disk cache of per-dataset "peek" metadata so a
@@ -847,6 +870,71 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>(),
                 sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Interoperability.IDisplayPlaneAuthorityProvider>(),
                 sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.IPortrayalInstructionCache>()));
+
+        // Background portrayal of load-as-you-pan cells into the portrayal cache
+        // (#1266). Its own pipeline factory shares the catalogue managers and the
+        // disk cache (wrapped to learn each cell's keys) but has its own Lua
+        // engine, so it never shares Lua state with a load on the map.
+        services.AddSingleton(sp =>
+            new EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalWarmRecorder(
+                sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache>(),
+                sp.GetRequiredService<EncDotNet.S100.Renderers.Mapsui.DiskPatternClipCache>()));
+        services.AddSingleton(sp =>
+        {
+            var recorder = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalWarmRecorder>();
+            var factory = new EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory(
+                sp.GetRequiredService<PortrayalCatalogueManager>(),
+                new EncDotNet.S100.Scripting.MoonSharp.MoonSharpLuaEngine(),
+                new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory(),
+                sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>(),
+                sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Interoperability.IDisplayPlaneAuthorityProvider>(),
+                recorder.InstructionCache);
+            var renderer = new EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer(
+                new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory(),
+                recorder.PatternClipCache);
+            var projection = sp.GetRequiredService<MapPresentationStateProjection>();
+            return new EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetCellPortrayer(
+                factory, renderer, recorder, projection.CreateSnapshot);
+        });
+        services.AddSingleton(sp =>
+        {
+            var datasets = sp.GetRequiredService<DatasetsViewModel>();
+            var settings = sp.GetRequiredService<ViewerSettings>();
+            var cache = sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache>();
+            var clips = sp.GetRequiredService<EncDotNet.S100.Renderers.Mapsui.DiskPatternClipCache>();
+            var recorder = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalWarmRecorder>();
+            var portrayer = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetCellPortrayer>();
+            var notifier = sp.GetRequiredService<IMapViewportNotifier>();
+            var projection = sp.GetRequiredService<MapPresentationStateProjection>();
+            var paths = sp.GetRequiredService<ViewerDataPaths>();
+            var viewMoves = new EncDotNet.S100.Viewer.Services.LazyLoading.ViewportActivity(
+                notifier, sp.GetRequiredService<TimeProvider>());
+            var options = EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalWarmOptions.Default;
+            return new EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalCacheWarmer(
+                candidates: () => datasets.Entries.Where(e => e.IsDeferred && e.IsFromExchangeSet).ToList(),
+                portrayAsync: portrayer.PortrayAsync,
+                // Busy while the map loads, draws or moves: a pan over tiles
+                // already drawn does neither of the first two.
+                isBusy: () => EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.HasVisibleTileWork
+                    || viewMoves.MovedWithin(options.QuietPeriod)
+                    || datasets.Entries.Any(e => e.IsLoading),
+                view: () => notifier.Current,
+                isEnabled: () => settings.PortrayalPrewarmEnabled,
+                // Pre-warming stops short of the cap, so it never makes the cache
+                // evict entries the map is using.
+                hasCacheRoom: () => cache.TotalBytes < cache.MaxBytes * PortrayalPrewarmCacheShare
+                    && clips.TotalBytes < clips.MaxBytes * PortrayalPrewarmCacheShare,
+                isCached: recorder.IsCached,
+                signature: () => EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalWarmSignature.Of(
+                    projection.CreateSnapshot(), settings),
+                ledger: new EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalWarmLedger(
+                    settings.IsReadOnly ? null : Path.Combine(paths.PortrayalInstructionCacheDirectory, "prewarm-ledger.json")),
+                options: options,
+                time: sp.GetRequiredService<TimeProvider>(),
+                logger: sp.GetRequiredService<ILogger<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalCacheWarmer>>());
+        });
+        services.AddSingleton(sp => new PortrayalWarmStatusViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalCacheWarmer>()));
 
         // The Mapsui renderer owns the processor -> ILayer conversion (issue
         // #189): it holds the process-wide pattern-clip cache and the CRS
@@ -1277,6 +1365,7 @@ public partial class App : Application
                 timeFormat: sp.GetService<ITimeFormatProvider>(),
                 sync: sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>());
             panel.OpenKeys = sp.GetRequiredService<Services.Secom.KeysNavigator>().Open;
+            panel.PortrayalWarm = sp.GetRequiredService<PortrayalWarmStatusViewModel>();
             // Open as route: with Import route…, the only way a dataset becomes a route.
             panel.OpenRoute = item =>
             {

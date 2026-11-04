@@ -78,6 +78,42 @@ public sealed class DiskPortrayalInstructionCache : IPortrayalInstructionCache
     /// <inheritdoc />
     public long Misses => Interlocked.Read(ref _misses);
 
+    /// <summary>Soft upper bound, in bytes, on the total size of the persisted entries.</summary>
+    public long MaxBytes => _budget.MaxBytes;
+
+    /// <summary>
+    /// The total size, in bytes, of the persisted entries. The first call reads
+    /// the cache directory if no write has done so yet.
+    /// </summary>
+    public long TotalBytes
+    {
+        get
+        {
+            _budget.EnsureIndexed();
+            return _budget.TotalBytes;
+        }
+    }
+
+    /// <summary>
+    /// Whether an entry is persisted for <paramref name="key"/>. Checks only
+    /// that the file exists: it neither reads nor validates the entry, and does
+    /// not mark it used.
+    /// </summary>
+    /// <param name="key">A key as passed to <see cref="GetOrCompute"/>.</param>
+    /// <returns><see langword="true"/> when the entry's file exists.</returns>
+    public bool Contains(string key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        try
+        {
+            return File.Exists(GetEntryPath(key));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <inheritdoc />
     public IReadOnlyList<DrawingInstruction> GetOrCompute(
         string key,
