@@ -28,4 +28,5 @@ internal static partial class Strings
     public static string Pick_Depth_ChartBasisAdjustedFormat => Get(nameof(Pick_Depth_ChartBasisAdjustedFormat));
     public static string Map_WaterLevelAdjustmentBoundary => Get(nameof(Map_WaterLevelAdjustmentBoundary));
     public static string Pick_Depth_DatumUnconfirmed => Get(nameof(Pick_Depth_DatumUnconfirmed));
+    public static string Label_WaterLevelApplyUndeclaredDatum => Get(nameof(Label_WaterLevelApplyUndeclaredDatum));
 }

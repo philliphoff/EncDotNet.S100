@@ -7436,4 +7436,7 @@
   <data name="Pick_Depth_DatumUnconfirmed" xml:space="preserve">
     <value>Datum unconfirmed: a vertical datum isn't declared, and water level is applied anyway.</value>
   </data>
+  <data name="Label_WaterLevelApplyUndeclaredDatum" xml:space="preserve">
+    <value>Apply over undeclared datum</value>
+  </data>
 </root>

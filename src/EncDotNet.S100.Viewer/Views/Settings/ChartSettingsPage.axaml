@@ -191,7 +191,7 @@
                   IsEnabled="{Binding IsWaterLevelAdjustmentOn}"
                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_WaterLevelApplyUndeclaredDatum}">
                 <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_WaterLevelApplyUndeclaredDatum}" TextWrapping="Wrap" />
-                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding WaterLevelApplyUndeclaredDatum}"  AutomationProperties.AutomationId="Settings.WaterLevelApplyUndeclaredDatum" AutomationProperties.Name="{x:Static loc:Strings.Settings_WaterLevelApplyUndeclaredDatum}"/>
+                <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding WaterLevelApplyUndeclaredDatum}"  AutomationProperties.AutomationId="Settings.WaterLevelApplyUndeclaredDatum" AutomationProperties.Name="{x:Static loc:Strings.Label_WaterLevelApplyUndeclaredDatum}" AutomationProperties.HelpText="{x:Static loc:Strings.Settings_WaterLevelApplyUndeclaredDatum}"/>
             </Grid>
 
             <!-- National Language -->
