@@ -154,6 +154,14 @@
                                       AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_Isotherms}"
                                       AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_Isotherms}" />
                     </Grid>
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_Currents}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.EcdisPanel_Weather_Currents}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsCurrentArrowsVisible}"
+                                      AutomationProperties.AutomationId="EcdisDisplayPanel.Weather.Currents"
+                                      AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_Currents}"
+                                      AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_Currents}" />
+                    </Grid>
                 </StackPanel>
 
                 <!-- Global reset -->

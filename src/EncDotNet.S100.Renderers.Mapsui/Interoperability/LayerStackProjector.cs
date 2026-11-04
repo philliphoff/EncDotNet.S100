@@ -120,11 +120,12 @@ public static class LayerStackProjector
     {
         // Coverage payloads are re-rasterised (not feature-filtered) when the
         // engine replaced the sub-layer — e.g. R-101-104-B attaches a land-area
-        // mask to the S-104 surface so it can be clipped to water (issue #483).
+        // mask to the S-104 surface so it can be clipped to water (issue #483),
+        // and R-111-WX-B blanks model current arrows inside S-111 (issue #1228).
         if (ruled.Payload is CoverageStackPayload ruledCoverage
             && prebuilt.Item.Payload is CoverageStackPayload originalCoverage
             && !ReferenceEquals(ruledCoverage.SubLayer, originalCoverage.SubLayer)
-            && ruledCoverage.SubLayer is GridCoverageSubLayer or IsolineCoverageSubLayer
+            && ruledCoverage.SubLayer is GridCoverageSubLayer or IsolineCoverageSubLayer or ArrowCoverageSubLayer
             && rebuildCoverage is not null)
         {
             var rebuilt = rebuildCoverage(ruled, ruledCoverage.SubLayer);

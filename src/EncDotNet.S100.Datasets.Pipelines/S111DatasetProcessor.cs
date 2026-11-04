@@ -471,6 +471,13 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             SourceDatasetId = _fileName,
             Info = info,
             LayerNames = new[] { "s111.arrows" },
+            // The whole grid's WGS-84 frame: model current arrows give way to
+            // S-111 inside it (S-98 rule R-111-WX-B, issue #1228).
+            CoverageExtent = new GeographicBounds(
+                viewport.MinLongitude,
+                viewport.MinLatitude,
+                viewport.MaxLongitude,
+                viewport.MaxLatitude),
             CellMinimumDisplayScale = GridDisplayScale.FromGrid(metadata.GridMetadata, geographic: crs == 4326),
         };
     }

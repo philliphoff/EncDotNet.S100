@@ -37,6 +37,11 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// Every Night colour stays under relative luminance 0.2, as the S-104
 /// style's do.
 /// </para>
+/// <para>
+/// The current arrows (<see cref="CurrentArrowStyle"/>) don't follow these
+/// rules: they take S-111's own speed band colours, so a current reads the
+/// same in a model as in an S-111 dataset.
+/// </para>
 /// </remarks>
 public static class WeatherPalette
 {
@@ -63,6 +68,12 @@ public static class WeatherPalette
 
     /// <summary>Colour token of the isotherms and their labels (<see cref="SeaTemperatureIsothermStyle"/>).</summary>
     public const string IsothermInkToken = "WXISOTH";
+
+    /// <summary>The colour token prefix of the current speed bands, followed by the band number: <c>WXCUR1</c> to <c>WXCUR9</c>.</summary>
+    public const string CurrentTokenPrefix = "WXCUR";
+
+    /// <summary>Colour token of the outline of the current arrows (<see cref="CurrentArrowStyle"/>).</summary>
+    public const string CurrentOutlineToken = "WXCUROUT";
 
     // Day, Dusk, Night for each wave height band (WXHS01 lowest).
     private static readonly (string Day, string Dusk, string Night)[] WaveHeightColors =
@@ -139,13 +150,30 @@ public static class WeatherPalette
         ("#A52B1E", "#FD8C7B", "#874035"),
     ];
 
+    // Day, Dusk, Night for each current speed band (WXCUR1 slowest): the
+    // S-111 Ed 2.0.0 colour profile's SCBN1 to SCBN9, so a speed reads the
+    // same colour in model currents as in S-111.
+    private static readonly (string Day, string Dusk, string Night)[] CurrentColors =
+    [
+        ("#7652E2", "#51379F", "#1A0F3B"),
+        ("#4898D3", "#14344C", "#04111C"),
+        ("#61CBE5", "#13333A", "#030E11"),
+        ("#6DBC45", "#407227", "#132808"),
+        ("#B4DC00", "#6E8800", "#263100"),
+        ("#CDC100", "#7E7700", "#2D2A00"),
+        ("#F8A718", "#936101", "#362100"),
+        ("#F7A29D", "#563533", "#211111"),
+        ("#FF1E1E", "#B20101", "#3F0000"),
+    ];
+
     /// <summary>
     /// The weather colours: <see cref="BarbInkToken"/>, <see cref="WaveArrowToken"/>,
     /// <see cref="IsobarInkToken"/>, <see cref="IsobarHaloToken"/>,
     /// <see cref="IsothermInkToken"/>, the wave height bands
     /// (<see cref="WaveHeightToken"/>), the Beaufort bands
-    /// (<see cref="WindSpeedToken"/>) and the sea surface temperature bands
-    /// (<see cref="SeaTemperatureToken"/>).
+    /// (<see cref="WindSpeedToken"/>), the sea surface temperature bands
+    /// (<see cref="SeaTemperatureToken"/>), and the current speed bands
+    /// (<see cref="CurrentToken"/>) with <see cref="CurrentOutlineToken"/>.
     /// </summary>
     public static ApplicationPalette Palette { get; } = new("Weather", BuildTokens());
 
@@ -157,6 +185,9 @@ public static class WeatherPalette
 
     /// <summary>The number of sea surface temperature bands: 32.</summary>
     public static int SeaTemperatureBandCount => SeaTemperatureColors.Length;
+
+    /// <summary>The number of current speed bands: 9, as S-111's.</summary>
+    public static int CurrentBandCount => CurrentColors.Length;
 
     /// <summary>The colour token of wave height band <paramref name="band"/>, 1 (lowest) to <see cref="WaveHeightBandCount"/>.</summary>
     /// <param name="band">The band number.</param>
@@ -185,6 +216,15 @@ public static class WeatherPalette
         return SeaTemperatureTokenPrefix + band.ToString("00", CultureInfo.InvariantCulture);
     }
 
+    /// <summary>The colour token of current speed band <paramref name="band"/>, 1 (slowest) to <see cref="CurrentBandCount"/>.</summary>
+    /// <param name="band">The band number.</param>
+    public static string CurrentToken(int band)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(band, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(band, CurrentBandCount);
+        return CurrentTokenPrefix + band.ToString(CultureInfo.InvariantCulture);
+    }
+
     private static Dictionary<string, PaletteColors> BuildTokens()
     {
         var tokens = new Dictionary<string, PaletteColors>(StringComparer.Ordinal)
@@ -200,6 +240,9 @@ public static class WeatherPalette
             // A dark neutral grey for the isotherms, so they read over both
             // ends of the temperature fill; it shares the isobar label halo.
             [IsothermInkToken] = PaletteColors.FromHex(day: "#3A3D44", dusk: "#E2E4E8", night: "#6A6D74"),
+            // The current arrows' outline: S-111's CHBLK, so model and S-111
+            // arrows of the same speed look alike.
+            [CurrentOutlineToken] = PaletteColors.FromHex(day: "#000000", dusk: "#6B7F89", night: "#252D31"),
         };
 
         for (int i = 0; i < WaveHeightColors.Length; i++)
@@ -218,6 +261,12 @@ public static class WeatherPalette
         {
             var (day, dusk, night) = SeaTemperatureColors[i];
             tokens[SeaTemperatureToken(i + 1)] = PaletteColors.FromHex(day, dusk, night);
+        }
+
+        for (int i = 0; i < CurrentColors.Length; i++)
+        {
+            var (day, dusk, night) = CurrentColors[i];
+            tokens[CurrentToken(i + 1)] = PaletteColors.FromHex(day, dusk, night);
         }
 
         return tokens;

@@ -192,6 +192,104 @@ internal static class NetCdfFixtures
         return path;
     }
 
+    /// <summary>The fixture surface current at a node: the speed in knots and the direction it sets to.</summary>
+    public static (double Knots, double ToDirection) Current(int row, int column) => (0.5 + 0.25 * column, 45 + 10 * row);
+
+    /// <summary>
+    /// Writes a NetCDF-4 surface current file on <see cref="ChartGrid"/> (one
+    /// step by default), with the north-east corner as land (<c>_FillValue</c>).
+    /// HYCOM-style by default: <c>water_u</c> and <c>water_v</c> as
+    /// <c>eastward_sea_water_velocity</c> and <c>northward_sea_water_velocity</c>
+    /// on a length-1 <c>depth</c> of 0 m. With <paramref name="hfRadar"/>, as the
+    /// IOOS HF radar files come from ERDDAP: the <c>surface_</c> standard names,
+    /// no depth, a <c>grid_mapping</c> naming a <c>wgs84</c> variable the file
+    /// leaves out, and a <c>source</c> listing every radial file.
+    /// </summary>
+    /// <param name="path">Where to write the file.</param>
+    /// <param name="hfRadar">Whether to write the HF radar form.</param>
+    /// <param name="grid">The grid; <see cref="ChartGrid"/> with one step by default.</param>
+    public static string WriteCurrentNetCdf4(string path, bool hfRadar = false, Grid? grid = null)
+    {
+        grid ??= ChartGrid with { Steps = 1, StepHours = 1 };
+        int rows = grid.Rows, cols = grid.Columns, steps = grid.Steps;
+        var missing = MissingNode(grid);
+        const double fill = -999;
+        var u = new double[steps * rows * cols];
+        var v = new double[steps * rows * cols];
+        for (int t = 0; t < steps; t++)
+        {
+            for (int r = 0; r < rows; r++)
+            {
+                for (int c = 0; c < cols; c++)
+                {
+                    int i = (t * rows + r) * cols + c;
+                    if ((r, c) == missing)
+                    {
+                        u[i] = v[i] = fill;
+                        continue;
+                    }
+
+                    var (knots, to) = Current(r, c);
+                    double speed = knots * 1852.0 / 3600.0;
+                    double radians = to * Math.PI / 180;
+                    u[i] = speed * Math.Sin(radians);
+                    v[i] = speed * Math.Cos(radians);
+                }
+            }
+        }
+
+        string prefix = hfRadar ? "surface_" : string.Empty;
+        string[] dims = hfRadar ? ["time", "lat", "lon"] : ["time", "depth", "lat", "lon"];
+        var component = (string standardName) =>
+        {
+            var attributes = new Dictionary<string, object> { ["units"] = "m s-1", ["standard_name"] = prefix + standardName, ["_FillValue"] = new[] { (float)fill } };
+            if (hfRadar)
+                attributes["grid_mapping"] = "wgs84";
+            return attributes;
+        };
+
+        var variables = new List<FixtureVariable>
+        {
+            new("time", FixtureType.Double, ["time"], grid.Times.Select(t => (t - DateTime.UnixEpoch).TotalSeconds).ToArray(),
+                new() { ["units"] = "seconds since 1970-01-01T00:00:00Z", ["standard_name"] = "time", ["axis"] = "T" }),
+            new("lat", FixtureType.Float, ["lat"], grid.Latitudes,
+                new() { ["units"] = "degrees_north", ["standard_name"] = "latitude", ["axis"] = "Y" }),
+            new("lon", FixtureType.Float, ["lon"], grid.Longitudes,
+                new() { ["units"] = "degrees_east", ["standard_name"] = "longitude", ["axis"] = "X" }),
+        };
+        if (!hfRadar)
+            variables.Add(new("depth", FixtureType.Double, ["depth"], [0.0], new() { ["units"] = "m", ["standard_name"] = "depth", ["positive"] = "down", ["axis"] = "Z" }));
+        variables.Add(new("water_u", FixtureType.Float, dims, u, component("eastward_sea_water_velocity")));
+        variables.Add(new("water_v", FixtureType.Float, dims, v, component("northward_sea_water_velocity")));
+
+        var file = new FixtureFile
+        {
+            Dimensions = hfRadar
+                ? [new("time", steps), new("lat", rows), new("lon", cols)]
+                : [new("time", steps), new("depth", 1), new("lat", rows), new("lon", cols)],
+            GlobalAttributes = hfRadar
+                ? new Dictionary<string, object>
+                {
+                    ["Conventions"] = "CF-1.6, ACDD-1.3",
+                    ["title"] = "Currents, HF Radar, US East Coast and Gulf of Mexico, RTV, Near-Real Time, 2012-present, Hourly, 6km (synthetic)",
+                    ["institution"] = "DOC/NOAA/NESDIS/OSPO > Office of Satellite and Product Operations, NESDIS, NOAA, U.S. Department of Commerce.",
+                    ["creator_name"] = "NOAA IOOS Surface Currents Program",
+                    ["source"] = string.Join(", ", Enumerable.Range(1, 12).Select(i => $"RDLm_SITE{i}_2026_11_04_0200.ruv")),
+                }
+                : new Dictionary<string, object>
+                {
+                    ["Conventions"] = "CF-1.6",
+                    ["title"] = "HYCOM surface currents (synthetic test data)",
+                    ["institution"] = "Naval Research Laboratory",
+                    ["source"] = "HYCOM archive file, GLBz0.04",
+                },
+            Variables = variables,
+        };
+
+        WriteNetCdf4(path, file, dimensionList: true);
+        return path;
+    }
+
     /// <summary>
     /// Writes an ERDDAP-style NetCDF-3 wave file: <c>time</c> as the record
     /// dimension (seconds since 1970), a length-1 <c>depth</c>, latitudes north

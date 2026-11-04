@@ -82,7 +82,8 @@ foreach (var source in WeatherCoverageSource.CreateForGroups(set))
 | `WeatherLevel` | The vertical level: surface, a height above ground, mean sea level or another level the reader describes. |
 | `WeatherCoverageSource` | An `ICoverageSource` over one parameter group. |
 | `WindComponents` | Wind speed and "from" direction from U and V. |
-| `WeatherCoverageStyle` | The base of the seven styles: `SeaTemperatureStyle`, `WaveHeightStyle`, `WindSpeedStyle`, `SeaTemperatureIsothermStyle`, `PressureIsobarStyle`, `WindBarbStyle` and `WaveDirectionStyle`. Each is an `ICoverageStyle` with its S-98 plane, priority, opacity and default visibility. |
+| `CurrentComponents` | Current speed and "to" direction from U and V. |
+| `WeatherCoverageStyle` | The base of the eight styles: `SeaTemperatureStyle`, `WaveHeightStyle`, `WindSpeedStyle`, `SeaTemperatureIsothermStyle`, `PressureIsobarStyle`, `CurrentArrowStyle`, `WindBarbStyle` and `WaveDirectionStyle`. Each is an `ICoverageStyle` with its S-98 plane, priority, opacity and default visibility. |
 | `WeatherPalette` | The styles' Day, Dusk and Night colours, as an `ApplicationPalette`. |
 | `WindBarb` | The pennants, full barbs and half barbs of a wind speed, rounded to 5 kn. |
 | `WeatherPortrayal` | Builds the coverage sub-layers of a source and its styles. |
@@ -109,8 +110,15 @@ lists several codes or names, they're alternatives in order of preference.
 | `wave.swell.hs` | `wave.swell` | any | 10,0,8 | `sea_surface_swell_wave_significant_height` | m |
 | `pressure.msl` | `pressure` | mean sea level | 0,3,1 (NCEP's PRMSL), 0,3,0 (ECMWF's `msl`; plain pressure, so only at mean sea level) | `air_pressure_at_mean_sea_level`, `air_pressure_at_sea_level` | Pa |
 | `sea.temperature` | `sea.temperature` | any | 10,3,0 (NCEP's WTMP) | `sea_surface_temperature`, `sea_surface_foundation_temperature`, `sea_surface_subskin_temperature`, `sea_surface_skin_temperature` | K |
+| `current.u` | `current` | any | 10,1,2 (UOGRD) | `eastward_sea_water_velocity`, `surface_eastward_sea_water_velocity` | m/s |
+| `current.v` | `current` | any | 10,1,3 (VOGRD) | `northward_sea_water_velocity`, `surface_northward_sea_water_velocity` | m/s |
+| `current.speed` | `current` | any | 10,1,1 (SPC) | `sea_water_speed` | m/s |
+| `current.to_direction` | `current` | any | 10,1,0 (DIRC) | `sea_water_velocity_to_direction`, `direction_of_sea_water_velocity` | degrees true |
 
-Directions are "from", in degrees clockwise from true north. Readers convert
+Wind and wave directions are "from", and current directions "to" (the
+oceanographic convention, as in S-111), in degrees clockwise from true north.
+The current rows take any level, because models give currents at their top
+layer, whatever its depth. Readers convert
 values to the stored unit; values cross the public API as `Speed`, `Length`
 and `Angle` through `WeatherParameterDefinition`, and stay `float` in the bulk
 grids.
@@ -140,7 +148,9 @@ expects:
 - **Fields.** Each parameter is a value field named by its id. When a group
   has `wind.u` and `wind.v` but no stored speed or direction, each sample adds
   `wind.speed` and `wind.from_direction` as computed fields:
-  `√(u² + v²)` and `atan2(−u, −v)` in degrees, in [0, 360).
+  `√(u² + v²)` and `atan2(−u, −v)` in degrees, in [0, 360). The `current`
+  group gets `current.speed` and `current.to_direction` the same way, with
+  `atan2(u, v)`.
 - **Time.** `AvailableTimes` is the union of the parameters' valid times.
   `SelectTime` picks the exact match, or else the nearest.
 - **Lazy decoding.** A step is decoded the first time `Sample` needs it, and
@@ -171,6 +181,7 @@ so the coverage pipeline and both renderers draw them with no weather code.
 | `PressureIsobarStyle` | Isobars every 4 hPa, labelled in hPa (`1012`) | `pressure.msl` | — | On |
 | `SeaTemperatureStyle` | Colour fill, 32 bands: below 0 °C, each degree to 30 °C, and 30 °C and higher | `sea.temperature` | — | On |
 | `SeaTemperatureIsothermStyle` | Isotherms every 2 °C, labelled in °C (`18°`) | `sea.temperature` | — | Off |
+| `CurrentArrowStyle` | Arrows in S-111's nine speed bands, colours and sizes (0.5, 1, 2, 3, 5, 7, 10 and 13 kn) | `current.speed` | `current.to_direction` | On |
 
 - **Default and switches.** The Default column is `IsVisibleByDefault`.
   `IsDrawnWith(display)` applies the map-wide switches in
@@ -195,7 +206,13 @@ so the coverage pipeline and both renderers draw them with no weather code.
   latitude. `WindBarbSymbols.For(knots, latitude)` applies the same rule to a
   single barb (an observation, an own-ship wind). The wave arrow points
   up, and its style adds 180° to the "from" direction so it points the way
-  the waves travel.
+  the waves travel. The current arrows point up too, and `current.to_direction`
+  is already the way the water flows.
+- **S-111.** The current arrows set `ArrowCoverageSubLayer.YieldsToS111`.
+  When an S-111 grid is loaded and active, the S-98 rule `R-111-WX-B` blanks
+  their speed inside the S-111 dataset's `CoverageExtent`, so only S-111's
+  arrows are drawn there. S-111 station and mesh datasets report no extent
+  and hide nothing.
 - **Layer order.** Fills go on the `OnDemandSurface` plane at priority 0,
   under the S-104 surface, at `Opacity` 0.5. Barbs and arrows go on the
   `DynamicArrows` plane at priority 20, above the S-111 arrows (10). Isobars
@@ -220,10 +237,12 @@ so the coverage pipeline and both renderers draw them with no weather code.
   near white at 15 °C to pale yellow, orange and brick for warm water, so
   each degree of a front is a different colour; like every fill it's drawn
   at half opacity. The isotherms are a dark neutral grey. Night
-  colours stay under relative luminance 0.2.
+  colours stay under relative luminance 0.2. The current arrows take S-111's
+  own band colours (`SCBN1` to `SCBN9` of its colour profile) and outline.
 - **Symbols.** The 40 northern barbs (`WXBARBN005` to `WXBARBN200`), their
   40 mirrored southern barbs (`WXBARBS005` to `WXBARBS200`), the calm circle
-  (`WXCALM`) and the wave arrow (`WXWAVE01`) are S-100 SVGs embedded from
+  (`WXCALM`), the wave arrow (`WXWAVE01`) and the nine current arrows
+  (`WXCURR1` to `WXCURR9`, S-111's arrow outline) are S-100 SVGs embedded from
   `Symbols/`, served by `WeatherCoverageStyle.Symbols`. They're generated by
   `tools/GenerateWeatherSymbols` and checked in.
 - **Tile cache.** `WeatherCoverageStyle.ContentScope` carries

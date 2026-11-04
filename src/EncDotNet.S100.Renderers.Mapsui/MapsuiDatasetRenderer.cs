@@ -314,14 +314,7 @@ public sealed class MapsuiDatasetRenderer
 
                 case ArrowCoverageSubLayer arrow:
                     {
-                        var renderer = new MapsuiCoverageArrowRenderer(_crsTransformFactory)
-                        {
-                            LayerName = arrow.LayerName,
-                            Palette = arrow.Palette,
-                            BaseSymbolScale = arrow.BaseSymbolScale,
-                            SymbolProvider = arrow.SymbolProvider,
-                        };
-                        layer = renderer.Render(arrow.Coverage);
+                        layer = BuildArrowLayer(arrow);
                         fallback = Union(fallback, ToMercator(arrow.FallbackExtent));
                         break;
                     }
@@ -434,7 +427,8 @@ public sealed class MapsuiDatasetRenderer
     /// <summary>
     /// Builds the Mapsui layer for a coverage sub-layer that an S-98 rule
     /// replaced (for example R-101-104-B attaching a land-area mask to the S-104
-    /// surface), or <see langword="null"/> for a sub-layer kind that is not rebuilt.
+    /// surface, or R-111-WX-B blanking model current arrows inside S-111), or
+    /// <see langword="null"/> for a sub-layer kind that is not rebuilt.
     /// </summary>
     /// <param name="subLayer">The replaced sub-layer.</param>
     /// <returns>The rebuilt layer, or <see langword="null"/>.</returns>
@@ -456,8 +450,23 @@ public sealed class MapsuiDatasetRenderer
         {
             GridCoverageSubLayer grid => BuildGridCoverageLayer(grid, coverageLayoutCache),
             IsolineCoverageSubLayer isolines => BuildIsolineLayer(isolines),
+            ArrowCoverageSubLayer arrows => BuildArrowLayer(arrows),
             _ => null,
         };
+
+    // Oriented symbols over a coverage: S-111 currents, weather barbs and
+    // arrows. Also rebuilds the arrows an S-98 rule replaced (R-111-WX-B).
+    private ILayer? BuildArrowLayer(ArrowCoverageSubLayer arrow)
+    {
+        var renderer = new MapsuiCoverageArrowRenderer(_crsTransformFactory)
+        {
+            LayerName = arrow.LayerName,
+            Palette = arrow.Palette,
+            BaseSymbolScale = arrow.BaseSymbolScale,
+            SymbolProvider = arrow.SymbolProvider,
+        };
+        return renderer.Render(arrow.Coverage);
+    }
 
     /// <summary>
     /// Builds the layer for labelled isolines (the S-104 surface): one feature

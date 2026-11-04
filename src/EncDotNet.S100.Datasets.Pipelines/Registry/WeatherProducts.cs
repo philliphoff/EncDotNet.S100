@@ -30,6 +30,7 @@ public static class WeatherProducts
             [Weather.PressureIsobarStyle.Key] = S98DisplayPlane.OtherChartOverlays,
             [Weather.SeaTemperatureStyle.Key] = S98DisplayPlane.OnDemandSurface,
             [Weather.SeaTemperatureIsothermStyle.Key] = S98DisplayPlane.OtherChartOverlays,
+            [Weather.CurrentArrowStyle.Key] = S98DisplayPlane.DynamicArrows,
             [ProductRegistration.AnyLayerKind] = S98DisplayPlane.OnDemandSurface,
         };
 

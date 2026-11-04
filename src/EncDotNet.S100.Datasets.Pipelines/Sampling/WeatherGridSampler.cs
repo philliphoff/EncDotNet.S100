@@ -8,9 +8,10 @@ namespace EncDotNet.S100.Datasets.Pipelines.Sampling;
 /// Samples a weather grid (<see cref="WeatherGridSet"/>): every known
 /// parameter at the grid node nearest the point and the time step nearest the
 /// requested time, as a <see cref="CoverageFieldsSample"/> whose fields carry
-/// their quantity and unit. Wind speed and direction are derived from U and V
-/// when the file has only the components; wind speed is repeated in knots and
-/// sea surface temperature (stored in kelvin) in degrees Celsius. Shared by
+/// their quantity and unit. Wind and current speed and direction are derived
+/// from U and V when the file has only the components; wind and current speed
+/// are repeated in knots and sea surface temperature (stored in kelvin) in
+/// degrees Celsius. Shared by
 /// <see cref="WeatherGridProcessorBase"/> (picks) and its catalog payload
 /// (<c>sample_coverage</c>).
 /// </summary>
@@ -32,6 +33,8 @@ internal sealed class WeatherGridSampler : ICoverageSampler
     private readonly DateTime? _run;
     private readonly bool _deriveWindSpeed;
     private readonly bool _deriveWindDirection;
+    private readonly bool _deriveCurrentSpeed;
+    private readonly bool _deriveCurrentDirection;
     private readonly object _cacheGate = new();
     private readonly LinkedList<(WeatherParameter Parameter, int Step, float[] Values)> _cache = new();
 
@@ -65,6 +68,9 @@ internal sealed class WeatherGridSampler : ICoverageSampler
         bool components = has(WeatherParameters.WindU) && has(WeatherParameters.WindV);
         _deriveWindSpeed = components && !has(WeatherParameters.WindSpeed);
         _deriveWindDirection = components && !has(WeatherParameters.WindFromDirection);
+        bool currentComponents = has(WeatherParameters.CurrentU) && has(WeatherParameters.CurrentV);
+        _deriveCurrentSpeed = currentComponents && !has(WeatherParameters.CurrentSpeed);
+        _deriveCurrentDirection = currentComponents && !has(WeatherParameters.CurrentToDirection);
     }
 
     /// <summary>The union of the parameters' valid times, in time order.</summary>
@@ -132,7 +138,7 @@ internal sealed class WeatherGridSampler : ICoverageSampler
     public CoverageFieldsSample? Read(GridNode node, int timeIndex, DateTimeOffset? requestedTime)
     {
         var fields = new List<SampledField>(_parameters.Length + 3);
-        float? u = null, v = null;
+        float? u = null, v = null, cu = null, cv = null;
         bool any = false;
         for (int p = 0; p < _parameters.Length; p++)
         {
@@ -145,6 +151,10 @@ internal sealed class WeatherGridSampler : ICoverageSampler
                 u = reading is null ? null : value;
             if (parameter.Id == WeatherParameters.WindV)
                 v = reading is null ? null : value;
+            if (parameter.Id == WeatherParameters.CurrentU)
+                cu = reading is null ? null : value;
+            if (parameter.Id == WeatherParameters.CurrentV)
+                cv = reading is null ? null : value;
 
             var (quantity, unit) = Describe(parameter.Id);
             fields.Add(new SampledField(parameter.Id, quantity, unit, reading));
@@ -152,6 +162,8 @@ internal sealed class WeatherGridSampler : ICoverageSampler
                 fields.Add(Knots(reading));
             if (parameter.Id == WeatherParameters.SeaSurfaceTemperature)
                 fields.Add(Celsius(reading));
+            if (parameter.Id == WeatherParameters.CurrentSpeed)
+                fields.Add(CurrentKnots(reading));
         }
 
         if (_deriveWindSpeed)
@@ -169,6 +181,23 @@ internal sealed class WeatherGridSampler : ICoverageSampler
                 ? WindComponents.GetFromDirection(Speed.FromMetresPerSecond(du), Speed.FromMetresPerSecond(dv)).TotalDegrees
                 : null;
             fields.Add(new SampledField(WeatherParameters.WindFromDirection, "wind_from_direction", "deg", direction));
+        }
+
+        if (_deriveCurrentSpeed)
+        {
+            double? speed = cu is { } su && cv is { } sv
+                ? CurrentComponents.GetSpeed(Speed.FromMetresPerSecond(su), Speed.FromMetresPerSecond(sv)).TotalMetresPerSecond
+                : null;
+            fields.Add(new SampledField(WeatherParameters.CurrentSpeed, "sea_water_speed", "m/s", speed));
+            fields.Add(CurrentKnots(speed));
+        }
+
+        if (_deriveCurrentDirection)
+        {
+            double? direction = cu is { } du && cv is { } dv
+                ? CurrentComponents.GetToDirection(Speed.FromMetresPerSecond(du), Speed.FromMetresPerSecond(dv)).TotalDegrees
+                : null;
+            fields.Add(new SampledField(WeatherParameters.CurrentToDirection, "sea_water_velocity_to_direction", "deg", direction));
         }
 
         if (!any)
@@ -204,12 +233,21 @@ internal sealed class WeatherGridSampler : ICoverageSampler
         WeatherParameters.SwellHeight => ("swell_wave_significant_height", "m"),
         WeatherParameters.PressureMsl => ("air_pressure_at_mean_sea_level", "Pa"),
         WeatherParameters.SeaSurfaceTemperature => ("sea_surface_temperature", "K"),
+        WeatherParameters.CurrentU => ("eastward_sea_water_velocity", "m/s"),
+        WeatherParameters.CurrentV => ("northward_sea_water_velocity", "m/s"),
+        WeatherParameters.CurrentSpeed => ("sea_water_speed", "m/s"),
+        WeatherParameters.CurrentToDirection => ("sea_water_velocity_to_direction", "deg"),
         _ => (id, null),
     };
 
     // The wind speed again in knots, the unit mariners read it in.
     private static SampledField Knots(double? metresPerSecond) =>
         new(WeatherParameters.WindSpeed + ".kn", "wind_speed", "kn",
+            metresPerSecond is { } s ? Speed.FromMetresPerSecond(s).TotalKnots : null);
+
+    // The current speed again in knots, the unit mariners read it in.
+    private static SampledField CurrentKnots(double? metresPerSecond) =>
+        new(WeatherParameters.CurrentSpeed + ".kn", "sea_water_speed", "kn",
             metresPerSecond is { } s ? Speed.FromMetresPerSecond(s).TotalKnots : null);
 
     // The sea surface temperature again in degrees Celsius, the unit mariners read it in.

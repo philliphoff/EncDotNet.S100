@@ -60,12 +60,41 @@ public class WeatherParametersTests
         Assert.Null(WeatherParameters.FindByGribCode(new GribParameterCode(0, 0, 0)));
     }
 
+    [Theory]
+    [InlineData("eastward_sea_water_velocity", WeatherParameters.CurrentU)]
+    [InlineData("surface_eastward_sea_water_velocity", WeatherParameters.CurrentU)]
+    [InlineData("northward_sea_water_velocity", WeatherParameters.CurrentV)]
+    [InlineData("surface_northward_sea_water_velocity", WeatherParameters.CurrentV)]
+    [InlineData("sea_water_speed", WeatherParameters.CurrentSpeed)]
+    [InlineData("sea_water_velocity_to_direction", WeatherParameters.CurrentToDirection)]
+    [InlineData("direction_of_sea_water_velocity", WeatherParameters.CurrentToDirection)]
+    public void Current_CF_names_map_to_the_current_group(string standardName, string id)
+    {
+        var definition = WeatherParameters.FindByCfStandardName(standardName);
+
+        Assert.NotNull(definition);
+        Assert.Equal(id, definition.Id);
+        Assert.Equal(WeatherParameters.CurrentGroup, definition.Group);
+        // Any level: models give currents at their top layer, whatever its depth.
+        Assert.Null(definition.Level);
+    }
+
+    [Theory]
+    [InlineData(0, WeatherParameters.CurrentToDirection)]
+    [InlineData(1, WeatherParameters.CurrentSpeed)]
+    [InlineData(2, WeatherParameters.CurrentU)]
+    [InlineData(3, WeatherParameters.CurrentV)]
+    public void Current_GRIB_codes_are_discipline_10_category_1(byte number, string id)
+    {
+        Assert.Equal(id, WeatherParameters.FindByGribCode(new GribParameterCode(10, 1, number))?.Id);
+    }
+
     [Fact]
     public void Ids_codes_and_names_are_unique()
     {
         var all = WeatherParameters.All;
 
-        Assert.Equal(13, all.Count);
+        Assert.Equal(17, all.Count);
         Assert.Equal(all.Count, all.Select(d => d.Id).Distinct().Count());
         var codes = all.SelectMany(d => d.GribCodes).ToList();
         Assert.Equal(codes.Count, codes.Distinct().Count());

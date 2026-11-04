@@ -338,8 +338,9 @@ public abstract class WeatherGridProcessorBase :
     /// <see cref="PickAttribute.NavigationNotice"/> row), then the
     /// model run and valid time, then each value with its unit: wave heights
     /// in metres, wind speed in knots (raw value in m/s), directions in
-    /// degrees ("from"), periods in seconds, sea surface temperature in
-    /// degrees Celsius (raw value in kelvin).
+    /// degrees ("from"; current direction "to"), periods in seconds, sea
+    /// surface temperature in degrees Celsius (raw value in kelvin), current
+    /// speed in knots (raw value in m/s).
     /// </summary>
     /// <param name="latitude">Latitude, WGS-84 degrees.</param>
     /// <param name="longitude">Longitude, WGS-84 degrees.</param>
@@ -452,8 +453,12 @@ public abstract class WeatherGridProcessorBase :
             WeatherParameters.WindV => new() { Code = field.Name, Name = "Wind, northward component", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0.0#")} m/s") },
             WeatherParameters.PressureMsl => new() { Code = field.Name, Name = "Mean sea level pressure", RawValue = raw, DisplayValue = Display(x => $"{Number(x / 100, "0.#")} hPa") },
             WeatherParameters.SeaSurfaceTemperature => new() { Code = field.Name, Name = "Sea surface temperature", RawValue = raw, DisplayValue = Display(x => $"{Number(SeaTemperatureStyle.ToCelsius(x), "0.0")} °C") },
-            // The knots copy of the wind speed and the Celsius copy of the
-            // sea temperature are already in their display values.
+            WeatherParameters.CurrentSpeed => new() { Code = field.Name, Name = "Current speed", RawValue = raw, DisplayValue = Display(x => $"{Number(Speed.FromMetresPerSecond(x).TotalKnots, "0.0")} kn") },
+            WeatherParameters.CurrentToDirection => new() { Code = field.Name, Name = "Current direction (to)", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0")}°") },
+            WeatherParameters.CurrentU => new() { Code = field.Name, Name = "Current, eastward component", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0.0#")} m/s") },
+            WeatherParameters.CurrentV => new() { Code = field.Name, Name = "Current, northward component", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0.0#")} m/s") },
+            // The knots copies of the wind and current speeds and the Celsius
+            // copy of the sea temperature are already in their display values.
             _ => null,
         };
     }

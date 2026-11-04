@@ -137,10 +137,7 @@ internal static class CfWeatherReader
                 $"Variables found: {ListVariables(file)}.");
         }
 
-        string model = file.GetGlobalText("source")
-            ?? file.GetGlobalText("institution")
-            ?? file.GetGlobalText("title")
-            ?? (string.IsNullOrWhiteSpace(name) ? "NetCDF" : name);
+        string model = ModelName(file) ?? (string.IsNullOrWhiteSpace(name) ? "NetCDF" : name);
         var origin = new WeatherOrigin(model, referenceTime ?? times.Min(), file.GetGlobalText("institution"));
         return new Result(new WeatherGridSet(origin, native, parameters), times, referenceTime, ignored);
     }
@@ -320,7 +317,15 @@ internal static class CfWeatherReader
         // "name: coords" pairs in CF 1.7+); take the first variable named.
         var first = mappingName.Split([' ', ':'], StringSplitOptions.RemoveEmptyEntries)[0];
         var mapping = file.FindVariable(first);
-        var gridType = mapping?.GetText("grid_mapping_name");
+
+        // A mapping the file doesn't carry says nothing against the 1-D
+        // latitude and longitude coordinates the grid is read on: ERDDAP
+        // subsets of the IOOS HF radar currents name "wgs84" but leave the
+        // variable out (issue #1228).
+        if (mapping is null)
+            return;
+
+        var gridType = mapping.GetText("grid_mapping_name");
         if (string.Equals(gridType, "latitude_longitude", StringComparison.OrdinalIgnoreCase))
             return;
 
@@ -461,6 +466,26 @@ internal static class CfWeatherReader
         }
 
         return null;
+    }
+
+    // The longest global attribute text taken as a model name. Longer ones are
+    // descriptions or lists: HF radar "source" names every radial file, and
+    // satellite analyses list their input sensors.
+    internal const int MaxModelNameLength = 80;
+
+    // The first of source, institution, creator_name and title that reads as
+    // a name, or else the first one given.
+    private static string? ModelName(NetCdfFile file)
+    {
+        string?[] candidates =
+        [
+            file.GetGlobalText("source"),
+            file.GetGlobalText("institution"),
+            file.GetGlobalText("creator_name"),
+            file.GetGlobalText("title"),
+        ];
+        return candidates.FirstOrDefault(c => c is { Length: <= MaxModelNameLength })
+            ?? candidates.FirstOrDefault(c => c is not null);
     }
 
     private static bool IsVertical(NetCdfVariable coordinate) =>

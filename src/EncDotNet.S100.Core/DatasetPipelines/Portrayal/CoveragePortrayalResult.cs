@@ -226,6 +226,38 @@ public sealed class ArrowCoverageSubLayer : CoverageSubLayerBase
     /// produces no layer.
     /// </summary>
     public required GeographicBounds FallbackExtent { get; init; }
+
+    /// <summary>
+    /// Whether these arrows give way to S-111 surface currents. When set, the
+    /// S-98 rule <c>R-111-WX-B</c> hides the arrows that fall inside an active
+    /// S-111 dataset's <see cref="CoveragePortrayalResult.CoverageExtent"/>, so
+    /// only the S-111 arrows are drawn there. Set by the model current arrows
+    /// (issue #1228); defaults to <see langword="false"/>.
+    /// </summary>
+    public bool YieldsToS111 { get; init; }
+
+    /// <summary>
+    /// Returns a copy of this sub-layer drawing <paramref name="coverage"/>
+    /// instead of <see cref="Coverage"/>. Used by the S-98 rule that hides
+    /// model currents inside S-111 coverage.
+    /// </summary>
+    /// <param name="coverage">The coverage to draw.</param>
+    public ArrowCoverageSubLayer WithCoverage(StyledCoverageLayer coverage) =>
+        new()
+        {
+            LayerKey = LayerKey,
+            LayerName = LayerName,
+            Plane = Plane,
+            WithinPlanePriority = WithinPlanePriority,
+            SourceFeatureType = SourceFeatureType,
+            Coverage = coverage,
+            Viewport = Viewport,
+            Palette = Palette,
+            BaseSymbolScale = BaseSymbolScale,
+            SymbolProvider = SymbolProvider,
+            FallbackExtent = FallbackExtent,
+            YieldsToS111 = YieldsToS111,
+        };
 }
 
 /// <summary>
@@ -428,7 +460,8 @@ public sealed class CoveragePortrayalResult
     /// viewport a render sampled, or <see langword="null"/> when the producer
     /// does not report one. S-98 rules that act only where the coverage is
     /// displayed read it: S-102 replaces ENC depth features inside this extent
-    /// and nowhere else (S-98 Part A §A-6.9.1).
+    /// and nowhere else (S-98 Part A §A-6.9.1), and S-111 hides model current
+    /// arrows inside its own (<see cref="ArrowCoverageSubLayer.YieldsToS111"/>).
     /// </summary>
     public GeographicBounds? CoverageExtent { get; init; }
 

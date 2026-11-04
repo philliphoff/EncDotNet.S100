@@ -245,6 +245,8 @@ public class ProjectedCoverageExtentTests
                 arrows.FallbackExtent.MinLongitude,
                 arrows.FallbackExtent.MaxLatitude,
                 arrows.FallbackExtent.MaxLongitude));
+            // The extent model currents give way inside (R-111-WX-B, #1228).
+            Assert.Equal(arrows.FallbackExtent, result.CoverageExtent);
         }
         finally
         {
