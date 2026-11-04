@@ -413,6 +413,13 @@ internal sealed partial class ViewerSettings
     public bool ShowOutOfScaleExtentIndicators { get; set; } = true;
 
     /// <summary>
+    /// Whether cells of load-as-you-pan sets are portrayed in the background,
+    /// while the map is idle, so panning to them later is quick (#1266). On by
+    /// default; turning it off stops the background work at once.
+    /// </summary>
+    public bool PortrayalPrewarmEnabled { get; set; } = true;
+
+    /// <summary>
     /// Whether the on-chart overscale "curtain" (a subtle vertical-line pattern,
     /// S-52 / S-101 <c>AP(OVERSC01)</c>) is drawn over the region of a cell that
     /// is being displayed beyond its compilation scale (issue #441, Form A).

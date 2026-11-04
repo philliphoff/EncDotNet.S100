@@ -6,6 +6,16 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Charts get ready for panning in the background.** When a Library source
+  or a large exchange set loads as you pan, SoundCharts now portrays its
+  not-yet-loaded cells one at a time while the map is idle, so panning to
+  them later takes about a second instead of many seconds. It stops whenever
+  the map is loading or drawing, picks up where it left off after a restart,
+  and shows its progress under the Library's bulk bar. Turn it off with
+  **Prepare charts in the background** in Settings → Advanced. The portrayal
+  cache is now capped at 1 GB, and background work fills at most three
+  quarters of it.
+
 - **S-57 updates are checked before they apply.** An S-57 update now applies
   only when it's for the cell's edition and follows on from the updates
   before it, record by record. Updates a re-issue already holds are skipped,

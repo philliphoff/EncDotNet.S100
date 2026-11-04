@@ -92,8 +92,9 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
     {
         ArgumentNullException.ThrowIfNull(mariner);
 
-        // The MoonSharp interpreter is not interruptible mid-script, so the
-        // token is honoured at the coarse boundary before invocation.
+        // The MoonSharp interpreter has no interrupt of its own, so the token
+        // is checked before the run and at every feature the rules emit (see
+        // ExecuteRawCore).
         cancellationToken.ThrowIfCancellationRequested();
 
         using var activity = Telemetry.ActivitySource.StartActivity("s100.lua.execute");
@@ -108,7 +109,7 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
             // sync loader callback inside ExecuteRawCore.
             var luaSources = await LoadLuaSourcesAsync(cancellationToken).ConfigureAwait(false);
 
-            var (emitted, provider) = ExecuteRawCore(mariner, luaSources);
+            var (emitted, provider) = ExecuteRawCore(mariner, luaSources, cancellationToken);
 
             Telemetry.LuaFeaturesCount.Add(
                 emitted.Count,
@@ -160,7 +161,7 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         ArgumentNullException.ThrowIfNull(mariner);
         cancellationToken.ThrowIfCancellationRequested();
         var luaSources = await LoadLuaSourcesAsync(cancellationToken).ConfigureAwait(false);
-        return ExecuteRawCore(mariner, luaSources).Emitted;
+        return ExecuteRawCore(mariner, luaSources, cancellationToken).Emitted;
     }
 
     /// <summary>
@@ -222,17 +223,23 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
     }
 
     private (IReadOnlyList<EmittedInstruction> Emitted, ILuaDataProvider Provider) ExecuteRawCore(
-        MarinerSettings mariner, IReadOnlyDictionary<string, string> luaSources)
+        MarinerSettings mariner, IReadOnlyDictionary<string, string> luaSources, CancellationToken cancellationToken)
     {
         var provider = _providerFactory.Create(mariner);
 
         using var lua = _luaEngine.CreateContext();
         Prepare(lua, provider, mariner, luaSources);
+        if (cancellationToken.CanBeCanceled)
+            InstallCancellationCheck(lua, cancellationToken);
 
         // 7. Run portrayal.
         try
         {
             lua.Call("PortrayalMain");
+        }
+        catch (Exception) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(cancellationToken);
         }
         catch (Exception ex)
         {
@@ -242,6 +249,27 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
 
         return (Deduplicate(provider.EmittedInstructions, 0), provider);
     }
+
+    /// <summary>
+    /// Makes a running <c>PortrayalMain</c> stop soon after
+    /// <paramref name="cancellationToken"/> is cancelled. The S-100 Part 9a
+    /// rules hand each feature's drawing instructions to the global
+    /// <c>HostPortrayalEmit</c>, so wrapping that global with a token check
+    /// gives one check per feature without touching the interpreter. A cell's
+    /// rules can run for several seconds, so without this a cancelled load kept
+    /// a core busy until they finished.
+    /// </summary>
+    private static void InstallCancellationCheck(ILuaContext lua, CancellationToken cancellationToken)
+    {
+        lua.SetGlobal(CancellationCheckGlobal, (Action)cancellationToken.ThrowIfCancellationRequested);
+        lua.Execute(
+            "local emit = HostPortrayalEmit\n" +
+            "if emit ~= nil then\n" +
+            "  HostPortrayalEmit = function(...) " + CancellationCheckGlobal + "() return emit(...) end\n" +
+            "end\n");
+    }
+
+    private const string CancellationCheckGlobal = "__EncDotNetCheckCancelled";
 
     // 8. Collect + dedup. PortrayalModel.lua AddFeature() stores items under
     //    both array append and feature-ID index, so ipairs() may visit some

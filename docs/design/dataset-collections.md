@@ -724,6 +724,26 @@ This is the same mechanism as large S-57 sets, generalized:
 - **The threshold** (`CellThreshold = 50`) stays a heuristic for opening
   from the File menu only. An explicit "Load as you pan" always defers.
 
+> **Background pre-warm (#1266):** `PortrayalCacheWarmer` renders the
+> deferred cells off the map, one at a time and nearest the view first, so
+> their Lua portrayal and pattern clip are already in the disk caches when
+> the map reaches them.
+> - **When:** only after the map has had nothing visible to load or draw for
+>   750 ms. A running cell is cancelled when that changes or when the cell
+>   starts loading for real.
+> - **Same keys:** it opens the cell through the loader's
+>   `CreateExchangeSetCellProcessor` and renders it under the map's current
+>   presentation with its own pipeline factory, renderer and Lua engine, so
+>   it never shares Lua state with a load on the map.
+> - **Resumable:** a ledger beside the portrayal cache records each cell's
+>   file stamps, the presentation signature and the cache keys the render
+>   used. A cell counts as done only while the signature matches and every
+>   key is still cached.
+> - **Cache room:** the portrayal cache cap is 1 GB (the NOAA Washington
+>   source fills about 115 MB). Pre-warm stops at three quarters of the
+>   portrayal and pattern-clip caps, so it never makes them evict entries in
+>   use.
+
 ### 7.3 Download (NOAA)
 
 > **Slice 6 as built:**

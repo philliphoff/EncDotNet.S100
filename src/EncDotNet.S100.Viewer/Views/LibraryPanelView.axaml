@@ -718,6 +718,12 @@
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_LoadAsYouPan}" />
                         </Grid>
                     </Border>
+                    <!-- Background chart preparation for load-as-you-pan sets (#1266). -->
+                    <TextBlock IsVisible="{Binding PortrayalWarm.IsVisible, FallbackValue=False}"
+                               Text="{Binding PortrayalWarm.Text, FallbackValue=''}"
+                               AutomationProperties.AutomationId="Library.PrewarmStatus"
+                               FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.65"
+                               Margin="10,0" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
 
                 <ListBox x:Name="ItemList"

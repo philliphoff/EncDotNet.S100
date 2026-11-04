@@ -1508,6 +1508,24 @@
   <data name="Tooltip_PerformanceProfile" xml:space="preserve">
     <value>Sizes the tile caches. Auto picks a tier from this machine's cores and RAM; Low/Balanced/High pin smaller-to-larger budgets. The detected tier is shown below. Applies on the next dataset reload.</value>
   </data>
+  <data name="Settings_PortrayalPrewarmEnabled" xml:space="preserve">
+    <value>Prepare charts in the background</value>
+  </data>
+  <data name="Tooltip_PortrayalPrewarmEnabled" xml:space="preserve">
+    <value>While the map is idle, portray the cells of sets that load as you pan, so they appear quickly when you pan to them. Uses one processor core and disk space in the cache.</value>
+  </data>
+  <data name="Library_PrewarmWorkingFormat" xml:space="preserve">
+    <value>Preparing charts for panning: {0:N0} of {1:N0}</value>
+  </data>
+  <data name="Library_PrewarmPausedFormat" xml:space="preserve">
+    <value>Preparing charts for panning: {0:N0} of {1:N0} (paused while the map draws)</value>
+  </data>
+  <data name="Library_PrewarmCompleteFormat" xml:space="preserve">
+    <value>{0:N0} charts ready for panning</value>
+  </data>
+  <data name="Library_PrewarmCacheFullFormat" xml:space="preserve">
+    <value>Chart cache full: {0:N0} of {1:N0} charts prepared</value>
+  </data>
   <data name="Settings_MaintenanceSubsection" xml:space="preserve">
     <value>Maintenance</value>
   </data>

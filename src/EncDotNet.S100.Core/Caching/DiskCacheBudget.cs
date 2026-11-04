@@ -112,6 +112,22 @@ public sealed class DiskCacheBudget
     public int Count => _entries.Count;
 
     /// <summary>
+    /// Loads the index from disk if no write has loaded it yet, so
+    /// <see cref="TotalBytes"/> and <see cref="Count"/> report what the
+    /// directory holds rather than zero.
+    /// </summary>
+    public void EnsureIndexed()
+    {
+        lock (_gate)
+        {
+            if (!_loaded)
+            {
+                Scan();
+            }
+        }
+    }
+
+    /// <summary>
     /// Reads the entry at <paramref name="path"/> and marks it most recently
     /// used, or returns <see langword="null"/> when it is absent or unreadable.
     /// Never throws for IO errors.

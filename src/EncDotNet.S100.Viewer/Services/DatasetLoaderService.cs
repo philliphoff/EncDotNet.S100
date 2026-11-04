@@ -712,17 +712,39 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             if (!fromExchangeSet)
                 return _pipelineFactory.CreateProcessorWithFilesystemUpdates(entry.FilePath);
 
-            if (!entry.HasUpdates)
-                return _pipelineFactory.CreateProcessor(entry.Source!, entry.RelativePath!, spec);
-
-            return spec switch
-            {
-                "S-57" => _pipelineFactory.CreateS57ProcessorWithUpdates(
-                    entry.Source!, entry.RelativePath!, entry.UpdateRelativePaths),
-                _ => _pipelineFactory.CreateS101ProcessorWithUpdates(
-                    entry.Source!, entry.RelativePath!, entry.UpdateRelativePaths),
-            };
+            return CreateExchangeSetCellProcessor(
+                _pipelineFactory, entry.Source!, entry.RelativePath!, entry.UpdateRelativePaths, spec);
         }, token);
+
+    /// <summary>
+    /// Builds the processor for an exchange-set cell: the base cell alone, or
+    /// collapsed with its in-set sequential updates into a single up-to-date
+    /// dataset (S-101 / S-57 / S-100 Part 10a; S-57 Part 3). Shared with the
+    /// background portrayal-cache warmer so both open a cell the same way and
+    /// so portray it under the same cache key.
+    /// </summary>
+    /// <param name="factory">The pipeline factory to build the processor with.</param>
+    /// <param name="source">The exchange set's asset source.</param>
+    /// <param name="relativePath">The base cell's path within <paramref name="source"/>.</param>
+    /// <param name="updateRelativePaths">The cell's sequential updates, in order; empty for none.</param>
+    /// <param name="spec">The cell's declared product specification.</param>
+    /// <returns>The processor; the caller owns it.</returns>
+    internal static IDatasetProcessor CreateExchangeSetCellProcessor(
+        DatasetPipelineFactory factory,
+        EncDotNet.S100.Core.IAssetSource source,
+        string relativePath,
+        IReadOnlyList<string> updateRelativePaths,
+        string spec)
+    {
+        if (updateRelativePaths.Count == 0)
+            return factory.CreateProcessor(source, relativePath, spec);
+
+        return spec switch
+        {
+            "S-57" => factory.CreateS57ProcessorWithUpdates(source, relativePath, updateRelativePaths),
+            _ => factory.CreateS101ProcessorWithUpdates(source, relativePath, updateRelativePaths),
+        };
+    }
 
     /// <summary>
     /// Applies Viewer load defaults once a processor is registered: collapse

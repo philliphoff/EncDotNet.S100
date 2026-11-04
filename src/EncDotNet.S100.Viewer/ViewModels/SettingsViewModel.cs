@@ -906,6 +906,26 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
     /// </summary>
     public event Action? ExtentIndicatorsChanged;
 
+    private bool _portrayalPrewarmEnabled;
+    /// <summary>
+    /// Whether cells of load-as-you-pan sets are portrayed in the background so
+    /// panning to them later is quick (#1266). Persisted to
+    /// <see cref="ViewerSettings.PortrayalPrewarmEnabled"/>; the warmer reads the
+    /// setting on every pass, so the change applies at once.
+    /// </summary>
+    public bool PortrayalPrewarmEnabled
+    {
+        get => _portrayalPrewarmEnabled;
+        set
+        {
+            if (SetProperty(ref _portrayalPrewarmEnabled, value))
+            {
+                _settings.PortrayalPrewarmEnabled = value;
+                _settings.Save();
+            }
+        }
+    }
+
     private bool _showOutOfScaleExtentIndicators;
     /// <summary>
     /// Whether an accent border is drawn around the extent of a loaded dataset
@@ -1144,6 +1164,7 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
 
         _basemapMode = settings.BasemapMode;
         _showOutOfScaleExtentIndicators = settings.ShowOutOfScaleExtentIndicators;
+        _portrayalPrewarmEnabled = settings.PortrayalPrewarmEnabled;
         _showOverscaleIndication = settings.ShowOverscaleIndication;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;
 
