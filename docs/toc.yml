@@ -104,5 +104,7 @@
           href: design/depth-basis-indicator.md
         - name: Chart-wide water level adjustment
           href: design/chart-wide-water-level-adjustment.md
+        - name: Installed-data store
+          href: design/installed-data-store.md
         - name: Predefined display combinations
           href: design/predefined-display-combinations.md
