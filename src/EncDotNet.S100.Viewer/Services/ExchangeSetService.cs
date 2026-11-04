@@ -1090,7 +1090,9 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
                 item.MinimumDisplayScale,
                 item.MaximumDisplayScale,
                 item.GeographicBounds,
-                item.NotForNavigation)));
+                item.NotForNavigation,
+                item.CompilationScale,
+                LazyLoading.CoveredCellGate.FromCatalogueCoverage(item.Coverage))));
         }
 
         if (registrations.Count > 0)

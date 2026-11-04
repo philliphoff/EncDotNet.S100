@@ -63,6 +63,21 @@ internal sealed record LazyLoadOptions
     /// were held back because the tile renderer still had visible tiles to draw.
     /// </summary>
     public TimeSpan SpeculativeRetryDelay { get; init; } = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>
+    /// Whether an in-view cell whose part of the view is covered by finer cells
+    /// loads as <see cref="LoadTier.Covered"/> (after the visible and ahead
+    /// cells) rather than as <see cref="LoadTier.Visible"/> (#1265).
+    /// </summary>
+    public bool DeferCoveredCells { get; init; } = true;
+
+    /// <summary>
+    /// Uncovered slivers narrower than this many screen pixels don't stop a
+    /// cell counting as covered (<see cref="DeferCoveredCells"/>). Catalogue
+    /// polygons of neighbouring cells can leave hairline gaps; the deferred cell
+    /// still loads and fills them shortly after.
+    /// </summary>
+    public double CoverageTolerancePixels { get; init; } = 1.0;
 }
 
 /// <summary>
@@ -85,6 +100,17 @@ internal sealed record LazyLoadOptions
 /// time, and not while the tile renderer still has visible tiles to draw. This
 /// matches the tile renderer's own queue, which draws visible tiles before
 /// predicted and pre-warm tiles.
+/// </para>
+/// <para>
+/// An in-view cell whose part of the view is covered by finer cells that draw
+/// at this scale (loaded, or loading as visible) is ranked
+/// <see cref="LoadTier.Covered"/> instead (#1265): overlap suppression would
+/// hide almost all of it, so it loads after the finer cells rather than
+/// competing with them. It is deferred, not skipped, and the queue is ranked
+/// again whenever a load finishes, so a finer cell that turns out not to draw
+/// at this scale (or fails) promotes the coarse cell back to visible. Coverage
+/// comes from the catalogue (<see cref="DatasetEntry.CatalogueCoverage"/>);
+/// cells known only by a bounding box never count as covering.
 /// </para>
 /// <para>
 /// A running load whose cell falls outside the ahead window (or out of scale)
@@ -128,6 +154,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     private MapViewportSnapshot? _lastSnapshot;
     private LoadWindow? _lastWindow;
     private double _lastScaleDenominator = double.NaN;
+    private double _lastResolution = double.NaN;
     private bool _speculativeRetryScheduled;
     private bool _disposed;
 
@@ -345,16 +372,11 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             _lastSnapshot = snapshot;
             _lastWindow = window;
             _lastScaleDenominator = scaleDenominator;
+            _lastResolution = snapshot.MercatorResolution;
 
             // Rebuild the queue: a cell that left the view drops out now, and
             // the rest are re-ranked for this view.
-            _queued.Clear();
-            foreach (var entry in _deferred)
-            {
-                if (_running.ContainsKey(entry)) continue;
-                if (Classify(entry, scaleDenominator, window) is { } tier)
-                    _queued[entry] = new QueuedLoad(tier, LoadPrioritizer.Rank(entry.GeographicBounds, tier, window));
-            }
+            RebuildQueue(window, scaleDenominator, snapshot.MercatorResolution);
 
             // Cancel running loads this view no longer wants. The ahead margin
             // keeps a small pan from cancelling a cell that is nearly in view.
@@ -409,6 +431,111 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         StartQueuedLoads();
     }
 
+    /// <summary>
+    /// Rebuilds <see cref="_queued"/> from the deferred cells for a view. Called
+    /// under <see cref="_lock"/>.
+    /// </summary>
+    private void RebuildQueue(LoadWindow window, double scaleDenominator, double resolution)
+    {
+        _queued.Clear();
+        List<DatasetEntry>? inView = null;
+        foreach (var entry in _deferred)
+        {
+            if (_running.ContainsKey(entry)) continue;
+            if (Classify(entry, scaleDenominator, window) is not { } tier) continue;
+            if (tier == LoadTier.Visible && _options.DeferCoveredCells)
+                (inView ??= new()).Add(entry);
+            else
+                _queued[entry] = new QueuedLoad(tier, LoadPrioritizer.Rank(entry.GeographicBounds, tier, window));
+        }
+
+        if (inView is null)
+            return;
+
+        List<string>? covered = null;
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        foreach (var (entry, tier) in RankCoverage(inView, window, resolution))
+        {
+            if (tier == LoadTier.Covered)
+                (covered ??= new()).Add(entry.DisplayName);
+            _queued[entry] = new QueuedLoad(tier, LoadPrioritizer.Rank(entry.GeographicBounds, tier, window));
+        }
+
+        if (covered is not null && _logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug(
+                "Lazy load deferred {Deferred} of {InView} in-view cells covered by finer cells in {Elapsed} ms: {Cells}.",
+                covered.Count, inView.Count, watch.ElapsedMilliseconds, string.Join(", ", covered));
+        }
+    }
+
+    /// <summary>
+    /// Splits in-view deferred cells into <see cref="LoadTier.Visible"/> and
+    /// <see cref="LoadTier.Covered"/>, finest first: a cell is covered when the
+    /// coverage of strictly finer cells that draw now (loaded, visible, opaque
+    /// and inside their display window) or will draw soon (loading or queued as
+    /// visible) fills its part of the view. Called under <see cref="_lock"/>.
+    /// </summary>
+    private IEnumerable<(DatasetEntry Entry, LoadTier Tier)> RankCoverage(
+        List<DatasetEntry> inView, LoadWindow window, double resolution)
+    {
+        // Covering cells: finer coverage that is, or soon will be, on the map.
+        var coverers = new List<(int? Rank, NetTopologySuite.Geometries.Geometry Coverage)>();
+        foreach (var loaded in _loadedEntries)
+        {
+            if (loaded.CatalogueCoverage is { } coverage && DrawsNow(loaded, resolution)
+                && LazyCellGate.IntersectsViewport(loaded.GeographicBounds, window.South, window.West, window.North, window.East))
+            {
+                coverers.Add((RankingScale(loaded), coverage));
+            }
+        }
+        foreach (var (running, load) in _running)
+        {
+            if (load.Tier == LoadTier.Visible && running.CatalogueCoverage is { } coverage && IsShown(running))
+                coverers.Add((RankingScale(running), coverage));
+        }
+
+        var tolerance = CoveredCellGate.ToleranceDegrees(
+            resolution, window.CenterLatitude, _options.CoverageTolerancePixels);
+
+        // Finest first, so a cell's own tier is settled before coarser cells
+        // decide whether it covers them.
+        inView.Sort((a, b) => DataModel.CellScaleRanking.Compare(RankingScale(a), RankingScale(b)));
+        foreach (var entry in inView)
+        {
+            var rank = RankingScale(entry);
+            var finer = coverers
+                .Where(c => DataModel.CellScaleRanking.IsFiner(c.Rank, rank))
+                .Select(c => c.Coverage)
+                .ToList();
+            if (finer.Count > 0
+                && CoveredCellGate.IsCoveredInView(entry.CatalogueCoverage, entry.GeographicBounds, finer, window, tolerance))
+            {
+                yield return (entry, LoadTier.Covered);
+                continue;
+            }
+
+            if (entry.CatalogueCoverage is { } own && IsShown(entry))
+                coverers.Add((rank, own));
+            yield return (entry, LoadTier.Visible);
+        }
+    }
+
+    private static int? RankingScale(DatasetEntry entry) =>
+        DataModel.CellScaleRanking.RankingScale(entry.CompilationScale, entry.MinimumDisplayScale);
+
+    /// <summary>
+    /// Whether a loaded cell draws, fully opaque, at <paramref name="resolution"/>:
+    /// loaded, shown (<see cref="IsShown"/>), and not zoomed out past its display window.
+    /// </summary>
+    private static bool DrawsNow(DatasetEntry entry, double resolution) =>
+        entry.IsLoaded
+        && IsShown(entry)
+        && (entry.ContentMaxVisibleResolution is not { } max || double.IsNaN(resolution) || resolution <= max);
+
+    /// <summary>Whether the user has the cell switched on at full opacity.</summary>
+    private static bool IsShown(DatasetEntry entry) => entry.IsVisible && entry.Opacity >= 1.0;
+
     private static LoadTier? Classify(DatasetEntry entry, double scaleDenominator, LoadWindow window) =>
         LoadPrioritizer.Classify(
             entry.GeographicBounds, entry.UsageBand, entry.MinimumDisplayScale, scaleDenominator, window);
@@ -422,7 +549,8 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     /// Starts queued loads, best first, while slots are free: visible cells may
     /// take every slot; speculative cells start only when no visible cell is
     /// queued, within their own cap, and not while the tile renderer has
-    /// visible tiles to draw.
+    /// visible tiles to draw. Covered and unbounded cells also wait until no
+    /// visible load is running.
     /// </summary>
     private void StartQueuedLoads()
     {
@@ -445,6 +573,14 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                     var speculativeRunning = _running.Values.Count(r => r.Tier != LoadTier.Visible);
                     if (speculativeRunning >= Math.Max(0, _options.MaxSpeculativeConcurrency))
                         break;
+                    // A covered cell waits for the visible loads too: the finer
+                    // cells covering it are among them, and it would only take
+                    // CPU and allocation headroom from them (#1265).
+                    if (queued.Tier >= LoadTier.Covered
+                        && _running.Values.Any(r => r.Tier == LoadTier.Visible))
+                    {
+                        break;
+                    }
                     if (_hasVisibleTileWork?.Invoke() == true)
                     {
                         retry = true;
@@ -536,15 +672,22 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                     _loadedEntries.Add(entry);
                     entry.IsDeferred = false;
                 }
-                else if (cancelled
-                    && _lastWindow is { } window
-                    && Classify(entry, _lastScaleDenominator, window) is { } tier)
+
+                // Rank the queue again: a finished finer cell may now cover a
+                // coarse one, or turn out not to draw at this scale (or have
+                // failed) and so promote a covered cell back to visible. A
+                // cancelled cell the view came back to while its load was
+                // unwinding is queued again here too, since the evaluation that
+                // brought it back skipped it while it was still running.
+                // A failed cell isn't queued again at once; the next viewport
+                // evaluation retries it.
+                if (_lastWindow is { } window)
                 {
-                    // The view came back while the cancelled load was unwinding;
-                    // that evaluation skipped the still-running cell, so queue it
-                    // again here.
-                    _queued[entry] = new QueuedLoad(tier, LoadPrioritizer.Rank(entry.GeographicBounds, tier, window));
+                    RebuildQueue(window, _lastScaleDenominator, _lastResolution);
+                    if (failed)
+                        _queued.Remove(entry);
                 }
+
             }
         }
         load.Cancellation.Dispose();

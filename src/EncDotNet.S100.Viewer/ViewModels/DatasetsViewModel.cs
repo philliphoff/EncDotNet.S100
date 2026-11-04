@@ -156,6 +156,23 @@ internal sealed class DatasetEntry : ViewModelBase
     public ExchangeSets.BoundingBox? GeographicBounds { get; }
 
     /// <summary>
+    /// The cell's compilation scale denominator from its catalogue (for example
+    /// the NOAA product catalogue's <c>cscale</c>), known before the cell is
+    /// parsed; <see langword="null"/> when the catalogue doesn't give one. Ranks
+    /// cells for lazy-load deferral (#1265) the way overlap suppression ranks
+    /// loaded cells (<see cref="DataModel.CellScaleRanking"/>).
+    /// </summary>
+    public int? CompilationScale { get; }
+
+    /// <summary>
+    /// The cell's coverage from its catalogue as an EPSG:4326 geometry
+    /// (x = longitude), known before the cell is parsed; <see langword="null"/>
+    /// when the catalogue only gives a bounding box. Lazy loading defers a
+    /// coarse cell while finer cells' coverage fills its part of the view (#1265).
+    /// </summary>
+    public NetTopologySuite.Geometries.Geometry? CatalogueCoverage { get; }
+
+    /// <summary>
     /// The ENC navigational-purpose band (1&#160;Overview .. 6&#160;Berthing)
     /// parsed from an S-57 cell name (S-57 Ed 3.1 App&#160;B.1), or
     /// <see langword="null"/> for other products or unrecognised names.
@@ -820,9 +837,13 @@ internal sealed class DatasetEntry : ViewModelBase
         int? minimumDisplayScale = null,
         int? maximumDisplayScale = null,
         ExchangeSets.BoundingBox? geographicBounds = null,
-        bool notForNavigation = false)
+        bool notForNavigation = false,
+        int? compilationScale = null,
+        NetTopologySuite.Geometries.Geometry? catalogueCoverage = null)
     {
         FilePath = filePath;
+        CompilationScale = compilationScale;
+        CatalogueCoverage = catalogueCoverage;
         NotForNavigation = notForNavigation;
         ProductSpec = productSpec;
         Source = source;
@@ -1497,7 +1518,9 @@ internal sealed class DatasetsViewModel : ViewModelBase
                 minimumDisplayScale: reg.MinimumDisplayScale,
                 maximumDisplayScale: reg.MaximumDisplayScale,
                 geographicBounds: reg.GeographicBounds,
-                notForNavigation: reg.NotForNavigation);
+                notForNavigation: reg.NotForNavigation,
+                compilationScale: reg.CompilationScale,
+                catalogueCoverage: reg.CatalogueCoverage);
 
             // Mark the entry deferred *before* it is inserted (and therefore
             // before the extent-overlay / grouping subscribers attach to it).

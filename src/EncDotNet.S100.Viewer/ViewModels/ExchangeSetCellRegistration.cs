@@ -19,6 +19,8 @@ namespace EncDotNet.S100.Viewer.ViewModels;
 /// <param name="GeographicBounds">The cell's EPSG:4326 footprint from the
 /// catalogue, used for viewport culling.</param>
 /// <param name="NotForNavigation">Whether the catalogue marks the cell not for navigation.</param>
+/// <param name="CompilationScale">The catalogue's compilation scale denominator, if known.</param>
+/// <param name="CatalogueCoverage">The catalogue's coverage polygons (EPSG:4326, x = longitude), if known.</param>
 internal sealed record ExchangeSetCellRegistration(
     IAssetSource Source,
     string RelativePath,
@@ -28,4 +30,6 @@ internal sealed record ExchangeSetCellRegistration(
     int? MinimumDisplayScale = null,
     int? MaximumDisplayScale = null,
     ExchangeSets.BoundingBox? GeographicBounds = null,
-    bool NotForNavigation = false);
+    bool NotForNavigation = false,
+    int? CompilationScale = null,
+    NetTopologySuite.Geometries.Geometry? CatalogueCoverage = null);

@@ -20,11 +20,20 @@ internal enum LoadTier
     Ahead = 1,
 
     /// <summary>
+    /// The cell is in view, but finer cells that draw at this scale cover its
+    /// part of the view (#1265). Overlap suppression would hide almost all of
+    /// it, so it loads speculatively after the visible and ahead cells instead
+    /// of competing with them; once loaded it fills any hairline gaps between
+    /// the finer cells.
+    /// </summary>
+    Covered = 2,
+
+    /// <summary>
     /// The cell has no known footprint, so it may or may not be in view. Loaded
     /// last, like the tile renderer's idle pre-warm, so it never holds back a
     /// cell that is known to be in view.
     /// </summary>
-    Unbounded = 2,
+    Unbounded = 3,
 }
 
 /// <summary>
