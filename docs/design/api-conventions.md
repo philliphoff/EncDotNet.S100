@@ -71,7 +71,8 @@ event). Wrap the live collection so it cannot be downcast:
 - Maps: `new ReadOnlyDictionary<K, V>(dict)` (available on all target
   frameworks).
 - Sets: `new ReadOnlySetView<T>(set)` (an internal Core wrapper — `ReadOnlySet<T>`
-  / `HashSet<T>.AsReadOnly()` are .NET 9+ only and Core also targets .NET 8).
+  / `HashSet<T>.AsReadOnly()` wrap only an `ISet<T>`, and some owners hold an
+  `IReadOnlySet<T>`).
 
 Both are live projections (they reflect the owner's later edits), O(1) to
 construct. This is worth doing even though all consumers are first-party,
@@ -248,7 +249,7 @@ Then remove now-unused `using System.Collections.Immutable;` /
 `using System.Collections.ObjectModel;` as appropriate, and rebuild.
 
 `ReadOnlyDictionary<K, V>.Empty` lives in
-`System.Collections.ObjectModel` (available since .NET 8).
+`System.Collections.ObjectModel`.
 
 ## 8. Geographic coordinates: one canonical type
 
@@ -452,5 +453,4 @@ the baseline only makes it visible. Say so in the pull request.
 3. Run that test project once with `S100_UPDATE_API_BASELINE=1` to write
    `src/<AssemblyName>/PublicApi.txt`, and review and commit it.
 
-The baseline is taken from the `net10.0` build, the target the tests run on.
-The libraries' `net8.0` build compiles the same sources.
+The baseline is taken from the `net10.0` build, the libraries' only target.

@@ -1,8 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework />
-    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <IsPackable>true</IsPackable>
     <Description>Per-spec IDatasetProcessor implementations, the DatasetPipelineFactory (file -&gt; processor detection), the weather grid processors (NetCDF-CF, GRIB2), the CAP weather warning processor, the headless image-render capability, the S-98 interoperability authority, and the validation runner for IHO S-100 product datasets. Consumed by the EncDotNet.S100 convenience package, the viewer, and the s100 CLI.</Description>
   </PropertyGroup>

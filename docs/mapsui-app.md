@@ -7,7 +7,7 @@ Mapsui hosts; see [Use another Mapsui host](#use-another-mapsui-host).
 
 ## Prerequisites
 
-- An Avalonia 12 app targeting .NET 8 or later.
+- An Avalonia 12 app targeting .NET 10 or later.
 - A dataset file, such as an S-101 cell (`.000`) or an S-102 file (`.h5`). See
   [Get sample data](getting-started.md#get-sample-data).
 
