@@ -138,9 +138,8 @@ made from its data. The Library can fetch some of these sources for you.
    **Weather Data (GRIB2, NetCDF, CAP)** file type to see weather files, or
    **All files** for a GRIB2 file with no extension.
 
-   The Datasets panel lists it with a **Not an S-100 product** badge. The
-   Layer stack lists the layers it draws, and the wave height fill's entry
-   shows a colour legend.
+   The Datasets panel lists it, and the Layer stack lists the layers it
+   draws; the wave height fill's entry shows a colour legend.
 2. Open **Display controls**. While a GRIB2 or NetCDF dataset is loaded, its
    **Weather** section has four switches for every weather dataset:
 

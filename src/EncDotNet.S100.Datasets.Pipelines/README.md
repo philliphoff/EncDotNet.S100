@@ -168,7 +168,7 @@ names for:
 
 | Trait | Meaning | Read by |
 |---|---|---|
-| `IsS100` | `false` for a product that isn't S-100 (GRIB2, NetCDF, CAP) | MCP `list_specs`, the viewer's "Not an S-100 product" badge and pick-report notice |
+| `IsS100` | `false` for a product that isn't S-100 (GRIB2, NetCDF, CAP) | MCP `list_specs` and the viewer's pick-report notice |
 | `Portrayal` | `PortrayalBasis.Catalogue`, or `PortrayalBasis.Application("S-104 Ed 2.0.0")` for a portrayal drawn in code | `list_specs`, `describe_feature`, `s100 info`, the viewer's portrayal note |
 | `PortrayalSpec` | The spec whose portrayal applies, when it isn't the product's own (`S-101` for S-57) | `ProductRegistry.PortrayalSpecFor` / `PortrayalSpecName` |
 | `ReadMetadata` | Cheap path-based metadata reader | The viewer's Library probe (`CachingDatasetMetadataReader`) |
