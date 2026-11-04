@@ -30,6 +30,13 @@
                     <SolidColorBrush x:Key="DepthBasisInfoBackgroundBrush" Color="#1F2563EB" />
                     <SolidColorBrush x:Key="DepthBasisInfoBorderBrush" Color="#802563EB" />
                     <SolidColorBrush x:Key="DepthBasisInfoForegroundBrush" Color="#1D4ED8" />
+                    <!-- Depth basis pill (#1132): chart adjusted for water level, and adjustment on but not applying in view. -->
+                    <SolidColorBrush x:Key="DepthBasisAdjustedBackgroundBrush" Color="#1F0D9488" />
+                    <SolidColorBrush x:Key="DepthBasisAdjustedBorderBrush" Color="#800D9488" />
+                    <SolidColorBrush x:Key="DepthBasisAdjustedForegroundBrush" Color="#0F766E" />
+                    <SolidColorBrush x:Key="DepthBasisCautionBackgroundBrush" Color="#1FD97706" />
+                    <SolidColorBrush x:Key="DepthBasisCautionBorderBrush" Color="#80D97706" />
+                    <SolidColorBrush x:Key="DepthBasisCautionForegroundBrush" Color="#B45309" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="MapOverlaySurfaceBrush" Color="#B818181B" />
@@ -40,6 +47,13 @@
                     <SolidColorBrush x:Key="DepthBasisInfoBackgroundBrush" Color="#2E60A5FA" />
                     <SolidColorBrush x:Key="DepthBasisInfoBorderBrush" Color="#8060A5FA" />
                     <SolidColorBrush x:Key="DepthBasisInfoForegroundBrush" Color="#93C5FD" />
+                    <!-- Depth basis pill (#1132): chart adjusted for water level, and adjustment on but not applying in view. -->
+                    <SolidColorBrush x:Key="DepthBasisAdjustedBackgroundBrush" Color="#2E2DD4BF" />
+                    <SolidColorBrush x:Key="DepthBasisAdjustedBorderBrush" Color="#802DD4BF" />
+                    <SolidColorBrush x:Key="DepthBasisAdjustedForegroundBrush" Color="#5EEAD4" />
+                    <SolidColorBrush x:Key="DepthBasisCautionBackgroundBrush" Color="#2EF59E0B" />
+                    <SolidColorBrush x:Key="DepthBasisCautionBorderBrush" Color="#80F59E0B" />
+                    <SolidColorBrush x:Key="DepthBasisCautionForegroundBrush" Color="#FCD34D" />
                 </ResourceDictionary>
                 <!--
                   S-100 Night chrome variant. Inherits from ShadUI's
@@ -87,6 +101,13 @@
                     <SolidColorBrush x:Key="DepthBasisInfoBackgroundBrush" Color="#24C88478" />
                     <SolidColorBrush x:Key="DepthBasisInfoBorderBrush" Color="#80C88478" />
                     <SolidColorBrush x:Key="DepthBasisInfoForegroundBrush" Color="#FFB0A0" />
+                    <!-- Depth basis pill (#1132): chart adjusted for water level, and adjustment on but not applying in view. -->
+                    <SolidColorBrush x:Key="DepthBasisAdjustedBackgroundBrush" Color="#40C88478" />
+                    <SolidColorBrush x:Key="DepthBasisAdjustedBorderBrush" Color="#FFC88478" />
+                    <SolidColorBrush x:Key="DepthBasisAdjustedForegroundBrush" Color="#FFD0C0" />
+                    <SolidColorBrush x:Key="DepthBasisCautionBackgroundBrush" Color="#30C86478" />
+                    <SolidColorBrush x:Key="DepthBasisCautionBorderBrush" Color="#C0C86478" />
+                    <SolidColorBrush x:Key="DepthBasisCautionForegroundBrush" Color="#FFB0A0" />
                 </ResourceDictionary>
 
                 <!--
@@ -133,6 +154,13 @@
                     <SolidColorBrush x:Key="DepthBasisInfoBackgroundBrush" Color="#1F1E40AF" />
                     <SolidColorBrush x:Key="DepthBasisInfoBorderBrush" Color="#801E40AF" />
                     <SolidColorBrush x:Key="DepthBasisInfoForegroundBrush" Color="#1E3A8A" />
+                    <!-- Depth basis pill (#1132): chart adjusted for water level, and adjustment on but not applying in view. -->
+                    <SolidColorBrush x:Key="DepthBasisAdjustedBackgroundBrush" Color="#1F115E59" />
+                    <SolidColorBrush x:Key="DepthBasisAdjustedBorderBrush" Color="#80115E59" />
+                    <SolidColorBrush x:Key="DepthBasisAdjustedForegroundBrush" Color="#134E4A" />
+                    <SolidColorBrush x:Key="DepthBasisCautionBackgroundBrush" Color="#1F92400E" />
+                    <SolidColorBrush x:Key="DepthBasisCautionBorderBrush" Color="#8092400E" />
+                    <SolidColorBrush x:Key="DepthBasisCautionForegroundBrush" Color="#78350F" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 

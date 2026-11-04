@@ -15,6 +15,13 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// </remarks>
 public sealed record RenderContext
 {
+    /// <summary>
+    /// The water level to add to charted depths (S-98 Appendix D), or
+    /// <see langword="null"/> to portray depths as charted. The S-102 and
+    /// S-101 processors honour it; other products ignore it.
+    /// </summary>
+    public IDepthAdjustment? DepthAdjustment { get; init; }
+
     /// <summary>The color palette (Day/Dusk/Night) to use for rendering.</summary>
     public PaletteType Palette { get; init; } = PaletteType.Day;
 

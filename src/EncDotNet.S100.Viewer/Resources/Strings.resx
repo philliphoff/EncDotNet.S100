@@ -7393,4 +7393,79 @@
     <value>Close without saving</value>
     <comment>Tooltip of the save form's Cancel button</comment>
   </data>
+  <data name="Settings_WaterLevelAdjustment" xml:space="preserve">
+    <value>Water level adjustment</value>
+  </data>
+  <data name="Settings_WaterLevelAdjustment_Help" xml:space="preserve">
+    <value>Add S-104 water level to the charted depths, depth shading and safety contour. Outside S-104 coverage or its time range the chart stays charted. S-104 is still used in the Depth card and route checks when this is off.</value>
+  </data>
+  <data name="Settings_WaterLevelAdjustment_Off" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="Settings_WaterLevelAdjustment_AtViewTime" xml:space="preserve">
+    <value>At view time</value>
+  </data>
+  <data name="Settings_WaterLevelApplyUndeclaredDatum" xml:space="preserve">
+    <value>Apply anyway when datum is not declared</value>
+  </data>
+  <data name="Tooltip_WaterLevelApplyUndeclaredDatum" xml:space="preserve">
+    <value>Apply water level where the chart or the S-104 data doesn't declare its vertical datum. The depth basis then says the datum is unconfirmed. Water level on a different datum is never applied.</value>
+  </data>
+  <data name="Status_DepthBasis_AdjustedFormat" xml:space="preserve">
+    <value>+ water level {0}</value>
+  </data>
+  <data name="Status_DepthBasis_AdjustedFormat_Compact" xml:space="preserve">
+    <value>Adjusted {0}</value>
+  </data>
+  <data name="Status_DepthBasis_AdjustedPartialFormat" xml:space="preserve">
+    <value>+ water level {0} · part of view</value>
+  </data>
+  <data name="Status_DepthBasis_AdjustedPartialFormat_Short" xml:space="preserve">
+    <value>Part adjusted {0}</value>
+  </data>
+  <data name="Status_DepthBasis_DatumUnconfirmedSuffix" xml:space="preserve">
+    <value> · datum unconfirmed</value>
+  </data>
+  <data name="Status_DepthBasis_NoWaterLevelAtFormat" xml:space="preserve">
+    <value>Charted · no water level at {0}</value>
+  </data>
+  <data name="Status_DepthBasis_NoWaterLevelAt_Short" xml:space="preserve">
+    <value>Charted · no water level</value>
+  </data>
+  <data name="Status_DepthBasis_DatumMismatch" xml:space="preserve">
+    <value>Charted · datum mismatch</value>
+  </data>
+  <data name="Status_DepthBasisPopup_AdjustedBasisFormat" xml:space="preserve">
+    <value>Charted depth + water level at {0}. The safety contour and depth shading use the adjusted values.</value>
+  </data>
+  <data name="Status_DepthBasisPopup_AdjustedDatumSame" xml:space="preserve">
+    <value>Datum: the same as the charted depths.</value>
+  </data>
+  <data name="Status_DepthBasisPopup_AdjustedDatumUnconfirmed" xml:space="preserve">
+    <value>Datum unconfirmed: a vertical datum isn't declared, and water level is applied anyway.</value>
+  </data>
+  <data name="Status_DepthBasisPopup_NotAdjustedFormat" xml:space="preserve">
+    <value>Not adjusted: {0} on {1}, water level on {2}.</value>
+  </data>
+  <data name="Status_DepthBasisPopup_NoWaterLevelInViewNow" xml:space="preserve">
+    <value>Not applied: no water level covers the view.</value>
+  </data>
+  <data name="Status_DepthBasisPopup_OutsideTimeRangeFormat" xml:space="preserve">
+    <value>Not applied: no water level at {0}.</value>
+  </data>
+  <data name="Status_DepthBasisPopup_WhereChart" xml:space="preserve">
+    <value>The chart, at the Timeline's view time.</value>
+  </data>
+  <data name="Pick_Depth_ChartBasisAdjustedFormat" xml:space="preserve">
+    <value>The chart shows adjusted depths at {0}</value>
+  </data>
+  <data name="Map_WaterLevelAdjustmentBoundary" xml:space="preserve">
+    <value>Water level adjustment boundary</value>
+  </data>
+  <data name="Pick_Depth_DatumUnconfirmed" xml:space="preserve">
+    <value>Datum unconfirmed: a vertical datum isn't declared, and water level is applied anyway.</value>
+  </data>
+  <data name="Label_WaterLevelApplyUndeclaredDatum" xml:space="preserve">
+    <value>Apply over undeclared datum</value>
+  </data>
 </root>

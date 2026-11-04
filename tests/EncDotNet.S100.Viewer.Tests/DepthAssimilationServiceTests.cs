@@ -28,6 +28,27 @@ public class DepthAssimilationServiceTests
         new(depth, BaseDepthSource.DepthArea, null, datum, null);
 
     [Fact]
+    public void An_undeclared_datum_is_refused_unless_the_override_is_on()
+    {
+        var series = Series("ds1", Lat, (T0, 1.0), (T0.AddMinutes(10), 1.0));
+
+        var strict = _service.Assimilate(Vector(12.0, datum: null), [series])!;
+        Assert.Null(strict.Tide);
+        Assert.Equal(DatumAgreement.Unknown, strict.Refusal!.Agreement);
+        Assert.False(strict.DatumUnconfirmed);
+
+        var anyway = _service.Assimilate(Vector(12.0, datum: null), [series], applyUndeclaredDatum: true)!;
+        Assert.NotNull(anyway.Tide);
+        Assert.Null(anyway.Refusal);
+        Assert.True(anyway.DatumUnconfirmed);
+        Assert.Equal(13.0, anyway.DepthOverTime[0].DepthMeters);
+
+        var different = _service.Assimilate(Vector(12.0, datum: Mllw), [series], applyUndeclaredDatum: true)!;
+        Assert.Null(different.Tide);
+        Assert.Equal(DatumAgreement.Different, different.Refusal!.Agreement);
+    }
+
+    [Fact]
     public void Assimilate_returns_null_when_no_base_depth()
     {
         Assert.Null(_service.Assimilate(null, []));

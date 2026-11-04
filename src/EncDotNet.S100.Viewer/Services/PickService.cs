@@ -39,6 +39,7 @@ internal sealed class PickService : IPickService
     private readonly EncDotNet.S100.Viewer.Services.Depth.LocationDepthProbe _depthProbe = new();
     private readonly ViewerDatasetCatalog? _catalog;
     private readonly EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? _routeSources;
+    private readonly EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentSettings? _waterLevelSettings;
 
     public PickService(
         IDatasetLoaderService loader,
@@ -76,7 +77,8 @@ internal sealed class PickService : IPickService
         IThemeService? themeService,
         IMarinerSettingsProvider? marinerSettings = null,
         ViewerDatasetCatalog? catalog = null,
-        EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? routeSources = null)
+        EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? routeSources = null,
+        EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentSettings? waterLevelSettings = null)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(pickReport);
@@ -90,6 +92,7 @@ internal sealed class PickService : IPickService
         _marinerSettings = marinerSettings;
         _catalog = catalog;
         _routeSources = routeSources;
+        _waterLevelSettings = waterLevelSettings;
 
         // The pick-report VM raises NavigateRequested when the user
         // clicks a row in the References list. Failures surface as a
@@ -524,7 +527,11 @@ internal sealed class PickService : IPickService
         var waterLevel = _catalog is not null && _routeSources is not null
             ? _routeSources.Get(_catalog.Datasets).WaterLevel
             : null;
-        var probe = _depthProbe.Evaluate(processors, hits, latitude, longitude, waterLevel);
+        // The "Apply anyway when datum is not declared" override applies to the
+        // card as it does to the chart, so the two agree (#1132 Q2).
+        var probe = _depthProbe.Evaluate(
+            processors, hits, latitude, longitude, waterLevel,
+            _waterLevelSettings?.WaterLevelApplyUndeclaredDatum ?? false);
         if (probe.Class != EncDotNet.S100.Viewer.Services.Depth.WaterLandClass.Water || probe.Depth is not { } result)
             return null;
 

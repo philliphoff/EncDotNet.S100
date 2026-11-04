@@ -82,7 +82,7 @@ internal sealed class GetDepthBasisTool
             basis.WaterLevelStepTime,
             basis.CoversWholeView,
             basis.Datum is { } datum ? Datum(datum) : null,
-            DepthBasisText.Display(basis),
+            DepthBasisText.Display(basis, TimeFormat.Utc),
             [.. basis.DepthSources.Select(Source)],
             [.. basis.WaterLevelSources.Select(Source)]);
     }

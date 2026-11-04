@@ -578,7 +578,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     public void SetDepthBasis(Services.Depth.DepthBasis basis)
     {
         ArgumentNullException.ThrowIfNull(basis);
-        _chartBasisLine = Services.Depth.DepthBasisText.CardLine(basis);
+        _chartBasisLine = Services.Depth.DepthBasisText.CardLine(basis, _timeFormat?.Current ?? TimeFormat.Local);
         if (_locationDepth is not null)
             _locationDepth.ChartBasisLine = _chartBasisLine;
     }

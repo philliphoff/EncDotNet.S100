@@ -60,6 +60,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
     private MarinerSettings _mariner = MarinerSettings.Default;
     private CancellationTokenSource? _timeRefreshCts;
     private CancellationTokenSource? _presentationRefreshCts;
+    private CancellationTokenSource? _depthRefreshCts;
     private bool _ignoreScaleMinimum;
     private bool _disposed;
 
@@ -233,12 +234,14 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         ArgumentNullException.ThrowIfNull(dataset);
 
         TimePolicy? timePolicy = null;
+        var adjustsDepths = false;
         DateTime? issueTime = null;
         DatasetForecastRun? forecastRun = null;
         if (_processorOwner.TryAcquire(dataset.Id, out var processorLease))
         {
             using (processorLease)
             {
+                adjustsDepths = processorLease.Processor is IDepthAdjustableProcessor;
                 if (processorLease.Processor is ITimeAwareDatasetProcessor timeAware)
                 {
                     timePolicy = TimePolicy.TryCreate(
@@ -274,6 +277,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 entry.LayerKeys,
                 entry.Dataset.SubLayers);
             entry.TimePolicy = timePolicy;
+            entry.AdjustsDepths = adjustsDepths;
             entry.IssueTime = issueTime;
             entry.ForecastRun = forecastRun;
             if (timePolicy is not null)
@@ -510,6 +514,64 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
     }
 
     /// <summary>
+    /// Applies <paramref name="presentation"/> and re-renders only the datasets
+    /// whose processor honours <see cref="RenderContext.DepthAdjustment"/>
+    /// (<see cref="IDepthAdjustableProcessor"/>), for a change of the water
+    /// level applied to charted depths. Cancels the preceding depth refresh.
+    /// Off-view cells are deferred as <see cref="RefreshAsync"/> defers them.
+    /// </summary>
+    /// <param name="presentation">The presentation carrying the new adjustment.</param>
+    /// <param name="viewport">The current EPSG:3857 viewport, or <see langword="null"/> to re-render every such dataset.</param>
+    /// <param name="cancellationToken">Cancels the requested refresh.</param>
+    /// <returns>
+    /// <see langword="true"/> when this refresh was applied, or
+    /// <see langword="false"/> when a newer depth refresh superseded it.
+    /// </returns>
+    public async Task<bool> RefreshDepthAdjustedAsync(
+        MapPresentationState presentation,
+        MRect? viewport = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        CancellationTokenSource localCts;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            _currentPresentation = presentation;
+            _depthRefreshCts?.Cancel();
+            localCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _depthRefreshCts = localCts;
+        }
+
+        try
+        {
+            await RefreshCoreAsync(
+                presentation,
+                timeAwareOnly: false,
+                viewport,
+                staleOnly: false,
+                localCts.Token,
+                depthAdjustedOnly: true).ConfigureAwait(true);
+            return true;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        finally
+        {
+            lock (_sync)
+            {
+                if (ReferenceEquals(_depthRefreshCts, localCts))
+                    _depthRefreshCts = null;
+            }
+
+            localCts.Dispose();
+        }
+    }
+
+    /// <summary>
     /// Cancels the preceding full refresh and re-renders registered datasets
     /// while holding the render gate exclusively, preserving time gating.
     /// </summary>
@@ -624,7 +686,8 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         bool timeAwareOnly,
         MRect? viewport,
         bool staleOnly,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool depthAdjustedOnly = false)
     {
         var kind = timeAwareOnly
             ? MapSessionRenderKind.TimeRefresh
@@ -672,7 +735,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 async (datasetId, ct) =>
                 {
                     if (await RefreshDatasetAsync(
-                        datasetId, presentation, timeAwareOnly, gate, staleOnly, kind, ct)
+                        datasetId, presentation, timeAwareOnly, gate, staleOnly, kind, ct, depthAdjustedOnly)
                         .ConfigureAwait(false))
                     {
                         Interlocked.Exchange(ref needsCompose, 1);
@@ -736,7 +799,8 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         MRect? gate,
         bool staleOnly,
         MapSessionRenderKind kind,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool depthAdjustedOnly = false)
     {
         TimePolicy? policy;
         DateTime? selectedTime;
@@ -747,6 +811,8 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 return false;
             policy = entry.TimePolicy;
             if (timeAwareOnly && policy is null)
+                return false;
+            if (depthAdjustedOnly && !entry.AdjustsDepths)
                 return false;
 
             // Viewport gating and stale tracking apply to presentation refreshes
@@ -1499,6 +1565,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             _disposed = true;
             _timeRefreshCts?.Cancel();
             _presentationRefreshCts?.Cancel();
+            _depthRefreshCts?.Cancel();
             CancelEntryRenders();
             _authorityProvider.CurrentChanged -= OnAuthorityChanged;
             _entries.Clear();
@@ -2384,6 +2451,9 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         public MapDataset Dataset { get; set; } = dataset;
 
         public TimePolicy? TimePolicy { get; set; }
+
+        /// <summary>Whether the processor honours <see cref="RenderContext.DepthAdjustment"/>.</summary>
+        public bool AdjustsDepths { get; set; }
 
         /// <summary>When the dataset was issued, from its data (#720).</summary>
         public DateTime? IssueTime { get; set; }

@@ -24,7 +24,7 @@ public sealed class DepthBasisTextTests
     [Fact]
     public void Charted_has_one_form_and_no_accent()
     {
-        var forms = DepthBasisText.Pill(Charted());
+        var forms = DepthBasisText.Pill(Charted(), TimeFormat.Utc);
 
         Assert.Equal("Charted", forms.Full);
         Assert.Equal("Charted", forms.Short);
@@ -36,7 +36,7 @@ public sealed class DepthBasisTextTests
     [Fact]
     public void Not_applied_steps_down_through_whole_forms_with_its_icon()
     {
-        var forms = DepthBasisText.Pill(NotApplied());
+        var forms = DepthBasisText.Pill(NotApplied(), TimeFormat.Utc);
 
         Assert.Equal("Charted · water level not applied", forms.Full);
         Assert.Equal("Charted · not applied", forms.Short);
@@ -49,7 +49,7 @@ public sealed class DepthBasisTextTests
     [Fact]
     public void The_forms_come_from_their_own_strings()
     {
-        var forms = DepthBasisText.Pill(NotApplied());
+        var forms = DepthBasisText.Pill(NotApplied(), TimeFormat.Utc);
 
         Assert.Equal(Strings.Status_DepthBasis_ChartedNotApplied, forms.Full);
         Assert.Equal(Strings.Status_DepthBasis_ChartedNotApplied_Short, forms.Short);
@@ -59,16 +59,16 @@ public sealed class DepthBasisTextTests
     [Fact]
     public void Display_is_the_full_form_and_empty_when_hidden()
     {
-        Assert.Equal("Charted · water level not applied", DepthBasisText.Display(NotApplied()));
-        Assert.Equal(string.Empty, DepthBasisText.Display(DepthBasis.Hidden));
+        Assert.Equal("Charted · water level not applied", DepthBasisText.Display(NotApplied(), TimeFormat.Utc));
+        Assert.Equal(string.Empty, DepthBasisText.Display(DepthBasis.Hidden, TimeFormat.Utc));
     }
 
     [Fact]
     public void The_accessible_name_carries_the_state()
     {
-        Assert.Equal("Depth basis: Charted", DepthBasisText.AccessibleName(Charted()));
-        Assert.Equal("Depth basis: Charted, water level not applied", DepthBasisText.AccessibleName(NotApplied()));
-        Assert.Equal("Depth basis", DepthBasisText.AccessibleName(DepthBasis.Hidden));
+        Assert.Equal("Depth basis: Charted", DepthBasisText.AccessibleName(Charted(), TimeFormat.Utc));
+        Assert.Equal("Depth basis: Charted, water level not applied", DepthBasisText.AccessibleName(NotApplied(), TimeFormat.Utc));
+        Assert.Equal("Depth basis", DepthBasisText.AccessibleName(DepthBasis.Hidden, TimeFormat.Utc));
     }
 
     [Fact]
@@ -76,9 +76,9 @@ public sealed class DepthBasisTextTests
     {
         Assert.Equal(
             "Charted depths, relative to the vertical datum below. The safety contour and depth shading use these values.",
-            DepthBasisText.BasisLine(Charted()));
-        Assert.Equal("The chart shows charted depths", DepthBasisText.CardLine(Charted()));
-        Assert.Equal(string.Empty, DepthBasisText.CardLine(DepthBasis.Hidden));
+            DepthBasisText.BasisLine(Charted(), TimeFormat.Utc));
+        Assert.Equal("The chart shows charted depths", DepthBasisText.CardLine(Charted(), TimeFormat.Utc));
+        Assert.Equal(string.Empty, DepthBasisText.CardLine(DepthBasis.Hidden, TimeFormat.Utc));
     }
 
     [Fact]
@@ -180,18 +180,73 @@ public sealed class DepthBasisTextTests
     }
 
     [Fact]
-    public void Where_water_level_is_applied_today()
+    public void Where_water_level_is_applied()
     {
         Assert.Equal(
             ["Object information: the Depth card at a picked point.", "Route check: clearance at each ETA."],
-            DepthBasisText.WhereAppliedLines());
+            DepthBasisText.WhereAppliedLines(chartAdjustmentOn: false));
+        Assert.Equal(
+            ["The chart, at the Timeline's view time.", "Object information: the Depth card at a picked point.", "Route check: clearance at each ETA."],
+            DepthBasisText.WhereAppliedLines(chartAdjustmentOn: true));
+    }
+
+    private static readonly DateTime Step = new(2026, 10, 31, 14, 20, 0, DateTimeKind.Utc);
+
+    private static DepthBasis Adjusted(bool wholeView = true, DatumAgreement datum = DatumAgreement.Same) =>
+        NotApplied() with
+        {
+            Kind = DepthBasisKind.Adjusted,
+            Reason = DepthBasisReason.None,
+            WaterLevelStatus = WaterLevelStatus.Applied,
+            WaterLevelStepTime = Step,
+            CoversWholeView = wholeView,
+            Datum = datum,
+        };
+
+    [Fact]
+    public void Adjusted_states_name_the_time_the_layers_are_for()
+    {
+        var whole = DepthBasisText.Pill(Adjusted(), TimeFormat.Utc);
+        Assert.Equal("+ water level 14:20 UTC", whole.Full);
+        Assert.Equal("Adjusted 14:20 UTC", whole.Compact);
+        Assert.Equal(DepthBasisTone.Adjusted, whole.Tone);
+        Assert.False(whole.ShowsIcon);
+
+        var part = DepthBasisText.Pill(Adjusted(wholeView: false), TimeFormat.Utc);
+        Assert.Equal("+ water level 14:20 UTC · part of view", part.Full);
+        Assert.Equal("Part adjusted 14:20 UTC", part.Short);
+
+        Assert.Equal(
+            "+ water level 14:20 UTC · datum unconfirmed",
+            DepthBasisText.Display(Adjusted(datum: DatumAgreement.Unknown), TimeFormat.Utc));
+        Assert.Equal("The chart shows adjusted depths at 14:20 UTC", DepthBasisText.CardLine(Adjusted(), TimeFormat.Utc));
+        Assert.StartsWith("Charted depth + water level at 14:20 UTC.", DepthBasisText.BasisLine(Adjusted(), TimeFormat.Utc));
     }
 
     [Fact]
-    public void The_adjusted_states_have_no_text_until_chart_adjustment()
+    public void Unavailable_states_are_charted_with_a_caution()
     {
-        var adjusted = NotApplied() with { Kind = DepthBasisKind.Adjusted, Reason = DepthBasisReason.None };
+        var unavailable = NotApplied() with
+        {
+            Reason = DepthBasisReason.WaterLevel,
+            WaterLevelStatus = WaterLevelStatus.AfterEnd,
+            WaterLevelStepTime = Step,
+        };
+        var forms = DepthBasisText.Pill(unavailable, TimeFormat.Utc);
+        Assert.Equal("Charted · no water level at 14:20 UTC", forms.Full);
+        Assert.Equal("Charted · no water level", forms.Short);
+        Assert.Equal("Charted", forms.Compact);
+        Assert.Equal(DepthBasisTone.Caution, forms.Tone);
+        Assert.True(forms.ShowsIcon);
 
-        Assert.Throws<NotSupportedException>(() => DepthBasisText.Pill(adjusted));
+        var mismatch = unavailable with
+        {
+            WaterLevelStatus = WaterLevelStatus.DatumMismatch,
+            NotAdjusted = [new DepthBasisSource("102US004FL2AI252277", "S-102", 12)],
+        };
+        Assert.Equal("Charted · datum mismatch", DepthBasisText.Display(mismatch, TimeFormat.Utc));
+        Assert.Contains(
+            "Not adjusted: 102US004FL2AI252277 on Mean Lower Low Water, water level on Mean Lower Low Water.",
+            DepthBasisText.WaterLevelLines(mismatch, waterLevelLoaded: true, TimeFormat.Utc));
     }
 }

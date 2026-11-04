@@ -1,4 +1,5 @@
 using EncDotNet.S100.Collections;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
 using EncDotNet.S100.Navigation;
 
@@ -84,12 +85,11 @@ internal static class DepthBasisEvaluator
             .ToList();
 
         var datum = Agreement(depthSources, waterLevelSources);
-        var adjustment = inputs.Adjustment.IsEnabled
-            ? inputs.Adjustment.Evaluate(inputs.View, inputs.ViewTime)
-            : null;
+        var adjustment = inputs.Adjustment.IsEnabled ? inputs.Adjustment.Current : null;
 
-        if (adjustment is null)
+        if (adjustment is not { AppliedTime: { } applied })
         {
+            // Off, or on with nothing drawn yet: the chart is charted.
             return new DepthBasis(
                 DepthBasisKind.Charted,
                 waterLevelSources.Count > 0 ? DepthBasisReason.NotApplied : DepthBasisReason.None,
@@ -102,31 +102,74 @@ internal static class DepthBasisEvaluator
                 waterLevelSources);
         }
 
-        if (adjustment.Status == WaterLevelStatus.Applied)
-        {
-            return new DepthBasis(
-                DepthBasisKind.Adjusted,
-                DepthBasisReason.None,
-                WaterLevelStatus.Applied,
-                inputs.ViewTime,
-                adjustment.StepTime,
-                adjustment.CoversWholeView,
-                adjustment.Datum ?? datum,
-                depthSources,
-                waterLevelSources);
-        }
-
-        return new DepthBasis(
+        DepthBasis Charted(WaterLevelStatus status, DatumAgreement? agreement, IReadOnlyList<DepthBasisSource>? notAdjusted = null) => new(
             DepthBasisKind.Charted,
             DepthBasisReason.WaterLevel,
-            adjustment.Status,
+            status,
             inputs.ViewTime,
-            null,
+            applied,
             true,
-            adjustment.Datum ?? datum,
+            agreement,
             depthSources,
-            waterLevelSources);
+            waterLevelSources,
+            notAdjusted);
+
+        if (waterLevelSources.Count == 0 || !adjustment.FootprintBounds.Any(f => MeetsView(f, inputs.View)))
+            return Charted(WaterLevelStatus.NoCoverage, datum);
+
+        // Only water levels whose time range holds the applied time adjust anything.
+        var current = waterLevelSources.Where(w => Covers(w, applied)).ToList();
+        if (current.Count == 0)
+        {
+            var after = waterLevelSources.All(w => w.End is { } end && applied > end);
+            return Charted(after ? WaterLevelStatus.AfterEnd : WaterLevelStatus.BeforeStart, datum);
+        }
+
+        var adjusted = new List<DepthBasisSource>();
+        var refused = new List<DepthBasisSource>();
+        var unconfirmed = false;
+        foreach (var depth in depthSources)
+        {
+            var agreements = current
+                .Select(w => VerticalDatumCheck.Compare(depth.VerticalDatumCode, w.VerticalDatumCode))
+                .Where(adjustment.Permits)
+                .ToList();
+            if (agreements.Count == 0)
+            {
+                refused.Add(depth);
+                continue;
+            }
+
+            adjusted.Add(depth);
+            unconfirmed |= !agreements.Contains(DatumAgreement.Same);
+        }
+
+        if (adjusted.Count == 0)
+            return Charted(WaterLevelStatus.DatumMismatch, Agreement(depthSources, current), refused);
+
+        var coversView = refused.Count == 0
+            && inputs.View is { } view
+            && adjustment.FootprintBounds.Any(f => Contains(f, view));
+        return new DepthBasis(
+            DepthBasisKind.Adjusted,
+            DepthBasisReason.None,
+            WaterLevelStatus.Applied,
+            inputs.ViewTime,
+            applied,
+            coversView,
+            unconfirmed ? DatumAgreement.Unknown : DatumAgreement.Same,
+            depthSources,
+            waterLevelSources,
+            refused);
     }
+
+    private static bool Covers(DepthBasisSource waterLevel, DateTime time) =>
+        (waterLevel.Start is not { } start || time >= start) && (waterLevel.End is not { } end || time <= end);
+
+    private static bool Contains(GeoBounds outer, GeoBounds inner) =>
+        inner.South >= outer.South && inner.North <= outer.North
+        && outer.Contains(new GeoPosition(inner.South, inner.West))
+        && outer.Contains(new GeoPosition(inner.North, inner.East));
 
     /// <summary>
     /// Whether the depth sources and water-level sources share a vertical

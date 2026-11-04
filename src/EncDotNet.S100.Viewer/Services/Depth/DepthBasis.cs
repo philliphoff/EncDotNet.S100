@@ -55,11 +55,12 @@ internal sealed record DepthBasisSource(
 /// <param name="Reason">Why charted when water level exists.</param>
 /// <param name="WaterLevelStatus">Set when <paramref name="Reason"/> is <see cref="DepthBasisReason.WaterLevel"/>, or <paramref name="Kind"/> is <see cref="DepthBasisKind.Adjusted"/>.</param>
 /// <param name="ViewTime">The Timeline's view time the basis was evaluated at.</param>
-/// <param name="WaterLevelStepTime">The S-104 step actually used (#1132).</param>
+/// <param name="WaterLevelStepTime">The time the adjusted layers are for (#1132): the last completed adjustment, not the slider's time while it moves.</param>
 /// <param name="CoversWholeView">False for "part of view" (#1132).</param>
 /// <param name="Datum">Whether the depth sources and water-level sources in view share a datum, when both are present.</param>
 /// <param name="DepthSources">The depth-bearing datasets in the view.</param>
 /// <param name="WaterLevelSources">The active S-104 datasets that meet the view.</param>
+/// <param name="NotAdjusted">The depth sources in view refused for their datum (#1132).</param>
 internal sealed record DepthBasis(
     DepthBasisKind Kind,
     DepthBasisReason Reason,
@@ -69,8 +70,15 @@ internal sealed record DepthBasis(
     bool CoversWholeView,
     DatumAgreement? Datum,
     IReadOnlyList<DepthBasisSource> DepthSources,
-    IReadOnlyList<DepthBasisSource> WaterLevelSources)
+    IReadOnlyList<DepthBasisSource> WaterLevelSources,
+    IReadOnlyList<DepthBasisSource>? NotAdjusted = null)
 {
+    /// <summary>
+    /// The depth sources in view that adjustment refuses for their datum
+    /// (#1132); empty when adjustment is off or adjusts every source.
+    /// </summary>
+    public IReadOnlyList<DepthBasisSource> NotAdjustedSources => NotAdjusted ?? [];
+
     /// <summary>No depth-bearing dataset loaded: the indicator is hidden.</summary>
     public static DepthBasis Hidden { get; } = new(
         DepthBasisKind.None, DepthBasisReason.None, null, null, null, true, null, [], []);

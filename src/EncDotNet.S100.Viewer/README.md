@@ -607,10 +607,35 @@ and safety contour on the chart are relative to:
 - **Charted · water level not applied**: an active S-104 dataset covers the
   view, but its water level isn't added to the chart. The pill is highlighted
   and has an information icon.
+- **+ water level 14:20**: the chart adds the S-104 water level at that time
+  (see [Water level adjustment](#water-level-adjustment)). It says **· part of
+  view** when the adjusted area doesn't cover every depth in view, and
+  **· datum unconfirmed** when a vertical datum isn't declared and the water
+  level is applied anyway.
+- **Charted · no water level at 14:20** or **Charted · datum mismatch**:
+  adjustment is on, but no water level applies in view at that time, or every
+  depth source in view is on another datum. The pill has a caution icon.
 
-The chart always draws charted depths. S-104 water level is applied in two
-places: the **Depth** card in Object information, and the clearance in
-**Check route**. Moving the Timeline doesn't change the depths on the chart.
+### Water level adjustment
+
+In **Settings** > **Chart display** > **Mariner Settings**, **Water level
+adjustment** set to **At view time** adds the S-104 water level at the
+Timeline's view time to the charted depths (S-98 Appendix D). The S-102
+depth shading and its safety contour follow the tide as you move the
+Timeline. A dash-dot teal line marks the edge of the area that has a water
+level (S-104 grid nodes and 10 km around each station); outside it the chart
+is charted.
+
+Water level on a different vertical datum from the depths is never applied:
+those depths stay charted and the **DEPTHS** flyout says why ("Not adjusted:
+… on Mean Lower Low Water, water level on Lowest Astronomical Tide"). When a
+datum isn't declared, water level isn't applied either unless you turn on
+**Apply anyway when datum is not declared**. The **Depth** card follows the
+same setting.
+
+While the Timeline is dragged, the chart keeps the last water level it drew
+and the pill names that time until the new one lands. The S-101 depths are
+not adjusted yet (#1132).
 
 On a narrow window the value shortens to **Charted · not applied**, then
 **Charted** with the information icon. It never cuts off part of a word. The
@@ -623,7 +648,10 @@ Select the pill to see:
   themselves.
 - **Water level**: each S-104 dataset in view, with its kind (grid or
   station), run and time range, or "No S-104 water level loaded."
-- **Where water level is applied**: the Depth card and the route check.
+- **Where water level is applied**: the chart (when adjustment is on), the
+  Depth card and the route check. With adjustment on, the water level section
+  also says whether the datums agree and lists any depth source that isn't
+  adjusted.
 
 ## Control the layer stack
 

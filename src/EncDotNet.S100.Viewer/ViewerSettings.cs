@@ -197,6 +197,18 @@ internal sealed partial class ViewerSettings
     public bool? IgnoreScaleMinimum { get; set; }
 
     /// <summary>
+    /// Chart-wide water level adjustment (#1132): "Off" or "AtViewTime".
+    /// Null (older files) is Off.
+    /// </summary>
+    public string? WaterLevelAdjustment { get; set; }
+
+    /// <summary>
+    /// Whether chart-wide adjustment applies water level where either
+    /// vertical datum isn't declared (#1132 Q2). Null is false.
+    /// </summary>
+    public bool? WaterLevelApplyUndeclaredDatum { get; set; }
+
+    /// <summary>
     /// The base-plane scene mode (issue #331).
     /// One of "Tiled" (Phase-2 default) or "Single" (Phase-1 single surface),
     /// matching <see cref="Renderers.Mapsui.VectorSceneMode"/>.
