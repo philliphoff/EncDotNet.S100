@@ -303,6 +303,12 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     internal Func<CollectionItem, Task>? OpenRoute { get; set; }
 
     /// <summary>
+    /// The progress line for background chart preparation (#1266), shown under
+    /// the bulk bar; <see langword="null"/> where the host runs no warmer.
+    /// </summary>
+    public PortrayalWarmStatusViewModel? PortrayalWarm { get; set; }
+
+    /// <summary>
     /// The identities SECOM sources choose from (#883); set by the host. With
     /// it, SECOM rows show their identity and the details pane shows a selected
     /// source's Connection.
