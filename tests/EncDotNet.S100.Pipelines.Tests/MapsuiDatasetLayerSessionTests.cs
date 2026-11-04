@@ -138,6 +138,45 @@ public sealed class MapsuiDatasetLayerSessionTests
     }
 
     [Fact]
+    public async Task DepthRefreshReportraysOnlyDepthAdjustableDatasets()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+
+        var chart = new DepthAdjustableStubProcessor("chart");
+        var other = new StubProcessor("other");
+        foreach (var processor in new StubProcessor[] { chart, other })
+        {
+            var id = new MapDatasetId(processor.DatasetId);
+            Assert.True(owner.TryRegister(id, processor));
+            session.SetDataset(Dataset(id));
+            await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
+        }
+
+        var adjustment = new ConstantDepthAdjustment();
+        var applied = await session.RefreshDepthAdjustedAsync(
+            MapPresentationState.Default.WithDepthAdjustment(adjustment),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(applied);
+        Assert.Equal(2, chart.RenderCount);
+        Assert.Same(adjustment, chart.LastContext!.DepthAdjustment);
+        Assert.Equal(1, other.RenderCount);
+    }
+
+    private sealed class ConstantDepthAdjustment : IDepthAdjustment
+    {
+        public string Key => "constant";
+
+        public IReadOnlyList<EncDotNet.S100.DataModel.CoverageArea> Footprint => [];
+
+        public DepthAdjustmentSample? At(double latitude, double longitude, int? depthDatum) => new(1.0);
+
+        public bool Accepts(int? depthDatum) => true;
+    }
+
+    [Fact]
     public async Task RefreshReportraysEveryDatasetButComposesTheStackOnce()
     {
         using var map = new Map();

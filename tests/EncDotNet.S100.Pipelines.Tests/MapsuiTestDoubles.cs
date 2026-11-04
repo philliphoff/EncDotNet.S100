@@ -45,7 +45,7 @@ internal readonly struct ParkUntilCancelled(
 /// sub-layers, can be made time-aware, can throw on render, and counts
 /// disposals. Shared by the reusable-session and AddS100 facade tests.
 /// </summary>
-internal sealed class StubProcessor :
+internal class StubProcessor :
     IDatasetProcessor,
     ITimeAwareDatasetProcessor,
     IVectorPortrayalSource,
@@ -277,4 +277,9 @@ internal sealed class StubGeometryProvider : IFeatureGeometryProvider
                 new GeoPosition(0, 0),
             ],
         };
+}
+
+/// <summary>A <see cref="StubProcessor"/> whose portrayal follows <see cref="RenderContext.DepthAdjustment"/>.</summary>
+internal sealed class DepthAdjustableStubProcessor(string datasetId) : StubProcessor(datasetId), IDepthAdjustableProcessor
+{
 }

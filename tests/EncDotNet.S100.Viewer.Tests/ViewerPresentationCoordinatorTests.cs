@@ -22,7 +22,7 @@ public class ViewerPresentationCoordinatorTests
             settingsViewModel, ecdis, mariner);
         var controller = new RecordingPresentationController();
         using var coordinator = new ViewerPresentationCoordinator(
-            settingsViewModel, ecdis, mariner, projection, controller);
+            settingsViewModel, ecdis, mariner, projection, controller, new FakeRequests());
 
         settingsViewModel.SelectedPalette = PaletteType.Night;
         settingsViewModel.SymbolScale = 1.25;
@@ -52,7 +52,7 @@ public class ViewerPresentationCoordinatorTests
             settingsViewModel, ecdis, mariner);
         var controller = new RecordingPresentationController();
         var coordinator = new ViewerPresentationCoordinator(
-            settingsViewModel, ecdis, mariner, projection, controller);
+            settingsViewModel, ecdis, mariner, projection, controller, new FakeRequests());
 
         coordinator.Dispose();
         settingsViewModel.SelectedPalette = PaletteType.Dusk;
@@ -60,9 +60,77 @@ public class ViewerPresentationCoordinatorTests
         Assert.Empty(controller.Presentations);
     }
 
+    [Fact]
+    public void A_requested_depth_adjustment_redraws_the_depths_and_is_marked_applied()
+    {
+        var settings = new ViewerSettings
+        {
+            SettingsFilePath = Path.Combine(
+                Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json"),
+        };
+        var settingsViewModel = new SettingsViewModel(settings);
+        var ecdis = new EcdisDisplayState();
+        var mariner = new StubMarinerSettingsProvider();
+        var projection = new MapPresentationStateProjection(settingsViewModel, ecdis, mariner);
+        var controller = new RecordingPresentationController();
+        var requests = new FakeRequests();
+        using var coordinator = new ViewerPresentationCoordinator(
+            settingsViewModel, ecdis, mariner, projection, controller, requests);
+
+        var adjustment = new FakeDepthAdjustment();
+        requests.Request(adjustment);
+
+        var drawn = Assert.Single(controller.DepthAdjustments);
+        Assert.Same(adjustment, drawn.DepthAdjustment);
+        Assert.Empty(controller.Presentations);
+        Assert.Same(adjustment, requests.Applied);
+
+        // A full presentation change keeps the adjustment.
+        settingsViewModel.SelectedPalette = PaletteType.Dusk;
+        Assert.Same(adjustment, Assert.Single(controller.Presentations).DepthAdjustment);
+    }
+
+    private sealed class FakeDepthAdjustment : IDepthAdjustment
+    {
+        public string Key => "fake";
+
+        public IReadOnlyList<EncDotNet.S100.DataModel.CoverageArea> Footprint => [];
+
+        public DepthAdjustmentSample? At(double latitude, double longitude, int? depthDatum) => new(1.0);
+
+        public bool Accepts(int? depthDatum) => true;
+    }
+
+    private sealed class FakeRequests : EncDotNet.S100.Viewer.Services.Depth.IDepthAdjustmentRequests
+    {
+        public IDepthAdjustment? Requested { get; private set; }
+
+        public IDepthAdjustment? Applied { get; private set; }
+
+        public event EventHandler? RequestChanged;
+
+        public void Request(IDepthAdjustment adjustment)
+        {
+            Requested = adjustment;
+            RequestChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void MarkApplied(IDepthAdjustment? adjustment) => Applied = adjustment;
+    }
+
     private sealed class RecordingPresentationController : IMapPresentationController
     {
         public List<MapPresentationState> Presentations { get; } = [];
+
+        public List<MapPresentationState> DepthAdjustments { get; } = [];
+
+        public Task<bool> SetDepthAdjustmentAsync(
+            MapPresentationState presentation,
+            CancellationToken cancellationToken = default)
+        {
+            DepthAdjustments.Add(presentation);
+            return Task.FromResult(true);
+        }
 
         public Task SetPresentationAsync(
             MapPresentationState presentation,
