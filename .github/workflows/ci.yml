@@ -240,7 +240,8 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
-      # Installed after the build so the build uses the .NET 10 SDK. Drop
+      # global.json keeps the build and test commands on the .NET 10 SDK;
+      # this adds the .NET 11 runtime the tests roll forward to. Drop
       # dotnet-quality once .NET 11 is generally available.
       - name: Setup .NET 11
         uses: actions/setup-dotnet@v6
