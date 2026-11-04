@@ -10,7 +10,6 @@
     <PackageProjectUrl>https://soundcharts.app/docs/</PackageProjectUrl>
     <RepositoryUrl>https://github.com/philliphoff/EncDotNet.S100</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
     <!-- Ship XML documentation in every package so consumers get IntelliSense,
          and fail the build (via TreatWarningsAsErrors) on missing (CS1591) or
          malformed doc comments. Non-packable projects opt out explicitly with
@@ -30,9 +29,5 @@
                             And '$(MSBuildProjectName)' != 'EncDotNet.S100.Scripting.MoonSharp'">
     <IsTrimmable>true</IsTrimmable>
   </PropertyGroup>
-
-  <ItemGroup>
-    <None Include="README.md" Pack="true" PackagePath="\" />
-  </ItemGroup>
 
 </Project>
