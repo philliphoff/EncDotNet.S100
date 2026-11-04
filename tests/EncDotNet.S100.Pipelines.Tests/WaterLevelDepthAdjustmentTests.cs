@@ -85,7 +85,7 @@ public sealed class WaterLevelDepthAdjustmentTests
         var layer = Layer(2, 4, (_, c) => c == 3 ? Fill : 10f);
         var adjustment = Adjustment(new Water(Lat, (_, lon) => lon > 21.5 ? -1.5 : null), applyUndeclared: false);
 
-        var (adjusted, count) = S102DepthAdjuster.Apply(layer, adjustment, Lat, nativeToWgs84: null);
+        var (adjusted, count) = S102DepthAdjuster.Apply(layer, adjustment, Lat, createNativeToWgs84: () => null, TestContext.Current.CancellationToken);
 
         var depths = adjusted.Coverage.GetValues(S102DepthAdjuster.DepthField);
         Assert.Equal(2, count);
@@ -99,7 +99,7 @@ public sealed class WaterLevelDepthAdjustmentTests
         var layer = Layer(2, 2, (_, _) => 10f);
         var adjustment = Adjustment(new Water(Lat, (_, _) => 1.0), applyUndeclared: true);
 
-        var (adjusted, count) = S102DepthAdjuster.Apply(layer, adjustment, Mllw, nativeToWgs84: null);
+        var (adjusted, count) = S102DepthAdjuster.Apply(layer, adjustment, Mllw, createNativeToWgs84: () => null, TestContext.Current.CancellationToken);
 
         Assert.Same(layer, adjusted);
         Assert.Equal(0, count);

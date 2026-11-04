@@ -293,7 +293,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
                     // S-98 Appendix D: band and trace the adjusted depths.
                     // The depth lines are traced from the adjusted values, so
                     // the safety contour follows the water level too.
-                    var (adjusted, count) = S102DepthAdjuster.Apply(styledLayer, adjustment, _dataset.VerticalDatum, nativeToWgs84);
+                    var (adjusted, count) = S102DepthAdjuster.Apply(styledLayer, adjustment, _dataset.VerticalDatum, () => NativeToWgs84(crs), cancellationToken);
                     styledLayer = adjusted;
                     adjustmentKey = count > 0 ? adjustment.Key : null;
                 }

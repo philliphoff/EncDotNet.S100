@@ -26,16 +26,23 @@ internal static class S102DepthAdjuster
     /// <param name="layer">The sampled, styled surface.</param>
     /// <param name="adjustment">The water level to add.</param>
     /// <param name="verticalDatum">The S-102 dataset's vertical datum code, or <see langword="null"/>.</param>
-    /// <param name="nativeToWgs84">Maps a native (x, y) to WGS-84 (longitude, latitude); <see langword="null"/> when the grid is already WGS-84.</param>
+    /// <param name="createNativeToWgs84">
+    /// Creates a map from a native (x, y) to WGS-84 (longitude, latitude), or
+    /// returns <see langword="null"/> when the grid is already WGS-84. Called
+    /// once per worker, since a projection isn't guaranteed thread-safe.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the pass, for a superseded render.</param>
     /// <returns>The adjusted layer and how many nodes were adjusted.</returns>
     public static (StyledCoverageLayer Layer, int Adjusted) Apply(
         StyledCoverageLayer layer,
         IDepthAdjustment adjustment,
         int? verticalDatum,
-        Func<double, double, (double Longitude, double Latitude)>? nativeToWgs84)
+        Func<Func<double, double, (double Longitude, double Latitude)>?> createNativeToWgs84,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(layer);
         ArgumentNullException.ThrowIfNull(adjustment);
+        ArgumentNullException.ThrowIfNull(createNativeToWgs84);
 
         var coverage = layer.Coverage;
         if (!adjustment.Accepts(verticalDatum) || !coverage.Values.TryGetValue(DepthField, out var depths))
@@ -46,34 +53,42 @@ internal static class S102DepthAdjuster
         var grid = coverage.Metadata;
         var georeferencer = layer.Georeferencer;
         var noData = layer.NoDataValue;
-        float[]? adjusted = null;
+        // Rows are independent, and the water level is read at every node, so
+        // the pass runs in parallel.
+        var adjusted = (float[])depths.Clone();
         var count = 0;
-        for (var row = 0; row < grid.NumRows; row++)
-        {
-            var rowBase = row * grid.NumColumns;
-            for (var col = 0; col < grid.NumColumns; col++)
+        Parallel.For(
+            0,
+            grid.NumRows,
+            new ParallelOptions { CancellationToken = cancellationToken },
+            () => (Count: 0, ToWgs84: createNativeToWgs84()),
+            (row, _, local) =>
             {
-                var index = rowBase + col;
-                var depth = depths[index];
-                if (depth == noData || !float.IsFinite(depth))
+                var nativeToWgs84 = local.ToWgs84;
+                var rowBase = row * grid.NumColumns;
+                for (var col = 0; col < grid.NumColumns; col++)
                 {
-                    continue;
+                    var index = rowBase + col;
+                    var depth = depths[index];
+                    if (depth == noData || !float.IsFinite(depth))
+                    {
+                        continue;
+                    }
+
+                    var (x, y) = georeferencer.ToNative(row, col);
+                    var (lon, lat) = nativeToWgs84 is null ? (x, y) : nativeToWgs84(x, y);
+                    if (adjustment.At(lat, lon, verticalDatum) is { } water)
+                    {
+                        adjusted[index] = (float)(depth + water.HeightMeters);
+                        local.Count++;
+                    }
                 }
 
-                var (x, y) = georeferencer.ToNative(row, col);
-                var (lon, lat) = nativeToWgs84 is null ? (x, y) : nativeToWgs84(x, y);
-                if (adjustment.At(lat, lon, verticalDatum) is not { } water)
-                {
-                    continue;
-                }
+                return local;
+            },
+            local => Interlocked.Add(ref count, local.Count));
 
-                adjusted ??= (float[])depths.Clone();
-                adjusted[index] = (float)(depth + water.HeightMeters);
-                count++;
-            }
-        }
-
-        if (adjusted is null)
+        if (count == 0)
         {
             return (layer, 0);
         }

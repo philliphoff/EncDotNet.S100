@@ -1,9 +1,11 @@
 # Chart-wide water level adjustment — Design Note
 
-> Status: **Phase 1 built** ([#1132](https://github.com/philliphoff/EncDotNet.S100/issues/1132)).
-> The water-level field, S-104 uncertainty, the S-101 sounding datum and the
-> pick report's move to the field (§10, phase 1) are built; the rest is
-> proposed. The note proposes how SoundCharts applies
+> Status: **Phases 1, 2 and 3a built** ([#1132](https://github.com/philliphoff/EncDotNet.S100/issues/1132)).
+> Phase 1 built the water-level field, S-104 uncertainty, the S-101 sounding
+> datum and the pick report's move to the field. Phase 2 built the S-102
+> safety contour. Phase 3a built the setting, the adjusted S-102 surface and
+> safety contour, the adjusted-area boundary and the indicator's adjusted
+> states (§10). The rest is proposed. The note proposes how SoundCharts applies
 > S-104 water levels to the depths, the safety contour and the S-102 surface
 > across the displayed chart, not only at a picked point and along a route.
 > The status-bar indication that tells the mariner what the chart shows is
@@ -280,6 +282,19 @@ the dataset, station or grid, the time or period, and the datum status.
 
 Outside the footprint the chart is charted, and the basis says so.
 
+As built in phase 3a, the line is the merged edge of the source's footprint
+(each grid's node extent and a 10 km disc round each station), drawn
+dash-dot in teal (artboard B4) on the viewer's overlay band. It doesn't yet
+leave out masked nodes or areas refused for datum, draw station cell edges,
+or select to show the basis; the **DEPTHS** flyout lists the sources that
+aren't adjusted instead.
+
+Finding the nearest station at every sampled S-102 node made the geodesic
+the cost of a re-draw. `CatalogWaterLevelSource` now ranks stations by a
+flat-earth distance first and computes the WGS-84 geodesic only for those
+within 2 % of the nearest (the flat distance is within 0.6 % of the
+geodesic at that reach), so the answer is unchanged.
+
 ## 5. Recomputing on a time change
 
 `GlobalTimeService.CurrentTimeChanged` drives a viewer-side
@@ -324,6 +339,19 @@ loaded, the depth basis indicator says so (see its note). That's the case
 the trial found most confusing.
 
 ## 7. State reported to the depth basis indicator
+
+As built (phase 3a), `IWaterLevelAdjustmentState` exposes `Current`, a
+`ChartAdjustmentState(Mode, AppliedTime, Sources, Footprint,
+ApplyUndeclaredDatum)`, instead of an `Evaluate(view, time)` result. The
+refusals and `AdjustedAreaInView` sketched below aren't stored: the
+evaluator works them out from the datasets in view and the state's datum
+rule, and puts the refused sources in `DepthBasis.NotAdjusted`. The library
+side is `RenderContext.DepthAdjustment` (`IDepthAdjustment` in Core), set by
+`WaterLevelDepthAdjustment` over the field; processors that honour it
+implement `IDepthAdjustableProcessor`, and a water-level change re-renders
+only those (`MapsuiDatasetLayerSession.RefreshDepthAdjustedAsync`).
+`AppliedTime` changes only when that re-render completes.
+
 
 The [Depth basis indicator](depth-basis-indicator.md) owns how the state is
 shown, and defines the seam this note plugs into:
@@ -396,7 +424,8 @@ use one vocabulary.
 |---|---|---|
 | 1 | `IWaterLevelField`, `WaterLevelSnapshot` and `WaterLevelPeriodMinimum` over `CatalogWaterLevelSource`; the pick report moves to it; S-101 vertical datum read; S-104 uncertainty read; combined uncertainty in the card. No chart change. | UncertaintyWLA; IncompatibleDatums at a point |
 | 2 | S-102 safety contour from the S-102 grid with no adjustment, with the coverage-limit border. | UserSelectedSafetyContour |
-| 3 | The mariner setting; adjusted S-102 bands and enhanced safety contour; S-101 threshold and value shifts; adjusted-area boundary; `ChartAdjustmentState` to the indicator. | WaterLevelAdjustment, AdjustmentOfDepthValues, WLAFeatureInformation, SafetyContourWLA, IncompatibleDatums |
+| 3a | The mariner setting and the undeclared-datum override; adjusted S-102 bands and enhanced safety contour; adjusted-area boundary; `ChartAdjustmentState` to the indicator. | — (the S-164 rows move with 3b) |
+| 3b | S-101 threshold and value shifts with clipping at the footprint; the adjusted-sounding marker; adjusted values in the pick report; the faint S-101 safety contour under S-102. | WaterLevelAdjustment, AdjustmentOfDepthValues, WLAFeatureInformation, SafetyContourWLA, IncompatibleDatums |
 | 4 | **Lowest over period**. | WLATimePeriod |
 | 5 | `--water-level-time` in `s100 render` and the MCP render tools. | — |
 

@@ -565,7 +565,7 @@ S-57 records.
 | RevisionUpdate | S-98, Appendix C | — | Gap | `src/EncDotNet.S100.Datasets.S128` | S-128 updates aren't applied. |
 | RevisionCompleteness | S-98, Appendix C | — | Gap | — | No S-124 bulletin vs S-128 cross-check. |
 | S-102 | S-98 6.1; S-98 13 | InitialCatalogues, S102 | Partial | `src/EncDotNet.S100.Datasets.S102/S102PortrayalCatalogue.cs` | Shading follows the safety contour and S-101 depth areas are suppressed; no enhanced safety contour or coverage border. |
-| Water Level Adjustment (S-104) | S-98 Appendix D-2 | EnhancedSafetyContour, InitialCatalogues, WLAOverlap | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs` | S-104 overlay and tide-adjusted depth at a point; no chart-wide adjustment. |
+| Water Level Adjustment (S-104) | S-98 Appendix D-2 | EnhancedSafetyContour, InitialCatalogues, WLAOverlap | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/ChartWaterLevelAdjustmentService.cs` | S-104 overlay, tide-adjusted depth at a point, and (setting **Water level adjustment**) the S-102 surface and safety contour adjusted at the view time with the adjusted-area boundary; S-101 depths not yet adjusted (#1132 phase 3b). |
 | S-111 | S-98 6.1; S-98 13 | InitialCatalogues, S111 | Supported | `src/EncDotNet.S100.Datasets.Pipelines/S111DatasetProcessor.cs` | Reader and portrayal. |
 | Marine Protected Areas | S-98 6.1.1 | — | Supported | `src/EncDotNet.S100.Datasets.Pipelines/S122DatasetProcessor.cs` | Reader and portrayal. |
 | Navigational Warnings | S-98 11.12.1 S-98 11.2.2 | S124NAVARNSelection | Supported | `src/EncDotNet.S100.Datasets.Pipelines/S124DatasetProcessor.cs` | Reader, portrayal and warnings panel. |
@@ -629,12 +629,12 @@ S-57 records.
 | OverlappingData | S-98 20.3.1 | — | Gap | `src/EncDotNet.S100.Renderers.Mapsui/OverlapSuppression.cs` | Same-band overlaps both draw; no overlap indication. |
 | GraphicalIndex | S-98 12.4.1 | PowerUp | Supported | `src/EncDotNet.S100.Viewer/Services/LibraryCoverageOverlayController.cs` | Library coverage overlay with edition and update. |
 | DisplayScaleChange | S-98 12 | PowerUp | Partial | `src/EncDotNet.S100.Viewer/MapScaleFormatter.cs` | Zoom and scale readout; no chart-scale or range picker outside MCP. |
-| WaterLevelAdjustment | S-98 Appendix D-2 | PowerUp | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs`, `src/EncDotNet.S100.Viewer/Services/Depth/DepthBasisEvaluator.cs` | S-102 replaces ENC depths; S-104 water level only at a picked point and in route clearance. The permanent indication exists (status bar **DEPTHS**, #1191); chart adjustment is #1132. |
+| WaterLevelAdjustment | S-98 Appendix D-2 | PowerUp | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/ChartWaterLevelAdjustmentService.cs`, `src/EncDotNet.S100.Viewer/Services/Depth/DepthBasisEvaluator.cs` | With **Water level adjustment** on, the S-102 surface and its safety contour are adjusted at the Timeline's view time, the adjusted-area boundary is drawn and the status bar **DEPTHS** says "+ water level 14:20" with the datum status. S-101 depths aren't adjusted yet (#1132 phase 3b). |
 | AdjustmentOfDepthValues | S-98 Appendix D-3.1 | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/LocationDepthProbe.cs` | Point probe only. |
 | WLAFeatureInformation | S-98 Appendix D-3 | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs` | Depth card shows charted depth, water level and source, and says the chart shows charted depths (#1191); not per feature. Chart adjustment is #1132. |
 | UncertaintyWLA | S-98 Appendix D-2 | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs` | S-102 and S-104 uncertainty combined, √(σ₁₀₂² + σ₁₀₄²), at a picked point; not yet on the chart. |
 | WLATimePeriod | S-98 Appendix D-2.5 | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/DepthOverTimeViewModel.cs` | Depth over time at a point; no period adjustment. |
-| IncompatibleDatums | — | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs` | At a picked point, water level on another or an undeclared datum is refused and the reason shown; not yet on the chart. |
+| IncompatibleDatums | — | — | Partial | `src/EncDotNet.S100.Datasets.Pipelines/Navigation/WaterLevelDepthAdjustment.cs` | Water level on another datum is refused at a picked point and on the S-102 surface, and the **DEPTHS** flyout names each refused source; an undeclared datum is refused unless **Apply anyway when datum is not declared** is on. In the v2.0.0 WaterLevelAdjustment set the S-102 is on MLLW and the S-104 on LAT, so its surface stays charted. The WLAInvalid set the test names isn't in v2.0.0. S-101 on the chart is #1132 phase 3b. |
 | WLAPlanning1 | S-98 Appendix D-2.7 | — | Supported | `src/EncDotNet.S100.Navigation/ClearanceCheck.UkcModel.cs` | Route clearance applies S-104 at each ETA. |
 | PolarData1 | — | — | Supported | `src/EncDotNet.S100.Rendering.Scene/WebMercator.cs` | Web Mercator to 85.05°. |
 | HighLatitudeScaleBar | S-98 12.10.1 | — | Partial | `src/EncDotNet.S100.Viewer/Views/ScaleBarView.axaml.cs` | Scale bar corrected at view centre only. |
@@ -719,7 +719,7 @@ S-57 records.
 |---|---|---|---|---|---|
 | SafetyContourLS | S-98 12.10.9 | SafetyContour, NavigationalHazardsOverview | Passes | `tests/EncDotNet.S100.S164.Tests/Part7SafetyContourTests.cs` | No overview finding inside SAFCO. The manual's plot is TBD. |
 | SafetyContourNextLeg | S-98 12.10.9 | — | Partial | `src/EncDotNet.S100.Navigation/ChartCheck.cs` | All legs checked at planning; no next-leg rule. The S-164 test is TBD. |
-| SafetyContourWLA | S-98 Appendix D-3 | — | Partial | `src/EncDotNet.S100.Navigation/ChartCheck.Depths.cs` | S-102 shoals and S-104 water level in clearance; no adjusted safety contour. |
+| SafetyContourWLA | S-98 Appendix D-3 | — | Partial | `src/EncDotNet.S100.Datasets.Pipelines/S102DatasetProcessor.cs` | S-102 shoals and S-104 water level in clearance; the S-102 safety contour is traced on the adjusted surface. The S-101 safety contour isn't adjusted yet (#1132 phase 3b). |
 | SafetyContourMon | S-98 12.10.9 | — | Gap | — | No monitoring mode. |
 | SafetyContourMonLS | S-98 12.10.9 | — | Gap | — | No monitoring mode. |
 | DualFuelSimple | S-98 18.2 | — | Partial | `src/EncDotNet.S100.Viewer/Services/ExchangeSetService.cs` | S-57 and S-100 sets load side by side; one set with both catalogues takes the S-57 path only. |
