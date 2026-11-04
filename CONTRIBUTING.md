@@ -141,7 +141,7 @@ dotnet format EncDotNet.S100.slnx --diagnostics IDE0005 IDE1006 --severity warn 
 > unused-directive removal), and *naming*. `dotnet format` cannot Fix-All
 > IDE1006 naming violations, so fix those manually. Other style diagnostics
 > are not machine-enforced solution-wide because style fix-all is unreliable
-> on the multi-targeted (`net8.0;net10.0`) projects; follow those rules by hand
+> there; follow those rules by hand
 > (the `.editorconfig` still flags them in your IDE).
 
 ## Documentation

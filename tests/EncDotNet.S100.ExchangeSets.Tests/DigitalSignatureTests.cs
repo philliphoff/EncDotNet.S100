@@ -47,11 +47,7 @@ public class DigitalSignatureTests
         var certEntry = catalogue.Certificates!.Certificates[0];
 
         // Should parse as a valid X.509 certificate
-#if NET10_0_OR_GREATER
         using var cert = X509CertificateLoader.LoadCertificate(certEntry.Value);
-#else
-        using var cert = new X509Certificate2(certEntry.Value);
-#endif
         Assert.NotNull(cert.Subject);
         Assert.NotNull(cert.Issuer);
     }

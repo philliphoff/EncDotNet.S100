@@ -233,11 +233,7 @@ public static class SecomSignatureVerifier
             .Replace("-----BEGIN CERTIFICATE-----", string.Empty, StringComparison.Ordinal)
             .Replace("-----END CERTIFICATE-----", string.Empty, StringComparison.Ordinal);
         var der = Convert.FromBase64String(string.Concat(body.Where(c => !char.IsWhiteSpace(c))));
-#if NET10_0_OR_GREATER
         return X509CertificateLoader.LoadCertificate(der);
-#else
-        return new X509Certificate2(der);
-#endif
     }
 
     private static bool VerifyData(X509Certificate2 signer, string? reference, byte[] data, byte[] signature)
