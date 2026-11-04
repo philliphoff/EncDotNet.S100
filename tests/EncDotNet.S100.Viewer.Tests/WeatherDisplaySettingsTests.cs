@@ -42,7 +42,7 @@ public sealed class WeatherDisplaySettingsTests
     }
 
     [Fact]
-    public void Isobars_are_on_and_the_wind_speed_fill_and_wave_arrows_off_by_default()
+    public void Isobars_are_on_and_the_wind_speed_fill_wave_arrows_and_isotherms_off_by_default()
     {
         var state = new EcdisDisplayState();
         using var panel = new EcdisDisplayPanelViewModel(state, new PortrayalCatalogueManager(), new DatasetsViewModel(new FakeDatasetLoaderService()));
@@ -50,6 +50,7 @@ public sealed class WeatherDisplaySettingsTests
         Assert.True(panel.IsIsobarsVisible);
         Assert.False(panel.IsWindSpeedFillVisible);
         Assert.False(panel.IsWaveArrowsVisible);
+        Assert.False(panel.IsIsothermsVisible);
         // Unset switches follow the styles' defaults, so nothing is in the snapshot yet.
         Assert.Empty(state.Snapshot().LayerVisibility);
     }
@@ -67,12 +68,14 @@ public sealed class WeatherDisplaySettingsTests
         panel.IsIsobarsVisible = false;
         panel.IsWindSpeedFillVisible = true;
         panel.IsWindSpeedFillVisible = true; // no-op
+        panel.IsIsothermsVisible = true;
 
         // Changed is what re-renders every dataset (ViewerPresentationCoordinator).
-        Assert.Equal(2, changed);
+        Assert.Equal(3, changed);
         Assert.False(panel.IsIsobarsVisible);
         Assert.True(panel.IsWindSpeedFillVisible);
         Assert.Contains(nameof(EcdisDisplayPanelViewModel.IsIsobarsVisible), notified);
+        Assert.Contains(nameof(EcdisDisplayPanelViewModel.IsIsothermsVisible), notified);
 
         var display = state.Snapshot();
         Assert.False(display.LayerVisibility[PressureIsobarStyle.Key]);
@@ -80,6 +83,8 @@ public sealed class WeatherDisplaySettingsTests
         Assert.False(new PressureIsobarStyle().IsDrawnWith(display));
         Assert.True(new WindSpeedStyle().IsDrawnWith(display));
         Assert.False(new WaveDirectionStyle().IsDrawnWith(display));
+        Assert.True(new SeaTemperatureIsothermStyle().IsDrawnWith(display));
+        Assert.True(new SeaTemperatureStyle().IsDrawnWith(display));
     }
 
     [Fact]

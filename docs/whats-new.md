@@ -20,6 +20,16 @@ month. For package versions and release assets, see
   versions. CI also runs the tests on .NET 11. The packages now build on
   EncDotNet 0.11.0, which made the same change.
 
+- **Sea surface temperature on the chart.** GRIB2 and NetCDF files with sea
+  surface temperature now draw it as a colour fill with a band for each
+  degree from 0 °C to 30 °C, so fronts such as the edge of the Gulf Stream
+  stand out; the fill is clipped to water. An **Isotherms** switch in
+  Display controls adds labelled lines every 2 °C. The Library has a new
+  **Sea surface temperature — NOAA ERDDAP** source with the NASA MUR, NOAA
+  OISST and NOAA Geo-polar Blended daily analyses, and picks and
+  `sample_coverage` give the temperature in degrees Celsius. See
+  [Show wind and waves on the chart](weather.md).
+
 - **Convert S-101 to S-57.** `s100 s101 convert --to s57` writes an S-101
   dataset as an S-57 Edition 3.1 base cell, following S-65 Annex C, and
   prints what Annex C dropped or folded into `INFORM`. `--exchange-set`

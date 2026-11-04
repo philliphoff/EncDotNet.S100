@@ -1310,6 +1310,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         "weather.wind.barbs" => Strings.SubLayer_Weather_WindBarbs,
         "weather.wave.direction" => Strings.SubLayer_Weather_WaveDirection,
         "weather.pressure.isobars" => Strings.SubLayer_Weather_Isobars,
+        "weather.sea.temperature" => Strings.SubLayer_Weather_SeaTemperature,
+        "weather.sea.temperature.isotherms" => Strings.SubLayer_Weather_Isotherms,
         _ => key,
     };
 

@@ -114,7 +114,8 @@
                 <!-- Weather (#1072): map-wide switches for the optional weather
                      layers, applied to every GRIB2 and NetCDF dataset and kept
                      between sessions. Shown while a weather dataset is loaded.
-                     The wave height fill and wind barbs are always drawn. -->
+                     The wave height and sea temperature fills and the wind
+                     barbs are always drawn. -->
                 <StackPanel Spacing="4" IsVisible="{Binding HasWeatherData}">
                     <TextBlock Text="{x:Static loc:Strings.EcdisPanel_WeatherHeader}"
                                FontSize="11"
@@ -144,6 +145,14 @@
                                       AutomationProperties.AutomationId="EcdisDisplayPanel.Weather.WaveArrows"
                                       AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_WaveArrows}"
                                       AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_WaveArrows}" />
+                    </Grid>
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_Isotherms}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.EcdisPanel_Weather_Isotherms}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsIsothermsVisible}"
+                                      AutomationProperties.AutomationId="EcdisDisplayPanel.Weather.Isotherms"
+                                      AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_Isotherms}"
+                                      AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_Isotherms}" />
                     </Grid>
                 </StackPanel>
 

@@ -322,8 +322,10 @@ internal sealed partial class ViewerSettings
     /// The Display controls' map-wide switches for optional product layers,
     /// keyed by the processor's sub-layer key: today the Weather section's
     /// <c>weather.pressure.isobars</c>, <c>weather.wind.speed</c> and
-    /// <c>weather.wave.direction</c> (#1072). A missing key follows the
-    /// layer's default (isobars on, the wind speed fill and wave arrows off).
+    /// <c>weather.wave.direction</c> (#1072), and
+    /// <c>weather.sea.temperature.isotherms</c> (#1227). A missing key follows
+    /// the layer's default (isobars on; the wind speed fill, wave arrows and
+    /// isotherms off).
     /// </summary>
     public Dictionary<string, bool> EcdisLayerVisibility { get; set; }
         = new(StringComparer.Ordinal);

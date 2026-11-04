@@ -11,8 +11,9 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// <para>
 /// GRIB2 codes are (discipline, category, number) from WMO code table 4.2:
 /// discipline 0 category 2 is momentum, discipline 0 category 3 is mass and
-/// discipline 10 category 0 is oceanographic waves. CF names are from the CF
-/// standard name table.
+/// discipline 10 category 0 is oceanographic waves and discipline 10
+/// category 3 is surface properties (water temperature). CF names are from
+/// the CF standard name table.
 /// </para>
 /// <para>
 /// Where a row lists several codes or names, they're alternatives in order of
@@ -22,7 +23,11 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// waves and swell (10,0,15) and the primary wave mean period (10,0,11).
 /// Mean sea level pressure is NCEP's PRMSL (0,3,1) before ECMWF's <c>msl</c>,
 /// which is plain pressure (0,3,0) at mean sea level: the row's level keeps
-/// surface pressure, also (0,3,0), out.
+/// surface pressure, also (0,3,0), out. Sea surface temperature takes the
+/// plain CF name first, then the GHRSST foundation, subskin and skin
+/// temperatures that satellite analyses such as MUR and the NOAA Geo-polar
+/// Blended analysis carry; GFS's surface <c>TMP</c> (0,0,0) is left out, as
+/// it is land skin temperature too.
 /// </para>
 /// </remarks>
 public static class WeatherParameters
@@ -63,6 +68,9 @@ public static class WeatherParameters
     /// <summary>Canonical id of the air pressure reduced to mean sea level.</summary>
     public const string PressureMsl = "pressure.msl";
 
+    /// <summary>Canonical id of the sea surface temperature, in kelvin.</summary>
+    public const string SeaSurfaceTemperature = "sea.temperature";
+
     /// <summary>Group id of the 10 m wind: U, V, speed and direction.</summary>
     public const string WindGroup = "wind";
 
@@ -81,11 +89,15 @@ public static class WeatherParameters
     /// <summary>Group id of the mean sea level pressure.</summary>
     public const string PressureGroup = "pressure";
 
+    /// <summary>Group id of the sea surface temperature.</summary>
+    public const string SeaTemperatureGroup = "sea.temperature";
+
     private static readonly WeatherLevel TenMetres = WeatherLevel.AboveGround(Length.FromMetres(10));
 
     /// <summary>
     /// Every row of the table, in the order of design note §3.5, with the
-    /// wind-sea direction (NCEP's WVDIR, issue #1074) after the wind-sea height.
+    /// wind-sea direction (NCEP's WVDIR, issue #1074) after the wind-sea height
+    /// and the sea surface temperature (issue #1227) last.
     /// </summary>
     public static IReadOnlyList<WeatherParameterDefinition> All { get; } =
     [
@@ -115,6 +127,9 @@ public static class WeatherParameters
             [new(10, 0, 8)], ["sea_surface_swell_wave_significant_height"]),
         new(PressureMsl, "Mean sea level pressure", WeatherUnit.Pascals, PressureGroup, WeatherLevel.MeanSeaLevel,
             [new(0, 3, 1), new(0, 3, 0)], ["air_pressure_at_mean_sea_level", "air_pressure_at_sea_level"]),
+        new(SeaSurfaceTemperature, "Sea surface temperature", WeatherUnit.Kelvin, SeaTemperatureGroup, null,
+            [new(10, 3, 0)],
+            ["sea_surface_temperature", "sea_surface_foundation_temperature", "sea_surface_subskin_temperature", "sea_surface_skin_temperature"]),
     ];
 
     /// <summary>Finds the row with canonical id <paramref name="id"/>.</summary>

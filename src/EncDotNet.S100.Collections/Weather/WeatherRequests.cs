@@ -174,9 +174,19 @@ public static class WeatherRequests
     }
 
     /// <summary>
+    /// The most points a <c>griddap</c> subset asks for along latitude or
+    /// longitude: 1500. A finer axis is strided (<see cref="ErddapGriddapUri"/>),
+    /// so a 0.01° analysis over a wide area stays a few megabytes a day.
+    /// </summary>
+    public const int ErddapMaxAxisPoints = 1500;
+
+    /// <summary>
     /// A <c>griddap</c> subset of an ERDDAP dataset as NetCDF (<c>griddap/&lt;id&gt;.nc?…</c>):
     /// each variable over <paramref name="start"/> to <paramref name="end"/>,
     /// the area, and the first index of any other axis (a depth or height of one value).
+    /// Latitude and longitude are strided when the area would take more than
+    /// <see cref="ErddapMaxAxisPoints"/> points along them at the axis's
+    /// spacing (<see cref="ErddapAxis.Spacing"/>).
     /// </summary>
     /// <param name="erddapUri">The ERDDAP root (<c>…/erddap/</c>).</param>
     /// <param name="dataset">The dataset.</param>
@@ -204,7 +214,7 @@ public static class WeatherRequests
                 var (south, north) = (lat.South, lat.North);
                 if (axis.Descending)
                     (south, north) = (north, south);
-                constraint.Append('(').Append(Number(south)).Append("):1:(").Append(Number(north)).Append(')');
+                constraint.Append('(').Append(Number(south)).Append("):").Append(Stride(axis, lat.North - lat.South)).Append(":(").Append(Number(north)).Append(')');
             }
             else if (axis.IsLongitude && area is { } lon)
             {
@@ -218,13 +228,15 @@ public static class WeatherRequests
                         west = 0; // Straddles 0°: keep the part east of it.
                 }
 
+                double width = east - west;
                 if (axis.Descending)
                     (west, east) = (east, west);
-                constraint.Append('(').Append(Number(west)).Append("):1:(").Append(Number(east)).Append(')');
+                constraint.Append('(').Append(Number(west)).Append("):").Append(Stride(axis, width)).Append(":(").Append(Number(east)).Append(')');
             }
             else if (axis.IsLatitude || axis.IsLongitude)
             {
-                constraint.Append("0:1:last");
+                double? span = axis.Maximum - axis.Minimum;
+                constraint.Append("0:").Append(span is { } extent ? Stride(axis, extent) : 1).Append(":last");
             }
             else
             {
@@ -255,6 +267,15 @@ public static class WeatherRequests
     public static string FormatRun(DateTimeOffset run) =>
         run.ToUniversalTime().ToString("yyyy-MM-dd HH'Z'", CultureInfo.InvariantCulture);
 
+    // Every n-th point, so the span takes at most ErddapMaxAxisPoints points.
+    private static int Stride(ErddapAxis axis, double span)
+    {
+        if (axis.Spacing is not { } spacing || spacing <= 0 || !double.IsFinite(span) || span <= 0)
+            return 1;
+        double points = span / spacing + 1;
+        return Math.Max(1, (int)Math.Ceiling(points / ErddapMaxAxisPoints));
+    }
+
     private static Uri Folder(Uri uri) => uri.AbsoluteUri.EndsWith('/') ? uri : new Uri(uri.AbsoluteUri + "/");
 
     private static string Number(double value) => value.ToString("0.####", CultureInfo.InvariantCulture);
@@ -267,7 +288,8 @@ public static class WeatherRequests
 /// <param name="Descending">True when its values decrease (a negative <c>averageSpacing</c>).</param>
 /// <param name="Minimum">The smallest value (<c>actual_range</c>), if known.</param>
 /// <param name="Maximum">The largest value (<c>actual_range</c>), if known.</param>
-public sealed record ErddapAxis(string Name, bool Descending = false, double? Minimum = null, double? Maximum = null)
+/// <param name="Spacing">The distance between points (<c>averageSpacing</c>, without its sign), if numeric.</param>
+public sealed record ErddapAxis(string Name, bool Descending = false, double? Minimum = null, double? Maximum = null, double? Spacing = null)
 {
     /// <summary>True for the time axis.</summary>
     public bool IsTime => Name.Equals("time", StringComparison.OrdinalIgnoreCase);

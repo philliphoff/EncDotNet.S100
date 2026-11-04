@@ -243,6 +243,14 @@
     <value>Isobars</value>
     <comment>Weather sub-layer name (#1072): mean sea level pressure isobars every 4 hPa.</comment>
   </data>
+  <data name="SubLayer_Weather_SeaTemperature" xml:space="preserve">
+    <value>Sea surface temperature</value>
+    <comment>Weather sub-layer name (#1227): the sea surface temperature colour fill.</comment>
+  </data>
+  <data name="SubLayer_Weather_Isotherms" xml:space="preserve">
+    <value>Isotherms</value>
+    <comment>Weather sub-layer name (#1227): sea surface temperature isotherms every 2 °C.</comment>
+  </data>
   <data name="Tooltip_ToggleSubLayerVisibility" xml:space="preserve">
     <value>Show or hide this sub-layer</value>
   </data>
@@ -7001,6 +7009,13 @@
   </data>
   <data name="Tooltip_EcdisPanel_Weather_WaveArrows" xml:space="preserve">
     <value>Draw arrows the way the waves travel, sized by wave height, on every weather dataset with wave direction. Off by default: they compete with the wind barbs.</value>
+  </data>
+  <data name="EcdisPanel_Weather_Isotherms" xml:space="preserve">
+    <value>Isotherms</value>
+    <comment>Display controls switch (#1227): sea surface temperature isotherms on every weather dataset.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_Isotherms" xml:space="preserve">
+    <value>Draw sea surface temperature isotherms, every 2 °C, on every weather dataset that has sea temperature. Off by default: the colour fill already shows the temperature.</value>
   </data>
   <data name="EcdisPanel_NavigationalWarnings" xml:space="preserve">
     <value>Navigational warnings</value>

@@ -67,6 +67,9 @@ internal static class NetCdfFixtures
         return (15 + i + 5 * step, 200 + 4.0 * i);
     }
 
+    /// <summary>The sea surface temperature at a node, in °C: 14 °C in the south-west, warming 0.5 °C a column east and 0.2 °C a row north.</summary>
+    public static double SeaTemperatureCelsius(int row, int column) => 14 + 0.5 * column + 0.2 * row;
+
     /// <summary>
     /// The (row, column) of the one wave node with no data in every wave
     /// fixture: the north-east corner.
@@ -112,6 +115,80 @@ internal static class NetCdfFixtures
     {
         grid ??= ChartWindGrid;
         WriteNetCdf4(path, WindFile(grid), dimensionList: true);
+        return path;
+    }
+
+    /// <summary>
+    /// Writes a GHRSST-style NetCDF-4 sea surface temperature analysis (the
+    /// layout of NOAA's Geo-polar Blended and NASA's MUR analyses on ERDDAP):
+    /// one daily step of <c>analysed_sst</c>, a
+    /// <c>sea_surface_foundation_temperature</c> in <paramref name="units"/>,
+    /// packed as <c>short</c> with scale 0.01 and offset 20 (in those units),
+    /// with the north-east corner as land (<c>_FillValue</c>).
+    /// </summary>
+    /// <param name="path">Where to write the file.</param>
+    /// <param name="units">The <c>units</c> attribute; the values are written in it.</param>
+    /// <param name="grid">The grid; <see cref="ChartGrid"/> with one step by default.</param>
+    public static string WriteSstNetCdf4(string path, string units = "degree_C", Grid? grid = null)
+    {
+        grid ??= ChartGrid with { Steps = 1, StepHours = 24 };
+        Func<double, double> convert = units switch
+        {
+            "degree_C" or "Celsius" or "degC" => c => c,
+            "K" or "kelvin" => c => c + 273.15,
+            "degree_F" or "degF" => c => c * 9 / 5 + 32,
+            _ => throw new ArgumentException($"No fixture conversion to '{units}'.", nameof(units)),
+        };
+
+        int rows = grid.Rows, cols = grid.Columns, steps = grid.Steps;
+        var missing = MissingNode(grid);
+        const double scale = 0.01, offset = 20;
+        var data = new double[steps * rows * cols];
+        for (int t = 0; t < steps; t++)
+        {
+            for (int r = 0; r < rows; r++)
+            {
+                for (int c = 0; c < cols; c++)
+                {
+                    data[(t * rows + r) * cols + c] = (r, c) == missing
+                        ? -32768
+                        : Math.Round((convert(SeaTemperatureCelsius(r, c)) - offset) / scale);
+                }
+            }
+        }
+
+        var file = new FixtureFile
+        {
+            Dimensions = [new("time", steps), new("lat", rows), new("lon", cols)],
+            GlobalAttributes = new Dictionary<string, object>
+            {
+                ["Conventions"] = "CF-1.6, ACDD-1.3",
+                ["title"] = "Sea-Surface Temperature, Geo-polar Blended Analysis (synthetic test data)",
+                ["institution"] = "NOAA (synthetic)",
+                ["source"] = "Geo-polar Blended",
+            },
+            Variables =
+            [
+                new("time", FixtureType.Double, ["time"], grid.Times.Select(t => (t - DateTime.UnixEpoch).TotalSeconds).ToArray(),
+                    new() { ["units"] = "seconds since 1970-01-01T00:00:00Z", ["standard_name"] = "time", ["axis"] = "T" }),
+                new("lat", FixtureType.Float, ["lat"], grid.Latitudes,
+                    new() { ["units"] = "degrees_north", ["standard_name"] = "latitude", ["axis"] = "Y" }),
+                new("lon", FixtureType.Float, ["lon"], grid.Longitudes,
+                    new() { ["units"] = "degrees_east", ["standard_name"] = "longitude", ["axis"] = "X" }),
+                new("analysed_sst", FixtureType.Short, ["time", "lat", "lon"], data,
+                    new()
+                    {
+                        ["units"] = units,
+                        ["standard_name"] = "sea_surface_foundation_temperature",
+                        ["long_name"] = "analysed sea surface temperature",
+                        ["_FillValue"] = new short[] { -32768 },
+                        ["scale_factor"] = new[] { scale },
+                        ["add_offset"] = new[] { offset },
+                    }),
+            ],
+        };
+
+        WriteNetCdf4(path, file, dimensionList: true);
         return path;
     }
 

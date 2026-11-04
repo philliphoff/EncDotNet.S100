@@ -74,8 +74,8 @@ format layer underneath, if you need the raw variables and attributes.
   (`CfTimeUnits`). Months, years and other calendars fail.
 - **Variables.** A data variable on the latitude × longitude grid is matched
   to the weather parameter table by its `standard_name` and converted to the
-  table's units (feet, knots, km/h and hPa are converted; anything else makes
-  it an unknown parameter). Extra dimensions of length 1 (a single height or
+  table's units (feet, knots, km/h and hPa are converted, and degrees Celsius
+  and Fahrenheit to kelvin; anything else makes it an unknown parameter). Extra dimensions of length 1 (a single height or
   depth) are allowed; a 10 m height is the wind level. A variable with several
   levels is listed in `IgnoredVariables` and left out.
 - **Values.** `_FillValue`, `missing_value`, `valid_min`, `valid_max` and

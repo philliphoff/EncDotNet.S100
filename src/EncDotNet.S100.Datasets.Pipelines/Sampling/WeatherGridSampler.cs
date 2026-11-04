@@ -9,7 +9,8 @@ namespace EncDotNet.S100.Datasets.Pipelines.Sampling;
 /// parameter at the grid node nearest the point and the time step nearest the
 /// requested time, as a <see cref="CoverageFieldsSample"/> whose fields carry
 /// their quantity and unit. Wind speed and direction are derived from U and V
-/// when the file has only the components. Shared by
+/// when the file has only the components; wind speed is repeated in knots and
+/// sea surface temperature (stored in kelvin) in degrees Celsius. Shared by
 /// <see cref="WeatherGridProcessorBase"/> (picks) and its catalog payload
 /// (<c>sample_coverage</c>).
 /// </summary>
@@ -149,6 +150,8 @@ internal sealed class WeatherGridSampler : ICoverageSampler
             fields.Add(new SampledField(parameter.Id, quantity, unit, reading));
             if (parameter.Id == WeatherParameters.WindSpeed)
                 fields.Add(Knots(reading));
+            if (parameter.Id == WeatherParameters.SeaSurfaceTemperature)
+                fields.Add(Celsius(reading));
         }
 
         if (_deriveWindSpeed)
@@ -200,6 +203,7 @@ internal sealed class WeatherGridSampler : ICoverageSampler
         WeatherParameters.WindSeaDirection => ("wind_wave_from_direction", "deg"),
         WeatherParameters.SwellHeight => ("swell_wave_significant_height", "m"),
         WeatherParameters.PressureMsl => ("air_pressure_at_mean_sea_level", "Pa"),
+        WeatherParameters.SeaSurfaceTemperature => ("sea_surface_temperature", "K"),
         _ => (id, null),
     };
 
@@ -207,6 +211,11 @@ internal sealed class WeatherGridSampler : ICoverageSampler
     private static SampledField Knots(double? metresPerSecond) =>
         new(WeatherParameters.WindSpeed + ".kn", "wind_speed", "kn",
             metresPerSecond is { } s ? Speed.FromMetresPerSecond(s).TotalKnots : null);
+
+    // The sea surface temperature again in degrees Celsius, the unit mariners read it in.
+    private static SampledField Celsius(double? kelvin) =>
+        new(WeatherParameters.SeaSurfaceTemperature + ".degc", "sea_surface_temperature", "degC",
+            kelvin is { } k ? SeaTemperatureStyle.ToCelsius(k) : null);
 
     private float[] GetStep(WeatherParameter parameter, int step)
     {

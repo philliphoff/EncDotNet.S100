@@ -226,9 +226,13 @@ public sealed class DepartureWindowTests : IDisposable
         await f.Check.WhenIdle();
         Assert.Same(first, f.Check.Window);
 
-        // A deeper draft: the morning window closes.
+        // A deeper draft: the morning window closes. Hold the check so it
+        // can't finish on the thread pool before IsComputing is read.
+        var hold = new TaskCompletionSource();
+        f.Check.HoldHook = _ => hold.Task;
         f.Route.History.Execute(RouteEditLabels.EditPassage, () => f.Route.SetPassageValue(RoutePassageField.Draft, 13));
         Assert.True(f.Check.IsComputing);
+        hold.SetResult();
         await f.Check.WhenIdle();
         Assert.False(f.Check.IsWindowComputing);
         Assert.NotSame(first, f.Check.Window);

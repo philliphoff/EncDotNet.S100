@@ -158,14 +158,14 @@ internal static class CfWeatherReader
     {
         // Known parameters first, best standard name first, so the preferred
         // variable keeps the canonical id when two map to it.
-        var mapped = new List<(Candidate Candidate, WeatherParameterDefinition? Definition, WeatherLevel Level, double Factor, int Preference)>();
+        var mapped = new List<(Candidate Candidate, WeatherParameterDefinition? Definition, WeatherLevel Level, CfUnitConversion Conversion, int Preference)>();
         foreach (var candidate in candidates)
         {
             var variable = candidate.Variable;
             var level = FindLevel(file, variable);
             var standardName = variable.GetText("standard_name");
             var definition = standardName is null ? null : WeatherParameters.FindByCfStandardName(standardName);
-            double factor = 1;
+            var conversion = CfUnitConversion.Identity;
             if (definition is not null)
             {
                 var resolvedLevel = level ?? definition.Level ?? WeatherLevel.Surface;
@@ -173,9 +173,9 @@ internal static class CfWeatherReader
                 {
                     definition = null; // the same quantity at another level is an unknown parameter
                 }
-                else if (CfUnits.FactorTo(variable.GetText("units"), definition.Unit) is { } f)
+                else if (CfUnits.ConversionTo(variable.GetText("units"), definition.Unit) is { } c)
                 {
-                    factor = f;
+                    conversion = c;
                     level = resolvedLevel;
                 }
                 else
@@ -189,7 +189,7 @@ internal static class CfWeatherReader
             int preference = definition is null
                 ? int.MaxValue
                 : IndexOf(definition.CfStandardNames, standardName!.Trim());
-            mapped.Add((candidate, definition, level ?? WeatherLevel.Surface, factor, preference));
+            mapped.Add((candidate, definition, level ?? WeatherLevel.Surface, conversion, preference));
         }
 
         var seen = new HashSet<(string, WeatherLevel)>();
@@ -197,7 +197,7 @@ internal static class CfWeatherReader
         foreach (var entry in mapped.OrderBy(m => m.Preference).ThenBy(m => candidates.IndexOf(m.Candidate)))
         {
             var variable = entry.Candidate.Variable;
-            var steps = BuildSteps(file, entry.Candidate, times, native, entry.Factor);
+            var steps = BuildSteps(file, entry.Candidate, times, native, entry.Conversion);
             if (entry.Definition is { } definition && seen.Add((definition.Id, entry.Level)))
             {
                 parameters.Add(new WeatherParameter(definition, entry.Level, steps, sourceName: variable.Name));
@@ -221,10 +221,10 @@ internal static class CfWeatherReader
         Candidate candidate,
         IReadOnlyList<DateTime> times,
         WeatherNativeGrid native,
-        double unitFactor)
+        CfUnitConversion unit)
     {
         var variable = candidate.Variable;
-        var packing = Packing.For(variable, unitFactor);
+        var packing = Packing.For(variable, unit);
         if (candidate.TimeIndex < 0)
             return [new WeatherTimeStep(times[0], ct => Decode(file, candidate, -1, native, packing, ct))];
 
@@ -523,7 +523,7 @@ internal static class CfWeatherReader
             _offset = offset;
         }
 
-        public static Packing For(NetCdfVariable variable, double unitFactor)
+        public static Packing For(NetCdfVariable variable, CfUnitConversion unit)
         {
             var missing = new List<double>();
             if (variable.FindAttribute("_FillValue") is { Numbers.Count: > 0 } fill)
@@ -547,7 +547,8 @@ internal static class CfWeatherReader
 
             double scale = variable.FindAttribute("scale_factor")?.FirstNumber ?? 1;
             double offset = variable.FindAttribute("add_offset")?.FirstNumber ?? 0;
-            return new Packing(missing.ToArray(), validMin, validMax, scale * unitFactor, offset * unitFactor);
+            // stored = (raw × scale + offset) × factor + unit offset
+            return new Packing(missing.ToArray(), validMin, validMax, scale * unit.Factor, offset * unit.Factor + unit.Offset);
         }
 
         public float Unpack(double raw)

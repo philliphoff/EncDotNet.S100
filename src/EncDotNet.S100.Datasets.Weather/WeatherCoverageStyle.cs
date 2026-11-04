@@ -30,6 +30,8 @@ namespace EncDotNet.S100.Datasets.Weather;
 ///   <item><term><see cref="WindSpeedStyle"/></term><description>A <c>wind.speed</c> fill in Beaufort bands. Off by default.</description></item>
 ///   <item><term><see cref="WaveDirectionStyle"/></term><description>Arrows along <c>wave.dir</c>, sized by <c>wave.hs</c>. Off by default.</description></item>
 ///   <item><term><see cref="PressureIsobarStyle"/></term><description>Isobars every 4 hPa on <c>pressure.msl</c>, labelled. On by default.</description></item>
+///   <item><term><see cref="SeaTemperatureStyle"/></term><description>A <c>sea.temperature</c> fill in 1 °C bands. On by default.</description></item>
+///   <item><term><see cref="SeaTemperatureIsothermStyle"/></term><description>Isotherms every 2 °C on <c>sea.temperature</c>, labelled. Off by default.</description></item>
 /// </list>
 /// <para>
 /// Layer order (design note §5): fills go on
@@ -42,7 +44,7 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// sub-layers <see cref="WeatherPortrayal"/> builds carry these.
 /// </para>
 /// <para>
-/// <b>Land.</b> Fills with <see cref="ClipToWater"/> set (wave height) are
+/// <b>Land.</b> Fills with <see cref="ClipToWater"/> set (wave height, sea surface temperature) are
 /// clipped to water when an S-101 chart is loaded, by the S-98 rule that
 /// clips the S-104 surface (<c>S98DefaultRules.R_101_WX_B_ClipWeatherFillsToWater</c>).
 /// Wind isn't clipped: it blows over land too.
@@ -58,7 +60,7 @@ public abstract class WeatherCoverageStyle : ICoverageStyle
     /// The version of the weather styles, folded into <see cref="ContentScope"/>.
     /// Bump it whenever the symbols, the palette or the bands change.
     /// </summary>
-    public const int StyleVersion = 2;
+    public const int StyleVersion = 3;
 
     /// <summary>The opacity of the colour fills: 0.5, so the chart under them stays readable.</summary>
     public const double FillOpacity = 0.5;
@@ -252,12 +254,16 @@ public abstract class WeatherCoverageStyle : ICoverageStyle
     }
 
     /// <summary>
-    /// New instances of every weather style, in layer-stack order: the wave
-    /// height and wind speed fills, the pressure isobars, then the wind barbs
-    /// and wave arrows.
+    /// New instances of every weather style, in layer-stack order: the sea
+    /// surface temperature, wave height and wind speed fills, the isotherms
+    /// and pressure isobars, then the wind barbs and wave arrows.
     /// </summary>
     public static IReadOnlyList<WeatherCoverageStyle> CreateAll() =>
-        [new WaveHeightStyle(), new WindSpeedStyle(), new PressureIsobarStyle(), new WindBarbStyle(), new WaveDirectionStyle()];
+    [
+        new SeaTemperatureStyle(), new WaveHeightStyle(), new WindSpeedStyle(),
+        new SeaTemperatureIsothermStyle(), new PressureIsobarStyle(),
+        new WindBarbStyle(), new WaveDirectionStyle(),
+    ];
 
     /// <summary>
     /// New instances of the styles that apply to <paramref name="source"/>

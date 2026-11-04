@@ -177,10 +177,12 @@ public sealed class SpitCrossingRouteCheckTests(SpitCrossingFixture fixture) : I
         Assert.InRange(result.Detail!.LengthMeters / PassageGeodesy.MetersPerNauticalMile, 20, 35);
         Assert.Contains(result.Findings, f => f.Code == RouteFindingCodes.CrossesDrying);
 
-        // About 120 ms on Apple silicon, but about 1 s on a 2-core GitHub
-        // ubuntu runner, so the bound leaves room for CI; a regression that
-        // makes checks several times slower still fails.
-        Assert.True(each < 2500, $"A check took {each:0} ms.");
+        // About 20 ms on Apple silicon, but 1 to 3 s on a 2-core GitHub
+        // ubuntu runner, where other test assemblies run at the same time
+        // (2.5 s twice in November 2026, once net8.0 runs stopped spreading
+        // them out). The bound leaves room for that; a regression that makes
+        // checks many times slower still fails.
+        Assert.True(each < 6000, $"A check took {each:0} ms.");
     }
 
     private RouteCheckOutcome<ChartCheckResult> Check(IReadOnlyList<PassageLeg> legs, params string[] only)

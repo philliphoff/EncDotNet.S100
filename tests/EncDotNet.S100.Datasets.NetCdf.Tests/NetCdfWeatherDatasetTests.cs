@@ -136,6 +136,31 @@ public sealed class NetCdfWeatherDatasetTests : IDisposable
         Assert.Equal(WaveHeight(1, 1, 0) * 0.3048, step[5], 4);
     }
 
+    [Theory]
+    [InlineData("degree_C")]
+    [InlineData("Celsius")]
+    [InlineData("K")]
+    [InlineData("degree_F")]
+    public void A_GHRSST_analysis_reads_as_sea_temperature_in_kelvin(string units)
+    {
+        using var dataset = NetCdfWeatherDataset.Open(WriteSstNetCdf4(PathFor("sst.nc"), units));
+        var set = dataset.GridSet;
+        var sst = Assert.Single(set.Parameters);
+
+        Assert.Equal(WeatherParameters.SeaSurfaceTemperature, sst.Id);
+        Assert.Equal("analysed_sst", sst.SourceName);
+        Assert.Equal(WeatherLevel.Surface, sst.Level);
+        Assert.Equal("kelvin", sst.Units);
+        Assert.Empty(dataset.IgnoredVariables);
+
+        var step = set.ReadStep(sst, 0, Ct);
+        int columns = ChartGrid.Columns;
+        // Packed to 0.01 in the file's unit: within 0.01 K (0.0056 K for °F).
+        Assert.Equal(SeaTemperatureCelsius(3, 7) + 273.15, step[3 * columns + 7], 2);
+        Assert.Equal(SeaTemperatureCelsius(0, 0) + 273.15, step[0], 2);
+        Assert.True(float.IsNaN(step[^1]), "Land is missing.");
+    }
+
     [Fact]
     public void Unconvertible_units_make_an_unknown_parameter()
     {

@@ -376,7 +376,8 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
     /// <summary>
     /// Reads ERDDAP's <c>info</c> table (rows of row type, variable, attribute,
     /// data type and value): the axes in order (<c>dimension</c> rows; a
-    /// negative <c>averageSpacing</c> is a descending axis), their
+    /// negative <c>averageSpacing</c> is a descending axis, and a numeric one
+    /// its spacing), their
     /// <c>actual_range</c>, and the global <c>time_coverage_start</c>/<c>_end</c>,
     /// <c>title</c> and issue date (<c>date_issued</c>, else <c>date_modified</c>, else <c>date_created</c>).
     /// </summary>
@@ -385,7 +386,7 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
         if (!root.TryGetProperty("table", out var table) || !table.TryGetProperty("rows", out var rows) || rows.ValueKind != JsonValueKind.Array)
             throw new InvalidDataException("The ERDDAP info has no table.");
 
-        var axes = new List<(string Name, bool Descending)>();
+        var axes = new List<(string Name, bool Descending, double? Spacing)>();
         var ranges = new Dictionary<string, (double Min, double Max)>(StringComparer.Ordinal);
         var globals = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var row in rows.EnumerateArray())
@@ -397,7 +398,16 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
             if (type == "dimension")
             {
                 var spacing = value.IndexOf("averageSpacing=", StringComparison.Ordinal);
-                axes.Add((variable, spacing >= 0 && value.Length > spacing + 15 && value[spacing + 15] == '-'));
+                double? step = null;
+                if (spacing >= 0)
+                {
+                    var text = value[(spacing + 15)..];
+                    var comma = text.IndexOf(',', StringComparison.Ordinal);
+                    if (double.TryParse(comma < 0 ? text : text[..comma], NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+                        step = Math.Abs(parsed);
+                }
+
+                axes.Add((variable, spacing >= 0 && value.Length > spacing + 15 && value[spacing + 15] == '-', step));
             }
             else if (type == "attribute" && variable == "NC_GLOBAL")
             {
@@ -425,7 +435,7 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
 
         return new ErddapInfo(
             [.. axes.Select(a => new ErddapAxis(a.Name, a.Descending,
-                ranges.TryGetValue(a.Name, out var r) ? r.Min : null, ranges.TryGetValue(a.Name, out var r2) ? r2.Max : null))],
+                ranges.TryGetValue(a.Name, out var r) ? r.Min : null, ranges.TryGetValue(a.Name, out var r2) ? r2.Max : null, a.Spacing))],
             Time("time_coverage_start"),
             Time("time_coverage_end"),
             Time("date_issued") ?? Time("date_modified") ?? Time("date_created"),

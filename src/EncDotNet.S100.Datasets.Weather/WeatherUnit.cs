@@ -24,4 +24,7 @@ public enum WeatherUnit
 
     /// <summary>Pascals (air pressure).</summary>
     Pascals,
+
+    /// <summary>Kelvin (sea surface temperature).</summary>
+    Kelvin,
 }

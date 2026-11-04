@@ -17,6 +17,7 @@ public class WeatherParametersTests
     [InlineData("wave.wind_sea.dir", 10, 0, 4, "sea_surface_wind_wave_from_direction", WeatherUnit.DegreesTrue)]
     [InlineData("wave.swell.hs", 10, 0, 8, "sea_surface_swell_wave_significant_height", WeatherUnit.Metres)]
     [InlineData("pressure.msl", 0, 3, 1, "air_pressure_at_mean_sea_level", WeatherUnit.Pascals)]
+    [InlineData("sea.temperature", 10, 3, 0, "sea_surface_temperature", WeatherUnit.Kelvin)]
     public void Table_maps_each_canonical_id(string id, byte discipline, byte category, byte number, string standardName, WeatherUnit unit)
     {
         var definition = WeatherParameters.Find(id);
@@ -39,12 +40,32 @@ public class WeatherParametersTests
         Assert.Equal(id, WeatherParameters.FindByGribCode(new GribParameterCode(discipline, category, number))?.Id);
     }
 
+    [Theory]
+    [InlineData("sea_surface_foundation_temperature")]
+    [InlineData("sea_surface_subskin_temperature")]
+    [InlineData("sea_surface_skin_temperature")]
+    public void Satellite_SST_names_map_to_the_sea_temperature(string standardName)
+    {
+        var definition = WeatherParameters.FindByCfStandardName(standardName);
+
+        Assert.Equal(WeatherParameters.SeaSurfaceTemperature, definition?.Id);
+        Assert.Null(definition?.Level);
+        Assert.Equal("kelvin", WeatherUnits.GetLabel(WeatherUnit.Kelvin));
+    }
+
+    [Fact]
+    public void Surface_air_temperature_is_not_the_sea_temperature()
+    {
+        // GFS's surface TMP (0,0,0) is land skin temperature too.
+        Assert.Null(WeatherParameters.FindByGribCode(new GribParameterCode(0, 0, 0)));
+    }
+
     [Fact]
     public void Ids_codes_and_names_are_unique()
     {
         var all = WeatherParameters.All;
 
-        Assert.Equal(12, all.Count);
+        Assert.Equal(13, all.Count);
         Assert.Equal(all.Count, all.Select(d => d.Id).Distinct().Count());
         var codes = all.SelectMany(d => d.GribCodes).ToList();
         Assert.Equal(codes.Count, codes.Distinct().Count());
