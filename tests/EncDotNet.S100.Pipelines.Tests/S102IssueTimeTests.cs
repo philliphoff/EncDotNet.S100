@@ -2,8 +2,8 @@ using System.Reflection;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 using PureHDF;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -33,7 +33,7 @@ public class S102IssueTimeTests
         {
             using var manager = CreateCatalogueManager();
             using var processor = new S102DatasetProcessor(
-                path, manager, new MoonSharpLuaEngine(), new ProjNetCrsTransformFactory());
+                path, manager, TestLuaEngine.Create(), new ProjNetCrsTransformFactory());
 
             var timeAware = Assert.IsAssignableFrom<ITimeAwareDatasetProcessor>(processor);
             Assert.Empty(timeAware.AvailableTimes);
@@ -53,7 +53,7 @@ public class S102IssueTimeTests
         {
             using var manager = CreateCatalogueManager();
             using var processor = new S102DatasetProcessor(
-                path, manager, new MoonSharpLuaEngine(), new ProjNetCrsTransformFactory());
+                path, manager, TestLuaEngine.Create(), new ProjNetCrsTransformFactory());
 
             Assert.Null(processor.IssueTime);
         }

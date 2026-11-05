@@ -51,6 +51,10 @@
     <PackageVersion Include="Mapsui.Nts" Version="5.1.0" />
     <PackageVersion Include="Mapsui.Rendering.Skia" Version="5.1.0" />
     <PackageVersion Include="Mapsui.Tiling" Version="5.1.0" />
+    <!-- Lua engines behind ILuaEngine. Lua-CSharp (MIT, pure managed, Lua 5.2)
+         is the default; MoonSharp stays selectable until the A/B criteria in
+         docs/design/map-render-architecture.md step 0 are met (#1278). -->
+    <PackageVersion Include="LuaCSharp" Version="0.5.8" />
     <PackageVersion Include="MoonSharp" Version="2.0.0" />
     <PackageVersion Include="NetTopologySuite" Version="2.6.0" />
     <PackageVersion Include="ProjNet" Version="2.1.0" />

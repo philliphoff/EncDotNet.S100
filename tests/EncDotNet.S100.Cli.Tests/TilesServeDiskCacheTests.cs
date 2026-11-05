@@ -148,6 +148,9 @@ public sealed class TilesServeDiskCacheTests : IDisposable
 
         // Settings that change pixels change it.
         Assert.NotEqual(fingerprint, FingerprintOf(new TilesServeCommand.Settings { Input = cell, TextScale = 1.5 }));
+
+        // So does the Lua engine, whose portrayal can differ.
+        Assert.NotEqual(fingerprint, FingerprintOf(new TilesServeCommand.Settings { Input = cell, LuaEngine = "moonsharp" }));
         Assert.NotEqual(fingerprint, FingerprintOf(new TilesServeCommand.Settings { Input = cell, Format = "webp" }));
 
         // So does the data: an update file beside the cell, or the cell itself changing.

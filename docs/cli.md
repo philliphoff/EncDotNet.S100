@@ -201,6 +201,7 @@ other extension writes PNG, unless you set `--format`.
 | `--basemap <mode>` | `none` | `offline` draws the bundled Natural Earth 1:10m land layer under the chart, in a parchment tone (`238,232,220`). Online tile basemaps aren't available. |
 | `--display-mode <mode>` | `ice-concentration` | S-411 only. `ice-concentration`, `ice-sod` (stage of development), or `ice-navigational`. See [Sea-ice display modes](#sea-ice-display-modes). |
 | `--no-updates` | off | Single-dataset form only. Renders an S-101 base cell without its update files. See [S-101 updates](#s-101-updates). |
+| `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
 | `--debug` | off | Prints full stack traces on error, and portrayal and Lua diagnostics on standard error. |
 
 `--hide`, `--no-text` and `--basemap` apply to every layer of a composite.
@@ -405,6 +406,7 @@ Set `--container` to choose the container whatever the extension. An existing
 | `--parallel <workers>` | processor count | Number of blocks rendered at once. |
 | `-y`, `--yes` | off | Writes a tile set of more than 100,000 tiles without asking. |
 | `--no-updates` | off | Tiles an S-101 base cell, given on its own or with `--layer`, without its update files. |
+| `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
 | `--debug` | off | Prints full stack traces on error, and portrayal and Lua diagnostics on standard error. |
 
 ### Tiles export examples
@@ -966,6 +968,7 @@ lists them all.
 | `--layer <path>` | none | Adds a dataset. Repeat it for each dataset. Can't be combined with `--from`. |
 | `--from`, `--exchange-set <path>` | none | Serves every dataset in an exchange set. |
 | `--only <specs>` | all | Exchange-set form only. Loads only these product specifications, comma-separated. |
+| `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
 | `--debug` | off | Prints a full stack trace on error. |
 
 ```bash
@@ -1063,6 +1066,21 @@ s100 feed export exchange-set.zip -o export --title "Harbour survey"
 
 When some datasets can't be written, they're left out of the feed and the
 command exits with code `1`.
+
+## Lua engine
+
+S-101, S-57, S-401, S-131, S-125 and S-102 are portrayed by the Lua rules in
+their portrayal catalogues. `render`, `tiles export`, `tiles serve` and
+`mcp serve` run those rules on Lua-CSharp unless `--lua-engine moonsharp`
+selects MoonSharp, the previous engine:
+
+```bash
+s100 render chart.000 chart.png --lua-engine moonsharp
+```
+
+The engines produce the same chart, with one known exception: a sectored light
+whose sectors share a nominal range can list its colours in a different order
+in its light description. Lua-CSharp lists them as reference Lua does.
 
 ## Supported specifications
 

@@ -8,8 +8,8 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Projections;
@@ -195,7 +195,7 @@ public sealed class S101WithS102SessionTests
 
         return new DatasetPipelineFactory(
             catalogueManager,
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory(),
             new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue),
             new DisplayPlaneAuthorityProvider());

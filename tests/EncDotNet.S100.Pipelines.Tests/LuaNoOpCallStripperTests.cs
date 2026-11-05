@@ -1,7 +1,7 @@
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Scripting;
-using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -59,7 +59,7 @@ public class LuaNoOpCallStripperTests
     {
         var main = Framework + extra + "\nfunction PortrayalMain()\n" + portrayalMainBody + "\nreturn true\nend\n";
         var provider = new Provider();
-        var executor = new LuaRuleExecutor(new MoonSharpLuaEngine(), new RuleSource(main), provider, "TEST", []);
+        var executor = new LuaRuleExecutor(TestLuaEngine.Create(), new RuleSource(main), provider, "TEST", []);
         var emitted = await executor.ExecuteRawAsync(MarinerSettings.Default, TestContext.Current.CancellationToken);
         return [.. emitted.Select(e => e.InstructionString)];
     }
@@ -133,6 +133,7 @@ public class LuaNoOpCallStripperTests
             error('boom')
             """));
 
-        Assert.Contains("(10,", ex.Message);
+        // MoonSharp reports "chunk:(10,c-c)", Lua-CSharp "chunk:10:".
+        Assert.Matches(@"(\(10,|:10:)", ex.Message);
     }
 }

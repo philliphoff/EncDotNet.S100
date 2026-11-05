@@ -926,6 +926,33 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
         }
     }
 
+    /// <summary>The Lua engines the Settings page offers.</summary>
+    public static Scripting.LuaEngineKind[] AvailableLuaEngines { get; } =
+        [Scripting.LuaEngineKind.LuaCSharp, Scripting.LuaEngineKind.MoonSharp];
+
+    private Scripting.LuaEngineKind _luaEngine;
+    /// <summary>
+    /// The Lua engine that runs the portrayal rules. Persisted to
+    /// <see cref="ViewerSettings.LuaEngine"/>; the pipeline factories are
+    /// built at startup, so a change applies after a restart. Disabled when
+    /// pinned by <c>S100_LUA_ENGINE</c>.
+    /// </summary>
+    public Scripting.LuaEngineKind SelectedLuaEngine
+    {
+        get => _luaEngine;
+        set
+        {
+            if (SetProperty(ref _luaEngine, value))
+            {
+                _settings.LuaEngine = Scripting.LuaEngineKinds.GetName(value);
+                _settings.Save();
+            }
+        }
+    }
+
+    /// <summary>Whether the Lua-engine selector is user-editable (not env-pinned).</summary>
+    public bool LuaEngineEditable => !ViewerLuaEngine.IsPinnedByEnvironment;
+
     private bool _showOutOfScaleExtentIndicators;
     /// <summary>
     /// Whether an accent border is drawn around the extent of a loaded dataset
@@ -1165,6 +1192,7 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
         _basemapMode = settings.BasemapMode;
         _showOutOfScaleExtentIndicators = settings.ShowOutOfScaleExtentIndicators;
         _portrayalPrewarmEnabled = settings.PortrayalPrewarmEnabled;
+        _luaEngine = settings.ResolveLuaEngine();
         _showOverscaleIndication = settings.ShowOverscaleIndication;
         _nationalLanguage = settings.NationalLanguage ?? def.NationalLanguage;
 

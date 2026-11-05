@@ -829,9 +829,9 @@ public partial class App : Application
         {
             // One process-wide disk cache shared by every S-101 and S-57 processor so a
             // fresh open of a previously-portrayed cell skips the multi-second
-            // MoonSharp Part 9A Lua run, even across restarts. The cache key is
+            // Part 9A Lua run, even across restarts. The cache key is
             // the portrayal-content hash (dataset bytes + FC/PC content +
-            // pipeline / VM assemblies) so persisted entries auto-invalidate
+            // pipeline / Lua engine assemblies) so persisted entries auto-invalidate
             // when anything affecting the instruction list changes.
             var cacheDir = sp.GetRequiredService<ViewerDataPaths>().PortrayalInstructionCacheDirectory;
             return new EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache(cacheDir, PortrayalCacheMaxBytes);
@@ -865,7 +865,7 @@ public partial class App : Application
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory>(sp =>
             new EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory(
                 sp.GetRequiredService<PortrayalCatalogueManager>(),
-                new EncDotNet.S100.Scripting.MoonSharp.MoonSharpLuaEngine(),
+                ViewerLuaEngine.Create(sp.GetRequiredService<ViewerSettings>().ResolveLuaEngine()),
                 new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory(),
                 sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>(),
                 sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Interoperability.IDisplayPlaneAuthorityProvider>(),
@@ -884,7 +884,7 @@ public partial class App : Application
             var recorder = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalWarmRecorder>();
             var factory = new EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory(
                 sp.GetRequiredService<PortrayalCatalogueManager>(),
-                new EncDotNet.S100.Scripting.MoonSharp.MoonSharpLuaEngine(),
+                ViewerLuaEngine.Create(sp.GetRequiredService<ViewerSettings>().ResolveLuaEngine()),
                 new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory(),
                 sp.GetRequiredService<EncDotNet.S100.Features.FeatureCatalogueManager>(),
                 sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Interoperability.IDisplayPlaneAuthorityProvider>(),

@@ -4,8 +4,8 @@ using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.S164.Tests.S64;
 
@@ -35,7 +35,7 @@ internal static class S64Cells
             cell,
             updates,
             catalogues,
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
     }
 

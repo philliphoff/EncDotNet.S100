@@ -240,7 +240,8 @@ split into focused packages.
 | Package | Description |
 |---|---|
 | **EncDotNet.S100.Hdf5.PureHdf** | HDF5 reader implementation using [PureHDF](https://github.com/Apollo3zehn/PureHDF) (fully managed, no native dependencies). |
-| **EncDotNet.S100.Scripting.MoonSharp** | Lua 5.2 scripting engine using [MoonSharp](https://github.com/moonsharp-devs/moonsharp). |
+| **EncDotNet.S100.Scripting.LuaCSharp** | Lua 5.2 scripting engine using [Lua-CSharp](https://github.com/nuskey8/Lua-CSharp). The default engine for Lua portrayal. |
+| **EncDotNet.S100.Scripting.MoonSharp** | Lua 5.2 scripting engine using [MoonSharp](https://github.com/moonsharp-devs/moonsharp). Selectable instead of Lua-CSharp. |
 | **EncDotNet.S100.Crs.ProjNet** | CRS transform backend (`ICrsTransformFactory`) using [ProjNet](https://github.com/NetTopologySuite/ProjNet4GeoAPI) — WGS84 UTM zones and EPSG:4326 ↔ EPSG:3857. Mapsui-free, so headless consumers (the facade and the `s100` CLI) can reproject coverage products without linking a map renderer. |
 
 ### Product datasets

@@ -1,8 +1,8 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -27,7 +27,7 @@ public class S57DatasetProcessorEcdisFilterTests
         Assert.SkipUnless(File.Exists(fixturePath),
             $"S-57 fixture not found at expected path: {fixturePath}");
 
-        var luaEngine = new MoonSharpLuaEngine();
+        var luaEngine = TestLuaEngine.Create();
         var catalogueManager = new PortrayalCatalogueManager();
         catalogueManager.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
         var featureCatalogueManager = new FeatureCatalogueManager(
@@ -128,7 +128,7 @@ public class S57DatasetProcessorEcdisFilterTests
         return new S57DatasetProcessor(
             fixturePath,
             catalogueManager,
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new FeatureCatalogueManager(spec => Specification.TryOpenFeatureCatalogue(spec)));
     }
 

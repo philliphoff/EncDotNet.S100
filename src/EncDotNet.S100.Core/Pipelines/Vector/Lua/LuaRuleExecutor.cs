@@ -92,8 +92,9 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
     {
         ArgumentNullException.ThrowIfNull(mariner);
 
-        // The MoonSharp interpreter has no interrupt of its own, so the token
-        // is checked before the run and at every feature the rules emit (see
+        // The token is checked before the run, passed to the engine (which
+        // Lua-CSharp checks between instructions) and checked at every
+        // feature the rules emit, which is the only check MoonSharp gets (see
         // ExecuteRawCore).
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -104,7 +105,7 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         try
         {
             // Async pre-warm — load every Lua module declared by the catalogue
-            // so the synchronous MoonSharp require() loader can resolve modules
+            // so the synchronous require() loader can resolve modules
             // without blocking. The snapshot dictionary is captured by the
             // sync loader callback inside ExecuteRawCore.
             var luaSources = await LoadLuaSourcesAsync(cancellationToken).ConfigureAwait(false);
@@ -166,7 +167,7 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
 
     /// <summary>
     /// Awaits every Lua rule file declared in the portrayal catalogue
-    /// manifest into a local snapshot dictionary so the synchronous MoonSharp
+    /// manifest into a local snapshot dictionary so the synchronous
     /// <c>require()</c> module loader (registered inside
     /// <see cref="ExecuteRawCore"/>) can perform its lookups against an
     /// in-memory map. This is the sync↔async bridge for Lua portrayal:
@@ -245,7 +246,7 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         // 7. Run portrayal.
         try
         {
-            lua.Call("PortrayalMain");
+            lua.CallCancellable("PortrayalMain", cancellationToken);
         }
         catch (Exception) when (cancellationToken.IsCancellationRequested)
         {
@@ -269,6 +270,13 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
     /// rules can run for several seconds, so without this a cancelled load kept
     /// a core busy until they finished.
     /// </summary>
+    /// <remarks>
+    /// Lua-CSharp also checks the token passed to <c>PortrayalMain</c> between
+    /// instructions, so on that engine this is a second, coarser check.
+    /// MoonSharp has no interrupt, so there it's the only one. Keep it until
+    /// the work scheduler shows whether it needs a finer yield point (map
+    /// render design, slice 5).
+    /// </remarks>
     private static void InstallCancellationCheck(ILuaContext lua, CancellationToken cancellationToken)
     {
         lua.SetGlobal(CancellationCheckGlobal, (Action)cancellationToken.ThrowIfCancellationRequested);
@@ -304,8 +312,8 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
     private void Prepare(ILuaContext lua, ILuaDataProvider provider, MarinerSettings mariner, IReadOnlyDictionary<string, string> luaSources)
     {
         // 1. Resolve require() modules from the pre-loaded snapshot.
-        //    Normalise the module name here (MoonSharp may pass it bare or with
-        //    a .lua extension) so each catalogue need not repeat the logic.
+        //    Normalise the module name here (an engine may pass it bare or
+        //    with a .lua extension) so each catalogue need not repeat the logic.
         lua.SetModuleLoader(moduleName =>
         {
             var fileName = moduleName.EndsWith(".lua", StringComparison.OrdinalIgnoreCase)

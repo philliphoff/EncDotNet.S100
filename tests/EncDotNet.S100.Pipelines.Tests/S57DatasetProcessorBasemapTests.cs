@@ -2,8 +2,8 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Skia.Scene;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -41,7 +41,7 @@ public class S57DatasetProcessorBasemapTests
         var featureCatalogueManager = new FeatureCatalogueManager(
             spec => Specification.TryOpenFeatureCatalogue(spec));
         var processor = new S57DatasetProcessor(
-            fixturePath, catalogueManager, new MoonSharpLuaEngine(), featureCatalogueManager);
+            fixturePath, catalogueManager, TestLuaEngine.Create(), featureCatalogueManager);
 
         using var none = await processor.RenderHeadlessAsync(
             300, 300, new RenderContext { Viewport = MassachusettsViewport, Basemap = BasemapKind.None }, cancellationToken: TestContext.Current.CancellationToken);

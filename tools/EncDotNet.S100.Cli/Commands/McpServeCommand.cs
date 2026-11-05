@@ -90,6 +90,11 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
         [Description("Keep the Library's index cache, catalogue cache, downloads (and collections.json) here between runs. Defaults to a temporary directory that is removed on exit.")]
         public string? DataDir { get; init; }
 
+        [CommandOption(LuaEngineOption.Template)]
+        [Description(LuaEngineOption.Description)]
+        [DefaultValue(LuaEngineOption.Default)]
+        public string LuaEngine { get; init; } = LuaEngineOption.Default;
+
         [CommandOption("--debug")]
         [Description("Show full stack traces on error.")]
         public bool Debug { get; init; }
@@ -108,6 +113,9 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
 
             if (Collections.Any(string.IsNullOrWhiteSpace))
                 return ValidationResult.Error("--collection needs a path, known-source id or URL.");
+
+            if (LuaEngineOption.Validate(LuaEngine) is { Successful: false } luaEngineError)
+                return luaEngineError;
 
             return ValidationResult.Success();
         }
@@ -143,7 +151,8 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
             // it holds each dataset both as a projected LoadedDataset (read tools)
             // and an open render handle (headless renderer), and is what
             // open_dataset / close_dataset and the Library's loads mutate.
-            using var catalog = new HeadlessMutableCatalog(new ProjNetCrsTransformFactory());
+            using var catalog = new HeadlessMutableCatalog(
+                new ProjNetCrsTransformFactory(), luaEngine: LuaEngineOption.Resolve(settings.LuaEngine));
 
             // Ownership of any exchange-set extraction transfers to the catalog,
             // which keeps it alive for the whole session (the composite renderer

@@ -48,7 +48,7 @@ The bridge is:
 1. `S131DatasetReader` — parses GML into `S131Dataset`
 2. `S131LuaDataProvider` — adapts GML features to the Lua Host API
    (numeric IDs, synthetic spatial records, attribute path navigation)
-3. `S131LuaRuleExecutor` — runs S-131's `main.lua` under MoonSharp
+3. `S131LuaRuleExecutor` — runs S-131's `main.lua` on the Lua engine (Lua-CSharp by default)
 4. `DrawingInstructionParser` — reused from S-101
 
 ### S-131 GML shape
@@ -71,8 +71,9 @@ The bridge is:
    exactly — the bridge just sources from GML instead of ISO 8211.
 6. `DrawingInstructionParser` is reused from S-101; if S-131 emits new
    instruction forms, extend the parser rather than forking it.
-7. The Lua engine is MoonSharp (Lua 5.2 sandboxed). Test that S-131
-   rules run under MoonSharp; avoid non-portable Lua features.
+7. The Lua engine is Lua-CSharp by default, MoonSharp selectable (both Lua
+   5.2, sandboxed). Test that S-131 rules run on both; avoid non-portable
+   Lua features.
 8. The bundled portrayal catalogue under `content/S131/pc/` is
    byte-identical to upstream
    `iho-ohi/S-131-Product-Specification-Development`. Do not edit

@@ -19,6 +19,12 @@ namespace EncDotNet.S100.Pipelines.Vector.Lua;
 /// allocates (#1275).
 /// </para>
 /// <para>
+/// Lua-CSharp calls them without allocating, so there the removal saves time
+/// but not bytes: portraying the 19 S-101 test cells took 294 ms instead of
+/// 330 ms, and the NOAA S-57 test cell 37 ms instead of 45 ms, with the same
+/// bytes allocated (map render design, step 0). It stays for both engines.
+/// </para>
+/// <para>
 /// Only a call that is a whole line is removed, and only when every argument is
 /// a plain name or a literal. Evaluating those has no side effects, so removing
 /// the call cannot skip an attribute lookup or an error that an argument

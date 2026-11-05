@@ -22,7 +22,7 @@ When modifying S-131 code:
 - The bundled `content/S131/pc/` tree is byte-identical to upstream
   `iho-ohi/S-131-Product-Specification-Development`. Do not edit
   those files directly; if upstream needs adapting for this codebase's
-  MoonSharp Lua engine, add an `Adapter/main.lua`.
+  Lua engines (Lua-CSharp and MoonSharp), add an `Adapter/main.lua`.
 - `DrawingInstructionParser` is reused from
   `EncDotNet.S100.Datasets.S101`. If S-131 emits new instruction
   forms, extend the shared parser rather than forking it.

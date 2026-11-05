@@ -15,8 +15,8 @@ dotnet add package EncDotNet.S100
 ```
 
 The package brings in the product readers, the dataset pipeline factory, the
-MoonSharp Lua portrayal engine, the bundled specifications and the headless
-Skia renderer.
+Lua portrayal engines (Lua-CSharp, the default, and MoonSharp), the bundled
+specifications and the headless Skia renderer.
 
 ### Publish for Linux arm64
 
@@ -187,6 +187,25 @@ against one shared viewport. Set `S100CompositeOptions.Viewport` to fix the
 framing, or leave it `null` to fit the union of the extents of all active
 layers. [Compose S-101 and S-102](../../docs/scenarios/compose-s101-s102.md)
 walks through an example.
+
+## Choose the Lua engine
+
+The Lua portrayal rules (S-101, S-57, S-401, S-131, S-125 and S-102) run on
+Lua-CSharp by default. To run them on MoonSharp instead, pass a
+`LuaEngineKind` (namespace `EncDotNet.S100.Scripting`):
+
+```csharp
+using EncDotNet.S100;
+using EncDotNet.S100.Scripting;
+
+using var renderer = new PngS100DatasetRenderer(LuaEngineKind.MoonSharp);
+using var factory = BundledDatasetProcessorFactory.Create(LuaEngineKind.MoonSharp);
+```
+
+`LuaEngineFactory.Create` returns either engine as an `ILuaEngine`, for a
+`DatasetPipelineFactory` you build yourself. The engines produce the same
+portrayal, except where Lua leaves the result to the implementation; see the
+[`EncDotNet.S100.Scripting.LuaCSharp` README](../EncDotNet.S100.Scripting.LuaCSharp/README.md).
 
 ## Renderer result types
 

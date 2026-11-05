@@ -48,6 +48,26 @@ public interface ILuaContext : IDisposable
     object? Call(string functionName, params object?[] args);
 
     /// <summary>
+    /// Calls a global Lua function by name with the given arguments, and
+    /// stops it when <paramref name="cancellationToken"/> is cancelled.
+    /// Returns the first return value, or <c>null</c> if the function returns
+    /// nothing.
+    /// </summary>
+    /// <remarks>
+    /// An engine that can interrupt a running script checks the token between
+    /// instructions and throws an <see cref="OperationCanceledException"/>.
+    /// The default implementation ignores the token, so a caller that needs
+    /// to stop a long call on every engine must also check it from a host
+    /// function the script calls.
+    /// </remarks>
+    /// <param name="functionName">The global function's name.</param>
+    /// <param name="cancellationToken">Stops the call.</param>
+    /// <param name="args">The arguments.</param>
+    /// <returns>The first return value, or <c>null</c>.</returns>
+    object? CallCancellable(string functionName, CancellationToken cancellationToken, params object?[] args) =>
+        Call(functionName, args);
+
+    /// <summary>
     /// Calls a global Lua function and returns all return values.
     /// </summary>
     object?[] CallMultiReturn(string functionName, params object?[] args);

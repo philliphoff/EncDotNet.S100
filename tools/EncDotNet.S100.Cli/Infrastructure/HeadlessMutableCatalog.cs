@@ -3,6 +3,7 @@ using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Scripting;
 
 namespace EncDotNet.S100.Cli.Infrastructure;
 
@@ -62,12 +63,17 @@ internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposab
     /// datasets. When <c>null</c> a bundled all-products factory is created and
     /// owned (disposed with this catalog).
     /// </param>
+    /// <param name="luaEngine">
+    /// The Lua engine for the bundled factory created when
+    /// <paramref name="factory"/> is <c>null</c>.
+    /// </param>
     public HeadlessMutableCatalog(
         ICrsTransformFactory? transforms = null,
-        IDatasetProcessorFactory? factory = null)
+        IDatasetProcessorFactory? factory = null,
+        LuaEngineKind luaEngine = LuaEngineKinds.Default)
     {
         _transforms = transforms;
-        _factory = factory ?? BundledDatasetProcessorFactory.Create();
+        _factory = factory ?? BundledDatasetProcessorFactory.Create(luaEngine);
         _ownsFactory = factory is null;
     }
 

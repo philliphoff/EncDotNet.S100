@@ -4,8 +4,8 @@ using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 using Mapsui;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -84,7 +84,7 @@ public sealed class MapsuiCoverageLayoutSessionCacheTests
     public async Task S98MaskRebuild_ReusesTheLayoutOfTheSameGrid()
     {
         using var manager = CreateCatalogueManager();
-        using var processor = new S102DatasetProcessor(S102File, manager, new MoonSharpLuaEngine(), Factory);
+        using var processor = new S102DatasetProcessor(S102File, manager, TestLuaEngine.Create(), Factory);
         var portrayal = await processor.BuildCoveragePortrayalAsync(
             cancellationToken: TestContext.Current.CancellationToken);
         var grid = Assert.Single(portrayal.SubLayers.OfType<GridCoverageSubLayer>());
@@ -106,7 +106,7 @@ public sealed class MapsuiCoverageLayoutSessionCacheTests
         string path = S102File)
     {
         var id = new MapDatasetId(name);
-        var processor = new S102DatasetProcessor(path, manager, new MoonSharpLuaEngine(), Factory);
+        var processor = new S102DatasetProcessor(path, manager, TestLuaEngine.Create(), Factory);
         Assert.True(owner.TryRegister(id, processor));
         session.SetDataset(new MapDataset(id, name, processor.Metadata));
         return id;

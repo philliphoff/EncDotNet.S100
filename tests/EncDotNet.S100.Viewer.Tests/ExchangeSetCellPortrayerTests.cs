@@ -7,8 +7,8 @@ using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Pipelines.Vector.Caching;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.LazyLoading;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -36,7 +36,7 @@ public sealed class ExchangeSetCellPortrayerTests : IDisposable
         catalogues.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
         return new DatasetPipelineFactory(
             catalogues,
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory(),
             new FeatureCatalogueManager(spec => Specification.TryOpenFeatureCatalogue(spec)),
             new DisplayPlaneAuthorityProvider(),

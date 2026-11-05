@@ -420,6 +420,30 @@ internal sealed partial class ViewerSettings
     public bool PortrayalPrewarmEnabled { get; set; } = true;
 
     /// <summary>
+    /// The Lua engine that runs the portrayal rules: <c>luacsharp</c> or
+    /// <c>moonsharp</c> (see <see cref="Scripting.LuaEngineKinds"/>).
+    /// <see langword="null"/> or an unknown name means the default,
+    /// Lua-CSharp. The <c>S100_LUA_ENGINE</c> environment variable overrides
+    /// it. Read when the viewer starts, so a change applies after a restart.
+    /// </summary>
+    public string? LuaEngine { get; set; }
+
+    /// <summary>
+    /// The Lua engine this session runs: the one <c>S100_LUA_ENGINE</c> names
+    /// when it's set, otherwise <see cref="LuaEngine"/>.
+    /// </summary>
+    /// <returns>The engine.</returns>
+    public Scripting.LuaEngineKind ResolveLuaEngine()
+    {
+        if (ViewerLuaEngine.IsPinnedByEnvironment)
+        {
+            return Scripting.LuaEngineKinds.FromEnvironment();
+        }
+
+        return Scripting.LuaEngineKinds.TryParse(LuaEngine, out var kind) ? kind : Scripting.LuaEngineKinds.Default;
+    }
+
+    /// <summary>
     /// Whether the on-chart overscale "curtain" (a subtle vertical-line pattern,
     /// S-52 / S-101 <c>AP(OVERSC01)</c>) is drawn over the region of a cell that
     /// is being displayed beyond its compilation scale (issue #441, Form A).

@@ -6,7 +6,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.TestSupport;
 using PureHDF;
 using static EncDotNet.S100.TestSupport.NetCdfFixtures;
 
@@ -251,7 +251,7 @@ public sealed class DatasetPipelineFactoryHdf5UndeclaredTests : IDisposable
 
     private static DatasetPipelineFactory CreateFactory() => new(
         new PortrayalCatalogueManager(),
-        new MoonSharpLuaEngine(),
+        TestLuaEngine.Create(),
         new ProjNetCrsTransformFactory(),
         new FeatureCatalogueManager(),
         new DisplayPlaneAuthorityProvider());

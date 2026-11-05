@@ -6,8 +6,8 @@ using EncDotNet.S100.Features;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -174,7 +174,7 @@ public class S98OnDemandSurfaceOrderingTests
         var catalogues = new PortrayalCatalogueManager();
         catalogues.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
         var processor = new S57DatasetProcessor(
-            path, catalogues, new MoonSharpLuaEngine(),
+            path, catalogues, TestLuaEngine.Create(),
             new FeatureCatalogueManager(spec => Specification.TryOpenFeatureCatalogue(spec)));
         return processor.BuildVectorPortrayalAsync(new RenderContext());
     }
@@ -185,7 +185,7 @@ public class S98OnDemandSurfaceOrderingTests
         var catalogues = new PortrayalCatalogueManager();
         catalogues.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
         var processor = new S101DatasetProcessor(
-            path, catalogues, new MoonSharpLuaEngine(),
+            path, catalogues, TestLuaEngine.Create(),
             new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
         return processor.BuildVectorPortrayalAsync(new RenderContext());
     }

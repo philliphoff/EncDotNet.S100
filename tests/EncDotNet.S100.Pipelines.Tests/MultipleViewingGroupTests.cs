@@ -3,8 +3,8 @@ using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -146,7 +146,7 @@ public class MultipleViewingGroupTests
 
         using var pcSource = Specification.CreatePortrayalCatalogueSource("S-101");
         var pcProvider = await PortrayalCatalogueProvider.OpenAsync(pcSource, cancellationToken: TestContext.Current.CancellationToken);
-        var luaEngine = new MoonSharpLuaEngine();
+        var luaEngine = TestLuaEngine.Create();
         var catalogue = new S101PortrayalCatalogue(pcProvider, luaEngine);
         await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
 

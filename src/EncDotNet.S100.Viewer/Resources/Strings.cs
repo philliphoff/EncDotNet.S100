@@ -525,6 +525,11 @@ internal static partial class Strings
     public static string Settings_ClearCaches_Button => Get(nameof(Settings_ClearCaches_Button));
     public static string Settings_PortrayalPrewarmEnabled => Get(nameof(Settings_PortrayalPrewarmEnabled));
     public static string Tooltip_PortrayalPrewarmEnabled => Get(nameof(Tooltip_PortrayalPrewarmEnabled));
+    public static string Settings_LuaEngine => Get(nameof(Settings_LuaEngine));
+    public static string Tooltip_LuaEngine => Get(nameof(Tooltip_LuaEngine));
+    public static string Settings_LuaEngine_LuaCSharp => Get(nameof(Settings_LuaEngine_LuaCSharp));
+    public static string Settings_LuaEngine_MoonSharp => Get(nameof(Settings_LuaEngine_MoonSharp));
+    public static string Settings_LuaEngine_RestartHint => Get(nameof(Settings_LuaEngine_RestartHint));
     public static string Library_PrewarmWorkingFormat => Get(nameof(Library_PrewarmWorkingFormat));
     public static string Library_PrewarmPausedFormat => Get(nameof(Library_PrewarmPausedFormat));
     public static string Library_PrewarmCompleteFormat => Get(nameof(Library_PrewarmCompleteFormat));

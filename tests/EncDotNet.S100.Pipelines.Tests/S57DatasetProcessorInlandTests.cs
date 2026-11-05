@@ -2,7 +2,6 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.TestSupport;
 
@@ -25,7 +24,7 @@ public class S57DatasetProcessorInlandTests
         var featureCatalogueManager = new FeatureCatalogueManager(
             spec => Specification.TryOpenFeatureCatalogue(spec));
         return new S57DatasetProcessor(
-            path, catalogueManager, new MoonSharpLuaEngine(), featureCatalogueManager);
+            path, catalogueManager, TestLuaEngine.Create(), featureCatalogueManager);
     }
 
     private static T WithCell<T>(byte productSpecification, Func<S57DatasetProcessor, T> body)
@@ -111,7 +110,7 @@ public class S57DatasetProcessorInlandTests
             // A host that registered only S-101 still loads the inland cell, as
             // it did before inland cells were portrayed with S-401.
             var processor = new S57DatasetProcessor(
-                path, catalogueManager, new MoonSharpLuaEngine(), featureCatalogueManager);
+                path, catalogueManager, TestLuaEngine.Create(), featureCatalogueManager);
 
             Assert.Equal("S-101", processor.PortrayalSpec.Name);
         }

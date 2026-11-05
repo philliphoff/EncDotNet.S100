@@ -4,7 +4,6 @@ using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Rendering.Scene;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.TestSupport;
 using SkiaSharp;
@@ -78,7 +77,7 @@ public sealed class GribRenderingTests : IDisposable
 
         using var manager = CreateCatalogueManager();
         var s101 = await new S101DatasetProcessor(
-                cellPath, manager, new MoonSharpLuaEngine(), new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue))
+                cellPath, manager, TestLuaEngine.Create(), new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue))
             .BuildVectorPortrayalAsync(new RenderContext(), Ct);
 
         var factory = new ProjNetCrsTransformFactory();

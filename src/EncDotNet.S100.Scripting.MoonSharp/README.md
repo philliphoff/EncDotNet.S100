@@ -4,8 +4,11 @@
 `ILuaContext` interfaces from
 [`EncDotNet.S100.Core`](../EncDotNet.S100.Core/README.md) with
 [MoonSharp](https://github.com/moonsharp-devs/moonsharp), a Lua 5.2
-interpreter written in .NET. The S-100 Part 9A Lua portrayal (S-101, S-131,
-S-102 and others) runs on it. Reference it directly when you build a dataset
+interpreter written in .NET. It was the engine for the S-100 Part 9A Lua
+portrayal (S-101, S-131, S-102 and others) before
+[`EncDotNet.S100.Scripting.LuaCSharp`](../EncDotNet.S100.Scripting.LuaCSharp/README.md),
+which is now the default. It stays selectable, for comparison, through
+`LuaEngineKind.MoonSharp`. Reference it directly when you build a dataset
 pipeline yourself or run Lua scripts through the core interfaces.
 
 ## Install
