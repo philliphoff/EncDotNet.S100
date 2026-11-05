@@ -60,6 +60,9 @@ internal sealed record SettleRunOptions
 /// </summary>
 internal static class ViewerSettleRunner
 {
+    /// <summary>The <c>timeoutMs</c> the harness passes to <c>await_library_idle</c>.</summary>
+    internal const int LibraryIdleTimeoutMs = 120_000;
+
     public static async Task<JsonObject> RunAsync(McpClient client, SettleRunOptions options, CancellationToken ct)
     {
         var startedAtUtc = DateTimeOffset.UtcNow;
@@ -246,7 +249,7 @@ internal static class ViewerSettleRunner
         {
             AnsiConsole.MarkupLine($"[bold]Library:[/]  turning on load as you pan for '{Markup.Escape(name)}'");
             await CallJsonAsync(client, "set_library_source_options", new() { ["id"] = id, ["showOnMap"] = true }, ct);
-            await CallJsonAsync(client, "await_library_idle", new() { ["timeoutMs"] = 120_000 }, ct);
+            await CallJsonAsync(client, "await_library_idle", new() { ["timeoutMs"] = LibraryIdleTimeoutMs }, ct);
         }
     }
 
