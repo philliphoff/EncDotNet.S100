@@ -78,8 +78,12 @@ internal sealed class TileDiskCache : IDisposable
     /// state, so tiles cached before would keep their wedges and seam lines.
     /// v6: a tile is keyed and rasterised by its SCAMIN scale class (#774), so
     /// a v5 tile, judged at its band's scale, may hold the wrong ops.
+    /// v7: a tile stores only its core plus a 2-pixel apron, not the full
+    /// gutter (map rendering slice 4). The per-pixel-size namespace would
+    /// already keep a v6 tile from being served, but the version bump deletes
+    /// the v6 folder instead of leaving it to age out of the byte budget.
     /// </remarks>
-    public const int FormatVersion = 6;
+    public const int FormatVersion = 7;
 
     private const string FileExtension = ".png";
 

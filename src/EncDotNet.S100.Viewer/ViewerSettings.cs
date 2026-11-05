@@ -225,7 +225,7 @@ internal sealed partial class ViewerSettings
     public double? TileGutterDip { get; set; }
 
     /// <summary>
-    /// Per-layer hot-cache native budget, in MB (issue #331).
+    /// Process-wide hot-cache native budget, in MB (issue #331, map rendering slice 4).
     /// <see langword="null"/> → best default. Mirrors
     /// <c>RenderingOptimizations.TileBudgetMb</c> /
     /// <c>S100_VECTOR_TILE_BUDGET_MB</c>.
@@ -282,7 +282,7 @@ internal sealed partial class ViewerSettings
     public bool? TileGpuResidencyEnabled { get; set; }
 
     /// <summary>
-    /// Per-layer GPU-residency budget, in MB (issue #331).
+    /// Process-wide GPU-residency budget, in MB (issue #331, map rendering slice 4).
     /// <see langword="null"/> → best default. Mirrors
     /// <c>RenderingOptimizations.TileGpuBudgetMb</c> /
     /// <c>S100_VECTOR_TILE_GPU_MB</c>.

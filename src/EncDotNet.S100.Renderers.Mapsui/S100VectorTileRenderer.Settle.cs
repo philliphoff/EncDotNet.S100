@@ -119,26 +119,25 @@ public static partial class S100VectorTileRenderer
             s.Pending)), latest);
     }
 
-    /// <summary>The native bytes held by every layer's raster and GPU tile caches. Safe to call from any thread.</summary>
+    /// <summary>
+    /// The native bytes held by the process-wide raster and GPU tile pools
+    /// (<see cref="TileMemoryPool"/>), which every layer's caches charge.
+    /// Safe to call from any thread.
+    /// </summary>
     /// <returns>The totals.</returns>
     public static TileCacheMemory GetTileCacheMemory()
     {
-        long raster = 0;
-        long gpu = 0;
-        var tiles = 0;
         var layers = 0;
-        foreach (var (_, state) in States)
+        foreach (var _ in States)
         {
             layers++;
-            raster += state.Cache.ResidentBytes;
-            tiles += state.Cache.Count;
-            if (Volatile.Read(ref state.GpuTextures) is { } textures)
-            {
-                gpu += textures.ResidentBytes;
-            }
         }
 
-        return new TileCacheMemory(raster, gpu, tiles, layers);
+        return new TileCacheMemory(
+            TileMemoryPool.Raster.ResidentBytes,
+            TileMemoryPool.Gpu.ResidentBytes,
+            TileMemoryPool.Raster.Count,
+            layers);
     }
 
     /// <summary>One layer's input to <see cref="Summarise"/>.</summary>

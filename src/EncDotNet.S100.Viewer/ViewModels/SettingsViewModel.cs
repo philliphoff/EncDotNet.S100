@@ -609,9 +609,9 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
 
     private double _tileBudgetMb;
     /// <summary>
-    /// Per-layer hot-cache native budget, in MB. Captured per layer when its tile
-    /// state is created, so a change applies on the next dataset reload. Disabled
-    /// when pinned by <c>S100_VECTOR_TILE_BUDGET_MB</c>.
+    /// Process-wide hot-cache native budget, in MB, shared by every layer's
+    /// tiles. Applies at once. Disabled when pinned by
+    /// <c>S100_VECTOR_TILE_BUDGET_MB</c>.
     /// </summary>
     public double TileBudgetMb
     {
@@ -775,9 +775,9 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
 
     private double _tileGpuBudgetMb;
     /// <summary>
-    /// Per-layer GPU-residency budget, in MB. Sized when the resident-texture
-    /// cache is first created, so a change applies on the next dataset reload.
-    /// Disabled when pinned by <c>S100_VECTOR_TILE_GPU_MB</c>.
+    /// Process-wide GPU-residency budget, in MB, shared by every layer's
+    /// textures. Applies at once. Disabled when pinned by
+    /// <c>S100_VECTOR_TILE_GPU_MB</c>.
     /// </summary>
     public double TileGpuBudgetMb
     {
