@@ -6,6 +6,17 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Fronts and pressure centres on the chart.** A WPC coded surface
+  bulletin now draws its cold, warm, occluded and stationary fronts and its
+  troughs with the triangles and semicircles of a printed weather map, on
+  the side each front moves towards, and its highs and lows as a bold **H**
+  or **L** with the pressure. Everything is in one dark ink (`WXFRONT`) over
+  the isobars, with a Layer stack legend and a pick in Object information.
+  `s100 render` draws bulletins too. Feature ids are now the bulletin's code
+  and number, such as `COLD 3`, and the pick notice is "Weather analysis,
+  not for navigation." See
+  [Show a surface analysis](weather.md#show-a-surface-analysis).
+
 - **Lines with symbols along them, and legends with pictures.** Code-defined
   portrayals can now draw a line with a symbol repeated along it, such as a
   weather front's triangles: `ComplexLineStyle` sets the pen, the symbols,

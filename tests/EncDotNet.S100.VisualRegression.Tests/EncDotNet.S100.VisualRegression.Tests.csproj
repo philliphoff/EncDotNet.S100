@@ -26,6 +26,7 @@
     <Compile Include="..\_shared\GribFixtures.cs" Link="TestSupport\GribFixtures.cs" />
     <Compile Include="..\_shared\CapFixtures.cs" Link="TestSupport\CapFixtures.cs" />
     <Compile Include="..\_shared\FrontPipFixtures.cs" Link="TestSupport\FrontPipFixtures.cs" />
+    <Compile Include="..\_shared\CodsusFixtures.cs" Link="TestSupport\CodsusFixtures.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -41,6 +42,8 @@
   <ItemGroup>
     <!-- NOAA GFS and GFS-Wave subsets (issue #1074); see tests/datasets/GRIB2/README.md. -->
     <Content Include="..\datasets\GRIB2\*.grib2" CopyToOutputDirectory="PreserveNewest" Link="TestData\GRIB2\%(Filename)%(Extension)" />
+    <!-- WPC coded surface bulletins (issues #1295, #1300); see tests/datasets/CODSUS/README.md. -->
+    <Content Include="..\datasets\CODSUS\*.txt" CopyToOutputDirectory="PreserveNewest" Link="TestData\CODSUS\%(Filename)%(Extension)" />
     <!-- NWS marine CAP alerts and a hand-written circle alert (issue #1069); see tests/datasets/CAP/README.md. -->
     <Content Include="..\datasets\CAP\*.*" Exclude="..\datasets\CAP\*.md" CopyToOutputDirectory="PreserveNewest" Link="TestData\CAP\%(Filename)%(Extension)" />
   </ItemGroup>

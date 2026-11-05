@@ -202,6 +202,14 @@ public static class WeatherProducts
         DefaultPlanes = CapPlanes,
     };
 
+    // Design note vector-weather.md V25: fronts on Other chart overlays, above
+    // the isobars (the sub-layer carries priority 92; this is the fallback).
+    private static readonly IReadOnlyDictionary<string, S98DisplayPlane> CodsusPlanes =
+        new Dictionary<string, S98DisplayPlane>(StringComparer.OrdinalIgnoreCase)
+        {
+            [ProductRegistration.AnyLayerKind] = S98DisplayPlane.OtherChartOverlays,
+        };
+
     /// <summary>
     /// The portrayal of the coded surface bulletins: code-defined front and
     /// pressure-centre symbols, since the bulletin defines no symbology.
@@ -233,6 +241,7 @@ public static class WeatherProducts
         PickReportNotice = SurfaceAnalysisDatasetProcessor.NotForNavigationNotice,
         MatchBytes = static header => CodedSurfaceBulletinReader.LooksLikeCodedSurfaceBulletin(header.LeadingBytes.Span),
         ReadMetadata = SurfaceAnalysisDatasetProcessor.ReadMetadata,
+        DefaultPlanes = CodsusPlanes,
     };
 
     /// <summary>Every built-in weather registration.</summary>

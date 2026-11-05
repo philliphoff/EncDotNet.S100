@@ -1096,7 +1096,7 @@ in its light description. Lua-CSharp lists them as reference Lua does.
 | Vector, ISO 8211 | S-101, S-401, S-57 | S-57 is translated to S-101, or to S-401 for an inland ENC, and drawn with that product's portrayal, not S-52. |
 | Vector, GML | S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421 | |
 | Coverage, HDF5 | S-102; S-104 data coding formats 1, 2 and 8; S-111 data coding formats 1, 2, 3 and 8 | Gridded data is drawn as a coverage; station and node data as glyphs. S-104 has no IHO portrayal, so its stations and grids use SoundCharts' own gauges and isolines; see [S-104 portrayal](../src/EncDotNet.S100.Datasets.S104/README.md#portrayal). S-111 draws current arrows over the coverage. Other data coding formats exit with code `4`. |
-| Weather, not S-100 | GRIB2, NetCDF-3 and NetCDF-4 (CF), CAP 1.2 and NWS alerts GeoJSON, WPC coded surface bulletins (CODSUS) | Wind and wave grids on a regular latitude/longitude grid, and marine weather warnings, drawn with SoundCharts' own styles; surface analyses (fronts and pressure centres) read and described, not drawn yet. Not for navigation. See [Show wind and waves on the chart](weather.md). |
+| Weather, not S-100 | GRIB2, NetCDF-3 and NetCDF-4 (CF), CAP 1.2 and NWS alerts GeoJSON, WPC coded surface bulletins (CODSUS) | Wind and wave grids on a regular latitude/longitude grid, and marine weather warnings, drawn with SoundCharts' own styles; and surface analyses drawn as fronts and pressure centres. Not for navigation. See [Show wind and waves on the chart](weather.md). |
 
 ## Exit codes
 

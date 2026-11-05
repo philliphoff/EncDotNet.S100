@@ -1,10 +1,12 @@
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Crs.ProjNet;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Weather;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Interoperability;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.TestSupport;
 using static EncDotNet.S100.TestSupport.CodsusFixtures;
@@ -12,9 +14,10 @@ using static EncDotNet.S100.TestSupport.CodsusFixtures;
 namespace EncDotNet.S100.Pipelines.Tests;
 
 /// <summary>
-/// Issue #1295: WPC coded surface bulletins through the registry — detection
+/// Issues #1295 and #1300: WPC coded surface bulletins through the registry — detection
 /// whatever the extension (never claiming an S-100 or other weather file),
-/// the <c>CODSUS</c> registration, and the processor's features and metadata.
+/// the <c>CODSUS</c> registration, and the processor's features, metadata,
+/// portrayal, picks and hit tests.
 /// </summary>
 public sealed class SurfaceAnalysisProcessorTests : IDisposable
 {
@@ -107,21 +110,44 @@ public sealed class SurfaceAnalysisProcessorTests : IDisposable
     }
 
     [Fact]
-    public void A_pick_reports_the_notice_valid_time_and_the_bulletins_points()
+    public void Features_are_named_by_code_and_number_and_forecasts_by_lead_time()
+    {
+        var processor = new SurfaceAnalysisDatasetProcessor(Fixture(HighResolution));
+        var refs = processor.EnumerateFeatures().Select(f => f.FeatureRef).ToArray();
+
+        Assert.Equal("COLD 1", refs[0]);
+        Assert.Equal("STNRY 1", refs[1]);
+        Assert.Contains("HIGH 15", refs);
+        Assert.Contains("LOW 29", refs);
+        Assert.Equal(refs.Length, refs.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+
+        var forecast = new SurfaceAnalysisDatasetProcessor(Fixture(Forecast));
+        var forecastRefs = forecast.EnumerateFeatures().Select(f => f.FeatureRef).ToArray();
+        Assert.Contains("COLD 1", forecastRefs);
+        Assert.Contains("+24h COLD 1", forecastRefs);
+    }
+
+    [Fact]
+    public void A_pick_reports_the_notice_the_analysis_and_next_times_and_the_bulletins_points()
     {
         var processor = new SurfaceAnalysisDatasetProcessor(Fixture(HighResolution));
 
-        var front = processor.GetFeatureInfo("a0.front0")!;
+        var front = processor.GetFeatureInfo("COLD 1")!;
         Assert.Equal("Cold front", front.FeatureTypeName);
         Assert.Equal(
-            ["notice", "validTime", "code", "points"],
+            ["notice", "analysis", "nextAnalysis", "points"],
             front.Attributes.Select(a => a.Code));
-        Assert.Equal(SurfaceAnalysisDatasetProcessor.NotForNavigationNotice, front.Attributes[0].RawValue);
+        Assert.True(front.Attributes[0].IsNavigationNotice);
+        Assert.Equal("Weather analysis, not for navigation.", front.Attributes[0].RawValue);
         Assert.Equal(new DateTime(2026, 11, 4, 0, 0, 0, DateTimeKind.Utc), front.Attributes[1].DateTimeValue);
-        Assert.StartsWith("41.7°N 93.1°W, 40.6°N 92.2°W", front.Attributes[3].RawValue, StringComparison.Ordinal);
+        Assert.Equal(new DateTime(2026, 11, 4, 3, 0, 0, DateTimeKind.Utc), front.Attributes[2].DateTimeValue);
+        var points = front.Attributes[3];
+        Assert.StartsWith("41.7°N 93.1°W, 40.6°N 92.2°W", points.RawValue, StringComparison.Ordinal);
+        Assert.Equal("9, from 41.7°N 93.1°W to 27.4°N 97.0°W", points.DisplayValue);
 
         var centre = processor.EnumerateFeatures().First(f => f.FeatureType == SurfaceAnalysisDatasetProcessor.PressureCentreFeatureType);
         var info = processor.GetFeatureInfoAt(centre.Ordinal)!;
+        Assert.Equal("HIGH 1", info.FeatureRef);
         Assert.Equal("High 1026 hPa", info.FeatureTypeName);
         Assert.Equal("50.1°N 116.2°W", info.Attributes.Single(a => a.Code == "position").RawValue);
         Assert.Null(processor.GetFeatureInfoAt(-1));
@@ -132,11 +158,99 @@ public sealed class SurfaceAnalysisProcessorTests : IDisposable
     public void A_forecast_pick_reports_its_lead_time_and_a_front_its_intensity()
     {
         var forecast = new SurfaceAnalysisDatasetProcessor(Fixture(Forecast));
-        var day = forecast.EnumerateFeatures().First(f => f.FeatureRef.StartsWith("a1.", StringComparison.Ordinal));
-        Assert.Equal("24 h", forecast.GetFeatureInfoAt(day.Ordinal)!.Attributes.Single(a => a.Code == "forecastHours").RawValue);
+        var day = forecast.EnumerateFeatures().First(f => f.FeatureRef.StartsWith("+24h ", StringComparison.Ordinal));
+        var attributes = forecast.GetFeatureInfoAt(day.Ordinal)!.Attributes;
+        Assert.Equal("24 h", attributes.Single(a => a.Code == "forecastHours").RawValue);
+        Assert.DoesNotContain(attributes, a => a.Code == "nextAnalysis");
 
         var synthetic = new SurfaceAnalysisDatasetProcessor(Fixture(Antimeridian));
-        Assert.Equal("Strong", synthetic.GetFeatureInfo("a0.front0")!.Attributes.Single(a => a.Code == "strength").RawValue);
+        Assert.Equal("Strong", synthetic.GetFeatureInfo("WARM 1")!.Attributes.Single(a => a.Code == "strength").RawValue);
+    }
+
+    [Fact]
+    public async Task The_portrayal_is_one_sub_layer_above_the_isobars_with_its_legend()
+    {
+        var processor = new SurfaceAnalysisDatasetProcessor(Fixture(AtlanticLow));
+
+        var result = await processor.BuildVectorPortrayalAsync(new RenderContext { Palette = PaletteType.Dusk }, TestContext.Current.CancellationToken);
+
+        var sub = Assert.Single(result.SubLayers);
+        Assert.Equal("weather.fronts", sub.LayerKey);
+        Assert.Equal(S98DisplayPlane.OtherChartOverlays, sub.Plane);
+        Assert.Equal(92, sub.WithinPlanePriority);
+        Assert.True(sub.WithinPlanePriority > WeatherCoverageStyle.IsolinePriority);
+        Assert.Equal(6, sub.Legend!.Count);
+        Assert.Equal("CODSUS", result.Product);
+        Assert.Equal(processor.FileName, result.SourceDatasetId);
+        Assert.Contains("not for navigation", result.Info, StringComparison.Ordinal);
+        Assert.StartsWith("ds:", result.ContentScope, StringComparison.Ordinal);
+        Assert.NotNull(result.LineStyleProvider!(SurfaceAnalysisStyle.Stationary.Name));
+        Assert.NotNull(result.SymbolProvider!(SurfaceAnalysisStyle.CentreSymbol));
+
+        // Each front's line in its own style; each centre its letter and pressure.
+        var lines = sub.Instructions.OfType<LineInstruction>().Where(l => l.LineStyleReference != LineInstruction.SimpleLineStyleReference).ToArray();
+        Assert.Equal(
+            [("OCFNT 1", "WXFRONT_OCCLUDED"), ("COLD 1", "WXFRONT_COLD"), ("WARM 1", "WXFRONT_WARM"), ("STNRY 1", "WXFRONT_STATIONARY"), ("TROF 1", "WXFRONT_TROUGH")],
+            lines.Select(l => (l.FeatureReference, l.LineStyleReference)));
+        Assert.Equal(["H", "1032", "L", "996"], sub.Instructions.OfType<TextInstruction>().Select(t => t.Text));
+
+        // Fronts are drawn on the smoothed line, which runs the bulletin's way.
+        var geometry = result.GeometryProvider.GetGeometry("COLD 1")!;
+        Assert.Equal(GeometryType.Curve, geometry.Type);
+        Assert.Equal(new GeoPosition(42.5, -45.5), geometry.Coordinates[0]);
+        Assert.Equal(new GeoPosition(33.5, -61.0), geometry.Coordinates[^1]);
+        Assert.True(geometry.Coordinates.Count > 6);
+        Assert.Equal(GeometryType.Point, result.GeometryProvider.GetGeometry("LOW 1")!.Type);
+    }
+
+    [Fact]
+    public async Task Only_the_first_analysis_is_drawn_and_hit()
+    {
+        var processor = new SurfaceAnalysisDatasetProcessor(Fixture(Forecast));
+
+        var result = await processor.BuildVectorPortrayalAsync(null, TestContext.Current.CancellationToken);
+
+        Assert.Same(processor.Bulletin.Analyses[0], processor.DrawnAnalysis);
+        Assert.All(result.SubLayers[0].Instructions, i => Assert.DoesNotContain("+24h", i.FeatureReference, StringComparison.Ordinal));
+        var later = processor.EnumerateFeatures().First(f => f.FeatureRef == "+24h COLD 1");
+        var line = processor.GetFeatureGeometryAt(later.Ordinal)!.Curves[0];
+        var middle = line[line.Count / 2];
+        Assert.DoesNotContain(processor.HitTestFeatures(middle.Latitude, middle.Longitude, 2_000), h => h.FeatureRef == "+24h COLD 1");
+    }
+
+    [Fact]
+    public void A_pick_on_the_drawn_line_or_centre_finds_it()
+    {
+        var processor = new SurfaceAnalysisDatasetProcessor(Fixture(AtlanticLow));
+        var cold = processor.EnumerateFeatures().Single(f => f.FeatureRef == "COLD 1");
+        var line = processor.GetFeatureGeometryAt(cold.Ordinal)!;
+        Assert.Equal(S100GeometryType.Curve, line.Primitive);
+        var onLine = line.Curves[0][line.Curves[0].Count / 2];
+
+        Assert.Contains(processor.HitTestFeatures(onLine.Latitude, onLine.Longitude, 2_000), h => h.FeatureRef == "COLD 1");
+        Assert.Contains(processor.HitTestFeatures(45.0, -50.0, 2_000), h => h.FeatureRef == "LOW 1");
+        Assert.Empty(processor.HitTestFeatures(20.0, -20.0, 2_000));
+    }
+
+    [Fact]
+    public async Task It_renders_headless()
+    {
+        var processor = new SurfaceAnalysisDatasetProcessor(Fixture(AtlanticLow));
+
+        using var bitmap = await processor.RenderHeadlessAsync(400, 300, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal((400, 300), (bitmap.Width, bitmap.Height));
+        int ink = 0;
+        for (int y = 0; y < bitmap.Height; y++)
+        {
+            for (int x = 0; x < bitmap.Width; x++)
+            {
+                if (bitmap.GetPixel(x, y).Red < 128)
+                    ink++;
+            }
+        }
+
+        Assert.True(ink > 1_000, $"Only {ink} dark pixels.");
     }
 
     [Fact]

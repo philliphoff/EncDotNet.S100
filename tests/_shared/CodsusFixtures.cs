@@ -1,7 +1,7 @@
 namespace EncDotNet.S100.TestSupport;
 
 /// <summary>
-/// The coded surface bulletin fixtures of issue #1295 in
+/// The coded surface bulletin fixtures of issues #1295 and #1300 in
 /// <c>tests/datasets/CODSUS</c> (copied to <c>TestData/CODSUS</c>). See the
 /// README there for where each came from.
 /// </summary>
@@ -19,8 +19,14 @@ internal static class CodsusFixtures
     /// <summary>Hand-written: intensities, fronts crossing 180°, wraps, an unknown code, valid the year before its issue time.</summary>
     public const string Antimeridian = "synthetic-antimeridian.txt";
 
+    /// <summary>
+    /// Hand-written: a 996 hPa Atlantic low with every front type and a trough,
+    /// and a 1032 hPa high, at high resolution (issue #1300's portrayal goldens).
+    /// </summary>
+    public const string AtlanticLow = "synthetic-atlantic-low.txt";
+
     /// <summary>Every fixture.</summary>
-    public static IReadOnlyList<string> All { get; } = [HighResolution, Standard, Forecast, Antimeridian];
+    public static IReadOnlyList<string> All { get; } = [HighResolution, Standard, Forecast, Antimeridian, AtlanticLow];
 
     /// <summary>The path of a committed fixture in the test output.</summary>
     /// <param name="name">The fixture's file name.</param>
