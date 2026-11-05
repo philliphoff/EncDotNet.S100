@@ -276,14 +276,22 @@ for how true wind is found.
 ## Use the command line
 
 `s100` reads the same files. `info` lists a grid's model, run, grid,
-parameters, levels and time steps, a CAP file's warnings, or a surface
-analysis's valid times and how many fronts and centres of each kind it has:
+parameters, levels and time steps, a CAP file's warnings, a surface
+analysis's valid times and how many fronts and centres of each kind it has,
+or a tropical cyclone advisory's storm and forecast:
 
 ```bash
 s100 info filter_gfswave.pl
 s100 info alerts.atom
 s100 info asus02.kwbc.cod.sus.txt
+s100 info al092022_5day_020.zip
 ```
+
+For a tropical cyclone, download the advisory's zips from NHC's
+[GIS page](https://www.nhc.noaa.gov/gis/) into one folder: the forecast track
+and cone (`al092022_5day_020.zip`), and, for the wind radii and the storm's
+past track, `al092022_fcst_020.zip` and `al092022_best_track.zip`. Then pass
+the forecast zip. SoundCharts doesn't draw tropical cyclones on the chart yet.
 
 `render` draws the default layers (wave height fill, wind barbs and isobars)
 at a time step, alone or over a chart:

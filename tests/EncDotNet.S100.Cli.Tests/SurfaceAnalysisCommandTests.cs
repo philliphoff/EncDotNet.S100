@@ -69,7 +69,7 @@ public sealed class SurfaceAnalysisCommandTests : IDisposable
 
         Assert.Equal(0, exit);
         Assert.Matches(@"CODSUS\s*│\s*SoundCharts, in code\s*│\s*no", stdout);
-        Assert.Contains("GRIB2, NetCDF, CAP, CODSUS aren't S-100 products", stdout);
+        Assert.Contains("GRIB2, NetCDF, CAP, CODSUS, TC aren't S-100 products", stdout);
     }
 
     private static (int Exit, string Stdout) RunCapturingAnsiConsole(string[] args)
