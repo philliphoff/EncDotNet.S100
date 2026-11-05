@@ -113,6 +113,19 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--ru
 /* display controls */
 .dc { padding: 4px 12px 12px; display: grid; gap: 12px; }
 .dc-sec { display: grid; gap: 6px; }
+.st { display: grid; grid-template-columns: 150px minmax(0,1fr); min-height: 100%; }
+.st-nav { border-right: 1px solid var(--w-border); padding: 12px 8px; display: grid; gap: 2px; align-content: start; }
+.st-nav span { font-size: 12.5px; font-weight: 500; padding: 7px 10px; border-radius: 6px; white-space: nowrap; }
+.st-nav span.on { background: color-mix(in srgb, var(--w-accent) 14%, transparent); }
+.st-page { padding: 18px 22px 22px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.st-title { font-size: 17px; font-weight: 600; } .st-sec { font-size: 14px; font-weight: 600; opacity: .7; }
+.st-help { font-size: 11px; opacity: .6; } .st-lbl { font-size: 12px; font-weight: 600; }
+.st-field { display: grid; gap: 6px; } .st-dim { opacity: .45; }
+.st-sub { font-size: 12.5px; font-weight: 600; border-top: 1px solid var(--w-border); padding-top: 12px; margin-top: 2px; }
+.st-row { display: flex; align-items: center; gap: 12px; font-size: 12.5px; } .st-row > span:first-child { flex: 1; }
+.st-input, .st-combo { border: 1px solid var(--w-border); border-radius: 5px; padding: 4px 8px; font-size: 12px; background: var(--w-bg); white-space: nowrap; }
+.st-input { width: 90px; } .st-combo { min-width: 140px; display: inline-flex; justify-content: space-between; gap: 10px; }
+.st-combo::after { content: "⌄"; opacity: .6; }
 .dc-h { font-size: 11px; font-weight: 600; letter-spacing: .5px; opacity: .7; }
 .dc-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .dc-radio { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 600; }
@@ -270,8 +283,9 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--ru
 
   <section class="frame">
     <div class="frame-head"><span class="eyebrow">Frame 5</span><h2>A planned route near the storm (#1093): the whole window</h2></div>
-    <p class="notes">The Routes panel (8) shows the check summary card and Findings as today, with a Weather row and weather findings. Check mode folds Object information to its edge tab. The route-check legend card on the map (9) is the existing <code>RouteCheckLegendView</code>, with a Weather row added (V38).</p>
+    <p class="notes">The Routes panel (8) shows the check summary card and Findings as today, with a Weather row and weather findings. Check mode folds Object information to its edge tab. The route-check legend card on the map (9) is the existing <code>RouteCheckLegendView</code>, with a Weather row added (V38). The radius the check uses and which radii are Must review are set in Settings (10), under Chart display → Mariner Settings, beside the safety contour and depth the check already reads (V39).</p>
     <div id="w5"></div>
+    <div class="callouts" id="c5"></div>
   </section>
 
   <section class="frame">
@@ -569,6 +583,28 @@ const callout = (n, where, title, html, width) => `<figure class="callout${width
 /* ---------- Panel contents, shared by the window frames and the callouts ---------- */
 const cb = (on = true) => `<span class="cb${on ? " on" : ""}">${on ? "✓" : ""}</span>`;
 const tg = (on = true) => `<span class="tg${on ? " on" : ""}"></span>`;
+// Settings → Chart display, Mariner Settings (V39), laid out from SettingsView.axaml and ChartSettingsPage.axaml.
+function panelSettings() {
+  const nav = ["General", "Appearance", "Chart display", "Vessels", "Integrations", "Keys &amp; certificates", "Advanced"]
+    .map(n => `<span class="${n === "Chart display" ? "on" : ""}">${n}</span>`).join("");
+  const field = (l, v, dim) => `<div class="st-field${dim ? " st-dim" : ""}"><span class="st-lbl">${l}</span><span class="st-input">${v}</span></div>`;
+  const combo = (v, w) => `<span class="st-combo"${w ? ` style="min-width:${w}px"` : ""}>${v}</span>`;
+  return `<div class="st"><div class="st-nav">${nav}</div><div class="st-page">
+    <div style="display:grid;gap:3px"><div class="st-title">Chart display</div><div class="st-help">The background map, scale indicators, and the mariner settings that shape how charts are drawn.</div></div>
+    <div class="st-sec st-dim">Map</div><div class="st-help st-dim">Basemap and scale indicators …</div>
+    <div class="st-sec">Mariner Settings</div><div class="st-help">Safety/depth preferences and S-101 portrayal toggles. Changes re-render all loaded datasets.</div>
+    ${field("Safety Contour", "10 m", true)}${field("Safety Depth", "10 m", true)}
+    <div class="st-help st-dim">Shallow and deep contours, S-101 toggles …</div>
+    <div class="st-field st-dim"><span class="st-lbl">Water level adjustment</span>${combo("Off", 180)}</div>
+    <div class="st-sub">Tropical cyclones on a route</div>
+    <div class="st-help" style="margin-top:-6px">Used by the route check's weather findings. Weather findings are advisory. Not for navigation.</div>
+    <div class="st-row"><span>Check against</span>${combo("34 kt radius")}</div>
+    <div class="st-row"><span>Report closest approach</span>${tg(true)}</div>
+    <div class="st-row"><span>Must review inside</span>${combo("50 kt radius")}</div>
+    <div class="st-help">Inside the 50 kt and 64 kt radii: Must review. The 34 kt radius and the cone: Check.</div>
+    <div class="st-help st-dim">National language …</div>
+  </div></div>`;
+}
 const eyeI = (on = true) => `<span class="eye">${on ? '<svg width="16" height="16" viewBox="0 0 24 24"><path d="M2 12c3-5 6.5-7 10-7s7 2 10 7c-3 5-6.5 7-10 7s-7-2-10-7Z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>' : '<svg width="16" height="16" viewBox="0 0 24 24"><path d="M2 12c3-5 6.5-7 10-7s7 2 10 7c-3 5-6.5 7-10 7s-7-2-10-7Z M4 4l16 16" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>'}</span>`;
 const gSym = (c, south) => `<svg width="14" height="14" viewBox="-11 -11 22 22">${tcSymbol(0, 0, c, 9, P, { south })}</svg>`;
 const gArea = (k, dash, w, stip) => `<svg width="14" height="10" viewBox="0 0 14 10"><rect x="0.5" y="0.5" width="13" height="9" rx="2" fill="${P[k][0]}" fill-opacity="${Math.min(1, P[k][1] * 2.2)}" stroke="${P.ink}" stroke-width="${w || 1}" ${dash ? `stroke-dasharray="${dash}"` : ""}/>${stip ? `<rect x="0.5" y="0.5" width="13" height="9" fill="url(#gstip)"/>` : ""}</svg>`;
@@ -793,8 +829,9 @@ function render() {
   rm += tcSymbol(gs.x, gs.y, gs.c, 14, p, { ring: "dash" }) + `<line x1="${f(gs.x)}" y1="${f(gs.y)}" x2="292" y2="256" stroke="${p.ink}" stroke-width="1.2" stroke-dasharray="4 3"/>` + text(gs.x - 18, gs.y + 30, "at ETA 11/5 5:00 AM · CPA 85 nm", p, { size: 10.5, weight: 600, anchor: "end" });
   document.getElementById("w5").innerHTML = appWindow({
     active: "routes", left: { title: "ROUTES", html: panelRoutes() }, edgeTab: "OBJECT INFORMATION",
-    map: rm, vb: "0 60 760 420", overlays: { hud: hudHtml(true, "11/4/2026 5:00 PM", "now"), extra: routeLegendOverlay() }, pins: [{ n: 8, x: 300, y: 50 }, { n: 9, x: 400, y: 70 }]
+    map: rm, vb: "0 60 760 420", overlays: { hud: hudHtml(true, "11/4/2026 5:00 PM", "now"), extra: routeLegendOverlay() }, pins: [{ n: 8, x: 300, y: 50 }, { n: 9, x: 400, y: 70 }, { n: 10, x: 34, y: 826 }]
   });
+  document.getElementById("c5").innerHTML = callout(10, "Settings (gear, bottom of the activity bar) · Chart display · Mariner Settings. Settings fills the content area.", "Settings", panelSettings(), 640);
   const stage = document.getElementById("stage"); chromeVars(stage);
   document.getElementById("gdefs").innerHTML = gdefs();
   fitWindows();

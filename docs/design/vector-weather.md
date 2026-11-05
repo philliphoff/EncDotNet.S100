@@ -7,11 +7,13 @@
 > [#1233](https://github.com/philliphoff/EncDotNet.S100/issues/1233) (surface
 > analysis fronts and pressure centres). Revision 2 (same day) redraws the
 > mock-ups with every non-map element in the SoundCharts panel it lives in,
-> and makes §6 say exactly where each one goes. Mock-ups at Day, Dusk and Night are in
+> and makes §6 say exactly where each one goes. Revision 3 (same day)
+> records the user's decisions on Q1–Q7 (§10) and adds the tropical cyclone
+> route-check settings to Settings (§6.6). Mock-ups at Day, Dusk and Night are in
 > [`vector-weather/mockups.html`](vector-weather/mockups.html) (published as
 > <https://claude.ai/artifact/VLAwoquLkwdESYSKrCxGQF>). Decisions are
-> numbered **V1–V38** so implementation PRs can cite them. Questions for the
-> user are in §10.
+> numbered **V1–V39** so implementation PRs can cite them. The user's
+> decisions on the open questions are in §10.
 
 The grid items of #1226 (#1227 SST, #1228 currents, #1229 visibility) reused
 what #1055 built: a parameter row, a `WeatherCoverageStyle`, a legend and a
@@ -261,7 +263,7 @@ Options:
 **V18. Option A.** One token, `WXFRONT`: Day `#1A2030`, Dusk `#E3E6EE`,
 Night `#646A76` (luminance 0.14). It's darker and twice as wide as the
 isobars (`WXISOBAR`), so a front reads as the stronger line where it lies
-along an isobar kink. A colour option is §10 Q3.
+along an isobar kink. There's no colour option in v1 (§10 Q3).
 
 ### 5.3 Pressure centres
 
@@ -314,6 +316,7 @@ on-map legend is added.
 | **Library** | Left dock | Activity bar, books icon | Two sources and their items (V27, V28) |
 | **Timeline** | Bottom dock, 260 px, first tab | Time HUD's dock button | Lanes (V14) |
 | **Routes** | Left dock | Activity bar, route icon | A Weather row in the check summary, and weather findings (V38) |
+| **Settings** | Fills the content area | Activity bar, gear at the bottom → **Chart display** | Tropical cyclone route-check settings in Mariner Settings (V39) |
 
 The mock-ups draw each of these in its own panel, laid out from
 `MainWindow.axaml` and the panel views, at Day/Light, Dusk/S100Dusk and
@@ -431,7 +434,8 @@ tag:
     run does. This uses the existing **New run** tag and the **Updates**
     segment.
 - **Tropical cyclones — JTWC** (West Pacific, Indian Ocean, Southern
-  Hemisphere). The same, from JTWC's warning list (§8.2).
+  Hemisphere). The same, from JTWC's warning list (§8.2). It's added later,
+  from its own issue after the spike (§10 Q5).
 - **Surface analysis — WPC**. One item, the latest analysis. The coded
   forecast bulletins are added as items when chosen.
 
@@ -447,6 +451,12 @@ Staleness uses the existing parts:
 - the details' stale-run warning, worded "Advisory 17 is over 7 hours old"
   instead of "Run … is over 12 hours old";
 - **Load latest run** and **Pin this run**.
+
+A new advisory for a **loaded** storm raises an Information notification in
+the existing notification centre ("HURRICANE ZELDA: advisory 18 is
+available"), with Load latest run as its action. A storm becoming active
+in a source's basin doesn't notify; it just appears in the Library
+(§10 Q4).
 
 ### 6.5 Datasets, Timeline and Routes
 
@@ -465,10 +475,48 @@ Staleness uses the existing parts:
   - The step menu lists the storm, so ‹ › step through its forecast points.
 - **Routes.** In the Routes panel's check summary card, a **Weather** row
   sits beside Clearance and Route. Weather findings join the Findings list
-  with their group: Must review, Check or Info (V38, Q7).
+  with their group: Must review, Check or Info (V38, V39).
   - The route-check legend card on the map (`RouteCheckLegendView`) gains a
     Weather group with "Storm at ETA (closest approach)".
   - Check mode folds Object information to its edge tab, as it does today.
+
+### 6.6 Settings
+
+**V39.** The tropical cyclone route-check settings (§10 Q6, Q7) go in
+**Settings → Chart display → Mariner Settings**, after **Water level
+adjustment**. That follows how the route check's other standing values are
+surfaced:
+
+- The check reads the safety contour and safety depth from Mariner Settings
+  (`RouteCheckSettings.FromMarinerSettings`).
+- #1132 put Water level adjustment, which the Depth card and route checks
+  also use, in the same section, beside the mariner depths.
+- The Routes passage card's **Your check settings** group (the
+  check-settings layer, kept per route in `check-settings.json`) holds only
+  per-passage values: draft, squat, required UKC and departure. These
+  thresholds are the mariner's standing choice, not a property of one
+  passage, so they don't go there and aren't written to the route.
+
+The settings are a sub-heading, **Tropical cyclones on a route**, with a
+help line ("Used by the route check's weather findings. Weather findings
+are advisory. Not for navigation."), three rows styled like the section's
+other rows, and a line under them that spells out the current mapping:
+
+| Setting | Control | Default | Effect |
+|---|---|---|---|
+| **Check against** | ComboBox: 34 kt radius, 50 kt radius, 64 kt radius | 34 kt radius | The outermost wind radius the check tests. Radii outside it aren't reported. The cone is always tested. |
+| **Report closest approach** | ToggleSwitch | On | Adds the `TC_CPA` finding and the CPA line on the map |
+| **Must review inside** | ComboBox: 64 kt radius, 50 kt radius, 34 kt radius, Never | 50 kt radius | Radii at or above this are **Must review**. Weaker radii and the cone are **Check**. |
+
+- **Must review inside** never offers a radius outside **Check against**.
+  Narrowing **Check against** past it moves it in with it.
+- A change re-runs an open route check, as a change to the safety contour
+  does.
+- Each control gets a `Settings.*` AutomationId and a tooltip, and the
+  values are readable and settable through MCP, like the other mariner
+  settings.
+- The Routes check summary's Weather row tooltip names the values in use
+  ("34 kt radius and cone · Must review inside 50 kt").
 
 ## 7. Stale and expired data
 
@@ -588,58 +636,64 @@ parameter from GFS) are a possible later item, not part of #1233.
 **V38.** A tropical cyclone rule for the weather check, as #1232 suggests:
 
 - At each sample along the route, at its ETA, take the storm at that time
-  (V11) and test the position against the 34 kt radius in its quadrant and
-  against the cone.
+  (V11) and test the position against the wind radius chosen in Settings
+  (V39; 34 kt by default) in its quadrant, and against the cone.
 - Findings, advisory like the rest of #1093:
   - `TC_RADIUS_34`, `TC_RADIUS_50`, `TC_RADIUS_64`: "Legs 4–5 inside the
     34 kt wind radius of HURRICANE ZELDA, Wed 6:00 PM to Thu 2:00 AM (forecast,
     adv 17)." The strongest radius sets the finding.
   - `TC_CONE`: "Leg 5 inside the forecast cone at ETA."
-  - `TC_CPA`: always reported when the storm is loaded: "Closest approach
-    85 nm at Thu 1:00 AM."
+  - `TC_CPA`: reported when the storm is loaded and **Report closest
+    approach** is on (V39, on by default): "Closest approach 85 nm at Thu
+    1:00 AM."
   - `TC_BEYOND_FORECAST`: legs after the last forecast point are "not
     checked".
+  - Severity follows **Must review inside** (V39). By default 64 kt and 50 kt
+    radii are Must review, and the 34 kt radius and the cone are Check.
 - On the map: the existing finding sleeves (#959) on the affected legs, plus
   a **storm at ETA** ghost (the class symbol with a dashed ring) at the time
   of closest approach, joined to the route by a thin dashed CPA line.
 - The departure sweep (`DepartureWindow`) shows which departures keep the
-  route outside the 34 kt radius.
+  route outside the chosen radius.
 - The rule doesn't add NHC's old "1-2-3" buffer: NHC retired it in favour of
-  wind speed probabilities, and the cone already widens with time. A buffer
-  setting is §10 Q6.
+  wind speed probabilities, and the cone already widens with time. The user
+  chooses the radius instead (§10 Q6).
 
-## 10. Questions for the user
+## 10. Decisions
 
-1. **Q1. Cyclone colour (V2).** Monochrome plum-grey storm ink, or NHC's
-   yellow/orange/red radii despite their clash with S-101 danger and CAP
-   Severe? Recommendation: storm ink.
-2. **Q2. Storm at view time (V11).** Is an interpolated position between
-   forecast points acceptable, given NHC doesn't publish one? It's labelled
-   "est." Recommendation: yes; the alternative is snapping to the nearest
-   forecast point, which jumps up to 12–24 h.
-3. **Q3. Fronts colour (V18).** Monochrome only, or also a **Colour fronts**
-   switch (WPC colours, off by default)? Recommendation: monochrome only in
-   v1.
-4. **Q4. Notifications.** Should the Library raise a notification when a new
-   storm becomes active in a source's basin, or when a loaded storm gets a
-   new advisory? Recommendation: new advisory for a loaded storm only.
-5. **Q5. JTWC.** Include in #1232, or split into its own issue after the
-   spike? Recommendation: split; NHC first.
-6. **Q6. Route check buffer (V38).** Test the 34 kt radius alone, or add a
-   user buffer (nm)? Recommendation: radius alone in v1, with CPA always
-   shown so the user can judge.
-7. **Q7. Severity of TC findings.** #1093 makes weather findings advisory.
-   Should a route inside the 64 kt radius be **Must review**?
-   Recommendation: yes for 64 kt and 50 kt, Review for 34 kt and the cone.
+The user decided these on 2026-11-04. Q1–Q5 follow the recommendations. Q6
+and Q7 use the recommendations as defaults, which the user can change in
+Settings (V39).
+
+1. **Q1. Cyclone colour (V2). Decided: storm ink.** Monochrome plum-grey
+   `WXTC*` tokens, not NHC's yellow/orange/red radii, which clash with S-101
+   danger and CAP Severe.
+2. **Q2. Storm at view time (V11). Decided: interpolate.** The position
+   between forecast points is interpolated and labelled "est.", rather than
+   snapping to the nearest forecast point, which jumps up to 12–24 h.
+3. **Q3. Fronts colour (V18). Decided: monochrome only in v1.** No Colour
+   fronts switch. WPC colours stay in S10 (later).
+4. **Q4. Notifications (V28). Decided: a new advisory for a loaded storm
+   only.** A storm becoming active in a basin doesn't notify.
+5. **Q5. JTWC (V33, V34). Decided: split.** NHC ships first under #1232;
+   the JTWC spike, reader and source get their own issue.
+6. **Q6. Route check radius (V38, V39). Decided: the 34 kt radius by
+   default, user-changeable.** No separate nm buffer. **Check against**
+   chooses the radius (34, 50 or 64 kt), and **Report closest approach**
+   (on by default) adds the CPA finding.
+7. **Q7. Severity of TC findings (V38, V39). Decided: Must review inside the
+   50 kt and 64 kt radii, Check for the 34 kt radius and the cone, by
+   default, user-changeable** with **Must review inside** (64 kt, 50 kt,
+   34 kt or Never).
 
 ## 11. Implementation slices
 
 ```
-S1 TC model + NHC reader ──▶ S2 TC portrayal ──▶ S3 TC time ──▶ S9 Route rule (needs #1093)
+S1 TC model + NHC reader ──▶ S2 TC portrayal ──▶ S3 TC time ──▶ S9 Route rule + settings (needs #1093)
         │                          │                 │
         └──────────▶ S4 NHC Library + switches ◀─────┘
                                    │
-                    S5 JTWC spike + reader (after S2, S4)
+                    S5 JTWC: own issue (after S2, S4)
 
 S6 CODSUS model + reader ──▶ S7 Fronts portrayal ──▶ S8 Fronts time + Library
         (parallel with S1)          ▲
@@ -652,12 +706,12 @@ S0 Toolkit: complex line style + glyph legends ──┘ (also feeds S2)
 | **S1** | `TropicalCycloneAdvisory` model (storm, advisory, past track, forecast points, cone, radii); NHC shapefile reader (or NTS.IO.Esri); `TC` format name; `s100 info`; fixtures from a public-domain archived advisory | — |
 | **S2** | Cyclone portrayal: `WXTC*` tokens, symbol generation (N and S sets), V1–V10, pick card V23, goldens Day/Dusk/Night | S0, S1 |
 | **S3** | Time: interpolation, storm at view time, Timeline lane and next-advisory marker, out-of-range messages (V11–V16) | S2 |
-| **S4** | Library source from `CurrentStorms.json`, advisory replace-in-place, stale at 7 h, Display controls switches (V26–V28), final-advisory state | S1; S2 for display |
-| **S5** | JTWC spike, then reader and source (V33–V34) | S2, S4 |
+| **S4** | Library source from `CurrentStorms.json`, advisory replace-in-place, stale at 7 h, new-advisory notification for a loaded storm, Display controls switches (V26–V28), final-advisory state | S1; S2 for display |
+| **S5** | JTWC spike, then reader and source (V33–V34). Filed as its own issue, not part of #1232 (Q5) | S2, S4 |
 | **S6** | `SurfaceAnalysis` model (fronts, centres, valid time); CODSUS reader (standard and HR) and forecast bulletins; `s100 info`; fixtures | — |
 | **S7** | Fronts portrayal: `WXFRONT`, pips, smoothing, scale rules, `H`/`L`, pick card, goldens | S0, S6 |
 | **S8** | Fronts time (at-or-before within 6 h, fading), WPC Library source, stale at 6 h | S7 |
-| **S9** | TC rule in the route weather check (V38) | S3, #1093's `WeatherCheck` |
+| **S9** | TC rule in the route weather check (V38). The three Settings rows in Chart display → Mariner Settings (V39): persisted with the mariner settings, re-run on change, MCP get/set, AutomationIds, headless view tests | S3, #1093's `WeatherCheck` |
 | **S10** | Later: NHC coastal watches and warnings, wind speed probability grids, cumulative wind swath, other RSMCs (JMA, BoM, IMD, Météo-France), colour fronts | S2–S4 |
 
 S0 and S6 can start at once, in parallel with S1. S2 is the first slice the
