@@ -1,8 +1,10 @@
 # Symbol dictionary — Design Note
 
-> Status: **Proposed.** No issue yet. A working prototype, generated from the
-> catalogues bundled in `EncDotNet.S100.Specifications`, is at
-> <https://claude.ai/artifact/Peujh6ZNQhhoJ4MsNAJT1i>.
+> Status: **Proposed.** No issue yet. A working prototype of the study page,
+> generated from the catalogues bundled in `EncDotNet.S100.Specifications`,
+> is at <https://claude.ai/artifact/Peujh6ZNQhhoJ4MsNAJT1i>. The viewer mocks
+> are the **Chart Reference · design pass** artboard on the SoundCharts design
+> canvas (<https://claude.ai/artifact/2hWbgQ9wKM1gC2gM51mSCs>).
 
 This note designs a searchable reference of every symbol the viewer can draw:
 for each product specification, each feature type with an example of how it
@@ -122,47 +124,139 @@ symbol the same way.
 
 ## 4. The viewer
 
-### Where it lives
+The mocks are the **Chart Reference · design pass** artboard on the *Chart
+display* page of the SoundCharts design canvas
+(<https://claude.ai/artifact/2hWbgQ9wKM1gC2gM51mSCs>), sections A–G. In the
+viewer the dictionary is called **Chart reference**, because it holds
+definitions and display settings as well as symbols.
 
-- **Help → Chart symbols** opens the dictionary as its own window, so it can
-  sit beside the chart.
-- **Object information** gets **Show in chart symbols** on each feature, which
-  opens the dictionary at that feature type.
-- The **Layer stack** legend rows link to their entries.
+### 4.1 How it fits with the Key
 
-### Layout
+[Per-product legends](https://claude.ai/artifact/2hWbgQ9wKM1gC2gM51mSCs)
+(round 3) gives each product a Key: a key at the cursor by default (its option
+C), and a Key button in the map's overlay column for what is in view (B4c).
+The two have different jobs:
 
-The prototype's layout, which works at window and phone widths:
+- The **Key** answers "what is on this chart?": only what is in view,
+  compact, with labels.
+- The **reference** answers "what does this mean, and why does it look like
+  that?": everything in the loaded catalogues, with definitions, every form
+  a symbol can take, and the attributes and settings that choose it.
 
-- **Header**: search, the ECDIS palette (Day, Dusk, Night; defaults to the
-  chart's current palette), and one chip per product specification with its
-  item count.
-- **Toolbar**: browse by *Feature types* or *Symbols*; filter by geometry
-  (Point, Line, Area) and display category (Base, Standard, Other); group by
-  Chart 1 section, display category, geometry, A–Z or nothing; sort by name,
-  code, S-57 acronym or viewing group.
-- **Grid**: one tile per entry, with the glyph on the palette's deep-water
-  colour (DEPDW), the name, the S-57 acronym or symbol code, and a display
-  category badge. Feature types with no symbol of their own sort last in
-  their group and have a plain background.
-- **Detail pane**: the glyph large and at chart size (S-100 symbols are
-  sized in millimetres, so chart size is exact), the definition, the display
-  category in plain words, the Chart 1 section and viewing group, then
-  **Drawn with**: each symbol with the conditions that select it. A symbol's
-  detail lists **Used by** instead. Every row links to its entry.
+The Key stays as designed. Each Key row becomes a term that links into the
+reference. The legends pass's option D (full keys in the Display controls
+tab) moves into the reference's study page (§4.5), so complete keys have one
+home.
 
-### Search
+### 4.2 Four depths, one set of entries
 
-Search matches the feature name, code, S-57 acronym and definition, the
-symbol codes and descriptions, and the decoded conditions, so "red beacon",
-"BCNLAT", "wreck" and "anchorage" all work. Exact code and name matches rank
-first.
+There are four kinds of entry: **feature type**, **symbol** (point symbol,
+line style or area fill), **attribute** (with its listed values) and
+**display setting** (a portrayal context parameter such as Simplified
+symbols). Every way into the reference lands on one of these entries. The
+four depths differ only in how much of the entry they show (artboard A):
 
-### In view
+| Depth | Where | Opens on | Shows |
+|---|---|---|---|
+| Glance | At the cursor; Object information's Key section | Hover, a pick | The symbol and one line (legends option C) |
+| Peek | A popover over any term | Hover or focus after 500 ms; Space pins it | The definition, the glyph, Open in reference |
+| Read | A **Reference** tab in the right dock, beside Object information | Clicking a term, F1 on a pick | The whole entry |
+| Study | **Chart reference** activity (left dock); **Open as page** (full-content panel) | Activity bar, Help › Chart reference, Ctrl+Shift+K | Every entry of a product |
 
-A **Shown on the chart** filter limits the dictionary to the feature types
-in the current view, which makes it the cross-product legend S-98 9.1.5
-asks for. The viewer already knows which features each layer drew.
+### 4.3 Object information (artboard B)
+
+Object information today shows a generic Fluent icon per feature type
+(`FeatureGlyphs`) and links names to the S-100 eXaminer website, which needs
+a connection a ship may not have. The proposal:
+
+- **The drawn symbol** replaces the generic icon: the symbol the renderer
+  actually drew for this feature, in the current palette. This needs the
+  pick hit to carry the portrayal instructions emitted for the feature
+  (symbol, line style or fill names). Areas show a fill swatch, lines a
+  short sample.
+- **Drawn as** names the symbol, with a folded **Why this symbol**: the
+  rule's conditions that held for this feature, in words. For example:
+  "Simplified symbols is on · Colour is red · Beacon shape is a stake, pole,
+  perch or post". A setting in the reason links to that switch in Display
+  settings. When the symbol is the catalogue's fallback (the magenta ? of
+  BCNDEF13), say so plainly.
+- **Attributes** use the feature catalogue's names, not camel-case codes,
+  and every name and value is a term. Codes and S-57 acronyms move into the
+  entry and Copy identity.
+- The **eXaminer link** stays, in the peek and the entry, but is never the
+  only way to a definition.
+
+### 4.4 Entries, in the right dock (artboard C)
+
+Entries are 360 px wide and open in a **Reference** tab of the right dock,
+next to **Object information**, so following links never loses the pick. A
+breadcrumb and back/forward (Alt+←, Alt+→) keep the trail. There is never a
+second window.
+
+- **Feature type** (C1): the glyph large and at chart size, the definition,
+  display category, Chart 1 section, a count in view with **Find**, and
+  **How it is drawn** as a variant table. The table's rows and columns are
+  the attributes that choose the symbol (for Lateral Beacon: beacon shape ×
+  colour). A **Simplified / Paper chart** switch shows the other style
+  without changing the chart, and the variant you see now is ringed. Parts
+  drawn by other rules (topmark, light, name) are links, not rows. The
+  fallback symbol has its own line.
+- **Symbol** (C2): Day, Dusk and Night side by side, its meaning in a
+  sentence, the setting it depends on, its counterpart in the other style,
+  its family, where it came from (S-52 Presentation Library or new in
+  S-101), and the feature types that use it.
+- **Attribute** (C3): the definition and each listed value's definition.
+  Opened from a feature, each value shows the symbol it gives that feature
+  in both styles, and the picked feature's value is highlighted. It also
+  lists the feature types whose symbol it changes.
+- **Display setting** (C4): what it does, its current state with **Change
+  in Display settings**, and before/after pairs from the rules that branch
+  on it (in S-101, Simplified symbols switches between 87 paper-chart forms
+  and 113 simplified ones).
+
+The variant table, the value-to-symbol columns and the before/after pairs
+come from running each rule over the values of the attributes it reads
+(§5, *Probing*). Until then, C1 falls back to the prototype's list of
+symbols with their conditions.
+
+### 4.5 Browse and study (artboards D, E)
+
+**Chart reference** is a left-dock activity, after Feature search. Its list
+reads like Chart 1: grouped by section, glyph first. It has a product combo
+(loaded products first, then every catalogue the viewer has), search, and
+Features / Symbols. **In view** limits it to what is drawn in the current
+extent, which makes it the cross-product legend S-98 9.1.5 asks for. It is
+on when the activity opens from the map or the Key, and off from the Help
+menu. Hovering a row rings that feature type's instances on the chart, and
+selecting a row opens its entry in the right dock.
+
+**Open as page** shows the reference in the full-content panel, over the
+map, as Settings does (#845). It uses the prototype's layout: a tile grid
+by Chart 1 section, a chip per product, Day/Dusk/Night and Simplified/Paper
+chart switches, and the entry on the right. **Export key…** writes the
+current product and palette as a PDF.
+
+### 4.6 Cross-referencing rules (artboard F)
+
+- **A term looks like a term.** Terms have a dotted underline in the text
+  colour. Blue is kept for actions (Find, Change in Display settings).
+- **Peek on hover or focus, read on click.**
+- **Every link is two-way**, generated from one index built from the
+  catalogues, never kept by hand.
+- **Entries reflect the chart as it is**: the current palette, the variant
+  you see now ringed, and a note with a link when the display category hides
+  the feature.
+- **Say what is new.** About 135 S-101 symbols don't come from the S-52
+  Presentation Library (from each SVG's `iho:source`). They get a **New in
+  S-101** badge and filter.
+- **Offline first.** Everything comes from the catalogues on disk.
+- **Entry points**: Object information (names, values, Drawn as, F1), the
+  map's context menu (Look up in reference), the Key flyout, Display
+  settings (setting names), Layer stack legend rows, Feature search hits,
+  the Help menu, and `soundcharts://reference/<spec>/<kind>/<code>` links
+  for MCP and docs.
+- **Automation ids**: `Reference.Entry`, `Reference.Back`,
+  `Reference.Term`, `Reference.Peek`, `ActivityBar.ChartReference`.
 
 ## 5. Later
 
@@ -181,9 +275,19 @@ asks for. The viewer already knows which features each layer drew.
 
 ## 6. Open questions
 
-1. Should the dictionary show every symbol in the catalogue, or only the ones
+1. Is "Chart reference" the name? Mariners say "Chart 1", but that names the
+   paper publication and S-101's test cells.
+2. Should the right dock grow a Reference tab, or should an entry replace
+   Object information's content with a Back to pick? Tabs keep both one click
+   apart; replacing keeps one thing on screen at 1280 × 720.
+3. How far should Why this symbol go? The main symbol's conditions are
+   clear; text, light sectors and topmarks come from other rules.
+4. Weather, AIS, NDBC and CAP overlays have legend rows but no feature
+   catalogue definitions; they need short written ones to be first-class
+   entries.
+5. Should the dictionary show every symbol in the catalogue, or only the ones
    a rule can reach? The prototype shows all of them; unreached ones say so.
-2. Is S-401 (Inland ENC) in scope for SoundCharts users?
-3. The display category comes from the viewing group a rule sets first.
+6. Is S-401 (Inland ENC) in scope for SoundCharts users?
+7. The display category comes from the viewing group a rule sets first.
    Some rules set different groups per geometry or per case; showing all of
    them is more correct and harder to read.
