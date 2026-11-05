@@ -841,16 +841,25 @@ wrapped back across the world.
 
 **Compositing.** Each frame, the UI thread snaps the resolution to the nearest
 band and blits the best available tile for every visible slot, each clipped to
-its core over a rendered gutter (`S100_VECTOR_TILE_GUTTER`, default 64 DIP), so
-strokes stay continuous across tile edges and no hole shows. The target band is
+its core. Tiles are rasterised with a gutter (`S100_VECTOR_TILE_GUTTER`, default
+64 DIP), so strokes stay continuous across tile edges and no hole shows, but a
+cached tile keeps only its core plus a 2-pixel apron for bilinear sampling
+(`ApronPx`). Storing the whole gutter took 2.25 times the core's pixels; the
+apron takes about 1.03 times. The target band is
 drawn on top. While it's incomplete, cached tiles from the single nearest other
 band are drawn underneath, within `MaxFallbackBandDistance` (2) bands, so zoom
 transitions don't show symbols at several sizes.
 
-**Cache and workers.** Finished tiles go into a thread-safe LRU `TileCache`
-bounded by a native-byte budget (`S100_VECTOR_TILE_BUDGET_MB`, default set by
-the [performance profile](#performance-profile)). Visible tiles are kept most
-recently used, so they're never evicted mid-frame. All cache access goes through
+**Cache and workers.** Finished tiles go into the layer's `TileCache`. Every
+layer's cache charges one process-wide `TileMemoryPool` with one LRU order and
+one native-byte budget (`S100_VECTOR_TILE_BUDGET_MB`, default set by the
+[performance profile](#performance-profile)). When the pool is full, the tiles
+drawn least recently go first, whichever layer holds them, so a culled, hidden
+or off-screen layer's tiles go before any visible layer's. Each layer pins its
+visible tiles every frame, so they're never evicted mid-frame. A pin lapses
+once other layers have drawn for 2 seconds without this one, so a layer that
+stops drawing can't hold its tiles. GPU textures have a second pool
+(`S100_VECTOR_TILE_GPU_MB`). All cache access goes through
 the layer lock, so a worker can't dispose an image the compositor is drawing.
 Each layer has a pool of coalescing workers that drains the visible misses,
 which are replaced every frame. `S100_VECTOR_TILE_WORKERS` sets the pool's
@@ -874,8 +883,8 @@ first keeps tile joins and the edge between fallback and target bands
 axis-aligned, so zooming while rotated doesn't show seams (Appendix F.8).
 
 **Device scale.** Tiles are rasterised at the frame's device scale
-(`canvas.TotalMatrix.ScaleX`): a 256-DIP tile plus its two gutters is 384 px at
-1x and 768 px at 2x. A cached tile's pixel size records its scale. A tile of
+(`canvas.TotalMatrix.ScaleX`): a 256-DIP tile plus its two gutters is
+rasterised at 384 px at 1x and 768 px at 2x, and stored at 260 px and 516 px. A cached tile's pixel size records its scale. A tile of
 another size is drawn only as a placeholder while a replacement rasterises, and
 never counts as a hit. Moving a window between a Retina and a standard display
 re-rasterises once. The disk cache is split by pixel size too.
@@ -924,8 +933,8 @@ still override each budget.
 
 | Setting | `LowEnd` | `Balanced` | `HighEnd` |
 |---|---|---|---|
-| Hot tile cache per layer (`S100_VECTOR_TILE_BUDGET_MB`) | 192 MB | 256 MB | 256 MB |
-| GPU tile cache per layer (`S100_VECTOR_TILE_GPU_MB`) | 192 MB | 256 MB | 256 MB |
+| Hot tile cache, all layers (`S100_VECTOR_TILE_BUDGET_MB`) | 512 MB | 1 GB | 1.5 GB |
+| GPU tile cache, all layers (`S100_VECTOR_TILE_GPU_MB`) | 256 MB | 512 MB | 768 MB |
 | Disk tile cache (`S100_VECTOR_TILE_DISK_MB`) | 256 MB | 384 MB | 512 MB |
 | Skia GPU resource cache (`S100_SKIA_GPU_RESOURCE_MB`) | 128 MB | 256 MB | 512 MB |
 | Tile workers per layer (`S100_VECTOR_TILE_WORKERS`) | 1 | 2 | One per 4 cores, 3 to 8 |
@@ -1033,10 +1042,21 @@ Metatiling is experimental and off by default. Turn it on with
 SoundCharts' **Batch adjacent tiles** setting. Measure it with
 `s100.render.metatile.rasterize.duration`, `.slice.duration`, `.tiles`, `.jobs`
 and `.fallbacks`. The fallback counter has a `reason` tag: `sparse`, `disk`,
-`scamin`, `dimension` or `scale`. The `scale` fallback keeps single-tile
-rendering when a fractional device scale can't give the core and gutter whole
-pixel sizes. Leave it off unless A/B runs on real cells show lower total raster
+`scamin` or `dimension`. Leave it off unless A/B runs on real cells show lower total raster
 time without worse cold latency, paint time, memory or pixels.
+
+#### Idle memory compaction
+
+Cell loads, portrayal pre-warm and tile rasterisation allocate gigabytes in
+bursts, and Server GC keeps the memory it committed for them. A host can start
+`IdleMemoryCompactor` (SoundCharts does) to give it back. Once at least 512 MB
+has been allocated since the last compaction and the process has been quiet for
+3 seconds (allocating under 32 MB/s, no visible tiles waiting, no view change),
+it runs one blocking, compacting gen-2 collection, at most once a minute. On
+.NET 10, Server GC decommits the freed memory only a step at a time during later
+collections, so the compactor then runs a gen-0 collection (about 1 ms) once a
+second while the process stays quiet, until the committed size is within
+256 MB of the heap or a minute has passed. Set `S100_IDLE_GC=0` to turn it off.
 
 #### Disk tile cache
 

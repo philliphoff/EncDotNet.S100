@@ -73,17 +73,50 @@ public static partial class S100VectorTileRenderer
     public static double GutterDip => RenderingOptimizations.TileGutterDip;
 
     /// <summary>
-    /// The edge length, in device pixels, of a tile (core + gutter on both
-    /// sides) rasterised at <paramref name="deviceScale"/>. The cached image's
-    /// width is this value, so it doubles as the tile's raster-scale tag: the hot
-    /// and warm caches only count a tile as a hit for a frame whose own scale
-    /// maps to the same pixel size.
+    /// The apron, in device pixels, a stored tile keeps beyond its core on every
+    /// edge (map rendering slice&#160;4). The tile is still rasterised with the
+    /// full <see cref="GutterDip"/> gutter so strokes crossing a seam keep their
+    /// joins and caps, but only the core plus this apron is kept: the compositor
+    /// clips each blit to the core, and bilinear sampling of a core-edge pixel
+    /// reads at most one pixel past it, even when the tile is drawn up to √2
+    /// smaller between bands. Storing the full 64&#160;DIP gutter held
+    /// <c>(256 + 128)² / 256² = 2.25×</c> the core's pixels; the apron holds
+    /// about 1.03×.
     /// </summary>
-    internal static int TilePixelSize(float deviceScale) =>
+    internal const int ApronPx = 2;
+
+    /// <summary>
+    /// The edge length, in device pixels, of a tile's core (the 256&#160;DIP
+    /// grid cell) rasterised at <paramref name="deviceScale"/>.
+    /// </summary>
+    internal static int CorePixelSize(float deviceScale) =>
         Math.Clamp(
-            (int)Math.Round((TileGrid.TileSizeDip + 2 * GutterDip) * deviceScale),
+            (int)Math.Round(TileGrid.TileSizeDip * deviceScale),
             1,
-            MaxImageDimension);
+            MaxImageDimension - 2 * ApronPx);
+
+    /// <summary>
+    /// The gutter, in whole device pixels, rasterised beyond a tile's core at
+    /// <paramref name="deviceScale"/>: <see cref="GutterDip"/> rounded, never
+    /// less than the stored apron and never so wide that the raster surface
+    /// passes <see cref="MaxImageDimension"/>. A whole number of pixels keeps
+    /// the stored apron a plain crop of the raster.
+    /// </summary>
+    internal static int GutterPixelSize(float deviceScale)
+    {
+        var core = CorePixelSize(deviceScale);
+        var gutter = (int)Math.Round(GutterDip * deviceScale);
+        return Math.Clamp(gutter, ApronPx, Math.Max(ApronPx, (MaxImageDimension - core) / 2));
+    }
+
+    /// <summary>
+    /// The edge length, in device pixels, of a stored tile (core + apron on
+    /// both sides) rasterised at <paramref name="deviceScale"/>. The cached
+    /// image's width is this value, so it doubles as the tile's raster-scale
+    /// tag: the hot and warm caches only count a tile as a hit for a frame
+    /// whose own scale maps to the same pixel size.
+    /// </summary>
+    internal static int TilePixelSize(float deviceScale) => CorePixelSize(deviceScale) + 2 * ApronPx;
 
     [ThreadStatic]
     private static int _offscreenDepth;
@@ -132,10 +165,11 @@ public static partial class S100VectorTileRenderer
     }
 
     /// <summary>
-    /// Hot-cache native-byte budget per layer. Sourced from
-    /// <see cref="RenderingOptimizations.TileBudgetMb"/> (seeded from
-    /// <c>S100_VECTOR_TILE_BUDGET_MB</c>, default 256&#160;MB); captured per layer
-    /// when its tile state is created (applies on the next dataset reload).
+    /// Process-wide hot-cache native-byte budget, shared by every layer's tiles
+    /// through <see cref="TileMemoryPool.Raster"/> (map rendering slice&#160;4).
+    /// Sourced from <see cref="RenderingOptimizations.TileBudgetMb"/> (seeded
+    /// from <c>S100_VECTOR_TILE_BUDGET_MB</c>, default by machine tier); read on
+    /// every insert, so a change applies at once.
     /// </summary>
     public static long BudgetBytes => (long)(RenderingOptimizations.TileBudgetMb * 1024 * 1024);
 
@@ -193,6 +227,24 @@ public static partial class S100VectorTileRenderer
     /// </summary>
     public static bool HasVisibleTileWork => HasActiveVisibleWork(Stopwatch.GetTimestamp());
 
+    private static long _lastViewChangeTicks;
+
+    /// <summary>
+    /// How long ago any live frame drew a tiled layer at a new viewport (a pan,
+    /// zoom, rotation, resize or a layer's first frame), or
+    /// <see cref="TimeSpan.MaxValue"/> if none has. Hosts use it to keep
+    /// background work such as an idle compacting collection
+    /// (<see cref="IdleMemoryCompactor"/>) out of a gesture.
+    /// </summary>
+    public static TimeSpan SinceLastViewChange
+    {
+        get
+        {
+            var last = Volatile.Read(ref _lastViewChangeTicks);
+            return last == 0 ? TimeSpan.MaxValue : Stopwatch.GetElapsedTime(last);
+        }
+    }
+
     /// <summary>
     /// Whether idle <b>cross-band pre-warm</b> (issue&#160;#428) is enabled. When
     /// on, and the tiled base plane is otherwise idle for a layer (no cold
@@ -229,7 +281,7 @@ public static partial class S100VectorTileRenderer
     private const int CrossBandPrewarmMaxTiles = 24;
 
     /// <summary>
-    /// The fraction of the hot-cache byte budget below which idle cross-band
+    /// The fraction of the process-wide hot-cache byte budget below which idle cross-band
     /// pre-warm may run (issue&#160;#428). When the resident set already exceeds
     /// this, pre-warm is skipped for the frame so its speculative inserts never
     /// force eviction of the current working set — the "LRU/hot-cache aware"
@@ -268,15 +320,16 @@ public static partial class S100VectorTileRenderer
     public static bool GpuResidencyEnabled => RenderingOptimizations.TileGpuResidencyEnabled;
 
     /// <summary>
-    /// Per-layer GPU-texture residency budget, in native bytes. The resident
-    /// GPU texture set is bounded independently of the CPU hot cache (it holds
-    /// only tiles actually blitted, so it tracks the viewport working set).
-    /// Sourced from <see cref="RenderingOptimizations.TileGpuBudgetMb"/> (seeded
-    /// from <c>S100_VECTOR_TILE_GPU_MB</c>, default 256&#160;MB); sized when the
-    /// resident-texture cache is first created (applies on the next dataset
-    /// reload). Must comfortably exceed the visible + fallback working set or
-    /// promotion thrashes (re-upload each frame); the default holds ~100 guttered
-    /// tiles.
+    /// Process-wide GPU-texture residency budget, in native bytes, shared by
+    /// every layer's textures through <see cref="TileMemoryPool.Gpu"/> (map
+    /// rendering slice&#160;4). The resident GPU texture set is bounded
+    /// independently of the CPU hot cache (it holds only tiles actually blitted,
+    /// so it tracks the viewport working set). Sourced from
+    /// <see cref="RenderingOptimizations.TileGpuBudgetMb"/> (seeded from
+    /// <c>S100_VECTOR_TILE_GPU_MB</c>, default by machine tier); read on every
+    /// upload, so a change applies at once. Must comfortably exceed the visible
+    /// + fallback working set of all layers or promotion thrashes (re-upload each
+    /// frame).
     /// </summary>
     public static long GpuBudgetBytes => (long)(RenderingOptimizations.TileGpuBudgetMb * 1024 * 1024);
 
@@ -1141,6 +1194,11 @@ public static partial class S100VectorTileRenderer
                     coverHeight,
                     resolution,
                     deviceScale);
+                if (state.CurrentViewport != currentViewport)
+                {
+                    Volatile.Write(ref _lastViewChangeTicks, Stopwatch.GetTimestamp());
+                }
+
                 state.ViewportEpoch = NextViewportEpoch(
                     state.ViewportEpoch,
                     state.CurrentViewport,
@@ -1276,7 +1334,7 @@ public static partial class S100VectorTileRenderer
                 state.PendingCrossBand.Clear();
                 if (CrossBandPrewarmEnabled
                     && coldExposure == 0
-                    && state.Cache.ResidentBytes < (long)(state.Cache.BudgetBytes * CrossBandPrewarmHeadroomFraction))
+                    && state.Cache.Pool.ResidentBytes < (long)(state.Cache.Pool.LimitBytes * CrossBandPrewarmHeadroomFraction))
                 {
                     foreach (var gridKey in SpeculativeTiles(copies, offset => TileGrid.CrossBandPrewarmTiles(
                         centerX - offset, centerY, coverWidth, coverHeight, resolution, band,
@@ -2812,7 +2870,7 @@ public static partial class S100VectorTileRenderer
                 state.GpuTextures.Dispose();
             }
 
-            state.GpuTextures = new TileCache(GpuBudgetBytes, deferDisposal: true);
+            state.GpuTextures = new TileCache(TileMemoryPool.Gpu, owner: null, deferDisposal: true);
             state.GpuEntry = RegisterGpuCache(layer, state.GpuTextures, grContext);
             state.GpuContext = grContext;
             state.GpuGeneration = state.Generation;
@@ -3143,11 +3201,11 @@ public static partial class S100VectorTileRenderer
         }
 
         var (minX, minY, maxX, maxY) = TileGrid.TileWorldBounds(key);
-        var gutterWorld = GutterDip * TileGrid.ResolutionForBand(key.Band);
+        var apronWorld = ApronWorld(image.Width, maxX - minX);
 
         var core = TileGrid.WorldToScreenRect(minX, minY, maxX, maxY, centerX, centerY, widthDip, heightDip, resolution);
         var full = TileGrid.WorldToScreenRect(
-            minX - gutterWorld, minY - gutterWorld, maxX + gutterWorld, maxY + gutterWorld,
+            minX - apronWorld, minY - apronWorld, maxX + apronWorld, maxY + apronWorld,
             centerX, centerY, widthDip, heightDip, resolution);
 
         var coreRect = new SKRect((float)core.Left, (float)core.Top, (float)core.Right, (float)core.Bottom);
@@ -3157,6 +3215,18 @@ public static partial class S100VectorTileRenderer
         canvas.ClipRect(coreRect, SKClipOperation.Intersect, antialias: false);
         canvas.DrawImage(toDraw, fullRect, Sampling);
         canvas.Restore();
+    }
+
+    /// <summary>
+    /// The world width of a stored tile's apron: <see cref="ApronPx"/> pixels
+    /// of a tile <paramref name="storedPx"/> pixels wide whose core spans
+    /// <paramref name="coreWorld"/>. The stored width is the tile's raster-scale
+    /// tag, so the image alone says where its core lies.
+    /// </summary>
+    internal static double ApronWorld(int storedPx, double coreWorld)
+    {
+        var corePx = storedPx - 2 * ApronPx;
+        return corePx > 0 ? ApronPx * coreWorld / corePx : 0.0;
     }
 
     /// <summary>
@@ -4219,8 +4289,12 @@ public static partial class S100VectorTileRenderer
     }
 
     /// <summary>
-    /// Rasterises a single tile (core + gutter) from the scene at its band
-    /// resolution and the frame's device scale.
+    /// Rasterises a single tile from the scene at its band resolution and the
+    /// frame's device scale. The scene is drawn over the core plus the full
+    /// gutter, so strokes crossing a seam keep their joins and caps, but the
+    /// returned bitmap holds only the core plus <see cref="ApronPx"/> on each
+    /// side (<see cref="TilePixelSize"/> pixels square), cropped from the
+    /// guttered raster so its pixels are the same as before the crop.
     /// </summary>
     internal static SKBitmap RasterizeTile(VectorScene scene, BaseSpatialIndex? baseIndex, TileKey key, float deviceScale)
     {
@@ -4231,8 +4305,9 @@ public static partial class S100VectorTileRenderer
         activity?.SetTag("s100.render.tile.band", key.Band);
 
         var (minX, minY, maxX, maxY) = TileGrid.TileWorldBounds(key);
-        var bandResolution = TileGrid.ResolutionForBand(key.Band);
-        var gutterWorld = GutterDip * bandResolution;
+        var corePx = CorePixelSize(deviceScale);
+        var gutterPx = GutterPixelSize(deviceScale);
+        var gutterWorld = gutterPx * (maxX - minX) / corePx;
 
         var fullMinX = minX - gutterWorld;
         var fullMaxX = maxX + gutterWorld;
@@ -4258,6 +4333,7 @@ public static partial class S100VectorTileRenderer
         var (minLon, minLat) = WebMercator.ToLonLat(fullMinX, fullMinY, clampLatitude: false);
         var (maxLon, maxLat) = WebMercator.ToLonLat(fullMaxX, fullMaxY, clampLatitude: false);
 
+        var rasterPx = corePx + 2 * gutterPx;
         var px = TilePixelSize(deviceScale);
         activity?.SetTag("s100.render.tile.width_px", px);
         activity?.SetTag("s100.render.tile.height_px", px);
@@ -4270,8 +4346,8 @@ public static partial class S100VectorTileRenderer
             MaxLatitude = maxLat,
             MinLongitude = minLon,
             MaxLongitude = maxLon,
-            WidthPixels = px,
-            HeightPixels = px,
+            WidthPixels = rasterPx,
+            HeightPixels = rasterPx,
             ScaleDenominator = denom,
         };
 
@@ -4287,13 +4363,36 @@ public static partial class S100VectorTileRenderer
             EnableSeamWrap = false,
         };
 
-        var bitmap = renderer.Render(tileScene, viewport);
+        using var raster = renderer.Render(tileScene, viewport);
         if (baseIndex is not null)
         {
-            DrawAdjacentWorldOps(renderer, bitmap, baseIndex, viewport, gutterWorld, fullMinX, fullMinY, fullMaxX, fullMaxY);
+            using var canvas = new SKCanvas(raster);
+            DrawAdjacentWorldOps(
+                renderer, canvas, rasterPx, baseIndex, viewport, gutterPx,
+                TileGrid.ResolutionForBand(key.Band), fullMinX, fullMinY, fullMaxX, fullMaxY);
+            canvas.Flush();
         }
 
-        return bitmap;
+        // Keep the core plus the apron: a plain crop, so every stored pixel is
+        // the guttered raster's own.
+        return CropStored(raster, gutterPx - ApronPx, gutterPx - ApronPx, px);
+    }
+
+    /// <summary>
+    /// Copies the <paramref name="size"/>-pixel square at
+    /// (<paramref name="left"/>, <paramref name="top"/>) out of
+    /// <paramref name="raster"/> into a bitmap of its own.
+    /// </summary>
+    private static SKBitmap CropStored(SKBitmap raster, int left, int top, int size)
+    {
+        using var subset = new SKBitmap();
+        if (!raster.ExtractSubset(subset, SKRectI.Create(left, top, size, size)))
+        {
+            throw new InvalidOperationException(
+                $"Could not crop a {size} px tile at ({left}, {top}) from a {raster.Width}×{raster.Height} raster.");
+        }
+
+        return subset.Copy();
     }
 
     /// <summary>
@@ -4309,16 +4408,23 @@ public static partial class S100VectorTileRenderer
     /// that span gets none either: the core is empty there, and a filled
     /// gutter would bleed into it over the copy that draws that place.
     /// </summary>
+    /// <remarks>
+    /// <paramref name="canvas"/> works in the guttered raster's pixels
+    /// (<paramref name="rasterPx"/> square, <paramref name="gutterPx"/> of
+    /// gutter); only the stored apron of that gutter reaches the surface.
+    /// </remarks>
     private static void DrawAdjacentWorldOps(
-        SkiaDisplayListRenderer renderer, SKBitmap bitmap, BaseSpatialIndex baseIndex, CoreViewport viewport,
-        double gutterWorld, double fullMinX, double fullMinY, double fullMaxX, double fullMaxY)
+        SkiaDisplayListRenderer renderer, SKCanvas canvas, int rasterPx, BaseSpatialIndex baseIndex,
+        CoreViewport viewport, int gutterPx, double tolerance,
+        double fullMinX, double fullMinY, double fullMaxX, double fullMaxY)
     {
         if (baseIndex.XSpan is not { } span)
         {
             return;
         }
 
-        SKCanvas? canvas = null;
+        var gutterWorld = gutterPx * (fullMaxX - fullMinX) / rasterPx;
+        var clipped = false;
         try
         {
             foreach (var offset in WorldCopies.OffsetsX)
@@ -4335,22 +4441,21 @@ public static partial class S100VectorTileRenderer
                     continue;
                 }
 
-                if (canvas is null)
+                if (!clipped)
                 {
-                    var pxPerMetre = bitmap.Width / (fullMaxX - fullMinX);
-                    var gutterPx = (float)(gutterWorld * pxPerMetre);
-                    var tolerance = gutterWorld / GutterDip;
+                    clipped = true;
+                    var pxPerMetre = rasterPx / (fullMaxX - fullMinX);
                     var left = fullMinX + gutterWorld < span.MinX - tolerance ? -1f : gutterPx;
-                    var right = fullMaxX - gutterWorld > span.MaxX + tolerance ? bitmap.Width + 1f : bitmap.Width - gutterPx;
-                    canvas = new SKCanvas(bitmap);
+                    var right = fullMaxX - gutterWorld > span.MaxX + tolerance ? rasterPx + 1f : rasterPx - gutterPx;
+                    canvas.Save();
                     canvas.ClipRect(
-                        new SKRect(left, gutterPx, right, bitmap.Height - gutterPx),
+                        new SKRect(left, gutterPx, right, rasterPx - gutterPx),
                         SKClipOperation.Difference,
                         antialias: false);
                     canvas.ClipRect(
                         new SKRect(
                             (float)((span.MinX - fullMinX) * pxPerMetre), -1f,
-                            (float)((span.MaxX - fullMinX) * pxPerMetre), bitmap.Height + 1f),
+                            (float)((span.MaxX - fullMinX) * pxPerMetre), rasterPx + 1f),
                         SKClipOperation.Difference,
                         antialias: true);
                 }
@@ -4365,63 +4470,10 @@ public static partial class S100VectorTileRenderer
         }
         finally
         {
-            canvas?.Flush();
-            canvas?.Dispose();
-        }
-    }
-
-    /// <summary>
-    /// Draws into a tile the ops one world east and west whose copies reach
-    /// into it (issue #773). Data kept in a 0…360 frame is clipped at 360°, so
-    /// the tile ending there had an empty gutter: scaled for a zoom between
-    /// bands, its edge blended with that transparency and showed a faint line
-    /// where the data continues in the adjacent world copy. Drawing the copy's
-    /// ops into the gutter makes the tiles on either side of the seam meet like
-    /// any other pair of tiles. Only the gutter is drawn: a tile's core shows
-    /// the data at its own position, and the copy's data there is drawn by the
-    /// copy's own tile, so filling the core too would draw it twice.
-    /// </summary>
-    private static void DrawAdjacentWorldOps(
-        SkiaDisplayListRenderer renderer, SKBitmap bitmap, BaseSpatialIndex baseIndex, CoreViewport viewport,
-        float deviceScale, double fullMinX, double fullMinY, double fullMaxX, double fullMaxY)
-    {
-        var gutterPx = (float)((bitmap.Width - TileGrid.TileSizeDip * deviceScale) * 0.5);
-        var core = new SKRect(gutterPx, gutterPx, bitmap.Width - gutterPx, bitmap.Height - gutterPx);
-        SKCanvas? canvas = null;
-        try
-        {
-            foreach (var offset in WorldCopies.OffsetsX)
+            if (clipped)
             {
-                if (offset == 0.0)
-                {
-                    continue;
-                }
-
-                // The ops whose copy at +offset lies in the tile sit at -offset.
-                var ops = baseIndex.Query(fullMinX - offset, fullMinY, fullMaxX - offset, fullMaxY);
-                if (ops.Count == 0)
-                {
-                    continue;
-                }
-
-                var degrees = offset / WorldCopies.Circumference * 360.0;
-                if (canvas is null)
-                {
-                    canvas = new SKCanvas(bitmap);
-                    canvas.ClipRect(core, SKClipOperation.Difference, antialias: false);
-                }
-
-                renderer.RenderOnto(canvas, new VectorScene(ops), viewport with
-                {
-                    MinLongitude = viewport.MinLongitude - degrees,
-                    MaxLongitude = viewport.MaxLongitude - degrees,
-                });
+                canvas.Restore();
             }
-        }
-        finally
-        {
-            canvas?.Flush();
-            canvas?.Dispose();
         }
     }
 
@@ -4527,22 +4579,11 @@ public static partial class S100VectorTileRenderer
         var band = keys[0].Band;
         var spanX = xMax - xMin + 1;
         var spanY = yMax - yMin + 1;
-        var tilePx = Math.Max(
-            1,
-            (int)Math.Round(
-                (TileGrid.TileSizeDip + 2 * GutterDip) * deviceScale));
-        var exactTileStepPx = tilePx * TileGrid.TileSizeDip
-            / (TileGrid.TileSizeDip + 2 * GutterDip);
-        var tileStepPx = Math.Max(1, (int)Math.Round(exactTileStepPx));
-        if (Math.Abs(exactTileStepPx - tileStepPx) > 1e-9)
-        {
-            activity?.SetTag("s100.render.tile.rasterize.fallback", "scale");
-            RecordMetatileFallback("scale");
-            return RasterizeIndividualTiles(scene, baseIndex, keys, deviceScale);
-        }
-
-        var widthPx = (spanX - 1) * tileStepPx + tilePx;
-        var heightPx = (spanY - 1) * tileStepPx + tilePx;
+        var corePx = CorePixelSize(deviceScale);
+        var gutterPx = GutterPixelSize(deviceScale);
+        var tilePx = TilePixelSize(deviceScale);
+        var widthPx = spanX * corePx + 2 * gutterPx;
+        var heightPx = spanY * corePx + 2 * gutterPx;
         if (widthPx > MaxImageDimension || heightPx > MaxImageDimension)
         {
             activity?.SetTag("s100.render.tile.rasterize.fallback", "dimension");
@@ -4554,8 +4595,7 @@ public static partial class S100VectorTileRenderer
         var last = new TileKey(band, xMax, yMax);
         var (blockMinX, _, _, blockMaxY) = TileGrid.TileWorldBounds(first);
         var (_, blockMinY, blockMaxX, _) = TileGrid.TileWorldBounds(last);
-        var bandResolution = TileGrid.ResolutionForBand(band);
-        var gutterWorld = GutterDip * bandResolution;
+        var gutterWorld = gutterPx * (blockMaxX - blockMinX) / (spanX * corePx);
         var fullMinX = blockMinX - gutterWorld;
         var fullMinY = blockMinY - gutterWorld;
         var fullMaxX = blockMaxX + gutterWorld;
@@ -4612,8 +4652,10 @@ public static partial class S100VectorTileRenderer
         {
             foreach (var key in keys)
             {
-                var left = (key.X - xMin) * tileStepPx;
-                var top = (key.Y - yMin) * tileStepPx;
+                // Each tile keeps its core plus the apron, cut from the block
+                // at the same pixels a single-tile raster would hold.
+                var left = gutterPx - ApronPx + (key.X - xMin) * corePx;
+                var top = gutterPx - ApronPx + (key.Y - yMin) * corePx;
                 var subset = new SKBitmap();
                 if (!bitmap.ExtractSubset(
                         subset, SKRectI.Create(left, top, tilePx, tilePx)))
@@ -4769,7 +4811,14 @@ public static partial class S100VectorTileRenderer
     /// <summary>Per-layer tiling state, held in a weak table keyed by layer.</summary>
     private sealed class TileState
     {
-        public TileState(ILayer layer) => Owner = new WeakReference<ILayer>(layer);
+        public TileState(ILayer layer)
+        {
+            Owner = new WeakReference<ILayer>(layer);
+
+            // Charged to the process-wide pool; once this state is collected the
+            // pool releases the tiles itself (the pool, not the state, holds them).
+            Cache = new TileCache(TileMemoryPool.Raster, owner: this);
+        }
 
         /// <summary>
         /// Weak back-reference to this state's owning layer (the weak-table key),
@@ -4817,7 +4866,7 @@ public static partial class S100VectorTileRenderer
         // disabled or no style key was supplied.
         public string? DiskNamespace;
 
-        public readonly TileCache Cache = new(BudgetBytes);
+        public readonly TileCache Cache;
         public readonly HashSet<TileKey> InFlight = new();
 
         // Memoised IsTileHidden answers for the layer's current hidden region
