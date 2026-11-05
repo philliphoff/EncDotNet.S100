@@ -6,6 +6,13 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Restricted visibility on the chart.** GRIB2 and NetCDF files with
+  visibility, such as GFS, now draw fog and poor visibility as a grey fill
+  in the marine forecast bands: very poor (under 1000 m), poor (to 2 nautical
+  miles) and moderate (to 5 nautical miles). Good visibility isn't drawn.
+  The Library's GFS sources can now fetch visibility, and picks give it in
+  nautical miles. See [Show wind and waves on the chart](weather.md).
+
 - **Charts get ready for panning in the background.** When a Library source
   or a large exchange set loads as you pan, SoundCharts now portrays its
   not-yet-loaded cells one at a time while the map is idle, so panning to

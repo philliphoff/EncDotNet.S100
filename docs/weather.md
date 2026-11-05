@@ -1,7 +1,7 @@
 # Show wind and waves on the chart
 
 SoundCharts can draw forecast wind and waves, sea surface temperature,
-surface currents, marine weather warnings and live observations over your
+surface currents, restricted visibility, marine weather warnings and live observations over your
 charts. This page covers which files it reads,
 where to get them, how to show them in SoundCharts and `s100`, and what isn't
 supported.
@@ -16,7 +16,7 @@ supported.
 
 | Data | Formats | What's drawn |
 |---|---|---|
-| Forecast and analysis grids | GRIB2, NetCDF-3 and NetCDF-4 with CF conventions | Wave height fill, wind barbs, isobars, a sea surface temperature fill and current arrows; optionally a wind speed fill, wave arrows and isotherms |
+| Forecast and analysis grids | GRIB2, NetCDF-3 and NetCDF-4 with CF conventions | Wave height fill, wind barbs, isobars, a sea surface temperature fill, current arrows and a restricted visibility fill; optionally a wind speed fill, wave arrows and isotherms |
 | Marine weather warnings | CAP 1.2 XML (one alert or an Atom feed of them), NWS alerts GeoJSON | Warning areas, hatched by severity and labelled with the event, while they're in force |
 | Buoy and coastal station observations | NOAA NDBC, fetched live | A wind barb and wave height at each station |
 | Own-ship wind | NMEA 0183 from your instruments | True wind as a barb beside own ship, with water and air temperature |
@@ -37,6 +37,7 @@ drawn or sampled are:
 | Mean sea level pressure | PRMSL, MSL | `air_pressure_at_mean_sea_level` |
 | Sea surface temperature | WTMP | `sea_surface_temperature`, `sea_surface_foundation_temperature`, `sea_surface_subskin_temperature`, `sea_surface_skin_temperature` |
 | Surface current: U, V, speed, direction | UOGRD, VOGRD, SPC, DIRC | `eastward_sea_water_velocity`, `northward_sea_water_velocity` (or their `surface_` forms), `sea_water_speed`, `sea_water_velocity_to_direction` |
+| Visibility | VIS | `visibility_in_air` |
 
 When a file has only U and V, wind or current speed and direction are worked
 out from them. Wind and wave directions are the direction they come from;
@@ -79,8 +80,10 @@ made from its data. The Library can fetch some of these sources for you.
   [nomads.ncep.noaa.gov](https://nomads.ncep.noaa.gov/) cut GFS and GFS-Wave
   to the variables, area and forecast hours you choose, and return one file.
   For waves choose HTSGW, PERPW and DIRPW; for wind and pressure choose UGRD
-  and VGRD at 10 m above ground and PRMSL. The download has no file
-  extension.
+  and VGRD at 10 m above ground and PRMSL; for visibility choose VIS at the
+  surface. The download has no file extension. The Library's two GFS
+  sources offer visibility too; tick **Visibility** when you choose
+  parameters.
 - **NOAA on AWS.** The `noaa-gfs-bdp-pds` bucket holds every GFS and
   GFS-Wave run as whole files, for example
   `gfs.YYYYMMDD/HH/wave/gridded/gfswave.tHHz.atlocn.0p16.f003.grib2` for the
@@ -174,8 +177,8 @@ made from its data. The Library can fetch some of these sources for you.
    | **Isotherms** | Off | Sea surface temperature every 2 °C |
    | **Currents** | On | Surface current arrows, coloured by speed |
 
-   The wave height and sea surface temperature fills and the wind barbs are
-   always drawn; hide them for one dataset with its eye in the Datasets
+   The wave height, sea surface temperature and visibility fills and the
+   wind barbs are always drawn; hide them for one dataset with its eye in the Datasets
    panel. The sea surface temperature fill has a band for each degree from
    0 °C to 30 °C, so fronts such as the edge of the Gulf Stream show as
    closely spaced bands.
@@ -183,7 +186,8 @@ made from its data. The Library can fetch some of these sources for you.
    valid time of the run.
 4. Click the map to pick. Object information starts with "Weather model
    data, not for navigation." and lists each parameter at the nearest grid
-   point and time step, in knots, metres and degrees Celsius.
+   point and time step, in knots, metres and degrees Celsius, and visibility
+   in nautical miles.
 
 Current arrows point the way the water flows. They use S-111's nine speed
 bands, colours and sizes, from purple under 0.5 kn to red at 13 kn and
@@ -191,8 +195,13 @@ faster, so a current reads the same as in an S-111 dataset. Where an S-111
 grid is loaded and shown, only its arrows are drawn inside its area; S-111
 station and mesh datasets don't hide model currents.
 
-The wave height and sea surface temperature fills are clipped to water when
-an S-101 chart is loaded.
+Restricted visibility is drawn in grey in the three bands marine forecasts
+use: very poor (fog, under 1000 m), poor (1000 m to 2 nautical miles) and
+moderate (2 to 5 nautical miles). Good visibility isn't drawn, so most of
+the chart stays clear. Its entry in the Layer stack shows the legend.
+
+The wave height, sea surface temperature and visibility fills are clipped to
+water when an S-101 chart is loaded.
 Wind barbs south of the equator are drawn mirrored, as the convention is.
 
 ## Show warnings

@@ -90,11 +90,25 @@ public class WeatherParametersTests
     }
 
     [Fact]
+    public void Visibility_maps_from_GRIB_and_CF_in_metres_at_any_level()
+    {
+        var grib = WeatherParameters.FindByGribCode(new GribParameterCode(0, 19, 0));
+        var cf = WeatherParameters.FindByCfStandardName("visibility_in_air");
+
+        Assert.NotNull(grib);
+        Assert.Same(grib, cf);
+        Assert.Equal(WeatherParameters.Visibility, grib.Id);
+        Assert.Equal(WeatherParameters.VisibilityGroup, grib.Group);
+        Assert.Equal(WeatherUnit.Metres, grib.Unit);
+        Assert.Null(grib.Level);
+    }
+
+    [Fact]
     public void Ids_codes_and_names_are_unique()
     {
         var all = WeatherParameters.All;
 
-        Assert.Equal(17, all.Count);
+        Assert.Equal(18, all.Count);
         Assert.Equal(all.Count, all.Select(d => d.Id).Distinct().Count());
         var codes = all.SelectMany(d => d.GribCodes).ToList();
         Assert.Equal(codes.Count, codes.Distinct().Count());

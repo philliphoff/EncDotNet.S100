@@ -83,7 +83,7 @@ foreach (var source in WeatherCoverageSource.CreateForGroups(set))
 | `WeatherCoverageSource` | An `ICoverageSource` over one parameter group. |
 | `WindComponents` | Wind speed and "from" direction from U and V. |
 | `CurrentComponents` | Current speed and "to" direction from U and V. |
-| `WeatherCoverageStyle` | The base of the eight styles: `SeaTemperatureStyle`, `WaveHeightStyle`, `WindSpeedStyle`, `SeaTemperatureIsothermStyle`, `PressureIsobarStyle`, `CurrentArrowStyle`, `WindBarbStyle` and `WaveDirectionStyle`. Each is an `ICoverageStyle` with its S-98 plane, priority, opacity and default visibility. |
+| `WeatherCoverageStyle` | The base of the nine styles: `SeaTemperatureStyle`, `WaveHeightStyle`, `WindSpeedStyle`, `VisibilityStyle`, `SeaTemperatureIsothermStyle`, `PressureIsobarStyle`, `CurrentArrowStyle`, `WindBarbStyle` and `WaveDirectionStyle`. Each is an `ICoverageStyle` with its S-98 plane, priority, opacity and default visibility. |
 | `WeatherPalette` | The styles' Day, Dusk and Night colours, as an `ApplicationPalette`. |
 | `WindBarb` | The pennants, full barbs and half barbs of a wind speed, rounded to 5 kn. |
 | `WeatherPortrayal` | Builds the coverage sub-layers of a source and its styles. |
@@ -114,6 +114,7 @@ lists several codes or names, they're alternatives in order of preference.
 | `current.v` | `current` | any | 10,1,3 (VOGRD) | `northward_sea_water_velocity`, `surface_northward_sea_water_velocity` | m/s |
 | `current.speed` | `current` | any | 10,1,1 (SPC) | `sea_water_speed` | m/s |
 | `current.to_direction` | `current` | any | 10,1,0 (DIRC) | `sea_water_velocity_to_direction`, `direction_of_sea_water_velocity` | degrees true |
+| `visibility` | `visibility` | any | 0,19,0 (VIS) | `visibility_in_air` | m |
 
 Wind and wave directions are "from", and current directions "to" (the
 oceanographic convention, as in S-111), in degrees clockwise from true north.
@@ -182,6 +183,7 @@ so the coverage pipeline and both renderers draw them with no weather code.
 | `SeaTemperatureStyle` | Colour fill, 32 bands: below 0 °C, each degree to 30 °C, and 30 °C and higher | `sea.temperature` | — | On |
 | `SeaTemperatureIsothermStyle` | Isotherms every 2 °C, labelled in °C (`18°`) | `sea.temperature` | — | Off |
 | `CurrentArrowStyle` | Arrows in S-111's nine speed bands, colours and sizes (0.5, 1, 2, 3, 5, 7, 10 and 13 kn) | `current.speed` | `current.to_direction` | On |
+| `VisibilityStyle` | Grey fill in the marine forecast's three restricted bands: under 1000 m, to 2 nm and to 5 nm; good visibility isn't drawn | `visibility` | — | On |
 
 - **Default and switches.** The Default column is `IsVisibleByDefault`.
   `IsDrawnWith(display)` applies the map-wide switches in

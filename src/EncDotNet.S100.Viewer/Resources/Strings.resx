@@ -255,6 +255,10 @@
     <value>Currents</value>
     <comment>Weather sub-layer name (#1228): surface current arrows from an ocean model, altimetry or HF radar.</comment>
   </data>
+  <data name="SubLayer_Weather_Visibility" xml:space="preserve">
+    <value>Visibility</value>
+    <comment>Weather sub-layer name (#1229): the fill of forecast restricted visibility (very poor, poor, moderate).</comment>
+  </data>
   <data name="Tooltip_ToggleSubLayerVisibility" xml:space="preserve">
     <value>Show or hide this sub-layer</value>
   </data>

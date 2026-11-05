@@ -232,6 +232,36 @@ public sealed class GribProcessorTests : IDisposable
     }
 
     [Fact]
+    public async Task Visibility_draws_a_sparse_fill_and_picks_in_nautical_miles()
+    {
+        // Rows run north to south: 10°N has 400 m and 2500 m, 9°N 8000 m and 24100 m (good).
+        var grid = new Grid(10, 10, 1, 2, 2);
+        var path = Write(PathFor("vis.grib2"), Encode(new Message { Category = 19, Number = 0, Grid = grid, DecimalScale = 0, Values = [400, 2500, 8000, 24100] }));
+        using var processor = new GribDatasetProcessor(path, new ProjNetCrsTransformFactory());
+
+        var portrayal = await processor.BuildCoveragePortrayalAsync(new RenderContext(), Ct);
+        var fill = Assert.IsType<GridCoverageSubLayer>(Assert.Single(portrayal.SubLayers));
+        Assert.Equal(VisibilityStyle.Key, fill.LayerKey);
+        Assert.Equal(S98DisplayPlane.OnDemandSurface, fill.Plane);
+        Assert.True(fill.ClipToWater);
+
+        string? Pick(double latitude, double longitude) =>
+            processor.GetCoverageInfo(latitude, longitude, null)!.Attributes.Single(a => a.Code == WeatherParameters.Visibility).DisplayValue;
+        Assert.Equal("0.2 nm (400 m)", Pick(10, 10));
+        Assert.Equal("1.3 nm", Pick(10, 11));
+        Assert.Equal("4.3 nm", Pick(9, 10));
+        Assert.Equal("13.0 nm", Pick(9, 11));
+        Assert.DoesNotContain(processor.GetCoverageInfo(9, 11, null)!.Attributes, a => a.Code == WeatherParameters.Visibility + ".nmi");
+
+        var query = new CoverageSampleQuery(9, 10, new ProjNetCrsTransformFactory());
+        var outcome = Assert.IsType<CoverageSampleOutcome<ICoverageSampler>.Sampled>(processor.SampleAt(query, null, nearestWhenOutOfRange: true));
+        var fields = Assert.IsType<CoverageFieldsSample>(outcome.Value).Fields.ToDictionary(f => f.Name);
+        Assert.Equal(("visibility_in_air", "m"), (fields["visibility"].Quantity, fields["visibility"].Unit));
+        Assert.Equal(("visibility_in_air", "nmi"), (fields["visibility.nmi"].Quantity, fields["visibility.nmi"].Unit));
+        Assert.Equal(8000 / 1852.0, fields["visibility.nmi"].Value!.Value, 3);
+    }
+
+    [Fact]
     public void The_pick_reads_ecCodes_values_and_leads_with_the_notice()
     {
         using var processor = new GribDatasetProcessor(Fixture(WaveFilter), new ProjNetCrsTransformFactory());

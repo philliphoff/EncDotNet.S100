@@ -114,8 +114,8 @@
                 <!-- Weather (#1072): map-wide switches for the optional weather
                      layers, applied to every GRIB2 and NetCDF dataset and kept
                      between sessions. Shown while a weather dataset is loaded.
-                     The wave height and sea temperature fills and the wind
-                     barbs are always drawn. -->
+                     The wave height, sea temperature and visibility fills
+                     and the wind barbs are always drawn. -->
                 <StackPanel Spacing="4" IsVisible="{Binding HasWeatherData}">
                     <TextBlock Text="{x:Static loc:Strings.EcdisPanel_WeatherHeader}"
                                FontSize="11"

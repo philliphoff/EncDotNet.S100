@@ -164,6 +164,8 @@ internal sealed class WeatherGridSampler : ICoverageSampler
                 fields.Add(Celsius(reading));
             if (parameter.Id == WeatherParameters.CurrentSpeed)
                 fields.Add(CurrentKnots(reading));
+            if (parameter.Id == WeatherParameters.Visibility)
+                fields.Add(NauticalMiles(reading));
         }
 
         if (_deriveWindSpeed)
@@ -237,6 +239,7 @@ internal sealed class WeatherGridSampler : ICoverageSampler
         WeatherParameters.CurrentV => ("northward_sea_water_velocity", "m/s"),
         WeatherParameters.CurrentSpeed => ("sea_water_speed", "m/s"),
         WeatherParameters.CurrentToDirection => ("sea_water_velocity_to_direction", "deg"),
+        WeatherParameters.Visibility => ("visibility_in_air", "m"),
         _ => (id, null),
     };
 
@@ -249,6 +252,11 @@ internal sealed class WeatherGridSampler : ICoverageSampler
     private static SampledField CurrentKnots(double? metresPerSecond) =>
         new(WeatherParameters.CurrentSpeed + ".kn", "sea_water_speed", "kn",
             metresPerSecond is { } s ? Speed.FromMetresPerSecond(s).TotalKnots : null);
+
+    // The visibility again in nautical miles, the unit marine forecasts give it in.
+    private static SampledField NauticalMiles(double? metres) =>
+        new(WeatherParameters.Visibility + ".nmi", "visibility_in_air", "nmi",
+            metres is { } m ? Length.FromMetres(m).TotalNauticalMiles : null);
 
     // The sea surface temperature again in degrees Celsius, the unit mariners read it in.
     private static SampledField Celsius(double? kelvin) =>

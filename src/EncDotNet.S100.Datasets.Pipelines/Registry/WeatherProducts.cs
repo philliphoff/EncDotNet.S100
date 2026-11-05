@@ -31,6 +31,7 @@ public static class WeatherProducts
             [Weather.SeaTemperatureStyle.Key] = S98DisplayPlane.OnDemandSurface,
             [Weather.SeaTemperatureIsothermStyle.Key] = S98DisplayPlane.OtherChartOverlays,
             [Weather.CurrentArrowStyle.Key] = S98DisplayPlane.DynamicArrows,
+            [Weather.VisibilityStyle.Key] = S98DisplayPlane.OnDemandSurface,
             [ProductRegistration.AnyLayerKind] = S98DisplayPlane.OnDemandSurface,
         };
 

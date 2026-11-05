@@ -340,7 +340,8 @@ public abstract class WeatherGridProcessorBase :
     /// in metres, wind speed in knots (raw value in m/s), directions in
     /// degrees ("from"; current direction "to"), periods in seconds, sea
     /// surface temperature in degrees Celsius (raw value in kelvin), current
-    /// speed in knots (raw value in m/s).
+    /// speed in knots (raw value in m/s), visibility in nautical miles (raw
+    /// value in metres).
     /// </summary>
     /// <param name="latitude">Latitude, WGS-84 degrees.</param>
     /// <param name="longitude">Longitude, WGS-84 degrees.</param>
@@ -432,6 +433,17 @@ public abstract class WeatherGridProcessorBase :
         source.SelectOverviewLevel(Math.Clamp(level, 0, source.AvailableOverviewLevels.Count - 1));
     }
 
+    // Visibility in nautical miles, as marine forecasts give it, with the
+    // metres too under 1000 m (very poor, fog), where a tenth of a mile is coarse.
+    private static string VisibilityText(double metres)
+    {
+        var length = Length.FromMetres(metres);
+        string miles = length.TotalNauticalMiles.ToString("0.0", CultureInfo.InvariantCulture) + " nm";
+        return metres < VisibilityStyle.VeryPoorLimit.TotalMetres
+            ? $"{miles} ({metres.ToString("0", CultureInfo.InvariantCulture)} m)"
+            : miles;
+    }
+
     private static PickAttribute? Pick(SampledField field)
     {
         string Number(double value, string format) => value.ToString(format, CultureInfo.InvariantCulture);
@@ -457,8 +469,10 @@ public abstract class WeatherGridProcessorBase :
             WeatherParameters.CurrentToDirection => new() { Code = field.Name, Name = "Current direction (to)", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0")}°") },
             WeatherParameters.CurrentU => new() { Code = field.Name, Name = "Current, eastward component", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0.0#")} m/s") },
             WeatherParameters.CurrentV => new() { Code = field.Name, Name = "Current, northward component", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0.0#")} m/s") },
-            // The knots copies of the wind and current speeds and the Celsius
-            // copy of the sea temperature are already in their display values.
+            WeatherParameters.Visibility => new() { Code = field.Name, Name = "Visibility", RawValue = raw, DisplayValue = Display(VisibilityText) },
+            // The knots copies of the wind and current speeds, the Celsius
+            // copy of the sea temperature and the nautical-mile copy of the
+            // visibility are already in their display values.
             _ => null,
         };
     }
