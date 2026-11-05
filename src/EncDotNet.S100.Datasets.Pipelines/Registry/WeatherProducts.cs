@@ -2,6 +2,7 @@ using EncDotNet.S100.Datasets.Cap;
 using EncDotNet.S100.Datasets.Grib;
 using EncDotNet.S100.Datasets.NetCdf;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.TropicalCyclones;
 using EncDotNet.S100.Interoperability;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
@@ -9,7 +10,8 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <summary>
 /// The built-in <see cref="ProductRegistration"/>s for weather data, formats
 /// that aren't S-100 products (design note weather-sources.md §3.1, §3.2 and
-/// §6.1): GRIB2 and NetCDF-CF model grids, and CAP weather warnings. They're kept apart from
+/// §6.1): GRIB2 and NetCDF-CF model grids, CAP weather warnings, and tropical
+/// cyclone advisories. They're kept apart from
 /// <see cref="S100Products"/> so a host can register the S-100 products
 /// without them (<see cref="ProductRegistryExtensions.AddAllS100Products"/>);
 /// <see cref="S100Products.CreateDefaultRegistry"/>, and so
@@ -200,8 +202,66 @@ public static class WeatherProducts
         DefaultPlanes = CapPlanes,
     };
 
+    /// <summary>
+    /// The portrayal of tropical cyclone advisories: drawn in code, since NHC's
+    /// GIS files define no symbology (design note vector-weather.md §3).
+    /// </summary>
+    public static PortrayalBasis TropicalCyclonePortrayal { get; } = PortrayalBasis.Application("NHC tropical cyclone GIS data");
+
+    // Design note vector-weather.md §3.1 (V1): the cone and radii fill on the
+    // on-demand surface plane; the tracks, symbols and labels go on other
+    // chart overlays. This is the fallback; the portrayal's sub-layers (#1296)
+    // carry their own planes.
+    private static readonly IReadOnlyDictionary<string, S98DisplayPlane> TropicalCyclonePlanes =
+        new Dictionary<string, S98DisplayPlane>(StringComparer.OrdinalIgnoreCase)
+        {
+            [ProductRegistration.AnyLayerKind] = S98DisplayPlane.OtherChartOverlays,
+        };
+
+    /// <summary>
+    /// Tropical cyclone advisories from NHC's GIS shapefiles (<c>TC/1.0.0</c>),
+    /// read by <see cref="TropicalCycloneDatasetProcessor"/>: the forecast zip
+    /// (<c>{ATCF}_5day_{adv}.zip</c>) with its wind radii and best track zips
+    /// beside it, or a folder of one storm's zips.
+    /// </summary>
+    /// <remarks>
+    /// <para>Claimed when:</para>
+    /// <list type="bullet">
+    /// <item><description>
+    /// a file is a zip whose first entry is a layer of an NHC forecast zip
+    /// (<c>al092022-020_5day_lin.dbf</c> and so on), whatever the file is
+    /// called (<see cref="ProductRegistration.MatchBytes"/>,
+    /// <see cref="NhcAdvisoryReader.LooksLikeForecastZip"/>);
+    /// </description></item>
+    /// <item><description>
+    /// a folder holds NHC forecast zips for one storm
+    /// (<see cref="ProductRegistration.MatchFolder"/>,
+    /// <see cref="NhcAdvisoryFiles.IsAdvisoryFolder"/>); the latest advisory is read.
+    /// </description></item>
+    /// </list>
+    /// <para>
+    /// The wind radii and best track zips aren't claimed on their own: they
+    /// belong to the forecast zip beside them. No S-100 product is a zip, so
+    /// the two never claim the same file.
+    /// </para>
+    /// </remarks>
+    public static ProductRegistration TropicalCyclone { get; } = new()
+    {
+        Spec = TropicalCycloneDatasetProcessor.SpecName,
+        CreateFromPath = static (_, path) => new TropicalCycloneDatasetProcessor(path),
+        CreateFromSource = static (_, r) => new TropicalCycloneDatasetProcessor(r.Source, r.RelativePath),
+        IsS100 = false,
+        Portrayal = TropicalCyclonePortrayal,
+        PickReportNotice = TropicalCycloneDatasetProcessor.NotForNavigationNotice,
+        MatchBytes = static header => NhcAdvisoryReader.LooksLikeForecastZip(header.LeadingBytes.Span),
+        MatchFolder = NhcAdvisoryFiles.IsAdvisoryFolder,
+        ReadMetadata = TropicalCycloneDatasetProcessor.ReadMetadata,
+        OpenData = static (stream, _) => TropicalCycloneDatasetProcessor.OpenData(stream),
+        DefaultPlanes = TropicalCyclonePlanes,
+    };
+
     /// <summary>Every built-in weather registration.</summary>
-    public static IReadOnlyList<ProductRegistration> All { get; } = Array.AsReadOnly(new[] { Grib2, NetCdf, Cap });
+    public static IReadOnlyList<ProductRegistration> All { get; } = Array.AsReadOnly(new[] { Grib2, NetCdf, Cap, TropicalCyclone });
 
     /// <summary>Registers every built-in weather product with <paramref name="registry"/>.</summary>
     /// <param name="registry">The registry.</param>

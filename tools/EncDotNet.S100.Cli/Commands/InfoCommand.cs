@@ -14,7 +14,9 @@ namespace EncDotNet.S100.Cli.Commands;
 /// time-series datasets) the available time steps with their indices; for
 /// weather files (GRIB2, NetCDF), the parameters and why any isn't used; for
 /// CAP warnings, each alert area, when it's in force and the zone codes the
-/// marine zone layer doesn't have.
+/// marine zone layer doesn't have; for tropical cyclone advisories, the
+/// storm, the advisory, the forecast span and intensity, and every forecast
+/// point.
 /// </summary>
 internal sealed class InfoCommand : Command<DatasetCommandSettings>
 {
@@ -92,7 +94,7 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
 
             table.AddRow("Headless render", processor is IHeadlessImageRenderer ? "[green]yes[/]" : "[yellow]no[/]");
 
-            // Weather data (GRIB2, NetCDF, CAP) isn't S-100 and isn't for
+            // Weather data (GRIB2, NetCDF, CAP, TC) isn't S-100 and isn't for
             // navigation (design note weather-sources.md §3.1).
             if (!ProductRegistry.Default.IsS100(processor.Spec.Name))
             {
@@ -112,6 +114,9 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
                     "Alerts",
                     $"{capAlerts.Warnings.Document.Alerts.Count} ({capAlerts.Warnings.Areas.Count} areas, {capAlerts.Warnings.Areas.Count(a => a.IsDrawable)} drawn)");
             }
+
+            if (processor is TropicalCycloneDatasetProcessor cyclone)
+                AddTropicalCycloneRows(table, cyclone.Advisory);
 
             if (processor is IDisplayModeAwareDatasetProcessor displayModeAware &&
                 displayModeAware.DeclaredDisplayModeIds.Count > 0)
@@ -185,6 +190,10 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
             if (processor is CapDatasetProcessor cap)
                 WriteCapWarnings(cap);
 
+            // Tropical cyclones: every forecast point (issue #1294).
+            if (processor is TropicalCycloneDatasetProcessor tc)
+                WriteTropicalCycloneForecast(tc.Advisory);
+
             return 0;
         }
         catch (NotSupportedException ex)
@@ -250,6 +259,98 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
         }
 
         table.AddRow("Layers", Markup.Escape(string.Join(", ", weather.LayerKeys)));
+    }
+
+    private static void AddTropicalCycloneRows(Table table, Datasets.TropicalCyclones.TropicalCycloneAdvisory advisory)
+    {
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
+        static string Utc(DateTime time) => time.ToString("yyyy-MM-dd HH:mm 'UTC'", System.Globalization.CultureInfo.InvariantCulture);
+
+        var storm = advisory.Storm;
+        var current = advisory.Current;
+        var title = current is { ClassDescription.Length: > 0 } ? $"{current.ClassDescription} {storm.Name}" : storm.Name;
+        table.AddRow("Storm", Markup.Escape($"{title} ({storm.AtcfId}), {storm.BasinName}"));
+        table.AddRow("Advisory", Markup.Escape($"{advisory.Advisory}, issued {Utc(advisory.IssueTime.UtcDateTime)}"));
+        table.AddRow(
+            "Forecast",
+            Markup.Escape(string.Create(
+                invariant,
+                $"{Utc(advisory.SynopticTime)} to {Utc(advisory.ForecastEnd)} ({advisory.Forecast[^1].Tau} h, {advisory.Forecast.Count} points)")));
+        if (current is not null)
+        {
+            var parts = new List<string>();
+            if (current.MaxWindKnots is { } wind)
+                parts.Add(string.Create(invariant, $"{wind} kt"));
+            if (current.GustKnots is { } gust)
+                parts.Add(string.Create(invariant, $"gusts {gust} kt"));
+            if (current.PressureHectopascals is { } pressure)
+                parts.Add(string.Create(invariant, $"{pressure} hPa"));
+            if (current.SaffirSimpsonCategory is { } category)
+                parts.Add(string.Create(invariant, $"category {category}"));
+            if (advisory.PeakForecastWindKnots is { } peak)
+                parts.Add(string.Create(invariant, $"peak forecast {peak} kt"));
+            table.AddRow("Intensity", Markup.Escape(string.Join(", ", parts)));
+        }
+
+        table.AddRow(
+            "Cone",
+            advisory.Cone is { } cone
+                ? cone.DaysFourToFive.Count > 0 ? "days 1–3 and 4–5" : "days 1–3"
+                : "none (final advisory)");
+        var withRadii = advisory.Forecast.Count(p => p.Radii.Count > 0);
+        table.AddRow(
+            "Wind radii",
+            withRadii == 0
+                ? "none"
+                : Markup.Escape(string.Create(invariant, $"at {withRadii} of {advisory.Forecast.Count} forecast points")));
+        table.AddRow(
+            "Past track",
+            advisory.PastTrack.Count == 0
+                ? "none (no best track read)"
+                : Markup.Escape(string.Create(
+                    invariant,
+                    $"{advisory.PastTrack.Count} points from {Utc(advisory.PastTrack[0].Time)}, {advisory.PastTrack.Count(p => p.Radii.Count > 0)} with radii")));
+    }
+
+    private static void WriteTropicalCycloneForecast(Datasets.TropicalCyclones.TropicalCycloneAdvisory advisory)
+    {
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
+        static string Radius(Datasets.TropicalCyclones.TropicalCycloneForecastPoint point, int threshold) =>
+            point.Radii.FirstOrDefault(r => r.ThresholdKnots == threshold) is { } r
+                ? string.Create(
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    $"{r.NortheastNauticalMiles:0}/{r.SoutheastNauticalMiles:0}/{r.SouthwestNauticalMiles:0}/{r.NorthwestNauticalMiles:0}")
+                : "—";
+
+        var table = new Table().Border(TableBorder.Rounded).Title("Forecast points");
+        table.AddColumn("Tau");
+        table.AddColumn("Valid (UTC)");
+        table.AddColumn("Position");
+        table.AddColumn("Wind");
+        table.AddColumn("Gust");
+        table.AddColumn("Pressure");
+        table.AddColumn("Class");
+        table.AddColumn("34 kt nm");
+        table.AddColumn("50 kt nm");
+        table.AddColumn("64 kt nm");
+        foreach (var point in advisory.Forecast)
+        {
+            var p = point.Position;
+            table.AddRow(
+                point.Tau.ToString(invariant),
+                point.ValidTime.ToString("yyyy-MM-dd HH:mm", invariant),
+                string.Create(invariant, $"{Math.Abs(p.Latitude):0.0}°{(p.Latitude < 0 ? 'S' : 'N')} {Math.Abs(p.Longitude):0.0}°{(p.Longitude < 0 ? 'W' : 'E')}"),
+                point.MaxWindKnots is { } wind ? string.Create(invariant, $"{wind} kt") : "—",
+                point.GustKnots is { } gust ? string.Create(invariant, $"{gust} kt") : "—",
+                point.PressureHectopascals is { } pressure ? string.Create(invariant, $"{pressure} hPa") : "—",
+                Markup.Escape(point.ClassCode),
+                Radius(point, 34),
+                Radius(point, 50),
+                Radius(point, 64));
+        }
+
+        AnsiConsole.Write(table);
+        AnsiConsole.MarkupLine("[grey]Radii are NE/SE/SW/NW in nautical miles.[/]");
     }
 
     private static void WriteCapWarnings(CapDatasetProcessor cap)
