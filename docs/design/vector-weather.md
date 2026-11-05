@@ -5,7 +5,9 @@
 > [#1232](https://github.com/philliphoff/EncDotNet.S100/issues/1232) (tropical
 > cyclone track, cone and wind radii) and
 > [#1233](https://github.com/philliphoff/EncDotNet.S100/issues/1233) (surface
-> analysis fronts and pressure centres). Mock-ups at Day, Dusk and Night are in
+> analysis fronts and pressure centres). Revision 2 (same day) redraws the
+> mock-ups with every non-map element in the SoundCharts panel it lives in,
+> and makes §6 say exactly where each one goes. Mock-ups at Day, Dusk and Night are in
 > [`vector-weather/mockups.html`](vector-weather/mockups.html) (published as
 > <https://claude.ai/artifact/VLAwoquLkwdESYSKrCxGQF>). Decisions are
 > numbered **V1–V38** so implementation PRs can cite them. Questions for the
@@ -107,8 +109,8 @@ fills nest (64 inside 50 inside 34), so the 64 kt core is the darkest by day
 and the brightest at dusk and night, without a fourth hue.
 
 **V3. The cone is tinted, not whitened.** NHC's white cone works on a
-coloured base map. S-101 Day deep water is white, so the cone darkens
-slightly by day and lightens slightly at dusk.
+coloured base map. S-101 Day deep water is near white, so the cone
+darkens slightly by day and lightens slightly at dusk.
 
 **V4. Line patterns separate what colour doesn't:**
 
@@ -152,14 +154,14 @@ them at 3.5 mm; the storm at view time uses them at 6 mm with a halo.
 
 ```
 HURRICANE ZELDA · 115 kt · 948 hPa
-Adv 17 · issued Tue 15:00 · NW 9 kt
+Adv 17 · issued Tue 3:00 PM · NW 9 kt
 ```
 
 The class word is spelt out (HURRICANE, TYPHOON, TROPICAL STORM, TROPICAL
 DEPRESSION, POST-TROPICAL). Intensity is the maximum sustained wind in knots,
 as advisories give it; the pressure is shown when the advisory has it.
 
-**V9. Forecast points:** one line, `Thu 06:00 · 110 kt`. Times use the
+**V9. Forecast points:** one line, `Thu 6:00 AM · 110 kt`. Times use the viewer's format and the
 Local/UTC preference with the machine's zone, as every viewer time does. No
 storm-local time.
 
@@ -266,7 +268,7 @@ along an isobar kink. A colour option is §10 Q3.
 **V19.** A bold `H` or `L` (5 mm), an `×` at the exact centre, and the
 pressure underlined below (`1032`), in `WXFRONT` with the isobar halo. Where
 the bulletin gives a forecast position (the coded forecast bulletins do), a
-dashed arrow runs to a small `×` with the time (`Thu 00:00`). The coded
+dashed arrow runs to a small `×` with the time (`Thu 12:00 AM`). The coded
 analysis gives no movement vector, so none is drawn from it.
 
 ### 5.4 Placement and clutter
@@ -296,47 +298,104 @@ the bulletin's own points.
 
 ## 6. Panels
 
-### 6.1 Pick cards
+Everything in this section lives in an existing SoundCharts panel, not on
+the chart. The chart shows only what's drawn on the map (§3, §5) and the
+map overlays that are already there: scale bar, tool column, compass, the
+Live stamp while the Timeline dock is open, the Time HUD while it's closed,
+and the route-check legend card in check mode. No new floating panel or
+on-map legend is added.
 
-**V23.** A pick on any part of a storm (cone, track, a point, a radius)
-gives one card for the storm, with the picked part's context. The mock-up's
-card:
+| Panel | Where it docks | How you get there | What this design adds |
+|---|---|---|---|
+| **Object information** | Right dock, 360 px | Pick on the map | A tropical cyclone, front or pressure-centre pick (V23, V24) |
+| **Layer stack** | Left dock, 320 px | Activity bar, stack icon | Entries and glyph legends (V25) |
+| **Display controls** | Left dock | Activity bar, eye icon | Three switches in the Weather section (V26) |
+| **Datasets** | Left dock | Activity bar, first icon | Layer-time messages and the Stale tag (§7) |
+| **Library** | Left dock | Activity bar, books icon | Two sources and their items (V27, V28) |
+| **Timeline** | Bottom dock, 260 px, first tab | Time HUD's dock button | Lanes (V14) |
+| **Routes** | Left dock | Activity bar, route icon | A Weather row in the check summary, and weather findings (V38) |
 
-```
-Weather forecast, not for navigation. Follow official NHC advisories.
-HURRICANE ZELDA (AL142026)                                  [symbol]
-Advisory 17 · issued Tue 4 Nov 15:00 · 2 h ago · next due 21:00
-Now (est. Tue 17:00)   27.4°N 86.1°W · 115 kt, gusts 140 · 948 hPa · NW 9 kt
-Picked: forecast point Thu 06:00 · 30.8°N 88.0°W · 110 kt · Hurricane
-Wind radii (nm)     NE    SE    SW    NW
-  64 kt             40    35    25    30
-  50 kt             80    70    50    60
-  34 kt            170   150   110   130
-Cone: days 1–3 solid, days 4–5 stippled. The centre stays inside the cone
-about two-thirds of the time; winds reach well outside it.
-Data: NOAA/NWS National Hurricane Center · Public domain
-```
+The mock-ups draw each of these in its own panel, laid out from
+`MainWindow.axaml` and the panel views, at Day/Light, Dusk/S100Dusk and
+Night/S100Night.
 
-The last two lines of the cone sentence are NHC's own caution, paraphrased;
-it's the most misunderstood part of the graphic.
+### 6.1 Object information
 
-**V24.** A front pick: `Cold front · WPC surface analysis Tue 12:00 UTC ·
-3 h ago`, the not-for-navigation line, and the attribution. A centre: `Low
-996 hPa · forecast Thu 00:00: 993 hPa`.
+**V23.** Picking any part of a storm (cone, track, a point, a radius) adds
+one hit for the storm to the existing hit list ("3 FEATURES AT THIS POINT").
+A CAP warning and a weather grid point at the same place are hits too.
+Selecting the storm fills the pinned header and the attributes as for any
+feature:
+
+- **Notice line.** The existing navigation notice (12 px, semibold, warning
+  colour): "Tropical cyclone forecast, not for navigation. Follow official
+  NHC advisories." This is the processor's `PickReportNotice`, as for CAP
+  and the weather grids.
+- **Stale line.** New. When the advisory is stale (§7), a second
+  warning-coloured line under the notice: "Advisory 17 is 9 h old. NHC has
+  probably issued a newer one. Load latest run". The link runs the
+  Library's existing **Load latest run**.
+- **Data credit.** The existing line: "Data: NOAA/NWS National Hurricane
+  Center · Public domain".
+- **Identity block.** The class symbol in the 36 px tile; "HURRICANE ZELDA"
+  as the primary label, with a class pill ("Category 4"); the caption
+  "AL142026 · TC · al142026_5day_017.zip".
+- **Attributes table.** The existing key/value table, one row each:
+  - Advisory (number, issue time, age)
+  - Next advisory
+  - At view time (estimated between forecast points, or on one)
+  - Position
+  - Max wind
+  - Pressure
+  - Movement
+  - Picked part
+  - 64, 50 and 34 kn radii, each as "NE / SE / SW / NW nm"
+  - Cone (NHC's caution, paraphrased: the centre stays inside about
+    two-thirds of the time, and winds reach well outside it)
+
+  The radii are attribute rows, not a new table component.
+
+Times use the viewer's own format and Local/UTC preference, for example
+"11/4/2026 3:00 PM".
+
+**V24.** A front pick has the same structure:
+
+- Notice: "Weather analysis, not for navigation."
+- Credit: the WPC line.
+- Identity: "Cold front", pill "Moderate", caption "COLD 3 · CODSUS ·
+  codsus_hr_2026110412.txt".
+- Attributes: Analysis (time and age), Strength, Points, and Next analysis.
+
+A pressure centre's identity is "Low 996 hPa", and its attributes add the
+forecast position and pressure when the bulletin has one.
 
 ### 6.2 Layer stack
 
-**V25.** One entry per dataset, named by source and time, as grids are:
-"Tropical cyclone ZELDA · NHC adv 17" and "Surface analysis · WPC Tue
-12Z". Each shows a **glyph legend**: a small symbol or line sample and a
-label per row. This extends `CoverageLegendEntry` (today colour only) with
-an optional symbol or line style; the Layer stack draws the glyph from the
-same `SymbolSet`.
+**V25.** The Layer stack lists sub-layers by S-98 plane, so a storm has two
+entries (V1):
+
+| Plane | Entry (file name, layer key, priority) | Legend under the entry |
+|---|---|---|
+| Other chart overlays | `al142026_5day_017.zip`, `weather.tc.track`, #95 | One symbol per class (TD, TS, HU, major); the southern-hemisphere mirror; forecast track; past track |
+| On-demand surface | `al142026_5day_017.zip`, `weather.tc.areas`, #10 | Cone days 1–3; cone days 4–5; 34, 50 and 64 kt areas |
+
+A surface analysis has one entry: Other chart overlays,
+`codsus_hr_….txt`, `weather.fronts`, #92. Its legend has the five line
+types and "Pressure centre, hPa".
+
+The legend sits under the entry that draws it, as the wave fill's colour
+legend does today (`LayerStack.Entry.Legend`). Today a legend row is a
+14×10 colour swatch and a label. This design adds **glyph rows**:
+
+- `CoverageLegendEntry` gains an optional symbol name or line style.
+- The Layer stack draws the glyph from the same `SymbolSet` at legend size.
+
+Swatch rows don't change.
 
 ### 6.3 Display controls
 
-**V26.** In the existing Weather section, shown while a cyclone dataset is
-loaded:
+**V26.** Three new switches are added to the end of the existing
+**Weather** section, after Currents:
 
 | Switch | Default | Draws |
 |---|---|---|
@@ -344,27 +403,72 @@ loaded:
 | **Past track** | On | Best-track line and points |
 | **Forecast times** | On | Time and intensity beside forecast points |
 
-The cone, forecast track, forecast points and the storm at view time have no
-switch; hide the whole storm with its eye in the Datasets panel. Fronts get
-no switch in v1. These go into `EcdisDisplaySettings.LayerVisibility` like
-the grid switches.
+Two conditions change:
+
+- The section's condition (`HasWeatherData`, today only for GRIB2 and
+  NetCDF datasets) widens to any weather-format dataset, including tropical
+  cyclones and surface analyses.
+- The three new switches show only while a tropical cyclone is loaded.
+
+The cone, the forecast track and points, and the storm at view time have no
+switch. To hide a whole storm, use its eye in Datasets. Fronts get no
+switch in v1. The switches are stored in `EcdisDisplaySettings.LayerVisibility`
+like the grid switches.
 
 ### 6.4 Library
 
-**V27.** Sources and items:
+**V27.** Two new sources go in the source tree, each with the `FEED` kind
+tag:
 
-- **Tropical cyclones — NHC** (Atlantic, East and Central Pacific): one item
-  per active storm, with the class symbol, name, latest advisory and age.
-  Indexing reads `CurrentStorms.json`; downloading fetches the advisory's
-  files. A new advisory makes the download outdated and replaces it.
+- **Tropical cyclones — NHC** (Atlantic, East and Central Pacific).
+  - One item per active storm. The item's swatch is the class symbol, its
+    name is the storm and ATCF id, its subtitle is the latest advisory, and
+    its summary is the forecast end and intensity.
+  - The forecast window bar shows how much of the forecast has passed.
+  - Indexing reads `CurrentStorms.json`, and downloading fetches the
+    advisory's files.
+  - A new advisory makes the download outdated and replaces it, as a newer
+    run does. This uses the existing **New run** tag and the **Updates**
+    segment.
 - **Tropical cyclones — JTWC** (West Pacific, Indian Ocean, Southern
-  Hemisphere): the same, from JTWC's warning list (§8.2).
-- **Surface analysis — WPC**: one item, the latest analysis, plus the coded
-  forecast bulletins as items when chosen.
+  Hemisphere). The same, from JTWC's warning list (§8.2).
+- **Surface analysis — WPC**. One item, the latest analysis. The coded
+  forecast bulletins are added as items when chosen.
 
-**V28.** Freshness overrides the 12 h weather default: cyclones are stale
-after 7 h without a new advisory (6 h cycle plus an hour's grace), fronts
-after 6 h (two 3-hourly analyses missed).
+**V28.** Freshness overrides the 12 h weather default:
+
+- Cyclones are stale after 7 h without a new advisory (the 6 h cycle plus an
+  hour's grace).
+- Fronts are stale after 6 h (two 3-hourly analyses missed).
+
+Staleness uses the existing parts:
+
+- the **Stale** tag on the item;
+- the details' stale-run warning, worded "Advisory 17 is over 7 hours old"
+  instead of "Run … is over 12 hours old";
+- **Load latest run** and **Pin this run**.
+
+### 6.5 Datasets, Timeline and Routes
+
+- **Datasets.** A storm row shows its name, "TC" in the spec column, and the
+  layer time. Outside the advisory's range, the layer time is
+  warning-coloured with a tag ("Beyond forecast"), and the inspector's
+  "At view time" field says why (V11). When stale, the row gets the Stale
+  tag (§7).
+- **Timeline.** New lane groups go in the bottom dock's Timeline tab:
+  "Tropical cyclones" and "Surface analysis".
+  - Lanes use the "other" lane colour, as weather lanes do today.
+  - The lane label shows the storm name (or WPC) in mono, a sub line
+    ("adv 17 · 6-hourly"), and the layer time below it.
+  - The track shows the V14 marks: a forecast-point tick, the issue diamond
+    and the next-advisory diamond.
+  - The step menu lists the storm, so ‹ › step through its forecast points.
+- **Routes.** In the Routes panel's check summary card, a **Weather** row
+  sits beside Clearance and Route. Weather findings join the Findings list
+  with their group: Must review, Check or Info (V38, Q7).
+  - The route-check legend card on the map (`RouteCheckLegendView`) gains a
+    Weather group with "Storm at ETA (closest approach)".
+  - Check mode folds Object information to its edge tab, as it does today.
 
 ## 7. Stale and expired data
 
@@ -372,7 +476,7 @@ after 6 h (two 3-hourly analyses missed).
 |---|---|---|---|---|
 | Current | As designed | Age in card | As designed | Age in card |
 | **Stale** (V28) | Unchanged weight. Storm label line 2 becomes `Adv 17 · 9 h old · newer advisory likely`; the age is in bold | **Stale** tag in Datasets and Library; card banner "This advisory is 9 h old. Load latest"; **Load latest run** | Lines and labels at 50 % opacity; the `H`/`L` labels gain `9 h old` | **Stale** tag; card banner |
-| **Final advisory** (storm dissipated or handed over) | Past track only; no cone; storm symbol `PT` | "Final advisory issued Wed 09:00"; item drops out of the active list but stays loaded | — | — |
+| **Final advisory** (storm dissipated or handed over) | Past track only; no cone; storm symbol `PT` | "Final advisory issued Wed 9:00 AM"; item drops out of the active list but stays loaded | — | — |
 | **Out of range** (view time outside the advisory or beyond tolerance) | Cone stays (V11); no storm marker | Datasets row "Beyond the forecast" | Not drawn | Datasets row "No analysis at view time" |
 
 **V29. Cyclone staleness doesn't fade the storm** (principle 3). A storm
@@ -488,11 +592,11 @@ parameter from GFS) are a possible later item, not part of #1233.
   against the cone.
 - Findings, advisory like the rest of #1093:
   - `TC_RADIUS_34`, `TC_RADIUS_50`, `TC_RADIUS_64`: "Legs 4–5 inside the
-    34 kt wind radius of HURRICANE ZELDA, Wed 18:00 to Thu 02:00 (forecast,
+    34 kt wind radius of HURRICANE ZELDA, Wed 6:00 PM to Thu 2:00 AM (forecast,
     adv 17)." The strongest radius sets the finding.
   - `TC_CONE`: "Leg 5 inside the forecast cone at ETA."
   - `TC_CPA`: always reported when the storm is loaded: "Closest approach
-    85 nm at Thu 01:00."
+    85 nm at Thu 1:00 AM."
   - `TC_BEYOND_FORECAST`: legs after the last forecast point are "not
     checked".
 - On the map: the existing finding sleeves (#959) on the affected legs, plus
