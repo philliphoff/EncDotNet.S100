@@ -762,7 +762,8 @@ public sealed class VectorSceneBuilder
                     continue;
                 symbols.Add(new LineSymbolPlacement(
                     new ResolvedSymbol(asset.ProcessedSvg, LineSymbolScale * SymbolScale, asset.PivotRelativeX, asset.PivotRelativeY),
-                    placed.Position / S100PixelSizeMm));
+                    placed.Position / S100PixelSizeMm,
+                    placed.Rotation));
             }
         }
 

@@ -6,6 +6,18 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Lines with symbols along them, and legends with pictures.** Code-defined
+  portrayals can now draw a line with a symbol repeated along it, such as a
+  weather front's triangles: `ComplexLineStyle` sets the pen, the symbols,
+  their spacing and the side of the line they go on, optionally alternating,
+  and `InstructionBuilder.ComplexLine` draws it. The spacing is in
+  millimetres on the display, so it holds at every zoom. Layer stack legends
+  can now show a symbol, a line sample or an outlined area beside each label,
+  built with `LegendBuilder`. `CoverageLegendEntry` is replaced by
+  `LegendEntry` and its `SwatchLegendEntry`, `SymbolLegendEntry` and
+  `LineLegendEntry` rows. See
+  [EncDotNet.S100.Portrayals](../src/EncDotNet.S100.Portrayals/README.md#code-defined-portrayal).
+
 - **Air temperature and freezing spray on the chart.** GRIB2 and NetCDF
   files with 2 m air temperature now draw it as dashed isotherms every 5 °C,
   off by default, behind a new **Air temperature** switch in Display

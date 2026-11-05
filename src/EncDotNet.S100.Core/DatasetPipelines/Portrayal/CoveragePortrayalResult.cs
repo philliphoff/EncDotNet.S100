@@ -76,12 +76,13 @@ public sealed class GridCoverageSubLayer : CoverageSubLayerBase
     public bool ClipToWater { get; init; }
 
     /// <summary>
-    /// The fill's colour legend, band colours and labels lowest first, for a
-    /// viewer to show next to the layer stack entry; <see langword="null"/>
-    /// (the default) for no legend. Set by the weather fills (issue #1072,
-    /// design note weather-sources.md §4.3). Renderers ignore it.
+    /// The fill's legend, for a viewer to show under the layer stack entry:
+    /// for a colour fill, one swatch per band, lowest first;
+    /// <see langword="null"/> (the default) for no legend. Set by the weather
+    /// fills (issue #1072, design note weather-sources.md §4.3). Renderers
+    /// ignore it.
     /// </summary>
-    public IReadOnlyList<CoverageLegendEntry>? Legend { get; init; }
+    public IReadOnlyList<LegendEntry>? Legend { get; init; }
 
     /// <summary>
     /// Returns a copy of this sub-layer with <see cref="LandAreaMask"/> replaced.

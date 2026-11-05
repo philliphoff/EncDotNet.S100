@@ -25,6 +25,7 @@
     <Compile Include="..\_shared\TestLuaEngine.cs" Link="TestSupport\TestLuaEngine.cs" />
     <Compile Include="..\_shared\GribFixtures.cs" Link="TestSupport\GribFixtures.cs" />
     <Compile Include="..\_shared\CapFixtures.cs" Link="TestSupport\CapFixtures.cs" />
+    <Compile Include="..\_shared\FrontPipFixtures.cs" Link="TestSupport\FrontPipFixtures.cs" />
   </ItemGroup>
 
   <ItemGroup>

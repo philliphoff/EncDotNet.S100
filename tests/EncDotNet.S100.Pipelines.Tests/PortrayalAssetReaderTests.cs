@@ -124,6 +124,25 @@ public class PortrayalAssetReaderTests
     }
 
     [Fact]
+    public void LineStyleReader_ReadsASymbolsRotationRelativeToTheLine()
+    {
+        // S-100 Part 9 LineSymbol rotation, default 0 (#1293).
+        var xml = """
+            <ls:lineStyle xmlns:ls="http://www.iho.int/S100LineStyle/5.2">
+               <intervalLength>18</intervalLength>
+               <pen width="0.7"><color>CHBLK</color></pen>
+               <symbol reference="PIP" rotation="180"><position>4</position></symbol>
+               <symbol reference="PIP"><position>13</position></symbol>
+            </ls:lineStyle>
+            """;
+
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(xml));
+        var style = LineStyleReader.Read(stream, "PIPS");
+
+        Assert.Equal([new LineStyleSymbol("PIP", 4f, 180f), new LineStyleSymbol("PIP", 13f)], style.Symbols);
+    }
+
+    [Fact]
     public void LineStyleReader_ReadsACompositeStyleAndAPenlessStyle()
     {
         var composite = """

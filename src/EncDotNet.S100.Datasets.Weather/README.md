@@ -237,8 +237,9 @@ so the coverage pipeline and both renderers draw them with no weather code.
   `LandArea` geometry, as `R-101-104-B` clips the S-104 surface. The wind
   fill and isobars aren't clipped.
 - **Legends.** Each fill's `GridCoverageSubLayer.Legend` lists its band
-  colours and labels, in the palette it was drawn in; the viewer shows it
-  under the fill's layer stack entry. The headless renderer draws no legend.
+  colours and labels as `SwatchLegendEntry` rows (`LegendEntry.FromScheme`),
+  in the palette it was drawn in; the viewer shows it under the fill's layer
+  stack entry. The headless renderer draws no legend.
 - **Isobars.** `PressureIsobarStyle.Contours` are value-based
   `ContourStyle`s in pascals, every 4 hPa from 860 to 1100 hPa; only the
   levels a grid reaches are traced (`CoverageContours`, marching squares)
