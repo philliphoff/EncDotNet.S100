@@ -16,6 +16,22 @@ month. For package versions and release assets, see
   and number, such as `COLD 3`, and the pick notice is "Weather analysis,
   not for navigation." See
   [Show a surface analysis](weather.md#show-a-surface-analysis).
+- **Tropical cyclone advisories.** A new
+  `EncDotNet.S100.Datasets.TropicalCyclones` package reads the National
+  Hurricane Center's GIS shapefile zips for an advisory: the forecast track
+  and cone (`al092022_5day_020.zip`), the wind radii (`_fcst_`) and the best
+  track (`_best_track`). `NhcAdvisoryReader` gives a `TropicalCycloneAdvisory`
+  with the storm, the advisory number and issue time, every forecast point
+  with its wind, gusts, pressure and class, the 34, 50 and 64 kt radii by
+  quadrant, the cone split at 72 hours, and the past track with observed
+  radii. The default registry recognises a forecast zip, or a folder of one
+  storm's zips, as `TC/1.0.0`, and `s100 info` describes the storm, the
+  advisory, the forecast and every forecast point. Tropical cyclones aren't
+  drawn on the chart yet. Not for navigation. Breaking changes:
+  `SpecName.NonS100Formats`, `S100Products.CreateDefaultRegistry()` (and so
+  `ProductRegistry.Default`) and `WeatherProducts.All` now also hold `TC`.
+  See the
+  [Datasets.TropicalCyclones README](../src/EncDotNet.S100.Datasets.TropicalCyclones/README.md).
 
 - **Lines with symbols along them, and legends with pictures.** Code-defined
   portrayals can now draw a line with a symbol repeated along it, such as a

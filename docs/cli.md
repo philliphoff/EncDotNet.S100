@@ -640,13 +640,22 @@ its WMO heading, **Issued by** and **Issued (UTC)** come from its header,
 table lists each valid time (one for an analysis, one per forecast time) with
 its lead time and its counts of cold, warm, occluded and stationary fronts,
 troughs, highs and lows. **Skipped codes** lists any feature codes it
-doesn't know. [Show wind and waves on the chart](weather.md) covers the
-weather formats.
+doesn't know. For a tropical cyclone advisory (an NHC forecast zip,
+such as `al092022_5day_020.zip`), **Storm**, **Advisory**, **Forecast** and
+**Intensity** give the storm and its basin, the advisory number and issue time
+(UTC), the forecast's span and the current wind, gusts, pressure and peak
+forecast wind. **Cone**, **Wind radii** and **Past track** say what the
+advisory holds; the wind radii and past track come from the `_fcst_` and
+`_best_track` zips beside the forecast zip. A **Forecast points** table then
+lists each point with its time, position, intensity, class and 34, 50 and
+64 kt radii by quadrant. [Show wind and waves on the chart](weather.md) covers
+the weather formats.
 
 ```bash
 s100 info currents.h5
 s100 info filter_gfswave.pl
 s100 info alerts.atom
+s100 info al092022_5day_020.zip
 ```
 
 | Option | Default | Description |
@@ -869,7 +878,7 @@ s100 list-specs
 `list-specs` prints a table of the product specifications `s100` reads, with
 whether each has a bundled portrayal catalogue and whether it can be rendered
 headlessly. S-57 is listed with its portrayal shown as "via S-101". The
-weather formats GRIB2, NetCDF, CAP and CODSUS are listed last, with their portrayal
+weather formats GRIB2, NetCDF, CAP, CODSUS and TC (tropical cyclone advisories) are listed last, with their portrayal
 shown as "SoundCharts, in code", and a line under the table says they aren't
 S-100 products. See [Supported specifications](#supported-specifications).
 
@@ -1096,7 +1105,7 @@ in its light description. Lua-CSharp lists them as reference Lua does.
 | Vector, ISO 8211 | S-101, S-401, S-57 | S-57 is translated to S-101, or to S-401 for an inland ENC, and drawn with that product's portrayal, not S-52. |
 | Vector, GML | S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421 | |
 | Coverage, HDF5 | S-102; S-104 data coding formats 1, 2 and 8; S-111 data coding formats 1, 2, 3 and 8 | Gridded data is drawn as a coverage; station and node data as glyphs. S-104 has no IHO portrayal, so its stations and grids use SoundCharts' own gauges and isolines; see [S-104 portrayal](../src/EncDotNet.S100.Datasets.S104/README.md#portrayal). S-111 draws current arrows over the coverage. Other data coding formats exit with code `4`. |
-| Weather, not S-100 | GRIB2, NetCDF-3 and NetCDF-4 (CF), CAP 1.2 and NWS alerts GeoJSON, WPC coded surface bulletins (CODSUS) | Wind and wave grids on a regular latitude/longitude grid, and marine weather warnings, drawn with SoundCharts' own styles; and surface analyses drawn as fronts and pressure centres. Not for navigation. See [Show wind and waves on the chart](weather.md). |
+| Weather, not S-100 | GRIB2, NetCDF-3 and NetCDF-4 (CF), CAP 1.2 and NWS alerts GeoJSON, WPC coded surface bulletins (CODSUS), NHC tropical cyclone GIS zips (`TC`) | Wind and wave grids on a regular latitude/longitude grid, and marine weather warnings, drawn with SoundCharts' own styles; and surface analyses drawn as fronts and pressure centres. Tropical cyclone advisories are read and described by `info`, not drawn yet. Not for navigation. See [Show wind and waves on the chart](weather.md). |
 
 ## Exit codes
 

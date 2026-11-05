@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <IsPackable>true</IsPackable>
-    <Description>Per-spec IDatasetProcessor implementations, the DatasetPipelineFactory (file -&gt; processor detection), the weather grid processors (NetCDF-CF, GRIB2), the CAP weather warning processor, the headless image-render capability, the S-98 interoperability authority, and the validation runner for IHO S-100 product datasets. Consumed by the EncDotNet.S100 convenience package, the viewer, and the s100 CLI.</Description>
+    <Description>Per-spec IDatasetProcessor implementations, the DatasetPipelineFactory (file -&gt; processor detection), the weather grid processors (NetCDF-CF, GRIB2), the CAP weather warning processor, the tropical cyclone advisory processor (NHC GIS shapefiles), the headless image-render capability, the S-98 interoperability authority, and the validation runner for IHO S-100 product datasets. Consumed by the EncDotNet.S100 convenience package, the viewer, and the s100 CLI.</Description>
   </PropertyGroup>
 
   <ItemGroup>
@@ -35,6 +35,7 @@
     <ProjectReference Include="..\EncDotNet.S100.Datasets.Cap\EncDotNet.S100.Datasets.Cap.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.Grib\EncDotNet.S100.Datasets.Grib.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.NetCdf\EncDotNet.S100.Datasets.NetCdf.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.TropicalCyclones\EncDotNet.S100.Datasets.TropicalCyclones.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.Weather\EncDotNet.S100.Datasets.Weather.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.ExchangeSets\EncDotNet.S100.ExchangeSets.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Features\EncDotNet.S100.Features.csproj" />
