@@ -35,10 +35,13 @@ public static class RenderingOptimizations
     /// <inheritdoc cref="MinTileGutterDip"/>
     public const double MaxTileGutterDip = 256.0;
 
-    /// <summary>Default per-layer hot-cache native budget, in MB (<c>S100_VECTOR_TILE_BUDGET_MB</c>).</summary>
-    public const double DefaultTileBudgetMb = 256.0;
+    /// <summary>
+    /// Default process-wide hot-cache native budget, in MB, shared by every
+    /// layer's tiles (<c>S100_VECTOR_TILE_BUDGET_MB</c>; the HighEnd tier).
+    /// </summary>
+    public const double DefaultTileBudgetMb = 1536.0;
 
-    /// <summary>Minimum / maximum accepted per-layer hot-cache native budget, in MB.</summary>
+    /// <summary>Minimum / maximum accepted process-wide hot-cache native budget, in MB.</summary>
     public const double MinTileBudgetMb = 4.0;
 
     /// <inheritdoc cref="MinTileBudgetMb"/>
@@ -53,10 +56,13 @@ public static class RenderingOptimizations
     /// <inheritdoc cref="MinTileDiskMb"/>
     public const double MaxTileDiskMb = 8192.0;
 
-    /// <summary>Default per-layer GPU-residency budget, in MB (<c>S100_VECTOR_TILE_GPU_MB</c>).</summary>
-    public const double DefaultTileGpuBudgetMb = 256.0;
+    /// <summary>
+    /// Default process-wide GPU-residency budget, in MB, shared by every layer's
+    /// textures (<c>S100_VECTOR_TILE_GPU_MB</c>; the HighEnd tier).
+    /// </summary>
+    public const double DefaultTileGpuBudgetMb = 768.0;
 
-    /// <summary>Minimum / maximum accepted per-layer GPU-residency budget, in MB.</summary>
+    /// <summary>Minimum / maximum accepted process-wide GPU-residency budget, in MB.</summary>
     public const double MinTileGpuBudgetMb = 4.0;
 
     /// <inheritdoc cref="MinTileGpuBudgetMb"/>
@@ -169,11 +175,12 @@ public static class RenderingOptimizations
     public static bool TileGutterDipEnvExplicit { get; }
 
     /// <summary>
-    /// Per-layer hot-cache native budget, in MB, for the tiled base plane. Seeded
-    /// from <c>S100_VECTOR_TILE_BUDGET_MB</c> (default
-    /// <see cref="DefaultTileBudgetMb"/>). The cache capacity is captured when a
-    /// layer's tile state is first created, so a change applies on the next
-    /// dataset reload (restart-only in practice).
+    /// Process-wide hot-cache native budget, in MB, for the tiled base plane:
+    /// every layer's tiles share it, and the least recently drawn go first when
+    /// it is full (map rendering slice&#160;4). Seeded from
+    /// <c>S100_VECTOR_TILE_BUDGET_MB</c> (default by machine tier,
+    /// <see cref="DefaultTileBudgetMb"/> on HighEnd). Read on every tile insert,
+    /// so a change applies at once.
     /// </summary>
     public static double TileBudgetMb
     {
@@ -300,10 +307,11 @@ public static class RenderingOptimizations
     public static bool TileGpuResidencyEnvExplicit { get; }
 
     /// <summary>
-    /// Per-layer GPU-residency budget, in MB. Seeded from
-    /// <c>S100_VECTOR_TILE_GPU_MB</c> (default <see cref="DefaultTileGpuBudgetMb"/>).
-    /// The resident-texture cache is sized when first created, so a change applies
-    /// on the next dataset reload (restart-only in practice).
+    /// Process-wide GPU-residency budget, in MB, shared by every layer's tile
+    /// textures (map rendering slice&#160;4). Seeded from
+    /// <c>S100_VECTOR_TILE_GPU_MB</c> (default by machine tier,
+    /// <see cref="DefaultTileGpuBudgetMb"/> on HighEnd). Read on every upload, so
+    /// a change applies at once.
     /// </summary>
     public static double TileGpuBudgetMb
     {

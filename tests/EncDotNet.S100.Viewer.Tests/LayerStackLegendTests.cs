@@ -2,6 +2,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Media;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
@@ -132,6 +133,32 @@ public sealed class LayerStackLegendTests
         Assert.True(swatch.IsSwatch);
         Assert.False(swatch.HasGlyph);
         Assert.Null(swatch.Glyph);
+    }
+
+    [Fact]
+    public async Task A_surface_analysis_gets_its_entry_above_the_isobars_with_the_front_legend()
+    {
+        // The real fronts portrayal (#1300): weather.fronts on Other chart
+        // overlays at #92, the five line kinds and the pressure centre.
+        var path = Path.Combine(AppContext.BaseDirectory, "TestData", "CODSUS", "synthetic-atlantic-low.txt");
+        var processor = new SurfaceAnalysisDatasetProcessor(path);
+        var result = await processor.BuildVectorPortrayalAsync(new RenderContext { Palette = PaletteType.Night }, TestContext.Current.CancellationToken);
+        var subLayer = Assert.Single(result.SubLayers);
+        var stackEntry = new LayerStackEntry(
+            new MemoryLayer(processor.FileName),
+            new SubLayerStackItem(new VectorStackPayload(result, subLayer), subLayer.Plane, subLayer.WithinPlanePriority, processor.FileName, subLayer.SourceFeatureType));
+
+        var entry = new LayerStackEntryViewModel(new LayerStackViewModelTests.ControllableLoader(), stackEntry);
+
+        Assert.Equal(S98DisplayPlane.OtherChartOverlays, subLayer.Plane);
+        Assert.Equal(92, subLayer.WithinPlanePriority);
+        Assert.Equal(
+            ["Cold front", "Warm front", "Occluded front", "Stationary front", "Trough", "Pressure centre, hPa"],
+            entry.Legend.Select(i => i.Label));
+        Assert.Equal(
+            [LegendRowKind.Line, LegendRowKind.Line, LegendRowKind.Line, LegendRowKind.Line, LegendRowKind.Line, LegendRowKind.Symbol],
+            entry.Legend.Select(i => i.Kind));
+        Assert.All(entry.Legend, row => Assert.True(row.HasGlyph));
     }
 
     [Fact]

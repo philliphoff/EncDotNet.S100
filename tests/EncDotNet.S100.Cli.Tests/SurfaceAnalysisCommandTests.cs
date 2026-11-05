@@ -26,7 +26,7 @@ public sealed class SurfaceAnalysisCommandTests : IDisposable
         Assert.Equal(0, exit);
         Assert.Contains("CODSUS", stdout);
         Assert.Contains("SoundCharts portrayal: WPC's coded surface bulletin defines no symbology", stdout);
-        Assert.Contains("Weather analysis, not an S-100 product and not for navigation.", stdout);
+        Assert.Contains("Weather analysis, not for navigation.", stdout);
         Assert.Contains("analysis · high resolution (0.1°) · CODSUS · ASUS02 KWBC 040000", stdout);
         Assert.Contains("NWS WEATHER PREDICTION CENTER COLLEGE PARK MD", stdout);
         Assert.Contains("WPC's domain only: -180,0,0,90", stdout);
@@ -63,13 +63,26 @@ public sealed class SurfaceAnalysisCommandTests : IDisposable
     }
 
     [Fact]
-    public void List_specs_lists_CODSUS_as_not_yet_rendered_headless()
+    public void List_specs_lists_CODSUS_as_rendered_headless()
     {
         var (exit, stdout) = RunCapturingAnsiConsole(["list-specs"]);
 
         Assert.Equal(0, exit);
-        Assert.Matches(@"CODSUS\s*│\s*SoundCharts, in code\s*│\s*no", stdout);
-        Assert.Contains("GRIB2, NetCDF, CAP, CODSUS aren't S-100 products", stdout);
+        Assert.Matches(@"CODSUS\s*│\s*SoundCharts, in code\s*│\s*yes", stdout);
+        Assert.Contains("GRIB2, NetCDF, CAP, CODSUS, TC aren't S-100 products", stdout);
+    }
+
+    [Fact]
+    public void Render_draws_a_bulletin()
+    {
+        var dataset = CodsusFixtures.CopyFixture(CodsusFixtures.AtlanticLow, Path.Combine(_dir, "atlantic.txt"));
+        var output = Path.Combine(_dir, "fronts.png");
+
+        var (exit, stdout) = RunCapturingAnsiConsole(["render", dataset, output, "--width", "400", "--height", "300"]);
+
+        Assert.Equal(0, exit);
+        Assert.Contains("CODSUS", stdout);
+        Assert.True(new FileInfo(output).Length > 1_000);
     }
 
     private static (int Exit, string Stdout) RunCapturingAnsiConsole(string[] args)

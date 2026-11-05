@@ -32,6 +32,8 @@ internal static class FeatureGlyphs
 
         // Order matters: check more specific keywords before broader ones
         // (e.g. "lighthouse" before "light", "landmark" before "land").
+        if (Has(t, "surfacefront")) return Icon.WeatherSqualls;
+        if (Has(t, "pressurecentre")) return Icon.Gauge;
         if (Has(t, "lighthouse")) return Icon.BuildingLighthouse;
         if (Has(t, "light")) return Icon.WeatherSunny;
         if (Has(t, "beacon")) return Icon.Flag;

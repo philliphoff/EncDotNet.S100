@@ -104,7 +104,8 @@ namespaces. `IMapPresentationController` is in `EncDotNet.S100.Maps`.
 | `GribDatasetProcessor` | GRIB2 wind and wave grids: GFS, GFS-Wave, ECMWF (not S-100) | Coverage: SoundCharts weather styles (see [Weather grids](#weather-grids)) |
 | `NetCdfDatasetProcessor` | NetCDF-CF wind and wave grids (not S-100) | Coverage: SoundCharts weather styles (see [Weather grids](#weather-grids)) |
 | `CapDatasetProcessor` | CAP 1.2 marine weather warnings: CAP XML, Atom, NWS GeoJSON (not S-100) | Vector: SoundCharts CAP style (see [CAP weather warnings](#cap-weather-warnings)) |
-| `SurfaceAnalysisDatasetProcessor` | WPC coded surface bulletins (`CODSUS`): fronts, troughs and pressure centres, analysis and forecast (not S-100) | Features and metadata only; drawing comes with #1233's portrayal slice |
+| `TropicalCycloneDatasetProcessor` | Tropical cyclone advisories: NHC GIS shapefile zips (not S-100) | Not drawn yet (see [Tropical cyclone advisories](#tropical-cyclone-advisories)) |
+| `SurfaceAnalysisDatasetProcessor` | WPC coded surface bulletins (`CODSUS`): fronts, troughs and pressure centres, analysis and forecast (not S-100) | Vector: SoundCharts fronts style (`SurfaceAnalysisStyle`), one `weather.fronts` sub-layer on Other chart overlays at priority 92 |
 
 `S101DatasetProcessor` handles S-401 inland ENCs when it's created with the
 S-401 catalogues.
@@ -313,6 +314,31 @@ namespace, and JSON from `api.weather.gov` naming an alert; `MatchGml` claims
 the same roots when an exchange set's `.xml` is read as GML. An S-100 GML
 dataset has a `DataSet` root, so CAP never claims S-124, and other GeoJSON
 isn't claimed.
+
+## Tropical cyclone advisories
+
+`TropicalCycloneDatasetProcessor` loads a tropical cyclone advisory from the
+National Hurricane Center's GIS shapefile zips, read by
+[`EncDotNet.S100.Datasets.TropicalCyclones`](../EncDotNet.S100.Datasets.TropicalCyclones/README.md).
+The dataset is the advisory's forecast zip (`al092022_5day_020.zip`), read
+with the wind radii (`al092022_fcst_020.zip`) and best track
+(`al092022_best_track.zip`) zips when they're beside it. It can also be a
+folder holding one storm's zips, in which case the latest advisory is read.
+Through an `IAssetSource`, the sibling zips are looked for beside the forecast
+zip in the source.
+
+The processor gives `Advisory`, the `TropicalCycloneAdvisory` model, and
+`Metadata`: the extent of the cone, tracks and forecast radii, and the time
+from the first past-track point to the last forecast point. The catalog
+payload is `TropicalCycloneDatasetData`. It doesn't draw, pick or step
+through time yet. That comes with the portrayal.
+
+`WeatherProducts.TropicalCyclone` registers the format as `TC/1.0.0`, not
+S-100, with an application portrayal (`NHC tropical cyclone GIS data`).
+`MatchBytes` claims a zip whose first entry is a layer of an NHC forecast zip,
+whatever the file is called, and `MatchFolder` claims a folder of NHC forecast
+zips for one storm. The wind radii and best track zips aren't claimed on their
+own.
 
 ## Processor lifetime
 

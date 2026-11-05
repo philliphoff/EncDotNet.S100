@@ -858,8 +858,8 @@
     <value>S-100 Datasets</value>
   </data>
   <data name="FilePicker_WeatherDataType" xml:space="preserve">
-    <value>Weather Data (GRIB2, NetCDF, CAP)</value>
-    <comment>Open Dataset file type for the weather formats (#1076). A GRIB2 file with no extension, such as a NOMADS GRIB filter download, needs the All files type.</comment>
+    <value>Weather Data (GRIB2, NetCDF, CAP, CODSUS)</value>
+    <comment>Open Dataset file type for the weather formats (#1076; WPC coded surface bulletins #1300). A GRIB2 file with no extension, such as a NOMADS GRIB filter download, needs the All files type.</comment>
   </data>
   <data name="FilePicker_ExchangeSetFolderTitle" xml:space="preserve">
     <value>Open Exchange Set Folder</value>
@@ -1483,7 +1483,7 @@
     <value>In-memory cache (MB)</value>
   </data>
   <data name="Tooltip_TileBudgetMb" xml:space="preserve">
-    <value>Per-layer budget, in megabytes, for decoded tile pixels kept in main memory. Applied when a dataset's tile cache is created — reload the dataset to apply a change.</value>
+    <value>Budget, in megabytes, for decoded tile pixels kept in main memory, shared by all layers. When it's full, the tiles drawn least recently are dropped first. Takes effect immediately.</value>
   </data>
   <data name="Settings_TileDiskCacheEnabled" xml:space="preserve">
     <value>Warm disk cache</value>
@@ -1507,7 +1507,7 @@
     <value>GPU residency (MB)</value>
   </data>
   <data name="Tooltip_TileGpuBudgetMb" xml:space="preserve">
-    <value>Per-layer budget, in megabytes, for GPU-resident tile textures. Sized when the resident-texture cache is created — reload the dataset to apply a change.</value>
+    <value>Budget, in megabytes, for GPU-resident tile textures, shared by all layers. When it's full, the textures drawn least recently are dropped first. Takes effect immediately.</value>
   </data>
   <data name="Settings_TileWorkerCount" xml:space="preserve">
     <value>Tile workers</value>

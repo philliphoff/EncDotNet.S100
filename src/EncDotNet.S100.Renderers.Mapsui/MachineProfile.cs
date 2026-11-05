@@ -8,7 +8,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <remarks>
 /// <see cref="Auto"/> derives the tier from the host's logical-core count and
 /// total available RAM at start-up, so a constrained machine (small Parallels /
-/// cloud VM, low-RAM laptop) gets smaller per-layer caches — bounding total
+/// cloud VM, low-RAM laptop) gets smaller tile caches — bounding total
 /// memory and fixing the tile-cache thrash a many-cell / multi-exchange-set
 /// chart created at a fixed 256&#160;MB ceiling. The explicit tiers exist so a
 /// user can pin a profile regardless of detected hardware; the individual
@@ -38,19 +38,19 @@ public enum PerformanceProfile
 /// </summary>
 public static class MachineProfile
 {
-    /// <summary>Per-layer hot (CPU) tile-cache budget, MB, for each resolved tier.</summary>
+    /// <summary>Process-wide hot (CPU) tile-cache budget, MB, for each resolved tier.</summary>
     public static double TileBudgetMb(PerformanceProfile tier) => tier switch
     {
-        PerformanceProfile.LowEnd => 192.0,
-        PerformanceProfile.Balanced => 256.0,
+        PerformanceProfile.LowEnd => 512.0,
+        PerformanceProfile.Balanced => 1024.0,
         _ => RenderingOptimizations.DefaultTileBudgetMb,
     };
 
-    /// <summary>Per-layer GPU-residency budget, MB, for each resolved tier.</summary>
+    /// <summary>Process-wide GPU-residency budget, MB, for each resolved tier.</summary>
     public static double TileGpuBudgetMb(PerformanceProfile tier) => tier switch
     {
-        PerformanceProfile.LowEnd => 192.0,
-        PerformanceProfile.Balanced => 256.0,
+        PerformanceProfile.LowEnd => 256.0,
+        PerformanceProfile.Balanced => 512.0,
         _ => RenderingOptimizations.DefaultTileGpuBudgetMb,
     };
 
