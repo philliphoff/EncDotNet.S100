@@ -253,15 +253,17 @@ internal sealed class PortrayalCacheWarmer : IDisposable
                         continue;
                     }
 
+                    // Survey only when a slot is free: it reads every candidate.
+                    if (_running.Count < _concurrency.Limit && !await FillAsync(stop))
+                        continue;
+
+                    // Observed after filling, so a slot counts as idle only
+                    // when the queue had nothing left to put in it.
                     if (_running.Count > 0 && _concurrency.Observe(_running.Count))
                     {
                         _logger.LogDebug("Portrayal pre-warm now portrays up to {Limit} cells at once (GC pause share {Share:P1}).",
                             _concurrency.Limit, _concurrency.LastPauseShare ?? 0);
                     }
-
-                    // Survey only when a slot is free: it reads every candidate.
-                    if (_running.Count < _concurrency.Limit && !await FillAsync(stop))
-                        continue;
 
                     await WaitAsync(_options.PollInterval, stop);
                 }

@@ -81,6 +81,7 @@ public sealed class PortrayalCacheWarmerTests : IDisposable
         public MapViewportSnapshot? View;
         public Func<DatasetEntry, CancellationToken, Task<IReadOnlyList<string>?>>? Portray;
         public int Concurrency = 1;
+        public int? InitialConcurrency;
         public Func<TimeSpan> GcPause = () => TimeSpan.Zero;
         public TimeSpan ConcurrencyWindow = TimeSpan.FromSeconds(30);
 
@@ -99,7 +100,7 @@ public sealed class PortrayalCacheWarmerTests : IDisposable
                 new PrewarmConcurrencyOptions
                 {
                     MaxConcurrency = Concurrency,
-                    InitialConcurrency = Concurrency,
+                    InitialConcurrency = InitialConcurrency ?? Concurrency,
                     Window = ConcurrencyWindow,
                     BackOffPauseShare = 0.10,
                     GrowPauseShare = 0.04,
@@ -207,6 +208,36 @@ public sealed class PortrayalCacheWarmerTests : IDisposable
         Assert.True(await WaitUntilAsync(() => warmer.Status.State == PortrayalWarmState.Complete));
         Assert.Equal(8, Volatile.Read(ref attempts));
         Assert.Equal(4, host.Portrayed.Count);
+    }
+
+    [Fact]
+    public async Task RunsMoreCellsAtOnce_WhileGcPausesStayLow_EvenWhenCellsFinishQuickly()
+    {
+        var host = new Host
+        {
+            Concurrency = 4,
+            InitialConcurrency = 1,
+            ConcurrencyWindow = TimeSpan.FromMilliseconds(40),
+        };
+        for (var i = 0; i < 400; i++)
+            host.Cells.Add(Cell("c" + i, 47.6 + (i * 0.001), -122.4));
+        var running = 0;
+        var peak = 0;
+        host.Portray = async (entry, ct) =>
+        {
+            InterlockedMax(ref peak, Interlocked.Increment(ref running));
+            try { await Task.Delay(10, ct); }
+            finally { Interlocked.Decrement(ref running); }
+            return await host.Default(entry);
+        };
+        using var warmer = host.Create(new PortrayalWarmLedger(null));
+
+        warmer.Start();
+
+        // Slots refill as cells finish, so every window counts as saturated.
+        Assert.True(await WaitUntilAsync(() => warmer.ConcurrencyLimit == 4));
+        Assert.True(await WaitUntilAsync(() => Volatile.Read(ref peak) == 4));
+        Assert.True(Volatile.Read(ref peak) <= 4);
     }
 
     [Fact]
@@ -578,13 +609,13 @@ public sealed class PrewarmConcurrencyTests
     }
 
     [Theory]
-    [InlineData(16, null, 14, 3)]
+    [InlineData(16, null, 14, 7)]
     [InlineData(4, null, 2, 1)]
     [InlineData(1, null, 1, 1)]
     [InlineData(16, "1", 1, 1)]
     [InlineData(16, "5", 5, 5)]
-    [InlineData(16, "0", 14, 3)]
-    [InlineData(16, "lots", 14, 3)]
+    [InlineData(16, "0", 14, 7)]
+    [InlineData(16, "lots", 14, 7)]
     public void Resolve_BoundsByCores_AndHonoursAFixedLimit(int processors, string? variable, int max, int initial)
     {
         var options = PrewarmConcurrencyOptions.Resolve(processors, variable);

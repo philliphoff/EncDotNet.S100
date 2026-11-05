@@ -43,8 +43,10 @@ internal sealed record PrewarmConcurrencyOptions
 
     /// <summary>
     /// The viewer's defaults: up to all cores but two (one for the UI thread,
-    /// one for the renderer and the GC's own threads), starting at a quarter
-    /// of that; back off above 10% of wall time in GC pauses and grow below 4%.
+    /// one for the renderer and the GC's own threads), starting at half of
+    /// that; over two-second windows, back off above 15% of wall time in GC
+    /// pauses and grow below 5%. A single Server GC pause can be 100–200 ms,
+    /// so a shorter window or a lower threshold halves on one collection.
     /// </summary>
     /// <param name="processorCount">Logical processors.</param>
     /// <returns>The options.</returns>
@@ -54,10 +56,10 @@ internal sealed record PrewarmConcurrencyOptions
         return new()
         {
             MaxConcurrency = max,
-            InitialConcurrency = Math.Max(1, max / 4),
-            Window = TimeSpan.FromSeconds(1),
-            BackOffPauseShare = 0.10,
-            GrowPauseShare = 0.04,
+            InitialConcurrency = Math.Max(1, max / 2),
+            Window = TimeSpan.FromSeconds(2),
+            BackOffPauseShare = 0.15,
+            GrowPauseShare = 0.05,
         };
     }
 }
