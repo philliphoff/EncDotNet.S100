@@ -115,9 +115,12 @@ public class ListSpecsToolTests
             "SoundCharts portrayal: CAP 1.2 defines no symbology",
             value.Specs.Single(s => s.Name == "CAP").PortrayalNote);
         Assert.Equal(
+            "SoundCharts portrayal: WPC's coded surface bulletin defines no symbology",
+            value.Specs.Single(s => s.Name == "CODSUS").PortrayalNote);
+        Assert.Equal(
             "SoundCharts portrayal: NHC tropical cyclone GIS data defines no symbology",
             value.Specs.Single(s => s.Name == "TC").PortrayalNote);
-        Assert.All(value.Specs.Where(s => s.Name is not ("S-104" or "NetCDF" or "GRIB2" or "CAP" or "TC")), s => Assert.Null(s.PortrayalNote));
+        Assert.All(value.Specs.Where(s => s.Name is not ("S-104" or "NetCDF" or "GRIB2" or "CAP" or "CODSUS" or "TC")), s => Assert.Null(s.PortrayalNote));
     }
 
     [Fact]

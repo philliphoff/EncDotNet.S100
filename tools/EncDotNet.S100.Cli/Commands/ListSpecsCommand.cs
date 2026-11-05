@@ -53,14 +53,15 @@ internal sealed class ListSpecsCommand : Command<ListSpecsCommand.Settings>
                 HeadlessSpecs.Contains(spec) ? "[green]yes[/]" : "[yellow]no[/]");
         }
 
-        // The weather formats (GRIB2, NetCDF, CAP) aren't S-100 products and
-        // have no portrayal catalogue: SoundCharts draws them in code.
+        // The weather formats (GRIB2, NetCDF, CAP, CODSUS) aren't S-100
+        // products and have no portrayal catalogue: SoundCharts draws them in
+        // code. The coded surface bulletins aren't drawn yet (#1233).
         foreach (var registration in WeatherProducts.All)
         {
             table.AddRow(
                 Markup.Escape(registration.Spec),
                 "[grey]SoundCharts, in code[/]",
-                "[green]yes[/]");
+                registration.Spec == WeatherProducts.Codsus.Spec ? "[yellow]no[/]" : "[green]yes[/]");
         }
 
         AnsiConsole.Write(table);

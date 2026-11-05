@@ -21,4 +21,10 @@
     <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.Weather\EncDotNet.S100.Datasets.Weather.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\_shared\CodsusFixtures.cs" Link="TestSupport\CodsusFixtures.cs" />
+    <!-- WPC coded surface bulletins, three real and one hand-written (issue #1295); see tests/datasets/CODSUS/README.md. -->
+    <Content Include="..\datasets\CODSUS\*.txt" CopyToOutputDirectory="PreserveNewest" Link="TestData\CODSUS\%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

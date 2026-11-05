@@ -3,6 +3,7 @@ using EncDotNet.S100.Datasets.Grib;
 using EncDotNet.S100.Datasets.NetCdf;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.TropicalCyclones;
+using EncDotNet.S100.Datasets.Weather;
 using EncDotNet.S100.Interoperability;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
@@ -10,8 +11,9 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <summary>
 /// The built-in <see cref="ProductRegistration"/>s for weather data, formats
 /// that aren't S-100 products (design note weather-sources.md §3.1, §3.2 and
-/// §6.1): GRIB2 and NetCDF-CF model grids, CAP weather warnings, and tropical
-/// cyclone advisories. They're kept apart from
+/// §6.1): GRIB2 and NetCDF-CF model grids, CAP weather warnings, the WPC
+/// coded surface bulletins (vector-weather.md §8.3), and tropical cyclone
+/// advisories (§8.1). They're kept apart from
 /// <see cref="S100Products"/> so a host can register the S-100 products
 /// without them (<see cref="ProductRegistryExtensions.AddAllS100Products"/>);
 /// <see cref="S100Products.CreateDefaultRegistry"/>, and so
@@ -203,6 +205,39 @@ public static class WeatherProducts
     };
 
     /// <summary>
+    /// The portrayal of the coded surface bulletins: code-defined front and
+    /// pressure-centre symbols, since the bulletin defines no symbology.
+    /// </summary>
+    public static PortrayalBasis CodsusPortrayal { get; } = PortrayalBasis.Application("WPC's coded surface bulletin");
+
+    /// <summary>
+    /// The WPC coded surface bulletins (<c>CODSUS</c>): the coded surface
+    /// analysis at standard and high resolution and the coded forecast
+    /// bulletins, fronts, troughs and pressure centres as text, read by
+    /// <see cref="SurfaceAnalysisDatasetProcessor"/> (design note
+    /// vector-weather.md §8.3).
+    /// </summary>
+    /// <remarks>
+    /// A file is claimed, whatever its extension (WPC's are <c>.txt</c> or have
+    /// none), when its leading bytes are ASCII text naming the product (the
+    /// title <c>CODED SURFACE FRONTAL POSITIONS</c>, or a <c>COD…</c> product
+    /// identifier under a WMO heading), or opening with a valid line followed by
+    /// a feature code (<see cref="CodedSurfaceBulletinReader.LooksLikeCodedSurfaceBulletin"/>).
+    /// No S-100 encoding is ASCII text of that shape, so it claims none of them.
+    /// </remarks>
+    public static ProductRegistration Codsus { get; } = new()
+    {
+        Spec = SurfaceAnalysisDatasetProcessor.SpecName,
+        CreateFromPath = static (_, path) => new SurfaceAnalysisDatasetProcessor(path),
+        CreateFromSource = static (_, r) => new SurfaceAnalysisDatasetProcessor(r.Source, r.RelativePath),
+        IsS100 = false,
+        Portrayal = CodsusPortrayal,
+        PickReportNotice = SurfaceAnalysisDatasetProcessor.NotForNavigationNotice,
+        MatchBytes = static header => CodedSurfaceBulletinReader.LooksLikeCodedSurfaceBulletin(header.LeadingBytes.Span),
+        ReadMetadata = SurfaceAnalysisDatasetProcessor.ReadMetadata,
+    };
+
+    /// <summary>
     /// The portrayal of tropical cyclone advisories: drawn in code, since NHC's
     /// GIS files define no symbology (design note vector-weather.md §3).
     /// </summary>
@@ -260,8 +295,9 @@ public static class WeatherProducts
         DefaultPlanes = TropicalCyclonePlanes,
     };
 
+
     /// <summary>Every built-in weather registration.</summary>
-    public static IReadOnlyList<ProductRegistration> All { get; } = Array.AsReadOnly(new[] { Grib2, NetCdf, Cap, TropicalCyclone });
+    public static IReadOnlyList<ProductRegistration> All { get; } = Array.AsReadOnly(new[] { Grib2, NetCdf, Cap, Codsus, TropicalCyclone });
 
     /// <summary>Registers every built-in weather product with <paramref name="registry"/>.</summary>
     /// <param name="registry">The registry.</param>

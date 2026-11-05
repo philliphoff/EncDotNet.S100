@@ -14,9 +14,10 @@ namespace EncDotNet.S100.Cli.Commands;
 /// time-series datasets) the available time steps with their indices; for
 /// weather files (GRIB2, NetCDF), the parameters and why any isn't used; for
 /// CAP warnings, each alert area, when it's in force and the zone codes the
-/// marine zone layer doesn't have; for tropical cyclone advisories, the
-/// storm, the advisory, the forecast span and intensity, and every forecast
-/// point.
+/// marine zone layer doesn't have; for WPC coded surface bulletins, the
+/// bulletin, its coverage and each analysis's valid time and feature counts;
+/// for tropical cyclone advisories, the storm, the advisory, the forecast span
+/// and intensity, and every forecast point.
 /// </summary>
 internal sealed class InfoCommand : Command<DatasetCommandSettings>
 {
@@ -115,6 +116,8 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
                     $"{capAlerts.Warnings.Document.Alerts.Count} ({capAlerts.Warnings.Areas.Count} areas, {capAlerts.Warnings.Areas.Count(a => a.IsDrawable)} drawn)");
             }
 
+            if (processor is SurfaceAnalysisDatasetProcessor surface)
+                AddSurfaceAnalysisRows(table, surface.Bulletin);
             if (processor is TropicalCycloneDatasetProcessor cyclone)
                 AddTropicalCycloneRows(table, cyclone.Advisory);
 
@@ -189,6 +192,11 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
             // codes the marine zone layer doesn't have (issue #1069).
             if (processor is CapDatasetProcessor cap)
                 WriteCapWarnings(cap);
+
+            // Coded surface bulletins: each analysis's valid time and what it
+            // holds (issue #1295).
+            if (processor is SurfaceAnalysisDatasetProcessor surfaceAnalysis)
+                WriteSurfaceAnalyses(surfaceAnalysis.Bulletin);
 
             // Tropical cyclones: every forecast point (issue #1294).
             if (processor is TropicalCycloneDatasetProcessor tc)
@@ -351,6 +359,67 @@ internal sealed class InfoCommand : Command<DatasetCommandSettings>
 
         AnsiConsole.Write(table);
         AnsiConsole.MarkupLine("[grey]Radii are NE/SE/SW/NW in nautical miles.[/]");
+    }
+
+    private static void AddSurfaceAnalysisRows(Table table, Datasets.Weather.CodedSurfaceBulletin bulletin)
+    {
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
+        table.AddRow(
+            "Bulletin",
+            Markup.Escape(string.Join(
+                " · ",
+                new[]
+                {
+                    bulletin.Kind == Datasets.Weather.CodedSurfaceBulletinKind.Forecast ? "forecast" : "analysis",
+                    bulletin.Resolution == Datasets.Weather.CodedSurfaceBulletinResolution.HighResolution
+                        ? "high resolution (0.1°)"
+                        : "standard (1°)",
+                    bulletin.Header.ProductId,
+                    bulletin.Header.WmoHeading,
+                }.Where(p => !string.IsNullOrEmpty(p)))));
+        table.AddRow("Issued by", Markup.Escape(bulletin.IssuingCentre));
+        if (bulletin.Header.IssuedAt is { } issued)
+            table.AddRow("Issued (UTC)", issued.UtcDateTime.ToString("yyyy-MM-dd HH:mm", invariant));
+        var d = bulletin.Domain;
+        table.AddRow(
+            "Coverage",
+            Markup.Escape(string.Create(
+                invariant,
+                $"WPC's domain only: {d.WestLongitude:0.###},{d.SouthLatitude:0.###},{d.EastLongitude:0.###},{d.NorthLatitude:0.###} (minLon,minLat,maxLon,maxLat)")));
+        if (bulletin.Analyses.Count == 1)
+            table.AddRow("Valid (UTC)", bulletin.Analyses[0].ValidTime.UtcDateTime.ToString("yyyy-MM-dd HH:mm", invariant));
+        if (bulletin.SkippedCodes.Count > 0)
+            table.AddRow("Skipped codes", $"[yellow]{Markup.Escape(string.Join(", ", bulletin.SkippedCodes.Distinct()))}[/]");
+    }
+
+    private static void WriteSurfaceAnalyses(Datasets.Weather.CodedSurfaceBulletin bulletin)
+    {
+        var table = new Table().Border(TableBorder.Rounded).Title("Surface analyses");
+        table.AddColumn("Valid (UTC)");
+        table.AddColumn("Forecast");
+        table.AddColumn("Cold");
+        table.AddColumn("Warm");
+        table.AddColumn("Occluded");
+        table.AddColumn("Stationary");
+        table.AddColumn("Troughs");
+        table.AddColumn("Highs");
+        table.AddColumn("Lows");
+        foreach (var analysis in bulletin.Analyses)
+        {
+            string Count(Datasets.Weather.SurfaceFrontType type) => analysis.FrontsOf(type).Count().ToString(System.Globalization.CultureInfo.InvariantCulture);
+            table.AddRow(
+                analysis.ValidTime.UtcDateTime.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture),
+                analysis.ForecastHours is { } hours ? $"{hours} h" : "analysis",
+                Count(Datasets.Weather.SurfaceFrontType.Cold),
+                Count(Datasets.Weather.SurfaceFrontType.Warm),
+                Count(Datasets.Weather.SurfaceFrontType.Occluded),
+                Count(Datasets.Weather.SurfaceFrontType.Stationary),
+                Count(Datasets.Weather.SurfaceFrontType.Trough),
+                analysis.CentresOf(Datasets.Weather.PressureCentreKind.High).Count().ToString(System.Globalization.CultureInfo.InvariantCulture),
+                analysis.CentresOf(Datasets.Weather.PressureCentreKind.Low).Count().ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        AnsiConsole.Write(table);
     }
 
     private static void WriteCapWarnings(CapDatasetProcessor cap)

@@ -6,7 +6,7 @@ namespace EncDotNet.S100.Core;
 /// Helpers for normalising S-100 product specification short names into the
 /// canonical <c>"S-NNN"</c> form (e.g. <c>"S-101"</c>, <c>"S-102"</c>), and
 /// the closed set of non-S-100 format names a product may be registered under
-/// (<see cref="Grib2"/>, <see cref="NetCdf"/>, <see cref="Cap"/>,
+/// (<see cref="Grib2"/>, <see cref="NetCdf"/>, <see cref="Cap"/>, <see cref="Codsus"/>,
 /// <see cref="TropicalCyclone"/>).
 /// </summary>
 /// <remarks>
@@ -29,6 +29,12 @@ public static partial class SpecName
     public const string Cap = "CAP";
 
     /// <summary>
+    /// The WPC coded surface bulletins (fronts and pressure centres), canonical
+    /// name <c>"CODSUS"</c>.
+    /// </summary>
+    public const string Codsus = "CODSUS";
+
+    /// <summary>
     /// Tropical cyclone advisories (NHC GIS shapefiles), canonical name
     /// <c>"TC"</c>. Not a published format's name: the advisory model of
     /// <c>EncDotNet.S100.Datasets.TropicalCyclones</c>, whose edition is that
@@ -40,7 +46,7 @@ public static partial class SpecName
     /// The non-S-100 format names <see cref="Normalize"/> accepts, in their
     /// canonical casing. The set is closed: a new format is added here.
     /// </summary>
-    public static IReadOnlyList<string> NonS100Formats { get; } = [Grib2, NetCdf, Cap, TropicalCyclone];
+    public static IReadOnlyList<string> NonS100Formats { get; } = [Grib2, NetCdf, Cap, Codsus, TropicalCyclone];
 
     /// <summary>
     /// Whether <paramref name="name"/> (trimmed, any casing) is one of the
