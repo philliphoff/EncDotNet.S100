@@ -98,7 +98,13 @@ public sealed class LineStyle
 /// <summary>A symbol a line style places along the line.</summary>
 /// <param name="Reference">The symbol's catalogue name.</param>
 /// <param name="Position">Its distance from the start of each interval, in millimetres.</param>
-public sealed record LineStyleSymbol(string Reference, float Position);
+/// <param name="Rotation">
+/// Its rotation in degrees, clockwise, relative to the line's direction where
+/// it lands (S-100 Part 9 <c>LineSymbol rotation</c> in the default
+/// <c>LocalCRS</c>). 0 (the default) draws the symbol as drawn, its +x axis
+/// along the line; 180 turns it to the other side of the line.
+/// </param>
+public sealed record LineStyleSymbol(string Reference, float Position, float Rotation = 0);
 
 /// <summary>
 /// An S-100 Part 9 area fill: a solid colour and/or a symbol pattern tiled

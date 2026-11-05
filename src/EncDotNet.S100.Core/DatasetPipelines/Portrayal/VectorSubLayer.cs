@@ -61,4 +61,12 @@ public sealed class VectorSubLayer
     /// (S-101 detail declutter). Applied only to the line-work sub-layer.
     /// </summary>
     public bool ApplyOutOfBandCap { get; init; }
+
+    /// <summary>
+    /// The sub-layer's legend, for a viewer to show under its layer stack
+    /// entry: symbol, line-sample and swatch rows (see <see cref="LegendEntry"/>),
+    /// resolved against the palette the sub-layer was drawn in;
+    /// <see langword="null"/> (the default) for no legend. Renderers ignore it.
+    /// </summary>
+    public IReadOnlyList<LegendEntry>? Legend { get; init; }
 }

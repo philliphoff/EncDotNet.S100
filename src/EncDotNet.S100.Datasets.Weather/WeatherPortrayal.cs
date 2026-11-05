@@ -159,7 +159,7 @@ public static class WeatherPortrayal
                 Viewport = viewport,
                 Opacity = style.Opacity,
                 ClipToWater = style.ClipToWater,
-                Legend = layer.ColorScheme is { } scheme ? CoverageLegendEntry.FromScheme(scheme) : null,
+                Legend = layer.ColorScheme is { } scheme ? LegendEntry.FromScheme(scheme) : null,
             };
         }
 

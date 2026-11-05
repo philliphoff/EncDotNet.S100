@@ -409,7 +409,8 @@ not on the map. The headless renderer doesn't draw a legend.
   height fill should be clipped (`WeatherCoverageStyle.ClipToWater`). The
   renderers' existing output-pixel clip does the rest.
 - **Legends.** `GridCoverageSubLayer.Legend` (a list of
-  `CoverageLegendEntry(Color, Label)`, from `CoverageLegendEntry.FromScheme`)
+  `SwatchLegendEntry(Color, Label)` rows, from `LegendEntry.FromScheme`;
+  `CoverageLegendEntry` before #1293)
   is set by `WeatherPortrayal` for the weather fills only, in the palette the
   fill was drawn in. S-102, whose bands also have labels, gets no legend: it's
   opt-in per sub-layer. The Layer stack entry shows it as a swatch and label

@@ -134,7 +134,15 @@ public static class LineStyleReader
             if (!string.IsNullOrWhiteSpace(reference) && position is not null
                 && float.TryParse(position.Value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var at))
             {
-                symbols.Add(new LineStyleSymbol(reference, at));
+                // S-100 Part 9 LineSymbol: rotation (default 0) relative to the line.
+                float rotation = 0;
+                if (symbol.Attribute("rotation")?.Value is { } rotationText
+                    && float.TryParse(rotationText.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var r))
+                {
+                    rotation = r;
+                }
+
+                symbols.Add(new LineStyleSymbol(reference, at, rotation));
             }
         }
 

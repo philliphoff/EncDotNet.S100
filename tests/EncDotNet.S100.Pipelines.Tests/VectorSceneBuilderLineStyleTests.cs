@@ -93,6 +93,25 @@ public sealed class VectorSceneBuilderLineStyleTests
     }
 
     [Fact]
+    public void NamedStyle_CarriesEachSymbolsRotation()
+    {
+        var pips = new LineStyle
+        {
+            Name = "PIPS",
+            Width = 0.7f,
+            Color = "CHBLK",
+            IntervalLength = 18f,
+            Symbols = [new LineStyleSymbol("PIP", 4f), new LineStyleSymbol("PIP", 13f, 180f)],
+        };
+
+        var op = Assert.IsType<LinePaintOp>(Assert.Single(Build(
+            new LineInstruction { FeatureReference = "f", LineStyleReference = "PIPS" }, pips)));
+
+        Assert.Equal([0.0, 180.0], op.Symbols.Select(s => s.RotationDegrees));
+        Assert.Equal(18 / 0.32, op.SymbolIntervalPx, 3);
+    }
+
+    [Fact]
     public void CompositeStyle_StacksItsParts()
     {
         var composite = new LineStyle

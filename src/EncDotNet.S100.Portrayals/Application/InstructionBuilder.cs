@@ -4,10 +4,10 @@ namespace EncDotNet.S100.Portrayals.Application;
 
 /// <summary>
 /// Builds the S-100 Part 9 drawing instructions of a portrayal defined in
-/// code: point symbols, text, lines and areas. The builder carries what a
-/// catalogue rule would set before its drawing commands (viewing group,
-/// drawing priority, display plane and scale limits) and stamps them on every
-/// instruction it builds.
+/// code: point symbols, text, simple and complex lines, and areas. The
+/// builder carries what a catalogue rule would set before its drawing commands
+/// (viewing group, drawing priority, display plane and scale limits) and
+/// stamps them on every instruction it builds.
 /// </summary>
 /// <remarks>
 /// The builder is immutable. Derive a variant with a <c>with</c> expression,
@@ -144,6 +144,36 @@ public sealed record InstructionBuilder
             // Lua portrayal emits them (Dash:0,dash;LineStyle:_simple_,interval).
             Dashes = dashed ? [(0.0, dashLength)] : null,
             DashIntervalLength = dashed ? dashLength + gapLength : 0,
+            Plane = Plane,
+            ViewingGroup = ViewingGroup,
+            DrawingPriority = DrawingPriority,
+            ScaleMinimum = ScaleMinimum,
+            ScaleMaximum = ScaleMaximum,
+        };
+    }
+
+    /// <summary>
+    /// Builds a complex-line instruction: the curve drawn with a named line
+    /// style, such as a <see cref="ComplexLineStyle"/> in the portrayal's
+    /// <see cref="LineStyleSet"/>, whose pen, dashes and symbols repeated
+    /// along the line come from the style.
+    /// </summary>
+    /// <param name="featureReference">The feature whose curve is drawn.</param>
+    /// <param name="lineStyleReference">
+    /// The line style's name, resolved by the sub-layer's line style provider
+    /// (see <see cref="LineStyleSet.Provider"/>).
+    /// </param>
+    public LineInstruction ComplexLine(string featureReference, string lineStyleReference)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(featureReference);
+        ArgumentException.ThrowIfNullOrEmpty(lineStyleReference);
+        if (string.Equals(lineStyleReference, LineInstruction.SimpleLineStyleReference, StringComparison.Ordinal))
+            throw new ArgumentException("Use Line for a simple line style.", nameof(lineStyleReference));
+
+        return new LineInstruction
+        {
+            FeatureReference = featureReference,
+            LineStyleReference = lineStyleReference,
             Plane = Plane,
             ViewingGroup = ViewingGroup,
             DrawingPriority = DrawingPriority,

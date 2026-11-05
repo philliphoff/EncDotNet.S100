@@ -525,7 +525,7 @@ public class WeatherCoverageStyleTests
 
         Assert.NotNull(legend);
         Assert.Equal(WaveHeightStyle.Bands.Select(b => b.Label), legend.Select(e => e.Label));
-        Assert.Equal(WeatherPalette.Palette.Resolve(WeatherPalette.WaveHeightToken(1), PaletteType.Night).ToHex(), legend[0].Color);
+        Assert.Equal(WeatherPalette.Palette.Resolve(WeatherPalette.WaveHeightToken(1), PaletteType.Night).ToHex(), Assert.IsType<SwatchLegendEntry>(legend[0]).Color);
     }
 
     [Theory]
