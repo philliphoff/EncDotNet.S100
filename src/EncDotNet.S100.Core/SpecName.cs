@@ -28,10 +28,16 @@ public static partial class SpecName
     public const string Cap = "CAP";
 
     /// <summary>
+    /// The WPC coded surface bulletins (fronts and pressure centres), canonical
+    /// name <c>"CODSUS"</c>.
+    /// </summary>
+    public const string Codsus = "CODSUS";
+
+    /// <summary>
     /// The non-S-100 format names <see cref="Normalize"/> accepts, in their
     /// canonical casing. The set is closed: a new format is added here.
     /// </summary>
-    public static IReadOnlyList<string> NonS100Formats { get; } = [Grib2, NetCdf, Cap];
+    public static IReadOnlyList<string> NonS100Formats { get; } = [Grib2, NetCdf, Cap, Codsus];
 
     /// <summary>
     /// Whether <paramref name="name"/> (trimmed, any casing) is one of the
