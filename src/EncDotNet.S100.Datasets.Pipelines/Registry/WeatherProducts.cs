@@ -241,6 +241,7 @@ public static class WeatherProducts
         PickReportNotice = SurfaceAnalysisDatasetProcessor.NotForNavigationNotice,
         MatchBytes = static header => CodedSurfaceBulletinReader.LooksLikeCodedSurfaceBulletin(header.LeadingBytes.Span),
         ReadMetadata = SurfaceAnalysisDatasetProcessor.ReadMetadata,
+        OpenData = static (stream, _) => OpenCodsus(stream),
         DefaultPlanes = CodsusPlanes,
     };
 
@@ -287,6 +288,14 @@ public static class WeatherProducts
             (stream as FileStream)?.Name is { } path ? Path.GetFileName(path) : null);
         var metadata = WeatherGridProcessorBase.BuildMetadata(dataset.GridSet, GribDatasetProcessor.Grib2Spec, dataset.Times);
         return new WeatherGridDatasetData(dataset.GridSet, metadata, dataset.ReferenceTime);
+    }
+
+    // The catalog payload: the file is read whole, so the caller's stream
+    // isn't kept. A bulletin without an issuance line can't be dated here.
+    private static LoadedDatasetData OpenCodsus(Stream stream)
+    {
+        var bulletin = CodedSurfaceBulletinReader.Read(stream, referenceTime: null);
+        return new SurfaceAnalysisDatasetData(bulletin, SurfaceAnalysisDatasetProcessor.BuildMetadata(bulletin));
     }
 
     // The catalog payload: the file is read whole, so the caller's stream

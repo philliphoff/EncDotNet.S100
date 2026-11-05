@@ -2,7 +2,9 @@ using EncDotNet.S100.Core;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Datasets.Pipelines.Spec;
 using EncDotNet.S100.Datasets.Weather;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Interoperability;
@@ -230,6 +232,35 @@ public sealed class SurfaceAnalysisProcessorTests : IDisposable
         Assert.Contains(processor.HitTestFeatures(onLine.Latitude, onLine.Longitude, 2_000), h => h.FeatureRef == "COLD 1");
         Assert.Contains(processor.HitTestFeatures(45.0, -50.0, 2_000), h => h.FeatureRef == "LOW 1");
         Assert.Empty(processor.HitTestFeatures(20.0, -20.0, 2_000));
+    }
+
+    [Fact]
+    public void The_catalog_payload_lists_the_drawn_fronts_and_centres_for_identify()
+    {
+        var processor = new SurfaceAnalysisDatasetProcessor(Fixture(Forecast));
+
+        var dataset = LoadedDatasetProjector.Project(new DatasetId(processor.FileName), processor)!;
+
+        Assert.Equal("CODSUS", dataset.Spec.Name);
+        Assert.IsType<SurfaceAnalysisDatasetData>(dataset.Data);
+        var features = FeatureAccessor.GetFeatures(dataset)!.ToArray();
+        Assert.Equal(processor.DrawnAnalysis!.Fronts.Count + processor.DrawnAnalysis.PressureCentres.Count, features.Length);
+        Assert.DoesNotContain(features, f => f.Id.StartsWith('+'));
+        var cold = features.First(f => f.Id == "COLD 1");
+        Assert.Equal(SurfaceAnalysisDatasetProcessor.FrontFeatureType, cold.FeatureType);
+        Assert.Equal("Weather analysis, not for navigation.", cold.Attributes["notice"]);
+        Assert.Single(cold.Curves);
+    }
+
+    [Fact]
+    public void The_registration_opens_the_catalog_payload_from_a_stream()
+    {
+        using var stream = File.OpenRead(Fixture(HighResolution));
+
+        var data = Assert.IsType<SurfaceAnalysisDatasetData>(WeatherProducts.Codsus.OpenData!(stream, null));
+
+        Assert.Equal(CodedSurfaceBulletin.WpcDomain, data.Metadata.Extent);
+        Assert.Single(data.Bulletin.Analyses);
     }
 
     [Fact]

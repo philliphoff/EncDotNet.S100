@@ -1,6 +1,7 @@
 using System.Globalization;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.Weather;
@@ -58,7 +59,8 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 public sealed class SurfaceAnalysisDatasetProcessor :
     IDatasetProcessor,
     IVectorPortrayalSource,
-    IHeadlessImageRenderer
+    IHeadlessImageRenderer,
+    ILoadedDatasetProjection
 {
     /// <summary>The spec name the coded surface bulletins are registered under.</summary>
     public const string SpecName = Core.SpecName.Codsus;
@@ -81,8 +83,8 @@ public sealed class SurfaceAnalysisDatasetProcessor :
     /// <summary>The spec every coded surface bulletin reports: <c>CODSUS</c>, with no edition (the format has none).</summary>
     public static SpecRef CodsusSpec { get; } = new(SpecName, default);
 
-    private readonly SurfaceFeature[] _features;
-    private readonly SurfaceFeature[] _drawn;
+    private readonly SurfaceAnalysisFeature[] _features;
+    private readonly SurfaceAnalysisFeature[] _drawn;
     private readonly IReadOnlyList<DrawingInstruction> _instructions;
     private readonly DatasetMetadata _metadata;
     private readonly string? _contentHash;
@@ -126,7 +128,7 @@ public sealed class SurfaceAnalysisDatasetProcessor :
         FileName = fileName;
         _features = BuildFeatures(bulletin);
         _metadata = BuildMetadata(bulletin);
-        DrawnAnalysis = bulletin.Analyses.Count > 0 ? bulletin.Analyses[0] : null;
+        DrawnAnalysis = DrawnAnalysisOf(bulletin);
         _drawn = [.. _features.Where(f => ReferenceEquals(f.Analysis, DrawnAnalysis))];
         _instructions = BuildInstructions(_drawn);
     }
@@ -136,6 +138,9 @@ public sealed class SurfaceAnalysisDatasetProcessor :
 
     /// <summary>The dataset's file name.</summary>
     public string FileName { get; }
+
+    /// <inheritdoc />
+    public LoadedDatasetData CreateLoadedData() => new SurfaceAnalysisDatasetData(Bulletin, _metadata);
 
     /// <summary>The bulletin, with its analyses.</summary>
     public CodedSurfaceBulletin Bulletin { get; }
@@ -184,6 +189,7 @@ public sealed class SurfaceAnalysisDatasetProcessor :
             Instructions = _instructions,
             Plane = S98DisplayPlane.OtherChartOverlays,
             WithinPlanePriority = SurfaceAnalysisStyle.WithinPlanePriority,
+            SourceFeatureType = SurfaceAnalysisStyle.LayerKey,
             Legend = SurfaceAnalysisStyle.BuildLegend(palette),
         };
 
@@ -197,7 +203,7 @@ public sealed class SurfaceAnalysisDatasetProcessor :
         {
             SubLayers = [subLayer],
             Palette = WeatherPalette.Palette.GetColorPalette(palette),
-            GeometryProvider = new FeatureGeometryProvider<SurfaceFeature>(_drawn),
+            GeometryProvider = new FeatureGeometryProvider<SurfaceAnalysisFeature>(_drawn),
             Product = SpecName,
             Spec = Spec,
             SourceDatasetId = FileName,
@@ -251,7 +257,7 @@ public sealed class SurfaceAnalysisDatasetProcessor :
         var palette = context?.Palette ?? PaletteType.Day;
         return Task.FromResult(HeadlessVectorRenderer.Render(
             _instructions,
-            new FeatureGeometryProvider<SurfaceFeature>(_drawn),
+            new FeatureGeometryProvider<SurfaceAnalysisFeature>(_drawn),
             WeatherPalette.Palette.GetColorPalette(palette),
             symbolProvider: WeatherCoverageStyle.Symbols.Provider,
             lineStyleProvider: SurfaceAnalysisStyle.LineStyles.Provider,
@@ -329,6 +335,24 @@ public sealed class SurfaceAnalysisDatasetProcessor :
         }
     }
 
+    /// <summary>The analysis of <paramref name="bulletin"/> that is drawn: its first, or <see langword="null"/> for none.</summary>
+    /// <param name="bulletin">The bulletin.</param>
+    public static SurfaceAnalysis? DrawnAnalysisOf(CodedSurfaceBulletin bulletin)
+    {
+        ArgumentNullException.ThrowIfNull(bulletin);
+        return bulletin.Analyses.Count > 0 ? bulletin.Analyses[0] : null;
+    }
+
+    /// <summary>
+    /// The features of the analysis drawn, as the processor draws and hits
+    /// them: for the catalog's identify and pick (<see cref="Spec.FeatureAccessor"/>).
+    /// </summary>
+    internal static IEnumerable<SurfaceAnalysisFeature> DrawnFeatures(CodedSurfaceBulletin bulletin)
+    {
+        var drawn = DrawnAnalysisOf(bulletin);
+        return BuildFeatures(bulletin).Where(f => ReferenceEquals(f.Analysis, drawn));
+    }
+
     /// <summary>A front kind's name, for example "Cold front" or "Trough".</summary>
     /// <param name="type">The kind of front.</param>
     public static string NameOf(SurfaceFrontType type) => type switch
@@ -381,9 +405,9 @@ public sealed class SurfaceAnalysisDatasetProcessor :
         }
     }
 
-    private static SurfaceFeature[] BuildFeatures(CodedSurfaceBulletin bulletin)
+    private static SurfaceAnalysisFeature[] BuildFeatures(CodedSurfaceBulletin bulletin)
     {
-        var features = new List<SurfaceFeature>();
+        var features = new List<SurfaceAnalysisFeature>();
         for (int a = 0; a < bulletin.Analyses.Count; a++)
         {
             var analysis = bulletin.Analyses[a];
@@ -402,16 +426,16 @@ public sealed class SurfaceAnalysisDatasetProcessor :
             }
 
             foreach (var front in analysis.Fronts)
-                features.Add(SurfaceFeature.ForFront(NextId(front.Code), analysis, front));
+                features.Add(SurfaceAnalysisFeature.ForFront(NextId(front.Code), analysis, front));
 
             foreach (var centre in analysis.PressureCentres)
-                features.Add(SurfaceFeature.ForCentre(NextId(centre.Kind == PressureCentreKind.High ? "HIGH" : "LOW"), analysis, centre));
+                features.Add(SurfaceAnalysisFeature.ForCentre(NextId(centre.Kind == PressureCentreKind.High ? "HIGH" : "LOW"), analysis, centre));
         }
 
         return [.. features];
     }
 
-    private static IReadOnlyList<DrawingInstruction> BuildInstructions(IEnumerable<SurfaceFeature> features)
+    private static IReadOnlyList<DrawingInstruction> BuildInstructions(IEnumerable<SurfaceAnalysisFeature> features)
     {
         var instructions = new List<DrawingInstruction>();
         foreach (var feature in features)
@@ -430,7 +454,7 @@ public sealed class SurfaceAnalysisDatasetProcessor :
         return instructions;
     }
 
-    private static List<PickAttribute> Describe(SurfaceFeature feature)
+    internal static List<PickAttribute> Describe(SurfaceAnalysisFeature feature)
     {
         var analysis = feature.Analysis;
         var attributes = new List<PickAttribute> { PickAttribute.NavigationNotice(NotForNavigationNotice) };
@@ -510,61 +534,61 @@ public sealed class SurfaceAnalysisDatasetProcessor :
         return new GeographicBounds(
             Math.Max(-180, west - pad), Math.Max(-90, south - pad), Math.Min(180, east + pad), Math.Min(90, north + pad));
     }
+}
 
-    /// <summary>A front or centre as a feature: the smoothed line or the centre point, for drawing, picking and hit tests.</summary>
-    private sealed class SurfaceFeature : IS100Feature
+/// <summary>A front or centre as a feature: the smoothed line or the centre point, for drawing, picking and hit tests.</summary>
+internal sealed class SurfaceAnalysisFeature : IS100Feature
+{
+    private SurfaceAnalysisFeature(string id, string featureType, string name, SurfaceAnalysis analysis, SurfaceFront? front, PressureCentre? centre)
     {
-        private SurfaceFeature(string id, string featureType, string name, SurfaceAnalysis analysis, SurfaceFront? front, PressureCentre? centre)
-        {
-            Id = id;
-            FeatureType = featureType;
-            Name = name;
-            Analysis = analysis;
-            Front = front;
-            Centre = centre;
-            Points = centre is null ? [] : [centre.Position];
-            Curves = front is null
-                ? []
-                : [SurfaceAnalysisStyle.Smooth(front.Points, SurfaceAnalysisStyle.SmoothingPasses)];
-            Attributes = Describe(this).ToDictionary(a => a.Code, a => a.RawValue, StringComparer.Ordinal);
-        }
-
-        public static SurfaceFeature ForFront(string id, SurfaceAnalysis analysis, SurfaceFront front) =>
-            new(id, FrontFeatureType, NameOf(front.Type), analysis, front, null);
-
-        public static SurfaceFeature ForCentre(string id, SurfaceAnalysis analysis, PressureCentre centre) =>
-            new(
-                id,
-                PressureCentreFeatureType,
-                string.Create(CultureInfo.InvariantCulture, $"{(centre.Kind == PressureCentreKind.High ? "High" : "Low")} {centre.PressureHectopascals} hPa"),
-                analysis,
-                null,
-                centre);
-
-        public string Id { get; }
-
-        public string FeatureType { get; }
-
-        public string Name { get; }
-
-        public SurfaceAnalysis Analysis { get; }
-
-        public SurfaceFront? Front { get; }
-
-        public PressureCentre? Centre { get; }
-
-        public S100GeometryType GeometryType => Centre is null ? S100GeometryType.Curve : S100GeometryType.Point;
-
-        public IReadOnlyList<GeoPosition> Points { get; }
-
-        public IReadOnlyList<IReadOnlyList<GeoPosition>> Curves { get; }
-
-        public IReadOnlyList<GeoPosition> ExteriorRing => [];
-
-        public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings => [];
-
-        public IReadOnlyDictionary<string, string> Attributes { get; }
-
-        public IReadOnlyList<IS100ComplexAttribute> ComplexAttributes => [];
+        Id = id;
+        FeatureType = featureType;
+        Name = name;
+        Analysis = analysis;
+        Front = front;
+        Centre = centre;
+        Points = centre is null ? [] : [centre.Position];
+        Curves = front is null
+            ? []
+            : [SurfaceAnalysisStyle.Smooth(front.Points, SurfaceAnalysisStyle.SmoothingPasses)];
+        Attributes = SurfaceAnalysisDatasetProcessor.Describe(this).ToDictionary(a => a.Code, a => a.RawValue, StringComparer.Ordinal);
     }
+
+    public static SurfaceAnalysisFeature ForFront(string id, SurfaceAnalysis analysis, SurfaceFront front) =>
+        new(id, SurfaceAnalysisDatasetProcessor.FrontFeatureType, SurfaceAnalysisDatasetProcessor.NameOf(front.Type), analysis, front, null);
+
+    public static SurfaceAnalysisFeature ForCentre(string id, SurfaceAnalysis analysis, PressureCentre centre) =>
+        new(
+            id,
+            SurfaceAnalysisDatasetProcessor.PressureCentreFeatureType,
+            string.Create(CultureInfo.InvariantCulture, $"{(centre.Kind == PressureCentreKind.High ? "High" : "Low")} {centre.PressureHectopascals} hPa"),
+            analysis,
+            null,
+            centre);
+
+    public string Id { get; }
+
+    public string FeatureType { get; }
+
+    public string Name { get; }
+
+    public SurfaceAnalysis Analysis { get; }
+
+    public SurfaceFront? Front { get; }
+
+    public PressureCentre? Centre { get; }
+
+    public S100GeometryType GeometryType => Centre is null ? S100GeometryType.Curve : S100GeometryType.Point;
+
+    public IReadOnlyList<GeoPosition> Points { get; }
+
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> Curves { get; }
+
+    public IReadOnlyList<GeoPosition> ExteriorRing => [];
+
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings => [];
+
+    public IReadOnlyDictionary<string, string> Attributes { get; }
+
+    public IReadOnlyList<IS100ComplexAttribute> ComplexAttributes => [];
 }
