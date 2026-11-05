@@ -95,12 +95,19 @@ internal sealed class SetViewportTool
     internal const double ResolutionAtZoomZero = 156543.03392804097;
 
     private readonly ICapabilityAccessor<IMapViewportController> _accessor;
+    private readonly Action? _onApplied;
 
     /// <summary>Creates a new <see cref="SetViewportTool"/>.</summary>
-    public SetViewportTool(ICapabilityAccessor<IMapViewportController> accessor)
+    /// <param name="accessor">Reaches the map's viewport.</param>
+    /// <param name="onApplied">
+    /// Called after a viewport is applied; the viewer marks the settle
+    /// trigger with it (<c>await_settled</c>).
+    /// </param>
+    public SetViewportTool(ICapabilityAccessor<IMapViewportController> accessor, Action? onApplied = null)
     {
         ArgumentNullException.ThrowIfNull(accessor);
         _accessor = accessor;
+        _onApplied = onApplied;
     }
 
     /// <summary>Executes the tool.</summary>
@@ -154,9 +161,15 @@ internal sealed class SetViewportTool
             ? ((r % FullCircleDegrees) + FullCircleDegrees) % FullCircleDegrees
             : 0.0;
 
-        return hasBboxAny
+        var result = hasBboxAny
             ? ApplyBbox(request, host, rotation)
             : ApplyCenter(request, host, rotation);
+        if (_onApplied is not null && result.IsCompletedSuccessfully && result.Result.TryGetValue(out _))
+        {
+            _onApplied();
+        }
+
+        return result;
     }
 
     private static Task<ToolResult<SetViewportResult>> ApplyBbox(

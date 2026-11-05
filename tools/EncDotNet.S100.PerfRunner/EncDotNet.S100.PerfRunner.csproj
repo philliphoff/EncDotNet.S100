@@ -12,6 +12,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The settle-run manifest is written here and read by PerfReport; one source file keeps them in step. -->
+    <Compile Include="..\EncDotNet.S100.PerfReport\SettleReport.cs" Link="SettleReport.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.Diagnostics.NETCore.Client" />
     <PackageReference Include="ModelContextProtocol" />
     <PackageReference Include="OpenTelemetry" />

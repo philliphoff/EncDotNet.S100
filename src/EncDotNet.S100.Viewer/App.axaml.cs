@@ -910,6 +910,7 @@ public partial class App : Application
             var viewMoves = new EncDotNet.S100.Viewer.Services.LazyLoading.ViewportActivity(
                 notifier, sp.GetRequiredService<TimeProvider>());
             var options = EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalWarmOptions.Default;
+            var prewarmOverride = sp.GetRequiredService<McpTools.PortrayalPrewarmOverride>();
             return new EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalCacheWarmer(
                 candidates: () => datasets.Entries.Where(e => e.IsDeferred && e.IsFromExchangeSet).ToList(),
                 portrayAsync: portrayer.PortrayAsync,
@@ -919,7 +920,8 @@ public partial class App : Application
                     || viewMoves.MovedWithin(options.QuietPeriod)
                     || datasets.Entries.Any(e => e.IsLoading),
                 view: () => notifier.Current,
-                isEnabled: () => settings.PortrayalPrewarmEnabled,
+                // The perf harness can switch it off for a session (portrayal_prewarm).
+                isEnabled: () => prewarmOverride.Enabled ?? settings.PortrayalPrewarmEnabled,
                 // Pre-warming stops short of the cap, so it never makes the cache
                 // evict entries the map is using.
                 hasCacheRoom: () => cache.TotalBytes < cache.MaxBytes * PortrayalPrewarmCacheShare
@@ -1330,7 +1332,27 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MeasureSession>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Tools.RangeBearingState>()));
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Tools.RangeBearingState>())
+        {
+            // Settle harness and render metrics (map rendering slice 1).
+            PerfHarness = new McpTools.PerfHarnessServices(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.ProcessMetricsSampler>(),
+                () => sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalCacheWarmer>().Status,
+                sp.GetRequiredService<McpTools.PortrayalPrewarmOverride>(),
+                sp.GetRequiredService<ViewerDataPaths>().RenderCacheDirectory),
+        });
+        // The settled signal and process metrics behind the perf harness's MCP
+        // tools (map rendering slice 1). Both are inert until a tool uses them.
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor
+        {
+            LoadProbe = () => sp.GetRequiredService<
+                EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetLazyLoadCoordinator>().GetVisibleWork(),
+        });
+        services.AddSingleton(_ => new EncDotNet.S100.Viewer.Diagnostics.ProcessMetricsSampler(
+            new EncDotNet.S100.Viewer.Diagnostics.RuntimeProcessMetricsSource(
+                () => EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.GetTileCacheMemory().TotalBytes)));
+        services.AddSingleton<McpTools.PortrayalPrewarmOverride>();
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
             () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources));

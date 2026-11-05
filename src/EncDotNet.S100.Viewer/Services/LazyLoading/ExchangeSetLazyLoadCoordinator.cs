@@ -158,6 +158,13 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     private bool _speculativeRetryScheduled;
     private bool _disposed;
 
+    // Settle measurement (map rendering slice 1): how many viewport changes
+    // arrived, how many of them an evaluation has caught up with, and when a
+    // load last finished. Read by GetVisibleWork; written under _lock.
+    private long _viewportChanges;
+    private long _evaluatedChanges;
+    private long _lastLoadFinishedTimestamp;
+
     /// <summary>
     /// Constructs a coordinator bound to <paramref name="notifier"/>.
     /// </summary>
@@ -297,9 +304,15 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     {
         if (_disposed) return;
 
+        long change;
+        lock (_lock)
+        {
+            change = ++_viewportChanges;
+        }
+
         if (_options.ViewportDebounce <= TimeSpan.Zero)
         {
-            Evaluate(snapshot);
+            Evaluate(snapshot, change);
             return;
         }
 
@@ -339,11 +352,11 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             if (t.IsCanceled || _disposed) return;
 
             if (_marshal is not null)
-                _marshal(() => { if (!_disposed) Evaluate(snapshot); });
+                _marshal(() => { if (!_disposed) Evaluate(snapshot, change); });
             else if (uiContext is not null)
-                uiContext.Post(_ => { if (!_disposed) Evaluate(snapshot); }, null);
+                uiContext.Post(_ => { if (!_disposed) Evaluate(snapshot, change); }, null);
             else
-                Evaluate(snapshot);
+                Evaluate(snapshot, change);
         }, TaskScheduler.Default);
     }
 
@@ -355,7 +368,13 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
     /// budget, and starts as many queued loads as the slots allow. Exposed to
     /// tests via the zero-debounce path.
     /// </summary>
-    internal void Evaluate(MapViewportSnapshot snapshot)
+    internal void Evaluate(MapViewportSnapshot snapshot) => Evaluate(snapshot, change: null);
+
+    /// <summary>
+    /// <see cref="Evaluate(MapViewportSnapshot)"/> for the viewport change
+    /// numbered <paramref name="change"/>, which it marks as caught up with.
+    /// </summary>
+    private void Evaluate(MapViewportSnapshot snapshot, long? change)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
@@ -367,6 +386,9 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         lock (_lock)
         {
             if (_disposed) return;
+
+            if (change is { } caughtUp && caughtUp > _evaluatedChanges)
+                _evaluatedChanges = caughtUp;
 
             var window = LoadWindow.From(snapshot, _lastSnapshot, _options.AheadMarginFraction);
             _lastSnapshot = snapshot;
@@ -660,6 +682,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             if (!aborted)
             {
                 _running.Remove(entry);
+                _lastLoadFinishedTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
 
                 // A cancelled load that did not finish leaves the cell deferred,
                 // so it loads again when it comes back into view. A failed one
@@ -706,6 +729,55 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
             StartQueuedLoads();
     }
 
+    /// <summary>
+    /// What the coordinator still has to load for the current view, for the
+    /// viewer's settled signal (map rendering slice 1). Only cells in view
+    /// count: queued or running as <see cref="LoadTier.Visible"/>, or a cell
+    /// that started loading as <see cref="LoadTier.Ahead"/> and that the view
+    /// has since moved onto. Covered, ahead and unbounded work doesn't count.
+    /// Cheap: it takes the coordinator's lock and walks the queue and running
+    /// loads. Safe to call from any thread.
+    /// </summary>
+    /// <returns>The work.</returns>
+    public LazyLoadVisibleWork GetVisibleWork()
+    {
+        lock (_lock)
+        {
+            var queuedVisible = 0;
+            var queuedOther = 0;
+            foreach (var queued in _queued.Values)
+            {
+                if (queued.Tier == LoadTier.Visible)
+                    queuedVisible++;
+                else
+                    queuedOther++;
+            }
+
+            var runningVisible = 0;
+            var runningOther = 0;
+            foreach (var (entry, running) in _running)
+            {
+                var nowInView = running.Tier == LoadTier.Ahead
+                    && _lastWindow is { } window
+                    && Classify(entry, _lastScaleDenominator, window) == LoadTier.Visible;
+                if (running.Tier == LoadTier.Visible || nowInView)
+                    runningVisible++;
+                else
+                    runningOther++;
+            }
+
+            return new LazyLoadVisibleWork(
+                EvaluationPending: _evaluatedChanges < _viewportChanges,
+                QueuedVisible: queuedVisible,
+                RunningVisible: runningVisible,
+                QueuedOther: queuedOther,
+                RunningOther: runningOther,
+                Loaded: _loadedEntries.Count,
+                Deferred: _deferred.Count,
+                LastLoadFinishedTimestamp: _lastLoadFinishedTimestamp);
+        }
+    }
+
     /// <inheritdoc />
     public void Dispose()
     {
@@ -735,4 +807,35 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
 
         public CancellationTokenSource Cancellation { get; } = cancellation;
     }
+}
+
+/// <summary>
+/// A snapshot of <see cref="ExchangeSetLazyLoadCoordinator.GetVisibleWork"/>.
+/// </summary>
+/// <param name="EvaluationPending">
+/// A viewport change hasn't been evaluated yet (it's within the debounce), so
+/// the queue doesn't reflect the current view.
+/// </param>
+/// <param name="QueuedVisible">Cells in view waiting to load.</param>
+/// <param name="RunningVisible">Cells in view loading now.</param>
+/// <param name="QueuedOther">Covered, ahead and unbounded cells waiting to load.</param>
+/// <param name="RunningOther">Covered, ahead and unbounded cells loading now.</param>
+/// <param name="Loaded">Cells held loaded.</param>
+/// <param name="Deferred">Registered cells not loaded.</param>
+/// <param name="LastLoadFinishedTimestamp">
+/// The <see cref="System.Diagnostics.Stopwatch"/> timestamp at which a load
+/// last finished (loaded, failed or cancelled), or 0.
+/// </param>
+internal readonly record struct LazyLoadVisibleWork(
+    bool EvaluationPending,
+    int QueuedVisible,
+    int RunningVisible,
+    int QueuedOther,
+    int RunningOther,
+    int Loaded,
+    int Deferred,
+    long LastLoadFinishedTimestamp)
+{
+    /// <summary>No viewport change is waiting and no cell in view is queued or loading.</summary>
+    public bool VisibleLoaded => !EvaluationPending && QueuedVisible == 0 && RunningVisible == 0;
 }

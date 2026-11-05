@@ -83,6 +83,9 @@ internal sealed record RenderWindowStats(
     long MaxTotalDrawCalls,
     SlowestRenderFrame? SlowestFrame)
 {
+    /// <summary>Median whole-frame paint duration over the window, in milliseconds.</summary>
+    public double FrameP50Ms { get; init; }
+
     /// <summary>An empty window (no paints retained).</summary>
     public static RenderWindowStats Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null);
 }

@@ -13,7 +13,7 @@ public sealed class SummariseCommand : Command<SummariseCommand.Settings>
     public sealed class Settings : CommandSettings
     {
         [CommandArgument(0, "<FILE>")]
-        [Description("Path to the .jsonl telemetry file.")]
+        [Description("Path to the .jsonl telemetry file, or a settle-run .json manifest from viewer-stress --scenario jumps|pan.")]
         public string File { get; set; } = "";
 
         [CommandOption("--out <PATH>")]
@@ -29,14 +29,18 @@ public sealed class SummariseCommand : Command<SummariseCommand.Settings>
             return 1;
         }
 
-        var data = TelemetryFileReader.Read(settings.File);
+        var settle = SettleReport.IsSettleManifestFile(settings.File);
+        var data = settle ? null : TelemetryFileReader.Read(settings.File);
         var writer = settings.OutputPath is not null
             ? new StreamWriter(settings.OutputPath)
             : new StreamWriter(Console.OpenStandardOutput());
 
         try
         {
-            WriteSummary(writer, data, settings.File);
+            if (settle)
+                SettleReport.WriteSummary(writer, System.Text.Json.Nodes.JsonNode.Parse(System.IO.File.ReadAllText(settings.File))!, settings.File);
+            else
+                WriteSummary(writer, data!, settings.File);
         }
         finally
         {

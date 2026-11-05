@@ -378,8 +378,14 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         try
         {
             var parseStart = Stopwatch.GetTimestamp();
-            var processor = await CreateProcessorAsync(
-                entry, spec, fromExchangeSet, token).ConfigureAwait(true);
+            IDatasetProcessor processor;
+            // The parse stage of the warm-load breakdown (s100.cell.parse,
+            // then s100.cell.portray, s100.cell.scene_build, s100.cell.compose).
+            using (EncDotNet.S100.Viewer.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.parse"))
+            {
+                processor = await CreateProcessorAsync(
+                    entry, spec, fromExchangeSet, token).ConfigureAwait(true);
+            }
             parseTime = Stopwatch.GetElapsedTime(parseStart);
             callerOwnedProcessor = processor;
             // Parsing cannot be interrupted, but a load cancelled meanwhile

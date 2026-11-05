@@ -47,6 +47,9 @@ namespace EncDotNet.S100.Viewer.McpTools;
 [JsonSerializable(typeof(SetDisplayCombinationDto))]
 [JsonSerializable(typeof(DepthBasisDto))]
 [JsonSerializable(typeof(RangeBearingDto))]
+[JsonSerializable(typeof(SettleStateDto))]
+[JsonSerializable(typeof(ProcessMetricsDto))]
+[JsonSerializable(typeof(PortrayalPrewarmDto))]
 // Errors, written by their concrete type.
 [JsonSerializable(typeof(MapNotReady))]
 [JsonSerializable(typeof(WindowNotReady))]

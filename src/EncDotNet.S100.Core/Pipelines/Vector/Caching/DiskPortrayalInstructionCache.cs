@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using EncDotNet.S100.Core.Caching;
+using EncDotNet.S100.Diagnostics;
 
 namespace EncDotNet.S100.Pipelines.Vector.Caching;
 
@@ -124,7 +125,7 @@ public sealed class DiskPortrayalInstructionCache : IPortrayalInstructionCache
 
         var path = GetEntryPath(key);
 
-        var cached = TryRead(path);
+        var cached = ReadTraced(path);
         if (cached is not null)
         {
             Interlocked.Increment(ref _hits);
@@ -151,7 +152,7 @@ public sealed class DiskPortrayalInstructionCache : IPortrayalInstructionCache
 
         var path = GetEntryPath(key);
 
-        var cached = TryRead(path);
+        var cached = ReadTraced(path);
         if (cached is not null)
         {
             Interlocked.Increment(ref _hits);
@@ -176,6 +177,19 @@ public sealed class DiskPortrayalInstructionCache : IPortrayalInstructionCache
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
         return Path.Combine(_cacheDirectory, Convert.ToHexString(hash).ToLowerInvariant() + FileExtension);
+    }
+
+    /// <summary>
+    /// <see cref="TryRead"/> inside an <c>s100.portrayal.cache.read</c> span
+    /// tagged with <c>s100.cache.result</c> (<c>hit</c> or <c>miss</c>), so a
+    /// warm cell load's trace shows the time spent reading the cache.
+    /// </summary>
+    private IReadOnlyList<DrawingInstruction>? ReadTraced(string path)
+    {
+        using var activity = Telemetry.ActivitySource.StartActivity("s100.portrayal.cache.read");
+        var cached = TryRead(path);
+        activity?.SetTag(TelemetryTags.CacheResult, cached is null ? "miss" : "hit");
+        return cached;
     }
 
     /// <summary>

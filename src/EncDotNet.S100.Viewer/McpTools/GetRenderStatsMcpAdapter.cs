@@ -96,6 +96,7 @@ internal static class GetRenderStatsMcpAdapter
                     ["count"] = value.Window.Count,
                     ["firstSequence"] = value.Window.FirstSequence,
                     ["lastSequence"] = value.Window.LastSequence,
+                    ["frameP50Ms"] = value.Window.FrameP50Ms,
                     ["frameMaxMs"] = value.Window.FrameMaxMs,
                     ["frameMeanMs"] = value.Window.FrameMeanMs,
                     ["frameP95Ms"] = value.Window.FrameP95Ms,
