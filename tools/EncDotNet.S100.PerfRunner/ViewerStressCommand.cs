@@ -85,7 +85,7 @@ public sealed class ViewerStressCommand : AsyncCommand<ViewerStressCommand.Setti
 
         /// <summary>Viewer executable or DLL to start per run.</summary>
         [CommandOption("--launch <PATH>")]
-        [Description("jumps/pan: start this viewer (the SoundCharts executable or EncDotNet.S100.Viewer.dll) for each engine and mode, with MCP, a fresh --cache-dir for cold runs and S100_LUA_ENGINE set. Replaces --endpoint/--port-file.")]
+        [Description("jumps/pan: start this viewer (the SoundCharts executable or SoundCharts.dll) for each engine and mode, with MCP, a fresh --cache-dir for cold runs and S100_LUA_ENGINE set. Replaces --endpoint/--port-file.")]
         public string? Launch { get; set; }
 
         /// <summary>Extra viewer arguments.</summary>

@@ -25,7 +25,7 @@ app.Configure(config =>
         .WithExample(
             "viewer-stress",
             "--scenario", "jumps",
-            "--launch", "src/EncDotNet.S100.Viewer/bin/Release/net10.0/EncDotNet.S100.Viewer.dll",
+            "--launch", "src/EncDotNet.S100.Viewer/bin/Release/net10.0/SoundCharts.dll",
             "--mode", "both",
             "--engines", "luacsharp,moonsharp");
 });

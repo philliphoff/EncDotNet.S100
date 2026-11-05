@@ -63,9 +63,9 @@ public sealed class SettleRouteTests
     [Fact]
     public void LauncherCommand_RunsADllThroughDotnetWithMcpAndCacheDir()
     {
-        var (file, args) = ViewerLauncher.CommandFor("/b/EncDotNet.S100.Viewer.dll", "/p/mcp.url", "/c", ["--data-dir", "/d"]);
+        var (file, args) = ViewerLauncher.CommandFor("/b/SoundCharts.dll", "/p/mcp.url", "/c", ["--data-dir", "/d"]);
         Assert.Equal("dotnet", file);
-        Assert.Equal(["/b/EncDotNet.S100.Viewer.dll", "--mcp", "--mcp-port-file", "/p/mcp.url", "--cache-dir", "/c", "--data-dir", "/d"], args);
+        Assert.Equal(["/b/SoundCharts.dll", "--mcp", "--mcp-port-file", "/p/mcp.url", "--cache-dir", "/c", "--data-dir", "/d"], args);
 
         var (exe, exeArgs) = ViewerLauncher.CommandFor("/b/SoundCharts", "/p", "/c", []);
         Assert.Equal("/b/SoundCharts", exe);
