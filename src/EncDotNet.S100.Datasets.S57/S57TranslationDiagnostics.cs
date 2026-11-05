@@ -199,6 +199,21 @@ public sealed class S57TranslationDiagnostics
     public int StructureEquipmentLinked { get; internal set; }
 
     /// <summary>
+    /// Number of coverage-available M_COVR objects cut into several Data
+    /// Coverage features by the M_CSCL objects over them (S-65 Annex B
+    /// §2.2.6), each piece with its own optimum display scale.
+    /// </summary>
+    public int DataCoverageCuts { get; internal set; }
+
+    /// <summary>
+    /// Number of coverage-available M_COVR objects with an M_CSCL over them
+    /// that were not cut, because the M_COVR and M_CSCL edges don't form
+    /// faces covering the M_COVR (an edge crossing another between nodes).
+    /// Such a Data Coverage keeps the cell's compilation scale throughout.
+    /// </summary>
+    public int DataCoverageNotCut { get; internal set; }
+
+    /// <summary>
     /// S-57 master/slave pairs not converted because the target Feature
     /// Catalogue doesn't bind the slave's class as <c>theEquipment</c> of the
     /// master's class, keyed by the S-101 pair → occurrence count.
@@ -273,6 +288,8 @@ public sealed class S57TranslationDiagnostics
     internal void RecordRuleDroppedObjectClass(ushort objl) => Increment(_ruleDroppedObjl, objl);
 
     internal void RecordFeatureWithoutGeometry(string s101Code) => Increment(_noGeometry, s101Code);
+
+    internal void RecordDataCoverageNotCut() => DataCoverageNotCut++;
 
     internal void RecordUnmappedAttribute(ushort objl, ushort attl)
         => Increment(_unmappedAttributes, new S57AttributeDrop(objl, attl));
