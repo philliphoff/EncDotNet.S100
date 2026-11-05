@@ -444,6 +444,86 @@ public class S57ToS101TranslatorTests
         Assert.Equal("DataCoverage", s101.FeatureTypeCatalogue[feat.FeatureTypeCode]);
     }
 
+    // ── Data Coverage display scales (S-65 Annex B §2.2.6) ──
+
+    [Theory]
+    [InlineData(22_000, 22_000)]
+    [InlineData(40_000, 22_000)]
+    [InlineData(50_000, 45_000)]
+    [InlineData(80_000, 45_000)]
+    [InlineData(1_000, 1_000)]
+    [InlineData(500, 1_000)]
+    [InlineData(20_000_000, 10_000_000)]
+    public void OptimumDisplayScale_SnapsToTheNextSmallestTable23Denominator(int compilationScale, int expected)
+        => Assert.Equal(expected, S57ToS101Translator.OptimumDisplayScale(compilationScale));
+
+    [Fact]
+    public void OptimumDisplayScale_IsNullWithoutACompilationScale()
+        => Assert.Null(S57ToS101Translator.OptimumDisplayScale(0));
+
+    [Fact]
+    public void Translate_MCovr_GetsDisplayScalesFromTheCompilationScale()
+    {
+        // CSCL 50 000 → optimum 45 000 (Table 2-3), maximum half of it, and
+        // minimum left empty for the producer.
+        var s101 = new S57ToS101Translator().Translate(CoveredCell(sdat: 0));
+
+        var values = AttributeValues(s101, Assert.Single(FeaturesOf(s101, "DataCoverage")));
+        Assert.Equal(["45000"], values["optimumDisplayScale"]);
+        Assert.Equal(["22500"], values["maximumDisplayScale"]);
+        Assert.False(values.ContainsKey("minimumDisplayScale"));
+    }
+
+    // A 100 × 100 square split down the middle: A(0,0) B(50,0) C(100,0)
+    // D(100,100) E(50,100) F(0,100), with the divider BE.
+    private static EncDotNet.S57.S57Document SplitCell(params EncDotNet.S57.S57FeatureRecord[] scales)
+    {
+        var coverage = Feat(
+            recordId: 1, primitive: 3, objectClass: 302,
+            featureIdentificationNumber: 1,
+            attributes: new[] { Attr(18, "1") },
+            spatialPointers: new[] { 10u, 11u, 12u, 13u, 14u, 15u }.Select(e => Sp(RcnmEdge, e, 1, 1, 255)).ToArray());
+        return BuildDocument(
+            vectorRecords: new[]
+            {
+                Node(1, 0, 0), Node(2, 0, 50), Node(3, 0, 100), Node(4, 100, 100), Node(5, 100, 50), Node(6, 100, 0),
+                Edge(10, 1, 2), Edge(11, 2, 3), Edge(12, 3, 4), Edge(13, 4, 5), Edge(14, 5, 6), Edge(15, 6, 1), Edge(16, 2, 5),
+            },
+            features: new[] { coverage }.Concat(scales));
+    }
+
+    private static EncDotNet.S57.S57FeatureRecord Scale(uint recordId, string cscale, params uint[] edges)
+        => Feat(
+            recordId: recordId, primitive: 3, objectClass: 301, // M_CSCL
+            featureIdentificationNumber: recordId,
+            attributes: new[] { Attr(80, cscale) },
+            spatialPointers: edges.Select(e => Sp(RcnmEdge, e, 1, 1, 255)).ToArray());
+
+    [Fact]
+    public void Translate_MCscl_CutsDataCoverageIntoPiecesWithTheirOwnScale()
+    {
+        // The M_CSCL covers the left half (A B E F) at 1:20 000 → 12 000.
+        var s101 = new S57ToS101Translator().Translate(SplitCell(Scale(2, "20000", 10, 16, 14, 15)));
+
+        var coverages = FeaturesOf(s101, "DataCoverage");
+        Assert.Equal(2, coverages.Count);
+        Assert.Equal(["45000", "12000"], coverages.Select(c => AttributeValues(s101, c)["optimumDisplayScale"].Single()));
+        Assert.Equal(["22500", "6000"], coverages.Select(c => AttributeValues(s101, c)["maximumDisplayScale"].Single()));
+
+        // The first piece keeps the M_COVR's FOID; the other gets a FIDS of its own.
+        Assert.Equal(2, coverages.Select(c => (c.FeatureIdentificationNumber, c.FeatureIdentificationSubdivision)).Distinct().Count());
+        Assert.Equal((1u, (ushort)0), (coverages[0].FeatureIdentificationNumber, coverages[0].FeatureIdentificationSubdivision));
+    }
+
+    [Fact]
+    public void Translate_MCscl_OverTheWholeCoverage_SetsItsScaleWithoutCutting()
+    {
+        var s101 = new S57ToS101Translator().Translate(SplitCell(Scale(2, "90000", 10, 11, 12, 13, 14, 15)));
+
+        var coverage = Assert.Single(FeaturesOf(s101, "DataCoverage"));
+        Assert.Equal(["90000"], AttributeValues(s101, coverage)["optimumDisplayScale"]);
+    }
+
     // ── Underwater hazard depths (surroundingDepth / defaultClearanceDepth) ──
 
     private const ushort ObjlDepare = 42;

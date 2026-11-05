@@ -110,7 +110,7 @@ internal sealed class S57RoundTripComparer
     // §2.1 notes a round trip can therefore never be the identity).
     private static readonly Dictionary<string, string> ClassesWithoutS101 = new(StringComparer.Ordinal)
     {
-        ["M_CSCL"] = "Annex B: no S-101 class (Annex C §3.5 re-creates one only where coverage scales differ)",
+        ["M_CSCL"] = "Annex B §2.2.6: cuts Data Coverage, CSCALE snapped to Table 2-3 (Annex C §3.5 re-creates one only where coverage scales differ)",
         ["M_HDAT"] = "Annex B: no S-101 class",
         ["M_HOPA"] = "Annex B: no S-101 class",
         ["M_PROD"] = "Annex B: no S-101 class",
@@ -261,7 +261,35 @@ internal sealed class S57RoundTripComparer
         }
 
         CompareTopology(source, result, differences);
+        CompareCompilationScale(source, result, differences);
         return differences;
+    }
+
+    // DSPM CSCL goes to Data Coverage optimum display scales snapped to
+    // Annex B Table 2-3 (§2.2.6), with M_CSCL CSCALE where one cuts the
+    // coverage; Annex C §3.5 takes the finest of them back as CSCL.
+    private static void CompareCompilationScale(S57Document source, S57Document result, List<RoundTripDifference> differences)
+    {
+        var before = source.DataSetParameters?.CompilationScale ?? 0;
+        var after = result.DataSetParameters?.CompilationScale ?? 0;
+        if (before == after) return;
+
+        var finest = source.FeatureRecords
+            .Where(f => (int)f.ObjectCode == (int)S57ObjectCode.M_CSCL)
+            .SelectMany(f => f.Attributes.Where(a => a.AttributeCode == 80))
+            .Select(a => int.TryParse(a.Value?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0)
+            .Where(v => v > 0)
+            .Append(before)
+            .Where(v => v > 0)
+            .DefaultIfEmpty(0)
+            .Min();
+        var expected = S57ToS101Translator.OptimumDisplayScale(finest) ?? 0;
+        differences.Add(after == expected
+            ? new("(dataset)", "CSCL", "value", RoundTripClass.ExpectedLoss,
+                "Annex B §2.2.6 (optimum display scale from Table 2-3) / Annex C §3.5 (finest optimum display scale)",
+                before.ToString(CultureInfo.InvariantCulture), after.ToString(CultureInfo.InvariantCulture))
+            : new("(dataset)", "CSCL", "value", RoundTripClass.Unexplained, "compilation scale differs",
+                before.ToString(CultureInfo.InvariantCulture), after.ToString(CultureInfo.InvariantCulture)));
     }
 
     // Objects the reverse translation creates without a source object of

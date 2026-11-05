@@ -52,7 +52,7 @@ namespace EncDotNet.S100.Datasets.S57;
 /// cell keep it, so validation still reports the source duplicate.
 /// </para>
 /// </remarks>
-public sealed class S57ToS101Translator
+public sealed partial class S57ToS101Translator
 {
     private const byte S101RcnmPoint = 110;
     private const byte S101RcnmMultiPoint = 115;
@@ -939,7 +939,7 @@ public sealed class S57ToS101Translator
 
     // ── Translation context ─────────────────────────────────────────────
 
-    private sealed class TranslationContext
+    private sealed partial class TranslationContext
     {
         private readonly EncDotNet.S57.S57Document _s57;
 
@@ -1165,6 +1165,7 @@ public sealed class S57ToS101Translator
             // See EmitDatasetSoundingDatum.
             var coverageFeatures = new List<(EncDotNet.S57.S57FeatureRecord Record, IReadOnlyList<S101SpatialAssociation> Spatials)>();
             var emittedSoundingDatum = false;
+            var coveragePlan = PlanCoverage(featureRecords);
 
             for (int fi = 0; fi < featureRecords.Count; fi++)
             {
@@ -1244,6 +1245,14 @@ public sealed class S57ToS101Translator
                     && catcov.Trim() == CatcovNoCoverage)
                 {
                     _diagnostics?.RecordRuleDroppedObjectClass(objl);
+                    continue;
+                }
+
+                // Coverage available: Data Coverage with display scales, cut
+                // by M_CSCL (S-65 Annex B §2.2.6).
+                if (objl == MCovrObjl && coveragePlan.TryGetValue(fi, out var coveragePieces))
+                {
+                    EmitDataCoverage(feat, resolved, objl, coveragePieces, coverageFeatures);
                     continue;
                 }
 

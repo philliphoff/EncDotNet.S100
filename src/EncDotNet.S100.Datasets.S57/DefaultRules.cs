@@ -499,9 +499,10 @@ internal static class DefaultRules
         yield return F(300, "M_ACCY", "QualityOfNonBathymetricData");
         // Meta objects S-101 has no feature for. They're dropped on purpose,
         // so they don't draw as unknown objects ("?", S57UnknownObject):
-        // M_HOPA isn't converted (S-65 Annex B § 2.1.1); M_CSCL's scale
-        // belongs on DataCoverage (§ 2.2.6), which the M_COVR rule doesn't
-        // take from it yet; and S-65 Annex B converts no M_HDAT, M_PROD or
+        // M_HOPA isn't converted (S-65 Annex B § 2.1.1); M_CSCL cuts the
+        // DataCoverage made from M_COVR and sets its display scales
+        // (§ 2.2.6, S57ToS101Translator.Coverage.cs) rather than becoming a
+        // feature of its own; and S-65 Annex B converts no M_HDAT, M_PROD or
         // M_UNIT (their content is dataset-level metadata in S-101, § 2.2.1).
         yield return F(301, "M_CSCL", null);
         yield return F(303, "M_HDAT", null);

@@ -55,6 +55,7 @@ public class S57RoundTripCorpusTests
         var reverse = new S101ToS57Translator();
         var report = new Report();
         var reverseDiagnostics = new S101ToS57TranslationDiagnostics();
+        var forwardDiagnostics = new S57TranslationDiagnostics();
 
         foreach (var path in cells)
         {
@@ -76,7 +77,7 @@ public class S57RoundTripCorpusTests
 
             try
             {
-                var s101 = forward.Translate(dataset.Document);
+                var s101 = forward.Translate(dataset.Document, forwardDiagnostics);
                 var back = reverse.Translate(s101, reverseDiagnostics);
                 var result = report.WriteReadBack.WriteAndReadBack(Path.GetFileName(path), back) ?? back;
                 var differences = comparer.Compare(dataset.Document, s101, result);
@@ -89,6 +90,8 @@ public class S57RoundTripCorpusTests
         }
 
         report.Reverse = ReverseSummary.From(reverseDiagnostics);
+        report.DataCoverageCuts = forwardDiagnostics.DataCoverageCuts;
+        report.DataCoverageNotCut = forwardDiagnostics.DataCoverageNotCut;
         var reportPath = Environment.GetEnvironmentVariable(ReportVariable) is { Length: > 0 } configured
             ? configured
             : Path.Combine(Path.GetTempPath(), "s57-roundtrip-report.json");
@@ -100,6 +103,7 @@ public class S57RoundTripCorpusTests
             _output.WriteLine($"  {cls}: {count}");
         var written = report.WriteReadBack;
         _output.WriteLine($"Written: {written.CellsWritten}, read back unchanged: {written.CellsReadBackUnchanged}, write failures: {written.WriteFailures.Count}.");
+        _output.WriteLine($"Data Coverage cut by M_CSCL: {report.DataCoverageCuts}, not cut: {report.DataCoverageNotCut}.");
         _output.WriteLine($"Report: {reportPath}");
 
         Assert.Empty(report.Failures);
@@ -253,6 +257,8 @@ public class S57RoundTripCorpusTests
         public Dictionary<RoundTripClass, int> Totals { get; } = Enum.GetValues<RoundTripClass>().ToDictionary(c => c, _ => 0);
         public List<CellFailure> Failures { get; } = [];
         public ReverseSummary? Reverse { get; set; }
+        public int DataCoverageCuts { get; set; }
+        public int DataCoverageNotCut { get; set; }
         public WriteReadBackSummary WriteReadBack { get; } = new();
 
         /// <summary>The unexplained differences and reverse bugs, largest first.</summary>
