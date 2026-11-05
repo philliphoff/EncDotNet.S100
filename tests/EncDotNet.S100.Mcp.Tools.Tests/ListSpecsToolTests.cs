@@ -114,7 +114,10 @@ public class ListSpecsToolTests
         Assert.Equal(
             "SoundCharts portrayal: CAP 1.2 defines no symbology",
             value.Specs.Single(s => s.Name == "CAP").PortrayalNote);
-        Assert.All(value.Specs.Where(s => s.Name is not ("S-104" or "NetCDF" or "GRIB2" or "CAP")), s => Assert.Null(s.PortrayalNote));
+        Assert.Equal(
+            "SoundCharts portrayal: WPC's coded surface bulletin defines no symbology",
+            value.Specs.Single(s => s.Name == "CODSUS").PortrayalNote);
+        Assert.All(value.Specs.Where(s => s.Name is not ("S-104" or "NetCDF" or "GRIB2" or "CAP" or "CODSUS")), s => Assert.Null(s.PortrayalNote));
     }
 
     [Fact]
