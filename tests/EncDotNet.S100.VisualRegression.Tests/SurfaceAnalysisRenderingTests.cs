@@ -1,8 +1,10 @@
 using System.Text;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.Weather;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Skia;
 using EncDotNet.S100.TestSupport;
 using SkiaSharp;
@@ -43,20 +45,27 @@ public sealed class SurfaceAnalysisRenderingTests
                 Background = Background(palette),
             });
 
-        await TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels: 8_000, maxDifferentInkFraction: 0.05, Background(palette).ToSkia())
+        // A quarter of the ink may differ, as in the isobar goldens: the labels
+        // draw in each platform's own sans-serif font.
+        await TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels: 8_000, maxDifferentInkFraction: 0.25, Background(palette).ToSkia())
             .UseParameters(palette);
     }
 
     [Fact]
     public async Task The_real_high_resolution_analysis()
     {
+        // Its lines and centre crosses, without the H/L letters and pressures:
+        // there are dozens of them, and they draw in each platform's own font.
         var fronts = new SurfaceAnalysisDatasetProcessor(CodsusFixtures.Fixture(CodsusFixtures.HighResolution));
+        var vector = WithoutText(await fronts.BuildVectorPortrayalAsync(new RenderContext(), Ct));
 
-        using var bitmap = await fronts.RenderHeadlessAsync(
-            1000,
-            640,
-            new RenderContext { Viewport = Viewport(-125, -60, 20, 55, 1000, 640, 25_000_000) },
-            cancellationToken: Ct);
+        using var bitmap = new HeadlessCompositor(new ProjNetCrsTransformFactory()).Render(
+            [HeadlessCompositeInput.ForVector(vector)],
+            new HeadlessCompositeOptions
+            {
+                Viewport = Viewport(-125, -60, 20, 55, 1000, 640, 25_000_000),
+                Background = RgbaColor.FromHex("#FFFFFF"),
+            });
 
         await TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels: 8_000, maxDifferentInkFraction: 0.05, SKColors.White);
     }
@@ -151,6 +160,29 @@ public sealed class SurfaceAnalysisRenderingTests
 
         static double Square(double x) => x * x;
     }
+
+    private static VectorPortrayalResult WithoutText(VectorPortrayalResult result) => new()
+    {
+        SubLayers = [.. result.SubLayers.Select(layer => new VectorSubLayer
+        {
+            LayerKey = layer.LayerKey,
+            LayerName = layer.LayerName,
+            Instructions = [.. layer.Instructions.Where(i => i is not TextInstruction)],
+            Plane = layer.Plane,
+            WithinPlanePriority = layer.WithinPlanePriority,
+        })],
+        Palette = result.Palette,
+        GeometryProvider = result.GeometryProvider,
+        Product = result.Product,
+        Spec = result.Spec,
+        SourceDatasetId = result.SourceDatasetId,
+        Info = result.Info,
+        SymbolScale = result.SymbolScale,
+        TextScale = result.TextScale,
+        SymbolProvider = result.SymbolProvider,
+        LineStyleProvider = result.LineStyleProvider,
+        AreaFillProvider = result.AreaFillProvider,
+    };
 
     private static Viewport Viewport(double west, double east, double south, double north, int width, int height, double scale) => new()
     {
