@@ -105,7 +105,7 @@ namespaces. `IMapPresentationController` is in `EncDotNet.S100.Maps`.
 | `NetCdfDatasetProcessor` | NetCDF-CF wind and wave grids (not S-100) | Coverage: SoundCharts weather styles (see [Weather grids](#weather-grids)) |
 | `CapDatasetProcessor` | CAP 1.2 marine weather warnings: CAP XML, Atom, NWS GeoJSON (not S-100) | Vector: SoundCharts CAP style (see [CAP weather warnings](#cap-weather-warnings)) |
 | `TropicalCycloneDatasetProcessor` | Tropical cyclone advisories: NHC GIS shapefile zips (not S-100) | Not drawn yet (see [Tropical cyclone advisories](#tropical-cyclone-advisories)) |
-| `SurfaceAnalysisDatasetProcessor` | WPC coded surface bulletins (`CODSUS`): fronts, troughs and pressure centres, analysis and forecast (not S-100) | Features and metadata only; drawing comes with #1233's portrayal slice |
+| `SurfaceAnalysisDatasetProcessor` | WPC coded surface bulletins (`CODSUS`): fronts, troughs and pressure centres, analysis and forecast (not S-100) | Vector: SoundCharts fronts style (`SurfaceAnalysisStyle`), one `weather.fronts` sub-layer on Other chart overlays at priority 92 |
 
 `S101DatasetProcessor` handles S-401 inland ENCs when it's created with the
 S-401 catalogues.

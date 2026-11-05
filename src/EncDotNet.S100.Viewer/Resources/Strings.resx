@@ -858,8 +858,8 @@
     <value>S-100 Datasets</value>
   </data>
   <data name="FilePicker_WeatherDataType" xml:space="preserve">
-    <value>Weather Data (GRIB2, NetCDF, CAP)</value>
-    <comment>Open Dataset file type for the weather formats (#1076). A GRIB2 file with no extension, such as a NOMADS GRIB filter download, needs the All files type.</comment>
+    <value>Weather Data (GRIB2, NetCDF, CAP, CODSUS)</value>
+    <comment>Open Dataset file type for the weather formats (#1076; WPC coded surface bulletins #1300). A GRIB2 file with no extension, such as a NOMADS GRIB filter download, needs the All files type.</comment>
   </data>
   <data name="FilePicker_ExchangeSetFolderTitle" xml:space="preserve">
     <value>Open Exchange Set Folder</value>

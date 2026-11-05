@@ -476,6 +476,7 @@ not on the map. The headless renderer doesn't draw a legend.
 |---|---|---|
 | Wave height and wind speed fills | `OnDemandSurface` | 0, below the S-104 surface |
 | Pressure isobars | `OtherChartOverlays` | 90 |
+| Surface analysis fronts and centres (#1300, `vector-weather.md` V25) | `OtherChartOverlays` | 92, above the isobars |
 | Wind barbs, wave arrows | `DynamicArrows` | 20, above S-111 |
 | CAP warnings | `CautionsAndWarnings` | after S-124 |
 | Observations | `OtherChartOverlays` | 100 |

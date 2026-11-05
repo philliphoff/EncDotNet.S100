@@ -4,7 +4,11 @@
 // (issues #1068 and #1072): the northern-hemisphere wind barbs WXBARBN005 to
 // WXBARBN200, their southern-hemisphere mirror images WXBARBS005 to
 // WXBARBS200, the calm circle WXCALM, the wave direction arrow WXWAVE01 and
-// the current arrows WXCURR1 to WXCURR9 (issue #1228).
+// the current arrows WXCURR1 to WXCURR9 (issue #1228), and the surface
+// analysis symbols (issue #1300): the front pips WXFRONTTRI and WXFRONTSEMI,
+// the pressure centre cross WXPCENTRE, the cross with the rule under its
+// pressure WXPCENTRERULE
+// and its legend glyph WXPCLEGEND.
 //
 //   dotnet run tools/GenerateWeatherSymbols/GenerateWeatherSymbols.cs \
 //       src/EncDotNet.S100.Datasets.Weather/Symbols
@@ -71,7 +75,47 @@ Write(WaveDirectionStyle.ArrowSymbol, WaveArrowSvg());
 for (int band = 1; band <= WeatherPalette.CurrentBandCount; band++)
     Write(CurrentArrowStyle.SymbolName(band), CurrentArrowSvg(band));
 
-Console.WriteLine($"Wrote {2 * barbs.Length + 2 + WeatherPalette.CurrentBandCount} symbols to {output}.");
+// Front pips (vector weather V17): drawn above the x axis, the left of the
+// line, with the pivot on the line, symmetric about the y axis so the line
+// style can turn them through 180° for the right side. 4 mm wide, under
+// half the 9 mm spacing.
+const string FrontInk = WeatherPalette.FrontInkToken;
+Write(SurfaceAnalysisStyle.TriangleSymbol, Svg(
+    SurfaceAnalysisStyle.TriangleSymbol,
+    "Front pip: a filled triangle (cold front), on the left of the line.",
+    3,
+    $"<path id=\"pip\" class=\"f{FrontInk}\" d=\"M -2 0 L 0 -3.2 L 2 0 Z\"/>"));
+Write(SurfaceAnalysisStyle.SemicircleSymbol, Svg(
+    SurfaceAnalysisStyle.SemicircleSymbol,
+    "Front pip: a filled semicircle (warm front), on the left of the line.",
+    3,
+    $"<path id=\"pip\" class=\"f{FrontInk}\" d=\"M -2 0 A 2 2 0 0 1 2 0 Z\"/>"));
+
+// Pressure centres (V19): an × at the exact centre, alone or with the rule
+// under the pressure (which the style draws 1.2 mm below the centre in 12 px
+// bold, at the same scales as this symbol), and an L for the legend. Point
+// symbols are drawn at 0.6 of their size at 96 dpi (VectorSceneBuilder), so
+// the rule at 7.3 units sits about 15 px under the centre, clear of the
+// digits' halo, and its 12.4 units span a four-digit pressure.
+const string Cross = "M -1.5 -1.5 L 1.5 1.5 M 1.5 -1.5 L -1.5 1.5";
+Write(SurfaceAnalysisStyle.CentreSymbol, Svg(
+    SurfaceAnalysisStyle.CentreSymbol,
+    "Pressure centre: a cross at the exact centre of a high or low.",
+    2,
+    $"<path id=\"cross\" class=\"sl f0 s{FrontInk}\" stroke-width=\"0.7\" d=\"{Cross}\"/>"));
+Write(SurfaceAnalysisStyle.CentreWithRuleSymbol, Svg(
+    SurfaceAnalysisStyle.CentreWithRuleSymbol,
+    "Pressure centre: a cross at the exact centre of a high or low, and the rule under its pressure.",
+    8,
+    $"<path id=\"cross\" class=\"sl f0 s{FrontInk}\" stroke-width=\"0.7\" d=\"{Cross}\"/>"
+    + $"<path id=\"rule\" class=\"sl f0 s{FrontInk}\" stroke-width=\"0.45\" d=\"M -6.2 7.3 L 6.2 7.3\"/>"));
+Write(SurfaceAnalysisStyle.CentreLegendSymbol, Svg(
+    SurfaceAnalysisStyle.CentreLegendSymbol,
+    "Legend glyph of a pressure centre: a bold L.",
+    2,
+    $"<path id=\"letter\" class=\"f0 s{FrontInk}\" stroke-width=\"0.7\" stroke-linejoin=\"miter\" d=\"M -0.9 -1.8 L -0.9 1.5 L 1.2 1.5\"/>"));
+
+Console.WriteLine($"Wrote {2 * barbs.Length + 2 + WeatherPalette.CurrentBandCount + 5} symbols to {output}.");
 return 0;
 
 // The distance from the tip to the innermost feather's base.
