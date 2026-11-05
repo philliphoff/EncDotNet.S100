@@ -169,14 +169,14 @@ public sealed class GribField
     /// <summary>
     /// Finds the canonical weather parameter (design note weather-sources.md
     /// §3.5) this field holds: its parameter code through
-    /// <see cref="WeatherParameters.FindByGribCode"/>, and its level matching
+    /// <see cref="WeatherParameters.FindByGribCode(GribParameterCode, WeatherLevel)"/>, and its level matching
     /// the row's level where the row has one (10 m for the wind rows, mean sea
     /// level for pressure).
     /// </summary>
     /// <returns>The row, or <see langword="null"/> for a parameter or level the table doesn't have.</returns>
     public WeatherParameterDefinition? FindWeatherParameter()
     {
-        var definition = WeatherParameters.FindByGribCode(Parameter);
+        var definition = WeatherParameters.FindByGribCode(Parameter, ToWeatherLevel());
         if (definition is null)
             return null;
         if (definition.Level is { } level && !level.Equals(ToWeatherLevel()))

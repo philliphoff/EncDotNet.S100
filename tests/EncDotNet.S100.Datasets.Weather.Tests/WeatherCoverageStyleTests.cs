@@ -216,6 +216,41 @@ public class WeatherCoverageStyleTests
         Assert.Null(new VisibilityStyle().ResolveColorScheme(MarinerSettings.Default).Resolve(metres));
     }
 
+    [Theory]
+    [InlineData(0, null)]
+    [InlineData(-5, null)]
+    [InlineData(0.01, 1)]
+    [InlineData(22.39, 1)]
+    [InlineData(22.4, 2)]
+    [InlineData(53.3, 3)]
+    [InlineData(83.0, 4)]
+    [InlineData(200, 4)]
+    public void Freezing_spray_resolves_the_predictor_to_its_icing_class(double predictor, int? band)
+    {
+        var scheme = new FreezingSprayStyle().ResolveColorScheme(MarinerSettings.Default);
+
+        Assert.Equal(WeatherParameters.FreezingSprayPredictor, scheme.FieldName);
+        Assert.Equal(
+            band is { } b ? WeatherPalette.Palette.Resolve(WeatherPalette.FreezingSprayToken(b), PaletteType.Day).ToHex() : null,
+            scheme.Resolve((float)predictor));
+    }
+
+    [Fact]
+    public void Freezing_spray_is_on_by_default_and_air_isotherms_off_dashed_every_5_degrees()
+    {
+        Assert.Equal(["Light", "Moderate", "Heavy", "Extreme"], FreezingSprayStyle.Bands.Select(b => b.Label));
+        Assert.True(new FreezingSprayStyle().IsVisibleByDefault);
+
+        var air = new AirTemperatureIsothermStyle();
+        Assert.False(air.IsVisibleByDefault);
+        Assert.Equal(WeatherLayerKind.Isolines, air.Kind);
+        Assert.Equal(S98DisplayPlane.OtherChartOverlays, air.Plane);
+        Assert.Contains(air.Contours, c => Math.Abs(c.Value - SeaTemperatureStyle.CelsiusZero) < 1e-9);
+        Assert.All(air.Contours, c => Assert.Equal([6f, 3f], c.DashPattern!));
+        Assert.Equal(5, air.Contours[1].Value - air.Contours[0].Value, 9);
+        Assert.Equal("-5°", air.FormatContourLabel(air.Contours.Single(c => Math.Abs(c.Value - 268.15) < 1e-9)));
+    }
+
     [Fact]
     public void Visibility_bands_are_labelled_with_the_forecast_terms_and_drawn_by_default()
     {
@@ -371,8 +406,9 @@ public class WeatherCoverageStyleTests
         Assert.True(new WaveHeightStyle().ClipToWater);
         Assert.True(new SeaTemperatureStyle().ClipToWater);
         Assert.True(new VisibilityStyle().ClipToWater);
+        Assert.True(new FreezingSprayStyle().ClipToWater);
         Assert.All(
-            WeatherCoverageStyle.CreateAll().Where(s => s is not (WaveHeightStyle or SeaTemperatureStyle or VisibilityStyle)),
+            WeatherCoverageStyle.CreateAll().Where(s => s is not (WaveHeightStyle or SeaTemperatureStyle or VisibilityStyle or FreezingSprayStyle)),
             style => Assert.False(style.ClipToWater, style.LayerKey));
     }
 
@@ -530,14 +566,14 @@ public class WeatherCoverageStyleTests
     public void Palette_tokens_are_prefixed_so_they_never_resolve_against_S101_colours()
     {
         Assert.All(WeatherPalette.Palette.Tokens.Keys, token => Assert.StartsWith("WX", token, StringComparison.Ordinal));
-        Assert.Equal(6 + 15 + 13 + 32 + 9 + 3, WeatherPalette.Palette.Tokens.Count);
+        Assert.Equal(7 + 15 + 13 + 32 + 9 + 3 + 4, WeatherPalette.Palette.Tokens.Count);
     }
 
     [Fact]
     public void Content_scope_carries_the_style_version()
     {
         Assert.Equal(ApplicationContentScope.For("Weather", WeatherCoverageStyle.StyleVersion), WeatherCoverageStyle.ContentScope);
-        Assert.StartsWith("app:Weather@5|toolkit:", WeatherCoverageStyle.ContentScope, StringComparison.Ordinal);
+        Assert.StartsWith("app:Weather@6|toolkit:", WeatherCoverageStyle.ContentScope, StringComparison.Ordinal);
     }
 
     [Fact]

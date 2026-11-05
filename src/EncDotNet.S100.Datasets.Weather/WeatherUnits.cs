@@ -11,7 +11,7 @@ public static class WeatherUnits
     /// <param name="unit">The unit.</param>
     /// <returns>
     /// <c>"metres per second"</c>, <c>"degrees"</c>, <c>"metres"</c>,
-    /// <c>"seconds"</c>, <c>"pascals"</c>, <c>"kelvin"</c>, or an empty string for
+    /// <c>"seconds"</c>, <c>"pascals"</c>, <c>"kelvin"</c>, <c>"proportion"</c>, or an empty string for
     /// <see cref="WeatherUnit.Other"/>.
     /// </returns>
     public static string GetLabel(WeatherUnit unit) => unit switch
@@ -22,6 +22,7 @@ public static class WeatherUnits
         WeatherUnit.Seconds => "seconds",
         WeatherUnit.Pascals => "pascals",
         WeatherUnit.Kelvin => "kelvin",
+        WeatherUnit.Proportion => "proportion",
         _ => string.Empty,
     };
 }

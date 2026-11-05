@@ -335,9 +335,11 @@ internal sealed partial class ViewerSettings
     /// keyed by the processor's sub-layer key: today the Weather section's
     /// <c>weather.pressure.isobars</c>, <c>weather.wind.speed</c> and
     /// <c>weather.wave.direction</c> (#1072), and
-    /// <c>weather.sea.temperature.isotherms</c> (#1227). A missing key follows
-    /// the layer's default (isobars on; the wind speed fill, wave arrows and
-    /// isotherms off).
+    /// <c>weather.sea.temperature.isotherms</c> (#1227),
+    /// <c>weather.current.arrows</c> (#1228) and
+    /// <c>weather.air.temperature.isotherms</c> (#1231). A missing key follows
+    /// the layer's default (isobars and currents on; the wind speed fill, wave
+    /// arrows and both kinds of isotherms off).
     /// </summary>
     public Dictionary<string, bool> EcdisLayerVisibility { get; set; }
         = new(StringComparer.Ordinal);

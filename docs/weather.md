@@ -1,7 +1,7 @@
 # Show wind and waves on the chart
 
 SoundCharts can draw forecast wind and waves, sea surface temperature,
-surface currents, restricted visibility, marine weather warnings and live observations over your
+surface currents, restricted visibility, air temperature, freezing spray, marine weather warnings and live observations over your
 charts. This page covers which files it reads,
 where to get them, how to show them in SoundCharts and `s100`, and what isn't
 supported.
@@ -16,7 +16,7 @@ supported.
 
 | Data | Formats | What's drawn |
 |---|---|---|
-| Forecast and analysis grids | GRIB2, NetCDF-3 and NetCDF-4 with CF conventions | Wave height fill, wind barbs, isobars, a sea surface temperature fill, current arrows and a restricted visibility fill; optionally a wind speed fill, wave arrows and isotherms |
+| Forecast and analysis grids | GRIB2, NetCDF-3 and NetCDF-4 with CF conventions | Wave height fill, wind barbs, isobars, a sea surface temperature fill, current arrows, a restricted visibility fill and a freezing spray fill; optionally a wind speed fill, wave arrows, sea isotherms and air isotherms |
 | Marine weather warnings | CAP 1.2 XML (one alert or an Atom feed of them), NWS alerts GeoJSON | Warning areas, hatched by severity and labelled with the event, while they're in force |
 | Buoy and coastal station observations | NOAA NDBC, fetched live | A wind barb and wave height at each station |
 | Own-ship wind | NMEA 0183 from your instruments | True wind as a barb beside own ship, with water and air temperature |
@@ -38,6 +38,9 @@ drawn or sampled are:
 | Sea surface temperature | WTMP | `sea_surface_temperature`, `sea_surface_foundation_temperature`, `sea_surface_subskin_temperature`, `sea_surface_skin_temperature` |
 | Surface current: U, V, speed, direction | UOGRD, VOGRD, SPC, DIRC | `eastward_sea_water_velocity`, `northward_sea_water_velocity` (or their `surface_` forms), `sea_water_speed`, `sea_water_velocity_to_direction` |
 | Visibility | VIS | `visibility_in_air` |
+| Air temperature at 2 m | TMP at 2 m above ground | `air_temperature` |
+| Surface (skin) temperature, for freezing spray | TMP at the surface | `surface_temperature` |
+| Land mask, for freezing spray | LAND | `land_binary_mask` |
 
 When a file has only U and V, wind or current speed and direction are worked
 out from them. Wind and wave directions are the direction they come from;
@@ -45,8 +48,9 @@ current directions are the direction the water flows to, as in S-111.
 Currents are read at whatever depth the file gives them, which is the
 model's top layer: 0 m for HYCOM, about 0.5 m for Copernicus Marine. Sea surface
 temperature can be in kelvin, degrees Celsius or degrees Fahrenheit. GFS's
-surface temperature (TMP) isn't read as sea temperature, because over land
-it's the temperature of the ground. Other
+surface temperature (TMP at the surface) isn't drawn as sea temperature,
+because over land it's the temperature of the ground; it's read only for the
+freezing spray risk. Other
 parameters are listed by `s100 info` but not drawn.
 
 GRIB2 files can hold many messages, and you can append several files, such as
@@ -81,9 +85,10 @@ made from its data. The Library can fetch some of these sources for you.
   to the variables, area and forecast hours you choose, and return one file.
   For waves choose HTSGW, PERPW and DIRPW; for wind and pressure choose UGRD
   and VGRD at 10 m above ground and PRMSL; for visibility choose VIS at the
-  surface. The download has no file extension. The Library's two GFS
-  sources offer visibility too; tick **Visibility** when you choose
-  parameters.
+  surface; for freezing spray choose TMP at 2 m above ground and at the
+  surface, LAND at the surface, and the 10 m wind. The download has no file
+  extension. The Library's two GFS sources offer these too; tick them when
+  you choose parameters.
 - **NOAA on AWS.** The `noaa-gfs-bdp-pds` bucket holds every GFS and
   GFS-Wave run as whole files, for example
   `gfs.YYYYMMDD/HH/wave/gridded/gfswave.tHHz.atlocn.0p16.f003.grib2` for the
@@ -167,7 +172,7 @@ made from its data. The Library can fetch some of these sources for you.
    The Datasets panel lists it, and the Layer stack lists the layers it
    draws; the wave height fill's entry shows a colour legend.
 2. Open **Display controls**. While a GRIB2 or NetCDF dataset is loaded, its
-   **Weather** section has five switches for every weather dataset:
+   **Weather** section has six switches for every weather dataset:
 
    | Switch | Default | Draws |
    |---|---|---|
@@ -176,9 +181,10 @@ made from its data. The Library can fetch some of these sources for you.
    | **Wave arrows** | Off | Arrows the way the waves travel, sized by height |
    | **Isotherms** | Off | Sea surface temperature every 2 °C |
    | **Currents** | On | Surface current arrows, coloured by speed |
+   | **Air temperature** | Off | Dashed air temperature isotherms every 5 °C |
 
-   The wave height, sea surface temperature and visibility fills and the
-   wind barbs are always drawn; hide them for one dataset with its eye in the Datasets
+   The wave height, sea surface temperature, visibility and freezing spray
+   fills and the wind barbs are always drawn; hide them for one dataset with its eye in the Datasets
    panel. The sea surface temperature fill has a band for each degree from
    0 °C to 30 °C, so fronts such as the edge of the Gulf Stream show as
    closely spaced bands.
@@ -186,8 +192,8 @@ made from its data. The Library can fetch some of these sources for you.
    valid time of the run.
 4. Click the map to pick. Object information starts with "Weather model
    data, not for navigation." and lists each parameter at the nearest grid
-   point and time step, in knots, metres and degrees Celsius, and visibility
-   in nautical miles.
+   point and time step, in knots, metres and degrees Celsius, visibility in
+   nautical miles, and the freezing spray class.
 
 Current arrows point the way the water flows. They use S-111's nine speed
 bands, colours and sizes, from purple under 0.5 kn to red at 13 kn and
@@ -200,8 +206,19 @@ use: very poor (fog, under 1000 m), poor (1000 m to 2 nautical miles) and
 moderate (2 to 5 nautical miles). Good visibility isn't drawn, so most of
 the chart stays clear. Its entry in the Layer stack shows the legend.
 
-The wave height, sea surface temperature and visibility fills are clipped to
-water when an S-101 chart is loaded.
+Freezing spray (vessel icing) is worked out from the 10 m wind, the 2 m air
+temperature and the sea temperature with Overland's icing predictor, the
+one NOAA's Ocean Prediction Center uses. It's drawn in plum in four classes:
+light (under about 0.7 cm of ice an hour), moderate (to 2 cm), heavy (to
+4 cm) and extreme. Where there's no icing nothing is drawn. It needs all
+three inputs in one file. When a file has no sea temperature, as GFS doesn't,
+the surface temperature stands in for it, with the land mask (LAND) to leave
+out land; without the mask, only surface temperatures under −2 °C, which are
+ice or land, are left out. The rates are for a fishing vessel of 20 to 75 m;
+judge your own vessel's exposure from them.
+
+The wave height, sea surface temperature, visibility and freezing spray
+fills are clipped to water when an S-101 chart is loaded.
 Wind barbs south of the equator are drawn mirrored, as the convention is.
 
 ## Show warnings

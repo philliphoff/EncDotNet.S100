@@ -114,8 +114,8 @@
                 <!-- Weather (#1072): map-wide switches for the optional weather
                      layers, applied to every GRIB2 and NetCDF dataset and kept
                      between sessions. Shown while a weather dataset is loaded.
-                     The wave height, sea temperature and visibility fills
-                     and the wind barbs are always drawn. -->
+                     The wave height, sea temperature, visibility and
+                     freezing spray fills and the wind barbs are always drawn. -->
                 <StackPanel Spacing="4" IsVisible="{Binding HasWeatherData}">
                     <TextBlock Text="{x:Static loc:Strings.EcdisPanel_WeatherHeader}"
                                FontSize="11"
@@ -161,6 +161,14 @@
                                       AutomationProperties.AutomationId="EcdisDisplayPanel.Weather.Currents"
                                       AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_Currents}"
                                       AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_Currents}" />
+                    </Grid>
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_AirTemperature}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.EcdisPanel_Weather_AirTemperature}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsAirTemperatureVisible}"
+                                      AutomationProperties.AutomationId="EcdisDisplayPanel.Weather.AirTemperature"
+                                      AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_AirTemperature}"
+                                      AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_AirTemperature}" />
                     </Grid>
                 </StackPanel>
 

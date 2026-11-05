@@ -161,6 +161,17 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         set => _state.SetLayerVisible(CurrentArrowStyle.Key, value);
     }
 
+    /// <summary>
+    /// The Weather section's Air temperature switch: dashed 2 m air
+    /// temperature isotherms on every weather dataset with air temperature.
+    /// Off by default (<see cref="AirTemperatureIsothermStyle"/>).
+    /// </summary>
+    public bool IsAirTemperatureVisible
+    {
+        get => GetWeatherLayer(AirTemperatureIsothermStyle.Key);
+        set => _state.SetLayerVisible(AirTemperatureIsothermStyle.Key, value);
+    }
+
     // The switch, or the style's own default when the mariner hasn't set it.
     private bool GetWeatherLayer(string layerKey) =>
         _state.GetLayerVisible(layerKey) ?? WeatherDefaults[layerKey];
@@ -269,6 +280,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsWaveArrowsVisible));
         OnPropertyChanged(nameof(IsIsothermsVisible));
         OnPropertyChanged(nameof(IsCurrentArrowsVisible));
+        OnPropertyChanged(nameof(IsAirTemperatureVisible));
         OnPropertyChanged(nameof(ActiveCategory));
         OnPropertyChanged(nameof(IsDisplayBase));
         OnPropertyChanged(nameof(IsStandard));

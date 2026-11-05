@@ -341,7 +341,8 @@ public abstract class WeatherGridProcessorBase :
     /// degrees ("from"; current direction "to"), periods in seconds, sea
     /// surface temperature in degrees Celsius (raw value in kelvin), current
     /// speed in knots (raw value in m/s), visibility in nautical miles (raw
-    /// value in metres).
+    /// value in metres), air and surface temperature in degrees Celsius (raw
+    /// value in kelvin), and the freezing spray class with its predictor.
     /// </summary>
     /// <param name="latitude">Latitude, WGS-84 degrees.</param>
     /// <param name="longitude">Longitude, WGS-84 degrees.</param>
@@ -470,9 +471,13 @@ public abstract class WeatherGridProcessorBase :
             WeatherParameters.CurrentU => new() { Code = field.Name, Name = "Current, eastward component", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0.0#")} m/s") },
             WeatherParameters.CurrentV => new() { Code = field.Name, Name = "Current, northward component", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0.0#")} m/s") },
             WeatherParameters.Visibility => new() { Code = field.Name, Name = "Visibility", RawValue = raw, DisplayValue = Display(VisibilityText) },
+            WeatherParameters.AirTemperature => new() { Code = field.Name, Name = "Air temperature at 2 m", RawValue = raw, DisplayValue = Display(x => $"{Number(SeaTemperatureStyle.ToCelsius(x), "0.0")} °C") },
+            WeatherParameters.SurfaceTemperature => new() { Code = field.Name, Name = "Surface temperature", RawValue = raw, DisplayValue = Display(x => $"{Number(SeaTemperatureStyle.ToCelsius(x), "0.0")} °C") },
+            WeatherParameters.FreezingSprayPredictor => new() { Code = field.Name, Name = "Freezing spray", RawValue = raw, DisplayValue = Display(x => $"{FreezingSpray.GetLabel(FreezingSpray.Classify(x)!.Value)} (predictor {Number(x, "0")})") },
             // The knots copies of the wind and current speeds, the Celsius
-            // copy of the sea temperature and the nautical-mile copy of the
-            // visibility are already in their display values.
+            // copies of the sea and air temperatures, the nautical-mile copy
+            // of the visibility and the freezing spray class are already in
+            // their display values; the land cover mask isn't shown.
             _ => null,
         };
     }

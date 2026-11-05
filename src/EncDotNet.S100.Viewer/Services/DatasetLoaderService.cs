@@ -1355,6 +1355,8 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         "weather.sea.temperature.isotherms" => Strings.SubLayer_Weather_Isotherms,
         "weather.current.arrows" => Strings.SubLayer_Weather_Currents,
         "weather.visibility" => Strings.SubLayer_Weather_Visibility,
+        "weather.spray" => Strings.SubLayer_Weather_FreezingSpray,
+        "weather.air.temperature.isotherms" => Strings.SubLayer_Weather_AirTemperature,
         _ => key,
     };
 

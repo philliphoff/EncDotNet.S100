@@ -156,6 +156,20 @@ public sealed class WeatherSourceTests : IDisposable
     [Theory]
     [InlineData("noaa-nomads-gfs")]
     [InlineData("noaa-aws-gfs")]
+    public void The_GFS_sources_offer_the_freezing_spray_inputs_off_by_default(string id)
+    {
+        var parameters = Known(id).Weather!.Parameters;
+
+        Assert.Equal(
+            [":TMP:2 m above ground:", ":TMP:surface:", ":LAND:surface:"],
+            parameters.Where(p => p.Id is "TMP" or "LAND").Select(p => p.IndexMatch));
+        Assert.DoesNotContain(parameters, p => p.Id is "TMP" or "LAND" && p.Default);
+        Assert.Equal(parameters.Count, parameters.Select(p => p.IndexMatch).Distinct().Count());
+    }
+
+    [Theory]
+    [InlineData("noaa-nomads-gfs")]
+    [InlineData("noaa-aws-gfs")]
     public void The_GFS_sources_offer_surface_visibility_off_by_default(string id)
     {
         var visibility = Known(id).Weather!.Parameters.Single(p => p.Id == "VIS");

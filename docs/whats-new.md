@@ -6,6 +6,16 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Air temperature and freezing spray on the chart.** GRIB2 and NetCDF
+  files with 2 m air temperature now draw it as dashed isotherms every 5 °C,
+  off by default, behind a new **Air temperature** switch in Display
+  controls. Where a file also has the 10 m wind and a sea temperature, or
+  GFS's surface temperature and land mask, SoundCharts works out the
+  freezing spray (vessel icing) risk with Overland's predictor and draws it
+  in four classes, from light to extreme. Picks give the air temperature and
+  the icing class, and the Library's GFS sources can fetch the inputs. See
+  [Show wind and waves on the chart](weather.md).
+
 - **Restricted visibility on the chart.** GRIB2 and NetCDF files with
   visibility, such as GFS, now draw fog and poor visibility as a grey fill
   in the marine forecast bands: very poor (under 1000 m), poor (to 2 nautical

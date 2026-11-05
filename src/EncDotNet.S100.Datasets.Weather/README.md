@@ -83,7 +83,7 @@ foreach (var source in WeatherCoverageSource.CreateForGroups(set))
 | `WeatherCoverageSource` | An `ICoverageSource` over one parameter group. |
 | `WindComponents` | Wind speed and "from" direction from U and V. |
 | `CurrentComponents` | Current speed and "to" direction from U and V. |
-| `WeatherCoverageStyle` | The base of the nine styles: `SeaTemperatureStyle`, `WaveHeightStyle`, `WindSpeedStyle`, `VisibilityStyle`, `SeaTemperatureIsothermStyle`, `PressureIsobarStyle`, `CurrentArrowStyle`, `WindBarbStyle` and `WaveDirectionStyle`. Each is an `ICoverageStyle` with its S-98 plane, priority, opacity and default visibility. |
+| `WeatherCoverageStyle` | The base of the eleven styles: `SeaTemperatureStyle`, `WaveHeightStyle`, `WindSpeedStyle`, `VisibilityStyle`, `FreezingSprayStyle`, `SeaTemperatureIsothermStyle`, `AirTemperatureIsothermStyle`, `PressureIsobarStyle`, `CurrentArrowStyle`, `WindBarbStyle` and `WaveDirectionStyle`. Each is an `ICoverageStyle` with its S-98 plane, priority, opacity and default visibility. |
 | `WeatherPalette` | The styles' Day, Dusk and Night colours, as an `ApplicationPalette`. |
 | `WindBarb` | The pennants, full barbs and half barbs of a wind speed, rounded to 5 kn. |
 | `WeatherPortrayal` | Builds the coverage sub-layers of a source and its styles. |
@@ -115,6 +115,9 @@ lists several codes or names, they're alternatives in order of preference.
 | `current.speed` | `current` | any | 10,1,1 (SPC) | `sea_water_speed` | m/s |
 | `current.to_direction` | `current` | any | 10,1,0 (DIRC) | `sea_water_velocity_to_direction`, `direction_of_sea_water_velocity` | degrees true |
 | `visibility` | `visibility` | any | 0,19,0 (VIS) | `visibility_in_air` | m |
+| `air.temperature` | `air.temperature` | 2 m above ground | 0,0,0 (TMP) | `air_temperature` | K |
+| `surface.temperature` | `surface.temperature` | surface | 0,0,0 (TMP) | `surface_temperature` | K |
+| `land.cover` | `land.cover` | surface | 2,0,0 (LAND) | `land_binary_mask` | proportion |
 
 Wind and wave directions are "from", and current directions "to" (the
 oceanographic convention, as in S-111), in degrees clockwise from true north.
@@ -152,6 +155,13 @@ expects:
   `√(u² + v²)` and `atan2(−u, −v)` in degrees, in [0, 360). The `current`
   group gets `current.speed` and `current.to_direction` the same way, with
   `atan2(u, v)`.
+- **Freezing spray.** `CreateForGroups` adds a combined source, `spray`,
+  when the set has the wind (speed, or U and V), `air.temperature`, and
+  `sea.temperature` or else `surface.temperature` (with `land.cover` to leave
+  land out). It derives `spray.predictor`, Overland's icing predictor
+  (`FreezingSpray.Predictor`), and lists only that field in `FieldNames`
+  (`IsCombined`), so only `FreezingSprayStyle` draws it. Water colder than
+  −2 °C is ice or land and has no predictor.
 - **Time.** `AvailableTimes` is the union of the parameters' valid times.
   `SelectTime` picks the exact match, or else the nearest.
 - **Lazy decoding.** A step is decoded the first time `Sample` needs it, and
@@ -184,6 +194,8 @@ so the coverage pipeline and both renderers draw them with no weather code.
 | `SeaTemperatureIsothermStyle` | Isotherms every 2 °C, labelled in °C (`18°`) | `sea.temperature` | — | Off |
 | `CurrentArrowStyle` | Arrows in S-111's nine speed bands, colours and sizes (0.5, 1, 2, 3, 5, 7, 10 and 13 kn) | `current.speed` | `current.to_direction` | On |
 | `VisibilityStyle` | Grey fill in the marine forecast's three restricted bands: under 1000 m, to 2 nm and to 5 nm; good visibility isn't drawn | `visibility` | — | On |
+| `FreezingSprayStyle` | Plum fill in Overland's icing classes: light, moderate (22.4), heavy (53.3) and extreme (83.0); no icing isn't drawn | `spray.predictor` (derived) | — | On |
+| `AirTemperatureIsothermStyle` | Dashed isotherms every 5 °C, labelled in °C (`-5°`) | `air.temperature` | — | Off |
 
 - **Default and switches.** The Default column is `IsVisibleByDefault`.
   `IsDrawnWith(display)` applies the map-wide switches in

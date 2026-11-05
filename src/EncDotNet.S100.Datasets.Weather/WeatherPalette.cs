@@ -6,7 +6,8 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// <summary>
 /// The colours of the weather styles: the band fills of
 /// <see cref="WaveHeightStyle"/>, <see cref="WindSpeedStyle"/>,
-/// <see cref="SeaTemperatureStyle"/> and <see cref="VisibilityStyle"/>, and the inks of the wind barbs, wave
+/// <see cref="SeaTemperatureStyle"/>, <see cref="VisibilityStyle"/> and
+/// <see cref="FreezingSprayStyle"/>, and the inks of the wind barbs, wave
 /// arrows, pressure isobars and isotherms, each with a Day, Dusk and Night
 /// value.
 /// </summary>
@@ -34,6 +35,11 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// stays readable. Visibility is a neutral grey ramp, the colour of fog: in
 /// Day the poorer bands are darker, in Dusk and Night lighter, and there's
 /// no band for good visibility, so clear areas aren't tinted at all.
+/// Freezing spray is a muted plum ramp (OKLCH hue about 325), redder and
+/// greyer than the wave violet and far less saturated than S-101 magenta:
+/// in Day the heavier classes are darker, in Dusk and Night lighter. The air
+/// isotherms are a warm grey, set apart from the sea isotherms' neutral
+/// grey and dashed.
 /// </para>
 /// <para>
 /// Every Night colour stays under relative luminance 0.2, as the S-104
@@ -73,6 +79,12 @@ public static class WeatherPalette
 
     /// <summary>The colour token prefix of the current speed bands, followed by the band number: <c>WXCUR1</c> to <c>WXCUR9</c>.</summary>
     public const string CurrentTokenPrefix = "WXCUR";
+
+    /// <summary>The colour token prefix of the freezing spray bands, followed by the class: <c>WXICE1</c> (light) to <c>WXICE4</c> (extreme).</summary>
+    public const string FreezingSprayTokenPrefix = "WXICE";
+
+    /// <summary>Colour token of the air temperature isotherms and their labels (<see cref="AirTemperatureIsothermStyle"/>).</summary>
+    public const string AirIsothermInkToken = "WXAIRTH";
 
     /// <summary>The colour token prefix of the visibility bands, followed by the band number: <c>WXVIS1</c> (very poor) to <c>WXVIS3</c> (moderate).</summary>
     public const string VisibilityTokenPrefix = "WXVIS";
@@ -180,6 +192,15 @@ public static class WeatherPalette
         ("#BCC0C7", "#565B65", "#25282E"),
     ];
 
+    // Day, Dusk, Night for each freezing spray class (WXICE1 light).
+    private static readonly (string Day, string Dusk, string Night)[] FreezingSprayColors =
+    [
+        ("#D8C3DA", "#4E3A52", "#2D2030"),
+        ("#B78ABD", "#6D4E73", "#3C2A41"),
+        ("#91579A", "#946F9B", "#513957"),
+        ("#652873", "#C19BC8", "#6A4B71"),
+    ];
+
     /// <summary>
     /// The weather colours: <see cref="BarbInkToken"/>, <see cref="WaveArrowToken"/>,
     /// <see cref="IsobarInkToken"/>, <see cref="IsobarHaloToken"/>,
@@ -188,7 +209,8 @@ public static class WeatherPalette
     /// (<see cref="WindSpeedToken"/>), the sea surface temperature bands
     /// (<see cref="SeaTemperatureToken"/>), and the current speed bands
     /// (<see cref="CurrentToken"/>) with <see cref="CurrentOutlineToken"/>,
-    /// and the visibility bands (<see cref="VisibilityToken"/>).
+    /// the visibility bands (<see cref="VisibilityToken"/>), the freezing spray
+    /// bands (<see cref="FreezingSprayToken"/>) and <see cref="AirIsothermInkToken"/>.
     /// </summary>
     public static ApplicationPalette Palette { get; } = new("Weather", BuildTokens());
 
@@ -203,6 +225,9 @@ public static class WeatherPalette
 
     /// <summary>The number of current speed bands: 9, as S-111's.</summary>
     public static int CurrentBandCount => CurrentColors.Length;
+
+    /// <summary>The number of freezing spray bands: 4 (light, moderate, heavy and extreme).</summary>
+    public static int FreezingSprayBandCount => FreezingSprayColors.Length;
 
     /// <summary>The number of visibility bands: 3 (very poor, poor and moderate).</summary>
     public static int VisibilityBandCount => VisibilityColors.Length;
@@ -252,6 +277,15 @@ public static class WeatherPalette
         return VisibilityTokenPrefix + band.ToString(CultureInfo.InvariantCulture);
     }
 
+    /// <summary>The colour token of freezing spray band <paramref name="band"/>, 1 (light) to <see cref="FreezingSprayBandCount"/>.</summary>
+    /// <param name="band">The band number.</param>
+    public static string FreezingSprayToken(int band)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(band, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(band, FreezingSprayBandCount);
+        return FreezingSprayTokenPrefix + band.ToString(CultureInfo.InvariantCulture);
+    }
+
     private static Dictionary<string, PaletteColors> BuildTokens()
     {
         var tokens = new Dictionary<string, PaletteColors>(StringComparer.Ordinal)
@@ -270,6 +304,8 @@ public static class WeatherPalette
             // The current arrows' outline: S-111's CHBLK, so model and S-111
             // arrows of the same speed look alike.
             [CurrentOutlineToken] = PaletteColors.FromHex(day: "#000000", dusk: "#6B7F89", night: "#252D31"),
+            // A warm grey for the dashed air isotherms; it shares the isobar label halo.
+            [AirIsothermInkToken] = PaletteColors.FromHex(day: "#5A4A40", dusk: "#E3D6CC", night: "#6E6158"),
         };
 
         for (int i = 0; i < WaveHeightColors.Length; i++)
@@ -294,6 +330,12 @@ public static class WeatherPalette
         {
             var (day, dusk, night) = CurrentColors[i];
             tokens[CurrentToken(i + 1)] = PaletteColors.FromHex(day, dusk, night);
+        }
+
+        for (int i = 0; i < FreezingSprayColors.Length; i++)
+        {
+            var (day, dusk, night) = FreezingSprayColors[i];
+            tokens[FreezingSprayToken(i + 1)] = PaletteColors.FromHex(day, dusk, night);
         }
 
         for (int i = 0; i < VisibilityColors.Length; i++)
