@@ -417,6 +417,10 @@ public partial class App : Application
             var portrayalWarmer = _services.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalCacheWarmer>();
             portrayalWarmer.Start();
 
+            // Give committed GC memory back after load and pre-warm bursts, once
+            // the map is idle (map rendering slice 4, #1276 item 1).
+            var idleCompactor = StartIdleCompactor(_services.GetService<ILogger<App>>());
+
             // Drain the tiled renderer's background Skia workers before the
             // process tears down. Avalonia raises ShutdownRequested on every
             // exit path (explicit Shutdown(), last-window-close, OS quit), so
@@ -429,12 +433,40 @@ public partial class App : Application
                 // not lost to the debounce window.
                 routePersistence.Flush();
                 portrayalWarmer.Dispose();
+                idleCompactor?.Dispose();
                 library.Dispose();
                 EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.ShutdownAndDrain(TimeSpan.FromSeconds(5));
             };
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// Starts the idle compacting collection (map rendering slice 4, #1276
+    /// item 1) unless <c>S100_IDLE_GC=0</c>, logging what each one gives back.
+    /// </summary>
+    private static EncDotNet.S100.Renderers.Mapsui.IdleMemoryCompactor? StartIdleCompactor(ILogger? logger)
+    {
+        if (!EncDotNet.S100.Renderers.Mapsui.IdleMemoryCompactor.EnabledByEnvironment)
+        {
+            return null;
+        }
+
+        var compactor = EncDotNet.S100.Renderers.Mapsui.IdleMemoryCompactor.Start();
+        if (logger is not null)
+        {
+            compactor.Compacted += c => logger.LogInformation(
+                "Idle GC compaction: committed {Before} MB -> {After} MB, heap {HeapBefore} MB -> {HeapAfter} MB, pause {PauseMs} ms, trim {TrimS} s",
+                c.CommittedBefore / (1024 * 1024),
+                c.CommittedAfter / (1024 * 1024),
+                c.HeapBefore / (1024 * 1024),
+                c.HeapAfter / (1024 * 1024),
+                (long)c.Pause.TotalMilliseconds,
+                (int)c.Trim.TotalSeconds);
+        }
+
+        return compactor;
     }
 
     /// <summary>

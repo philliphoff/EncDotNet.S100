@@ -1483,7 +1483,7 @@
     <value>In-memory cache (MB)</value>
   </data>
   <data name="Tooltip_TileBudgetMb" xml:space="preserve">
-    <value>Per-layer budget, in megabytes, for decoded tile pixels kept in main memory. Applied when a dataset's tile cache is created — reload the dataset to apply a change.</value>
+    <value>Budget, in megabytes, for decoded tile pixels kept in main memory, shared by all layers. When it's full, the tiles drawn least recently are dropped first. Takes effect immediately.</value>
   </data>
   <data name="Settings_TileDiskCacheEnabled" xml:space="preserve">
     <value>Warm disk cache</value>
@@ -1507,7 +1507,7 @@
     <value>GPU residency (MB)</value>
   </data>
   <data name="Tooltip_TileGpuBudgetMb" xml:space="preserve">
-    <value>Per-layer budget, in megabytes, for GPU-resident tile textures. Sized when the resident-texture cache is created — reload the dataset to apply a change.</value>
+    <value>Budget, in megabytes, for GPU-resident tile textures, shared by all layers. When it's full, the textures drawn least recently are dropped first. Takes effect immediately.</value>
   </data>
   <data name="Settings_TileWorkerCount" xml:space="preserve">
     <value>Tile workers</value>

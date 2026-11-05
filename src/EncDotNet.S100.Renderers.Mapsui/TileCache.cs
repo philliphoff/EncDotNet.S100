@@ -3,41 +3,67 @@ using SkiaSharp;
 namespace EncDotNet.S100.Renderers.Mapsui;
 
 /// <summary>
-/// A thread-safe, least-recently-used cache of rasterised base-plane tiles
-/// (S-100 render subsystem, Phase&#160;2), bounded by a hard <b>native-byte
-/// budget</b> rather than an entry count — decoded <see cref="SKImage"/> pixels
-/// live in native memory, which is the out-of-memory risk the design calls out
-/// (§3.4). When a <see cref="Put"/> pushes the resident total over budget the
-/// least-recently-used tiles are evicted (and disposed) until it fits.
+/// A thread-safe cache of rasterised base-plane tiles for one layer, whose
+/// native bytes are charged to a shared <see cref="TileMemoryPool"/>. The pool
+/// keeps one least-recently-used order across all its caches and evicts from it
+/// when the total passes the pool's limit (map rendering slice&#160;4), so the
+/// tiles nobody has drawn for longest go first, whichever layer holds them.
+/// Decoded <see cref="SKImage"/> pixels live in native memory, which is the
+/// out-of-memory risk the design calls out (§3.4).
 /// </summary>
 /// <remarks>
 /// Both the UI/compositor thread (via <see cref="TryGet"/> /
-/// <see cref="SnapshotKeys"/>) and the worker thread (via <see cref="Put"/>)
-/// touch the cache, so every operation takes the internal lock. Eviction
+/// <see cref="SnapshotKeys"/>) and the worker threads (via <see cref="Put"/>)
+/// touch the cache, so every operation takes the pool's lock. Eviction
 /// disposes the <see cref="SKImage"/>; callers must therefore only use an image
 /// returned by <see cref="TryGet"/> while they continue to reference it on the
 /// UI thread within the same composite pass (the compositor does, and a tile in
-/// use is also the most-recently-used, so it is never the eviction victim).
+/// use is also among the most-recently-used and pinned, so it is never the
+/// eviction victim).
 /// </remarks>
 internal sealed class TileCache : IDisposable
 {
-    private readonly object _sync = new();
+    private readonly TileMemoryPool _pool;
+    private readonly object _sync;
     private readonly Dictionary<TileKey, LinkedListNode<Entry>> _map = new();
-    private readonly LinkedList<Entry> _lru = new();
     private readonly HashSet<TileKey> _protected = new();
+    private readonly WeakReference? _owner;
     private readonly bool _deferDisposal;
-    private List<SKImage>? _pendingDisposal;
+    private long _protectedAt = long.MinValue;
     private long _generation;
     private long _residentBytes;
     private bool _disposed;
 
-    private sealed record Entry(TileKey Key, SKImage Image, long Bytes);
+    /// <summary>One resident tile, linked into its pool's recency list.</summary>
+    internal sealed record Entry(TileCache Owner, TileKey Key, SKImage Image, long Bytes)
+    {
+        /// <summary>Snapshots copying this tile's pixels outside the lock. Guarded by the pool's lock.</summary>
+        public int Readers;
+
+        /// <summary>Removed from the cache while a snapshot was reading it; the last reader disposes it.</summary>
+        public bool Retired;
+    }
 
     /// <summary>
-    /// Creates a cache with the given native-byte budget. Values ≤ 0 are
-    /// clamped to a 1-tile floor so a single tile can always reside.
+    /// Creates a cache with a pool of its own, bounded by
+    /// <paramref name="budgetBytes"/>. Values ≤ 0 are clamped to a 1-tile floor
+    /// so a single tile can always reside.
     /// </summary>
     /// <param name="budgetBytes">The native-byte eviction budget.</param>
+    /// <param name="deferDisposal">See <see cref="TileCache(TileMemoryPool, object?, bool)"/>.</param>
+    public TileCache(long budgetBytes, bool deferDisposal = false)
+        : this(new TileMemoryPool(() => budgetBytes, "private"), owner: null, deferDisposal)
+    {
+    }
+
+    /// <summary>Creates a cache that charges its tiles to <paramref name="pool"/>.</summary>
+    /// <param name="pool">The shared account the tiles are charged to and evicted from.</param>
+    /// <param name="owner">
+    /// The object whose lifetime the cache shares, or <see langword="null"/>.
+    /// The pool holds the cache's tiles strongly, so once the owner has been
+    /// collected the pool releases them itself (within about a second of its
+    /// next insert) rather than leaving them to age out.
+    /// </param>
     /// <param name="deferDisposal">
     /// When <see langword="true"/>, images evicted or cleared from the cache are
     /// <b>not</b> disposed inline; they are held until <see cref="DrainPendingDisposals"/>
@@ -51,19 +77,28 @@ internal sealed class TileCache : IDisposable
     /// The raster cache leaves this <see langword="false"/> (CPU images are safe
     /// to free inline).
     /// </param>
-    public TileCache(long budgetBytes, bool deferDisposal = false)
+    public TileCache(TileMemoryPool pool, object? owner, bool deferDisposal = false)
     {
-        BudgetBytes = Math.Max(budgetBytes, MinBudgetBytes);
+        _pool = pool ?? throw new ArgumentNullException(nameof(pool));
+        _sync = pool.Sync;
+        _owner = owner is null ? null : new WeakReference(owner);
         _deferDisposal = deferDisposal;
+        lock (_sync)
+        {
+            pool.Join(this);
+        }
     }
 
     /// <summary>A floor so at least one reasonably-sized tile always fits.</summary>
     public const long MinBudgetBytes = 4L * 1024 * 1024;
 
-    /// <summary>The native-byte budget; eviction keeps the resident total at or under this.</summary>
-    public long BudgetBytes { get; }
+    /// <summary>The pool this cache's tiles are charged to.</summary>
+    public TileMemoryPool Pool => _pool;
 
-    /// <summary>The current resident native-byte total.</summary>
+    /// <summary>The pool's native-byte limit.</summary>
+    public long BudgetBytes => _pool.LimitBytes;
+
+    /// <summary>The native bytes this cache holds.</summary>
     public long ResidentBytes
     {
         get { lock (_sync) { return _residentBytes; } }
@@ -74,6 +109,9 @@ internal sealed class TileCache : IDisposable
     {
         get { lock (_sync) { return _map.Count; } }
     }
+
+    /// <summary>Whether the owner passed at construction is still alive (always, without one).</summary>
+    internal bool OwnerAlive => _owner is null || _owner.IsAlive;
 
     /// <summary>The native bytes a decoded RGBA image of this pixel size occupies.</summary>
     public static long BytesFor(SKImage image)
@@ -95,8 +133,7 @@ internal sealed class TileCache : IDisposable
                 return null;
             }
 
-            _lru.Remove(node);
-            _lru.AddFirst(node);
+            _pool.Touch(node);
             return node.Value.Image;
         }
     }
@@ -111,7 +148,7 @@ internal sealed class TileCache : IDisposable
     /// </summary>
     internal SKImage? TryCreateSnapshot(TileKey key, long expectedGeneration, int expectedPixelSize)
     {
-        SKBitmap? pixels;
+        Entry entry;
         lock (_sync)
         {
             if (_disposed
@@ -122,9 +159,32 @@ internal sealed class TileCache : IDisposable
                 return null;
             }
 
-            _lru.Remove(node);
-            _lru.AddFirst(node);
-            pixels = TileDiskCache.CopyPixels(node.Value.Image);
+            _pool.Touch(node);
+            entry = node.Value;
+            entry.Readers++;
+        }
+
+        // Copy outside the pool's lock (a 2x tile is about 1 MB), so the
+        // compositor and other layers aren't held up; an eviction meanwhile
+        // leaves the image to this reader to dispose.
+        SKBitmap? pixels;
+        try
+        {
+            pixels = TileDiskCache.CopyPixels(entry.Image);
+        }
+        finally
+        {
+            bool dispose;
+            lock (_sync)
+            {
+                entry.Readers--;
+                dispose = entry.Retired && entry.Readers == 0;
+            }
+
+            if (dispose)
+            {
+                entry.Image.Dispose();
+            }
         }
 
         if (pixels is null)
@@ -175,10 +235,10 @@ internal sealed class TileCache : IDisposable
 
     /// <summary>
     /// Inserts (or replaces) the image for <paramref name="key"/> as
-    /// most-recently-used, then evicts least-recently-used tiles until the
-    /// resident total is within <see cref="BudgetBytes"/>. Replacing an existing
-    /// key disposes the prior image. If the cache is disposed the image is
-    /// disposed immediately.
+    /// most-recently-used, then evicts the pool's least-recently-used tiles —
+    /// from any member cache — until the pool is within its limit. Replacing an
+    /// existing key disposes the prior image. If the cache is disposed the image
+    /// is disposed immediately.
     /// </summary>
     public void Put(TileKey key, SKImage image)
     {
@@ -195,58 +255,84 @@ internal sealed class TileCache : IDisposable
 
             if (_map.TryGetValue(key, out var existing))
             {
-                _residentBytes -= existing.Value.Bytes;
-                _lru.Remove(existing);
-                RetireImage(existing.Value.Image, ref evicted);
-                _map.Remove(key);
+                Evict(existing.Value, ref evicted);
             }
 
-            var bytes = BytesFor(image);
-            var node = _lru.AddFirst(new Entry(key, image, bytes));
+            var entry = new Entry(this, key, image, BytesFor(image));
+            var node = _pool.AddFirst(entry);
             _map[key] = node;
-            _residentBytes += bytes;
+            _residentBytes += entry.Bytes;
 
-            // Evict least-recently-used tiles to fit the budget, but never the
-            // pinned (currently-visible) tiles or the just-inserted node: a tile
-            // in use must survive regardless of budget, or the compositor would
-            // blink between a rendered and a blank tile when the working set
-            // exceeds the cache size. Walk from the LRU end skipping protected
-            // keys; stop once the only remaining candidates are pinned.
-            var node2 = _lru.Last;
-            while (_residentBytes > BudgetBytes && node2 is not null)
-            {
-                var prev = node2.Previous;
-                if (node2 != node && !_protected.Contains(node2.Value.Key))
-                {
-                    _lru.Remove(node2);
-                    _map.Remove(node2.Value.Key);
-                    _residentBytes -= node2.Value.Bytes;
-                    RetireImage(node2.Value.Image, ref evicted);
-                }
-
-                node2 = prev;
-            }
+            // Evict least-recently-used tiles to fit the budget, but never a
+            // cache's pinned (currently-visible) tiles or the just-inserted node:
+            // a tile in use must survive regardless of budget, or the compositor
+            // would blink between a rendered and a blank tile when the working
+            // set exceeds the budget.
+            _pool.Trim(node, ref evicted);
         }
 
-        if (evicted is not null)
+        DisposeAll(evicted);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="key"/> is pinned by this cache's latest
+    /// <see cref="Protect"/> call and that pin still holds (see
+    /// <see cref="TileMemoryPool.PinLapse"/>). Must be called under the pool's lock.
+    /// </summary>
+    internal bool IsPinned(TileKey key) =>
+        _protected.Count > 0 && _protected.Contains(key) && _pool.PinHolds(_protectedAt);
+
+    /// <summary>
+    /// Removes <paramref name="entry"/> from this cache and the pool, retiring
+    /// its image. Must be called under the pool's lock.
+    /// </summary>
+    internal void Evict(Entry entry, ref List<SKImage>? inline)
+    {
+        if (!_map.Remove(entry.Key, out var node))
         {
-            foreach (var img in evicted)
-            {
-                img.Dispose();
-            }
+            return;
         }
+
+        _pool.Remove(node);
+        _residentBytes -= entry.Bytes;
+        RetireImage(entry, ref inline);
+    }
+
+    /// <summary>
+    /// Removes every resident tile from the pool, retiring the images. Must be
+    /// called under the pool's lock.
+    /// </summary>
+    internal void ReleaseAll(ref List<SKImage>? inline)
+    {
+        _generation++;
+        foreach (var node in _map.Values)
+        {
+            _pool.Remove(node);
+            RetireImage(node.Value, ref inline);
+        }
+
+        _map.Clear();
+        _protected.Clear();
+        _residentBytes = 0;
     }
 
     /// <summary>
     /// Routes an image removed from the cache to inline disposal, or — when
-    /// <see cref="_deferDisposal"/> is set — to the pending-disposal list drained
-    /// by <see cref="DrainPendingDisposals"/>. Must be called under <c>_sync</c>.
+    /// <see cref="_deferDisposal"/> is set — to the pool's pending-disposal list
+    /// drained by <see cref="DrainPendingDisposals"/>. Must be called under the
+    /// pool's lock.
     /// </summary>
-    private void RetireImage(SKImage image, ref List<SKImage>? evictedInline)
+    private void RetireImage(Entry entry, ref List<SKImage>? evictedInline)
     {
-        if (_deferDisposal)
+        var image = entry.Image;
+        if (entry.Readers > 0)
         {
-            (_pendingDisposal ??= new List<SKImage>()).Add(image);
+            // A snapshot is copying it outside the lock; it disposes the image.
+            entry.Retired = true;
+        }
+        else if (_deferDisposal)
+        {
+            _pool.Retire(this, image);
         }
         else
         {
@@ -255,29 +341,26 @@ internal sealed class TileCache : IDisposable
     }
 
     /// <summary>
-    /// Disposes images that were evicted/cleared since the last drain. For a
-    /// deferred-disposal (GPU) cache the caller invokes this at the <b>start of a
-    /// frame, before any draw is recorded</b>, so the images — last referenced by
-    /// the previous (already-flushed) frame — are freed without risking a
-    /// use-after-free in the current frame's deferred draws. A no-op for an
-    /// inline-disposal cache.
+    /// Disposes images that were evicted/cleared from this cache since the last
+    /// drain, plus any other member's that have waited past
+    /// <see cref="TileMemoryPool.OrphanDisposalDelay"/>. For a deferred-disposal
+    /// (GPU) cache the caller invokes this at the <b>start of a frame, before any
+    /// draw is recorded</b>, so the images — last referenced by the previous
+    /// (already-flushed) frame — are freed without risking a use-after-free in
+    /// the current frame's deferred draws. Another layer's eviction can retire
+    /// this cache's texture after it was drawn in the current frame; it is still
+    /// freed only at this cache's next frame, or once the delay has passed. A
+    /// no-op for an inline-disposal cache.
     /// </summary>
     public void DrainPendingDisposals()
     {
         List<SKImage>? pending;
         lock (_sync)
         {
-            pending = _pendingDisposal;
-            _pendingDisposal = null;
+            pending = _pool.TakeDisposable(this);
         }
 
-        if (pending is not null)
-        {
-            foreach (var img in pending)
-            {
-                img.Dispose();
-            }
-        }
+        DisposeAll(pending);
     }
 
     /// <summary>A snapshot of the currently-resident keys (no LRU reorder).</summary>
@@ -290,12 +373,14 @@ internal sealed class TileCache : IDisposable
     }
 
     /// <summary>
-    /// Replaces the set of <b>pinned</b> keys that <see cref="Put"/> must never
-    /// evict, regardless of budget. The compositor passes the current visible
+    /// Replaces the set of <b>pinned</b> keys that eviction must never take,
+    /// regardless of budget. The compositor passes the current visible
     /// (target-band) tiles each frame so a tile in active use cannot be evicted
     /// by speculative/predicted inserts, which would otherwise flicker the tile
-    /// blank when the working set exceeds the cache size. Keys not currently
-    /// resident are harmless; they simply protect the tile once it lands.
+    /// blank when the working set exceeds the budget. Keys not currently
+    /// resident are harmless; they simply protect the tile once it lands. The
+    /// pins lapse once other caches in the pool have renewed theirs for
+    /// <see cref="TileMemoryPool.PinLapse"/> without this one doing so.
     /// </summary>
     public void Protect(IReadOnlyCollection<TileKey> keys)
     {
@@ -307,6 +392,9 @@ internal sealed class TileCache : IDisposable
             {
                 _protected.Add(k);
             }
+
+            _protectedAt = _pool.Now();
+            _pool.NotePin(_protectedAt);
         }
     }
 
@@ -321,39 +409,41 @@ internal sealed class TileCache : IDisposable
         List<SKImage>? inline = null;
         lock (_sync)
         {
-            _generation++;
-            foreach (var node in _map.Values)
-            {
-                RetireImage(node.Value.Image, ref inline);
-            }
-
-            _map.Clear();
-            _lru.Clear();
-            _protected.Clear();
-            _residentBytes = 0;
+            ReleaseAll(ref inline);
         }
 
-        if (inline is not null)
-        {
-            foreach (var img in inline)
-            {
-                img.Dispose();
-            }
-        }
+        DisposeAll(inline);
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
+        List<SKImage>? inline = null;
         lock (_sync)
         {
             _disposed = true;
+            ReleaseAll(ref inline);
+            _pool.Leave(this);
         }
 
-        Clear();
+        DisposeAll(inline);
+
         // Teardown frees everything now (the render thread owns the GPU context
         // at this point and no draw for this cache is in flight): drain any
         // images Clear() may have deferred.
         DrainPendingDisposals();
+    }
+
+    private static void DisposeAll(List<SKImage>? images)
+    {
+        if (images is null)
+        {
+            return;
+        }
+
+        foreach (var img in images)
+        {
+            img.Dispose();
+        }
     }
 }
