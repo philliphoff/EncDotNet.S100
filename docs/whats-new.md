@@ -18,6 +18,14 @@ month. For package versions and release assets, see
   `LineLegendEntry` rows. See
   [EncDotNet.S100.Portrayals](../src/EncDotNet.S100.Portrayals/README.md#code-defined-portrayal).
 
+- **Surface analyses: fronts and pressure centres.** `s100` and the
+  libraries now read the Weather Prediction Center's coded surface
+  bulletins, the 3-hourly analysis at standard and high resolution and the
+  coded forecast bulletins, into a surface analysis model of fronts, troughs,
+  highs and lows. `s100 info` gives each bulletin's valid times and what it
+  holds. Drawing them on the chart comes next. See
+  [Show wind and waves on the chart](weather.md).
+
 - **Air temperature and freezing spray on the chart.** GRIB2 and NetCDF
   files with 2 m air temperature now draw it as dashed isotherms every 5 °C,
   off by default, behind a new **Air temperature** switch in Display

@@ -633,8 +633,15 @@ and a **Warnings** table lists each alert area with its event, severity, when
 it's in force (UTC) and how it's drawn (a polygon, a circle, or the NWS marine
 zones it names), then any zone codes the marine zone layer doesn't have. Its
 time steps are when warnings start and end, so `render --time-step` draws
-what's in force then. [Show wind and waves on the chart](weather.md) covers
-the weather formats.
+what's in force then. For a WPC coded surface bulletin (`CODSUS`),
+**Bulletin** says whether it's an analysis or a forecast, its resolution and
+its WMO heading, **Issued by** and **Issued (UTC)** come from its header,
+**Coverage** says it covers WPC's domain only, and a **Surface analyses**
+table lists each valid time (one for an analysis, one per forecast time) with
+its lead time and its counts of cold, warm, occluded and stationary fronts,
+troughs, highs and lows. **Skipped codes** lists any feature codes it
+doesn't know. [Show wind and waves on the chart](weather.md) covers the
+weather formats.
 
 ```bash
 s100 info currents.h5
@@ -862,7 +869,7 @@ s100 list-specs
 `list-specs` prints a table of the product specifications `s100` reads, with
 whether each has a bundled portrayal catalogue and whether it can be rendered
 headlessly. S-57 is listed with its portrayal shown as "via S-101". The
-weather formats GRIB2, NetCDF and CAP are listed last, with their portrayal
+weather formats GRIB2, NetCDF, CAP and CODSUS are listed last, with their portrayal
 shown as "SoundCharts, in code", and a line under the table says they aren't
 S-100 products. See [Supported specifications](#supported-specifications).
 
@@ -1089,7 +1096,7 @@ in its light description. Lua-CSharp lists them as reference Lua does.
 | Vector, ISO 8211 | S-101, S-401, S-57 | S-57 is translated to S-101, or to S-401 for an inland ENC, and drawn with that product's portrayal, not S-52. |
 | Vector, GML | S-122, S-124, S-125, S-127, S-128, S-129, S-131, S-201, S-411, S-421 | |
 | Coverage, HDF5 | S-102; S-104 data coding formats 1, 2 and 8; S-111 data coding formats 1, 2, 3 and 8 | Gridded data is drawn as a coverage; station and node data as glyphs. S-104 has no IHO portrayal, so its stations and grids use SoundCharts' own gauges and isolines; see [S-104 portrayal](../src/EncDotNet.S100.Datasets.S104/README.md#portrayal). S-111 draws current arrows over the coverage. Other data coding formats exit with code `4`. |
-| Weather, not S-100 | GRIB2, NetCDF-3 and NetCDF-4 (CF), CAP 1.2 and NWS alerts GeoJSON | Wind and wave grids on a regular latitude/longitude grid, and marine weather warnings, drawn with SoundCharts' own styles. Not for navigation. See [Show wind and waves on the chart](weather.md). |
+| Weather, not S-100 | GRIB2, NetCDF-3 and NetCDF-4 (CF), CAP 1.2 and NWS alerts GeoJSON, WPC coded surface bulletins (CODSUS) | Wind and wave grids on a regular latitude/longitude grid, and marine weather warnings, drawn with SoundCharts' own styles; surface analyses (fronts and pressure centres) read and described, not drawn yet. Not for navigation. See [Show wind and waves on the chart](weather.md). |
 
 ## Exit codes
 

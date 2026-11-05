@@ -277,6 +277,79 @@ var result = await WeatherPortrayal.BuildAsync(
     new RenderContext { TimeStep = mapTime, Palette = PaletteType.Dusk });
 ```
 
+## Surface analyses
+
+The package also holds the surface analysis model, fronts and pressure
+centres, and a reader for the National Weather Service Weather Prediction
+Center's (WPC) coded surface bulletins (issue
+[#1233](https://github.com/philliphoff/EncDotNet.S100/issues/1233), design note
+`vector-weather.md` §8.3). Drawing them
+is a later slice; `SurfaceAnalysisDatasetProcessor` in
+[`Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md)
+registers the format as `CODSUS`, and `s100 info` describes a bulletin.
+
+```csharp
+using EncDotNet.S100.Datasets.Weather;
+
+var bulletin = CodedSurfaceBulletinReader.Read("codsus_hr.txt");
+
+foreach (var analysis in bulletin.Analyses)        // one, or one per forecast time
+{
+    Console.WriteLine($"{analysis.ValidTime:u} ({analysis.ForecastHours?.ToString() ?? "analysis"})");
+    foreach (var front in analysis.Fronts)
+        Console.WriteLine($"  {front.Code} {front.Strength}: {front.Points.Count} points");
+    foreach (var centre in analysis.PressureCentres)
+        Console.WriteLine($"  {centre.Kind} {centre.PressureHectopascals} hPa at {centre.Position}");
+}
+```
+
+What it reads:
+
+- **The coded surface analysis** (`CODSUS`), every 3 hours, at standard
+  resolution (whole degrees, `ASUS01 KWBC`) and high resolution (tenths of a
+  degree, `ASUS02 KWBC`, the canonical input).
+- **The coded forecast bulletins**, such as the short-range `CODSRP`
+  (`FSUS02 KWBC`): one `SurfaceAnalysis` per forecast time (`12HR PROG VALID
+  051200Z`), with `ForecastHours` set.
+- `HIGHS` and `LOWS` (central pressure and position), and `COLD`, `WARM`,
+  `OCFNT`, `STNRY` and `TROF` with an optional intensity (`WK`, `MDT`, `STG`)
+  and their points.
+- Lines that wrap anywhere, even between a pressure and its position, codes
+  that start mid-line, and the `$$`, `**` and `....` end markers. A code the
+  reader doesn't know is skipped and listed in `SkippedCodes`.
+- Longitudes past 180°W, which are east longitudes: a front that crosses 180°
+  has points on both sides (`SurfaceFront.CrossesAntimeridian`).
+
+The short valid times (`VALID 110400Z` is month, day and hour) are dated from
+the bulletin's issuance line. WPC's own examples have none, so for those
+`Read(path)` uses the file's last-write time and `Parse(text, referenceTime)`
+the time you give.
+
+**Which side the pips go on.** A front's points run in the bulletin's order,
+and its symbols go on the **left**, walking from the first point to the last:
+that's the side it moves towards. WPC's format pages don't say so; the
+evidence from 15 real analyses is in the `CodedSurfaceBulletinReader` remarks
+(66 of 68 cold fronts leaving a low have their left facing east, 26 of 30
+warm fronts north), and a test checks it against a committed bulletin. Which
+of a stationary front's two symbols goes on which side isn't in the data.
+
+**Coverage.** The bulletins cover WPC's domain only, the Northern Hemisphere
+from 180° to 0° (`CodedSurfaceBulletin.WpcDomain`). Outside it, nothing is
+known; the dataset's extent is the domain, not the features' bounding box.
+
+| Type | Description |
+|---|---|
+| `CodedSurfaceBulletinReader` | `Read(path)`, `Read(stream, referenceTime)`, `Parse(text, referenceTime)` and `LooksLikeCodedSurfaceBulletin(leadingBytes)`. |
+| `CodedSurfaceBulletin` | `Kind` (analysis or forecast), `Resolution`, `Header`, `Analyses`, `SkippedCodes` and `Domain`. |
+| `CodedSurfaceBulletinHeader` | WMO heading, product id, title, issuing office and issue time; each optional. |
+| `SurfaceAnalysis` | Valid time, forecast lead time, issuing centre, `Fronts` and `PressureCentres`. |
+| `SurfaceFront` | `Type` (`SurfaceFrontType`), `Strength` (`SurfaceFrontStrength`) and `Points` in the bulletin's order. |
+| `PressureCentre` | `Kind` (high or low), `PressureHectopascals` and `Position`. |
+| `CodedSurfaceBulletinFormatException` | Thrown with the line number for a bulletin that can't be decoded. |
+
+> **Not for navigation.** Surface analyses are weather analyses, not S-100
+> data.
+
 ## Dependencies
 
 - `EncDotNet.S100.Core`: the coverage pipeline interfaces and the quantity

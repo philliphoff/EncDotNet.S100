@@ -2,7 +2,7 @@
 
 SoundCharts can draw forecast wind and waves, sea surface temperature,
 surface currents, restricted visibility, air temperature, freezing spray, marine weather warnings and live observations over your
-charts. This page covers which files it reads,
+charts, and it reads surface analyses (fronts and pressure centres). This page covers which files it reads,
 where to get them, how to show them in SoundCharts and `s100`, and what isn't
 supported.
 
@@ -17,6 +17,7 @@ supported.
 | Data | Formats | What's drawn |
 |---|---|---|
 | Forecast and analysis grids | GRIB2, NetCDF-3 and NetCDF-4 with CF conventions | Wave height fill, wind barbs, isobars, a sea surface temperature fill, current arrows, a restricted visibility fill and a freezing spray fill; optionally a wind speed fill, wave arrows, sea isotherms and air isotherms |
+| Surface analyses | WPC coded surface bulletin (`CODSUS`), standard and high resolution, and WPC's coded forecast bulletins (such as `CODSRP`) | Read, and described by `s100 info`. Drawing fronts and pressure centres on the chart is coming in a later release |
 | Marine weather warnings | CAP 1.2 XML (one alert or an Atom feed of them), NWS alerts GeoJSON | Warning areas, hatched by severity and labelled with the event, while they're in force |
 | Buoy and coastal station observations | NOAA NDBC, fetched live | A wind barb and wave height at each station |
 | Own-ship wind | NMEA 0183 from your instruments | True wind as a barb beside own ship, with water and air temperature |
@@ -72,6 +73,18 @@ only NWS zone codes (UGC codes such as `ANZ535`) is drawn from the NWS
 coastal and offshore marine zones, which SoundCharts includes. A warning is
 drawn from its onset until its hazard ends, and an update or cancellation in
 the same file replaces it.
+
+### Surface analyses
+
+The National Weather Service Weather Prediction Center (WPC) issues a coded
+surface analysis every 3 hours: highs and lows with their central pressure,
+and cold, warm, occluded and stationary fronts and troughs as lines of
+points. The high-resolution bulletin gives positions to a tenth of a degree,
+the standard one to whole degrees. The coded forecast bulletins give the same
+features at forecast times, 12 and 24 hours ahead and later. They cover
+WPC's area only: the Northern Hemisphere from the Date Line to the Greenwich
+meridian, mostly North America and the waters around it. Elsewhere there's
+no analysis, not an absence of fronts.
 
 ## Get the data
 
@@ -159,6 +172,12 @@ made from its data. The Library can fetch some of these sources for you.
   Atlantic marine area. Save the GeoJSON it returns, or request
   `application/cap+xml` for a CAP Atom feed. The API asks callers to send a
   `User-Agent` header that identifies them.
+- **Surface analyses.** The latest bulletins are plain text on the NWS
+  server: the high-resolution analysis at
+  `https://tgftp.nws.noaa.gov/data/raw/as/asus02.kwbc.cod.sus.txt`, the
+  standard one at `…/raw/as/asus01.kwbc.cod.sus.txt`, and the short-range
+  forecast at `…/raw/fs/fsus02.kwbc.cod.srp.txt`. Save them with any name;
+  SoundCharts and `s100` recognise the contents.
 - **NDBC buoys.** There's nothing to download. SoundCharts fetches the
   latest observations from [NDBC](https://www.ndbc.noaa.gov/) for the
   stations in view; see [Show buoy observations](#show-buoy-observations).
@@ -257,11 +276,13 @@ for how true wind is found.
 ## Use the command line
 
 `s100` reads the same files. `info` lists a grid's model, run, grid,
-parameters, levels and time steps, or a CAP file's warnings:
+parameters, levels and time steps, a CAP file's warnings, or a surface
+analysis's valid times and how many fronts and centres of each kind it has:
 
 ```bash
 s100 info filter_gfswave.pl
 s100 info alerts.atom
+s100 info asus02.kwbc.cod.sus.txt
 ```
 
 `render` draws the default layers (wave height fill, wind barbs and isobars)

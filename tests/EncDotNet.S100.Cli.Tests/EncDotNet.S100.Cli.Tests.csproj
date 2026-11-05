@@ -29,6 +29,7 @@
     <Compile Include="..\_shared\NetCdfFixtures.cs" Link="TestSupport\NetCdfFixtures.cs" />
     <Compile Include="..\_shared\GribFixtures.cs" Link="TestSupport\GribFixtures.cs" />
     <Compile Include="..\_shared\CapFixtures.cs" Link="TestSupport\CapFixtures.cs" />
+    <Compile Include="..\_shared\CodsusFixtures.cs" Link="TestSupport\CodsusFixtures.cs" />
     <Compile Include="..\_shared\WeatherFakeServer.cs" Link="TestSupport\WeatherFakeServer.cs" />
   </ItemGroup>
 
@@ -56,6 +57,8 @@
     <Content Include="..\datasets\GRIB2\*.grib2" CopyToOutputDirectory="PreserveNewest" Link="TestData\GRIB2\%(Filename)%(Extension)" />
     <!-- NWS marine CAP alerts and a hand-written circle alert (issue #1069); see tests/datasets/CAP/README.md. -->
     <Content Include="..\datasets\CAP\*.*" Exclude="..\datasets\CAP\*.md" CopyToOutputDirectory="PreserveNewest" Link="TestData\CAP\%(Filename)%(Extension)" />
+    <!-- WPC coded surface bulletins, three real and one hand-written (issue #1295); see tests/datasets/CODSUS/README.md. -->
+    <Content Include="..\datasets\CODSUS\*.txt" CopyToOutputDirectory="PreserveNewest" Link="TestData\CODSUS\%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>
