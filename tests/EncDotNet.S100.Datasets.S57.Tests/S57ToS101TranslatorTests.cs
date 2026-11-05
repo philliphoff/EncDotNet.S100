@@ -2176,6 +2176,29 @@ public class S57ToS101TranslatorTests
     }
 
     [Fact]
+    public void Translate_RangeSystemCAggr_CarriesItsOwnName()
+    {
+        // #1249: the C_AGGR's OBJNAM becomes the RangeSystem's featureName.
+        var n1 = Node(1, 1000, 2000);
+        var n2 = Node(2, 1000, 2100);
+        var navlne = Feat(1, 1, 85, featureIdentificationNumber: 10,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 1, 1, 0, 0) });
+        var beacon = Feat(2, 1, 9, featureIdentificationNumber: 12,
+            spatialPointers: new[] { Sp(RcnmConnectedNode, 2, 1, 0, 0) });
+        var aggr = Feat(3, 1, 400, featureIdentificationNumber: 99,
+            attributes: new[] { Attr(116, "Ambrose Channel") },
+            featurePointers: new[] { Ffpt(540, 10), Ffpt(540, 12) });
+
+        var s101 = new S57ToS101Translator().Translate(
+            BuildDocument(vectorRecords: new[] { n1, n2 }, features: new[] { navlne, beacon, aggr }));
+
+        var rangeSystem = FeatureOfClass(s101, "RangeSystem");
+        Assert.NotNull(rangeSystem);
+        var instance = ComplexInstance(s101, rangeSystem!.Attributes, "featureName", 1).ToList();
+        Assert.Equal("Ambrose Channel", GetSubAttribute(s101, instance, "name"));
+    }
+
+    [Fact]
     public void Translate_S401Target_RangeSystemCAggr_IsNotSynthesised()
     {
         // The same qualifying range system as above; S-401 has no RangeSystem class.
@@ -5183,7 +5206,8 @@ public class S57ToS101TranslatorTests
     {
         // LOCMAG (OBJL 78) → LocalMagneticAnomaly, which binds
         // valueOfLocalMagneticAnomaly. VALLMA (ATTL 175) feeds the mandatory
-        // magneticAnomalyValue sub-attribute (the value carried verbatim).
+        // magneticAnomalyValue sub-attribute, converted from minutes of arc
+        // to degrees (#1250).
         var s101 = new S57ToS101Translator().Translate(
             PointFeatureWithS57Attributes(78, Attr(175, "300")));
 
@@ -5192,7 +5216,7 @@ public class S57ToS101TranslatorTests
 
         var instance = ComplexInstance(s101, feat.Attributes, "valueOfLocalMagneticAnomaly", 1).ToList();
         Assert.NotEmpty(instance);
-        Assert.Equal("300", GetSubAttribute(s101, instance, "magneticAnomalyValue"));
+        Assert.Equal("5", GetSubAttribute(s101, instance, "magneticAnomalyValue"));
         // referenceDirection has no S-57 source and is not populated.
         Assert.Null(GetSubAttribute(s101, instance, "referenceDirection"));
         // VALLMA is not passed through as a top-level simple attribute.
@@ -5266,6 +5290,23 @@ public class S57ToS101TranslatorTests
 
         var feat = Assert.Single(s101.Features);
         Assert.Empty(ComplexInstance(s101, feat.Attributes, "radarWaveLength", 1).ToList());
+    }
+
+    [Theory]
+    [InlineData("100")]
+    [InlineData("7")]
+    [InlineData("-45.5")]
+    public void Translate_Vallma_RoundTripsThroughDegrees(string minutes)
+    {
+        // VALLMA values that do not divide evenly by 60 must come back
+        // unchanged from the reverse ×60 (S-65 Annex C §27.122).
+        var s101 = new S57ToS101Translator().Translate(
+            PointFeatureWithS57Attributes(78, Attr(175, minutes)));
+
+        var s57 = new S101ToS57Translator().Translate(s101);
+
+        var locmag = Assert.Single(s57.FeatureRecords, f => (int)f.ObjectCode == 78);
+        Assert.Equal(minutes, Assert.Single(locmag.Attributes, a => a.AttributeCode == 175).Value);
     }
 
     [Fact]

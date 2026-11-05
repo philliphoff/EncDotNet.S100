@@ -43,8 +43,6 @@ internal sealed record RoundTripDifference(
         (_, "NINFOM" or "NOBJNM" or "NTXTDS") => "#1221",
         ("TSEZNE" or "COSARE" or "163", "(feature)") => "#1222",
         ("TOPMAR", _) or ("M_QUAL", "SOUACC" or "POSACC") or ("SBDARE", "NATSUR" or "NATQUA") => "#1222",
-        ("C_AGGR", "OBJNAM" or "NOBJNM" or "INFORM") => "#1249",
-        ("LOCMAG", "VALLMA") => "#1250",
         _ => null,
     };
 }
