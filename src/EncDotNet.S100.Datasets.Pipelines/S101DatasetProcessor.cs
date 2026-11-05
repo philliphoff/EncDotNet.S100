@@ -652,7 +652,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
         AppendModuleVersion(sb, typeof(FeatureCatalogue).Assembly);           // Features (FC decode)
         AppendModuleVersion(sb, typeof(S101LuaRuleExecutor).Assembly);        // Datasets.S101 (executor)
         AppendModuleVersion(sb, typeof(S101DatasetProcessor).Assembly);       // Datasets.Pipelines (this)
-        AppendModuleVersion(sb, _luaEngine.GetType().Assembly);               // Lua engine (MoonSharp)
+        AppendModuleVersion(sb, _luaEngine.GetType().Assembly);               // Lua engine: each engine keeps its own entries
 
         _portrayalContentHash = Convert.ToHexString(
             System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())))

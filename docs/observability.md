@@ -269,7 +269,9 @@ product and catalogue versions and the kind of match.
 | `s100.hdf5.read.bytes` | counter | `By` | — |
 | `s100.hdf5.read.duration` | histogram | `ms` | — |
 
-### Lua rules (`EncDotNet.S100.Scripting.MoonSharp`)
+### Lua rules (`EncDotNet.S100.Scripting.LuaCSharp`, `EncDotNet.S100.Scripting.MoonSharp`)
+
+Both engines record the same instruments, each under its own assembly's name.
 
 | Instrument | Type | Unit | Tags |
 |---|---|---|---|

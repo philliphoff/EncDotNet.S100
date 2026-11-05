@@ -4,8 +4,8 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 using PureHDF;
 using SkiaSharp;
 
@@ -123,7 +123,7 @@ public class S102Edition21Tests
         var processor = new S102DatasetProcessor(
             path,
             manager,
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory());
 
         try
@@ -147,7 +147,7 @@ public class S102Edition21Tests
         var processor = new S102DatasetProcessor(
             path,
             manager,
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory());
 
         try
@@ -171,7 +171,7 @@ public class S102Edition21Tests
         var processor = new S102DatasetProcessor(
             path,
             manager,
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory());
 
         try

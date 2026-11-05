@@ -67,8 +67,11 @@ backend's "missing attribute" failure into these typed exceptions.
 `ILuaEngine` and `ILuaContext` (namespace `EncDotNet.S100.Scripting`) run
 sandboxed Lua portrayal scripts. `S100LuaHost` is the host API the scripts
 call.
+[`EncDotNet.S100.Scripting.LuaCSharp`](../EncDotNet.S100.Scripting.LuaCSharp/README.md)
+(the default) and
 [`EncDotNet.S100.Scripting.MoonSharp`](../EncDotNet.S100.Scripting.MoonSharp/README.md)
-implements the engine.
+implement the engine. `LuaEngineKind` names them, and `LuaEngineKinds` parses
+a name such as `luacsharp` and reads the `S100_LUA_ENGINE` override.
 
 ### Coverage pipeline
 

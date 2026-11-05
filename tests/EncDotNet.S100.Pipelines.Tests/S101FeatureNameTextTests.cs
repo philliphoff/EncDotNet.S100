@@ -2,8 +2,8 @@ using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -113,7 +113,7 @@ public class S101FeatureNameTextTests
 
         using var pcSource = Specification.CreatePortrayalCatalogueSource("S-101");
         var pcProvider = PortrayalCatalogueProvider.OpenAsync(pcSource).GetAwaiter().GetResult();
-        var luaEngine = new MoonSharpLuaEngine();
+        var luaEngine = TestLuaEngine.Create();
         var catalogue = new S101PortrayalCatalogue(pcProvider, luaEngine);
         catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
 

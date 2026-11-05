@@ -3,6 +3,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Rendering.Scene;
+using EncDotNet.S100.Scripting;
 using SkiaSharp;
 
 namespace EncDotNet.S100;
@@ -20,8 +21,22 @@ namespace EncDotNet.S100;
 /// </remarks>
 public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100CompositeRenderer<byte[]>, IDisposable
 {
+    private readonly LuaEngineKind _luaEngine;
     private S100PipelineHost? _bundledHost;
     private bool _disposed;
+
+    /// <summary>Creates a renderer that runs Lua portrayal on the default engine.</summary>
+    public PngS100DatasetRenderer()
+        : this(LuaEngineKinds.Default)
+    {
+    }
+
+    /// <summary>Creates a renderer that runs Lua portrayal on the given engine.</summary>
+    /// <param name="luaEngine">The Lua engine that runs the portrayal rules.</param>
+    public PngS100DatasetRenderer(LuaEngineKind luaEngine)
+    {
+        _luaEngine = luaEngine;
+    }
 
     /// <inheritdoc />
     public Task<byte[]> RenderAsync(
@@ -57,12 +72,13 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
             host = S100PipelineHost.Create(
                 dataset.SpecName,
                 featureOverride: layer.FeatureCatalogue is { IsBundled: false } fc ? fc : null,
-                portrayalOverride: layer.PortrayalCatalogue is { CustomSource: not null } pc ? pc : null);
+                portrayalOverride: layer.PortrayalCatalogue is { CustomSource: not null } pc ? pc : null,
+                luaEngine: _luaEngine);
             disposeHost = true;
         }
         else
         {
-            host = _bundledHost ??= S100PipelineHost.Create();
+            host = _bundledHost ??= S100PipelineHost.Create(luaEngine: _luaEngine);
             disposeHost = false;
         }
 
@@ -261,11 +277,12 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
             return S100PipelineHost.Create(
                 layer.Dataset.SpecName,
                 featureOverride: layer.FeatureCatalogue is { IsBundled: false } fc ? fc : null,
-                portrayalOverride: layer.PortrayalCatalogue is { CustomSource: not null } pc ? pc : null);
+                portrayalOverride: layer.PortrayalCatalogue is { CustomSource: not null } pc ? pc : null,
+                luaEngine: _luaEngine);
         }
 
         disposeHost = false;
-        return _bundledHost ??= S100PipelineHost.Create();
+        return _bundledHost ??= S100PipelineHost.Create(luaEngine: _luaEngine);
     }
 
     internal static RenderContext BuildCompositeContext(

@@ -1,7 +1,7 @@
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Scripting;
-using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -60,7 +60,7 @@ public class LuaRuleExecutorCancellationTests
     }
 
     private static LuaRuleExecutor Executor(Provider provider) =>
-        new(new MoonSharpLuaEngine(), new RuleSource(), provider, "TEST", []);
+        new(TestLuaEngine.Create(), new RuleSource(), provider, "TEST", []);
 
     [Fact]
     public async Task Cancelling_MidRun_StopsAtTheNextFeature()

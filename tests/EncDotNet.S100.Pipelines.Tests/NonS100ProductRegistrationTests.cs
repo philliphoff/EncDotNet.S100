@@ -7,7 +7,6 @@ using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.TestSupport;
 using PureHDF;
 using SkiaSharp;
@@ -262,7 +261,7 @@ public class NonS100ProductRegistrationTests : IDisposable
     private static DatasetPipelineFactory CreateFactory(ProductRegistry registry) =>
         new(
             new PortrayalCatalogueManager(),
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory(),
             new FeatureCatalogueManager(),
             new DisplayPlaneAuthorityProvider(registry),

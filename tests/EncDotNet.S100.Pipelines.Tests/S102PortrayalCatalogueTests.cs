@@ -2,8 +2,9 @@ using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S102;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Quantities;
-using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.Scripting;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -28,7 +29,7 @@ public sealed class S102PortrayalCatalogueTests : IDisposable
     // Night-palette sRGB (red=7,green=23,blue=39).
     private const string NightDEPVS = "#071727";
 
-    private readonly MoonSharpLuaEngine _engine = new();
+    private readonly ILuaEngine _engine = TestLuaEngine.Create();
     private readonly IAssetSource _source;
     private readonly PortrayalCatalogueProvider _provider;
 

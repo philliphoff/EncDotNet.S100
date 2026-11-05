@@ -42,7 +42,7 @@ description: |
 
 ## Review checklist
 1. Does the change respect the abstraction-first pattern? Concrete I/O
-   (`PureHdfFile`, `MoonSharpLuaEngine`, `FileSystemAssetSource`,
+   (`PureHdfFile`, `LuaCSharpLuaEngine`, `MoonSharpLuaEngine`, `FileSystemAssetSource`,
    `ZipAssetSource`) stays behind interfaces in `EncDotNet.S100.Core`.
 2. New product support: is it added as `EncDotNet.S100.Datasets.Sxxx`
    following the existing layout (Reader → Source → Pipeline plumbing)?

@@ -10,8 +10,8 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Quantities;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.S164.Tests;
 
@@ -161,7 +161,7 @@ public sealed class Part3WaterLevelAdjustmentTests
             ZipAssetSource.Create(zip, "S100_ROOT/"),
             "S-102/DATASET_FILES/102US004FL2AI252277.h5",
             catalogues,
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory());
     }
 

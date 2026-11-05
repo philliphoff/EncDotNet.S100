@@ -95,6 +95,11 @@ internal abstract class TilesRenderSettings : CommandSettings
     [DefaultValue("none")]
     public string Basemap { get; init; } = "none";
 
+    [CommandOption(LuaEngineOption.Template)]
+    [Description(LuaEngineOption.Description)]
+    [DefaultValue(LuaEngineOption.Default)]
+    public string LuaEngine { get; init; } = LuaEngineOption.Default;
+
     [CommandOption("--display-mode <MODE>")]
     [Description("Select the S-411 sea-ice portrayal display mode (S-411 only): ice-concentration (default), ice-sod or ice-navigational (PROVISIONAL preview, not a POLARIS/RIO computation).")]
     public string? DisplayMode { get; init; }
@@ -195,6 +200,9 @@ internal abstract class TilesRenderSettings : CommandSettings
                 $"Invalid --hide value '{badToken}'. Use a comma-separated list of: text, points, lines, areas.");
         if (!RenderCommand.TryParseBasemap(Basemap, out _))
             return ValidationResult.Error($"Invalid --basemap value '{Basemap}'. Use none or offline.");
+
+        if (LuaEngineOption.Validate(LuaEngine) is { Successful: false } luaEngineError)
+            return luaEngineError;
         if (DisplayMode is not null && !RenderCommand.TryParseDisplayMode(DisplayMode, out _))
             return ValidationResult.Error(
                 $"Invalid --display-mode value '{DisplayMode}'. Use ice-concentration, ice-sod or ice-navigational.");

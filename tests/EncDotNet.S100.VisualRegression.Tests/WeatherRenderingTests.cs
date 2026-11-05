@@ -8,9 +8,9 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Rendering.Scene;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.Testing.Scenarios.Hdf5;
+using EncDotNet.S100.TestSupport;
 using SkiaSharp;
 
 namespace EncDotNet.S100.VisualRegression.Tests;
@@ -157,7 +157,7 @@ public sealed class WeatherRenderingTests
 
         using var manager = CreateCatalogueManager();
         var s101 = await new S101DatasetProcessor(
-                cellPath, manager, new MoonSharpLuaEngine(), new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue))
+                cellPath, manager, TestLuaEngine.Create(), new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue))
             .BuildVectorPortrayalAsync(new RenderContext(), Ct);
 
         // Wave height rising from 0.5 m in the south-west to 6 m in the
@@ -268,7 +268,7 @@ public sealed class WeatherRenderingTests
 
         using var manager = CreateCatalogueManager();
         var s101 = await new S101DatasetProcessor(
-                cellPath, manager, new MoonSharpLuaEngine(), new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue))
+                cellPath, manager, TestLuaEngine.Create(), new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue))
             .BuildVectorPortrayalAsync(new RenderContext(), Ct);
 
         // Wave height rising from 0.5 m in the south-west to 6 m in the north-east.

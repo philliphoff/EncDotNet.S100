@@ -6,6 +6,7 @@ using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Rendering.Scene;
+using EncDotNet.S100.Scripting;
 using SkiaSharp;
 using Spectre.Console;
 
@@ -94,7 +95,7 @@ internal sealed class TileRenderSession : IDisposable
     public static int TryOpen(TilesRenderSettings settings, out TileRenderSession? session)
     {
         session = null;
-        var (factory, catalogueManager) = ProcessorFactoryBuilder.Build();
+        var (factory, catalogueManager) = ProcessorFactoryBuilder.Build(LuaEngineOption.Resolve(settings.LuaEngine));
         ExchangeSetLayerResolution? resolution = null;
         var processors = new List<IDatasetProcessor>();
         bool opened = false;
@@ -379,6 +380,7 @@ internal sealed class TileRenderSession : IDisposable
         Line("only", settings.Only);
         Line("noUpdates", settings.NoUpdates);
         Line("metatile", settings.Metatile);
+        Line("luaEngine", LuaEngineKinds.GetName(LuaEngineOption.Resolve(settings.LuaEngine)));
 
         foreach (var file in InputFiles(settings))
         {

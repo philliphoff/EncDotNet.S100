@@ -8,7 +8,7 @@ When modifying code in these projects:
 
 - Load the `s100-framework` skill before proposing non-trivial changes.
 - Preserve the abstraction-first pattern: concrete I/O
-  (`PureHdfFile`, `MoonSharpLuaEngine`, `FileSystemAssetSource`,
+  (`PureHdfFile`, `LuaCSharpLuaEngine`, `MoonSharpLuaEngine`, `FileSystemAssetSource`,
   `ZipAssetSource`) stays behind interfaces defined in
   `EncDotNet.S100.Core`.
 - Cite the relevant S-100 Edition 5.2.1 Part/section in XML doc comments

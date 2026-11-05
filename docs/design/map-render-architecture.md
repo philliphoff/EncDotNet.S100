@@ -726,8 +726,10 @@ change: MoonSharp stays. Step 0 adds a new `EncDotNet.S100.Scripting.LuaCSharp`
 package behind the existing `ILuaEngine` and `ILuaContext`, with the two
 compatibility shims (`__eq` dispatch and `require` recording modules that
 return nothing) and a sandbox equivalent to MoonSharp's hard sandbox. Both
-engines ship, and every host can pick either. MoonSharp is removed later, in its
-own change, once the A/B results below say it can go. It goes first because:
+engines ship, and every host can pick either. Lua-CSharp is the default from
+step 0, so problems with it surface quickly; MoonSharp stays selectable as the
+reference. MoonSharp is removed later, in its own change, once the A/B results
+below say it can go. It goes first because:
 
 - **It's the largest single gain on the table.** Cold portrayal is 2.3–2.8×
   faster and allocates about 9× less. Lua was 73% of cold-load allocations, so
@@ -756,7 +758,7 @@ Two choices in that issue interact with this design:
 
 #### Engine selection and A/B testing
 
-- **One option, every host.** A `LuaEngineKind { MoonSharp, LuaCSharp }`
+- **One option, every host.** A `LuaEngineKind { LuaCSharp, MoonSharp }`
   option picks the engine where `ILuaEngine` is constructed today:
   `DatasetPipelineFactory` and its callers. It surfaces as a viewer setting, an
   `s100 --lua-engine` flag for `render`, `tiles` and `mcp serve`, an
@@ -764,7 +766,9 @@ Two choices in that issue interact with this design:
   pre-warm's separate pipeline factory follows the same setting.
 - **The caches keep the engines apart.** The portrayal and pattern-clip cache
   keys already hash the Lua engine assembly's MVID, so each engine writes its own
-  entries and an A/B run can't read the other engine's output. [F] Warm A/B runs
+  entries and an A/B run can't read the other engine's output. [F] Step 0 adds
+  the engine to the two keys that didn't have it: the viewer's portrayal-warm
+  signature and the `tiles serve --cache-dir` fingerprint. Warm A/B runs
   therefore need each engine's cache warmed separately.
 - **Differential test in CI.** A test portrays every cell in the test corpora
   with both engines and compares the output hash (feature references,
@@ -778,9 +782,14 @@ Two choices in that issue interact with this design:
   job, reporting time and bytes allocated per engine.
 - **Viewer A/B.** The slice 1 harness runs the jumps route once per engine from
   empty caches and after pre-warm.
-- **Default.** Step 0 ships with MoonSharp as the default and Lua-CSharp opt-in.
-  Flip the default once the differential test and goldens pass on every
-  Lua-portrayed product and the viewer A/B confirms the gain on whole jumps.
+- **Default.** Step 0 ships with Lua-CSharp as the default and MoonSharp
+  selectable, so problems with Lua-CSharp surface in normal use rather than
+  only in A/B runs. The differential test, the goldens and the S-164 suite
+  pass on Lua-CSharp; slice 1's viewer A/B then measures the gain on whole
+  jumps. Where the engines legitimately differ (Lua leaves the order of
+  `table.sort` ties to the implementation, and MoonSharp's sort is stable
+  while reference Lua's isn't), Lua-CSharp follows reference Lua and the
+  differential test pins the difference.
 - **Retiring MoonSharp.** Remove it once Lua-CSharp has been the default for a
   release with no engine regressions reported, and no shim is waiting on an
   upstream fix that MoonSharp would be needed to cross-check.
@@ -789,7 +798,7 @@ The rest of the plan is tuned against Lua-CSharp. Slices that measure
 portrayal (shards, pre-warm, scheduler admission) measure on Lua-CSharp and
 only check that MoonSharp still works.
 
-After the default flips, re-baseline every "Today" figure in
+With Lua-CSharp the default from step 0, re-baseline every "Today" figure in
 [Measuring success](#measuring-success) before setting gates.
 
 **1. Settle harness and metrics.** Extend `viewer-stress` with a `jumps` route:
@@ -961,9 +970,10 @@ shows parsing and scene building dominate.
    of the coverage plane), or stay a separate layer drawn above them?
 9. **Settle targets.** The targets below are proposals. Which do you want as
    gates? They should be set against the post-step-0 baseline.
-10. **When to flip the default?** Step 0 can merge with Lua-CSharp
-    opt-in. Should the default flip need slice 1's whole-jump A/B, or only the
-    differential test, goldens and per-cell measurements?
+10. **Default engine.** Decided: Lua-CSharp is the default from step 0, with
+    MoonSharp selectable. Open: should the sectored-light colour order follow
+    reference Lua (Lua-CSharp, the step 0 behaviour) or MoonSharp's stable
+    sort, which earlier releases showed?
 11. **GC mode after step 0.** Should #1276 item 2 (re-check Server GC and its
     settings) gate the default flip, or follow it?
 12. **Retiring MoonSharp.** Is "one release as default with no engine
@@ -976,9 +986,10 @@ All figures from the slice 1 harness, Release, on the 16-core Mac used for
 [#1276](https://github.com/philliphoff/EncDotNet.S100/issues/1276), NOAA
 "Washington", load as you pan, 1:44 300, Seattle → Tacoma → Port Townsend.
 
-"Today" is MoonSharp on `main`. Re-baseline once Lua-CSharp is the default;
-the spike suggests cold portrayal times drop by more than half on their own.
-Until then, report both engines side by side.
+"Today" is MoonSharp on `main` before step 0. Step 0 makes Lua-CSharp the
+default, so re-baseline every figure on Lua-CSharp once it merges; the spike
+suggests cold portrayal times drop by more than half on their own. Report
+MoonSharp alongside while it remains selectable.
 
 | Metric | Today [M] | Proposed target |
 |---|---|---|

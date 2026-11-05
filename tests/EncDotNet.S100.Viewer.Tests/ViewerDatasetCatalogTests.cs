@@ -7,8 +7,8 @@ using EncDotNet.S100.Datasets.S124;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 
@@ -60,7 +60,7 @@ public class ViewerDatasetCatalogTests
         var processor = new S57DatasetProcessor(
             path,
             catalogueManager,
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new FeatureCatalogueManager(spec => Specification.TryOpenFeatureCatalogue(spec)));
         var entry = new DatasetEntry(path, "S-57");
         var loader = new FakeDatasetLoaderService

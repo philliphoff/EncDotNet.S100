@@ -4,8 +4,8 @@ using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Rendering.Scene;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -259,7 +259,7 @@ public sealed class TileMetatileTests
 
         return new DatasetPipelineFactory(
             portrayalCatalogues,
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory(),
             new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue),
             new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider());

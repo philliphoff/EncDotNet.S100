@@ -1,4 +1,5 @@
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Scripting;
 
 namespace EncDotNet.S100;
 
@@ -35,7 +36,17 @@ public sealed class BundledDatasetProcessorFactory : IDatasetProcessorFactory, I
     /// available product specification.
     /// </summary>
     public static BundledDatasetProcessorFactory Create() =>
-        new(S100PipelineHost.Create());
+        Create(LuaEngineKinds.Default);
+
+    /// <summary>
+    /// Creates a factory seeded with the bundled official catalogues for every
+    /// available product specification, running Lua portrayal on the given
+    /// engine.
+    /// </summary>
+    /// <param name="luaEngine">The Lua engine that runs the portrayal rules.</param>
+    /// <returns>The factory.</returns>
+    public static BundledDatasetProcessorFactory Create(LuaEngineKind luaEngine) =>
+        new(S100PipelineHost.Create(luaEngine: luaEngine));
 
     /// <inheritdoc />
     public IDatasetProcessor CreateProcessor(string path)

@@ -9,7 +9,7 @@ When modifying S-101 code:
 - Load the `s101-enc` skill before proposing non-trivial changes.
 - Read ISO 8211 records via the `EncDotNet.Iso8211` package — do not
   re-implement field/subfield parsing.
-- Preserve the Lua sandbox: `MoonSharpLuaEngine` must not expose host
+- Preserve the Lua sandbox: `LuaCSharpLuaEngine` and `MoonSharpLuaEngine` must not expose host
   file I/O or reflection to scripts. The contract visible to rules is
   `S101LuaDataProvider`; every added method maps to a spec-defined
   Part 9A function and carries an XML doc with the section number.

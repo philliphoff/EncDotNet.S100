@@ -1526,6 +1526,21 @@
   <data name="Tooltip_PortrayalPrewarmEnabled" xml:space="preserve">
     <value>While the map is idle, portray the cells of sets that load as you pan, so they appear quickly when you pan to them. Uses one processor core and disk space in the cache.</value>
   </data>
+  <data name="Settings_LuaEngine" xml:space="preserve">
+    <value>Lua engine</value>
+  </data>
+  <data name="Tooltip_LuaEngine" xml:space="preserve">
+    <value>The engine that runs the portrayal rules of S-101, S-57 and other Lua-portrayed products. Lua-CSharp is faster and uses less memory; MoonSharp is the previous engine, kept for comparison. Both draw the same chart. Each keeps its own portrayal cache.</value>
+  </data>
+  <data name="Settings_LuaEngine_LuaCSharp" xml:space="preserve">
+    <value>Lua-CSharp</value>
+  </data>
+  <data name="Settings_LuaEngine_MoonSharp" xml:space="preserve">
+    <value>MoonSharp</value>
+  </data>
+  <data name="Settings_LuaEngine_RestartHint" xml:space="preserve">
+    <value>Restart to apply.</value>
+  </data>
   <data name="Library_PrewarmWorkingFormat" xml:space="preserve">
     <value>Preparing charts for panning: {0:N0} of {1:N0}</value>
   </data>

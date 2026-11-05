@@ -14,7 +14,8 @@ namespace EncDotNet.S100.Viewer.Services.LazyLoading;
 /// contents, the code that portrays, the mariner settings and the display
 /// mode. The cell bytes are in the ledger's cell key; this covers the rest:
 /// the mariner settings and display modes of the presentation, the catalogue
-/// overrides in the settings, and the build of the assemblies that portray. It
+/// overrides in the settings, and the build of the assemblies that portray,
+/// including the selected Lua engine's, as the processors' keys do. It
 /// may change when the cache key does not (a palette or symbol-size change),
 /// which only costs a quick re-check of each cell; it must never stay the same
 /// when the cache key changes.
@@ -41,7 +42,7 @@ internal static class PortrayalWarmSignature
                  {
                      typeof(DatasetPipelineFactory).Assembly,
                      typeof(EncDotNet.S100.Pipelines.Vector.Caching.IPortrayalInstructionCache).Assembly,
-                     typeof(EncDotNet.S100.Scripting.MoonSharp.MoonSharpLuaEngine).Assembly,
+                     ViewerLuaEngine.AssemblyOf(settings.ResolveLuaEngine()),
                  })
         {
             sb.Append("asm:").Append(assembly.ManifestModule.ModuleVersionId).Append('|');

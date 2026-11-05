@@ -40,6 +40,12 @@ internal static class PerfActivitySource
     /// <summary>Tag carrying the optional "side" label (e.g. <c>baseline</c> or <c>candidate</c>).</summary>
     public const string SideTag = "perf.side";
 
+    /// <summary>Tag carrying the Lua engine the iteration portrayed with.</summary>
+    public const string LuaEngineTag = "perf.lua_engine";
+
+    /// <summary>Tag carrying the bytes allocated on all threads during the iteration.</summary>
+    public const string AllocatedBytesTag = "perf.allocated_bytes";
+
     /// <summary>The shared activity source instance.</summary>
     public static readonly ActivitySource Instance = new(Name);
 }

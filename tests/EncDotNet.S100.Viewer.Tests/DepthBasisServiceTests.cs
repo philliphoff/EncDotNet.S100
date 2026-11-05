@@ -2,8 +2,8 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.S101;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Depth;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -58,7 +58,7 @@ public sealed class DepthBasisServiceTests : IDisposable
         S101DocumentWriter.WriteToFile(path, Synth.Cell(areas).Document);
         var catalogues = new PortrayalCatalogueManager();
         catalogues.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
-        return (new DatasetEntry(path, "S-101"), new S101DatasetProcessor(path, catalogues, new MoonSharpLuaEngine(), new FeatureCatalogueManager()));
+        return (new DatasetEntry(path, "S-101"), new S101DatasetProcessor(path, catalogues, TestLuaEngine.Create(), new FeatureCatalogueManager()));
     }
 
     private void Load(params (DatasetEntry Entry, S101DatasetProcessor Processor)[] cells)

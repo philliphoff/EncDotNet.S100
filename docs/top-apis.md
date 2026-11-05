@@ -113,8 +113,12 @@ See [Render images and map tiles](embedding-the-renderer.md) and
 ## Backends
 
 - `PureHdfFile` (`EncDotNet.S100.Hdf5.PureHdf`): managed HDF5 reader.
-- `MoonSharpLuaEngine` (`EncDotNet.S100.Scripting.MoonSharp`): Lua engine for
-  S-100 Part 9A portrayal rules.
+- `LuaCSharpLuaEngine` (`EncDotNet.S100.Scripting.LuaCSharp`): the default Lua
+  engine for S-100 Part 9A portrayal rules.
+- `MoonSharpLuaEngine` (`EncDotNet.S100.Scripting.MoonSharp`): the previous Lua
+  engine, selectable with `LuaEngineKind.MoonSharp`.
+- `LuaEngineFactory` (`EncDotNet.S100`): creates either engine for a
+  `LuaEngineKind`.
 - `ProjNetCrsTransformFactory` (`EncDotNet.S100.Crs.ProjNet`): coordinate
   reference system transforms for projected grids.
 

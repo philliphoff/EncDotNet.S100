@@ -2,7 +2,7 @@
 #:project ../../src/EncDotNet.S100.Datasets.S102/EncDotNet.S100.Datasets.S102.csproj
 #:project ../../src/EncDotNet.S100.Hdf5.PureHdf/EncDotNet.S100.Hdf5.PureHdf.csproj
 #:project ../../src/EncDotNet.S100.Renderers.Skia/EncDotNet.S100.Renderers.Skia.csproj
-#:project ../../src/EncDotNet.S100.Scripting.MoonSharp/EncDotNet.S100.Scripting.MoonSharp.csproj
+#:project ../../src/EncDotNet.S100.Scripting.LuaCSharp/EncDotNet.S100.Scripting.LuaCSharp.csproj
 
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.S102;
@@ -11,7 +11,7 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Skia;
-using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.Scripting.LuaCSharp;
 using SkiaSharp;
 
 if (args.Length < 3)
@@ -51,7 +51,7 @@ Console.WriteLine($"  Origin        : ({coverage.OriginLatitude:F6}, {coverage.O
 
 // 2. Create the pipeline components
 var source = new S102CoverageSource(dataset);
-var engine = new MoonSharpLuaEngine();
+var engine = new LuaCSharpLuaEngine();
 using var assetSource = new FileSystemAssetSource(portrayalPath);
 using var provider = await PortrayalCatalogueProvider.OpenAsync(assetSource);
 var catalogue = new S102PortrayalCatalogue(engine, provider) { FourShades = true };

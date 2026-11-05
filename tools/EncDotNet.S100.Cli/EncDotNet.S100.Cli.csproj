@@ -56,6 +56,7 @@
     <ProjectReference Include="..\..\src\EncDotNet.S100.Navigation\EncDotNet.S100.Navigation.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Portrayals\EncDotNet.S100.Portrayals.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Routes.Rtz\EncDotNet.S100.Routes.Rtz.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Scripting.LuaCSharp\EncDotNet.S100.Scripting.LuaCSharp.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Scripting.MoonSharp\EncDotNet.S100.Scripting.MoonSharp.csproj" />
     <ProjectReference Include="..\..\src\EncDotNet.S100.Specifications\EncDotNet.S100.Specifications.csproj" />
   </ItemGroup>

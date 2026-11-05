@@ -7,8 +7,8 @@ using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Quantities;
 using EncDotNet.S100.Rendering.Scene;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -100,7 +100,7 @@ public sealed class S102DepthLinesTests
         // Depth rises 1 m per row from 10 m; the north-east corner is no-data.
         var path = S102Grids.Write(8, 8, (r, c) => r >= 6 && c >= 6 ? Fill : 10f + r);
         using var manager = CreateCatalogueManager();
-        using var processor = new S102DatasetProcessor(path, manager, new MoonSharpLuaEngine(), new ProjNetCrsTransformFactory());
+        using var processor = new S102DatasetProcessor(path, manager, TestLuaEngine.Create(), new ProjNetCrsTransformFactory());
         try
         {
             var context = new RenderContext
@@ -146,7 +146,7 @@ public sealed class S102DepthLinesTests
     {
         var path = S102Grids.Write(8, 8, (r, c) => r >= 6 && c >= 6 ? Fill : 10f + r);
         using var manager = CreateCatalogueManager();
-        using var processor = new S102DatasetProcessor(path, manager, new MoonSharpLuaEngine(), new ProjNetCrsTransformFactory());
+        using var processor = new S102DatasetProcessor(path, manager, TestLuaEngine.Create(), new ProjNetCrsTransformFactory());
         try
         {
             RenderContext At(double safety, PaletteType palette = PaletteType.Day) => new()

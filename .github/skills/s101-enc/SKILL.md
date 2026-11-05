@@ -39,7 +39,8 @@ description: |
    re-implement field/subfield parsing.
 2. Feature/Spatial/Information records map to the model defined in
    `S101Document.cs`; preserve invariants when adding fields.
-3. Lua execution stays inside `MoonSharpLuaEngine` (sandboxed Lua 5.2).
+3. Lua execution stays inside an `ILuaEngine` (sandboxed Lua 5.2):
+   `LuaCSharpLuaEngine` by default, `MoonSharpLuaEngine` when selected.
    Do not expose host file IO or reflection to scripts.
 4. `S101LuaDataProvider` is the only contract the rules see — every
    addition is a spec-defined function from S-100 Part 9A; cite the
@@ -56,7 +57,9 @@ description: |
 ## Known pitfalls in this repo
 - ISO 8211 string fields can be ISO/IEC 8859-1, UTF-8, or UCS-2; honor
   the DSSI/DSPM character set declaration rather than assuming UTF-8.
-- Lua 5.2 (MoonSharp) — not 5.1 or 5.4. Avoid `goto`/`bit32` quirks.
+- Lua 5.2 (Lua-CSharp by default, MoonSharp selectable) — not 5.1 or 5.4.
+  Avoid `goto`/`bit32` quirks, and run new rules on both engines (the
+  `LuaEngineDifferentialTests` compare them).
 - Drawing instruction priorities and the display-priority ordering are
   spec-defined; do not reorder in the renderer.
 - Coordinate values in S-101 are in COMF/SOMF-scaled integers; convert

@@ -154,6 +154,11 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         [DefaultValue("none")]
         public string Basemap { get; init; } = "none";
 
+        [CommandOption(LuaEngineOption.Template)]
+        [Description(LuaEngineOption.Description)]
+        [DefaultValue(LuaEngineOption.Default)]
+        public string LuaEngine { get; init; } = LuaEngineOption.Default;
+
         [CommandOption("--display-mode <MODE>")]
         [Description("Select the S-411 sea-ice portrayal display mode (S-411 only): ice-concentration (default), ice-sod (stage of development) or ice-navigational (PROVISIONAL preview derived from total concentration — NOT a POLARIS/RIO navigational-risk computation). A single dataset carries the full WMO egg code, so the same data can be shown in any mode. Supplying this option for any other product specification is a validation error.")]
         public string? DisplayMode { get; init; }
@@ -225,6 +230,9 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             if (!TryParseBasemap(Basemap, out _))
                 return ValidationResult.Error(
                     $"Invalid --basemap value '{Basemap}'. Use none or offline.");
+
+            if (LuaEngineOption.Validate(LuaEngine) is { Successful: false } luaEngineError)
+                return luaEngineError;
 
             if (DisplayMode is not null && !TryParseDisplayMode(DisplayMode, out _))
                 return ValidationResult.Error(
@@ -388,7 +396,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         using var diagnosticTrace = settings.Debug ? DiagnosticTraceScope.ToStandardError() : null;
         var datasetPath = settings.Input!;
         var outputPath = settings.ResolveOutputPath()!;
-        var (factory, catalogueManager) = ProcessorFactoryBuilder.Build();
+        var (factory, catalogueManager) = ProcessorFactoryBuilder.Build(LuaEngineOption.Resolve(settings.LuaEngine));
         try
         {
             var spec = DatasetPipelineFactory.DetectProductSpec(datasetPath);
@@ -623,7 +631,7 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 DisplayModeId = displayModeId,
             };
 
-            using var renderer = new PngS100DatasetRenderer();
+            using var renderer = new PngS100DatasetRenderer(LuaEngineOption.Resolve(settings.LuaEngine));
             byte[] png = renderer.RenderAsync(layers, options).GetAwaiter().GetResult();
 
             TryResolveFormat(settings.Format, outputPath, out var format, out _);

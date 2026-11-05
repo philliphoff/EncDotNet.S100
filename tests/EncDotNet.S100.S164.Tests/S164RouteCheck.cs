@@ -7,7 +7,8 @@ using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Quantities;
-using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.Scripting;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.S164.Tests;
 
@@ -31,7 +32,7 @@ internal static class S164RouteCheck
     public static Length HalfAMile { get; } = Length.FromMetres(926);
 
     /// <summary>The engine the cells portray their alerts with (#1127).</summary>
-    public static MoonSharpLuaEngine LuaEngine { get; } = new();
+    public static ILuaEngine LuaEngine { get; } = TestLuaEngine.Create();
 
     /// <summary>The checker's datasets: every S-101 base cell in the exchange sets.</summary>
     public static async Task<IReadOnlyList<LoadedDataset>> LoadAsync(CancellationToken cancellationToken, params string[] exchangeSets)

@@ -8,8 +8,8 @@ using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Quantities;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -112,7 +112,7 @@ public sealed class WaterLevelDepthAdjustmentTests
         // 13.5 m line sit where the charted depth is 14.5 m, one row north.
         var path = S102Grids.Write(8, 8, (r, _) => 10f + r, verticalDatum: Lat);
         using var manager = CreateCatalogueManager();
-        using var processor = new S102DatasetProcessor(path, manager, new MoonSharpLuaEngine(), new ProjNetCrsTransformFactory());
+        using var processor = new S102DatasetProcessor(path, manager, TestLuaEngine.Create(), new ProjNetCrsTransformFactory());
         try
         {
             var mariner = MarinerSettings.Default with

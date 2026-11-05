@@ -7,7 +7,7 @@ using EncDotNet.S100.Features;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
-using EncDotNet.S100.Scripting.MoonSharp;
+using EncDotNet.S100.TestSupport;
 using Mapsui;
 using static EncDotNet.S100.TestSupport.GribFixtures;
 
@@ -107,7 +107,7 @@ public sealed class WeatherDisplaySwitchTests : IDisposable
     private static DatasetPipelineFactory CreateFactory() =>
         new(
             new PortrayalCatalogueManager(),
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new ProjNetCrsTransformFactory(),
             new FeatureCatalogueManager(),
             new DisplayPlaneAuthorityProvider());

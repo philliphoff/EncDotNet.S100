@@ -5,7 +5,6 @@ using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Scripting;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
 
 namespace EncDotNet.S100.PerfRunner;
@@ -18,13 +17,13 @@ namespace EncDotNet.S100.PerfRunner;
 internal static class SharedInfrastructure
 {
     private static readonly Lazy<PortrayalCatalogueManager> LazyCatalogueManager = new(CreateCatalogueManager);
-    private static readonly Lazy<MoonSharpLuaEngine> LazyLuaEngine = new(() => new MoonSharpLuaEngine());
+    private static readonly Lazy<ILuaEngine> LazyLuaEngine = new(PerfLuaEngine.Create);
     private static readonly Lazy<ProjNetCrsTransformFactory> LazyCrsFactory = new(() => new ProjNetCrsTransformFactory());
     private static readonly Lazy<FeatureCatalogueManager> LazyFeatureCatalogueManager =
         new(() => new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
 
     public static PortrayalCatalogueManager CatalogueManager => LazyCatalogueManager.Value;
-    public static MoonSharpLuaEngine LuaEngine => LazyLuaEngine.Value;
+    public static ILuaEngine LuaEngine => LazyLuaEngine.Value;
     public static ProjNetCrsTransformFactory CrsFactory => LazyCrsFactory.Value;
     public static FeatureCatalogueManager FeatureCatalogueManager =>
         LazyFeatureCatalogueManager.Value;

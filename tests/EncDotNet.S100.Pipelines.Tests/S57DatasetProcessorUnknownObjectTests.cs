@@ -3,7 +3,6 @@ using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.TestSupport;
 
@@ -29,7 +28,7 @@ public sealed class S57DatasetProcessorUnknownObjectTests : IDisposable
         return new S57DatasetProcessor(
             SyntheticS57Cell.WriteWithUnknownClasses(_directory, "US5MA1BO.000"),
             catalogues,
-            new MoonSharpLuaEngine(),
+            TestLuaEngine.Create(),
             new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue));
     }
 

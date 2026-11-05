@@ -10,7 +10,6 @@ using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Mcp.Tools;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Quantities;
-using EncDotNet.S100.Scripting.MoonSharp;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -190,7 +189,7 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
             var transforms = new ProjNetCrsTransformFactory();
             // The engine lets the check portray the corridor's features for their
             // S-101 alerts (#1127).
-            var catalog = FileDatasetCatalog.Build(inputs, transforms, new MoonSharpLuaEngine());
+            var catalog = FileDatasetCatalog.Build(inputs, transforms, LuaEngineFactory.Create());
             warnings.AddRange(catalog.Warnings);
             foreach (var warning in warnings)
                 Console.Error.WriteLine(warning);

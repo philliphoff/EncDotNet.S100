@@ -4,8 +4,8 @@ using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Skia;
-using EncDotNet.S100.Scripting.MoonSharp;
 using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -443,7 +443,7 @@ public class S101PatternFillDiagnosticTests
         // Create portrayal catalogue from bundled assets
         using var pcSource = Specification.CreatePortrayalCatalogueSource("S-101");
         var provider = PortrayalCatalogueProvider.OpenAsync(pcSource).GetAwaiter().GetResult();
-        var luaEngine = new MoonSharpLuaEngine();
+        var luaEngine = TestLuaEngine.Create();
         var catalogue = new S101PortrayalCatalogue(provider, luaEngine);
         catalogue.SwitchPaletteAsync(PaletteType.Day).AsTask().GetAwaiter().GetResult();
         var palette = catalogue.ActivePalette;
