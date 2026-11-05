@@ -2,7 +2,7 @@
 
 SoundCharts can draw forecast wind and waves, sea surface temperature,
 surface currents, restricted visibility, air temperature, freezing spray, marine weather warnings and live observations over your
-charts, and it reads surface analyses (fronts and pressure centres). This page covers which files it reads,
+charts, with surface analyses (fronts and pressure centres). This page covers which files it reads,
 where to get them, how to show them in SoundCharts and `s100`, and what isn't
 supported.
 
@@ -17,7 +17,7 @@ supported.
 | Data | Formats | What's drawn |
 |---|---|---|
 | Forecast and analysis grids | GRIB2, NetCDF-3 and NetCDF-4 with CF conventions | Wave height fill, wind barbs, isobars, a sea surface temperature fill, current arrows, a restricted visibility fill and a freezing spray fill; optionally a wind speed fill, wave arrows, sea isotherms and air isotherms |
-| Surface analyses | WPC coded surface bulletin (`CODSUS`), standard and high resolution, and WPC's coded forecast bulletins (such as `CODSRP`) | Read, and described by `s100 info`. Drawing fronts and pressure centres on the chart is coming in a later release |
+| Surface analyses | WPC coded surface bulletin (`CODSUS`), standard and high resolution, and WPC's coded forecast bulletins (such as `CODSRP`) | Fronts, troughs, highs and lows in the symbols of a printed weather map, in one dark ink |
 | Marine weather warnings | CAP 1.2 XML (one alert or an Atom feed of them), NWS alerts GeoJSON | Warning areas, hatched by severity and labelled with the event, while they're in force |
 | Buoy and coastal station observations | NOAA NDBC, fetched live | A wind barb and wave height at each station |
 | Own-ship wind | NMEA 0183 from your instruments | True wind as a barb beside own ship, with water and air temperature |
@@ -185,8 +185,8 @@ made from its data. The Library can fetch some of these sources for you.
 ## Show a forecast in SoundCharts
 
 1. Choose **File** > **Open Dataset...** and pick the file. Choose the
-   **Weather Data (GRIB2, NetCDF, CAP)** file type to see weather files, or
-   **All files** for a GRIB2 file with no extension.
+   **Weather Data (GRIB2, NetCDF, CAP, CODSUS)** file type to see weather
+   files, or **All files** for a GRIB2 file or bulletin with no extension.
 
    The Datasets panel lists it, and the Layer stack lists the layers it
    draws; the wave height fill's entry shows a colour legend.
@@ -286,6 +286,39 @@ The storm is drawn where the advisory puts it now. Moving it along the track
 with the Timeline, NHC's feed in the Library and switches to hide the radii,
 past track and forecast times are still to come.
 
+## Show a surface analysis
+
+Open a coded surface bulletin as you would a grid. It draws over the isobars
+of any grid you have open, in the symbols mariners know from radiofax
+charts:
+
+| Feature | Drawn as |
+|---|---|
+| Cold front | A solid line with filled triangles on the side it's moving towards |
+| Warm front | A solid line with filled semicircles on the side it's moving towards |
+| Occluded front | Triangles and semicircles in turn, on the same side |
+| Stationary front | Triangles and semicircles in turn, on opposite sides |
+| Trough | A dashed line, from 1:40,000,000 and larger |
+| High or low | A bold **H** or **L** above a cross at the centre, with the pressure in hectopascals underlined below it from 1:60,000,000 and larger |
+
+Everything is in one dark ink, heavier than the isobars, so a front reads
+where it lies along an isobar. The symbols stay the same size and spacing
+on screen at every zoom, and the bulletin's points are smoothed into a
+curve as a forecaster would draw it. The bulletin doesn't say which side of
+a stationary front each symbol faces, so the triangles go on the left of the
+line as WPC lists its points and the semicircles on the right.
+
+The Layer stack lists the analysis on **Other chart overlays**, above the
+isobars, with a legend of the five line types and the pressure centre. Pick
+a front or centre to see it in Object information: "Weather analysis, not
+for navigation.", then the analysis time, when the next one is due (3 hours
+later), its intensity if the bulletin gives one, and the bulletin's own
+points as the count and the two ends. A centre shows its pressure and
+position.
+
+Only the bulletin's first analysis is drawn: for a forecast bulletin, its
+first forecast time. Moving the Timeline doesn't change it yet.
+
 ## Show buoy observations
 
 Turn on **NDBC buoy observations** in the Layer stack. It's off when you
@@ -341,6 +374,13 @@ s100 render gfswave.grib2 waves.png --time-step 2
 s100 render --layer chart.000 --layer gfswave.grib2 --layer gfs.grib2 chart.png --time-step 1
 ```
 
+A surface analysis renders the same way, alone or over a grid's isobars:
+
+```bash
+s100 render asus02.kwbc.cod.sus.txt fronts.png
+s100 render --layer gfs.grib2 --layer asus02.kwbc.cod.sus.txt fronts.png --bbox -100,25,-50,55
+```
+
 `identify` samples the grids and finds the warning areas at a point:
 
 ```bash
@@ -350,7 +390,8 @@ s100 identify --layer gfswave.grib2 --layer alerts.atom --lat 38.5 --lon -74.5 -
 See [info](cli.md#info), [render](cli.md#render) and
 [identify](cli.md#identify) for their options. Over MCP, `list_time_steps`,
 `sample_coverage` and `sample_coverage_along` work on the grids, and
-`identify_features` on the warnings; see the [MCP server](mcp-server.md).
+`identify_features` on the warnings and on a surface analysis's fronts and
+centres; see the [MCP server](mcp-server.md).
 
 ## What isn't supported
 
@@ -366,6 +407,10 @@ See [info](cli.md#info), [render](cli.md#render) and
   several levels, and compression filters other than deflate and shuffle
   (such as Zstandard).
 - **BUFR** observations.
+- **Surface analyses outside WPC's area**, and fronts in WPC's colours (blue
+  cold, red warm). Fronts are drawn in one ink only. The Library doesn't
+  fetch bulletins yet, and the Timeline doesn't choose between the times of a
+  forecast bulletin.
 - **Weather in route checks.** A route check doesn't consider wind, waves or
   model currents.
 - **Ocean model servers.** The Library fetches currents only from ERDDAP.

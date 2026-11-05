@@ -107,7 +107,10 @@ public sealed class TropicalCycloneRenderingTests
             ],
             options);
 
-        await TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels: 2_000, maxDifferentInkFraction: 0.02, SKColors.White);
+        // Anti-aliasing on the circles' edges differs by about a tenth of the
+        // ink between macOS and Linux; the arms' direction is pinned by
+        // TropicalCycloneStyleTests.
+        await TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels: 2_000, maxDifferentInkFraction: 0.15, SKColors.White);
     }
 
     private static VectorPortrayalResult WithoutText(VectorPortrayalResult result) => new()

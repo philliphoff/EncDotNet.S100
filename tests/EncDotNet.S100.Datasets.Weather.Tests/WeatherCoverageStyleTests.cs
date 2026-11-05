@@ -566,7 +566,7 @@ public class WeatherCoverageStyleTests
     public void Palette_tokens_are_prefixed_so_they_never_resolve_against_S101_colours()
     {
         Assert.All(WeatherPalette.Palette.Tokens.Keys, token => Assert.StartsWith("WX", token, StringComparison.Ordinal));
-        Assert.Equal(7 + 6 + 15 + 13 + 32 + 9 + 3 + 4, WeatherPalette.Palette.Tokens.Count);
+        Assert.Equal(8 + 6 + 15 + 13 + 32 + 9 + 3 + 4, WeatherPalette.Palette.Tokens.Count);
     }
 
     [Fact]

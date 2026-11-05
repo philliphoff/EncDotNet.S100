@@ -9,8 +9,8 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// <see cref="WaveHeightStyle"/>, <see cref="WindSpeedStyle"/>,
 /// <see cref="SeaTemperatureStyle"/>, <see cref="VisibilityStyle"/> and
 /// <see cref="FreezingSprayStyle"/>, and the inks of the wind barbs, wave
-/// arrows, pressure isobars and isotherms, each with a Day, Dusk and Night
-/// value.
+/// arrows, pressure isobars, isotherms and fronts, each with a Day, Dusk and
+/// Night value.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -124,6 +124,13 @@ public static class WeatherPalette
             [TropicalCyclone50Token] = (0.26, 0.22, 0.18),
             [TropicalCyclone64Token] = (0.38, 0.32, 0.28),
         };
+
+    /// <summary>
+    /// Colour token of the fronts, troughs and pressure centres of a surface
+    /// analysis (<see cref="SurfaceAnalysisStyle"/>): one monochrome front
+    /// ink, darker than <see cref="IsobarInkToken"/> (vector weather V18).
+    /// </summary>
+    public const string FrontInkToken = "WXFRONT";
 
     // Day, Dusk, Night for each wave height band (WXHS01 lowest).
     private static readonly (string Day, string Dusk, string Night)[] WaveHeightColors =
@@ -244,8 +251,8 @@ public static class WeatherPalette
     /// (<see cref="CurrentToken"/>) with <see cref="CurrentOutlineToken"/>,
     /// the visibility bands (<see cref="VisibilityToken"/>), the freezing spray
     /// bands (<see cref="FreezingSprayToken"/>), <see cref="AirIsothermInkToken"/>
-    /// and the tropical cyclone storm ink (<see cref="TropicalCycloneInkToken"/>
-    /// and its family).
+    /// <see cref="FrontInkToken"/> and the tropical cyclone storm ink
+    /// (<see cref="TropicalCycloneInkToken"/> and its family).
     /// </summary>
     public static ApplicationPalette Palette { get; } = new("Weather", BuildTokens());
 
@@ -366,6 +373,10 @@ public static class WeatherPalette
             [CurrentOutlineToken] = PaletteColors.FromHex(day: "#000000", dusk: "#6B7F89", night: "#252D31"),
             // A warm grey for the dashed air isotherms; it shares the isobar label halo.
             [AirIsothermInkToken] = PaletteColors.FromHex(day: "#5A4A40", dusk: "#E3D6CC", night: "#6E6158"),
+            // The front ink (V18): near-black slate by day, near-white at
+            // dusk, a dim grey at night (luminance 0.14), each stronger than
+            // the isobar ink so a front reads over the isobar it lies along.
+            [FrontInkToken] = PaletteColors.FromHex(day: "#1A2030", dusk: "#E3E6EE", night: "#646A76"),
             // Tropical cyclone storm ink (V2, decided Q1): one plum-grey family,
             // OKLCH hue about 330 at chroma under 0.05, so it reads as a tinted
             // grey far from S-101's magenta, CAP's ramp and the other weather

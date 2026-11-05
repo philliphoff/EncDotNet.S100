@@ -204,6 +204,14 @@ public static class WeatherProducts
         DefaultPlanes = CapPlanes,
     };
 
+    // Design note vector-weather.md V25: fronts on Other chart overlays, above
+    // the isobars (the sub-layer carries priority 92; this is the fallback).
+    private static readonly IReadOnlyDictionary<string, S98DisplayPlane> CodsusPlanes =
+        new Dictionary<string, S98DisplayPlane>(StringComparer.OrdinalIgnoreCase)
+        {
+            [ProductRegistration.AnyLayerKind] = S98DisplayPlane.OtherChartOverlays,
+        };
+
     /// <summary>
     /// The portrayal of the coded surface bulletins: code-defined front and
     /// pressure-centre symbols, since the bulletin defines no symbology.
@@ -235,6 +243,8 @@ public static class WeatherProducts
         PickReportNotice = SurfaceAnalysisDatasetProcessor.NotForNavigationNotice,
         MatchBytes = static header => CodedSurfaceBulletinReader.LooksLikeCodedSurfaceBulletin(header.LeadingBytes.Span),
         ReadMetadata = SurfaceAnalysisDatasetProcessor.ReadMetadata,
+        OpenData = static (stream, _) => OpenCodsus(stream),
+        DefaultPlanes = CodsusPlanes,
     };
 
     /// <summary>
@@ -339,6 +349,14 @@ public static class WeatherProducts
             (stream as FileStream)?.Name is { } path ? Path.GetFileName(path) : null);
         var metadata = WeatherGridProcessorBase.BuildMetadata(dataset.GridSet, GribDatasetProcessor.Grib2Spec, dataset.Times);
         return new WeatherGridDatasetData(dataset.GridSet, metadata, dataset.ReferenceTime);
+    }
+
+    // The catalog payload: the file is read whole, so the caller's stream
+    // isn't kept. A bulletin without an issuance line can't be dated here.
+    private static LoadedDatasetData OpenCodsus(Stream stream)
+    {
+        var bulletin = CodedSurfaceBulletinReader.Read(stream, referenceTime: null);
+        return new SurfaceAnalysisDatasetData(bulletin, SurfaceAnalysisDatasetProcessor.BuildMetadata(bulletin));
     }
 
     // The catalog payload: the file is read whole, so the caller's stream

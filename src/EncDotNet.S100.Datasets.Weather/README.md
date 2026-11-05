@@ -283,10 +283,12 @@ The package also holds the surface analysis model, fronts and pressure
 centres, and a reader for the National Weather Service Weather Prediction
 Center's (WPC) coded surface bulletins (issue
 [#1233](https://github.com/philliphoff/EncDotNet.S100/issues/1233), design note
-`vector-weather.md` §8.3). Drawing them
-is a later slice; `SurfaceAnalysisDatasetProcessor` in
+`vector-weather.md` §5, §8.3), and `SurfaceAnalysisStyle`, which draws them
+(issue [#1300](https://github.com/philliphoff/EncDotNet.S100/issues/1300)).
+`SurfaceAnalysisDatasetProcessor` in
 [`Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md)
-registers the format as `CODSUS`, and `s100 info` describes a bulletin.
+registers the format as `CODSUS` and draws the bulletin's first analysis,
+and `s100 info` describes a bulletin.
 
 ```csharp
 using EncDotNet.S100.Datasets.Weather;
@@ -331,7 +333,41 @@ that's the side it moves towards. WPC's format pages don't say so; the
 evidence from 15 real analyses is in the `CodedSurfaceBulletinReader` remarks
 (66 of 68 cold fronts leaving a low have their left facing east, 26 of 30
 warm fronts north), and a test checks it against a committed bulletin. Which
-of a stationary front's two symbols goes on which side isn't in the data.
+of a stationary front's two symbols goes on which side isn't in the data;
+the style puts the triangles on the left and the semicircles on the right.
+
+**Drawing.** `SurfaceAnalysisStyle` builds the drawing instructions with the
+portrayal toolkit, in one token, `WXFRONT` (Day `#1A2030`, Dusk `#E3E6EE`,
+Night `#646A76`), darker and twice as wide as the isobars:
+
+| Kind | Line style | Pips |
+|---|---|---|
+| Cold | `WXFRONT_COLD`, solid 0.7 mm | `WXFRONTTRI` triangles, left |
+| Warm | `WXFRONT_WARM`, solid 0.7 mm | `WXFRONTSEMI` semicircles, left |
+| Occluded | `WXFRONT_OCCLUDED`, solid 0.7 mm | Triangle and semicircle in turn, left |
+| Stationary | `WXFRONT_STATIONARY`, solid 0.7 mm | Triangle left, then semicircle right, in turn |
+| Trough | `WXFRONT_TROUGH`, dashed 1.5 / 1 mm, 0.5 mm | None; SCAMIN 1:40,000,000 |
+
+The pips are 4 mm wide, one every 9 mm from 4 mm in, so their spacing is the
+same on screen at every scale (`ComplexLineStyle`). Each line has a halo in
+the isobar label halo colour. Points are smoothed with three Chaikin passes
+(`SurfaceAnalysisStyle.Smooth`), which keeps the ends, drops repeats and
+takes the short way across 180°. A high or low is a bold `H` or `L` above a
+cross (`WXPCENTRE`) at the centre; from 1:60,000,000 the pressure is drawn
+below it, underlined (`WXPCENTRERULE`). `BuildLegend(palette)` gives the
+Layer stack legend: the five lines and "Pressure centre, hPa". The sub-layer
+is `weather.fronts` on Other chart overlays at priority 92, above the
+isobars at 90.
+
+```csharp
+var instructions = new List<DrawingInstruction>();
+foreach (var front in analysis.Fronts)      // feature geometry: SurfaceAnalysisStyle.Smooth(front.Points, 3)
+    instructions.AddRange(SurfaceAnalysisStyle.BuildFront(id, front.Type));
+foreach (var centre in analysis.PressureCentres)
+    instructions.AddRange(SurfaceAnalysisStyle.BuildCentre(id, centre));
+// LineStyleProvider = SurfaceAnalysisStyle.LineStyles.Provider,
+// SymbolProvider = WeatherCoverageStyle.Symbols.Provider, palette WeatherPalette.Palette.
+```
 
 **Coverage.** The bulletins cover WPC's domain only, the Northern Hemisphere
 from 180° to 0° (`CodedSurfaceBulletin.WpcDomain`). Outside it, nothing is
@@ -346,6 +382,7 @@ known; the dataset's extent is the domain, not the features' bounding box.
 | `SurfaceFront` | `Type` (`SurfaceFrontType`), `Strength` (`SurfaceFrontStrength`) and `Points` in the bulletin's order. |
 | `PressureCentre` | `Kind` (high or low), `PressureHectopascals` and `Position`. |
 | `CodedSurfaceBulletinFormatException` | Thrown with the line number for a bulletin that can't be decoded. |
+| `SurfaceAnalysisStyle` | The drawing: `BuildFront`, `BuildCentre`, `LineStyles`, `LineStyleOf`, `BuildLegend`, `Smooth`, and the layer key, priority and scale limits. |
 
 > **Not for navigation.** Surface analyses are weather analyses, not S-100
 > data.
