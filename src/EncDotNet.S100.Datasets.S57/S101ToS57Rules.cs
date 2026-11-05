@@ -287,25 +287,25 @@ public sealed partial class S101ToS57Rules
 
         // Classes a forward redirect reaches, which the inversion above can't
         // see (only defaults invert). The class implies the S-57 category.
-        AddFeature(features, "LightSectored", 75, "LIGHTS");
-        AddFeature(features, "LocalDirectionOfBuoyage", 306, "M_NSYS");
-        AddFeature(features, "Bollard", 84, "MORFAC", ("CATMOR", "3"));
-        AddFeature(features, "MooringBuoy", 84, "MORFAC", ("CATMOR", "7"));
+        AddFeature(features, "LightSectored", "LIGHTS");
+        AddFeature(features, "LocalDirectionOfBuoyage", "M_NSYS");
+        AddFeature(features, "Bollard", "MORFAC", ("CATMOR", "3"));
+        AddFeature(features, "MooringBuoy", "MORFAC", ("CATMOR", "7"));
 
         // §2.4.2 / §2.4.11 and §27: Boolean attributes become S-57 enumerations.
         // The forward mapping carries the S-57 code through unchanged, so the
         // general rules above would pass "true"/"false" on; these replace them.
-        AddBoolean(attributes, "radarConspicuous", 82, "CONRAD", "27.146", whenTrue: "1", whenFalse: "2");
-        AddBoolean(attributes, "basedOnFixedMarks", 54, "CATTRK", "27.1", whenTrue: "1", whenFalse: "2");
-        AddBoolean(attributes, "iMOAdopted", 67, "CATTSS", "27.112", whenTrue: "1", whenFalse: "2");
-        AddBoolean(attributes, "distanceMarkVisible", 21, "CATDIS", "27.90", whenTrue: "4", whenFalse: "1");
-        AddBoolean(attributes, "openingBridge", 9, "CATBRG", "27.140", whenTrue: "2", whenFalse: "1");
+        AddBoolean(attributes, "radarConspicuous", "CONRAD", "27.146", whenTrue: "1", whenFalse: "2");
+        AddBoolean(attributes, "basedOnFixedMarks", "CATTRK", "27.1", whenTrue: "1", whenFalse: "2");
+        AddBoolean(attributes, "iMOAdopted", "CATTSS", "27.112", whenTrue: "1", whenFalse: "2");
+        AddBoolean(attributes, "distanceMarkVisible", "CATDIS", "27.90", whenTrue: "4", whenFalse: "1");
+        AddBoolean(attributes, "openingBridge", "CATBRG", "27.140", whenTrue: "2", whenFalse: "1");
 
         // §27.142: pictorialRepresentation → PICREP (first value only, §2.4.12.2).
         // §27.154: reportedDate → SORDAT. §27.156: scaleMinimum → SCAMIN.
-        AddAttribute(attributes, "reportedDate", 147, "SORDAT");
+        AddAttribute(attributes, "reportedDate", "SORDAT");
         // categoryOfOpeningBridge keeps the S-57 CATBRG codes (forward § 4.8.10).
-        AddAttribute(attributes, "categoryOfOpeningBridge", 9, "CATBRG");
+        AddAttribute(attributes, "categoryOfOpeningBridge", "CATBRG");
 
         AddAnnexC(forward, features, attributes, featureAttributes);
 
@@ -314,24 +314,24 @@ public sealed partial class S101ToS57Rules
 
     private static void AddFeature(
         Dictionary<string, S101ToS57FeatureRule> features,
-        string s101Code, ushort objl, string acronym, params (string Acronym, string Value)[] fixedAttributes)
+        string s101Code, string acronym, params (string Acronym, string Value)[] fixedAttributes)
     {
         features[s101Code] = new S101ToS57FeatureRule(
-            s101Code, objl, acronym, FeatureClause(s101Code),
+            s101Code, S57Objl(acronym), acronym, FeatureClause(s101Code),
             fixedAttributes.Length == 0
                 ? NoFixedAttributes
                 : fixedAttributes.ToDictionary(a => a.Acronym, a => a.Value, StringComparer.Ordinal));
     }
 
     private static void AddAttribute(
-        Dictionary<string, S101ToS57AttributeRule> attributes, string s101Code, ushort attl, string acronym)
-        => attributes[s101Code] = new S101ToS57AttributeRule(s101Code, attl, acronym, AttributeClause(s101Code), NoRemap);
+        Dictionary<string, S101ToS57AttributeRule> attributes, string s101Code, string acronym)
+        => attributes[s101Code] = new S101ToS57AttributeRule(s101Code, S57Attl(acronym), acronym, AttributeClause(s101Code), NoRemap);
 
     private static void AddBoolean(
         Dictionary<string, S101ToS57AttributeRule> attributes,
-        string s101Code, ushort attl, string acronym, string clause, string whenTrue, string whenFalse)
+        string s101Code, string acronym, string clause, string whenTrue, string whenFalse)
         => attributes[s101Code] = new S101ToS57AttributeRule(
-            s101Code, attl, acronym, clause,
+            s101Code, S57Attl(acronym), acronym, clause,
             new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 [BooleanTrue] = whenTrue,
@@ -415,26 +415,13 @@ public sealed partial class S101ToS57Rules
 
     /// <summary>
     /// Whether the S-57 attribute is of type List (comma-separated values)
-    /// rather than Enumerated, per S-57 Ed 3.1 Appendix A.
+    /// rather than Enumerated, per the IHO S-57 Edition 3.1 Object Catalogue
+    /// (<see cref="S57ObjectCatalogue.Iho"/>). Several S-101 values join into
+    /// a List attribute (§2.4.1); an Enumerated one keeps the first value only.
     /// </summary>
     /// <param name="s57Acronym">The S-57 attribute acronym, e.g. <c>COLOUR</c>.</param>
-    public static bool IsS57ListAttribute(string s57Acronym) => S57ListAttributes.Contains(s57Acronym);
-
-    /// <summary>
-    /// S-57 attributes of type List (S-57 Ed 3.1 Appendix A, Chapter 2): their
-    /// values are comma-separated, so several S-101 values join (§2.4.1). Any
-    /// other enumerated S-57 attribute is of type Enumerated and keeps the
-    /// first value only. <c>EncDotNet.S57</c> 0.8.1 ships no attribute
-    /// catalogue, so the list is held here.
-    /// </summary>
-    internal static readonly FrozenSet<string> S57ListAttributes = new[]
-    {
-        "CATACH", "CATAIR", "CATBRG", "CATDPG", "CATHAF", "CATHLK", "CATLMK", "CATLND",
-        "CATLIT", "CATMPA", "CATOFP", "CATPIP", "CATREA", "CATROS", "CATRSC", "CATSCF",
-        "CATSIT", "CATSIW", "CATSPM", "CATVEG", "COLOUR", "COLPAT", "FUNCTN", "LITVIS",
-        "NATCON", "NATQUA", "NATSUR", "PRODCT", "QUASOU", "RESTRN", "STATUS", "SURTYP",
-        "TECSOU",
-    }.ToFrozenSet(StringComparer.Ordinal);
+    public static bool IsS57ListAttribute(string s57Acronym)
+        => S57ObjectCatalogue.Iho.TryGetAttribute(s57Acronym, out var definition) && definition.Type == S57AttributeType.List;
 
     /// <summary>
     /// S-57 attributes that an ENC must populate on an object class (S-57
@@ -460,93 +447,32 @@ public sealed partial class S101ToS57Rules
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>
-    /// S-57 acronym → ATTL for the attributes the translator assembles itself
-    /// (from complex attributes, information types and Boolean values), where
-    /// the forward mapping has no flat rule to invert.
+    /// The object class code (OBJL) of an S-57 acronym in the IHO S-57
+    /// Edition 3.1 Object Catalogue (<see cref="S57ObjectCatalogue.Iho"/>).
     /// </summary>
-    internal static readonly FrozenDictionary<string, ushort> S57AttributeCodes =
-        new Dictionary<string, ushort>(StringComparer.Ordinal)
-        {
-            ["CATBRG"] = 9,
-            ["CATZOC"] = 72,
-            ["COLOUR"] = 75,
-            ["COLPAT"] = 76,
-            ["CURVEL"] = 84,
-            ["DATEND"] = 85,
-            ["DATSTA"] = 86,
-            ["HORCLR"] = 98,
-            ["INFORM"] = 102,
-            ["LITCHR"] = 107,
-            ["LITVIS"] = 108,
-            ["MLTYLT"] = 110,
-            ["NATSUR"] = 113,
-            ["NATQUA"] = 114,
-            ["OBJNAM"] = 116,
-            ["ORIENT"] = 117,
-            ["PEREND"] = 118,
-            ["PERSTA"] = 119,
-            ["PICREP"] = 120,
-            ["RADWAL"] = 126,
-            ["SECTR1"] = 136,
-            ["SECTR2"] = 137,
-            ["SIGGRP"] = 141,
-            ["SIGPER"] = 142,
-            ["SIGSEQ"] = 143,
-            ["SORDAT"] = 147,
-            ["SORIND"] = 148,
-            ["SUREND"] = 151,
-            ["SURSTA"] = 152,
-            ["TXTDSC"] = 158,
-            ["TOPSHP"] = 171,
-            ["VALLMA"] = 175,
-            ["VALNMR"] = 178,
-            ["VERACC"] = 180,
-            ["VERCLR"] = 181,
-            ["VERCCL"] = 182,
-            ["VERCOP"] = 183,
-            ["VERCSA"] = 184,
-            ["CATCOV"] = 18,
-            ["NINFOM"] = 300,
-            ["NOBJNM"] = 301,
-            ["NTXTDS"] = 304,
-            ["DRVAL1"] = 87,
-            ["DRVAL2"] = 88,
-            ["VALDCO"] = 174,
-            ["CLSDEF"] = 190,
-            ["CLSNAM"] = 191,
-            ["SYMINS"] = 192,
-            ["JRSDTN"] = 103,
-            ["CATCTR"] = 16,
-            ["CATRUN"] = 58,
-            ["CATWED"] = 70,
-            ["CATSCF"] = 65,
-            ["BCNSHP"] = 2,
-            ["CATSPM"] = 66,
-            ["CONRAD"] = 82,
-            ["CATMOR"] = 40,
-            ["CATOBS"] = 42,
-            ["WATLEV"] = 187,
-            ["QUASOU"] = 125,
-            ["CATLIT"] = 37,
-            ["CATLMK"] = 35,
-            ["CONVIS"] = 83,
-            ["CATHAF"] = 30,
-            ["CATVEG"] = 68,
-            ["CSCALE"] = 80,
-            ["CATACH"] = 8,
-            ["STATUS"] = 149,
-            ["POSACC"] = 401,
-            ["SOUACC"] = 144,
-            ["QUAPOS"] = 402,
-            ["CALSGN"] = 6,
-            ["COMCHA"] = 77,
-            ["SIGFRQ"] = 139,
-            ["TS_TSP"] = 159,
-            ["PILDST"] = 121,
-            ["NPLDST"] = 302,
-            ["HORACC"] = 97,
-            ["VALSOU"] = 179,
-            ["SCAMIN"] = 133,
-            ["NATION"] = 111,
-        }.ToFrozenDictionary(StringComparer.Ordinal);
+    /// <exception cref="KeyNotFoundException">The catalogue has no such class.</exception>
+    internal static ushort S57Objl(string acronym)
+        => S57ObjectCatalogue.Iho.TryGetObjectClass(acronym, out var definition)
+            ? (ushort)definition.Code
+            : throw new KeyNotFoundException($"No S-57 object class {acronym}.");
+
+    /// <summary>
+    /// The attribute code (ATTL) of an S-57 acronym in the IHO S-57 Edition
+    /// 3.1 Object Catalogue (<see cref="S57ObjectCatalogue.Iho"/>).
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">The catalogue has no such attribute.</exception>
+    internal static ushort S57Attl(string acronym)
+        => TryGetS57Attl(acronym, out var attl) ? attl : throw new KeyNotFoundException($"No S-57 attribute {acronym}.");
+
+    /// <summary>The ATTL of an S-57 attribute acronym, when the IHO catalogue defines it.</summary>
+    internal static bool TryGetS57Attl(string acronym, out ushort attl)
+    {
+        var found = S57ObjectCatalogue.Iho.TryGetAttribute(acronym, out var definition);
+        attl = found ? (ushort)definition!.Code : (ushort)0;
+        return found;
+    }
+
+    /// <summary>The acronym of an S-57 attribute code, when the IHO catalogue defines it.</summary>
+    internal static string? S57AttributeAcronym(int attl)
+        => S57ObjectCatalogue.Iho.TryGetAttribute(attl, out var definition) ? definition.Acronym : null;
 }

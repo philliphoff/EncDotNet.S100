@@ -514,7 +514,7 @@ public sealed partial class S101ToS57Translator
             AddFixedAttributes(rule, bag);
 
             if (s101Class == "DataCoverage" && !bag.Has("CATCOV"))
-                bag.Add("CATCOV", S101ToS57Rules.S57AttributeCodes["CATCOV"], "1"); // §3.5: coverage available
+                bag.Add("CATCOV", S101ToS57Rules.S57Attl("CATCOV"), "1"); // §3.5: coverage available
 
             // A LightSectored: one LIGHTS object per light sector, the first
             // keeping the feature's identity.
@@ -540,7 +540,7 @@ public sealed partial class S101ToS57Translator
                         if (acronym is "OBJNAM" or "NOBJNM")
                             foreach (var v in values) surfaceBag.Add(acronym, attl, v);
                     }
-                    var surfaceRule = new S101ToS57FeatureRule(s101Class, aggregation.SurfaceObjl, surfaceAcronym, rule.Clause, FrozenDictionary<string, string>.Empty);
+                    var surfaceRule = new S101ToS57FeatureRule(s101Class, S101ToS57Rules.S57Objl(surfaceAcronym), surfaceAcronym, rule.Clause, FrozenDictionary<string, string>.Empty);
                     Emit(feature, surfaceRule, primitive, pointers, surfaceBag, NextFoid(foid));
                     _diagnostics?.RecordSynthesised(surfaceAcronym);
                 }
@@ -625,7 +625,7 @@ public sealed partial class S101ToS57Translator
                     continue;
                 }
                 if (bag.Has(acronym)) continue;
-                if (S101ToS57Rules.S57AttributeCodes.TryGetValue(acronym, out var attl))
+                if (S101ToS57Rules.TryGetS57Attl(acronym, out var attl))
                     bag.Add(acronym, attl, value);
                 else if (FlatAttl(acronym) is { } flat)
                     bag.Add(acronym, flat, value);
@@ -690,7 +690,7 @@ public sealed partial class S101ToS57Translator
                     foreach (var acronym in mandatory)
                     {
                         if (bag.Has(acronym) || (acronym == "INFORM" && bag.Inform.Count > 0)) continue;
-                        bag.Add(acronym, S101ToS57Rules.S57AttributeCodes[acronym], string.Empty);
+                        bag.Add(acronym, S101ToS57Rules.S57Attl(acronym), string.Empty);
                         _diagnostics?.RecordMandatoryNulled(rule.S57Acronym, acronym);
                     }
                 }
@@ -729,7 +729,7 @@ public sealed partial class S101ToS57Translator
             var values = new List<(ushort Attl, string Acronym, string Value)>();
             foreach (var (acronym, attl, list) in bag.Values)
             {
-                if (list.Count > 1 && !S101ToS57Rules.S57ListAttributes.Contains(acronym))
+                if (list.Count > 1 && !S101ToS57Rules.IsS57ListAttribute(acronym))
                 {
                     _diagnostics?.RecordTruncatedToFirst(acronym);
                     values.Add((attl, acronym, list[0]));
@@ -764,7 +764,7 @@ public sealed partial class S101ToS57Translator
                         joined = joined[.._options.MaxInformLength];
                 }
                 if (existing >= 0) values.RemoveAt(existing);
-                values.Add((S101ToS57Rules.S57AttributeCodes[acronym], acronym, joined));
+                values.Add((S101ToS57Rules.S57Attl(acronym), acronym, joined));
             }
         }
 
@@ -891,7 +891,7 @@ public sealed partial class S101ToS57Translator
         private void Add(AttributeBag bag, string acronym, string? value)
         {
             if (value is null) return;
-            var attl = S101ToS57Rules.S57AttributeCodes.TryGetValue(acronym, out var known)
+            var attl = S101ToS57Rules.TryGetS57Attl(acronym, out var known)
                 ? known
                 : FlatAttl(acronym) ?? throw new InvalidOperationException($"No ATTL for {acronym}.");
             bag.Add(acronym, attl, value);
@@ -1401,7 +1401,7 @@ public sealed partial class S101ToS57Translator
                 else if (node.Code == "periodicDateRange") AddDateRange(bag, node, "PERSTA", "PEREND");
             }
 
-            var rule = new S101ToS57FeatureRule("topmark", 144, "TOPMAR", "18.1", FrozenDictionary<string, string>.Empty);
+            var rule = new S101ToS57FeatureRule("topmark", S101ToS57Rules.S57Objl("TOPMAR"), "TOPMAR", "18.1", FrozenDictionary<string, string>.Empty);
             var slave = Emit(feature, rule, primitive, pointers, bag, NextFoid(masterFoid));
             _diagnostics?.RecordSynthesised("TOPMAR");
             AddSlave(master, slave);

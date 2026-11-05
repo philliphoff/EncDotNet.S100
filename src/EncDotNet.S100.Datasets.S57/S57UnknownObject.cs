@@ -41,11 +41,6 @@ public static class S57UnknownObject
     /// <returns>The code.</returns>
     public static string AttributeCode(ushort attl) => "ATTL" + attl.ToString(CultureInfo.InvariantCulture);
 
-    // ATTL → acronym for the attributes the reverse translator writes itself,
-    // which the forward mapping has no flat rule for (OBJNAM, INFORM, …).
-    private static readonly Lazy<Dictionary<ushort, string>> AssembledAttributeAcronyms = new(() =>
-        S101ToS57Rules.S57AttributeCodes.ToDictionary(kv => kv.Value, kv => kv.Key));
-
     /// <summary>
     /// The code an S-57 attribute goes by on an <see cref="FeatureTypeCode"/>
     /// feature: its acronym where <paramref name="mapping"/> or the S-57
@@ -53,7 +48,7 @@ public static class S57UnknownObject
     /// </summary>
     internal static string AttributeCode(ushort attl, S57S101Mapping mapping) =>
         mapping.AttributeRules.TryGetValue(attl, out var rule) ? rule.S57Acronym
-        : AssembledAttributeAcronyms.Value.TryGetValue(attl, out var acronym) ? acronym
+        : S101ToS57Rules.S57AttributeAcronym(attl) is { } acronym ? acronym
         : AttributeCode(attl);
 
     /// <summary>

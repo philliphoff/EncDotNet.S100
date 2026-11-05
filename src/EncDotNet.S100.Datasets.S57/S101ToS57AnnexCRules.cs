@@ -9,34 +9,6 @@ namespace EncDotNet.S100.Datasets.S57;
 // the enumeration differences of Table A-2 and §27.
 public sealed partial class S101ToS57Rules
 {
-    private const ushort ObjlAdmare = 1;
-    private const ushort ObjlBcnspp = 9;
-    private const ushort ObjlBridge = 11;
-    private const ushort ObjlBuisgl = 12;
-    private const ushort ObjlBoyspp = 19;
-    private const ushort ObjlCtnare = 27;
-    private const ushort ObjlCtrpnt = 33;
-    private const ushort ObjlDamcon = 38;
-    private const ushort ObjlHrbfac = 64;
-    private const ushort ObjlLndmrk = 74;
-    private const ushort ObjlLights = 75;
-    private const ushort ObjlLndrgn = 73;
-    private const ushort ObjlMorfac = 84;
-    private const ushort ObjlObstrn = 86;
-    private const ushort ObjlPilpnt = 90;
-    private const ushort ObjlRivers = 114;
-    private const ushort ObjlRunway = 117;
-    private const ushort ObjlSeaare = 119;
-    private const ushort ObjlSmcfac = 128;
-    private const ushort ObjlSoundg = 129;
-    private const ushort ObjlTselne = 145;
-    private const ushort ObjlVegatn = 155;
-    private const ushort ObjlWedklp = 158;
-    private const ushort ObjlArcsln = 161;
-    private const ushort ObjlAslxis = 162;
-    private const ushort ObjlNewobj = 163;
-    internal const ushort ObjlCAggr = 400;
-
     /// <summary>
     /// S-101 classes that Annex C converts to an S-57 collection (<c>C_AGGR</c>)
     /// of the features they aggregate, keyed by class with the S-101 feature
@@ -44,17 +16,17 @@ public sealed partial class S101ToS57Rules
     /// surface instance also yields (e.g. a <c>TrafficSeparationScheme</c>
     /// surface → <c>SEAARE</c>, §15.23).
     /// </summary>
-    internal static readonly FrozenDictionary<string, (string Association, string? SurfaceAcronym, ushort SurfaceObjl)> Aggregations =
-        new Dictionary<string, (string, string?, ushort)>(StringComparer.Ordinal)
+    internal static readonly FrozenDictionary<string, (string Association, string? SurfaceAcronym)> Aggregations =
+        new Dictionary<string, (string, string?)>(StringComparer.Ordinal)
         {
-            ["RangeSystem"] = ("RangeSystemAggregation", null, 0),
-            ["FairwaySystem"] = ("FairwayAggregation", "SEAARE", ObjlSeaare),
-            ["TwoWayRoute"] = ("TwoWayRouteAggregation", "SEAARE", ObjlSeaare),
-            ["DeepWaterRoute"] = ("DeepWaterRouteAggregation", "SEAARE", ObjlSeaare),
-            ["TrafficSeparationScheme"] = ("TrafficSeparationSchemeAggregation", "SEAARE", ObjlSeaare),
-            ["ArchipelagicSeaLane"] = ("ASLAggregation", "SEAARE", ObjlSeaare),
-            ["MooringTrot"] = ("MooringTrotAggregation", "SEAARE", ObjlSeaare),
-            ["IslandGroup"] = ("IslandAggregation", "LNDRGN", ObjlLndrgn),
+            ["RangeSystem"] = ("RangeSystemAggregation", null),
+            ["FairwaySystem"] = ("FairwayAggregation", "SEAARE"),
+            ["TwoWayRoute"] = ("TwoWayRouteAggregation", "SEAARE"),
+            ["DeepWaterRoute"] = ("DeepWaterRouteAggregation", "SEAARE"),
+            ["TrafficSeparationScheme"] = ("TrafficSeparationSchemeAggregation", "SEAARE"),
+            ["ArchipelagicSeaLane"] = ("ASLAggregation", "SEAARE"),
+            ["MooringTrot"] = ("MooringTrotAggregation", "SEAARE"),
+            ["IslandGroup"] = ("IslandAggregation", "LNDRGN"),
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     private static void AddAnnexC(
@@ -64,58 +36,58 @@ public sealed partial class S101ToS57Rules
         Dictionary<(string, string), S101ToS57AttributeRule> featureAttributes)
     {
         // ── Feature classes S-57 → S-101 never produces ───────────────────
-        features["StructureOverNavigableWater"] = Rule("StructureOverNavigableWater", ObjlBuisgl, "BUISGL", "8.7") with
+        features["StructureOverNavigableWater"] = Rule("StructureOverNavigableWater", "BUISGL", "8.7") with
         {
             // §8.7: a covered bulk or passenger terminal is also a HRBFAC.
             Companions =
             [
-                When(Rule("StructureOverNavigableWater", ObjlHrbfac, "HRBFAC", "8.7", ("CATHAF", "11")), "categoryOfStructure", "2"),
-                When(Rule("StructureOverNavigableWater", ObjlHrbfac, "HRBFAC", "8.7", ("CATHAF", "8")), "categoryOfStructure", "5"),
+                When(Rule("StructureOverNavigableWater", "HRBFAC", "8.7", ("CATHAF", "11")), "categoryOfStructure", "2"),
+                When(Rule("StructureOverNavigableWater", "HRBFAC", "8.7", ("CATHAF", "8")), "categoryOfStructure", "5"),
             ],
         };
         // §6.7 / §6.8: a span is a BRIDGE that carries its Bridge's attributes.
-        Feature(features, "SpanFixed", ObjlBridge, "BRIDGE", "6.7");
-        Feature(features, "SpanOpening", ObjlBridge, "BRIDGE", "6.8");
-        Feature(features, "FreePortArea", 60, "FRPARE", "16.19");
-        Feature(features, "Seagrass", ObjlWedklp, "WEDKLP", "12.3", ("CATWED", "3"));
-        Feature(features, "WindTurbine", ObjlLndmrk, "LNDMRK", "7.4", ("CATLMK", "19"), ("CONVIS", "2"));
-        Feature(features, "ArchipelagicSeaLaneArea", ObjlArcsln, "ARCSLN", "15.24");
-        Feature(features, "ArchipelagicSeaLaneAxis", ObjlAslxis, "ASLXIS", "15.25");
-        Feature(features, "RadarLine", 99, "RADLNE", "15.29");
-        Feature(features, "RadarRange", 100, "RADRNG", "15.30");
-        Feature(features, "CustomZone", 37, "CUSZNE", "16.15");
-        Feature(features, "StraightTerritorialSeaBaseline", 132, "STSLNE", "16.23");
-        Feature(features, "TrafficSeparationSchemeCrossing", 147, "TSSCRS", "15.21");
-        Feature(features, "TrafficSeparationSchemeRoundabout", 149, "TSSRON", "15.22");
-        Feature(features, "RadarReflector", 101, "RADRFL", "20.18");
-        Feature(features, "DepthNoBottomFound", ObjlSoundg, "SOUNDG", "11.8", ("QUASOU", "5"));
-        Feature(features, "FoulGround", ObjlObstrn, "OBSTRN", "13.7", ("CATOBS", "7"), ("WATLEV", "3"));
-        Feature(features, "DiscolouredWater", ObjlCtnare, "CTNARE", "13.8", ("INFORM", "Discoloured water"));
-        Feature(features, "EmergencyWreckMarkingBuoy", ObjlBoyspp, "BOYSPP", "20.6", ("CATSPM", "27"));
-        Feature(features, "LightFogDetector", ObjlLights, "LIGHTS", "19.4", ("CATLIT", "7"));
-        Feature(features, "LightAirObstruction", ObjlLights, "LIGHTS", "19.5", ("CATLIT", "6"));
-        Feature(features, "MooringArea", 4, "ACHARE", "16.4");
-        Feature(features, "PilotageDistrict", ObjlAdmare, "ADMARE", "16.26", ("JRSDTN", "3"));
-        Feature(features, "MarinePollutionRegulationsArea", ObjlAdmare, "ADMARE", "16.28", ("JRSDTN", "3"));
-        Feature(features, "VesselTrafficServiceArea", ObjlAdmare, "ADMARE", "22.2", ("JRSDTN", "3"));
-        Feature(features, "TidalStreamPanelData", 138, "TS_PAD", "10.5");
-        features["Helipad"] = Rule("Helipad", ObjlRunway, "RUNWAY", "6.5", ("CATRUN", "2")) with
+        Feature(features, "SpanFixed", "BRIDGE", "6.7");
+        Feature(features, "SpanOpening", "BRIDGE", "6.8");
+        Feature(features, "FreePortArea", "FRPARE", "16.19");
+        Feature(features, "Seagrass", "WEDKLP", "12.3", ("CATWED", "3"));
+        Feature(features, "WindTurbine", "LNDMRK", "7.4", ("CATLMK", "19"), ("CONVIS", "2"));
+        Feature(features, "ArchipelagicSeaLaneArea", "ARCSLN", "15.24");
+        Feature(features, "ArchipelagicSeaLaneAxis", "ASLXIS", "15.25");
+        Feature(features, "RadarLine", "RADLNE", "15.29");
+        Feature(features, "RadarRange", "RADRNG", "15.30");
+        Feature(features, "CustomZone", "CUSZNE", "16.15");
+        Feature(features, "StraightTerritorialSeaBaseline", "STSLNE", "16.23");
+        Feature(features, "TrafficSeparationSchemeCrossing", "TSSCRS", "15.21");
+        Feature(features, "TrafficSeparationSchemeRoundabout", "TSSRON", "15.22");
+        Feature(features, "RadarReflector", "RADRFL", "20.18");
+        Feature(features, "DepthNoBottomFound", "SOUNDG", "11.8", ("QUASOU", "5"));
+        Feature(features, "FoulGround", "OBSTRN", "13.7", ("CATOBS", "7"), ("WATLEV", "3"));
+        Feature(features, "DiscolouredWater", "CTNARE", "13.8", ("INFORM", "Discoloured water"));
+        Feature(features, "EmergencyWreckMarkingBuoy", "BOYSPP", "20.6", ("CATSPM", "27"));
+        Feature(features, "LightFogDetector", "LIGHTS", "19.4", ("CATLIT", "7"));
+        Feature(features, "LightAirObstruction", "LIGHTS", "19.5", ("CATLIT", "6"));
+        Feature(features, "MooringArea", "ACHARE", "16.4");
+        Feature(features, "PilotageDistrict", "ADMARE", "16.26", ("JRSDTN", "3"));
+        Feature(features, "MarinePollutionRegulationsArea", "ADMARE", "16.28", ("JRSDTN", "3"));
+        Feature(features, "VesselTrafficServiceArea", "ADMARE", "22.2", ("JRSDTN", "3"));
+        Feature(features, "TidalStreamPanelData", "TS_PAD", "10.5");
+        features["Helipad"] = Rule("Helipad", "RUNWAY", "6.5", ("CATRUN", "2")) with
         {
-            Companions = [OnPrimitive(Rule("Helipad", ObjlLndmrk, "LNDMRK", "6.5", ("CATLMK", ""), ("CONVIS", "2")), S57GeometricPrimitive.Point)],
+            Companions = [OnPrimitive(Rule("Helipad", "LNDMRK", "6.5", ("CATLMK", ""), ("CONVIS", "2")), S57GeometricPrimitive.Point)],
         };
-        features["ContinentalShelfArea"] = Rule("ContinentalShelfArea", 32, "COSARE", "16.14") with { PrimitiveChange = S101ToS57PrimitiveChange.CurveToArea };
-        features["CollisionRegulationsLimit"] = Rule("CollisionRegulationsLimit", ObjlCtnare, "CTNARE", "16.27", ("INFORM", "Collision regulations limit")) with
+        features["ContinentalShelfArea"] = Rule("ContinentalShelfArea", "COSARE", "16.14") with { PrimitiveChange = S101ToS57PrimitiveChange.CurveToArea };
+        features["CollisionRegulationsLimit"] = Rule("CollisionRegulationsLimit", "CTNARE", "16.27", ("INFORM", "Collision regulations limit")) with
         {
             PrimitiveChange = S101ToS57PrimitiveChange.CurveToArea,
         };
 
         // §21.3: a virtual AIS aid to navigation is a NEWOBJ whose class
         // definition, name and symbol instruction follow from its type.
-        var virtualAis = Feature(features, "VirtualAISAidToNavigation", ObjlNewobj, "NEWOBJ", "21.3");
+        var virtualAis = Feature(features, "VirtualAISAidToNavigation", "NEWOBJ", "21.3");
         features["VirtualAISAidToNavigation"] = virtualAis with
         {
             Redirects = VirtualAisTypes.Select(t => When(
-                Rule("VirtualAISAidToNavigation", ObjlNewobj, "NEWOBJ", "27.199",
+                Rule("VirtualAISAidToNavigation", "NEWOBJ", "27.199",
                     ("CLSDEF", t.Definition),
                     ("CLSNAM", $"Virtual AtoN, {t.Name}"),
                     ("INFORM", $"Virtual AtoN, {t.Name}; {t.Definition}."),
@@ -126,30 +98,30 @@ public sealed partial class S101ToS57Rules
         // Aggregations become C_AGGR (§5.5, §8.23, §15.6, §15.8, §15.11,
         // §15.15, §15.23, §15.26); the translator builds the members.
         foreach (var (code, _) in Aggregations)
-            Feature(features, code, ObjlCAggr, "C_AGGR", code == "FairwaySystem" ? "15.8" : FeatureClause(code));
+            Feature(features, code, "C_AGGR", code == "FairwaySystem" ? "15.8" : FeatureClause(code));
 
         // ── Class changes by attribute value or primitive ─────────────────
         Redirect(features, "Landmark",
-            When(Rule("Landmark", ObjlCtrpnt, "CTRPNT", "7.2", ("CATCTR", "1")), "categoryOfLandmark", "22"),
-            When(Rule("Landmark", ObjlCtrpnt, "CTRPNT", "7.2", ("CATCTR", "5")), "categoryOfLandmark", "23"),
-            When(Rule("Landmark", ObjlBridge, "BRIDGE", "7.2", ("CATBRG", "1")), "categoryOfLandmark", "26"),
-            When(Rule("Landmark", ObjlDamcon, "DAMCON", "7.2"), "categoryOfLandmark", "27"));
+            When(Rule("Landmark", "CTRPNT", "7.2", ("CATCTR", "1")), "categoryOfLandmark", "22"),
+            When(Rule("Landmark", "CTRPNT", "7.2", ("CATCTR", "5")), "categoryOfLandmark", "23"),
+            When(Rule("Landmark", "BRIDGE", "7.2", ("CATBRG", "1")), "categoryOfLandmark", "26"),
+            When(Rule("Landmark", "DAMCON", "7.2"), "categoryOfLandmark", "27"));
         Redirect(features, "Pile",
-            When(Rule("Pile", ObjlCtnare, "CTNARE", "8.4", ("INFORM", "Area of piles")), "categoryOfPile", ["5"], S57GeometricPrimitive.Area),
-            OnPrimitive(Rule("Pile", ObjlMorfac, "MORFAC", "8.4", ("CATMOR", "5")), S57GeometricPrimitive.Line, S57GeometricPrimitive.Area),
-            When(Rule("Pile", ObjlBcnspp, "BCNSPP", "8.4", ("CONRAD", "3"), ("BCNSHP", "1"), ("CATSPM", "52"), ("COLOUR", "")), "radarConspicuous", [], S57GeometricPrimitive.Point),
-            When(Rule("Pile", ObjlMorfac, "MORFAC", "27.47", ("CATMOR", "5")), "categoryOfPile", "8"));
-        Redirect(features, "Lake", When(Rule("Lake", ObjlRivers, "RIVERS", "5.10"), "status", "5") with { ConsumesAttribute = false });
+            When(Rule("Pile", "CTNARE", "8.4", ("INFORM", "Area of piles")), "categoryOfPile", ["5"], S57GeometricPrimitive.Area),
+            OnPrimitive(Rule("Pile", "MORFAC", "8.4", ("CATMOR", "5")), S57GeometricPrimitive.Line, S57GeometricPrimitive.Area),
+            When(Rule("Pile", "BCNSPP", "8.4", ("CONRAD", "3"), ("BCNSHP", "1"), ("CATSPM", "52"), ("COLOUR", "")), "radarConspicuous", [], S57GeometricPrimitive.Point),
+            When(Rule("Pile", "MORFAC", "27.47", ("CATMOR", "5")), "categoryOfPile", "8"));
+        Redirect(features, "Lake", When(Rule("Lake", "RIVERS", "5.10"), "status", "5") with { ConsumesAttribute = false });
         Redirect(features, "ShorelineConstruction",
-            When(Rule("ShorelineConstruction", ObjlMorfac, "MORFAC", "8.6", ("CATMOR", "4")), "categoryOfShorelineConstruction", "23"));
+            When(Rule("ShorelineConstruction", "MORFAC", "8.6", ("CATMOR", "4")), "categoryOfShorelineConstruction", "23"));
         Redirect(features, "CableSubmarine",
-            When(Rule("CableSubmarine", ObjlMorfac, "MORFAC", "14.2", ("CATMOR", "6")), "categoryOfCable", "9"));
+            When(Rule("CableSubmarine", "MORFAC", "14.2", ("CATMOR", "6")), "categoryOfCable", "9"));
         Redirect(features, "MooringBuoy",
-            When(Rule("MooringBuoy", ObjlSmcfac, "SMCFAC", "20.8", ("CATSCF", "29")), "visitorsMooring", []));
+            When(Rule("MooringBuoy", "SMCFAC", "20.8", ("CATSCF", "29")), "visitorsMooring", []));
         Redirect(features, "Obstruction",
-            When(Rule("Obstruction", ObjlVegatn, "VEGATN", "13.6", ("CATVEG", "7")), "categoryOfObstruction", ["23"], S57GeometricPrimitive.Area));
+            When(Rule("Obstruction", "VEGATN", "13.6", ("CATVEG", "7")), "categoryOfObstruction", ["23"], S57GeometricPrimitive.Area));
         Redirect(features, "SeparationZoneOrLine",
-            OnPrimitive(Rule("SeparationZoneOrLine", ObjlTselne, "TSELNE", "15.19"), S57GeometricPrimitive.Line));
+            OnPrimitive(Rule("SeparationZoneOrLine", "TSELNE", "15.19"), S57GeometricPrimitive.Line));
 
         // Table 2-1: primitives S-57 doesn't allow on the class.
         foreach (var code in new[] { "AdministrationArea", "ContiguousZone", "ExclusiveEconomicZone", "TerritorialSeaArea" })
@@ -161,40 +133,40 @@ public sealed partial class S101ToS57Rules
         // ── Objects Annex C adds ──────────────────────────────────────────
         // §30 inTheWater: a structure standing in the water gets a PILPNT.
         foreach (var code in new[] { "Building", "Landmark", "SiloTank", "WindTurbine", "FortifiedStructure", "Crane" })
-            Companion(features, code, When(Rule(code, ObjlPilpnt, "PILPNT", "30"), "inTheWater", [], S57GeometricPrimitive.Point));
+            Companion(features, code, When(Rule(code, "PILPNT", "30"), "inTheWater", [], S57GeometricPrimitive.Point));
         // §14.1 / §27.100: a flare stack on a platform is a LNDMRK.
-        Companion(features, "OffshorePlatform", When(Rule("OffshorePlatform", ObjlLndmrk, "LNDMRK", "27.100", ("CATLMK", "6"), ("CONVIS", "2")), "flareStack", []));
+        Companion(features, "OffshorePlatform", When(Rule("OffshorePlatform", "LNDMRK", "27.100", ("CATLMK", "6"), ("CONVIS", "2")), "flareStack", []));
         // §16.2 / §27.113: a disputed area also gets a CTNARE.
         foreach (var code in new[] { "AdministrationArea", "ContiguousZone", "ExclusiveEconomicZone", "TerritorialSeaArea", "FisheryZone", "ContinentalShelfArea", "CustomZone" })
-            Companion(features, code, When(Rule(code, ObjlCtnare, "CTNARE", "27.113", ("INFORM", "In dispute")), "inDispute", []));
+            Companion(features, code, When(Rule(code, "CTNARE", "27.113", ("INFORM", "In dispute")), "inDispute", []));
 
         // ── Attributes ────────────────────────────────────────────────────
         // Direct copies with no forward rule to invert (§27, §28).
-        Attribute(attributes, forward, "categoryOfDock", "CATDOC", 22);
-        Attribute(attributes, forward, "categoryOfInstallationBuoy", "CATINB", 33);
-        Attribute(attributes, forward, "estimatedRangeOfTransmission", "ESTRNG", 91);
-        Attribute(attributes, forward, "iceFactor", "ICEFAC", 101);
-        Attribute(attributes, forward, "valueOfMaximumRange", "VALMXR", 177);
-        Attribute(attributes, forward, "minimumBerthDepth", "DRVAL1", 87);
-        Attribute(attributes, forward, "dredgedDate", "SORDAT", 147);
-        Attribute(attributes, forward, "sweptDate", "SORDAT", 147);
-        Attribute(attributes, forward, "frequencyShoreStationTransmits", "SIGFRQ", 139);
-        Attribute(attributes, forward, "scaleValueMaximum", "SCVAL1", 134);
-        Attribute(attributes, forward, "scaleValueMinimum", "SCVAL2", 135);
-        Attribute(attributes, forward, "measurementDistanceMaximum", "SDISMX", 145);
-        Attribute(attributes, forward, "measurementDistanceMinimum", "SDISMN", 146);
-        Attribute(attributes, forward, "qualityOfHorizontalMeasurement", "QUAPOS", 402);
-        Attribute(attributes, forward, "categoryOfZoneOfConfidenceInData", "CATZOC", 72);
+        Attribute(attributes, forward, "categoryOfDock", "CATDOC");
+        Attribute(attributes, forward, "categoryOfInstallationBuoy", "CATINB");
+        Attribute(attributes, forward, "estimatedRangeOfTransmission", "ESTRNG");
+        Attribute(attributes, forward, "iceFactor", "ICEFAC");
+        Attribute(attributes, forward, "valueOfMaximumRange", "VALMXR");
+        Attribute(attributes, forward, "minimumBerthDepth", "DRVAL1");
+        Attribute(attributes, forward, "dredgedDate", "SORDAT");
+        Attribute(attributes, forward, "sweptDate", "SORDAT");
+        Attribute(attributes, forward, "frequencyShoreStationTransmits", "SIGFRQ");
+        Attribute(attributes, forward, "scaleValueMaximum", "SCVAL1");
+        Attribute(attributes, forward, "scaleValueMinimum", "SCVAL2");
+        Attribute(attributes, forward, "measurementDistanceMaximum", "SDISMX");
+        Attribute(attributes, forward, "measurementDistanceMinimum", "SDISMN");
+        Attribute(attributes, forward, "qualityOfHorizontalMeasurement", "QUAPOS");
+        Attribute(attributes, forward, "categoryOfZoneOfConfidenceInData", "CATZOC");
 
         // §8.7 / §27.68 / §27.40: attributes with no S-57 counterpart whose
         // values become text or another attribute.
-        Ensure(attributes, "categoryOfStructure", "", 0);
-        Ensure(attributes, "categoryOfMooringArea", "CATACH", 8);
+        Ensure(attributes, "categoryOfStructure", "");
+        Ensure(attributes, "categoryOfMooringArea", "CATACH");
         // §27.15: only dangerous cargo converts: an explosives anchorage, or
         // text on a berth.
-        Ensure(attributes, "categoryOfCargo", "", 0);
+        Ensure(attributes, "categoryOfCargo", "");
         featureAttributes[("AnchorageArea", "categoryOfCargo")] = new S101ToS57AttributeRule(
-            "categoryOfCargo", 8, "CATACH", "27.15",
+            "categoryOfCargo", S57Attl("CATACH"), "CATACH", "27.15",
             Enumerable.Range(1, 15).ToDictionary(v => v.ToString(System.Globalization.CultureInfo.InvariantCulture), v => v == 7 ? "4" : (string?)null));
 
         // Text the S-57 attribute can't hold folds into INFORM (§27).
@@ -298,16 +270,16 @@ public sealed partial class S101ToS57Rules
         ("12", "Emergency Wreck Marking", "BOYSPP11", "A Virtual object marking a wreck"),
     ];
 
-    private static S101ToS57FeatureRule Rule(string s101Code, ushort objl, string acronym, string clause, params (string Acronym, string Value)[] fixedAttributes)
-        => new(s101Code, objl, acronym, clause,
+    private static S101ToS57FeatureRule Rule(string s101Code, string acronym, string clause, params (string Acronym, string Value)[] fixedAttributes)
+        => new(s101Code, S57Objl(acronym), acronym, clause,
             fixedAttributes.Length == 0
                 ? NoFixedAttributes
                 : fixedAttributes.ToDictionary(a => a.Acronym, a => a.Value, StringComparer.Ordinal));
 
     private static S101ToS57FeatureRule Feature(
-        Dictionary<string, S101ToS57FeatureRule> features, string s101Code, ushort objl, string acronym, string clause,
+        Dictionary<string, S101ToS57FeatureRule> features, string s101Code, string acronym, string clause,
         params (string Acronym, string Value)[] fixedAttributes)
-        => features[s101Code] = Rule(s101Code, objl, acronym, clause, fixedAttributes);
+        => features[s101Code] = Rule(s101Code, acronym, clause, fixedAttributes);
 
     private static S101ToS57FeatureRedirect When(S101ToS57FeatureRule target, string attribute, params string[] values)
         => new(target, attribute, values, []);
@@ -334,23 +306,23 @@ public sealed partial class S101ToS57Rules
     }
 
     private static void Attribute(
-        Dictionary<string, S101ToS57AttributeRule> attributes, S57S101Mapping forward, string s101Code, string acronym, ushort attl)
+        Dictionary<string, S101ToS57AttributeRule> attributes, S57S101Mapping forward, string s101Code, string acronym)
     {
         if (attributes.ContainsKey(s101Code)) return;
-        if (forward.TryGetAttl(acronym, out var known)) attl = known;
+        var attl = forward.TryGetAttl(acronym, out var known) ? known : S57Attl(acronym);
         attributes[s101Code] = new S101ToS57AttributeRule(s101Code, attl, acronym, AttributeClause(s101Code), NoRemap);
     }
 
     // A rule for an attribute with no forward rule, so that remaps and INFORM
     // folds have one to attach to; ATTL 0 writes no S-57 attribute.
-    private static void Ensure(Dictionary<string, S101ToS57AttributeRule> attributes, string s101Code, string acronym, ushort attl)
+    private static void Ensure(Dictionary<string, S101ToS57AttributeRule> attributes, string s101Code, string acronym)
     {
         if (!attributes.ContainsKey(s101Code))
-            attributes[s101Code] = new S101ToS57AttributeRule(s101Code, attl, acronym, AttributeClause(s101Code), NoRemap);
+            attributes[s101Code] = new S101ToS57AttributeRule(s101Code, acronym.Length == 0 ? (ushort)0 : S57Attl(acronym), acronym, AttributeClause(s101Code), NoRemap);
     }
 
     private static void Inform(Dictionary<string, S101ToS57AttributeRule> attributes, string s101Code, string format, string clause)
-        => attributes[s101Code] = new S101ToS57AttributeRule(s101Code, 102, "INFORM", clause, NoRemap) { InformFormat = format };
+        => attributes[s101Code] = new S101ToS57AttributeRule(s101Code, S57Attl("INFORM"), "INFORM", clause, NoRemap) { InformFormat = format };
 
     // Adds value remaps to the general rule for the attribute and to every
     // class-specific rule for it.

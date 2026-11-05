@@ -326,7 +326,7 @@ public sealed partial class S101ToS57Translator
             foreach (var pointers in graph.Boundary(uncovered))
             {
                 var bag = new AttributeBag();
-                bag.Add("CATCOV", S101ToS57Rules.S57AttributeCodes["CATCOV"], "2");
+                bag.Add("CATCOV", S101ToS57Rules.S57Attl("CATCOV"), "2");
                 Emit(null, coverages[0].Object.Rule, S57GeometricPrimitive.Area, pointers, bag, NextFoid(coverages[0].Object.Foid));
                 _diagnostics?.RecordSynthesised("M_COVR");
             }
@@ -343,8 +343,8 @@ public sealed partial class S101ToS57Translator
                 if (OptimumDisplayScale(source) is not { } scale || scale == _compilationScale) continue;
 
                 var bag = new AttributeBag();
-                bag.Add("CSCALE", S101ToS57Rules.S57AttributeCodes["CSCALE"], scale.ToString(CultureInfo.InvariantCulture));
-                var rule = new S101ToS57FeatureRule("DataCoverage", 301, "M_CSCL", "3.5", FrozenDictionary<string, string>.Empty);
+                bag.Add("CSCALE", S101ToS57Rules.S57Attl("CSCALE"), scale.ToString(CultureInfo.InvariantCulture));
+                var rule = new S101ToS57FeatureRule("DataCoverage", S101ToS57Rules.S57Objl("M_CSCL"), "M_CSCL", "3.5", FrozenDictionary<string, string>.Empty);
                 Emit(source, rule, S57GeometricPrimitive.Area, [.. coverage.SpatialPointers], bag, NextFoid(coverage.Foid));
                 _diagnostics?.RecordSynthesised("M_CSCL");
             }
