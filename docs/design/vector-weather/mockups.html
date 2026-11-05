@@ -87,7 +87,6 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--ru
 .row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .caps10 { font-size: 10px; letter-spacing: 1px; opacity: .7; } .caps11 { font-size: 11px; font-weight: 600; letter-spacing: .6px; opacity: .6; }
 .accent-t { color: var(--w-accent); } .warn-t { color: #B7791F; }
-.new { font: 700 8.5px var(--f-mono); letter-spacing: .06em; color: #fff; background: #E0005A; border-radius: 3px; padding: 1px 4px; vertical-align: 1px; margin-left: 4px; }
 .cb { width: 15px; height: 15px; border-radius: 4px; border: 1px solid var(--w-border); display: inline-grid; place-items: center; font-size: 10px; flex: none; color: var(--w-pillFg); }
 .cb.on { background: var(--w-pillBg); border-color: var(--w-pillBg); }
 .tg { width: 36px; height: 20px; border-radius: 10px; background: var(--w-toggleOff); position: relative; flex: none; }
@@ -113,7 +112,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--ru
 .ls-foot { border-top: 1px solid var(--w-border); padding: 6px 8px 8px; font-size: 11px; opacity: .65; margin-top: 6px; }
 /* display controls */
 .dc { padding: 4px 12px 12px; display: grid; gap: 12px; }
-.dc-sec { display: grid; gap: 6px; } .dc-sec.hl { outline: 1.5px dashed #E0005A; outline-offset: 4px; border-radius: 4px; }
+.dc-sec { display: grid; gap: 6px; }
 .dc-h { font-size: 11px; font-weight: 600; letter-spacing: .5px; opacity: .7; }
 .dc-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .dc-radio { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 600; }
@@ -145,7 +144,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--ru
 .lib-bar { display: flex; align-items: center; padding: 4px 8px; gap: 4px; }
 .lib-tree { padding: 0 10px 6px; display: grid; gap: 4px; border-bottom: 1px solid var(--w-border); }
 .lib-src { display: flex; gap: 8px; align-items: center; font-size: 13px; }
-.lib-src > b, .lib-src > span:not(.ktag):not(.new) { white-space: nowrap; } .lib-src > b { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.lib-src > b, .lib-src > span:not(.ktag) { white-space: nowrap; } .lib-src > b { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .ktag { font: 10.5px var(--f-mono); min-width: 42px; text-align: center; border: 1px solid var(--w-border); border-radius: 4px; opacity: .7; padding: 1px 0; }
 .lib-filter { margin: 8px 10px 4px; border: 1px solid var(--w-border); border-radius: 6px; padding: 5px 8px; font-size: 12px; }
 .seg3, .seg { display: flex; margin: 4px 10px 6px; background: var(--w-chip); border-radius: 8px; padding: 2px; font-size: 12px; }
@@ -226,7 +225,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--ru
   <header>
     <span class="eyebrow">SoundCharts · design round 1, revision 2 · #1232 / #1233</span>
     <h1>Tropical cyclones, fronts and pressure centres</h1>
-    <p class="lede">Mock-ups for <code>docs/design/vector-weather.md</code>. The chart shows only what's drawn on the map. Everything else is shown in the SoundCharts panel it lives in, laid out as the viewer lays it out (from <code>MainWindow.axaml</code> and the panel views). Pink numbers match each panel in the whole-window frames to its full-size callout. <span class="new">NEW</span> marks what this design adds to a panel. The storm, coastline and route are made up.</p>
+    <p class="lede">Mock-ups for <code>docs/design/vector-weather.md</code>. The chart shows only what's drawn on the map. Everything else is shown in the SoundCharts panel it lives in, laid out as the viewer lays it out (from <code>MainWindow.axaml</code> and the panel views). Pink numbers match each panel in the whole-window frames to its full-size callout. The storm, coastline and route are made up.</p>
   </header>
 
   <div class="sticky">
@@ -244,7 +243,7 @@ footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--ru
     <p class="notes">Layer stack open in the left dock (1), a pick on the storm in Object information (2), the Timeline in the bottom dock (3). On the map (4): only the chart drawing, plus the existing map overlays (scale bar, tools, compass and the Live stamp that shows while the Timeline dock is open). Decisions: V1–V12, V23, V25.</p>
     <div id="w1"></div>
     <div class="frame-head"><span class="eyebrow">Callouts</span><h2>The panels at full size</h2></div>
-    <p class="notes"><b>1 Layer stack:</b> a storm draws on two S-98 planes, so it has two entries. Its symbol legend sits under the track entry and its area legend under the cone-and-radii entry, as the wave fill's legend sits under its entry today. Glyph rows are new; today a legend row is only a colour swatch. <b>2 Object information:</b> the storm is a hit in the list, then the existing notice line, credit, identity block and attributes table; the radii are attribute rows, not a new table. <b>5 Display controls</b> and <b>6 Library</b> are other tabs of the same left dock.</p>
+    <p class="notes"><b>1 Layer stack:</b> a storm draws on two S-98 planes, so it has two entries. Its symbol legend sits under the track entry and its area legend under the cone-and-radii entry, as the wave fill's legend sits under its entry today. Legend rows can show a symbol or line sample as well as a colour swatch. <b>2 Object information:</b> the storm is a hit in the list, then the existing notice line, credit, identity block and attributes table; the radii are attribute rows, not a new table. <b>5 Display controls</b> and <b>6 Library</b> are other tabs of the same left dock.</p>
     <div class="callouts" id="c1"></div>
     <div class="callouts" id="c1t"></div>
   </section>
@@ -568,7 +567,6 @@ function chromeVars(el) {
 const callout = (n, where, title, html, width) => `<figure class="callout${width > 600 ? " wide" : ""}" style="--cw:${width}px"><figcaption><span class="pin static">${n}</span><span><b>${title}</b><br><span class="where">${where}</span></span></figcaption><div class="panel"><div class="dock-title">${title.toUpperCase()}</div><div class="dock-body">${html}</div></div></figure>`;
 
 /* ---------- Panel contents, shared by the window frames and the callouts ---------- */
-const NEW = '<span class="new" title="New in this design">NEW</span>';
 const cb = (on = true) => `<span class="cb${on ? " on" : ""}">${on ? "✓" : ""}</span>`;
 const tg = (on = true) => `<span class="tg${on ? " on" : ""}"></span>`;
 const eyeI = (on = true) => `<span class="eye">${on ? '<svg width="16" height="16" viewBox="0 0 24 24"><path d="M2 12c3-5 6.5-7 10-7s7 2 10 7c-3 5-6.5 7-10 7s-7-2-10-7Z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>' : '<svg width="16" height="16" viewBox="0 0 24 24"><path d="M2 12c3-5 6.5-7 10-7s7 2 10 7c-3 5-6.5 7-10 7s-7-2-10-7Z M4 4l16 16" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>'}</span>`;
@@ -582,7 +580,7 @@ const swatches = (cols, labels) => cols.map((c, i) => `<div class="lg"><span cla
 
 /* LAYER STACK (left dock). Plane expanders, entry rows, the legend under the entry that draws it. */
 function lsEntry(label, key, prio, legend, isNew) {
-  return `<div class="ls-entry">${cb(true)}<div class="ls-text"><div class="t12 ell">${label}</div><div class="t10 o65 ell">${key}${isNew ? " " + NEW : ""}</div></div><span class="mono t10 o60">#${prio}</span>${legend ? `<div class="ls-legend">${legend}</div>` : ""}</div>`;
+  return `<div class="ls-entry">${cb(true)}<div class="ls-text"><div class="t12 ell">${label}</div><div class="t10 o65 ell">${key}</div></div><span class="mono t10 o60">#${prio}</span>${legend ? `<div class="ls-legend">${legend}</div>` : ""}</div>`;
 }
 const plane = (title, n, body) => `<div class="ls-plane"><div class="ls-head"><span class="chev-d">⌄</span><b class="t12 grow">${title}</b><span class="t11 o70">${n}</span></div>${body}</div>`;
 function panelLayerStack(kind = "tc") {
@@ -604,13 +602,13 @@ function panelLayerStack(kind = "tc") {
 
 /* DISPLAY CONTROLS (left dock). */
 function panelDisplayControls() {
-  const row = (label, on, isNew) => `<div class="dc-row"><span class="grow">${label}${isNew ? " " + NEW : ""}</span>${tg(on)}</div>`;
+  const row = (label, on, isNew) => `<div class="dc-row"><span class="grow">${label}</span>${tg(on)}</div>`;
   return `<div class="dc">
     <div class="dc-sec"><div class="dc-h">Display Category</div><div class="dc-radio"><span class="rd on"></span>Display Base</div><div class="dc-radio"><span class="rd"></span>Standard</div><div class="dc-radio"><span class="rd"></span>Other Information</div><div class="dc-radio"><span class="rd"></span>All</div></div>
     <div class="dc-sec"><div class="dc-h">Display Planes</div>${row("Under Radar", true)}${row("Over Radar", true)}</div>
     <div class="dc-sec"><div class="dc-h">Overlays</div>${row("Navigational warnings", true)}</div>
-    <div class="dc-sec hl"><div class="dc-h">Weather</div>${row("Isobars", true)}${row("Wind speed fill", false)}${row("Wave arrows", false)}${row("Isotherms", false)}${row("Currents", true)}${row("Wind radii", true, true)}${row("Past track", true, true)}${row("Forecast times", true, true)}
-      <div class="t11 o60">The three new switches show while a tropical cyclone is loaded. The section now also shows for cyclone and surface-analysis datasets.</div></div>
+    <div class="dc-sec"><div class="dc-h">Weather</div>${row("Isobars", true)}${row("Wind speed fill", false)}${row("Wave arrows", false)}${row("Isotherms", false)}${row("Currents", true)}${row("Wind radii", true, true)}${row("Past track", true, true)}${row("Forecast times", true, true)}
+      <div class="t11 o60">Wind radii, Past track and Forecast times show while a tropical cyclone is loaded. The section now also shows for cyclone and surface-analysis datasets.</div></div>
     <div><span class="btn-plain">Reset all overrides</span></div>
   </div>`;
 }
@@ -626,7 +624,7 @@ function identity(glyph, name, pill, caption) {
 }
 function panelPickTC(stale) {
   const hits = [[gSym("M"), "HURRICANE ZELDA", "Tropical cyclone", "AL142026"], [`<span class="hatchglyph"></span>`, "Hurricane Warning", "CAP warning", "ANZ835"], [`<span class="sw" style="background:${P.wave[2]}"></span>`, "Weather grid point", "GFS-Wave", "(212,388)"]];
-  const staleLine = stale ? `<div class="pk-stale">Advisory 17 is 9 h old. NHC has probably issued a newer one. <span class="link">Load latest run</span> ${NEW}</div>` : "";
+  const staleLine = stale ? `<div class="pk-stale">Advisory 17 is 9 h old. NHC has probably issued a newer one. <span class="link">Load latest run</span></div>` : "";
   return pickHeader("27°24.0′N 086°06.0′W", hits, 0) + `
     <div class="pk-notice">Tropical cyclone forecast, not for navigation. Follow official NHC advisories.</div>${staleLine}
     <div class="t12 o70">Data: NOAA/NWS National Hurricane Center · Public domain</div>
@@ -656,7 +654,7 @@ function panelDatasets(state = "stale") {
     ${dsRow("GFS-Wave", "GRIB2", "6:00 PM")}
     ${dsRow("US4FL1AA", "S-101", "—")}
     <div class="ds-insp"><div class="tabs2 small"><span class="on">DATASET</span><span>LAYERS</span><span>VALIDATION</span></div>
-    <div class="kvs"><span class="o60">Spec</span><span>TC (NHC GIS shapefile) ${NEW}</span><span class="o60">Time</span><span>${st ? "Advisory 17, 11/4 3:00 PM · 9 h old" : "Advisory 17, 11/4 3:00 PM"}</span><span class="o60">At view time</span><span>${state === "beyond" ? '<span class="warn-t">Beyond the forecast</span>' : "est. position between forecast points"}</span><span class="o60">Credit</span><span>NOAA/NWS NHC · Public domain</span></div></div>`;
+    <div class="kvs"><span class="o60">Spec</span><span>TC (NHC GIS shapefile)</span><span class="o60">Time</span><span>${st ? "Advisory 17, 11/4 3:00 PM · 9 h old" : "Advisory 17, 11/4 3:00 PM"}</span><span class="o60">At view time</span><span>${state === "beyond" ? '<span class="warn-t">Beyond the forecast</span>' : "est. position between forecast points"}</span><span class="o60">Credit</span><span>NOAA/NWS NHC · Public domain</span></div></div>`;
 }
 
 /* LIBRARY (left dock). */
@@ -666,8 +664,8 @@ function libItem(sw, name, tags, sub, summary, win) {
 function panelLibrary(stale) {
   return `<div class="lib-bar"><span class="btn-sec">+ Add ⌄</span><span class="grow"></span><span class="ib">⟳</span><span class="ib">▦</span><span class="ib">⋯</span></div>
     <div class="lib-tree">
-      <div class="lib-src"><span class="ktag">FEED</span><b>Tropical cyclones — NHC</b><span class="t13 o60">2 active</span> ${NEW}</div>
-      <div class="lib-src"><span class="ktag">FEED</span><b>Surface analysis — WPC</b><span class="t13 o60">every 3 h</span> ${NEW}</div>
+      <div class="lib-src"><span class="ktag">FEED</span><b>Tropical cyclones — NHC</b><span class="t13 o60">2 active</span></div>
+      <div class="lib-src"><span class="ktag">FEED</span><b>Surface analysis — WPC</b><span class="t13 o60">every 3 h</span></div>
       <div class="lib-src"><span class="ktag">WEB</span>GFS 0.25° (NOMADS)<span class="t13 o60">06Z</span></div>
     </div>
     <div class="lib-filter"><span class="o60">Filter by name, title, product…</span></div>
@@ -693,10 +691,10 @@ function panelTimeline(o = {}) {
     <div class="tl-grid"><div class="tl-left"><div class="caps11">ALL LOADED</div><div class="row">${cb(false)}<span class="t12">In map view</span></div><div class="row">${cb(true)}<span class="t12">Show online</span></div></div>
       <div class="tl-axis"><span class="tl-ov"></span>${ax}<span class="tl-nowlab" style="left:${X(vt)}px">NOW</span></div></div>
     <div class="tl-lanes">
-      <div class="tl-group"><span class="chev-d">⌄</span><b class="t12">Tropical cyclones</b><span class="o60 t12">1</span> ${NEW}</div>
+      <div class="tl-group"><span class="chev-d">⌄</span><b class="t12">Tropical cyclones</b><span class="o60 t12">1</span></div>
       <div class="tl-lane"><div class="tl-lab"><span class="lane-bar"></span><div><div><span class="mono b t12">ZELDA</span> <span class="t11 o60">adv 17 · 6-hourly</span></div><div class="mono t105 o75">est. 5:00 PM · T+2 h</div></div></div>
         <div class="tl-track"><span class="tl-known" style="left:${X(-36)}px;width:${X(120) - X(-36)}px"></span><span class="tl-load past" style="left:${X(-36)}px;width:${X(0) - X(-36)}px"></span><span class="tl-load" style="left:${X(0)}px;width:${X(120) - X(0)}px"></span>${fcTicks}<span class="tl-dia" style="left:${X(0)}px"></span><span class="tl-dia hollow" style="left:${X(6)}px"></span></div></div>
-      <div class="tl-group"><span class="chev-d">⌄</span><b class="t12">Surface analysis</b><span class="o60 t12">1</span> ${NEW}</div>
+      <div class="tl-group"><span class="chev-d">⌄</span><b class="t12">Surface analysis</b><span class="o60 t12">1</span></div>
       <div class="tl-lane"><div class="tl-lab"><span class="lane-bar"></span><div><div><span class="mono b t12">WPC</span> <span class="t11 o60">analysis · every 3 h</span></div><div class="mono t105 o75">2:00 PM · 3 h ago</div></div></div><div class="tl-track">${sa}</div></div>
       <div class="tl-group"><span class="chev-d">⌄</span><b class="t12">GRIB2</b><span class="o60 t12">2</span></div>
       <span class="tl-nowline" style="left:${X(vt)}px"></span>
@@ -716,7 +714,7 @@ function panelRoutes() {
       <div class="t12">Leg 2 → 4 · HURRICANE ZELDA · 11/5 2:00–7:00 AM at ETA · forecast, adv 17</div>
       <div class="rt-sum"><span class="o70">Clearance</span><span>min 4.1 m</span><span class="chipn ok">0</span></div>
       <div class="rt-sum"><span class="o70">Route</span><span>2 to check</span><span class="chipn chk">2</span></div>
-      <div class="rt-sum"><span class="o70">Weather ${NEW}</span><span>1 must review · CPA 85 nm</span><span class="chipn must">4</span></div>
+      <div class="rt-sum"><span class="o70">Weather</span><span>1 must review · CPA 85 nm</span><span class="chipn must">4</span></div>
       <div class="t12">Departures 11/6 6:00 AM and later keep the route outside the 34 kt radius.</div>
       <span class="btn-dark">Depart 11/6 6:00 AM</span>
       <div class="t11 o60">Not for navigation · weather from NHC adv 17 · ETAs ignore set and drift</div>
@@ -733,7 +731,7 @@ function panelRoutes() {
 const routeLegendOverlay = () => `<div class="ov-legend"><div class="caps10 row">UKC AT ETA <span class="grow"></span>⌄</div>
   <div class="lgr"><span class="ln" style="background:#2E9E5B"></span>Meets your settings</div><div class="lgr"><span class="ln" style="background:#B07D00"></span>Tight</div>
   <div class="caps10">FINDINGS</div><div class="lgr"><span class="badge-must sm">!</span>Must review</div><div class="lgr"><span class="badge-chk sm">!</span>Check</div><div class="lgr"><span class="ln wide" style="background:rgba(176,125,0,.45)"></span>Stretch of the route</div>
-  <div class="caps10">WEATHER ${NEW}</div><div class="lgr"><svg width="16" height="16" viewBox="-11 -11 22 22">${tcSymbol(0, 0, "H", 8, P, { ring: "dash" })}</svg>Storm at ETA (closest approach)</div></div>`;
+  <div class="caps10">WEATHER</div><div class="lgr"><svg width="16" height="16" viewBox="-11 -11 22 22">${tcSymbol(0, 0, "H", 8, P, { ring: "dash" })}</svg>Storm at ETA (closest approach)</div></div>`;
 
 /* ---------- Frames ---------- */
 const gdefs = () => `<svg width="0" height="0" style="position:absolute"><defs><pattern id="gstip" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.7" fill="${P.ink}" opacity="0.6"/><circle cx="3" cy="3" r="0.7" fill="${P.ink}" opacity="0.6"/></pattern></defs></svg>`;
