@@ -2,6 +2,7 @@ using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector.Caching;
+using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Scripting;
 
@@ -22,6 +23,12 @@ public sealed class DatasetProcessorServices
 
     /// <summary>Lua engine for Part 9A portrayal.</summary>
     public required ILuaEngine LuaEngine { get; init; }
+
+    /// <summary>
+    /// Whether Lua-portrayed cells split their rule run across several Lua
+    /// states (<see cref="LuaShardOptions"/>). Off by default.
+    /// </summary>
+    public LuaShardOptions LuaSharding { get; init; } = LuaShardOptions.Disabled;
 
     /// <summary>CRS transform factory for coverage products.</summary>
     public required ICrsTransformFactory CrsTransformFactory { get; init; }

@@ -49,12 +49,17 @@ public sealed class S101LuaRuleExecutor : ILuaVectorRuleExecutor
     /// <param name="catalogue">The S-101 portrayal catalogue.</param>
     /// <param name="featureCatalogue">The S-101 feature catalogue.</param>
     /// <param name="depthShift">The water level to add, or <see langword="null"/> for charted depths.</param>
+    /// <param name="sharding">
+    /// Whether to split a run across several Lua states
+    /// (<see cref="LuaShardOptions"/>); <see langword="null"/> for one full run.
+    /// </param>
     public S101LuaRuleExecutor(
         ILuaEngine luaEngine,
         S101Dataset dataset,
         S101PortrayalCatalogue catalogue,
         FeatureCatalogue featureCatalogue,
-        S101DepthShift? depthShift)
+        S101DepthShift? depthShift,
+        LuaShardOptions? sharding = null)
     {
         ArgumentNullException.ThrowIfNull(luaEngine);
         ArgumentNullException.ThrowIfNull(dataset);
@@ -69,7 +74,8 @@ public sealed class S101LuaRuleExecutor : ILuaVectorRuleExecutor
             S101ContextParameterBindings.Build(),
             new S101FeatureAnchorProvider(dataset),
             [new S101SafconTransform()],
-            new S101SpatialReferenceResolver(dataset));
+            new S101SpatialReferenceResolver(dataset),
+            sharding);
     }
 
     /// <inheritdoc/>

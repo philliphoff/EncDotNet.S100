@@ -7,6 +7,7 @@ using EncDotNet.S100.Features;
 using EncDotNet.S100.Hdf5.PureHdf;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector.Caching;
+using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Scripting;
 
@@ -51,6 +52,12 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
     /// is used: every built-in product, plus any a host registered there. Supply a custom registry to enable only a subset of
     /// products (e.g. an S-101-only host) or to add a product of your own.
     /// </param>
+    /// <param name="luaSharding">
+    /// Whether Lua-portrayed cells split their rule run across several Lua
+    /// states (map render design, slice 2); <see langword="null"/> reads
+    /// <see cref="LuaShardOptions.FromEnvironment"/>, which is off unless
+    /// <c>S100_LUA_SHARDS</c> is set.
+    /// </param>
     public DatasetPipelineFactory(
         PortrayalCatalogueManager catalogueManager,
         ILuaEngine luaEngine,
@@ -58,7 +65,8 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
         FeatureCatalogueManager featureCatalogueManager,
         IDisplayPlaneAuthorityProvider authorityProvider,
         IPortrayalInstructionCache? sharedInstructionCache = null,
-        ProductRegistry? productRegistry = null)
+        ProductRegistry? productRegistry = null,
+        LuaShardOptions? luaSharding = null)
     {
         ArgumentNullException.ThrowIfNull(catalogueManager);
         ArgumentNullException.ThrowIfNull(luaEngine);
@@ -74,6 +82,7 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
             FeatureCatalogueManager = featureCatalogueManager,
             AuthorityProvider = authorityProvider,
             SharedInstructionCache = sharedInstructionCache,
+            LuaSharding = luaSharding ?? LuaShardOptions.FromEnvironment(),
         };
         _registry = productRegistry ?? ProductRegistry.Default;
     }
@@ -733,7 +742,10 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
             _services.FeatureCatalogueManager,
             _services.SharedInstructionCache,
             supportFiles,
-            spec);
+            spec)
+        {
+            LuaSharding = _services.LuaSharding,
+        };
     }
 
     /// <summary>
@@ -777,7 +789,10 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
             _services.FeatureCatalogueManager,
             _services.SharedInstructionCache,
             supportFiles: null,
-            spec: spec);
+            spec: spec)
+        {
+            LuaSharding = _services.LuaSharding,
+        };
     }
 
     /// <summary>
@@ -808,7 +823,10 @@ public sealed class DatasetPipelineFactory : IDatasetProcessorFactory
             _services.CatalogueManager,
             _services.LuaEngine,
             _services.FeatureCatalogueManager,
-            _services.SharedInstructionCache);
+            _services.SharedInstructionCache)
+        {
+            LuaSharding = _services.LuaSharding,
+        };
     }
 
     /// <summary>

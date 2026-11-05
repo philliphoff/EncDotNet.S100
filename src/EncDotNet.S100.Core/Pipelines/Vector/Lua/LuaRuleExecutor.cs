@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using EncDotNet.S100.Diagnostics;
 using EncDotNet.S100.Scripting;
@@ -34,6 +35,7 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
     private readonly IFeatureAnchorProvider? _anchorProvider;
     private readonly ISpatialReferenceResolver? _spatialReferences;
     private readonly IReadOnlyList<IDrawingInstructionTransform> _transforms;
+    private readonly LuaShardOptions _sharding;
 
     /// <summary>Initialises a new generic Lua rule executor.</summary>
     /// <param name="luaEngine">The sandboxed Lua engine (S-100 Part 9A).</param>
@@ -60,6 +62,11 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
     /// on particular edges (such as the safety contour) follow those edges
     /// only; <see langword="null"/> for products whose rules emit none.
     /// </param>
+    /// <param name="sharding">
+    /// Whether to split a run across several Lua states
+    /// (<see cref="LuaShardOptions"/>); <see langword="null"/> for one full
+    /// run, as before.
+    /// </param>
     public LuaRuleExecutor(
         ILuaEngine luaEngine,
         ILuaRuleSource source,
@@ -68,7 +75,8 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         IReadOnlyList<LuaContextParameterBinding> contextParameterBindings,
         IFeatureAnchorProvider? anchorProvider = null,
         IReadOnlyList<IDrawingInstructionTransform>? transforms = null,
-        ISpatialReferenceResolver? spatialReferences = null)
+        ISpatialReferenceResolver? spatialReferences = null,
+        LuaShardOptions? sharding = null)
     {
         ArgumentNullException.ThrowIfNull(luaEngine);
         ArgumentNullException.ThrowIfNull(source);
@@ -84,6 +92,7 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         _anchorProvider = anchorProvider;
         _spatialReferences = spatialReferences;
         _transforms = transforms ?? [];
+        _sharding = sharding ?? LuaShardOptions.Disabled;
     }
 
     /// <inheritdoc/>
@@ -95,7 +104,7 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         // The token is checked before the run, passed to the engine (which
         // Lua-CSharp checks between instructions) and checked at every
         // feature the rules emit, which is the only check MoonSharp gets (see
-        // ExecuteRawCore).
+        // RunPortrayalMain).
         cancellationToken.ThrowIfCancellationRequested();
 
         using var activity = Telemetry.ActivitySource.StartActivity("s100.lua.execute");
@@ -107,10 +116,12 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
             // Async pre-warm — load every Lua module declared by the catalogue
             // so the synchronous require() loader can resolve modules
             // without blocking. The snapshot dictionary is captured by the
-            // sync loader callback inside ExecuteRawCore.
+            // sync loader callback inside ExecuteRawCoreAsync.
             var luaSources = await LoadLuaSourcesAsync(cancellationToken).ConfigureAwait(false);
 
-            var (emitted, provider) = ExecuteRawCore(mariner, luaSources, cancellationToken);
+            var (emitted, provider, shards) = await ExecuteRawCoreAsync(mariner, luaSources, cancellationToken)
+                .ConfigureAwait(false);
+            activity?.SetTag("s100.lua.shards", shards);
 
             Telemetry.LuaFeaturesCount.Add(
                 emitted.Count,
@@ -162,14 +173,14 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         ArgumentNullException.ThrowIfNull(mariner);
         cancellationToken.ThrowIfCancellationRequested();
         var luaSources = await LoadLuaSourcesAsync(cancellationToken).ConfigureAwait(false);
-        return ExecuteRawCore(mariner, luaSources, cancellationToken).Emitted;
+        return (await ExecuteRawCoreAsync(mariner, luaSources, cancellationToken).ConfigureAwait(false)).Emitted;
     }
 
     /// <summary>
     /// Awaits every Lua rule file declared in the portrayal catalogue
     /// manifest into a local snapshot dictionary so the synchronous
     /// <c>require()</c> module loader (registered inside
-    /// <see cref="ExecuteRawCore"/>) can perform its lookups against an
+    /// <c>ExecuteRawCoreAsync</c>) can perform its lookups against an
     /// in-memory map. This is the sync↔async bridge for Lua portrayal:
     /// catalogues serve content asynchronously, the executor freezes the set
     /// before driving the synchronous engine.
@@ -233,13 +244,55 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
         return new LuaPortrayalSession(lua, provider, _productTag, _anchorProvider, _spatialReferences);
     }
 
-    private (IReadOnlyList<EmittedInstruction> Emitted, ILuaDataProvider Provider) ExecuteRawCore(
+    private async Task<(IReadOnlyList<EmittedInstruction> Emitted, ILuaDataProvider Provider, int Shards)> ExecuteRawCoreAsync(
         MarinerSettings mariner, IReadOnlyDictionary<string, string> luaSources, CancellationToken cancellationToken)
     {
         var provider = _providerFactory.Create(mariner);
+        ILuaContext? lua = _luaEngine.CreateContext();
+        try
+        {
+            Prepare(lua, provider, mariner, luaSources);
 
-        using var lua = _luaEngine.CreateContext();
-        Prepare(lua, provider, mariner, luaSources);
+            if (_sharding.IsEnabled && provider is ILuaShardGrouping grouping)
+            {
+                var visits = ReadVisits(lua);
+                var shardCount = visits is null
+                    ? 1
+                    : LuaShardPlan.ShardCount(visits.Value.Refs.Count, _sharding.MaxShards, _sharding.MinFeaturesPerShard);
+                if (shardCount > 1)
+                {
+                    var (refs, codes) = visits!.Value;
+                    var positions = LuaShardPlan.Assign(grouping.GetShardGroups(refs), shardCount);
+                    var first = lua;
+                    lua = null; // RunShardsAsync disposes it.
+                    var emitted = await RunShardsAsync(
+                        first, provider, positions, mariner, luaSources, cancellationToken).ConfigureAwait(false);
+
+                    var merged = LuaShardPlan.Merge(refs, codes, positions, emitted);
+                    if (merged is not null)
+                    {
+                        return (Deduplicate(merged, 0), provider, shardCount);
+                    }
+
+                    // The catalogue's main loop isn't the one the merge
+                    // assumes: portray the cell again in one state.
+                    provider = _providerFactory.Create(mariner);
+                    lua = _luaEngine.CreateContext();
+                    Prepare(lua, provider, mariner, luaSources);
+                }
+            }
+
+            RunPortrayalMain(lua!, cancellationToken);
+            return (Deduplicate(provider.EmittedInstructions, 0), provider, 1);
+        }
+        finally
+        {
+            lua?.Dispose();
+        }
+    }
+
+    private void RunPortrayalMain(ILuaContext lua, CancellationToken cancellationToken)
+    {
         if (cancellationToken.CanBeCanceled)
             InstallCancellationCheck(lua, cancellationToken);
 
@@ -257,9 +310,168 @@ public sealed class LuaRuleExecutor : ILuaVectorRuleExecutor
             throw new InvalidOperationException(
                 $"{_productTag} Lua portrayal failed: {lua.DescribeError(ex)}", ex);
         }
-
-        return (Deduplicate(provider.EmittedInstructions, 0), provider);
     }
+
+    /// <summary>
+    /// Reads the features a full <c>PortrayalMain</c> run would visit, in
+    /// order, from a prepared state: the S-100 Part 9a main loop walks
+    /// <c>portrayalContext.FeaturePortrayalItems</c> with <c>ipairs</c>.
+    /// Reading the walk itself, rather than the host's feature ids, keeps
+    /// whatever that walk does (the array's numeric feature-id keys can
+    /// overwrite its entries, so some features are visited twice and others
+    /// not at all). Returns <see langword="null"/> when the catalogue has no
+    /// such list, so the cell gets a full run.
+    /// </summary>
+    private static (List<string> Refs, List<string> Codes)? ReadVisits(ILuaContext lua)
+    {
+        var refs = new List<string>();
+        var codes = new List<string>();
+        lua.SetGlobal(VisitGlobal, (Action<string, string>)((id, code) =>
+        {
+            refs.Add(id);
+            codes.Add(code);
+        }));
+        try
+        {
+            lua.Execute(
+                "if portrayalContext == nil or portrayalContext.FeaturePortrayalItems == nil then return end\n" +
+                "for _, item in ipairs(portrayalContext.FeaturePortrayalItems) do\n" +
+                "  " + VisitGlobal + "(item.Feature.ID, item.Feature.Code)\n" +
+                "end\n" +
+                VisitGlobal + " = nil\n");
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+
+        return refs.Count == 0 ? null : (refs, codes);
+    }
+
+    /// <summary>
+    /// Runs one shard per entry of <paramref name="positions"/>: shard 0 in
+    /// <paramref name="first"/>, the others each in a new state prepared the
+    /// same way, at most <see cref="LuaShardOptions.MaxDegreeOfParallelism"/>
+    /// at once on the thread pool. Disposes every state, including
+    /// <paramref name="first"/>.
+    /// </summary>
+    /// <returns>Each shard's emits, in its emission order.</returns>
+    private async Task<IReadOnlyList<EmittedInstruction>[]> RunShardsAsync(
+        ILuaContext first,
+        ILuaDataProvider firstProvider,
+        List<int>[] positions,
+        MarinerSettings mariner,
+        IReadOnlyDictionary<string, string> luaSources,
+        CancellationToken cancellationToken)
+    {
+        var emitted = new IReadOnlyList<EmittedInstruction>[positions.Length];
+        var firstTaken = 0;
+        Exception? failure = null;
+        try
+        {
+            var options = new ParallelOptions
+            {
+                MaxDegreeOfParallelism = Math.Clamp(_sharding.MaxDegreeOfParallelism, 1, positions.Length),
+                CancellationToken = cancellationToken,
+            };
+            await Parallel.ForEachAsync(Enumerable.Range(0, positions.Length), options, (shard, ct) =>
+            {
+                ILuaContext lua;
+                ILuaDataProvider provider;
+                if (shard == 0)
+                {
+                    Interlocked.Exchange(ref firstTaken, 1);
+                    (lua, provider) = (first, firstProvider);
+                }
+                else
+                {
+                    provider = _providerFactory.Create(mariner);
+                    lua = _luaEngine.CreateContext();
+                }
+
+                using (lua)
+                {
+                    try
+                    {
+                        if (shard != 0)
+                        {
+                            Prepare(lua, provider, mariner, luaSources);
+                        }
+
+                        SelectShard(lua, positions[shard]);
+                        RunPortrayalMain(lua, ct);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        // A failing shard cancels the others; remember the
+                        // failure so it, not their cancellation, surfaces.
+                        Interlocked.CompareExchange(ref failure, ex, null);
+                        throw;
+                    }
+                }
+
+                emitted[shard] = provider.EmittedInstructions;
+                return ValueTask.CompletedTask;
+            }).ConfigureAwait(false);
+        }
+        catch (Exception) when (Volatile.Read(ref failure) is { } shardFailure && !cancellationToken.IsCancellationRequested)
+        {
+            ExceptionDispatchInfo.Throw(shardFailure);
+        }
+        finally
+        {
+            if (Volatile.Read(ref firstTaken) == 0)
+            {
+                first.Dispose();
+            }
+        }
+
+        return emitted;
+    }
+
+    /// <summary>
+    /// Narrows a prepared state's <c>FeaturePortrayalItems</c> to one
+    /// shard's visits, in visit order, so <c>PortrayalMain</c>'s own loop
+    /// portrays just those (and emits their <c>TextPlacement</c> features
+    /// last, as a full run does).
+    /// </summary>
+    /// <remarks>
+    /// Rules may still look across the whole cell through
+    /// <c>portrayalContext:GetFeatures(code)</c> (the S-401 <c>MARSYS01</c>
+    /// rule looks for the enclosing <c>NavigationalSystemOfMarks</c>), so
+    /// that keeps answering from every feature.
+    /// </remarks>
+    private static void SelectShard(ILuaContext lua, List<int> positions)
+    {
+        var luaPositions = new List<object>(positions.Count);
+        foreach (var p in positions)
+        {
+            luaPositions.Add((double)(p + 1));
+        }
+
+        lua.SetGlobal(ShardPositionsGlobal, (Func<List<object>>)(() => luaPositions));
+        lua.Execute(
+            "local all = portrayalContext.FeaturePortrayalItems\n" +
+            "local visits = {}\n" +
+            "for i, item in ipairs(all) do visits[i] = item end\n" +
+            "local shard = { Type = all.Type, AddFeature = all.AddFeature }\n" +
+            "for _, p in ipairs(" + ShardPositionsGlobal + "()) do shard[#shard + 1] = visits[p] end\n" +
+            "portrayalContext.FeaturePortrayalItems = shard\n" +
+            "local getFeatures = portrayalContext.GetFeatures\n" +
+            "if getFeatures ~= nil then\n" +
+            "  portrayalContext.GetFeatures = function(self, ...)\n" +
+            "    self.FeaturePortrayalItems = all\n" +
+            "    local ok, result = pcall(getFeatures, self, ...)\n" +
+            "    self.FeaturePortrayalItems = shard\n" +
+            "    if not ok then error(result, 0) end\n" +
+            "    return result\n" +
+            "  end\n" +
+            "end\n" +
+            ShardPositionsGlobal + " = nil\n");
+    }
+
+    private const string VisitGlobal = "__EncDotNetVisit";
+    private const string ShardPositionsGlobal = "__EncDotNetShardPositions";
 
     /// <summary>
     /// Makes a running <c>PortrayalMain</c> stop soon after

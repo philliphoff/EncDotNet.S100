@@ -13,6 +13,7 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Pipelines.Vector.Caching;
+using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Scripting;
@@ -48,6 +49,13 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     private readonly PortrayalCatalogueProvider _provider;
     private readonly S101PortrayalCatalogue _catalogue;
     private readonly ILuaEngine _luaEngine;
+
+    /// <summary>
+    /// Whether the cell's Lua rules run split across several Lua states
+    /// (map render design, slice 2). Off by default; sharding changes neither
+    /// the output nor the portrayal cache keys.
+    /// </summary>
+    public LuaShardOptions LuaSharding { get; init; } = LuaShardOptions.Disabled;
     private readonly PortrayalCatalogueManager _catalogueManager;
     private readonly FeatureCatalogueManager _featureCatalogueManager;
     private readonly string _fileName;
@@ -494,7 +502,9 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             var instructionKey = $"{await GetPortrayalContentHashAsync(cancellationToken).ConfigureAwait(false)}|{ruleKey}";
             _cachedRuleOutput = await _instructionCache.GetOrComputeAsync(instructionKey, async ct =>
             {
-                var executor = new S101LuaRuleExecutor(_luaEngine, _translatedDataset, s101Cat, fc);
+                var executor = new S101LuaRuleExecutor(
+                    _luaEngine, _translatedDataset, s101Cat, fc, depthShift: null,
+                    LuaSharding.ForProduct("S-57").ForProduct(_target.Spec));
                 var featureSource = new S101FeatureXmlSource(_translatedDataset);
                 var output = await new VectorPipeline(executor)
                     .ExecuteRulesAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: ct)

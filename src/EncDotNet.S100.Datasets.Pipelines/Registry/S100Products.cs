@@ -69,10 +69,12 @@ public static class S100Products
         Spec = "S-101",
         CreateFromPath = (s, path) => new S101DatasetProcessor(
             path, s.CatalogueManager, s.LuaEngine, s.FeatureCatalogueManager,
-            s.SharedInstructionCache),
+            s.SharedInstructionCache)
+        { LuaSharding = s.LuaSharding },
         CreateFromSource = (s, r) => new S101DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.LuaEngine,
-            s.FeatureCatalogueManager, s.SharedInstructionCache, r.SupportFiles),
+            s.FeatureCatalogueManager, s.SharedInstructionCache, r.SupportFiles)
+        { LuaSharding = s.LuaSharding },
         // S-101 declares itself in the ISO 8211 DSID/PRSP subfield
         // (INT.IHO.S-101.…), which is what tells it apart from S-401 — the other
         // S-100 product sharing the .000 extension.
@@ -93,11 +95,13 @@ public static class S100Products
         Spec = "S-401",
         CreateFromPath = (s, path) => new S101DatasetProcessor(
             path, s.CatalogueManager, s.LuaEngine, s.FeatureCatalogueManager,
-            s.SharedInstructionCache, "S-401"),
+            s.SharedInstructionCache, "S-401")
+        { LuaSharding = s.LuaSharding },
         CreateFromSource = (s, r) => new S101DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.LuaEngine,
             s.FeatureCatalogueManager, s.SharedInstructionCache, r.SupportFiles,
-            "S-401"),
+            "S-401")
+        { LuaSharding = s.LuaSharding },
         MatchIso8211 = static root => root.DeclaresProduct("S-401"),
         // Read by the same Part 10a reader and carries the same payload; the
         // catalog keeps its declared identity via the dataset's DSID product
@@ -112,10 +116,12 @@ public static class S100Products
         Spec = "S-57",
         CreateFromPath = (s, path) => new S57DatasetProcessor(
             path, s.CatalogueManager, s.LuaEngine, s.FeatureCatalogueManager,
-            s.SharedInstructionCache),
+            s.SharedInstructionCache)
+        { LuaSharding = s.LuaSharding },
         CreateFromSource = (s, r) => new S57DatasetProcessor(
             r.Source, r.RelativePath, s.CatalogueManager, s.LuaEngine,
-            s.FeatureCatalogueManager, s.SharedInstructionCache),
+            s.FeatureCatalogueManager, s.SharedInstructionCache)
+        { LuaSharding = s.LuaSharding },
         // S-57 shares the ISO 8211 .000 extension with S-101 and S-401 but
         // declares no S-100 PRSP product identifier (its PRSP is a numeric S-57
         // code); it is instead identified by the S-57-only DSPM field in its DDR.

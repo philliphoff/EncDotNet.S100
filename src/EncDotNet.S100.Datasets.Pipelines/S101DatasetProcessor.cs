@@ -11,6 +11,7 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Pipelines.Vector.Caching;
+using EncDotNet.S100.Pipelines.Vector.Lua;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Rendering.Scene;
@@ -189,6 +190,13 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
     /// </summary>
     private string LayerKeyPrefix =>
         _catalogueSpec.Replace("-", "", StringComparison.Ordinal).ToLowerInvariant();
+
+    /// <summary>
+    /// Whether the cell's Lua rules run split across several Lua states
+    /// (map render design, slice 2). Off by default; sharding changes neither
+    /// the output nor the portrayal cache keys.
+    /// </summary>
+    public LuaShardOptions LuaSharding { get; init; } = LuaShardOptions.Disabled;
 
     /// <inheritdoc/>
     public SpecRef Spec { get; }
@@ -752,7 +760,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
             (context?.EcdisDisplay ?? UnfilteredEcdisDisplay).ApplyTo(s101Cat);
             var palette = s101Cat.ActivePalette;
 
-            var executor = new S101LuaRuleExecutor(_luaEngine, _dataset, s101Cat, fc);
+            var executor = new S101LuaRuleExecutor(
+                _luaEngine, _dataset, s101Cat, fc, depthShift: null, LuaSharding.ForProduct(_catalogueSpec));
             var featureSource = new S101FeatureXmlSource(_dataset);
             var pipeline = new PortrayalPipeline(executor);
             var portrayalLayer = await pipeline
@@ -843,7 +852,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
                 // Drive the unified VectorPipeline with the S-101 Lua rule
                 // executor (Part 9A). XSLT rules in the S-101 catalogue (if
                 // any) are also honoured by the pipeline.
-                var executor = new S101LuaRuleExecutor(_luaEngine, _dataset, s101Cat, fc);
+                var executor = new S101LuaRuleExecutor(
+                _luaEngine, _dataset, s101Cat, fc, depthShift: null, LuaSharding.ForProduct(_catalogueSpec));
                 var featureSource = new S101FeatureXmlSource(_dataset);
                 return await new VectorPipeline(executor)
                     .ExecuteRulesAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: ct)

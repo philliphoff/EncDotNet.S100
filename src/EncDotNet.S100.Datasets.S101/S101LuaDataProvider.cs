@@ -10,7 +10,7 @@ namespace EncDotNet.S100.Datasets.S101;
 /// and <see cref="FeatureCatalogue"/> to an <see cref="ILuaContext"/>. This is the C#
 /// side of the S-100 Part 9A Lua Portrayal Model host interface.
 /// </summary>
-public sealed class S101LuaDataProvider : ILuaDataProvider
+public sealed class S101LuaDataProvider : ILuaDataProvider, ILuaShardGrouping
 {
     private const byte RcnmPoint = 110;
     private const byte RcnmMultiPoint = 115;
@@ -307,6 +307,104 @@ public sealed class S101LuaDataProvider : ILuaDataProvider
         return _doc.FeatureTypeCatalogue.TryGetValue(feat.FeatureTypeCode, out var name)
             ? name
             : feat.FeatureTypeCode.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Features linked by a feature association (in either direction, and
+    /// through chains such as structure → equipment → <c>TextPlacement</c>)
+    /// share a group, as do features that use the same point or multipoint:
+    /// the S-101 rules write text to an associated <c>TextPlacement</c>'s
+    /// portrayal and offset a light's description by the text co-located
+    /// features have drawn. A reference this dataset doesn't hold gets a
+    /// group of its own.
+    /// </remarks>
+    public IReadOnlyList<int> GetShardGroups(IReadOnlyList<string> featureRefs)
+    {
+        ArgumentNullException.ThrowIfNull(featureRefs);
+        var features = _doc.Features;
+        var indexById = new Dictionary<uint, int>(features.Count);
+        for (var i = 0; i < features.Count; i++)
+        {
+            indexById.TryAdd(features[i].RecordId, i);
+        }
+
+        var parent = new int[features.Count];
+        for (var i = 0; i < parent.Length; i++)
+        {
+            parent[i] = i;
+        }
+
+        var firstUserOfPoint = new Dictionary<(byte Rcnm, uint Rcid), int>();
+        for (var i = 0; i < features.Count; i++)
+        {
+            var feat = features[i];
+            foreach (var association in feat.FeatureAssociations)
+            {
+                if (indexById.TryGetValue(association.RecordId, out var other))
+                {
+                    Union(i, other);
+                }
+            }
+
+            foreach (var spatial in feat.SpatialAssociations)
+            {
+                if (spatial.RecordName is not (RcnmPoint or RcnmMultiPoint))
+                {
+                    continue;
+                }
+
+                if (firstUserOfPoint.TryGetValue((spatial.RecordName, spatial.RecordId), out var other))
+                {
+                    Union(i, other);
+                }
+                else
+                {
+                    firstUserOfPoint[(spatial.RecordName, spatial.RecordId)] = i;
+                }
+            }
+        }
+
+        var groups = new int[featureRefs.Count];
+        for (var p = 0; p < groups.Length; p++)
+        {
+            groups[p] = TryParseFeatureRef(featureRefs[p], out var id) && indexById.TryGetValue(id, out var index)
+                ? Find(index)
+                : features.Count + p;
+        }
+
+        return groups;
+
+        int Find(int x)
+        {
+            while (parent[x] != x)
+            {
+                parent[x] = parent[parent[x]];
+                x = parent[x];
+            }
+
+            return x;
+        }
+
+        void Union(int a, int b)
+        {
+            var ra = Find(a);
+            var rb = Find(b);
+            if (ra != rb)
+            {
+                parent[Math.Max(ra, rb)] = Math.Min(ra, rb);
+            }
+        }
+    }
+
+    // Lua marshals the numeric record ids as e.g. "12345" or "12345.0".
+    private static bool TryParseFeatureRef(string featureRef, out uint id)
+    {
+        id = 0;
+        if (string.IsNullOrEmpty(featureRef)) return false;
+        var dot = featureRef.IndexOf('.');
+        var idText = dot >= 0 ? featureRef[..dot] : featureRef;
+        return uint.TryParse(idText, NumberStyles.Integer, CultureInfo.InvariantCulture, out id);
     }
 
     /// <summary>
