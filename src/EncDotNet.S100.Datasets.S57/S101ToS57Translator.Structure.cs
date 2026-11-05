@@ -204,7 +204,7 @@ public sealed partial class S101ToS57Translator
             foreach (var node in tree.Where(n => n.Code == "featureName"))
                 TranslateComplex("Bridge", node, bag);
             FoldNames(bag);
-            var rule = new S101ToS57FeatureRule("BridgeAggregation", S101ToS57Rules.ObjlCAggr, "C_AGGR", "6.6", S101ToS57Rules.NoFixedAttributesValue);
+            var rule = new S101ToS57FeatureRule("BridgeAggregation", S101ToS57Rules.S57Objl("C_AGGR"), "C_AGGR", "6.6", S101ToS57Rules.NoFixedAttributesValue);
             // The bridge's identity goes to its C_AGGR unless a span already
             // carries it.
             var foid = _objects.Exists(o => o.Foid == bridgeFoid) ? NextFoid(bridgeFoid) : bridgeFoid;
@@ -223,12 +223,12 @@ public sealed partial class S101ToS57Translator
             var seen = new HashSet<string>(StringComparer.Ordinal);
             foreach (var group in _links.Where(l => CollectionAssociations.ContainsKey(l.Association)).GroupBy(l => (l.Association, l.From)))
             {
-                var (objl, acronym, clause) = CollectionAssociations[group.Key.Association];
+                var (acronym, clause) = CollectionAssociations[group.Key.Association];
                 var members = group.Select(l => l.To).Prepend(group.Key.From).Distinct().Order().ToList();
                 if (!seen.Add($"{group.Key.Association}:{string.Join(',', members)}")) continue;
                 if (!_objectsByFeature.TryGetValue(group.Key.From, out var head)) continue;
 
-                var rule = new S101ToS57FeatureRule(group.Key.Association, objl, acronym, clause, S101ToS57Rules.NoFixedAttributesValue);
+                var rule = new S101ToS57FeatureRule(group.Key.Association, S101ToS57Rules.S57Objl(acronym), acronym, clause, S101ToS57Rules.NoFixedAttributesValue);
                 var collection = Emit(null, rule, S57GeometricPrimitive.None, [], new AttributeBag(), NextFoid(head[0].Foid));
                 foreach (var member in members)
                     AddPeers(collection, member);
@@ -237,12 +237,12 @@ public sealed partial class S101ToS57Translator
             }
         }
 
-        private static readonly Dictionary<string, (ushort Objl, string Acronym, string Clause)> CollectionAssociations = new(StringComparer.Ordinal)
+        private static readonly Dictionary<string, (string Acronym, string Clause)> CollectionAssociations = new(StringComparer.Ordinal)
         {
-            ["AidsToNavigationAssociation"] = (401, "C_ASSO", "25.2"),
-            ["FairwayAuxiliary"] = (401, "C_ASSO", "25.8"),
-            ["PilotageDistrictAssociation"] = (S101ToS57Rules.ObjlCAggr, "C_AGGR", "25.11"),
-            ["RoofedStructureAggregation"] = (S101ToS57Rules.ObjlCAggr, "C_AGGR", "25.14"),
+            ["AidsToNavigationAssociation"] = ("C_ASSO", "25.2"),
+            ["FairwayAuxiliary"] = ("C_ASSO", "25.8"),
+            ["PilotageDistrictAssociation"] = ("C_AGGR", "25.11"),
+            ["RoofedStructureAggregation"] = ("C_AGGR", "25.14"),
         };
 
         // §22.1 / §16.26: a pilot boarding place takes the name of its
@@ -261,7 +261,7 @@ public sealed partial class S101ToS57Translator
                     {
                         var name = names.Find(v => v.Acronym == acronym).Values?.FirstOrDefault();
                         if (name is not null && !placeObjects[0].Bag.Has(target))
-                            placeObjects[0].Bag.Add(target, S101ToS57Rules.S57AttributeCodes[target], name);
+                            placeObjects[0].Bag.Add(target, S101ToS57Rules.S57Attl(target), name);
                     }
                 }
             }

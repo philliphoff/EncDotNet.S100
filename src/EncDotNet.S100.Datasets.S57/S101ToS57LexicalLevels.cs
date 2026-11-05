@@ -24,13 +24,10 @@ internal static class S101ToS57LexicalLevels
     // Free-text ATTF attributes and their NATF counterparts (S-57 Appendix A).
     private static readonly FrozenDictionary<int, int> NationalCounterparts = new Dictionary<int, int>
     {
-        [S101ToS57Rules.S57AttributeCodes["INFORM"]] = S101ToS57Rules.S57AttributeCodes["NINFOM"],
-        [S101ToS57Rules.S57AttributeCodes["OBJNAM"]] = S101ToS57Rules.S57AttributeCodes["NOBJNM"],
-        [S101ToS57Rules.S57AttributeCodes["TXTDSC"]] = S101ToS57Rules.S57AttributeCodes["NTXTDS"],
+        [S101ToS57Rules.S57Attl("INFORM")] = S101ToS57Rules.S57Attl("NINFOM"),
+        [S101ToS57Rules.S57Attl("OBJNAM")] = S101ToS57Rules.S57Attl("NOBJNM"),
+        [S101ToS57Rules.S57Attl("TXTDSC")] = S101ToS57Rules.S57Attl("NTXTDS"),
     }.ToFrozenDictionary();
-
-    private static readonly FrozenDictionary<int, string> Acronyms =
-        S101ToS57Rules.S57AttributeCodes.ToFrozenDictionary(kv => (int)kv.Value, kv => kv.Key);
 
     /// <summary>
     /// Returns the features with text moved where the levels need it, and the
@@ -111,7 +108,7 @@ internal static class S101ToS57LexicalLevels
         return feature with { Attributes = attributes, NationalAttributes = national };
     }
 
-    private static string Acronym(int attl) => Acronyms.GetValueOrDefault(attl) ?? $"#{attl}";
+    private static string Acronym(int attl) => S101ToS57Rules.S57AttributeAcronym(attl) ?? $"#{attl}";
 
     private static bool Fits(string value, char max)
     {
