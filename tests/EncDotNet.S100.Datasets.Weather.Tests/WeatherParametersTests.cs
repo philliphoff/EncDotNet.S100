@@ -54,10 +54,23 @@ public class WeatherParametersTests
     }
 
     [Fact]
-    public void Surface_air_temperature_is_not_the_sea_temperature()
+    public void GRIB_temperature_is_air_temperature_at_2_m_and_skin_temperature_at_the_surface_never_the_sea_temperature()
     {
-        // GFS's surface TMP (0,0,0) is land skin temperature too.
-        Assert.Null(WeatherParameters.FindByGribCode(new GribParameterCode(0, 0, 0)));
+        var tmp = new GribParameterCode(0, 0, 0);
+
+        var air = WeatherParameters.FindByGribCode(tmp, WeatherLevel.AboveGround(Length.FromMetres(2)));
+        var skin = WeatherParameters.FindByGribCode(tmp, WeatherLevel.Surface);
+
+        Assert.Equal(WeatherParameters.AirTemperature, air?.Id);
+        Assert.Equal(WeatherParameters.SurfaceTemperature, skin?.Id);
+        // GFS's surface TMP is the ground's temperature over land, so it's
+        // never read as the sea temperature, which is drawn.
+        Assert.NotEqual(WeatherParameters.SeaSurfaceTemperature, skin?.Id);
+        // At another level the first row comes back, and the reader finds its level doesn't match.
+        Assert.Equal(WeatherParameters.AirTemperature, WeatherParameters.FindByGribCode(tmp, WeatherLevel.MeanSeaLevel)?.Id);
+        Assert.Equal(WeatherParameters.LandCover, WeatherParameters.FindByGribCode(new GribParameterCode(2, 0, 0), WeatherLevel.Surface)?.Id);
+        Assert.Equal(WeatherParameters.AirTemperature, WeatherParameters.FindByCfStandardName("air_temperature")?.Id);
+        Assert.Equal("proportion", WeatherUnits.GetLabel(WeatherUnit.Proportion));
     }
 
     [Theory]
@@ -108,10 +121,12 @@ public class WeatherParametersTests
     {
         var all = WeatherParameters.All;
 
-        Assert.Equal(18, all.Count);
+        Assert.Equal(21, all.Count);
         Assert.Equal(all.Count, all.Select(d => d.Id).Distinct().Count());
-        var codes = all.SelectMany(d => d.GribCodes).ToList();
+        // A code is shared only by rows at different levels (temperature at 2 m and at the surface).
+        var codes = all.SelectMany(d => d.GribCodes.Select(c => (c, d.Level))).ToList();
         Assert.Equal(codes.Count, codes.Distinct().Count());
+        Assert.All(all.Where(d => all.Any(o => o != d && o.GribCodes.Intersect(d.GribCodes).Any())), d => Assert.NotNull(d.Level));
         var names = all.SelectMany(d => d.CfStandardNames).ToList();
         Assert.Equal(names.Count, names.Distinct().Count());
     }

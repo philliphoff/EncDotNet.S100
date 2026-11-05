@@ -25,6 +25,9 @@ public enum WeatherUnit
     /// <summary>Pascals (air pressure).</summary>
     Pascals,
 
-    /// <summary>Kelvin (sea surface temperature).</summary>
+    /// <summary>Kelvin (sea surface, air and skin temperatures).</summary>
     Kelvin,
+
+    /// <summary>A proportion from 0 to 1 (the land cover mask).</summary>
+    Proportion,
 }

@@ -89,6 +89,12 @@ internal static class CfUnits
                 "hpa" or "mbar" or "millibar" or "millibars" or "mb" => 100,
                 _ => null,
             },
+            WeatherUnit.Proportion => key switch
+            {
+                "1" or "fraction" or "proportion" => 1,
+                "%" or "percent" => 0.01,
+                _ => null,
+            },
             _ => null,
         };
         return factor is { } f ? new CfUnitConversion(f, 0) : null;

@@ -11,7 +11,9 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// <para>
 /// GRIB2 codes are (discipline, category, number) from WMO code table 4.2:
 /// discipline 0 category 2 is momentum, discipline 0 category 3 is mass and
-/// discipline 0 category 19 is physical atmospheric properties (visibility),
+/// discipline 0 category 0 is temperature, discipline 0 category 19 is
+/// physical atmospheric properties (visibility), discipline 2 category 0 is
+/// land surface vegetation (the land cover mask),
 /// discipline 10 category 0 is oceanographic waves and discipline 10
 /// category 3 is surface properties (water temperature); discipline 10
 /// category 1 is currents. CF names are from
@@ -38,6 +40,15 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// The current rows have no level: a model gives currents at its top layer
 /// (0 m for HYCOM, about 0.5 m for Copernicus, 15 m for OSCAR), and each
 /// reader keeps the level it finds, so a 15 m current is labelled as one.
+/// </para>
+/// <para>
+/// GRIB2 temperature (0,0,0) is two rows told apart by level: at 2 m above
+/// ground it's the air temperature, at the surface the skin temperature,
+/// which over the sea is the model's sea surface temperature and over land
+/// the ground's. The skin temperature and the land cover mask aren't drawn:
+/// they stand in for the sea temperature in the freezing spray risk
+/// (<see cref="FreezingSpray"/>) when a file such as GFS has no sea
+/// temperature of its own.
 /// </para>
 /// <para>
 /// The visibility row has no level either: GFS, HRRR and the NBM give it
@@ -100,6 +111,22 @@ public static class WeatherParameters
     /// <summary>Canonical id of the horizontal visibility at the surface, in metres.</summary>
     public const string Visibility = "visibility";
 
+    /// <summary>Canonical id of the air temperature at 2 m above ground, in kelvin.</summary>
+    public const string AirTemperature = "air.temperature";
+
+    /// <summary>Canonical id of the surface (skin) temperature, in kelvin: the sea surface temperature over water.</summary>
+    public const string SurfaceTemperature = "surface.temperature";
+
+    /// <summary>Canonical id of the land cover mask: 1 over land, 0 over water.</summary>
+    public const string LandCover = "land.cover";
+
+    /// <summary>
+    /// Id of the freezing spray predictor, a field derived from the wind,
+    /// air temperature and sea temperature (<see cref="FreezingSpray"/>), not
+    /// a row of the table.
+    /// </summary>
+    public const string FreezingSprayPredictor = "spray.predictor";
+
     /// <summary>Group id of the 10 m wind: U, V, speed and direction.</summary>
     public const string WindGroup = "wind";
 
@@ -127,13 +154,32 @@ public static class WeatherParameters
     /// <summary>Group id of the visibility.</summary>
     public const string VisibilityGroup = "visibility";
 
+    /// <summary>Group id of the 2 m air temperature.</summary>
+    public const string AirTemperatureGroup = "air.temperature";
+
+    /// <summary>Group id of the surface (skin) temperature.</summary>
+    public const string SurfaceTemperatureGroup = "surface.temperature";
+
+    /// <summary>Group id of the land cover mask.</summary>
+    public const string LandCoverGroup = "land.cover";
+
+    /// <summary>
+    /// Name of the source that combines the wind, air temperature and sea
+    /// temperature to derive <see cref="FreezingSprayPredictor"/>
+    /// (<see cref="WeatherCoverageSource.CreateFreezingSpray"/>).
+    /// </summary>
+    public const string FreezingSprayGroup = "spray";
+
+    private static readonly WeatherLevel TwoMetres = WeatherLevel.AboveGround(Length.FromMetres(2));
+
     private static readonly WeatherLevel TenMetres = WeatherLevel.AboveGround(Length.FromMetres(10));
 
     /// <summary>
     /// Every row of the table, in the order of design note §3.5, with the
     /// wind-sea direction (NCEP's WVDIR, issue #1074) after the wind-sea height,
     /// then the sea surface temperature (issue #1227), the surface current
-    /// (issue #1228) and the visibility (issue #1229).
+    /// (issue #1228), the visibility (issue #1229), and the air and skin
+    /// temperatures and land cover the freezing spray risk reads (issue #1231).
     /// </summary>
     public static IReadOnlyList<WeatherParameterDefinition> All { get; } =
     [
@@ -176,6 +222,12 @@ public static class WeatherParameters
             [new(10, 1, 0)], ["sea_water_velocity_to_direction", "direction_of_sea_water_velocity"]),
         new(Visibility, "Visibility", WeatherUnit.Metres, VisibilityGroup, null,
             [new(0, 19, 0)], ["visibility_in_air"]),
+        new(AirTemperature, "Air temperature at 2 m", WeatherUnit.Kelvin, AirTemperatureGroup, TwoMetres,
+            [new(0, 0, 0)], ["air_temperature"]),
+        new(SurfaceTemperature, "Surface temperature", WeatherUnit.Kelvin, SurfaceTemperatureGroup, WeatherLevel.Surface,
+            [new(0, 0, 0)], ["surface_temperature"]),
+        new(LandCover, "Land cover", WeatherUnit.Proportion, LandCoverGroup, WeatherLevel.Surface,
+            [new(2, 0, 0)], ["land_binary_mask"]),
     ];
 
     /// <summary>Finds the row with canonical id <paramref name="id"/>.</summary>
@@ -193,12 +245,12 @@ public static class WeatherParameters
         return null;
     }
 
-    /// <summary>Finds the row a GRIB2 parameter code maps to.</summary>
+    /// <summary>Finds the first row a GRIB2 parameter code maps to.</summary>
     /// <param name="code">The GRIB2 (discipline, category, number).</param>
     /// <returns>The row, or <see langword="null"/> when the code isn't in the table.</returns>
     /// <remarks>
-    /// The level isn't checked here: a reader also compares the message's
-    /// level with <see cref="WeatherParameterDefinition.Level"/>.
+    /// The level isn't checked here, and temperature (0,0,0) has two rows;
+    /// readers use <see cref="FindByGribCode(GribParameterCode, WeatherLevel)"/>.
     /// </remarks>
     public static WeatherParameterDefinition? FindByGribCode(GribParameterCode code)
     {
@@ -212,6 +264,30 @@ public static class WeatherParameters
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Finds the row a GRIB2 parameter code at a level maps to: the row with
+    /// that code and that level, else the first row with the code (whose
+    /// level the reader then finds doesn't match, or which takes any level).
+    /// </summary>
+    /// <param name="code">The GRIB2 (discipline, category, number).</param>
+    /// <param name="level">The message's level.</param>
+    /// <returns>The row, or <see langword="null"/> when the code isn't in the table.</returns>
+    public static WeatherParameterDefinition? FindByGribCode(GribParameterCode code, WeatherLevel level)
+    {
+        ArgumentNullException.ThrowIfNull(level);
+        WeatherParameterDefinition? first = null;
+        foreach (var definition in All)
+        {
+            if (!definition.GribCodes.Contains(code))
+                continue;
+            if (definition.Level == level)
+                return definition;
+            first ??= definition;
+        }
+
+        return first;
     }
 
     /// <summary>Finds the row a CF <c>standard_name</c> maps to.</summary>

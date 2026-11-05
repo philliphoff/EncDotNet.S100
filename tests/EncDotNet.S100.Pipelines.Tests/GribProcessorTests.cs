@@ -232,6 +232,48 @@ public sealed class GribProcessorTests : IDisposable
     }
 
     [Fact]
+    public async Task A_GFS_file_with_air_and_skin_temperature_draws_freezing_spray_over_water_and_picks_it()
+    {
+        // GFS fields at 60°N: column 0 is water, column 1 land. A 15 m/s
+        // wind, −10 °C air and +2 °C water: Overland's predictor is 59, heavy.
+        var grid = new Grid(60, -170, 1, 1, 2);
+        Message Field(byte discipline, byte category, byte number, byte surface, int value, double[] values) =>
+            new() { Discipline = discipline, Category = category, Number = number, SurfaceType = surface, SurfaceValue = value, Grid = grid, Values = values, DecimalScale = 2 };
+        var path = Write(PathFor("gfs-icing.grib2"), Concat(
+            Encode(Field(0, 2, 2, 103, 10, [0, 0])),
+            Encode(Field(0, 2, 3, 103, 10, [15, 15])),
+            Encode(Field(0, 0, 0, 103, 2, [263.15, 263.15])),
+            Encode(Field(0, 0, 0, 1, 0, [275.15, 255.15])),
+            Encode(Field(2, 0, 0, 1, 0, [0, 1]))));
+        using var processor = new GribDatasetProcessor(path, new ProjNetCrsTransformFactory());
+
+        Assert.Equal(
+            [WeatherParameters.WindU, WeatherParameters.WindV, WeatherParameters.AirTemperature, WeatherParameters.SurfaceTemperature, WeatherParameters.LandCover],
+            processor.GridSet.Parameters.Select(p => p.Id));
+        var portrayal = await processor.BuildCoveragePortrayalAsync(new RenderContext(), Ct);
+        var spray = Assert.IsType<GridCoverageSubLayer>(portrayal.SubLayers.Single(l => l.LayerKey == FreezingSprayStyle.Key));
+        Assert.True(spray.ClipToWater);
+        Assert.DoesNotContain(portrayal.SubLayers, l => l.LayerKey == AirTemperatureIsothermStyle.Key);
+        var withAir = await processor.BuildCoveragePortrayalAsync(
+            new RenderContext { EcdisDisplay = new EcdisDisplaySettings { LayerVisibility = new Dictionary<string, bool> { [AirTemperatureIsothermStyle.Key] = true } } }, Ct);
+        Assert.Contains(withAir.SubLayers, l => l.LayerKey == AirTemperatureIsothermStyle.Key);
+
+        var water = processor.GetCoverageInfo(60, -170, null)!.Attributes;
+        Assert.Equal("Heavy (predictor 59)", water.Single(a => a.Code == WeatherParameters.FreezingSprayPredictor).DisplayValue);
+        Assert.Equal("-10.0 °C", water.Single(a => a.Code == WeatherParameters.AirTemperature).DisplayValue);
+        Assert.Equal("2.0 °C", water.Single(a => a.Code == WeatherParameters.SurfaceTemperature).DisplayValue);
+        Assert.DoesNotContain(water, a => a.Code == WeatherParameters.LandCover);
+        var land = processor.GetCoverageInfo(60, -169, null)!.Attributes;
+        Assert.Equal("—", land.Single(a => a.Code == WeatherParameters.FreezingSprayPredictor).DisplayValue);
+
+        var query = new CoverageSampleQuery(60, -170, new ProjNetCrsTransformFactory());
+        var outcome = Assert.IsType<CoverageSampleOutcome<ICoverageSampler>.Sampled>(processor.SampleAt(query, null, nearestWhenOutOfRange: true));
+        var fields = Assert.IsType<CoverageFieldsSample>(outcome.Value).Fields.ToDictionary(f => f.Name);
+        Assert.Equal((double)(int)FreezingSprayClass.Heavy, fields["spray.predictor.class"].Value);
+        Assert.Equal(-10, fields["air.temperature.degc"].Value!.Value, 2);
+    }
+
+    [Fact]
     public async Task Visibility_draws_a_sparse_fill_and_picks_in_nautical_miles()
     {
         // Rows run north to south: 10°N has 400 m and 2500 m, 9°N 8000 m and 24100 m (good).

@@ -259,6 +259,14 @@
     <value>Visibility</value>
     <comment>Weather sub-layer name (#1229): the fill of forecast restricted visibility (very poor, poor, moderate).</comment>
   </data>
+  <data name="SubLayer_Weather_FreezingSpray" xml:space="preserve">
+    <value>Freezing spray</value>
+    <comment>Weather sub-layer name (#1231): the fill of vessel icing risk (light, moderate, heavy, extreme) derived from wind, air and sea temperature.</comment>
+  </data>
+  <data name="SubLayer_Weather_AirTemperature" xml:space="preserve">
+    <value>Air temperature</value>
+    <comment>Weather sub-layer name (#1231): dashed 2 m air temperature isotherms every 5 °C.</comment>
+  </data>
   <data name="Tooltip_ToggleSubLayerVisibility" xml:space="preserve">
     <value>Show or hide this sub-layer</value>
   </data>
@@ -7041,6 +7049,13 @@
   </data>
   <data name="Tooltip_EcdisPanel_Weather_Currents" xml:space="preserve">
     <value>Draw surface current arrows, coloured by speed as S-111's are, on every weather dataset that has currents. Where an S-111 dataset is loaded, only its arrows are drawn.</value>
+  </data>
+  <data name="EcdisPanel_Weather_AirTemperature" xml:space="preserve">
+    <value>Air temperature</value>
+    <comment>Display controls switch (#1231): 2 m air temperature isotherms on every weather dataset.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_AirTemperature" xml:space="preserve">
+    <value>Draw dashed air temperature isotherms, every 5 °C at 2 m above the surface, on every weather dataset that has air temperature. Off by default.</value>
   </data>
   <data name="EcdisPanel_NavigationalWarnings" xml:space="preserve">
     <value>Navigational warnings</value>

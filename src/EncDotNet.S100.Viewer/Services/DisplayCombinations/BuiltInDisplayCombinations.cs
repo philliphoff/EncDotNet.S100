@@ -49,6 +49,7 @@ internal static class BuiltInDisplayCombinations
         WaveDirectionStyle.Key,
         SeaTemperatureIsothermStyle.Key,
         CurrentArrowStyle.Key,
+        AirTemperatureIsothermStyle.Key,
     ];
 
     /// <summary>The S-111 station (non-grid) arrows sub-layer.</summary>

@@ -154,7 +154,7 @@
       "coverage": "boundingBoxes",
       "editions": false,
       "sizes": false,
-      "note": "GFS 10 m wind, gusts, mean sea level pressure and visibility at 0.25°, cut to the map view. The model runs every 6 hours; each refresh lists its latest run, downloaded as one GRIB2 file. Choose parameters and forecast days next.",
+      "note": "GFS 10 m wind, gusts, mean sea level pressure, visibility and air temperature at 0.25°, cut to the map view. The model runs every 6 hours; each refresh lists its latest run, downloaded as one GRIB2 file. Choose parameters and forecast days next.",
       "product": "GRIB2",
       "notForNavigation": true,
       "licence": "Public domain",
@@ -175,7 +175,10 @@
           { "id": "VGRD", "name": "10 m wind, north component", "level": "10 m above ground", "default": true },
           { "id": "GUST", "name": "Wind gust", "level": "surface" },
           { "id": "PRMSL", "name": "Mean sea level pressure", "level": "mean sea level", "default": true },
-          { "id": "VIS", "name": "Visibility", "level": "surface" }
+          { "id": "VIS", "name": "Visibility", "level": "surface" },
+          { "id": "TMP", "name": "2 m air temperature", "level": "2 m above ground" },
+          { "id": "TMP", "name": "Surface temperature, for freezing spray", "level": "surface" },
+          { "id": "LAND", "name": "Land mask, for freezing spray", "level": "surface" }
         ]
       }
     },
@@ -248,7 +251,10 @@
           { "id": "VGRD", "name": "10 m wind, north component", "level": "10 m above ground", "default": true },
           { "id": "GUST", "name": "Wind gust", "level": "surface" },
           { "id": "PRMSL", "name": "Mean sea level pressure", "level": "mean sea level", "default": true },
-          { "id": "VIS", "name": "Visibility", "level": "surface" }
+          { "id": "VIS", "name": "Visibility", "level": "surface" },
+          { "id": "TMP", "name": "2 m air temperature", "level": "2 m above ground" },
+          { "id": "TMP", "name": "Surface temperature, for freezing spray", "level": "surface" },
+          { "id": "LAND", "name": "Land mask, for freezing spray", "level": "surface" }
         ]
       }
     },

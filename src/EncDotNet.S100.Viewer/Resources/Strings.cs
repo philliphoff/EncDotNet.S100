@@ -169,6 +169,8 @@ internal static partial class Strings
     public static string SubLayer_Weather_Isotherms => Get(nameof(SubLayer_Weather_Isotherms));
     public static string SubLayer_Weather_Currents => Get(nameof(SubLayer_Weather_Currents));
     public static string SubLayer_Weather_Visibility => Get(nameof(SubLayer_Weather_Visibility));
+    public static string SubLayer_Weather_FreezingSpray => Get(nameof(SubLayer_Weather_FreezingSpray));
+    public static string SubLayer_Weather_AirTemperature => Get(nameof(SubLayer_Weather_AirTemperature));
     public static string Tooltip_ToggleSubLayerVisibility => Get(nameof(Tooltip_ToggleSubLayerVisibility));
     public static string Tooltip_SubLayerOpacity => Get(nameof(Tooltip_SubLayerOpacity));
     public static string Tooltip_ExpandSubLayers => Get(nameof(Tooltip_ExpandSubLayers));
@@ -854,6 +856,8 @@ internal static partial class Strings
     public static string Tooltip_EcdisPanel_Weather_Isotherms => Get(nameof(Tooltip_EcdisPanel_Weather_Isotherms));
     public static string EcdisPanel_Weather_Currents => Get(nameof(EcdisPanel_Weather_Currents));
     public static string Tooltip_EcdisPanel_Weather_Currents => Get(nameof(Tooltip_EcdisPanel_Weather_Currents));
+    public static string EcdisPanel_Weather_AirTemperature => Get(nameof(EcdisPanel_Weather_AirTemperature));
+    public static string Tooltip_EcdisPanel_Weather_AirTemperature => Get(nameof(Tooltip_EcdisPanel_Weather_AirTemperature));
 
     // Text group toolbar pill
     public static string Toolbar_Text => Get(nameof(Toolbar_Text));
