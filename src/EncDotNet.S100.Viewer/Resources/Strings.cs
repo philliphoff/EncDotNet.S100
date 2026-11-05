@@ -168,6 +168,7 @@ internal static partial class Strings
     public static string SubLayer_Weather_SeaTemperature => Get(nameof(SubLayer_Weather_SeaTemperature));
     public static string SubLayer_Weather_Isotherms => Get(nameof(SubLayer_Weather_Isotherms));
     public static string SubLayer_Weather_Currents => Get(nameof(SubLayer_Weather_Currents));
+    public static string SubLayer_Weather_Visibility => Get(nameof(SubLayer_Weather_Visibility));
     public static string Tooltip_ToggleSubLayerVisibility => Get(nameof(Tooltip_ToggleSubLayerVisibility));
     public static string Tooltip_SubLayerOpacity => Get(nameof(Tooltip_SubLayerOpacity));
     public static string Tooltip_ExpandSubLayers => Get(nameof(Tooltip_ExpandSubLayers));

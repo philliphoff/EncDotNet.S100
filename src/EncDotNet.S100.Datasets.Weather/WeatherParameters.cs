@@ -11,6 +11,7 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// <para>
 /// GRIB2 codes are (discipline, category, number) from WMO code table 4.2:
 /// discipline 0 category 2 is momentum, discipline 0 category 3 is mass and
+/// discipline 0 category 19 is physical atmospheric properties (visibility),
 /// discipline 10 category 0 is oceanographic waves and discipline 10
 /// category 3 is surface properties (water temperature); discipline 10
 /// category 1 is currents. CF names are from
@@ -37,6 +38,10 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// The current rows have no level: a model gives currents at its top layer
 /// (0 m for HYCOM, about 0.5 m for Copernicus, 15 m for OSCAR), and each
 /// reader keeps the level it finds, so a 15 m current is labelled as one.
+/// </para>
+/// <para>
+/// The visibility row has no level either: GFS, HRRR and the NBM give it
+/// only at the surface.
 /// </para>
 /// </remarks>
 public static class WeatherParameters
@@ -92,6 +97,9 @@ public static class WeatherParameters
     /// <summary>Canonical id of the direction the current flows to, in degrees true.</summary>
     public const string CurrentToDirection = "current.to_direction";
 
+    /// <summary>Canonical id of the horizontal visibility at the surface, in metres.</summary>
+    public const string Visibility = "visibility";
+
     /// <summary>Group id of the 10 m wind: U, V, speed and direction.</summary>
     public const string WindGroup = "wind";
 
@@ -116,13 +124,16 @@ public static class WeatherParameters
     /// <summary>Group id of the surface current: U, V, speed and direction.</summary>
     public const string CurrentGroup = "current";
 
+    /// <summary>Group id of the visibility.</summary>
+    public const string VisibilityGroup = "visibility";
+
     private static readonly WeatherLevel TenMetres = WeatherLevel.AboveGround(Length.FromMetres(10));
 
     /// <summary>
     /// Every row of the table, in the order of design note §3.5, with the
     /// wind-sea direction (NCEP's WVDIR, issue #1074) after the wind-sea height,
-    /// then the sea surface temperature (issue #1227) and the surface current
-    /// (issue #1228).
+    /// then the sea surface temperature (issue #1227), the surface current
+    /// (issue #1228) and the visibility (issue #1229).
     /// </summary>
     public static IReadOnlyList<WeatherParameterDefinition> All { get; } =
     [
@@ -163,6 +174,8 @@ public static class WeatherParameters
             [new(10, 1, 1)], ["sea_water_speed"]),
         new(CurrentToDirection, "Current direction (to)", WeatherUnit.DegreesTrue, CurrentGroup, null,
             [new(10, 1, 0)], ["sea_water_velocity_to_direction", "direction_of_sea_water_velocity"]),
+        new(Visibility, "Visibility", WeatherUnit.Metres, VisibilityGroup, null,
+            [new(0, 19, 0)], ["visibility_in_air"]),
     ];
 
     /// <summary>Finds the row with canonical id <paramref name="id"/>.</summary>

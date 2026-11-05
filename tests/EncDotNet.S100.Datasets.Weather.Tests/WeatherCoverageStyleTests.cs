@@ -189,6 +189,56 @@ public class WeatherCoverageStyleTests
             scheme.Resolve((float)(celsius + SeaTemperatureStyle.CelsiusZero)));
     }
 
+    [Theory]
+    // Marine forecast terms: very poor under 1000 m, poor to 2 nm, moderate to 5 nm.
+    [InlineData(0, 1)]
+    [InlineData(999, 1)]
+    [InlineData(1000, 2)]
+    [InlineData(3703, 2)]
+    [InlineData(3704, 3)]
+    [InlineData(9259, 3)]
+    public void Restricted_visibility_resolves_to_its_forecast_band(double metres, int band)
+    {
+        var scheme = new VisibilityStyle().ResolveColorScheme(MarinerSettings.Default);
+
+        Assert.Equal(WeatherParameters.Visibility, scheme.FieldName);
+        Assert.Equal(
+            WeatherPalette.Palette.Resolve(WeatherPalette.VisibilityToken(band), PaletteType.Day).ToHex(),
+            scheme.Resolve((float)metres));
+    }
+
+    [Theory]
+    [InlineData(9260)] // 5 nm: good.
+    [InlineData(24100)] // GFS's ceiling.
+    [InlineData(float.NaN)]
+    public void Good_visibility_is_not_drawn(float metres)
+    {
+        Assert.Null(new VisibilityStyle().ResolveColorScheme(MarinerSettings.Default).Resolve(metres));
+    }
+
+    [Fact]
+    public void Visibility_bands_are_labelled_with_the_forecast_terms_and_drawn_by_default()
+    {
+        var style = new VisibilityStyle();
+
+        Assert.Equal(["Very poor (fog), under 1000 m", "Poor, 1000 m to 2 nm", "Moderate, 2 to 5 nm"], VisibilityStyle.Bands.Select(b => b.Label));
+        Assert.True(style.IsVisibleByDefault);
+        Assert.Equal(VisibilityStyle.Key, style.LayerKey);
+        Assert.Contains(WeatherCoverageStyle.CreateAll(), s => s is VisibilityStyle);
+    }
+
+    [Fact]
+    public void Visibility_greys_darken_by_day_and_lighten_at_dusk_and_night_as_it_worsens()
+    {
+        double Luminance(int band, Func<PaletteColors, RgbaColor> pick) =>
+            RelativeLuminance(pick(WeatherPalette.Palette.Tokens[WeatherPalette.VisibilityToken(band)]));
+
+        Assert.True(Luminance(1, c => c.Day) < Luminance(2, c => c.Day));
+        Assert.True(Luminance(2, c => c.Day) < Luminance(3, c => c.Day));
+        Assert.True(Luminance(1, c => c.Dusk) > Luminance(2, c => c.Dusk));
+        Assert.True(Luminance(2, c => c.Night) > Luminance(3, c => c.Night));
+    }
+
     [Fact]
     public void Sea_temperature_bands_are_labelled_in_celsius()
     {
@@ -258,7 +308,7 @@ public class WeatherCoverageStyleTests
     [Fact]
     public void Fills_sit_under_S104_on_the_on_demand_surface_at_half_opacity()
     {
-        foreach (WeatherCoverageStyle style in new WeatherCoverageStyle[] { new WaveHeightStyle(), new WindSpeedStyle(), new SeaTemperatureStyle() })
+        foreach (WeatherCoverageStyle style in new WeatherCoverageStyle[] { new WaveHeightStyle(), new WindSpeedStyle(), new SeaTemperatureStyle(), new VisibilityStyle() })
         {
             Assert.Equal(WeatherLayerKind.Fill, style.Kind);
             Assert.Equal(S98DisplayPlane.OnDemandSurface, style.Plane);
@@ -320,8 +370,9 @@ public class WeatherCoverageStyleTests
     {
         Assert.True(new WaveHeightStyle().ClipToWater);
         Assert.True(new SeaTemperatureStyle().ClipToWater);
+        Assert.True(new VisibilityStyle().ClipToWater);
         Assert.All(
-            WeatherCoverageStyle.CreateAll().Where(s => s is not (WaveHeightStyle or SeaTemperatureStyle)),
+            WeatherCoverageStyle.CreateAll().Where(s => s is not (WaveHeightStyle or SeaTemperatureStyle or VisibilityStyle)),
             style => Assert.False(style.ClipToWater, style.LayerKey));
     }
 
@@ -479,14 +530,14 @@ public class WeatherCoverageStyleTests
     public void Palette_tokens_are_prefixed_so_they_never_resolve_against_S101_colours()
     {
         Assert.All(WeatherPalette.Palette.Tokens.Keys, token => Assert.StartsWith("WX", token, StringComparison.Ordinal));
-        Assert.Equal(6 + 15 + 13 + 32 + 9, WeatherPalette.Palette.Tokens.Count);
+        Assert.Equal(6 + 15 + 13 + 32 + 9 + 3, WeatherPalette.Palette.Tokens.Count);
     }
 
     [Fact]
     public void Content_scope_carries_the_style_version()
     {
         Assert.Equal(ApplicationContentScope.For("Weather", WeatherCoverageStyle.StyleVersion), WeatherCoverageStyle.ContentScope);
-        Assert.StartsWith("app:Weather@4|toolkit:", WeatherCoverageStyle.ContentScope, StringComparison.Ordinal);
+        Assert.StartsWith("app:Weather@5|toolkit:", WeatherCoverageStyle.ContentScope, StringComparison.Ordinal);
     }
 
     [Fact]

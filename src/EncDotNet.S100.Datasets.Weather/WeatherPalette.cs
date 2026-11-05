@@ -5,8 +5,8 @@ namespace EncDotNet.S100.Datasets.Weather;
 
 /// <summary>
 /// The colours of the weather styles: the band fills of
-/// <see cref="WaveHeightStyle"/>, <see cref="WindSpeedStyle"/> and
-/// <see cref="SeaTemperatureStyle"/>, and the inks of the wind barbs, wave
+/// <see cref="WaveHeightStyle"/>, <see cref="WindSpeedStyle"/>,
+/// <see cref="SeaTemperatureStyle"/> and <see cref="VisibilityStyle"/>, and the inks of the wind barbs, wave
 /// arrows, pressure isobars and isotherms, each with a Day, Dusk and Night
 /// value.
 /// </summary>
@@ -31,7 +31,9 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// and the fill is drawn at half opacity, so its orange and brick don't
 /// stand alone as danger colours. The fills are drawn at
 /// <see cref="WeatherCoverageStyle.FillOpacity"/>, so the chart under them
-/// stays readable.
+/// stays readable. Visibility is a neutral grey ramp, the colour of fog: in
+/// Day the poorer bands are darker, in Dusk and Night lighter, and there's
+/// no band for good visibility, so clear areas aren't tinted at all.
 /// </para>
 /// <para>
 /// Every Night colour stays under relative luminance 0.2, as the S-104
@@ -71,6 +73,9 @@ public static class WeatherPalette
 
     /// <summary>The colour token prefix of the current speed bands, followed by the band number: <c>WXCUR1</c> to <c>WXCUR9</c>.</summary>
     public const string CurrentTokenPrefix = "WXCUR";
+
+    /// <summary>The colour token prefix of the visibility bands, followed by the band number: <c>WXVIS1</c> (very poor) to <c>WXVIS3</c> (moderate).</summary>
+    public const string VisibilityTokenPrefix = "WXVIS";
 
     /// <summary>Colour token of the outline of the current arrows (<see cref="CurrentArrowStyle"/>).</summary>
     public const string CurrentOutlineToken = "WXCUROUT";
@@ -166,6 +171,15 @@ public static class WeatherPalette
         ("#FF1E1E", "#B20101", "#3F0000"),
     ];
 
+    // Day, Dusk, Night for each visibility band (WXVIS1 very poor): neutral
+    // greys, cool by a few degrees so they don't read as the chart's paper.
+    private static readonly (string Day, string Dusk, string Night)[] VisibilityColors =
+    [
+        ("#5B606B", "#A9AEB8", "#4A4E57"),
+        ("#8B909A", "#7D828C", "#363A42"),
+        ("#BCC0C7", "#565B65", "#25282E"),
+    ];
+
     /// <summary>
     /// The weather colours: <see cref="BarbInkToken"/>, <see cref="WaveArrowToken"/>,
     /// <see cref="IsobarInkToken"/>, <see cref="IsobarHaloToken"/>,
@@ -173,7 +187,8 @@ public static class WeatherPalette
     /// (<see cref="WaveHeightToken"/>), the Beaufort bands
     /// (<see cref="WindSpeedToken"/>), the sea surface temperature bands
     /// (<see cref="SeaTemperatureToken"/>), and the current speed bands
-    /// (<see cref="CurrentToken"/>) with <see cref="CurrentOutlineToken"/>.
+    /// (<see cref="CurrentToken"/>) with <see cref="CurrentOutlineToken"/>,
+    /// and the visibility bands (<see cref="VisibilityToken"/>).
     /// </summary>
     public static ApplicationPalette Palette { get; } = new("Weather", BuildTokens());
 
@@ -188,6 +203,9 @@ public static class WeatherPalette
 
     /// <summary>The number of current speed bands: 9, as S-111's.</summary>
     public static int CurrentBandCount => CurrentColors.Length;
+
+    /// <summary>The number of visibility bands: 3 (very poor, poor and moderate).</summary>
+    public static int VisibilityBandCount => VisibilityColors.Length;
 
     /// <summary>The colour token of wave height band <paramref name="band"/>, 1 (lowest) to <see cref="WaveHeightBandCount"/>.</summary>
     /// <param name="band">The band number.</param>
@@ -223,6 +241,15 @@ public static class WeatherPalette
         ArgumentOutOfRangeException.ThrowIfLessThan(band, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(band, CurrentBandCount);
         return CurrentTokenPrefix + band.ToString(CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>The colour token of visibility band <paramref name="band"/>, 1 (very poor) to <see cref="VisibilityBandCount"/>.</summary>
+    /// <param name="band">The band number.</param>
+    public static string VisibilityToken(int band)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(band, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(band, VisibilityBandCount);
+        return VisibilityTokenPrefix + band.ToString(CultureInfo.InvariantCulture);
     }
 
     private static Dictionary<string, PaletteColors> BuildTokens()
@@ -267,6 +294,12 @@ public static class WeatherPalette
         {
             var (day, dusk, night) = CurrentColors[i];
             tokens[CurrentToken(i + 1)] = PaletteColors.FromHex(day, dusk, night);
+        }
+
+        for (int i = 0; i < VisibilityColors.Length; i++)
+        {
+            var (day, dusk, night) = VisibilityColors[i];
+            tokens[VisibilityToken(i + 1)] = PaletteColors.FromHex(day, dusk, night);
         }
 
         return tokens;

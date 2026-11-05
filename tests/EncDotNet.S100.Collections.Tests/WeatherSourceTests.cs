@@ -153,6 +153,17 @@ public sealed class WeatherSourceTests : IDisposable
         Assert.Equal(["c"], KnownCatalogueSources.Read(stream).Select(s => s.Id));
     }
 
+    [Theory]
+    [InlineData("noaa-nomads-gfs")]
+    [InlineData("noaa-aws-gfs")]
+    public void The_GFS_sources_offer_surface_visibility_off_by_default(string id)
+    {
+        var visibility = Known(id).Weather!.Parameters.Single(p => p.Id == "VIS");
+
+        Assert.Equal("surface", visibility.Level);
+        Assert.False(visibility.Default);
+    }
+
     [Fact]
     public void The_grib_filter_url_names_the_runs_file_the_parameters_their_levels_and_the_area_rounded_out_to_the_grid()
     {

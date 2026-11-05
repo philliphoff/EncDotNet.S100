@@ -39,6 +39,7 @@ internal static class GribShortNames
         (10, 1, 2) => "UOGRD",
         (10, 1, 3) => "VOGRD",
         (10, 3, 0) => "WTMP",
+        (0, 19, 0) => "VIS",
         _ => null,
     };
 

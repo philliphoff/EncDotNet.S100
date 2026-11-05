@@ -164,6 +164,22 @@ public sealed class GribWeatherDatasetTests
         Assert.Equal([288.15, 290.5, 300.25], values.Where(v => !float.IsNaN(v)).Select(v => Math.Round(v, 2)).Order());
     }
 
+    [Fact]
+    public void Surface_visibility_reads_in_metres()
+    {
+        // GFS VIS: WMO table 4.2-0-19 parameter 0, at the surface, in metres.
+        var grid = new Grid(10, 10, 1, 2, 2);
+        var bytes = Encode(new Message { Category = 19, Number = 0, Grid = grid, DecimalScale = 0, Values = [400, 2500, 8000, 24100] });
+
+        using var dataset = GribWeatherDataset.Read(GribFile.Open(bytes));
+        var visibility = Assert.Single(dataset.GridSet.Parameters);
+
+        Assert.Equal(WeatherParameters.Visibility, visibility.Id);
+        Assert.Equal(WeatherLevel.Surface, visibility.Level);
+        Assert.Equal("VIS", GribShortNames.Get(new GribParameterCode(0, 19, 0)));
+        Assert.Equal([400, 2500, 8000, 24100], dataset.GridSet.ReadStep(visibility, 0, Ct).Select(v => Math.Round(v)).Order());
+    }
+
     // -----------------------------------------------------------------
     // Levels: GFS-Wave's surface wind and the 10 m wind
     // -----------------------------------------------------------------
