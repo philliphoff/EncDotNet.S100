@@ -932,6 +932,15 @@ public partial class App : Application
                 ledger: new EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalWarmLedger(
                     settings.IsReadOnly ? null : Path.Combine(paths.PortrayalInstructionCacheDirectory, "prewarm-ledger.json")),
                 options: options,
+                // Several cells at once while the map is idle, backing off
+                // when GC pauses climb (map rendering slice 3).
+                concurrency: new EncDotNet.S100.Viewer.Services.LazyLoading.PrewarmConcurrency(
+                    EncDotNet.S100.Viewer.Services.LazyLoading.PrewarmConcurrencyOptions.Resolve(
+                        Environment.ProcessorCount,
+                        Environment.GetEnvironmentVariable(
+                            EncDotNet.S100.Viewer.Services.LazyLoading.PrewarmConcurrencyOptions.FixedConcurrencyVariable)),
+                    GC.GetTotalPauseDuration,
+                    sp.GetRequiredService<TimeProvider>()),
                 time: sp.GetRequiredService<TimeProvider>(),
                 logger: sp.GetRequiredService<ILogger<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalCacheWarmer>>());
         });
@@ -1340,6 +1349,7 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.ProcessMetricsSampler>(),
                 () => sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalCacheWarmer>().Status,
                 sp.GetRequiredService<McpTools.PortrayalPrewarmOverride>(),
+                () => sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalCacheWarmer>().ConcurrencyLimit,
                 sp.GetRequiredService<ViewerDataPaths>().RenderCacheDirectory),
         });
         // The settled signal and process metrics behind the perf harness's MCP

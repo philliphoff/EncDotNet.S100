@@ -12,7 +12,7 @@ internal enum PortrayalWarmState
     /// <summary>No load-as-you-pan cells are registered.</summary>
     Idle,
 
-    /// <summary>Portraying a cell.</summary>
+    /// <summary>Portraying one or more cells.</summary>
     Working,
 
     /// <summary>Cells are waiting, but the map is loading or drawing.</summary>
@@ -62,18 +62,25 @@ internal sealed record PortrayalWarmOptions
 
 /// <summary>
 /// Renders the registered, not-yet-loaded cells of load-as-you-pan sets in
-/// the background, one at a time, so their Lua portrayal and pattern-fill clip
+/// the background, several at a time, so their Lua portrayal and pattern-fill clip
 /// are already in the disk caches when the map reaches them (#1266). Those two
 /// are most of a cold cell load; with both cached a load takes tens of
 /// milliseconds.
 /// </summary>
 /// <remarks>
 /// <para>
-/// One worker, lowest priority: a cell starts only after the map has had
-/// nothing visible to load or draw for <see cref="PortrayalWarmOptions.QuietPeriod"/>,
-/// and the running cell is cancelled as soon as that changes (or the cell
-/// starts loading for real); the Lua run stops at its next feature. Cells
-/// nearest the view go first.
+/// Lowest priority: cells start only after the map has had nothing visible
+/// to load or draw for <see cref="PortrayalWarmOptions.QuietPeriod"/>, and
+/// every running cell is cancelled within a
+/// <see cref="PortrayalWarmOptions.PollInterval"/> of that changing (or of
+/// the cell starting to load for real); the Lua run stops at its next
+/// feature. Cells nearest the view go first.
+/// </para>
+/// <para>
+/// While the map is idle, up to <see cref="PrewarmConcurrency.Limit"/> cells
+/// are portrayed at once (map rendering slice 3). The limit rises while the
+/// process spends little of its time in GC pauses and halves when that
+/// share climbs, within the processor count.
 /// </para>
 /// <para>
 /// Progress is resumable: what has been portrayed is kept in a
@@ -105,6 +112,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
     private readonly Func<string> _signature;
     private readonly PortrayalWarmLedger _ledger;
     private readonly PortrayalWarmOptions _options;
+    private readonly PrewarmConcurrency _concurrency;
     private readonly TimeProvider _time;
     private readonly ILogger _logger;
     private readonly CancellationTokenSource _stop = new();
@@ -113,6 +121,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
     private readonly HashSet<string> _warmKeys = new(StringComparer.Ordinal);
     private readonly HashSet<DatasetEntry> _warmEntries = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<DatasetEntry> _failed = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<DatasetEntry, Running> _running = new(ReferenceEqualityComparer.Instance);
     private string? _sessionSignature;
     private long _lastSave;
     private int _portrayedThisSession;
@@ -134,6 +143,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
     /// <param name="signature">Identifies the current presentation and build; cells portrayed under another are redone.</param>
     /// <param name="ledger">What has been portrayed, kept across restarts.</param>
     /// <param name="options">Timings.</param>
+    /// <param name="concurrency">How many cells may be portrayed at once; the warmer's loop owns it.</param>
     /// <param name="time">Clock for the timings.</param>
     /// <param name="logger">Logs progress.</param>
     public PortrayalCacheWarmer(
@@ -147,6 +157,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
         Func<string> signature,
         PortrayalWarmLedger ledger,
         PortrayalWarmOptions options,
+        PrewarmConcurrency concurrency,
         TimeProvider time,
         ILogger<PortrayalCacheWarmer> logger)
     {
@@ -160,6 +171,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
         ArgumentNullException.ThrowIfNull(signature);
         ArgumentNullException.ThrowIfNull(ledger);
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(concurrency);
         ArgumentNullException.ThrowIfNull(time);
         ArgumentNullException.ThrowIfNull(logger);
         _candidates = candidates;
@@ -172,6 +184,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
         _signature = signature;
         _ledger = ledger;
         _options = options;
+        _concurrency = concurrency;
         _time = time;
         _logger = logger;
     }
@@ -185,7 +198,10 @@ internal sealed class PortrayalCacheWarmer : IDisposable
     /// <summary>Starts the loop on the current context. Later calls do nothing.</summary>
     public void Start() => _loop ??= RunAsync(_stop.Token);
 
-    /// <summary>Stops the loop and saves the ledger. Does not wait for a running portrayal.</summary>
+    /// <summary>How many cells may be portrayed at once now.</summary>
+    public int ConcurrencyLimit => _concurrency.Limit;
+
+    /// <summary>Stops the loop and saves the ledger. Does not wait for running portrayals.</summary>
     public void Dispose()
     {
         if (_stop.IsCancellationRequested)
@@ -199,64 +215,225 @@ internal sealed class PortrayalCacheWarmer : IDisposable
         // Leave the caller (app start-up) before doing anything.
         await Task.Yield();
         long? quietSince = null;
-        while (!stop.IsCancellationRequested)
+        try
         {
-            try
+            while (!stop.IsCancellationRequested)
             {
-                if (!_isEnabled())
+                try
                 {
-                    quietSince = null;
-                    Publish(PortrayalWarmState.Off, _status.Warm, _status.Total);
-                    await DelayAsync(_options.IdleInterval, stop);
-                    continue;
-                }
+                    Harvest(stop);
+                    var enabled = _isEnabled();
+                    var busy = enabled && _isBusy();
+                    GiveWay(enabled, busy);
 
-                if (_isBusy())
+                    if (!enabled)
+                    {
+                        quietSince = null;
+                        _concurrency.Restart();
+                        if (_running.Count == 0)
+                            Publish(PortrayalWarmState.Off, _status.Warm, _status.Total);
+                        await WaitAsync(_running.Count == 0 ? _options.IdleInterval : _options.PollInterval, stop);
+                        continue;
+                    }
+
+                    if (busy)
+                    {
+                        quietSince = null;
+                        _concurrency.Restart();
+                        if (_status.State is PortrayalWarmState.Working or PortrayalWarmState.Paused)
+                            Publish(PortrayalWarmState.Paused, _status.Warm, _status.Total);
+                        await WaitAsync(_options.PollInterval, stop);
+                        continue;
+                    }
+
+                    quietSince ??= _time.GetTimestamp();
+                    if (_time.GetElapsedTime(quietSince.Value) < _options.QuietPeriod)
+                    {
+                        await WaitAsync(_options.PollInterval, stop);
+                        continue;
+                    }
+
+                    if (_running.Count > 0 && _concurrency.Observe(_running.Count))
+                    {
+                        _logger.LogDebug("Portrayal pre-warm now portrays up to {Limit} cells at once (GC pause share {Share:P1}).",
+                            _concurrency.Limit, _concurrency.LastPauseShare ?? 0);
+                    }
+
+                    // Survey only when a slot is free: it reads every candidate.
+                    if (_running.Count < _concurrency.Limit && !await FillAsync(stop))
+                        continue;
+
+                    await WaitAsync(_options.PollInterval, stop);
+                }
+                catch (OperationCanceledException) when (stop.IsCancellationRequested)
                 {
-                    quietSince = null;
-                    if (_status.State is PortrayalWarmState.Working or PortrayalWarmState.Paused)
-                        Publish(PortrayalWarmState.Paused, _status.Warm, _status.Total);
-                    await DelayAsync(_options.PollInterval, stop);
-                    continue;
+                    break;
                 }
-
-                quietSince ??= _time.GetTimestamp();
-                if (_time.GetElapsedTime(quietSince.Value) < _options.QuietPeriod)
+                catch (Exception ex)
                 {
-                    await DelayAsync(_options.PollInterval, stop);
-                    continue;
+                    _logger.LogWarning(ex, "Portrayal pre-warm pass failed.");
+                    await DelayAsync(_options.IdleInterval, stop).ConfigureAwait(true);
                 }
-
-                var (pending, warm, total) = Survey();
-                if (pending.Count == 0)
-                {
-                    Publish(total == 0 ? PortrayalWarmState.Idle : PortrayalWarmState.Complete, warm, total);
-                    SaveLedger(force: true);
-                    await DelayAsync(_options.IdleInterval, stop);
-                    continue;
-                }
-
-                if (!_hasCacheRoom())
-                {
-                    Publish(PortrayalWarmState.CacheFull, warm, total);
-                    SaveLedger(force: true);
-                    await DelayAsync(_options.IdleInterval, stop);
-                    continue;
-                }
-
-                Publish(PortrayalWarmState.Working, warm, total);
-                await PortrayOneAsync(Nearest(pending), stop);
-            }
-            catch (OperationCanceledException) when (stop.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Portrayal pre-warm pass failed.");
-                await DelayAsync(_options.IdleInterval, stop).ConfigureAwait(true);
             }
         }
+        finally
+        {
+            foreach (var run in _running.Values)
+                run.Cancel.Cancel();
+        }
+    }
+
+    /// <summary>
+    /// Starts pending cells, nearest the view first, until every slot is in
+    /// use; or, with nothing running, reports why nothing can start and waits.
+    /// </summary>
+    /// <returns><see langword="false"/> when it already waited.</returns>
+    private async Task<bool> FillAsync(CancellationToken stop)
+    {
+        var (pending, warm, total) = Survey();
+        if (pending.Count == 0 && _running.Count == 0)
+        {
+            Publish(total == 0 ? PortrayalWarmState.Idle : PortrayalWarmState.Complete, warm, total);
+            SaveLedger(force: true);
+            await DelayAsync(_options.IdleInterval, stop);
+            return false;
+        }
+
+        if (!_hasCacheRoom())
+        {
+            if (_running.Count > 0)
+                return true;
+            Publish(PortrayalWarmState.CacheFull, warm, total);
+            SaveLedger(force: true);
+            await DelayAsync(_options.IdleInterval, stop);
+            return false;
+        }
+
+        while (_running.Count < _concurrency.Limit && pending.Count > 0)
+            Start(TakeNearest(pending), stop);
+
+        Publish(PortrayalWarmState.Working, warm, total);
+        return true;
+    }
+
+    /// <summary>
+    /// Cancels running cells when the map needs the machine, the warmer is
+    /// switched off, or the cell starts loading for real (that load portrays
+    /// it anyway). The Lua run stops at its next feature.
+    /// </summary>
+    private void GiveWay(bool enabled, bool busy)
+    {
+        foreach (var (entry, run) in _running)
+        {
+            if (!run.Cancel.IsCancellationRequested
+                && (!enabled || busy || entry.IsLoading || entry.IsLoaded))
+            {
+                run.Cancel.Cancel();
+            }
+        }
+    }
+
+    /// <summary>Waits for a poll interval or until a running cell finishes, whichever is first.</summary>
+    private async Task WaitAsync(TimeSpan delay, CancellationToken stop)
+    {
+        if (_running.Count == 0)
+        {
+            await DelayAsync(delay, stop);
+            return;
+        }
+
+        var waits = new List<Task>(_running.Count + 1) { DelayAsync(delay, stop) };
+        foreach (var run in _running.Values)
+            waits.Add(run.Portrayal);
+        await Task.WhenAny(waits).ConfigureAwait(true);
+        stop.ThrowIfCancellationRequested();
+    }
+
+    private void Start(DatasetEntry entry, CancellationToken stop)
+    {
+        var cancel = CancellationTokenSource.CreateLinkedTokenSource(stop);
+        Task<IReadOnlyList<string>?> task;
+        try
+        {
+            task = _portrayAsync(entry, cancel.Token);
+        }
+        catch (Exception ex)
+        {
+            task = Task.FromException<IReadOnlyList<string>?>(ex);
+        }
+
+        _running.Add(entry, new Running(
+            task, cancel, PortrayalWarmLedger.CellKey(entry), _sessionSignature!, _time.GetTimestamp()));
+    }
+
+    /// <summary>Records the cells that finished since the last pass.</summary>
+    private void Harvest(CancellationToken stop)
+    {
+        List<DatasetEntry>? done = null;
+        foreach (var (entry, run) in _running)
+        {
+            if (run.Portrayal.IsCompleted)
+                (done ??= []).Add(entry);
+        }
+
+        if (done is null)
+            return;
+
+        foreach (var entry in done)
+        {
+            var run = _running[entry];
+            _running.Remove(entry);
+            if (!stop.IsCancellationRequested)
+                Record(entry, run);
+            run.Cancel.Dispose();
+        }
+    }
+
+    private void Record(DatasetEntry entry, Running run)
+    {
+        IReadOnlyList<string>? keys;
+        try
+        {
+            keys = run.Portrayal.GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException) when (run.Cancel.IsCancellationRequested)
+        {
+            _logger.LogDebug("Portrayal pre-warm of {Cell} gave way to the map after {Elapsed:N0} ms.",
+                entry.DisplayName, _time.GetElapsedTime(run.Start).TotalMilliseconds);
+            return;
+        }
+        catch (Exception ex)
+        {
+            // A cell that cannot be opened or portrayed is skipped for the rest
+            // of the session; its interactive load reports the problem.
+            _failed.Add(entry);
+            _logger.LogDebug(ex, "Portrayal pre-warm skipped {Cell}.", entry.DisplayName);
+            return;
+        }
+
+        if (keys is null)
+        {
+            _failed.Add(entry);
+            return;
+        }
+
+        if (run.CellKey is not null)
+            _ledger.MarkWarm(run.CellKey, run.Signature, keys);
+
+        // A cell started under a presentation that has since changed is
+        // recorded under its own signature, but isn't warm for this one.
+        if (!string.Equals(run.Signature, _sessionSignature, StringComparison.Ordinal))
+            return;
+
+        _warmEntries.Add(entry);
+        if (run.CellKey is not null)
+            _warmKeys.Add(run.CellKey);
+
+        _portrayedThisSession++;
+        _logger.LogDebug("Portrayal pre-warm portrayed {Cell} in {Elapsed:N0} ms ({Count} this session, {Running} running).",
+            entry.DisplayName, _time.GetElapsedTime(run.Start).TotalMilliseconds, _portrayedThisSession, _running.Count);
+        Publish(_status.State, _status.Warm + 1, _status.Total);
+        SaveLedger(force: false);
     }
 
     /// <summary>
@@ -285,7 +462,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
             total++;
             if (IsWarm(entry, signature))
                 warm++;
-            else
+            else if (!_running.ContainsKey(entry))
                 pending.Add(entry);
         }
 
@@ -306,20 +483,28 @@ internal sealed class PortrayalCacheWarmer : IDisposable
         return true;
     }
 
-    /// <summary>The pending cell whose footprint is nearest the view's centre; cells with no footprint go last.</summary>
-    private DatasetEntry Nearest(List<DatasetEntry> pending)
+    /// <summary>Removes and returns the pending cell whose footprint is nearest the view's centre; cells with no footprint go last.</summary>
+    private DatasetEntry TakeNearest(List<DatasetEntry> pending)
+    {
+        var index = NearestIndex(pending);
+        var entry = pending[index];
+        pending.RemoveAt(index);
+        return entry;
+    }
+
+    private int NearestIndex(List<DatasetEntry> pending)
     {
         if (_view() is not { } view)
-            return pending[0];
+            return 0;
 
         var lat = (view.MinLatitude + view.MaxLatitude) / 2.0;
         var lon = (view.MinLongitude + view.MaxLongitude) / 2.0;
         var cosLat = Math.Cos(lat * Math.PI / 180.0);
-        DatasetEntry best = pending[0];
+        var best = 0;
         var bestDistance = double.MaxValue;
-        foreach (var entry in pending)
+        for (var i = 0; i < pending.Count; i++)
         {
-            if (entry.GeographicBounds is not { } b)
+            if (pending[i].GeographicBounds is not { } b)
                 continue;
             // Distance from the view centre to the nearest point of the footprint.
             var dLat = Math.Max(0, Math.Max(b.SouthBoundLatitude - lat, lat - b.NorthBoundLatitude));
@@ -328,75 +513,11 @@ internal sealed class PortrayalCacheWarmer : IDisposable
             if (distance < bestDistance)
             {
                 bestDistance = distance;
-                best = entry;
+                best = i;
             }
         }
 
         return best;
-    }
-
-    private async Task PortrayOneAsync(DatasetEntry entry, CancellationToken stop)
-    {
-        var signature = _sessionSignature!;
-        var cellKey = PortrayalWarmLedger.CellKey(entry);
-        using var cell = CancellationTokenSource.CreateLinkedTokenSource(stop);
-        var start = _time.GetTimestamp();
-        var portrayal = _portrayAsync(entry, cell.Token);
-
-        // Give way at once when the map needs the machine, or when the cell
-        // starts loading for real (that load portrays it anyway).
-        while (!portrayal.IsCompleted)
-        {
-            await Task.WhenAny(portrayal, Task.Delay(_options.PollInterval, _time, stop)).ConfigureAwait(true);
-            if (!portrayal.IsCompleted && !cell.IsCancellationRequested
-                && (_isBusy() || !_isEnabled() || entry.IsLoading || entry.IsLoaded))
-            {
-                cell.Cancel();
-            }
-
-            stop.ThrowIfCancellationRequested();
-        }
-
-        IReadOnlyList<string>? keys;
-        try
-        {
-            keys = await portrayal.ConfigureAwait(true);
-        }
-        catch (OperationCanceledException) when (cell.IsCancellationRequested)
-        {
-            stop.ThrowIfCancellationRequested();
-            _logger.LogDebug("Portrayal pre-warm of {Cell} gave way to the map after {Elapsed:N0} ms.",
-                entry.DisplayName, _time.GetElapsedTime(start).TotalMilliseconds);
-            Publish(PortrayalWarmState.Paused, _status.Warm, _status.Total);
-            return;
-        }
-        catch (Exception ex)
-        {
-            // A cell that cannot be opened or portrayed is skipped for the rest
-            // of the session; its interactive load reports the problem.
-            _failed.Add(entry);
-            _logger.LogDebug(ex, "Portrayal pre-warm skipped {Cell}.", entry.DisplayName);
-            return;
-        }
-
-        if (keys is null)
-        {
-            _failed.Add(entry);
-            return;
-        }
-
-        _warmEntries.Add(entry);
-        if (cellKey is not null)
-        {
-            _warmKeys.Add(cellKey);
-            _ledger.MarkWarm(cellKey, signature, keys);
-        }
-
-        _portrayedThisSession++;
-        _logger.LogDebug("Portrayal pre-warm portrayed {Cell} in {Elapsed:N0} ms ({Count} this session).",
-            entry.DisplayName, _time.GetElapsedTime(start).TotalMilliseconds, _portrayedThisSession);
-        Publish(PortrayalWarmState.Working, _status.Warm + 1, _status.Total);
-        SaveLedger(force: false);
     }
 
     private void SaveLedger(bool force)
@@ -425,4 +546,17 @@ internal sealed class PortrayalCacheWarmer : IDisposable
     }
 
     private Task DelayAsync(TimeSpan delay, CancellationToken stop) => Task.Delay(delay, _time, stop);
+
+    /// <summary>A cell being portrayed.</summary>
+    /// <param name="Portrayal">The portrayal.</param>
+    /// <param name="Cancel">Cancels it; linked to the warmer's stop.</param>
+    /// <param name="CellKey">The cell's ledger key, or null.</param>
+    /// <param name="Signature">The presentation signature it was started under.</param>
+    /// <param name="Start">When it started.</param>
+    private sealed record Running(
+        Task<IReadOnlyList<string>?> Portrayal,
+        CancellationTokenSource Cancel,
+        string? CellKey,
+        string Signature,
+        long Start);
 }

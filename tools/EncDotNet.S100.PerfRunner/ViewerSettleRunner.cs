@@ -287,16 +287,22 @@ internal static class ViewerSettleRunner
 
     private static async Task<JsonObject> WaitForPrewarmAsync(McpClient client, int timeoutMs, CancellationToken ct)
     {
+        // Bracket the pre-warm with a metrics window, so the manifest has its
+        // CPU, GC pause share and peak memory (map rendering slice 3).
+        await CallJsonAsync(client, "get_process_metrics", new() { ["window"] = "start" }, ct);
         await CallJsonAsync(client, "portrayal_prewarm", new() { ["enabled"] = "on" }, ct);
         var sw = Stopwatch.StartNew();
         var lastLine = string.Empty;
+        var peakConcurrency = 0;
         while (true)
         {
             var status = await CallJsonAsync(client, "portrayal_prewarm", new(), ct);
             var state = status["state"]?.GetValue<string>() ?? "?";
             var warm = status["warm"]?.GetValue<int>() ?? 0;
             var total = status["total"]?.GetValue<int>() ?? 0;
-            var line = FormattableString.Invariant($"{state} {warm}/{total}");
+            var concurrency = status["concurrencyLimit"]?.GetValue<int>() ?? 0;
+            peakConcurrency = Math.Max(peakConcurrency, concurrency);
+            var line = FormattableString.Invariant($"{state} {warm}/{total} ×{concurrency}");
             if (line != lastLine)
             {
                 AnsiConsole.MarkupLine($"[bold]Pre-warm:[/] {Markup.Escape(line)} after {sw.Elapsed.TotalSeconds:F0} s");
@@ -310,12 +316,16 @@ internal static class ViewerSettleRunner
                     AnsiConsole.MarkupLine($"[yellow]Warning:[/] the pre-warm stopped in state '{Markup.Escape(state)}', not complete.");
                 }
 
+                var metrics = await CallJsonAsync(client, "get_process_metrics", new() { ["window"] = "read" }, ct);
                 return new JsonObject
                 {
                     ["state"] = state,
                     ["warm"] = warm,
                     ["total"] = total,
                     ["waitedMs"] = sw.Elapsed.TotalMilliseconds,
+                    ["concurrencyLimit"] = concurrency,
+                    ["peakConcurrencyLimit"] = peakConcurrency,
+                    ["metrics"] = metrics["window"]?.DeepClone(),
                 };
             }
 
