@@ -12,7 +12,7 @@ internal sealed record PrewarmConcurrencyOptions
     /// <summary>How long a GC pause share is measured over before the limit changes.</summary>
     public required TimeSpan Window { get; init; }
 
-    /// <summary>A window whose GC pause share is above this halves the limit.</summary>
+    /// <summary>A window whose GC pause share is above this halves the limit; 1 never backs off.</summary>
     public required double BackOffPauseShare { get; init; }
 
     /// <summary>A full window whose GC pause share is below this raises the limit by one.</summary>
@@ -27,7 +27,8 @@ internal sealed record PrewarmConcurrencyOptions
     /// <summary>
     /// <see cref="ForProcessors"/>, unless <paramref name="fixedConcurrency"/>
     /// (the value of <see cref="FixedConcurrencyVariable"/>) is a positive
-    /// whole number: then the limit starts and stays there.
+    /// whole number: then the limit starts and stays there, whatever the GC
+    /// pause share.
     /// </summary>
     /// <param name="processorCount">Logical processors.</param>
     /// <param name="fixedConcurrency">The variable's value, or null.</param>
@@ -37,7 +38,7 @@ internal sealed record PrewarmConcurrencyOptions
         var options = ForProcessors(processorCount);
         return int.TryParse(fixedConcurrency, System.Globalization.NumberStyles.None,
                 System.Globalization.CultureInfo.InvariantCulture, out var n) && n > 0
-            ? options with { MaxConcurrency = n, InitialConcurrency = n }
+            ? options with { MaxConcurrency = n, InitialConcurrency = n, BackOffPauseShare = 1, GrowPauseShare = 0 }
             : options;
     }
 

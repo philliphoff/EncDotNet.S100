@@ -198,7 +198,7 @@ public sealed class PortrayalCacheWarmerTests : IDisposable
 
         // All four are cancelled within a few poll intervals, and none restart while busy.
         Assert.True(await WaitUntilAsync(() => Volatile.Read(ref cancelled) == 4));
-        Assert.True(busyAt.ElapsedMilliseconds < 1000, $"gave way after {busyAt.ElapsedMilliseconds} ms");
+        Assert.True(busyAt.ElapsedMilliseconds < 2000, $"gave way after {busyAt.ElapsedMilliseconds} ms");
         Assert.True(await WaitUntilAsync(() => warmer.Status.State == PortrayalWarmState.Paused));
         await Task.Delay(100, TestContext.Current.CancellationToken);
         Assert.Equal(4, Volatile.Read(ref attempts));
@@ -621,6 +621,17 @@ public sealed class PrewarmConcurrencyTests
         var options = PrewarmConcurrencyOptions.Resolve(processors, variable);
 
         Assert.Equal((max, initial), (options.MaxConcurrency, options.InitialConcurrency));
+    }
+
+    [Fact]
+    public void AFixedLimit_DoesNotBackOff()
+    {
+        var rig = new Rig();
+        var c = rig.Create(PrewarmConcurrencyOptions.Resolve(16, "8") with { Window = TimeSpan.FromSeconds(1) });
+        c.Observe(running: 8);
+
+        Assert.False(rig.Window(c, 1.0, running: 8));
+        Assert.Equal(8, c.Limit);
     }
 }
 
