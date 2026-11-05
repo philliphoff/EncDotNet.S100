@@ -481,7 +481,8 @@ public sealed class TropicalCycloneDatasetProcessor :
                 string.Create(CultureInfo.InvariantCulture, $"Forecast point +{point.Tau} h{wind}"),
                 point.Position,
                 15,
-                0) with { Forecast = point, IsLastForecast = i == advisory.Forecast.Count - 1 });
+                0) with
+            { Forecast = point, IsLastForecast = i == advisory.Forecast.Count - 1 });
         }
 
         var past = advisory.PastTrack.Where(p => p.Time < advisory.SynopticTime).ToArray();
@@ -527,7 +528,8 @@ public sealed class TropicalCycloneDatasetProcessor :
                     string.Create(CultureInfo.InvariantCulture, $"{radius.ThresholdKnots} kn wind radius"),
                     surfaces,
                     12,
-                    2 + (64 - radius.ThresholdKnots) / 15) with { ThresholdKnots = radius.ThresholdKnots });
+                    2 + (64 - radius.ThresholdKnots) / 15) with
+                { ThresholdKnots = radius.ThresholdKnots });
             }
         }
 

@@ -247,6 +247,45 @@ are when warnings start and end, so moving the time shows what's in force
 then. Pick an area to see its headline, severity, times, sender and
 description.
 
+## Show tropical cyclones
+
+Download an advisory's zips from NHC's
+[GIS page](https://www.nhc.noaa.gov/gis/) into one folder: the forecast track
+and cone (`al092022_5day_020.zip`), the wind radii (`al092022_fcst_020.zip`)
+and the past track (`al092022_best_track.zip`). Then open the forecast zip,
+or the folder, as you would a grid. SoundCharts draws the whole advisory in
+one plum-grey storm ink, so it doesn't look like a chart colour or a warning:
+
+- **Cone.** NHC's cone, tinted. The part beyond 72 hours (days 4 and 5) is
+  also stippled. The outline is dashed. The storm's centre stays inside the
+  cone only about two-thirds of the time, and its winds reach well outside it.
+- **Wind radii.** The 34, 50 and 64 knot areas at the advisory, nested, with
+  the 64 knot core the strongest. Their outlines are dashed, solid and heavy.
+- **Tracks.** The forecast track is a solid line, the past track a dotted
+  line with a dot at each best-track position.
+- **Symbols.** Each forecast point has its class's weather-map symbol: an
+  open circle for a depression, arms for a storm, a filled circle for a
+  hurricane or typhoon, and an outer ring for a major hurricane (category 3
+  and above). A square centre is subtropical, and a circled × is
+  post-tropical, a remnant low or a disturbance. South of the equator the
+  symbols are mirrored, because storms there turn the other way.
+- **Labels.** The storm at the advisory is drawn larger, in a ring, with its
+  class, name, wind and pressure, and under that the advisory number, its
+  issue time and how the storm is moving. Forecast points at 12 hours, every
+  24 hours and the last show their time and wind. Times follow the Local or
+  UTC setting.
+
+In the **Layer stack**, a storm has two entries: its lines and symbols under
+**Other chart overlays**, and its cone and radii under **On-demand surface**,
+each with a legend. Pick any part of the storm to see it in **Object
+information**: the advisory, its issue time and when the next is due, the
+position, wind, pressure and movement, the part you picked, and the radii in
+each quadrant.
+
+The storm is drawn where the advisory puts it now. Moving it along the track
+with the Timeline, NHC's feed in the Library and switches to hide the radii,
+past track and forecast times are still to come.
+
 ## Show buoy observations
 
 Turn on **NDBC buoy observations** in the Layer stack. It's off when you
@@ -291,7 +330,8 @@ For a tropical cyclone, download the advisory's zips from NHC's
 [GIS page](https://www.nhc.noaa.gov/gis/) into one folder: the forecast track
 and cone (`al092022_5day_020.zip`), and, for the wind radii and the storm's
 past track, `al092022_fcst_020.zip` and `al092022_best_track.zip`. Then pass
-the forecast zip. SoundCharts doesn't draw tropical cyclones on the chart yet.
+the forecast zip. `render` draws the advisory as SoundCharts does
+([Show tropical cyclones](#show-tropical-cyclones)).
 
 `render` draws the default layers (wave height fill, wind barbs and isobars)
 at a time step, alone or over a chart:

@@ -1,5 +1,4 @@
 using System.Globalization;
-using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
@@ -7,9 +6,7 @@ using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.Pipelines.Spec;
 using EncDotNet.S100.Datasets.TropicalCyclones;
 using EncDotNet.S100.Datasets.Weather;
-using EncDotNet.S100.Features;
 using EncDotNet.S100.Interoperability;
-using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.TestSupport;
 

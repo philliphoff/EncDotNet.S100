@@ -104,7 +104,7 @@ namespaces. `IMapPresentationController` is in `EncDotNet.S100.Maps`.
 | `GribDatasetProcessor` | GRIB2 wind and wave grids: GFS, GFS-Wave, ECMWF (not S-100) | Coverage: SoundCharts weather styles (see [Weather grids](#weather-grids)) |
 | `NetCdfDatasetProcessor` | NetCDF-CF wind and wave grids (not S-100) | Coverage: SoundCharts weather styles (see [Weather grids](#weather-grids)) |
 | `CapDatasetProcessor` | CAP 1.2 marine weather warnings: CAP XML, Atom, NWS GeoJSON (not S-100) | Vector: SoundCharts CAP style (see [CAP weather warnings](#cap-weather-warnings)) |
-| `TropicalCycloneDatasetProcessor` | Tropical cyclone advisories: NHC GIS shapefile zips (not S-100) | Not drawn yet (see [Tropical cyclone advisories](#tropical-cyclone-advisories)) |
+| `TropicalCycloneDatasetProcessor` | Tropical cyclone advisories: NHC GIS shapefile zips (not S-100) | `TropicalCycloneStyle`, in code (see [Tropical cyclone advisories](#tropical-cyclone-advisories)) |
 | `SurfaceAnalysisDatasetProcessor` | WPC coded surface bulletins (`CODSUS`): fronts, troughs and pressure centres, analysis and forecast (not S-100) | Features and metadata only; drawing comes with #1233's portrayal slice |
 
 `S101DatasetProcessor` handles S-401 inland ENCs when it's created with the
@@ -330,8 +330,29 @@ zip in the source.
 The processor gives `Advisory`, the `TropicalCycloneAdvisory` model, and
 `Metadata`: the extent of the cone, tracks and forecast radii, and the time
 from the first past-track point to the last forecast point. The catalog
-payload is `TropicalCycloneDatasetData`. It doesn't draw, pick or step
-through time yet. That comes with the portrayal.
+payload is `TropicalCycloneDatasetData`.
+
+It draws the advisory with `TropicalCycloneStyle` from
+[`EncDotNet.S100.Datasets.Weather`](../EncDotNet.S100.Datasets.Weather/README.md#tropical-cyclones)
+as two sub-layers: the cone and wind radii fills (`weather.tc.areas`) on the
+On-demand surface plane at priority 10, and the lines, symbols and labels
+(`weather.tc.track`) on the Other chart overlays plane at priority 95, each
+with its legend. The storm and its radii are drawn at the advisory's first
+forecast point; following the view time is still to come. Labels are written
+in `RenderContext.DisplayTimeZone` (UTC when it's unset) and the current
+culture.
+
+Each drawn part is a feature: the storm (its id is the ATCF id, such as
+`AL092022`), the cone and its two parts, both tracks, every forecast and
+best-track point, and the radii (`AL092022 +24h`, `AL092022 34 kt`). Every
+part reports the storm when it's picked, with the same `FeatureRef`, class and
+attributes, and a **Picked part** row naming the part. `HitTestFeatures` gives
+one hit per storm, on the part nearest the pick. The attributes are the
+not-for-navigation notice, the storm's name, the advisory, its issue time, the
+next advisory due (the next of 03, 09, 15 and 21 UTC), the position, wind,
+pressure and movement, the part picked, the 64, 50 and 34 knot radii by
+quadrant, and NHC's caution about the cone. `FeatureAccessor` lists the parts
+for the catalog's identify and pick.
 
 `WeatherProducts.TropicalCyclone` registers the format as `TC/1.0.0`, not
 S-100, with an application portrayal (`NHC tropical cyclone GIS data`).
