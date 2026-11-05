@@ -380,6 +380,51 @@ public sealed class PerfHarnessTests
         Assert.Equal(1, marks);
     }
 
+    // ── Wire contract with PerfRunner ────────────────────────────────
+
+    [Fact]
+    public void Replies_UseTheFieldNamesTheHarnessReads()
+    {
+        // PerfRunner's SettleReport.Flatten reads these names; renaming one
+        // here silently empties a column in every settle manifest.
+        var settle = AwaitSettledTool.ToDto(new SettleOutcome(
+            true, false, 1234.5, 1500, 2, true,
+            new SettleSample(1, LoadsDone, TilesSettled)));
+        var settleJson = Reply(ToolResultOk(settle));
+        foreach (var field in new[] { "settled", "timedOut", "settleMs", "waitedMs" })
+            Assert.NotNull(settleJson[field]);
+        Assert.NotNull(settleJson["loads"]!["loaded"]);
+
+        using var sampler = new ProcessMetricsSampler(new FakeSource(), TimeSpan.FromHours(1), 4);
+        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment());
+        Assert.True(tool.Invoke("start").TryGetValue(out var metrics));
+        var metricsJson = Reply(ToolResultOk(metrics!));
+        foreach (var field in new[]
+        {
+            "wallMs", "cpuMs", "coresBusy", "cpuUtilisation", "gcPauseMs", "gcPauseShare", "gen0Collections",
+            "gen1Collections", "gen2Collections", "allocatedBytes", "peakWorkingSetBytes", "peakGcHeapBytes",
+            "peakGcCommittedBytes", "peakTileNativeBytes",
+        })
+        {
+            Assert.NotNull(metricsJson["window"]![field]);
+        }
+
+        foreach (var field in new[] { "workingSetBytes", "gcHeapBytes", "gcCommittedBytes", "tileNativeBytes" })
+            Assert.NotNull(metricsJson["memory"]![field]);
+        foreach (var field in new[] { "luaEngine", "serverGc", "processorCount", "os", "architecture", "runtime", "optimized" })
+            Assert.NotNull(metricsJson["environment"]![field]);
+    }
+
+    private static EncDotNet.S100.Datasets.Pipelines.Query.ToolResult<T> ToolResultOk<T>(T value) =>
+        EncDotNet.S100.Datasets.Pipelines.Query.ToolResult<T>.Ok(value);
+
+    private static System.Text.Json.Nodes.JsonNode Reply<T>(EncDotNet.S100.Datasets.Pipelines.Query.ToolResult<T> result)
+    {
+        var call = McpAdapterShared.Translate(result);
+        var text = call.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>().Single().Text;
+        return System.Text.Json.Nodes.JsonNode.Parse(text)!;
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────
 
     private static PerfEnvironmentDto Environment() =>
