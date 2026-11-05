@@ -37,6 +37,8 @@ internal sealed record RoundTripDifference(
     /// </summary>
     public string? Issue => Class != RoundTripClass.Unexplained ? null : (ObjectClass, Attribute) switch
     {
+        ("BRIDGE" or "PILPNT", "(pointers)") or ("TOPMAR", "(geometry)") => "#1290",
+        ("NEWOBJ", "(feature)") => "#1289",
         (_, "(pointers)") => "#1220",
         ("SOUNDG", _) => "#1219",
         (_, "CONRAD" or "CATDIS" or "CATTRK" or "CATTSS") => "#1218",
@@ -122,6 +124,12 @@ internal sealed class S57RoundTripComparer
         ["$CSYMB"] = "cartographic object",
         ["$COMPS"] = "cartographic object",
         ["$TEXTS"] = "cartographic object",
+    };
+
+    // Classes with no forward rule that S-65 Annex B says aren't converted.
+    private static readonly Dictionary<string, string> UnknownClassReasons = new(StringComparer.Ordinal)
+    {
+        ["TS_TIS"] = "Annex B §3.3.2: no S-101 equivalent (kept as S57UnknownObject, which Annex C doesn't convert)",
     };
 
     // Object classes the forward translation restructures and the reverse inverts.
@@ -215,10 +223,12 @@ internal sealed class S57RoundTripComparer
 
         // Second pass: match what the forward pass merged or split by class
         // and position.
+        // A collection object (C_AGGR, C_ASSO) has no geometry, so position
+        // can't tell one from another.
         foreach (var feature in unmatched)
         {
             var fingerprint = sourceGeometry.Fingerprint(feature);
-            var pick = result.FeatureRecords
+            var pick = feature.SpatialPointers.Count == 0 ? default : result.FeatureRecords
                 .Select((f, i) => (Feature: f, Index: i))
                 .FirstOrDefault(c => !matched.Contains(c.Index)
                     && c.Feature.ObjectCode == feature.ObjectCode
@@ -239,7 +249,7 @@ internal sealed class S57RoundTripComparer
                 pairs.Add((feature, pick.Feature, true));
                 continue;
             }
-            differences.Add(ExplainMissingFeature(feature, intermediateByFoid));
+            differences.Add(ExplainMissingFeature(feature, intermediate, intermediateByFoid));
         }
 
         foreach (var (src, res, byPosition) in pairs)
@@ -330,6 +340,7 @@ internal sealed class S57RoundTripComparer
 
     private RoundTripDifference ExplainMissingFeature(
         S57FeatureRecord feature,
+        S101Document intermediate,
         Dictionary<(int, int, int), List<S101FeatureRecord>> intermediateByFoid)
     {
         var name = ClassName((int)feature.ObjectCode);
@@ -339,8 +350,14 @@ internal sealed class S57RoundTripComparer
         if (name is "M_SDAT" or "M_VDAT")
             return new(name, "(feature)", "missing", RoundTripClass.ExpectedLoss, "Annex C §3.9/§3.10: the dataset datum is stated in DSPM", null, null);
 
-        if (intermediateByFoid.TryGetValue(Foid(feature), out _))
+        if (intermediateByFoid.TryGetValue(Foid(feature), out var carriers))
         {
+            // A class with no forward rule travels as an S57UnknownObject
+            // (drawn "?"), which S-65 Annex C has no clause for.
+            if (!RestructuredClasses.Contains(name) && carriers.All(c => intermediate.FeatureTypeCatalogue.GetValueOrDefault(c.FeatureTypeCode) == S57UnknownObject.FeatureTypeCode))
+                return UnknownClassReasons.TryGetValue(name, out var unknownReason)
+                    ? new(name, "(feature)", "missing", RoundTripClass.ExpectedLoss, unknownReason, null, null)
+                    : new(name, "(feature)", "missing", RoundTripClass.Unexplained, "no forward rule (S57UnknownObject)", null, null);
             return RestructuredClasses.Contains(name)
                 ? new(name, "(feature)", "missing", RoundTripClass.ExpectedRestructure, "structural inverse", null, null)
                 : new(name, "(feature)", "missing", RoundTripClass.ReverseBug, "S-101 carried the feature", null, null);
@@ -486,6 +503,15 @@ internal sealed class S57RoundTripComparer
         if (string.IsNullOrEmpty(sourceValue) && resultValue is null)
             return D(RoundTripClass.ExpectedLoss, "empty (unknown) value not carried");
 
+        // A light merged into a co-located sector light keeps only its sector;
+        // its other attributes are the surviving light's.
+        if (byPosition && name == "LIGHTS")
+            return D(RoundTripClass.ExpectedRestructure, "co-located sector lights merged (forward) and split (Annex C §19.3)");
+
+        // A list of empty values ("," on NATQUA) is unknown too.
+        if (sourceValue is not null && sourceValue.Split(',').All(v => v.Trim().Length == 0) && resultValue is null)
+            return D(RoundTripClass.ExpectedLoss, "empty (unknown) value not carried");
+
         if (sourceValue is null)
         {
             if (resultValue == string.Empty)
@@ -505,11 +531,6 @@ internal sealed class S57RoundTripComparer
                 return D(RoundTripClass.ExpectedRestructure, "Annex C §2.1.1 / §27.131 (MLTYLT → INFORM)");
             return D(RoundTripClass.Unexplained, "value appeared");
         }
-
-        // A light merged into a co-located sector light keeps only its sector;
-        // its other attributes are the surviving light's.
-        if (byPosition && name == "LIGHTS")
-            return D(RoundTripClass.ExpectedRestructure, "co-located sector lights merged (forward) and split (Annex C §19.3)");
 
         // The clearances of a BRIDGE travel on its SpanFixed / SpanOpening.
         if (name == "BRIDGE" && BridgeSpanAttributes.Contains(acronym) && resultValue is null)
@@ -559,6 +580,16 @@ internal sealed class S57RoundTripComparer
         if (resultValue is null && acronym is "SURSTA" or "PERSTA" or "PEREND"
             && !Attributes(source).ContainsKey(acronym == "SURSTA" ? 151 : acronym == "PERSTA" ? 118 : 119))
             return D(RoundTripClass.ExpectedLoss, "the S-101 date range needs both dates (S-101 FC)");
+
+        // Annex B §2.2.6: an M_CSCL only cuts Data Coverage, so only its
+        // CSCALE comes back (Annex C §3.5).
+        if (resultValue is null && name == "M_CSCL")
+            return D(RoundTripClass.ExpectedLoss, "Annex B §2.2.6 (M_CSCL is not a feature; only CSCALE converts)");
+
+        // Annex B §13.1.2: PILDST / NPLDST on a PILBOP aren't converted (a
+        // pilotage district is a PilotageDistrict feature in S-101).
+        if (resultValue is null && name == "PILBOP" && acronym is "PILDST" or "NPLDST")
+            return D(RoundTripClass.ExpectedLoss, "Annex B §13.1.2 (not converted)");
 
         // §6.4: CATRUN only tells a runway (Runway) from a helipad (Helipad).
         if (name == "RUNWAY" && acronym == "CATRUN" && resultValue is null && sourceValue.Trim() == "1")
@@ -645,6 +676,8 @@ internal sealed class S57RoundTripComparer
         ["CURVEL"] = ["speed"],
         ["MLTYLT"] = ["multiplicityOfFeatures"],
         ["SIGSEQ"] = ["rhythmOfLight", "sectorCharacteristics", "signalSequence"],
+        ["SOUACC"] = ["verticalUncertainty"],
+        ["SCAMIN"] = ["scaleMinimum"],
     };
 
     private static readonly HashSet<string> BridgeSpanAttributes = new(StringComparer.Ordinal)

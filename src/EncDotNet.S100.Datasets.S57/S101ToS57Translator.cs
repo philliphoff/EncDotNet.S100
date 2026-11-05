@@ -832,7 +832,9 @@ public sealed partial class S101ToS57Translator
                 return;
             }
 
-            if (valueType == "boolean")
+            // An empty Boolean is unknown, and stays an empty S-57 value
+            // rather than becoming false.
+            if (valueType == "boolean" && value.Length > 0)
                 value = NormaliseBoolean(value);
             else if (valueType == "S100_TruncatedDate")
                 value = RemoveDashes(value);

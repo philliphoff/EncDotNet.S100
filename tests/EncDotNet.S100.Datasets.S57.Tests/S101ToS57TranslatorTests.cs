@@ -281,6 +281,17 @@ public partial class S101ToS57TranslatorTests
     }
 
     [Fact]
+    public void Boolean_EmptyValue_StaysUnknown()
+    {
+        var diagnostics = new S101ToS57TranslationDiagnostics();
+
+        var feature = Single(new S101ToS57Translator().Translate(PointFeature("Landmark", R("radarConspicuous", "")), diagnostics));
+
+        Assert.Equal(string.Empty, Value(feature, AttlConrad));
+        Assert.Equal(0, diagnostics.NonBooleanValues);
+    }
+
+    [Fact]
     public void Boolean_NonBooleanValue_IsReadAsFalseAndReported()
     {
         var diagnostics = new S101ToS57TranslationDiagnostics();
@@ -708,6 +719,19 @@ public partial class S101ToS57TranslatorTests
         Assert.NotNull(rule);
         Assert.Equal(s57, rule.S57Acronym);
         Assert.Equal(clause, rule.Clause);
+    }
+
+    [Fact]
+    public void Rules_SeparationZoneOrLine_IsTsezneWithTselneForALine()
+    {
+        // TSELNE and TSEZNE both convert forward; the lower OBJL mustn't win.
+        var rule = S101ToS57Rules.Default.ResolveFeature("SeparationZoneOrLine");
+
+        Assert.NotNull(rule);
+        Assert.Equal("TSEZNE", rule.S57Acronym);
+        var line = Assert.Single(rule.Redirects);
+        Assert.Equal("TSELNE", line.Target.S57Acronym);
+        Assert.Equal([S57GeometricPrimitive.Line], line.Primitives);
     }
 
     [Fact]

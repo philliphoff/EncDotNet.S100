@@ -638,6 +638,7 @@ public class S57S101MappingTests
     [InlineData(21, "CableOverhead")]        // CBLOHD
     [InlineData(22, "CableSubmarine")]       // CBLSUB
     [InlineData(27, "CautionArea")]          // CTNARE (ambiguous alias → CautionArea)
+    [InlineData(37, "CustomZone")]           // CUSZNE
     [InlineData(39, "Daymark")]              // DAYMAR
     [InlineData(58, "FogSignal")]            // FOGSIG
     [InlineData(77, "LightVessel")]          // LITVES
@@ -646,6 +647,7 @@ public class S57S101MappingTests
     [InlineData(94, "PipelineSubmarineOnLand")] // PIPSOL
     [InlineData(109, "RecommendedTrack")]    // RECTRC
     [InlineData(133, "SubmarineTransitLane")] // SUBTLN
+    [InlineData(145, "SeparationZoneOrLine")] // TSELNE
     [InlineData(150, "SeparationZoneOrLine")] // TSEZNE
     [InlineData(119, "SeaAreaNamedWaterArea")] // SEAARE
     [InlineData(121, "SeabedArea")]          // SBDARE
