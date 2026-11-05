@@ -287,6 +287,13 @@ internal sealed class PickService : IPickService
             if (info is null)
                 continue;
 
+            // Parts drawn as separate features can report one feature (a
+            // tropical cyclone's cone, track and points all report the
+            // storm, #1296): keep the topmost.
+            if (!string.Equals(info.FeatureRef, featureRef, StringComparison.Ordinal)
+                && !seen.Add((processor, info.FeatureRef)))
+                continue;
+
             hits.Add(BuildHit(info, owningEntry, processor));
         }
 

@@ -55,14 +55,20 @@ public sealed record InstructionBuilder
     /// <param name="symbolReference">The symbol name, resolved by the sub-layer's symbol provider (see <see cref="SymbolSet"/>).</param>
     /// <param name="rotation">Clockwise rotation in degrees, or <see langword="null"/> for upright.</param>
     /// <param name="rotationCrs">The frame <paramref name="rotation"/> is measured in.</param>
+    /// <param name="symbolScale">
+    /// The symbol's size as a multiple of its own: 1 draws it as defined, 1.7
+    /// draws one symbol set larger for emphasis.
+    /// </param>
     public PointInstruction Point(
         string featureReference,
         string symbolReference,
         double? rotation = null,
-        SymbolRotationCrs rotationCrs = SymbolRotationCrs.Portrayal)
+        SymbolRotationCrs rotationCrs = SymbolRotationCrs.Portrayal,
+        double symbolScale = 1.0)
     {
         ArgumentException.ThrowIfNullOrEmpty(featureReference);
         ArgumentException.ThrowIfNullOrEmpty(symbolReference);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(symbolScale);
 
         return new PointInstruction
         {
@@ -70,6 +76,7 @@ public sealed record InstructionBuilder
             SymbolReference = symbolReference,
             Rotation = rotation,
             RotationCrs = rotationCrs,
+            SymbolScale = symbolScale,
             Plane = Plane,
             ViewingGroup = ViewingGroup,
             DrawingPriority = DrawingPriority,

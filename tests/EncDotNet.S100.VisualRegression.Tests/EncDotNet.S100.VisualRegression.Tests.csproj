@@ -26,6 +26,7 @@
     <Compile Include="..\_shared\GribFixtures.cs" Link="TestSupport\GribFixtures.cs" />
     <Compile Include="..\_shared\CapFixtures.cs" Link="TestSupport\CapFixtures.cs" />
     <Compile Include="..\_shared\FrontPipFixtures.cs" Link="TestSupport\FrontPipFixtures.cs" />
+    <Compile Include="..\_shared\TropicalCycloneFixtures.cs" Link="TestSupport\TropicalCycloneFixtures.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -39,6 +40,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- NHC's archived GIS zips for Hurricane Ian, advisory 20 (issues #1294, #1296); see tests/datasets/TC/README.md. -->
+    <Content Include="..\datasets\TC\**\*.zip" CopyToOutputDirectory="PreserveNewest" Link="TestData\TC\%(RecursiveDir)%(Filename)%(Extension)" />
     <!-- NOAA GFS and GFS-Wave subsets (issue #1074); see tests/datasets/GRIB2/README.md. -->
     <Content Include="..\datasets\GRIB2\*.grib2" CopyToOutputDirectory="PreserveNewest" Link="TestData\GRIB2\%(Filename)%(Extension)" />
     <!-- NWS marine CAP alerts and a hand-written circle alert (issue #1069); see tests/datasets/CAP/README.md. -->

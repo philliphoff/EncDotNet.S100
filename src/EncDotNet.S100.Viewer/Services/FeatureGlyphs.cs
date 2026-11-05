@@ -32,6 +32,8 @@ internal static class FeatureGlyphs
 
         // Order matters: check more specific keywords before broader ones
         // (e.g. "lighthouse" before "light", "landmark" before "land").
+        // A tropical cyclone turns, as its symbol's arms do (#1296).
+        if (Has(t, "tropicalcyclone")) return Icon.ArrowRotateCounterclockwise;
         if (Has(t, "lighthouse")) return Icon.BuildingLighthouse;
         if (Has(t, "light")) return Icon.WeatherSunny;
         if (Has(t, "beacon")) return Icon.Flag;

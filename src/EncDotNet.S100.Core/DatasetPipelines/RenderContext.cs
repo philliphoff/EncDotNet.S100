@@ -186,4 +186,12 @@ public sealed record RenderContext
     /// <c>null</c>.
     /// </remarks>
     public DateTime? TimeStep { get; init; }
+
+    /// <summary>
+    /// The time zone that times drawn on the chart are written in, such as a
+    /// tropical cyclone's forecast times; <see langword="null"/> for UTC. A
+    /// host sets the zone the user reads times in: SoundCharts passes the
+    /// machine's zone or UTC, as its Local/UTC preference says.
+    /// </summary>
+    public TimeZoneInfo? DisplayTimeZone { get; init; }
 }

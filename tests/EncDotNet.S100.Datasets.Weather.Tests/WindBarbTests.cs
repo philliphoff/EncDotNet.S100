@@ -215,6 +215,7 @@ public class WindBarbTests
             .Concat(WindBarb.All.Where(b => !b.IsCalm).Select(b => b.SouthernSymbolName))
             .Append(WaveDirectionStyle.ArrowSymbol)
             .Concat(Enumerable.Range(1, WeatherPalette.CurrentBandCount).Select(CurrentArrowStyle.SymbolName))
+            .Concat(TropicalCycloneStyle.AllSymbols)
             .Order(StringComparer.Ordinal);
         Assert.Equal(expected, WeatherCoverageStyle.Symbols.Names.Order(StringComparer.Ordinal));
 

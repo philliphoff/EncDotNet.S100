@@ -2,6 +2,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Media;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
@@ -132,6 +133,34 @@ public sealed class LayerStackLegendTests
         Assert.True(swatch.IsSwatch);
         Assert.False(swatch.HasGlyph);
         Assert.Null(swatch.Glyph);
+    }
+
+    [Fact]
+    public async Task A_tropical_cyclone_gets_two_entries_one_per_plane_each_with_its_legend()
+    {
+        // V25 (#1296): the track entry on Other chart overlays at #95 with the
+        // symbol legend, and the areas entry on On-demand surface at #10 with
+        // the cone and radii legend.
+        var processor = new TropicalCycloneDatasetProcessor(TropicalCycloneFixtures.IanForecast);
+        var result = await processor.BuildVectorPortrayalAsync(new RenderContext { Palette = PaletteType.Night }, TestContext.Current.CancellationToken);
+        var loader = new LayerStackViewModelTests.ControllableLoader();
+        loader.SetEntries([.. result.SubLayers.Select(subLayer => new LayerStackEntry(
+            new MemoryLayer(processor.FileName),
+            new SubLayerStackItem(new VectorStackPayload(result, subLayer), subLayer.Plane, subLayer.WithinPlanePriority, processor.FileName, subLayer.SourceFeatureType)))]);
+
+        var stack = new LayerStackViewModel(loader);
+
+        var track = (LayerStackEntryViewModel)Assert.Single(stack.Planes.Single(p => p.Plane == S98DisplayPlane.OtherChartOverlays).Children);
+        var areas = (LayerStackEntryViewModel)Assert.Single(stack.Planes.Single(p => p.Plane == S98DisplayPlane.OnDemandSurface).Children);
+        Assert.Equal(
+            ["Tropical depression", "Tropical storm", "Hurricane, typhoon", "Major (cat. 3+)", "Post-tropical, low", "Southern hemisphere", "Forecast track", "Past track"],
+            track.Legend.Select(i => i.Label));
+        Assert.Equal(
+            [.. Enumerable.Repeat(LegendRowKind.Symbol, 6), LegendRowKind.Line, LegendRowKind.Line],
+            track.Legend.Select(i => i.Kind));
+        Assert.Equal(["Cone, days 1–3", "Cone, days 4–5 (stippled)", "34 kt winds", "50 kt winds", "64 kt winds"], areas.Legend.Select(i => i.Label));
+        Assert.All(areas.Legend, row => Assert.Equal(LegendRowKind.Area, row.Kind));
+        Assert.All(track.Legend.Concat(areas.Legend), row => Assert.True(row.HasGlyph));
     }
 
     [Fact]
