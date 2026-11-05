@@ -977,16 +977,26 @@ public sealed class MapsuiDisplayListRenderer
         if (PatternClipCache is not { } cache || PatternClipCacheKey is not { } key)
             return null;
 
-        return compute => cache
-            .GetOrCompute(key, () =>
-            {
-                var clipped = compute();
-                var tuples = new List<(string PatternRef, int Priority, Geometry Geometry)>(clipped.Count);
-                foreach (var c in clipped)
-                    tuples.Add((c.PatternRef, c.Priority, c.Geometry));
-                return tuples;
-            })
-            .Select(t => new Scene.PatternPriorityClipper.ClippedPattern(t.PatternRef, t.Priority, t.Geometry))
-            .ToList();
+        return compute =>
+        {
+            // One span per clip lookup, tagged hit or miss, so a warm cell
+            // load's trace shows whether the clip came from the cache.
+            using var activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.cell.pattern_clip");
+            var missed = false;
+            var result = cache
+                .GetOrCompute(key, () =>
+                {
+                    missed = true;
+                    var clipped = compute();
+                    var tuples = new List<(string PatternRef, int Priority, Geometry Geometry)>(clipped.Count);
+                    foreach (var c in clipped)
+                        tuples.Add((c.PatternRef, c.Priority, c.Geometry));
+                    return tuples;
+                })
+                .Select(t => new Scene.PatternPriorityClipper.ClippedPattern(t.PatternRef, t.Priority, t.Geometry))
+                .ToList();
+            activity?.SetTag(TelemetryTags.CacheResult, missed ? "miss" : "hit");
+            return result;
+        };
     }
 }

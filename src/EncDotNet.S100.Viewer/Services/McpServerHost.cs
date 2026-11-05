@@ -73,6 +73,13 @@ internal sealed class McpServerHost : IAsyncDisposable
     private S100McpServer? _server;
     private bool _disposed;
 
+    /// <summary>
+    /// The settle harness's services (map rendering slice 1), or null to leave
+    /// out <c>await_settled</c>, <c>get_process_metrics</c> and
+    /// <c>portrayal_prewarm</c>.
+    /// </summary>
+    public PerfHarnessServices? PerfHarness { get; init; }
+
     public McpServerHost(
         EncDotNet.S100.Datasets.Pipelines.Catalog.IDatasetCatalog catalog,
         ViewerSettings settings,
@@ -379,7 +386,8 @@ internal sealed class McpServerHost : IAsyncDisposable
         var tools = new System.Collections.Generic.List<McpServerTool>();
         if (_viewportAccessor is not null)
         {
-            tools.Add(SetViewportMcpAdapter.Create(new SetViewportTool(_viewportAccessor)));
+            // set_viewport marks the settle trigger, so await_settled measures from it.
+            tools.Add(SetViewportMcpAdapter.Create(new SetViewportTool(_viewportAccessor, PerfHarness is { } settleHarness ? settleHarness.Settle.MarkTrigger : null)));
         }
         if (_coordinateAccessor is not null)
         {
@@ -397,6 +405,20 @@ internal sealed class McpServerHost : IAsyncDisposable
         {
             tools.Add(AwaitRenderIdleMcpAdapter.Create(new AwaitRenderIdleTool(_renderActivityMonitor)));
             tools.Add(GetRenderStatsMcpAdapter.Create(new GetRenderStatsTool(_renderActivityMonitor)));
+        }
+        if (PerfHarness is { } harness)
+        {
+            var settings = _settings;
+            tools.Add(PerfHarnessMcpAdapters.Create(new AwaitSettledTool(harness.Settle)));
+            tools.Add(PerfHarnessMcpAdapters.Create(new GetProcessMetricsTool(
+                harness.Metrics,
+                _renderActivityMonitor,
+                () => GetProcessMetricsTool.DescribeEnvironment(settings, harness.RenderCacheDirectory),
+                () => EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.GetTileCacheMemory().Tiles)));
+            tools.Add(PerfHarnessMcpAdapters.Create(new PortrayalPrewarmTool(
+                harness.PrewarmStatus,
+                harness.PrewarmOverride,
+                () => settings.PortrayalPrewarmEnabled)));
         }
         if (_ownShipHelm is not null)
         {

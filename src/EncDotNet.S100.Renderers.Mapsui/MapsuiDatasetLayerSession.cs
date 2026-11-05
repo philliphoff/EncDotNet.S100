@@ -994,6 +994,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             }
             if (compose)
             {
+                using var composeActivity = Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.compose");
                 try
                 {
                     ComposeLayers();

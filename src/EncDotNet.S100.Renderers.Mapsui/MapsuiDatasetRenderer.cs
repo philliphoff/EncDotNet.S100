@@ -158,8 +158,19 @@ public sealed class MapsuiDatasetRenderer
         {
             if (processor is IVectorPortrayalSource vectorSource)
             {
-                var result = await vectorSource.BuildVectorPortrayalAsync(context, cancellationToken).ConfigureAwait(false);
-                return ConvertVector(processor, result);
+                // Spans split a cell load into portrayal (which includes the
+                // portrayal-cache read) and scene build (which includes the
+                // pattern clip), for the warm-load breakdown.
+                VectorPortrayalResult result;
+                using (Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.portray"))
+                {
+                    result = await vectorSource.BuildVectorPortrayalAsync(context, cancellationToken).ConfigureAwait(false);
+                }
+
+                using (Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.scene_build"))
+                {
+                    return ConvertVector(processor, result);
+                }
             }
 
             if (processor is ICoveragePortrayalSource coverageSource)

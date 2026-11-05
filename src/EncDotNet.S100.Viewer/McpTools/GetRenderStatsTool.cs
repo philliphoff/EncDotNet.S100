@@ -35,7 +35,11 @@ internal sealed record RenderWindowStatsDto(
     double VectorMeanMs,
     double VectorP95Ms,
     long MaxTotalDrawCalls,
-    SlowestRenderFrameDto? SlowestFrame);
+    SlowestRenderFrameDto? SlowestFrame)
+{
+    /// <summary>Median frame duration over the window.</summary>
+    public double FrameP50Ms { get; init; }
+}
 
 /// <summary>Result payload for <see cref="GetRenderStatsTool"/>.</summary>
 internal sealed record GetRenderStatsResult(
@@ -105,7 +109,10 @@ internal sealed class GetRenderStatsTool
             window.VectorMeanMs,
             window.VectorP95Ms,
             window.MaxTotalDrawCalls,
-            slowestFrame);
+            slowestFrame)
+        {
+            FrameP50Ms = window.FrameP50Ms,
+        };
 
         var snapshot = _monitor.LatestStats;
         if (snapshot is null)

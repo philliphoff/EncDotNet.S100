@@ -54,7 +54,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// frame.
 /// </para>
 /// </remarks>
-public static class S100VectorTileRenderer
+public static partial class S100VectorTileRenderer
 {
     /// <summary>
     /// The <see cref="ILayer.CustomLayerRendererName"/> value that routes a
@@ -993,6 +993,7 @@ public static class S100VectorTileRenderer
                 VectorLayerRepaint.Request(layer);
             }
 
+            RecordSettleCulled(state, viewport, resolution, offscreen);
             return;
         }
 
@@ -1006,6 +1007,7 @@ public static class S100VectorTileRenderer
                 VectorLayerRepaint.Request(layer);
             }
 
+            RecordSettleCulled(state, viewport, resolution, offscreen);
             return;
         }
 
@@ -1022,6 +1024,7 @@ public static class S100VectorTileRenderer
                 VectorLayerRepaint.Request(layer);
             }
 
+            RecordSettleCulled(state, viewport, resolution, offscreen);
             return;
         }
 
@@ -1058,6 +1061,8 @@ public static class S100VectorTileRenderer
         // dataset every frame.
         if (TryRenderLive(canvas, viewport, layer, state, copies, centerX, centerY, widthDip, heightDip, coverWidth, coverHeight, resolution, rotationDeg, deviceScale))
         {
+            // Drawn live, straight from the scene: nothing waits on tiles.
+            RecordSettleCulled(state, viewport, resolution, offscreen);
             return;
         }
 
@@ -1428,6 +1433,10 @@ public static class S100VectorTileRenderer
 
                     var outcome = Composite(canvas, state, band, copyTiles, visible, centerX, centerY, widthDip, heightDip, coverWidth, coverHeight, resolution, rotationDeg, grContext, pinVisible: !offscreen);
                     compositeBaseEnd = Stopwatch.GetTimestamp();
+                    if (!offscreen && _settleTracking)
+                    {
+                        RecordSettleComposite(state, viewport, resolution, visible, outcome.TargetExact, tilePx);
+                    }
 
                     // A held tile is revealed when its sibling's tile lands
                     // (that publish repaints) or when the hold times out, which
@@ -2424,9 +2433,21 @@ public static class S100VectorTileRenderer
             anyBackdrop |= blit.Fallback.Count > 0;
         }
 
+        // The target shows exactly when every visible tile is its own cached
+        // tile: none held for a sibling and none stood in for by another SCAMIN
+        // scale class (WithCachedScaleClasses returns its input unchanged when
+        // it replaced nothing). Fallback and predecessor tiles only draw when
+        // the target is incomplete, so they are ruled out too.
+        var targetExact = targetComplete;
+        for (var i = 0; targetExact && i < copies.Count; i++)
+        {
+            targetExact = ReferenceEquals(copyTargets[i], copies[i].Tiles);
+        }
+
         return new CompositeOutcome(
             ShowsBase: !anyTarget || anyShown || anyBackdrop,
-            Holding: held is { Count: > 0 });
+            Holding: held is { Count: > 0 },
+            TargetExact: targetExact);
     }
 
     /// <summary>
@@ -2495,7 +2516,11 @@ public static class S100VectorTileRenderer
     /// do not float over the chart before its fills and lines appear.
     /// </param>
     /// <param name="Holding">Whether a cached tile was held back for a sibling layer.</param>
-    private readonly record struct CompositeOutcome(bool ShowsBase, bool Holding);
+    /// <param name="TargetExact">
+    /// Whether every target tile drew as itself: cached, not held, and not
+    /// replaced by another scale class, so no fallback or predecessor drew.
+    /// </param>
+    private readonly record struct CompositeOutcome(bool ShowsBase, bool Holding, bool TargetExact);
 
     /// <summary>
     /// <paramref name="keys"/> with each uncached tile replaced by a cached
@@ -4888,5 +4913,9 @@ public static class S100VectorTileRenderer
         // TileRevealGroup), or null for a layer that reveals on its own.
         public TileRevealGroup? RevealGroup;
         public string? RevealMember;
+
+        // Settle tracking (map rendering slice 1): what the last live frame of
+        // this layer showed, written only while SettleTrackingEnabled. Under Sync.
+        public SettleStamp? Settle;
     }
 }

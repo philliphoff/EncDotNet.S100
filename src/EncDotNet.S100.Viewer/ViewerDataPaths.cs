@@ -27,6 +27,12 @@ internal sealed class ViewerDataPaths
 {
     private const string DataDirEnvironmentVariable = "S100_DATA_DIR";
 
+    /// <summary>
+    /// Re-roots only the render caches (portrayal instructions with the
+    /// pre-warm ledger, pattern clips and tiles), like <c>--cache-dir</c>.
+    /// </summary>
+    internal const string CacheDirEnvironmentVariable = "S100_CACHE_DIR";
+
     private static readonly string DefaultSettingsDirectory = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "EncDotNet.S100.Viewer");
@@ -37,6 +43,7 @@ internal sealed class ViewerDataPaths
 
     private readonly string? _baseDirectory;
     private readonly string? _settingsFileOverride;
+    private readonly string? _renderCacheDirectory;
 
     /// <summary>
     /// Creates a path set. <paramref name="baseDirectory"/> re-roots every
@@ -45,8 +52,20 @@ internal sealed class ViewerDataPaths
     /// the settings file (the <c>--settings</c> flag) and leaves caches
     /// under the base directory.
     /// </summary>
-    public ViewerDataPaths(string? baseDirectory = null, string? settingsFileOverride = null)
+    /// <param name="baseDirectory">Re-roots every location.</param>
+    /// <param name="settingsFileOverride">Pins just the settings file.</param>
+    /// <param name="renderCacheDirectory">
+    /// Re-roots only the render caches: the portrayal-instruction cache (and the
+    /// pre-warm ledger in it), the pattern-clip cache and the warm tile cache.
+    /// Settings, the Library and the other caches stay where they are, so a
+    /// performance run can start from empty render caches without touching the
+    /// user's own (the <c>--cache-dir</c> option).
+    /// </param>
+    public ViewerDataPaths(string? baseDirectory = null, string? settingsFileOverride = null, string? renderCacheDirectory = null)
     {
+        _renderCacheDirectory = string.IsNullOrWhiteSpace(renderCacheDirectory)
+            ? null
+            : Path.GetFullPath(renderCacheDirectory);
         _baseDirectory = string.IsNullOrWhiteSpace(baseDirectory)
             ? null
             : Path.GetFullPath(baseDirectory);
@@ -109,13 +128,15 @@ internal sealed class ViewerDataPaths
 
     /// <summary>Directory for the shared disk pattern-clip cache.</summary>
     public string PatternClipCacheDirectory =>
-        _baseDirectory is { } b
+        _renderCacheDirectory is { } r ? Path.Combine(r, "PatternClipCache")
+        : _baseDirectory is { } b
             ? Path.Combine(b, "caches", "PatternClipCache")
             : Path.Combine(DefaultLocalDataDirectory, "PatternClipCache");
 
     /// <summary>Directory for the shared disk portrayal-instruction cache.</summary>
     public string PortrayalInstructionCacheDirectory =>
-        _baseDirectory is { } b
+        _renderCacheDirectory is { } r ? Path.Combine(r, "PortrayalInstructionCache")
+        : _baseDirectory is { } b
             ? Path.Combine(b, "caches", "PortrayalInstructionCache")
             : Path.Combine(DefaultLocalDataDirectory, "PortrayalInstructionCache");
 
@@ -209,7 +230,14 @@ internal sealed class ViewerDataPaths
             : Path.Combine(DefaultLocalDataDirectory, "Downloads");
 
     public string? TileDiskCacheDirectory =>
-        _baseDirectory is { } b ? Path.Combine(b, "caches", "tiles") : null;
+        _renderCacheDirectory is { } r ? Path.Combine(r, "tiles")
+        : _baseDirectory is { } b ? Path.Combine(b, "caches", "tiles") : null;
+
+    /// <summary>
+    /// The folder the render caches were re-rooted under with <c>--cache-dir</c>
+    /// or <c>S100_CACHE_DIR</c>, or <see langword="null"/>.
+    /// </summary>
+    public string? RenderCacheDirectory => _renderCacheDirectory;
 
     /// <summary>
     /// Every disk-cache directory the viewer may populate this run,
@@ -254,6 +282,12 @@ internal sealed class ViewerDataPaths
             baseDir = Environment.GetEnvironmentVariable(DataDirEnvironmentVariable);
         }
 
-        return new ViewerDataPaths(baseDir, options?.SettingsPath);
+        var cacheDir = options?.CacheDir;
+        if (string.IsNullOrWhiteSpace(cacheDir))
+        {
+            cacheDir = Environment.GetEnvironmentVariable(CacheDirEnvironmentVariable);
+        }
+
+        return new ViewerDataPaths(baseDir, options?.SettingsPath, cacheDir);
     }
 }
