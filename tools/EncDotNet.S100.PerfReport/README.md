@@ -7,8 +7,8 @@ and Chrome traces.
 
 | Command | What it does |
 |---|---|
-| [`summarise`](#summarise) | Summarize one telemetry file. |
-| [`diff`](#diff) | Compare a baseline file with a candidate file. |
+| [`summarise`](#summarise) | Summarize one telemetry file or settle run. |
+| [`diff`](#diff) | Compare a baseline file with a candidate file, or two settle runs. |
 | [`gate`](#gate) | Compare every scenario in two folders and fail on regressions. |
 | [`tile-report`](#tile-report) | Rank and attribute the viewer's tile render jobs. |
 | [`chrome-trace`](#chrome-trace) | Convert spans to the Chrome Trace Event Format. |
@@ -67,6 +67,29 @@ Example output:
 | s100.pipeline.vector.stage.lua | 89.30 | 72.10 | -19.3% | ✅ |
 | s100.render.frame | 53.20 | 63.10 | +18.6% | ❌ |
 ```
+
+## Settle runs
+
+`summarise` and `diff` also read the `.json` manifests that PerfRunner's
+`viewer-stress --scenario jumps` and `--scenario pan` write; see
+[Measure how long a view takes to settle](../EncDotNet.S100.PerfRunner/README.md#measure-how-long-a-view-takes-to-settle).
+They recognize a manifest by its `kind`, `viewer-settle`.
+
+```bash
+dotnet run --project tools/EncDotNet.S100.PerfReport -- summarise perf-runs/settle/<stem>.json
+dotnet run --project tools/EncDotNet.S100.PerfReport -- diff \
+    perf-runs/settle/<timestamp>-settle-jumps-cold-moonsharp.json \
+    perf-runs/settle/<timestamp>-settle-jumps-cold-luacsharp.json
+```
+
+The summary has one row per jump, or one for a pan, and a total: settle time,
+CPU, cores busy, GC pause share, bytes allocated, peak working set, peak GC
+committed and peak tile native bytes, and paint p50, p95 and maximum.
+
+The diff compares each metric step by step and in total. Lower is better for
+every metric except cores busy. The statuses are as for `.jsonl` files: ❌ for
+5% or more worse, ✅ for 10% or more better. Both files must be manifests, or
+both `.jsonl`.
 
 ## `gate`
 

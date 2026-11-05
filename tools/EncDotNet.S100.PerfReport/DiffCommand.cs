@@ -13,11 +13,11 @@ public sealed class DiffCommand : Command<DiffCommand.Settings>
     public sealed class Settings : CommandSettings
     {
         [CommandArgument(0, "<BASELINE>")]
-        [Description("Path to the baseline .jsonl file.")]
+        [Description("Path to the baseline .jsonl file, or a settle-run .json manifest.")]
         public string Baseline { get; set; } = "";
 
         [CommandArgument(1, "<CANDIDATE>")]
-        [Description("Path to the candidate .jsonl file.")]
+        [Description("Path to the candidate .jsonl file, or a settle-run .json manifest.")]
         public string Candidate { get; set; } = "";
 
         [CommandOption("--out <PATH>")]
@@ -38,8 +38,12 @@ public sealed class DiffCommand : Command<DiffCommand.Settings>
             return 1;
         }
 
-        var baseline = TelemetryFileReader.Read(settings.Baseline);
-        var candidate = TelemetryFileReader.Read(settings.Candidate);
+        var baseSettle = SettleReport.IsSettleManifestFile(settings.Baseline);
+        if (baseSettle != SettleReport.IsSettleManifestFile(settings.Candidate))
+        {
+            AnsiConsole.MarkupLine("[red]Compare two settle-run manifests or two .jsonl files, not one of each.[/]");
+            return 1;
+        }
 
         var writer = settings.OutputPath is not null
             ? new StreamWriter(settings.OutputPath)
@@ -47,7 +51,24 @@ public sealed class DiffCommand : Command<DiffCommand.Settings>
 
         try
         {
-            WriteDiff(writer, baseline, candidate, settings.Baseline, settings.Candidate);
+            if (baseSettle)
+            {
+                SettleReport.WriteDiff(
+                    writer,
+                    System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(settings.Baseline))!,
+                    System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(settings.Candidate))!,
+                    settings.Baseline,
+                    settings.Candidate);
+            }
+            else
+            {
+                WriteDiff(
+                    writer,
+                    TelemetryFileReader.Read(settings.Baseline),
+                    TelemetryFileReader.Read(settings.Candidate),
+                    settings.Baseline,
+                    settings.Candidate);
+            }
         }
         finally
         {

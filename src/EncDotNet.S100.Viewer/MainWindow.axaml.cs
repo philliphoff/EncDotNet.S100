@@ -35,6 +35,7 @@ public partial class MainWindow : ShadUI.Window
     private readonly MapsuiMapHost _mapHost;
     private ValidationOverlayService? _validationOverlay;
     private EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor? _renderActivityMonitor;
+    private EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor? _settleMonitor;
     private Map? _renderActivityMap;
     private EventHandler? _renderActivityRefreshHandler;
     private EncDotNet.S100.Renderers.Mapsui.DynamicSources.S100DynamicSourceHost? _dynamicSourceOverlayHost;
@@ -224,6 +225,12 @@ public partial class MainWindow : ShadUI.Window
             if (_renderActivityMonitor is not null)
             {
                 _renderActivityMonitor.BusyProbe = null;
+                if (_settleMonitor is not null)
+                {
+                    _settleMonitor.TileProbe = null;
+                    _settleMonitor.RequestRedraw = null;
+                    _settleMonitor = null;
+                }
                 if (_renderActivityMap is not null && _renderActivityRefreshHandler is not null)
                 {
                     _renderActivityMap.RefreshGraphicsRequest -= _renderActivityRefreshHandler;
@@ -371,6 +378,15 @@ public partial class MainWindow : ShadUI.Window
 
             _renderActivityRefreshHandler = (_, _) => monitor.NotifyActivity();
             activityMap.RefreshGraphicsRequest += _renderActivityRefreshHandler;
+
+            // The tile half of the settled signal behind the MCP await_settled
+            // tool (map rendering slice 1). Read on the MCP request's thread from
+            // a snapshot of the layers; inert until a harness turns tracking on.
+            var settle = App.Services.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor>();
+            _settleMonitor = settle;
+            settle.TileProbe = () => EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.EvaluateSettle(
+                activityMap.Layers.ToArray());
+            settle.RequestRedraw = activityMap.RefreshGraphics;
         }
 
         // The background vector-snapshot / scene / tile renderers repaint through

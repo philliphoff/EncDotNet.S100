@@ -178,6 +178,9 @@ internal sealed class RenderActivityMonitor : IRenderActivityMonitor, IRenderAct
             }
         }
 
+        // Nearest-rank percentiles sort in place, so the median reads first
+        // from its own copy.
+        var frameP50 = Percentile((double[])frames.Clone(), 0.50);
         return new RenderWindowStats(
             Count: n,
             FirstSequence: firstSeq,
@@ -189,7 +192,10 @@ internal sealed class RenderActivityMonitor : IRenderActivityMonitor, IRenderAct
             VectorMeanMs: Mean(vectors),
             VectorP95Ms: Percentile(vectors, 0.95),
             MaxTotalDrawCalls: maxCalls,
-            SlowestFrame: slowestFrame);
+            SlowestFrame: slowestFrame)
+        {
+            FrameP50Ms = frameP50,
+        };
     }
 
     /// <inheritdoc />

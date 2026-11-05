@@ -21,7 +21,13 @@ app.Configure(config =>
         .WithExample(
             "viewer-stress",
             "--port-file", "/tmp/viewer/mcp.url",
-            "--bbox", "49.8,-6.5,59.0,2.0");
+            "--bbox", "49.8,-6.5,59.0,2.0")
+        .WithExample(
+            "viewer-stress",
+            "--scenario", "jumps",
+            "--launch", "src/EncDotNet.S100.Viewer/bin/Release/net10.0/SoundCharts.dll",
+            "--mode", "both",
+            "--engines", "luacsharp,moonsharp");
 });
 
 return await app.RunAsync(args);
