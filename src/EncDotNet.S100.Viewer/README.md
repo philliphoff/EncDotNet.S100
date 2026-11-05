@@ -680,7 +680,9 @@ Rows include:
   arrows**) or **NDBC buoy observations** (under **Other chart overlays**).
 - A colour legend under each weather fill (wave height, wind speed): a swatch
   and a label for each band, such as **2–2.5 m** or **Force 3, 7–10 kn**, in
-  the palette the map is drawn in. Legends appear only in this panel, not on
+  the palette the map is drawn in. An overlay drawn with symbols or styled
+  lines can carry a legend too, with a small picture of each symbol, line or
+  outlined area beside its label. Legends appear only in this panel, not on
   the map.
 
 Each dataset row has an **Active** toggle. When it's off, the dataset is taken

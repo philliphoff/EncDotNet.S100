@@ -4,6 +4,7 @@ using EncDotNet.S100.Collections.KnownSources;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Services;
@@ -74,7 +75,7 @@ public sealed partial class LiveAccessibleNameTests
         loader.SetEntries(
             StackEntry("US5SEAFL.000", S98DisplayPlane.BaseChartUnder, 10),
             StackEntry("102US00_BATHY.h5", S98DisplayPlane.Bathymetry, 20),
-            LayerStackLegendTests.FillEntry("gfswave-20261025.grib2", [new("#F3EEFF", "0–0.5 m"), new("#E5DFFC", "0.5–1 m")]));
+            LayerStackLegendTests.FillEntry("gfswave-20261025.grib2", [new SwatchLegendEntry("#F3EEFF", "0–0.5 m"), new SwatchLegendEntry("#E5DFFC", "0.5–1 m")]));
         var stack = new LayerStackViewModel(loader);
         using var host = ViewHost.Show(new LayerStackView { DataContext = stack }, width: 420, height: 700);
 

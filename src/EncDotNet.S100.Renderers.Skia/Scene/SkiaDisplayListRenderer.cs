@@ -615,7 +615,7 @@ public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
                         float x = (float)(a.X + dx * t);
                         float y = (float)(a.Y + dy * t);
                         if (near.Contains(x, y))
-                            DrawLineSymbol(canvas, placed.Symbol, x, y, angle);
+                            DrawLineSymbol(canvas, placed.Symbol, x, y, angle + (float)placed.RotationDegrees);
                     }
                 }
             }

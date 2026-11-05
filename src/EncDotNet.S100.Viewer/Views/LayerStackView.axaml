@@ -118,8 +118,9 @@
                                                            Opacity="0.6"
                                                            VerticalAlignment="Center"
                                                            FontFamily="{StaticResource MonoFontFamily}" />
-                                                <!-- #1072: the colour legend of a fill that carries one
-                                                     (the weather fills): a swatch and label per band. -->
+                                                <!-- #1072: the legend of a sub-layer that carries one: a swatch
+                                                     and label per band of a weather fill. #1293: or a drawn glyph
+                                                     (an outlined area, a symbol, a line sample) and label per row. -->
                                                 <ItemsControl Grid.Row="1"
                                                               Grid.Column="1"
                                                               Grid.ColumnSpan="2"
@@ -141,7 +142,16 @@
                                                                         BorderThickness="1"
                                                                         BorderBrush="{DynamicResource BorderColor}"
                                                                         Background="{Binding Swatch}"
+                                                                        IsVisible="{Binding IsSwatch}"
                                                                         VerticalAlignment="Center" />
+                                                                <Image Source="{Binding Glyph}"
+                                                                       Width="{Binding GlyphWidth}"
+                                                                       Height="{Binding GlyphHeight}"
+                                                                       IsVisible="{Binding HasGlyph}"
+                                                                       Stretch="Fill"
+                                                                       VerticalAlignment="Center"
+                                                                       AutomationProperties.AutomationId="LayerStack.Entry.Legend.Glyph"
+                                                                       AutomationProperties.AccessibilityView="Raw" />
                                                                 <TextBlock Text="{Binding Label}"
                                                                            FontSize="10"
                                                                            Opacity="0.8"
