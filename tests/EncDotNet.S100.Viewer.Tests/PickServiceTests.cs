@@ -8,9 +8,6 @@ using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
 using Mapsui.Layers;
-using Mapsui.Manipulations;
-using Mapsui.Rendering;
-using Mapsui.Styles;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

@@ -1,5 +1,4 @@
 using EncDotNet.S100.Viewer.Services;
-using Mapsui;
 
 namespace EncDotNet.S100.Viewer.Tests;
 

@@ -933,6 +933,132 @@ tiles and `StackSlice` keys. Replace per-cell Mapsui layers with one
 prototype the per-slot raster cost with 5, 10 and 20 overlapping cells; if
 re-raster on a landing cell is too slow, see the fallback in the risks.
 
+*Prototype (slice 8, step 1).* A raster of one slot over all 276 NOAA
+Washington cells, portrayed through the real pipeline, at device scale 2
+(516&#160;px stored), single-threaded:
+
+- **Real overlap is low.** Once "one finer coverage hides it" applies, a
+  Washington slot has at most 8 cells drawing (p95 2–5), and at most 15
+  intersect any slot before hiding.
+- **A chart tile costs less than the per-layer tiles it replaces.** With 5,
+  10 and 20 overlapping cells (20 padded with copies of the heaviest cells)
+  one chart tile took 3–41, 16–55 and 32–103&#160;ms, against 7–55, 30–73 and
+  67–132&#160;ms for that slot's per-layer tiles today: 20–50% less, because
+  the fixed cost of each tile (a guttered raster, then a crop) is paid once.
+- **A landing cell costs more than today unless arrivals batch.** At the
+  three jump views (1:44&#160;300, 40–48 visible slots), re-rastering every
+  touched slot per landing cost 431–935&#160;ms of CPU per view against
+  281–451&#160;ms today; with all landings in one stack version it cost
+  244–399&#160;ms, less than today. So stack-version batching is required.
+- **Scale classes don't grow (risk 5).** The union of a slot's op thresholds
+  gives at most 4 classes per slot (p95 1–4 by band), the same as today's
+  largest per-layer count.
+- **Per-cell fragments (risk 4's fallback) give back the memory.**
+  Compositing per-sub-layer fragments costs 0.7–3&#160;ms per slot but holds
+  10–42&#160;MB of fragments per slot at 2×, against about 1&#160;MB for one
+  chart tile; per-cell fragments lose the cross-cell plane order.
+
+*Decision (open question 1): composite chart tiles,* re-rastered when a cell
+lands, batched by stack version, with the old tile kept on screen until the
+new one is ready. No per-cell fragments.
+
+*Result (slice 8).* A tiled layer no longer goes on the map by itself:
+
+- **One chart layer per run.** `MapsuiDatasetLayerSession` turns each run of
+  consecutive tiled layers in the projected S-98 stack into one `ChartLayer`
+  and publishes the run to the map's `ChartSession` as a `ChartStack`. Layers
+  the chart can't hold (S-102 and other gridded coverage, layers drawn live
+  such as routes, and the single-surface scene mode) stay map layers of their
+  own and split the run, so the S-98 order holds across them. Open question
+  8 stays open: S-102 is its own layer.
+- **Chart tiles.** For each visible slot the engine plans the stack layers
+  that draw there at the live resolution, in stack order: a layer's scale
+  window and out-of-band cap (against the live scale at the view centre, as
+  #761 needs), "one finer coverage hides it", and the finer coverages that
+  clip it in the slot. The plan's `StackSlice` (SHA-256 of the ordered scene
+  keys, opacities and clip inputs) goes into the tile key with the scale
+  class, whose thresholds are the union of the slot's ops. The raster draws
+  every layer of the plan into one guttered canvas, each clipped by its finer
+  coverages (anti-aliased, as the screen clip was) and at its opacity, then
+  keeps the core plus apron. Metatiles draw the union of their tiles' plans.
+  A plan's tile is written to disk only when every scene in it has a stable
+  key, so disk tiles are content-addressed across sessions.
+- **Atomic reveal.** A slot whose slice changes keeps showing its last tile
+  until the new one lands (stale-while-revalidate), and a layer's symbols
+  wait until its base shows in every slot it draws in. `TileRevealGroup`, the
+  predecessor stand-in, the S-98 filtered layers and `TryBindFilteredScene`
+  are deleted.
+- **Stack settings.** A cell's visibility, opacity, scale window,
+  overlap-suppression clip and S-98 suppressed features are settings of its
+  `ChartStackEntry`. S-98 suppression is a filter on the scene's ops
+  (`LayerStackEntry.SuppressedFeatures`), applied by the chart tile, the
+  single-surface renderer and the session pick.
+- **Picks.** The viewer picks through the session's engine pick (each drawn
+  dataset's own spatial index), not through Mapsui features. The per-cell
+  layers still build their per-op features; nothing reads them any more, and
+  dropping them is a follow-up.
+- **Per-session options.** `ChartSession` owns its `ChartSessionOptions`
+  (`S100MapsuiOptions.ChartOptions`); the viewer passes the process-wide
+  `ChartEngine.Options`, which its settings write to.
+- **Reveal trace.** While the perf harness tracks settle, the compositor
+  counts a slot's first reveal in a view and every later change
+  (`s100.render.reveal.first` / `.incremental`, the latter tagged `flash`
+  within 150&#160;ms of the slot's last change and `refine` after), and the
+  time from the last view change to a slot's first content
+  (`s100.render.reveal.first_delay`).
+- **Atomic reveal, superseded rasters.** A raster that finishes after its
+  slot's stack has changed stands in for the slot when the slot shows
+  nothing yet, rather than being thrown away.
+
+*Measured (slice 8).* Washington, Lua-CSharp, slice 1 harness, main against
+this slice interleaved, medians of 3 runs (2 for prewarm); App Nap off. Both
+builds carry the same reveal trace.
+
+| | main | slice 8 |
+|---|---|---|
+| Cold jumps: settle | 3.09 s | 3.66 s |
+| Cold jumps: CPU | 9.7 s | 12.1 s |
+| Prewarm jumps: settle | 1.12 s | 1.12 s |
+| Cold pan: settle | 0.46 s | 0.84 s |
+| Peak tile native: cold jumps / prewarm / pan | 516 / 471 / 496 MB | 244 / 220 / 181 MB |
+| Longest UI-thread task, cold jumps | 18.6 ms | 3.7 ms |
+| Frame p95, cold jumps | 56 ms | 40 ms |
+| Incremental reveals per run: jumps / pan | 36–41 / 38–39 | 36–38 / 20–22 |
+| ... of which within 150 ms of the last: jumps / pan | 24–27 / 19–29 | 26–28 / 10–15 |
+
+- **Memory and the UI thread are the clear wins.** Native tile bytes halve,
+  and the longest UI-thread task falls from about 19 to 4 ms: the map has one
+  chart layer instead of about 10 per cell.
+- **Pan settle is noise-dominated.** An earlier round of the same A/B, before
+  the stand-in fix below, measured cold pan at 1.52 s on main and 0.61 s here;
+  the two rounds disagree on which build is faster.
+- **Cold jumps are slower (+0.6 s, Tacoma most), and cost more CPU.** Every
+  stack version re-rasters each slot its cells touch, over all the slot's
+  layers, and a slot's raster can't be split across workers as per-layer
+  tiles were: over a cold run main rasterised 659 per-layer tiles in 2.4 s,
+  this slice 317 chart tiles in 4.0 s. Before the fix below it was worse
+  (4.8 s): a raster still running when the slot's stack changed was
+  discarded, so on a fresh view a slot could stay blank while cells kept
+  landing. A superseded chart tile now stands in for its slot until the
+  current one lands.
+- **Reveals.** A slot changes from one complete image to the next, and its
+  layers never appear one by one. But each stack version is one reveal, and
+  on a cold jump cells land in many versions a few hundred milliseconds
+  apart, so jumps still refine in about as many steps as on main; pans
+  halve them. Batching versions needs to know which arrivals are coming:
+  the demand planner of slice 9.
+- **The stack hold is off by default.** `ChartSessionOptions.StackHoldMs`
+  (`S100_STACK_HOLD_MS`) lets a compose wait for the cells the view is still
+  rendering. On the same build, a 250 ms hold against none: cold jumps
+  settle 3.66 against 3.67 s, incremental reveals 36–38 against 41–42 but
+  more of them within 150 ms (26–28 against 22–24), the same time to first
+  content per slot (2.3–2.9 against 2.3–2.4 s), and a slower cold pan (0.84
+  against 0.51 s). Off is the default.
+- **Time to first paint isn't comparable with main.** The trace measures it
+  from the last view change of any tiled layer, and on main every newly
+  loaded cell layer's first frame counts as one, which shortens main's
+  figure. Compare it only within a build.
+
 **9. Prediction v2.** Feed fling and animation destinations into `ViewMotion`.
 Add a zoom-rate estimate. Add route and history inputs. Drive cell demand and
 release hints from the model. Report hit and waste rates. With faster

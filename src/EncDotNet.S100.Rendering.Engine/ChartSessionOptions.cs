@@ -90,7 +90,7 @@ public sealed class ChartSessionOptions
     public const double MaxSceneMarginPx = 4096.0;
 
     /// <summary>Default chart stack hold, in milliseconds (<c>S100_STACK_HOLD_MS</c>).</summary>
-    public const double DefaultStackHoldMs = 250.0;
+    public const double DefaultStackHoldMs = 0.0;
 
     /// <summary>Minimum / maximum accepted chart stack hold, in milliseconds.</summary>
     public const double MinStackHoldMs = 0.0;
@@ -415,8 +415,11 @@ public sealed class ChartSessionOptions
     /// composing per arrival reveals a slot once per cell; holding lets cells
     /// that land one after another reveal in one change, at the cost of
     /// showing the first of them later. 0 turns the hold off. Seeded from
-    /// <c>S100_STACK_HOLD_MS</c> (default <see cref="DefaultStackHoldMs"/>).
-    /// Read by each compose.
+    /// <c>S100_STACK_HOLD_MS</c> (default <see cref="DefaultStackHoldMs"/>,
+    /// off: on Washington a 250&#160;ms hold cut incremental reveals by about
+    /// a tenth but added quick-succession ones and slowed a cold pan, see
+    /// <c>docs/design/map-render-architecture.md</c>, slice&#160;8). Read by
+    /// each compose.
     /// </summary>
     public double StackHoldMs
     {
