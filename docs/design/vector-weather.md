@@ -14,7 +14,7 @@
 > and makes §6 say exactly where each one goes. Revision 3 (same day)
 > records the user's decisions on Q1–Q7 (§10) and adds the tropical cyclone
 > route-check settings to Settings (§6.6). Mock-ups at Day, Dusk and Night are in
-> [`vector-weather/mockups.html`](vector-weather/mockups.html) (published as
+> [`vector-weather/mockups.html`](https://github.com/philliphoff/EncDotNet.S100/blob/main/docs/design/vector-weather/mockups.html) (published as
 > <https://claude.ai/artifact/VLAwoquLkwdESYSKrCxGQF>). Decisions are
 > numbered **V1–V39** so implementation PRs can cite them. The user's
 > decisions on the open questions are in §10.
