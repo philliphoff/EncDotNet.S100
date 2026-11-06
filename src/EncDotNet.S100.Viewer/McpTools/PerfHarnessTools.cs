@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime;
 using System.Runtime.InteropServices;
+using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Services;
@@ -94,13 +95,41 @@ internal sealed record PerfEnvironmentDto(
     [property: Description("Where the render caches live when --cache-dir or S100_CACHE_DIR moved them, else null.")] string? RenderCacheDirectory,
     [property: Description("Whether the build is optimised (Release).")] bool Optimized);
 
+/// <summary>Wait or run times of one work class in a <see cref="SchedulerWindowDto"/>.</summary>
+[Description("A distribution of times in milliseconds.")]
+internal sealed record LatencyDto(
+    [property: Description("Jobs measured.")] long Count,
+    [property: Description("Median.")] double P50Ms,
+    [property: Description("95th percentile.")] double P95Ms,
+    [property: Description("Longest (to within one bucket, 10%).")] double MaxMs)
+{
+    public static LatencyDto Of(LatencySnapshot s) => new(s.Count, s.Percentile(0.5), s.Percentile(0.95), s.MaxMs);
+}
+
+/// <summary>Work scheduler figures in a <see cref="ProcessMetricsDto"/>.</summary>
+[Description("The work scheduler (map rendering slice 5) over the window: how long jobs waited for a worker and how long they ran.")]
+internal sealed record SchedulerWindowDto(
+    [property: Description("Dedicated worker threads.")] int Workers,
+    [property: Description("Worker time spent running jobs in the window.")] double BusyMs,
+    [property: Description("busyMs ÷ the window's wall time: the average number of workers kept busy.")] double CoresBusy,
+    [property: Description("Visible jobs: time from queued (or promoted to visible) to a worker starting them.")] LatencyDto VisibleWait,
+    [property: Description("Predicted jobs' wait.")] LatencyDto PredictedWait,
+    [property: Description("Background jobs' wait.")] LatencyDto BackgroundWait,
+    [property: Description("How long a job held a worker per run, visible class.")] LatencyDto VisibleRun,
+    [property: Description("How long a job held a worker per run, every class.")] LatencyDto Run,
+    [property: Description("Jobs finished in the window.")] long Completed,
+    [property: Description("Jobs dropped before they started in the window (no one wanted them).")] long Cancelled,
+    [property: Description("Jobs waiting for a worker now, by class: visible, predicted, background, validation.")] IReadOnlyList<int> QueuedNow,
+    [property: Description("Allocation-heavy background jobs the GC pause governor admits now.")] int AllocationHeavyLimit);
+
 /// <summary>Result of <see cref="GetProcessMetricsTool"/>.</summary>
 [Description("Process CPU, GC and memory metrics for the perf harness.")]
 internal sealed record ProcessMetricsDto(
     [property: Description("The window up to now, or null when none was started.")] MetricsWindowDto? Window,
     [property: Description("Memory now.")] MemoryDto Memory,
     [property: Description("Map paint times over the render-stats window.")] FrameTimesDto Frames,
-    [property: Description("The run environment.")] PerfEnvironmentDto Environment);
+    [property: Description("The run environment.")] PerfEnvironmentDto Environment,
+    [property: Description("The work scheduler over the window, or null when no window is open.")] SchedulerWindowDto? Scheduler = null);
 
 /// <summary>Result of <see cref="PortrayalPrewarmTool"/>.</summary>
 [Description("The background portrayal pre-warm's progress.")]
@@ -174,7 +203,8 @@ internal sealed class GetProcessMetricsTool(
     ProcessMetricsSampler sampler,
     IRenderActivityMonitor? renderMonitor,
     Func<PerfEnvironmentDto> environment,
-    Func<int>? tileCount = null)
+    Func<int>? tileCount = null,
+    Func<WorkSchedulerStats>? schedulerStats = null)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "get_process_metrics";
@@ -183,6 +213,8 @@ internal sealed class GetProcessMetricsTool(
     private readonly Func<PerfEnvironmentDto> _environment = environment ?? throw new ArgumentNullException(nameof(environment));
     private readonly IRenderActivityMonitor? _renderMonitor = renderMonitor;
     private readonly Func<int>? _tileCount = tileCount;
+    private readonly Func<WorkSchedulerStats>? _schedulerStats = schedulerStats;
+    private WorkSchedulerStats? _schedulerStart;
 
     /// <summary>Reads, and optionally starts, restarts or stops the window.</summary>
     /// <param name="window">'read' (default), 'start', 'restart' (read, then start the next window here) or 'stop'.</param>
@@ -190,6 +222,8 @@ internal sealed class GetProcessMetricsTool(
     {
         var action = (window ?? "read").Trim().ToLowerInvariant();
         ProcessMetricsWindow? measured;
+        var schedulerNow = _schedulerStats?.Invoke();
+        var schedulerStart = _schedulerStart;
         switch (action)
         {
             case "read":
@@ -198,15 +232,18 @@ internal sealed class GetProcessMetricsTool(
             case "start":
                 _sampler.StartWindow();
                 measured = _sampler.ReadWindow(restart: false);
+                schedulerStart = _schedulerStart = schedulerNow;
                 break;
             case "restart":
                 measured = _sampler.ReadWindow(restart: true);
                 if (measured is null)
                     _sampler.StartWindow();
+                _schedulerStart = schedulerNow;
                 break;
             case "stop":
                 measured = _sampler.ReadWindow(restart: false);
                 _sampler.StopWindow();
+                _schedulerStart = null;
                 break;
             default:
                 return ToolResult<ProcessMetricsDto>.Err(new InvalidArgument("window", "one of 'read', 'start', 'restart' or 'stop'"));
@@ -218,7 +255,33 @@ internal sealed class GetProcessMetricsTool(
             measured is null ? null : ToDto(measured),
             new MemoryDto(now.GcHeapBytes, now.GcCommittedBytes, now.WorkingSetBytes, now.PrivateBytes, now.TileNativeBytes, SafeTileCount()),
             new FrameTimesDto(frames.Count, frames.FrameP50Ms, frames.FrameP95Ms, frames.FrameMaxMs),
-            _environment()));
+            _environment(),
+            measured is not null && schedulerNow is not null && schedulerStart is not null
+                ? ToDto(schedulerStart, schedulerNow, measured.WallMs)
+                : null));
+    }
+
+    internal static SchedulerWindowDto ToDto(WorkSchedulerStats start, WorkSchedulerStats end, double wallMs)
+    {
+        LatencySnapshot Wait(WorkClass c) => end.WaitByClass[(int)c].Since(start.WaitByClass[(int)c]);
+        LatencySnapshot RunOf(WorkClass c) => end.RunByClass[(int)c].Since(start.RunByClass[(int)c]);
+        var allRuns = RunOf(WorkClass.Visible);
+        foreach (var c in new[] { WorkClass.Predicted, WorkClass.Background, WorkClass.Validation })
+            allRuns = allRuns.Plus(RunOf(c));
+        var busy = Math.Max(0, end.BusyMilliseconds - start.BusyMilliseconds);
+        return new SchedulerWindowDto(
+            end.Workers,
+            busy,
+            wallMs > 0 ? busy / wallMs : 0,
+            LatencyDto.Of(Wait(WorkClass.Visible)),
+            LatencyDto.Of(Wait(WorkClass.Predicted)),
+            LatencyDto.Of(Wait(WorkClass.Background)),
+            LatencyDto.Of(RunOf(WorkClass.Visible)),
+            LatencyDto.Of(allRuns),
+            end.Completed - start.Completed,
+            end.Cancelled - start.Cancelled,
+            end.QueuedByClass,
+            end.AllocationHeavyLimit);
     }
 
     private int SafeTileCount()

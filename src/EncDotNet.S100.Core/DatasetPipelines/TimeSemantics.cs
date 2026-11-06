@@ -65,6 +65,20 @@ public enum TimeStepSelection
 /// analysis or observation before a forecast for the same time), so a newer
 /// analysis, or a forecast valid nearer the map time, takes over (V30).
 /// </param>
+/// <param name="StaleAfter">
+/// For <see cref="TimeStepSelection.AtOrBefore"/>: how long after its step the
+/// data is stale, still drawn (within <paramref name="Validity"/>) but marked
+/// as old, or <see langword="null"/> for never (design note
+/// <c>vector-weather.md</c> §7, V28). A host passes the step's age at the map
+/// time in <see cref="RenderContext.TimeStepAge"/> once it is past this.
+/// </param>
+/// <param name="Supersession">
+/// A key shared by datasets of which only one should draw at a time, or
+/// <see langword="null"/> for none: among the datasets with the same key that
+/// have a step at the map time, the one whose step is latest draws (an
+/// analysis or observation before a forecast for the same time), so a newer
+/// analysis, or a forecast valid nearer the map time, takes over (V30).
+/// </param>
 public sealed record TimeSemantics(
     TimeStepKind Kind,
     TimeStepSelection Selection,
