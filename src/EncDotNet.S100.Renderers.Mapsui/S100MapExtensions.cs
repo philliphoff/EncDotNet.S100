@@ -100,7 +100,7 @@ public static class S100MapExtensions
             ? () => marshal(refreshMap)
             : refreshMap;
         var session = new MapsuiDatasetLayerSession(
-            layerBands, processorOwner, renderer, authorityProvider, redraw);
+            layerBands, processorOwner, renderer, authorityProvider, redraw, options.StackMarshal);
         var navigator = new MapsuiMapNavigator(map);
         var dynamicSourceHost = new DynamicSources.S100DynamicSourceHost(
             layerBands,

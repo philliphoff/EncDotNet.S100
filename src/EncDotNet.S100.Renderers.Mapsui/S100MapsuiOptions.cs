@@ -105,6 +105,18 @@ public sealed record S100MapsuiOptions
     public Action<Action>? DynamicSourceMarshal { get; init; }
 
     /// <summary>
+    /// Gets the post to the map-owning thread that a UI host supplies so the
+    /// session composes the layer stack off that thread (map rendering
+    /// slice 6). When a rendered cell arrives, the S-98 projection and overlap
+    /// suppression run as a job on the work scheduler, and the result is
+    /// applied to the map — display state, clips and the layer diff — in one
+    /// post through this marshal; cells that arrive meanwhile join the next
+    /// compose. When <see langword="null"/>, every compose runs inline on the
+    /// calling thread, which suits headless or single-threaded hosts.
+    /// </summary>
+    public Action<Action>? StackMarshal { get; init; }
+
+    /// <summary>
     /// Gets the resolver the session's dynamic-source host uses to find an
     /// <see cref="IDynamicFeatureRenderer"/> for a source's
     /// <see cref="EncDotNet.S100.DynamicSources.DynamicSourceMetadata.RendererKey"/>.
