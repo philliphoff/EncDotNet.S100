@@ -48,6 +48,7 @@ internal sealed class ViewerPresentationCoordinator : IDisposable
 
         _settings.PaletteChanged += OnPaletteChanged;
         _settings.DisplayScaleChanged += OnPresentationChanged;
+        _settings.TimeFormatChanged += OnTimeFormatChanged;
         _ecdisDisplay.Changed += OnPresentationChanged;
         _marinerSettings.Changed += OnMarinerChanged;
         _depthAdjustment.RequestChanged += OnDepthAdjustmentRequested;
@@ -57,6 +58,7 @@ internal sealed class ViewerPresentationCoordinator : IDisposable
     {
         _settings.PaletteChanged -= OnPaletteChanged;
         _settings.DisplayScaleChanged -= OnPresentationChanged;
+        _settings.TimeFormatChanged -= OnTimeFormatChanged;
         _ecdisDisplay.Changed -= OnPresentationChanged;
         _marinerSettings.Changed -= OnMarinerChanged;
         _depthAdjustment.RequestChanged -= OnDepthAdjustmentRequested;
@@ -65,6 +67,10 @@ internal sealed class ViewerPresentationCoordinator : IDisposable
     private void OnPaletteChanged(PaletteType _) => ApplyCurrent();
 
     private void OnMarinerChanged(MarinerSettings _) => ApplyCurrent();
+
+    // Times drawn on the chart (a cyclone's forecast times) follow the
+    // Local/UTC preference.
+    private void OnTimeFormatChanged(TimeFormat _) => ApplyCurrent();
 
     private void OnPresentationChanged() => ApplyCurrent();
 

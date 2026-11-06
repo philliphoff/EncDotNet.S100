@@ -19,7 +19,7 @@ public class ViewerPresentationCoordinatorTests
         var ecdis = new EcdisDisplayState();
         var mariner = new StubMarinerSettingsProvider();
         var projection = new MapPresentationStateProjection(
-            settingsViewModel, ecdis, mariner);
+            settingsViewModel, ecdis, mariner, TimeProvider.System);
         var controller = new RecordingPresentationController();
         using var coordinator = new ViewerPresentationCoordinator(
             settingsViewModel, ecdis, mariner, projection, controller, new FakeRequests());
@@ -49,7 +49,7 @@ public class ViewerPresentationCoordinatorTests
         var ecdis = new EcdisDisplayState();
         var mariner = new StubMarinerSettingsProvider();
         var projection = new MapPresentationStateProjection(
-            settingsViewModel, ecdis, mariner);
+            settingsViewModel, ecdis, mariner, TimeProvider.System);
         var controller = new RecordingPresentationController();
         var coordinator = new ViewerPresentationCoordinator(
             settingsViewModel, ecdis, mariner, projection, controller, new FakeRequests());
@@ -71,7 +71,7 @@ public class ViewerPresentationCoordinatorTests
         var settingsViewModel = new SettingsViewModel(settings);
         var ecdis = new EcdisDisplayState();
         var mariner = new StubMarinerSettingsProvider();
-        var projection = new MapPresentationStateProjection(settingsViewModel, ecdis, mariner);
+        var projection = new MapPresentationStateProjection(settingsViewModel, ecdis, mariner, TimeProvider.System);
         var controller = new RecordingPresentationController();
         var requests = new FakeRequests();
         using var coordinator = new ViewerPresentationCoordinator(

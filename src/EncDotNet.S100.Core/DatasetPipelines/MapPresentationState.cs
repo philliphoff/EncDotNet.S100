@@ -87,12 +87,19 @@ public sealed class MapPresentationState
         EcdisDisplay = ecdisDisplay is null ? source.EcdisDisplay : Snapshot(ecdisDisplay);
         Mariner = mariner ?? source.Mariner;
         DepthAdjustment = source.DepthAdjustment;
+        DisplayTimeZone = source.DisplayTimeZone;
     }
 
     private MapPresentationState(MapPresentationState source, IDepthAdjustment? depthAdjustment)
         : this(source)
     {
         DepthAdjustment = depthAdjustment;
+    }
+
+    private MapPresentationState(MapPresentationState source, TimeZoneInfo displayTimeZone)
+        : this(source)
+    {
+        DisplayTimeZone = displayTimeZone;
     }
 
     /// <summary>The S-100 colour palette applied across the map.</summary>
@@ -112,6 +119,23 @@ public sealed class MapPresentationState
 
     /// <summary>Mariner-configurable portrayal settings.</summary>
     public MarinerSettings Mariner { get; }
+
+    /// <summary>
+    /// The time zone that times drawn on the chart are written in
+    /// (<see cref="RenderContext.DisplayTimeZone"/>); UTC unless replaced
+    /// with <see cref="WithDisplayTimeZone"/>.
+    /// </summary>
+    public TimeZoneInfo DisplayTimeZone { get; } = TimeZoneInfo.Utc;
+
+    /// <summary>
+    /// Returns a copy of this snapshot with <see cref="DisplayTimeZone"/> replaced.
+    /// </summary>
+    /// <param name="displayTimeZone">The zone chart times are written in.</param>
+    public MapPresentationState WithDisplayTimeZone(TimeZoneInfo displayTimeZone)
+    {
+        ArgumentNullException.ThrowIfNull(displayTimeZone);
+        return new(this, displayTimeZone);
+    }
 
     /// <summary>
     /// Returns a copy of this snapshot with <see cref="Palette"/> replaced.
@@ -209,6 +233,7 @@ public sealed class MapPresentationState
             EcdisDisplay = EcdisDisplay,
             Mariner = Mariner,
             DepthAdjustment = DepthAdjustment,
+            DisplayTimeZone = DisplayTimeZone,
         };
 
         var displayModeId = EcdisDisplay.ActiveDisplayModes.GetValueOrDefault(

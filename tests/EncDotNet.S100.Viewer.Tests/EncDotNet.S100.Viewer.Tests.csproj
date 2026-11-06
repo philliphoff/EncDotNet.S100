@@ -39,6 +39,7 @@
     <Compile Include="..\_shared\GribFixtures.cs" Link="TestSupport\GribFixtures.cs" />
     <Compile Include="..\_shared\CapFixtures.cs" Link="TestSupport\CapFixtures.cs" />
     <Compile Include="..\_shared\FrontPipFixtures.cs" Link="TestSupport\FrontPipFixtures.cs" />
+    <Compile Include="..\_shared\TropicalCycloneFixtures.cs" Link="TestSupport\TropicalCycloneFixtures.cs" />
     <Compile Include="..\EncDotNet.S100.Mcp.Tools.Tests\Fakes\S101AreaSynth.cs" Link="TestSupport\S101AreaSynth.cs" />
   </ItemGroup>
 
@@ -53,6 +54,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- NHC's archived GIS zips for Hurricane Ian, advisory 20 (issues #1294, #1296); see tests/datasets/TC/README.md. -->
+    <Content Include="..\datasets\TC\**\*.zip" CopyToOutputDirectory="PreserveNewest" Link="TestData\TC\%(RecursiveDir)%(Filename)%(Extension)" />
     <Content Include="..\datasets\S125\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S125\%(Filename)%(Extension)" />
     <Content Include="..\datasets\S128\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\%(Filename)%(Extension)" />
     <Content Include="..\datasets\S421\*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S421\%(Filename)%(Extension)" />
