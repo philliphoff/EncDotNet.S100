@@ -138,7 +138,8 @@ internal sealed record PortrayalPrewarmDto(
     [property: Description("Registered cells already in the portrayal cache.")] int Warm,
     [property: Description("Registered cells it considers.")] int Total,
     [property: Description("Whether it may run: the session override if set, else the setting.")] bool Enabled,
-    [property: Description("The session override (not saved), or null when the setting decides.")] bool? Override);
+    [property: Description("The session override (not saved), or null when the setting decides.")] bool? Override,
+    [property: Description("How many cells it may portray at once now; it adapts to the GC pause share.")] int ConcurrencyLimit);
 
 /// <summary>
 /// Waits for the view to settle (MCP <c>await_settled</c>, map rendering slice 1).
@@ -359,7 +360,8 @@ internal sealed class PortrayalPrewarmOverride
 internal sealed class PortrayalPrewarmTool(
     Func<PortrayalWarmStatus> status,
     PortrayalPrewarmOverride overrideHolder,
-    Func<bool> settingEnabled)
+    Func<bool> settingEnabled,
+    Func<int> concurrencyLimit)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "portrayal_prewarm";
@@ -367,6 +369,7 @@ internal sealed class PortrayalPrewarmTool(
     private readonly Func<PortrayalWarmStatus> _status = status ?? throw new ArgumentNullException(nameof(status));
     private readonly PortrayalPrewarmOverride _override = overrideHolder ?? throw new ArgumentNullException(nameof(overrideHolder));
     private readonly Func<bool> _settingEnabled = settingEnabled ?? throw new ArgumentNullException(nameof(settingEnabled));
+    private readonly Func<int> _concurrencyLimit = concurrencyLimit ?? throw new ArgumentNullException(nameof(concurrencyLimit));
 
     /// <summary>Reads the progress, after applying <paramref name="enabled"/> when given.</summary>
     /// <param name="enabled">'on' or 'off' to override the setting for this session, 'setting' to drop the override, or null to leave it.</param>
@@ -391,7 +394,7 @@ internal sealed class PortrayalPrewarmTool(
 
         var s = _status();
         var effective = _override.Enabled ?? _settingEnabled();
-        return ToolResult<PortrayalPrewarmDto>.Ok(new PortrayalPrewarmDto(StateName(s.State), s.Warm, s.Total, effective, _override.Enabled));
+        return ToolResult<PortrayalPrewarmDto>.Ok(new PortrayalPrewarmDto(StateName(s.State), s.Warm, s.Total, effective, _override.Enabled, _concurrencyLimit()));
     }
 
     internal static string StateName(PortrayalWarmState state) => state switch
@@ -411,12 +414,14 @@ internal sealed class PortrayalPrewarmTool(
 /// <param name="Metrics">The process metrics sampler.</param>
 /// <param name="PrewarmStatus">Reads the portrayal pre-warm's progress.</param>
 /// <param name="PrewarmOverride">The session override of the pre-warm setting.</param>
+/// <param name="PrewarmConcurrency">Reads how many cells the pre-warm may portray at once.</param>
 /// <param name="RenderCacheDirectory">Where <c>--cache-dir</c> moved the render caches, or null.</param>
 internal sealed record PerfHarnessServices(
     ViewSettleMonitor Settle,
     ProcessMetricsSampler Metrics,
     Func<PortrayalWarmStatus> PrewarmStatus,
     PortrayalPrewarmOverride PrewarmOverride,
+    Func<int> PrewarmConcurrency,
     string? RenderCacheDirectory);
 
 /// <summary>MCP adapters for the perf-harness tools.</summary>
@@ -494,7 +499,7 @@ internal static class PerfHarnessMcpAdapters
             Description =
                 "Reads the background portrayal pre-warm, which portrays load-as-you-pan cells into the portrayal cache "
                 + "while the map is idle: its state (off, idle, working, paused, cache_full, complete) and how many "
-                + "registered cells are warm of the total. 'enabled' switches it on or off for this session without "
+                + "registered cells are warm of the total, and how many cells it may portray at once (it adapts to the GC pause share). 'enabled' switches it on or off for this session without "
                 + "changing the saved setting. Viewer-injected tool.",
             SerializerOptions = McpAdapterShared.Options,
         });

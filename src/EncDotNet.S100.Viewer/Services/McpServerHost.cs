@@ -419,7 +419,8 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(PerfHarnessMcpAdapters.Create(new PortrayalPrewarmTool(
                 harness.PrewarmStatus,
                 harness.PrewarmOverride,
-                () => settings.PortrayalPrewarmEnabled)));
+                () => settings.PortrayalPrewarmEnabled,
+                harness.PrewarmConcurrency)));
         }
         if (_ownShipHelm is not null)
         {
