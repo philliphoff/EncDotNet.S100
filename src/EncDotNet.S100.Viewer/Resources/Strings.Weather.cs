@@ -4,6 +4,16 @@ namespace EncDotNet.S100.Viewer.Resources;
 internal static partial class Strings
 {
     public static string Library_StaleRunFormat => Get(nameof(Library_StaleRunFormat));
+    public static string Library_StaleAnalysisFormat => Get(nameof(Library_StaleAnalysisFormat));
+    public static string Library_StaleAdvisoryFormat => Get(nameof(Library_StaleAdvisoryFormat));
+    public static string Library_StormNameFormat => Get(nameof(Library_StormNameFormat));
+    public static string Library_StormAdvisoryFormat => Get(nameof(Library_StormAdvisoryFormat));
+    public static string Library_StormNextFormat => Get(nameof(Library_StormNextFormat));
+    public static string Library_StormNewerFormat => Get(nameof(Library_StormNewerFormat));
+    public static string Library_StormForecastToFormat => Get(nameof(Library_StormForecastToFormat));
+    public static string Library_StormIntensityFormat => Get(nameof(Library_StormIntensityFormat));
+    public static string Toast_StormAdvisoryTitleFormat => Get(nameof(Toast_StormAdvisoryTitleFormat));
+    public static string Toast_StormAdvisoryContent => Get(nameof(Toast_StormAdvisoryContent));
 
     public static string Library_LoadLatestRun => Get(nameof(Library_LoadLatestRun));
 

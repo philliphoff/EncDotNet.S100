@@ -177,7 +177,9 @@ made from its data. The Library can fetch some of these sources for you.
   `https://tgftp.nws.noaa.gov/data/raw/as/asus02.kwbc.cod.sus.txt`, the
   standard one at `…/raw/as/asus01.kwbc.cod.sus.txt`, and the short-range
   forecast at `…/raw/fs/fsus02.kwbc.cod.srp.txt`. Save them with any name;
-  SoundCharts and `s100` recognise the contents.
+  SoundCharts and `s100` recognise the contents. In SoundCharts, the
+  Library's **Surface analysis — WPC** source fetches them for you; see
+  [Show a surface analysis](#show-a-surface-analysis).
 - **NDBC buoys.** There's nothing to download. SoundCharts fetches the
   latest observations from [NDBC](https://www.ndbc.noaa.gov/) for the
   stations in view; see [Show buoy observations](#show-buoy-observations).
@@ -190,8 +192,10 @@ made from its data. The Library can fetch some of these sources for you.
 
    The Datasets panel lists it, and the Layer stack lists the layers it
    draws; the wave height fill's entry shows a colour legend.
-2. Open **Display controls**. While a GRIB2 or NetCDF dataset is loaded, its
-   **Weather** section has six switches for every weather dataset:
+2. Open **Display controls**. While a weather dataset is loaded (a GRIB2 or
+   NetCDF grid, a tropical cyclone or a surface analysis), its **Weather**
+   section has six switches for every weather grid, and three for tropical
+   cyclones ([Show tropical cyclones](#show-tropical-cyclones)):
 
    | Switch | Default | Draws |
    |---|---|---|
@@ -249,7 +253,9 @@ description.
 
 ## Show tropical cyclones
 
-Download an advisory's zips from NHC's
+Add the storms NHC is issuing advisories for from the Library
+([Get active storms from the Library](#get-active-storms-from-the-library)).
+Or download an advisory's zips from NHC's
 [GIS page](https://www.nhc.noaa.gov/gis/) into one folder: the forecast track
 and cone (`al092022_5day_020.zip`), the wind radii (`al092022_fcst_020.zip`)
 and the past track (`al092022_best_track.zip`). Then open the forecast zip,
@@ -259,7 +265,7 @@ one plum-grey storm ink, so it doesn't look like a chart colour or a warning:
 - **Cone.** NHC's cone, tinted. The part beyond 72 hours (days 4 and 5) is
   also stippled. The outline is dashed. The storm's centre stays inside the
   cone only about two-thirds of the time, and its winds reach well outside it.
-- **Wind radii.** The 34, 50 and 64 knot areas at the advisory, nested, with
+- **Wind radii.** The 34, 50 and 64 knot areas at the view time, nested, with
   the 64 knot core the strongest. Their outlines are dashed, solid and heavy.
 - **Tracks.** The forecast track is a solid line, the past track a dotted
   line with a dot at each best-track position.
@@ -269,9 +275,9 @@ one plum-grey storm ink, so it doesn't look like a chart colour or a warning:
   and above). A square centre is subtropical, and a circled × is
   post-tropical, a remnant low or a disturbance. South of the equator the
   symbols are mirrored, because storms there turn the other way.
-- **Labels.** The storm at the advisory is drawn larger, in a ring, with its
-  class, name, wind and pressure, and under that the advisory number, its
-  issue time and how the storm is moving. Forecast points at 12 hours, every
+- **Labels.** The storm is drawn larger, in a ring, with its class, name,
+  wind and pressure, and under that the advisory number, its issue time and
+  how the storm is moving. Forecast points at 12 hours, every
   24 hours and the last show their time and wind. Times follow the Local or
   UTC setting.
 
@@ -282,9 +288,101 @@ information**: the advisory, its issue time and when the next is due, the
 position, wind, pressure and movement, the part you picked, and the radii in
 each quadrant.
 
-The storm is drawn where the advisory puts it now. Moving it along the track
-with the Timeline, NHC's feed in the Library and switches to hide the radii,
-past track and forecast times are still to come.
+While a storm is loaded, three switches end the **Weather** section of
+**Display controls**. They apply to every storm and are kept after a restart:
+
+| Switch | Default | Draws |
+|---|---|---|
+| **Wind radii** | On | The 34, 50 and 64 knot areas |
+| **Past track** | On | The best-track line and points |
+| **Forecast times** | On | The time and wind beside forecast points |
+
+The cone, the forecast track and points, and the storm have no switch. To
+hide a whole storm, use its eye in the Datasets panel.
+
+### Storm at the view time
+
+The cone, the tracks and the forecast points are always drawn, whatever the
+view time. The storm and its wind radii are drawn at the view time, so
+scrubbing the Timeline moves them along the track:
+
+| View time | Storm | Radii | Datasets row |
+|---|---|---|---|
+| On a forecast point | The forecast point, drawn large in a solid ring | The point's forecast radii | `18:00Z · T+24 h` |
+| Between two forecast points | An estimate, in a dashed ring, labelled `est. Wed 9:00 PM · Adv 17 · NW 9 kt` | Each quadrant between the two points' | `est. 20:00Z · T+2 h` |
+| Before the advisory, on the past track | The best-track position, in a solid ring, labelled `best track …` | The observed radii, where the best track has them | `12:00Z · best track` |
+| After the last forecast point | None; the cone and tracks stay | None | A **Beyond forecast** tag |
+| Before the first best-track point | None; the cone and tracks stay | None | A **Before track** tag |
+
+Between two points the position follows the great circle, and the wind,
+pressure and each radius change evenly with time. A radius that's zero at
+one end shrinks to nothing; NHC forecasts no radii beyond 72 hours, so none
+are drawn there. The estimate keeps the class of the earlier point. NHC
+doesn't forecast these in-between positions, and Object information says so:
+its **At view time** row gives the time, and **Basis** reads "Estimated
+between forecast points; NHC doesn't forecast this position." Click a tagged
+row's time to jump to the nearest end of the storm's track.
+
+In Live mode the view time follows the clock, so the storm creeps along the
+track between advisories.
+
+The Timeline lists storms under **Tropical cyclones**, in a lane named for
+the storm, such as **IAN**, with "adv 20 · 6 h" under it. Its band runs from
+the first best-track point, faded, to the last forecast point. A tick marks
+each forecast point, a solid diamond the advisory's issue time and a hollow
+diamond when NHC's next regular advisory is due (03, 09, 15 and 21 UTC;
+intermediate advisories can come sooner). Choose the storm in the step menu
+and ‹ › step through its forecast points. The lane is grey with the
+**Expired** tag once the last forecast point has passed.
+
+### Get active storms from the Library
+
+In the Library, choose **Add** and pick **Tropical cyclones — NHC** from the
+weather sources. It has the `FEED` tag and nothing to choose: it lists every
+storm NHC is issuing advisories for in the Atlantic, East and Central Pacific,
+one item each, from NHC's active-storm list. Between storms the list is
+empty.
+
+Each item is named by the storm, such as **HURRICANE ZELDA · AL14**, with its
+class symbol beside it. Under the name are the advisory, when it was issued
+and when the next is due, then where the forecast ends and the storm's wind;
+the bar shows how much of the forecast has passed. Downloading an item fetches
+the advisory's forecast, wind radii and best track zips into one folder.
+
+NHC usually issues an advisory every 6 hours. A newer advisory makes the
+download outdated, as a newer model run does: the item gets the **New run**
+tag and is listed under **Updates**, and downloading it again replaces the
+storm on the chart in place. **Pin this run** keeps an advisory beside the
+latest.
+
+While a storm is loaded, the Library reads NHC's list every hour. When NHC
+issues a new advisory for it, a notification says so ("HURRICANE ZELDA:
+advisory 18 is available"), with **Load latest run** to download and load it.
+Nothing is loaded without you, and a storm that isn't loaded, or one that
+newly becomes active, doesn't notify; it just appears in the Library.
+
+### Stale and final advisories
+
+An advisory is stale 7 hours after it was issued, when a newer one is likely.
+Its age is counted up to the view time, or up to now when you look ahead, so
+stepping through a forecast doesn't make it older. A stale storm isn't faded:
+
+- on the chart, the second line of its label says its age, such as
+  `Adv 17 · 9 h old · newer advisory likely`;
+- in **Object information**, a warning line under the notice says
+  "Advisory 17 is 9 h old. NHC has probably issued a newer one.";
+- in the Datasets panel, its row has the **Stale** tag;
+- in the Library, the item has the **Stale** tag, its details say
+  "Advisory 17 is over 7 hours old", and **Load latest run** fetches the
+  newest.
+
+When NHC stops listing a loaded storm, its last advisory was its final one:
+the storm dissipated, became post-tropical or was handed over. The item
+leaves the Library, but the storm stays loaded and is drawn as a final
+advisory: its past track, and the storm with the post-tropical symbol and
+"Final advisory issued" and the time on its label, with no cone, forecast or
+radii. SoundCharts marks it with a file beside its zips
+(`al142026_final.txt`), so it's drawn the same way after a restart.
 
 ## Show a surface analysis
 
@@ -316,8 +414,45 @@ later), its intensity if the bulletin gives one, and the bulletin's own
 points as the count and the two ends. A centre shows its pressure and
 position.
 
-Only the bulletin's first analysis is drawn: for a forecast bulletin, its
-first forecast time. Moving the Timeline doesn't change it yet.
+### Get the latest analysis from the Library
+
+In the Library, choose **Add** and pick **Surface analysis — WPC** from the
+weather sources. It has the `FEED` tag. The latest high-resolution analysis
+is ticked; tick **Forecast fronts · WPC** too to add WPC's coded forecast,
+12 and 24 hours ahead, as a second item. Both cover WPC's area only, North
+America and adjacent waters, which each item says.
+
+Download and load an item as any other. While the analysis is loaded, the
+Library reads the source again every 3 hours, as WPC issues a new analysis,
+and loads the newer one in its place. **Load latest run** does it at once;
+**Pin this run** keeps an analysis beside the latest.
+
+### Time
+
+An analysis or forecast is drawn from its valid time until 12 hours later,
+then nothing is drawn. The Datasets row says "No analysis at view time" and
+the Timeline lane hides; click the row's time to jump to the nearest one.
+
+| Age at the view time | Chart | Panels |
+|---|---|---|
+| Up to 6 hours | Drawn as above | The analysis time, and how far it is from the view time |
+| 6 to 12 hours | Lines and labels at half opacity, and each **H** and **L** says its age, such as `9 h old` | A **Stale** tag on the Datasets row, and a warning line in Object information: "This analysis is 9 h old. A newer one is likely." |
+| Over 12 hours | Not drawn | "No analysis at view time" |
+
+When several bulletins are loaded, one draws at a time: the one valid
+latest at or before the view time. A newer analysis takes over from an
+older one, and a forecast valid nearer the view time takes over from the
+analysis. For the same valid time, the analysis wins over the forecast.
+Hidden bulletins show "newer analysis drawn" on their Datasets row.
+
+The Timeline lists bulletins under **Surface analysis**, in a lane named
+**WPC** with "analysis · 3 h" or "forecast" under it. Step with ‹ › through
+the forecast's valid times.
+
+In the Library, an analysis more than 6 hours old has the **Stale** tag and
+"Analysis … is over 6 hours old" in its details, with **Load latest run**.
+WPC issues the forecast fronts about every 12 hours, so they are stale after
+13.
 
 ## Show buoy observations
 
@@ -408,9 +543,8 @@ centres; see the [MCP server](mcp-server.md).
   (such as Zstandard).
 - **BUFR** observations.
 - **Surface analyses outside WPC's area**, and fronts in WPC's colours (blue
-  cold, red warm). Fronts are drawn in one ink only. The Library doesn't
-  fetch bulletins yet, and the Timeline doesn't choose between the times of a
-  forecast bulletin.
+  cold, red warm). Fronts are drawn in one ink only. `s100 render` draws a
+  stale analysis at full opacity.
 - **Weather in route checks.** A route check doesn't consider wind, waves or
   model currents.
 - **Ocean model servers.** The Library fetches currents only from ERDDAP.

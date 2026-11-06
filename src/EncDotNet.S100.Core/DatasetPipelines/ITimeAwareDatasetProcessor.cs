@@ -29,6 +29,27 @@ public interface ITimeAwareDatasetProcessor
     DateTime? IssueTime => null;
 
     /// <summary>
+    /// When the producer is next expected to issue a newer dataset (UTC), such
+    /// as NHC's next regular advisory; <see langword="null"/> (the default)
+    /// when it doesn't say. A host marks it on the timeline (V14).
+    /// </summary>
+    DateTime? NextIssueTime => null;
+
+    /// <summary>
+    /// A short name for the dataset on a host's timeline, such as a storm's
+    /// name (<c>IAN</c>); <see langword="null"/> (the default) for the host's
+    /// own label from the dataset's name or run.
+    /// </summary>
+    string? TimelineLabel => null;
+
+    /// <summary>
+    /// A few words a host's timeline shows after <see cref="TimelineLabel"/>,
+    /// such as a storm's advisory (<c>adv 20</c>); <see langword="null"/> (the
+    /// default) for none.
+    /// </summary>
+    string? TimelineDetail => null;
+
+    /// <summary>
     /// What the time steps are, which one is drawn between steps, and how long
     /// a step stays valid. Defaults to <see cref="TimeSemantics.Default"/>:
     /// forecast steps, nearest within the typical step.

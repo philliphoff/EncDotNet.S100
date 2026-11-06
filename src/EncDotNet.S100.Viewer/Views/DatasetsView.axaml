@@ -508,18 +508,31 @@
                                                     AutomationProperties.AutomationId="Datasets.Source.Dataset.LayerTime"
                                                     AutomationProperties.Name="{Binding LayerTimeText}"
                                                     Classes="LayerTime"
-                                                    Classes.hidden="{Binding IsLayerHidden}"
+                                                    Classes.hidden="{Binding IsLayerWarning}"
                                                     Classes.drawing="{Binding IsLayerDrawing}"
                                                     Command="{Binding JumpToLayerDataCommand}"
                                                     ToolTip.Tip="{Binding LayerTimeText}">
                                                 <TextBlock Text="{Binding LayerTimeText}" TextTrimming="CharacterEllipsis" />
                                             </Button>
-                                            <Border Grid.Column="1" Classes="HiddenTag" IsVisible="{Binding IsLayerHidden}">
-                                                <TextBlock Text="{x:Static loc:Strings.LayerTime_Hidden}"
-                                                           FontSize="10"
-                                                           FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource WarningColor}" />
-                                            </Border>
+                                            <Panel Grid.Column="1">
+                                                <Border Classes="HiddenTag" IsVisible="{Binding IsLayerWarning}"
+                                                        AutomationProperties.AutomationId="Datasets.Source.Dataset.TimeTag"
+                                                        AutomationProperties.Name="{Binding LayerTagText}">
+                                                    <TextBlock Text="{Binding LayerTagText}"
+                                                               FontSize="10"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource WarningColor}" />
+                                                </Border>
+                                                <!-- Stale data drawn at the view time (vector-weather.md §7): a surface analysis over 6 hours old. -->
+                                                <Border Classes="HiddenTag" IsVisible="{Binding IsLayerStale}"
+                                                        AutomationProperties.AutomationId="Datasets.Source.Dataset.StaleTag"
+                                                        AutomationProperties.Name="{x:Static loc:Strings.LayerTime_Stale}">
+                                                    <TextBlock Text="{x:Static loc:Strings.LayerTime_Stale}"
+                                                               FontSize="10"
+                                                               FontWeight="SemiBold"
+                                                               Foreground="{DynamicResource WarningColor}" />
+                                                </Border>
+                                            </Panel>
                                         </Grid>
                                         </StackPanel>
                                         <Border Grid.Column="2" Classes="SpecTag">
@@ -683,18 +696,31 @@
                                                 AutomationProperties.AutomationId="Datasets.Row.LayerTime"
                                                 AutomationProperties.Name="{Binding LayerTimeText}"
                                                 Classes="LayerTime"
-                                                Classes.hidden="{Binding IsLayerHidden}"
+                                                Classes.hidden="{Binding IsLayerWarning}"
                                                 Classes.drawing="{Binding IsLayerDrawing}"
                                                 Command="{Binding JumpToLayerDataCommand}"
                                                 ToolTip.Tip="{Binding LayerTimeText}">
                                             <TextBlock Text="{Binding LayerTimeText}" TextTrimming="CharacterEllipsis" />
                                         </Button>
-                                        <Border Grid.Column="1" Classes="HiddenTag" IsVisible="{Binding IsLayerHidden}">
-                                            <TextBlock Text="{x:Static loc:Strings.LayerTime_Hidden}"
-                                                       FontSize="10"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource WarningColor}" />
-                                        </Border>
+                                        <Panel Grid.Column="1">
+                                            <Border Classes="HiddenTag" IsVisible="{Binding IsLayerWarning}"
+                                                    AutomationProperties.AutomationId="Datasets.Row.TimeTag"
+                                                    AutomationProperties.Name="{Binding LayerTagText}">
+                                                <TextBlock Text="{Binding LayerTagText}"
+                                                           FontSize="10"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource WarningColor}" />
+                                            </Border>
+                                            <!-- Stale data drawn at the view time (vector-weather.md §7): a surface analysis over 6 hours old. -->
+                                            <Border Classes="HiddenTag" IsVisible="{Binding IsLayerStale}"
+                                                    AutomationProperties.AutomationId="Datasets.Row.StaleTag"
+                                                    AutomationProperties.Name="{x:Static loc:Strings.LayerTime_Stale}">
+                                                <TextBlock Text="{x:Static loc:Strings.LayerTime_Stale}"
+                                                           FontSize="10"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource WarningColor}" />
+                                            </Border>
+                                        </Panel>
                                     </Grid>
                                 </StackPanel>
                                 <ic:FluentIcon Grid.Column="2"

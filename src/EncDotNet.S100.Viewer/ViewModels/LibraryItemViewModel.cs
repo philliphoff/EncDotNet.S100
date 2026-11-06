@@ -117,12 +117,22 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// (or its group, once unpacked) is named by its description instead.
     /// </summary>
     public string Name => IsModelHeader ? Item.Name
+        : IsStorm ? StormItemText.Name(Item)
         : IsPackageEntry || IsGroupHeader
         ? Item.Title is { } title ? PackageTitles.Clean(title) : Item.Name
         : Item.Name;
 
     /// <summary>True when <see cref="Name"/> is a code, shown in monospace (not a package's description).</summary>
-    public bool IsNameMono => IsModelHeader || (!IsPackageEntry && !IsGroupHeader);
+    public bool IsNameMono => IsModelHeader || (!IsPackageEntry && !IsGroupHeader && !IsStorm);
+
+    /// <summary>True when the row shows the outline swatch: not for a group header or a storm, which shows its class symbol.</summary>
+    public bool ShowsOutlineSwatch => !IsGroupHeader && !IsStorm;
+
+    /// <summary>True for an NHC storm (V27): named by the storm, with its class symbol as the swatch.</summary>
+    public bool IsStorm => StormItemText.IsStorm(Item);
+
+    /// <summary>The storm's class symbol, drawn as the row's swatch (V27); <see langword="null"/> for other items.</summary>
+    public Avalonia.Media.IImage? StormGlyph => IsStorm ? StormGlyphs.For(StormItemText.Symbol(Item)) : null;
 
     /// <summary>The descriptive title, when the source supplies one (for a package: what it holds).</summary>
     /// <remarks>A dataset under an unpacked package drops a title that only repeats the package's.</remarks>
@@ -130,6 +140,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             // A downloaded SECOM exchange set that only cancels warnings (#916).
             ? Item.Properties.ContainsKey("contents") ? Strings.Library_PackageEmptyHint : Strings.Library_PackageHint
         : IsModelHeader ? Item.Title
+        : IsStorm ? StormItemText.Subtitle(Item, EffectiveItem, ShownRun, IsNewerRunListed, FormatRun)
         : IsForecastTile ? null
         : IsGroupHeader ? null
         : _isGroupChild && Item.Title is { } title && Item.Properties.TryGetValue("packageTitle", out var package) && title == package ? null
@@ -296,9 +307,21 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// <summary>True when the row's downloaded run can be pinned (a weather run, downloaded, not already a pin).</summary>
     public bool CanPinRun => CanLoadLatestRun && LocalRun is not null;
 
-    /// <summary>"Run 2026-10-25 00Z is over 12 hours old" for a stale weather run; otherwise null.</summary>
+    /// <summary>
+    /// "Run 2026-10-25 00Z is over 12 hours old" for a stale weather run (or
+    /// "Analysis … is over 6 hours old" for a surface analysis, with the
+    /// source's own limit); otherwise null.
+    /// </summary>
     public string? StaleRunText => IsStaleRun && ShownRun is { } run
-        ? string.Format(CultureInfo.CurrentCulture, Strings.Library_StaleRunFormat, FormatRun(run))
+        ? IsStorm && StormItemText.ShownAdvisory(Item, EffectiveItem) is { } advisory
+            ? StormItemText.StaleText(advisory, EncDotNet.S100.Collections.Weather.WeatherRuns.StaleAfterOf(Item))
+            : string.Format(
+            CultureInfo.CurrentCulture,
+            Item.Properties.GetValueOrDefault(EncDotNet.S100.Collections.Weather.WeatherFeedIndexer.BulletinKindProperty) == "analysis"
+                ? Strings.Library_StaleAnalysisFormat
+                : Strings.Library_StaleRunFormat,
+            FormatRun(run),
+            (int)Math.Round(EncDotNet.S100.Collections.Weather.WeatherRuns.StaleAfterOf(Item).TotalHours))
         : null;
 
     /// <summary>
@@ -320,6 +343,9 @@ internal sealed class LibraryItemViewModel : ViewModelBase
 
     /// <summary>The run shown: the downloaded copy's, else the catalogue's latest.</summary>
     private DateTimeOffset? ShownRun => LocalRun ?? S100ForecastFeedIndexer.RunOf(Item);
+
+    /// <summary>True when the catalogue lists a newer run than the downloaded copy's (a storm's next advisory).</summary>
+    private bool IsNewerRunListed => LocalRun is { } local && S100ForecastFeedIndexer.RunOf(Item) is { } listed && listed > local;
 
     /// <summary>The end of the shown run's valid window.</summary>
     private DateTimeOffset? ShownValidTo => ForecastRuns.ShownWindow(Item, LocalRun)?.ValidTo;
@@ -370,6 +396,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         if (!IsForecast)
             return;
         OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(Subtitle));
         OnPropertyChanged(nameof(Details));
     }
 
@@ -398,6 +425,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         OnPropertyChanged(nameof(TimeLeftText));
         OnPropertyChanged(nameof(IsWindowEnded));
         OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(Subtitle));
         OnPropertyChanged(nameof(Tags));
         OnPropertyChanged(nameof(PrimaryAvailability));
     }
@@ -405,6 +433,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// <summary>"S-111 · run 30.09.2026 12:00Z · to 02.10.2026 12:00Z · 23 tiles · 12 MB" (a tile: its size).</summary>
     private string ForecastSummary()
     {
+        if (IsStorm)
+            return StormItemText.Summary(Item, ShownValidTo, FormatRun);
         var c = CultureInfo.CurrentCulture;
         var parts = new List<string>(5) { Item.ProductSpec };
         if (IsForecastRunRow)
@@ -416,6 +446,10 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             if (IsModelHeader)
                 parts.Add(string.Format(c, Strings.Library_Forecast_TilesFormat, _members.Count));
         }
+
+        // Where the data covers, when narrower than its area (WPC's domain, V36).
+        if (EncDotNet.S100.Collections.Weather.WeatherRuns.CoverageOf(Item) is { } coverage)
+            parts.Add(coverage);
 
         var bytes = IsModelHeader
             ? _members.Sum(m => (m.Item.Location as RemoteItemLocation)?.SizeBytes ?? 0)

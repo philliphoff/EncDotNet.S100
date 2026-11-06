@@ -35,6 +35,13 @@ public enum NhcFileKind
 public sealed partial record NhcAdvisoryFiles(string ForecastZip, string? WindRadiiZip, string? BestTrackZip)
 {
     /// <summary>
+    /// Whether a final-advisory marker (<see cref="FinalMarkerName"/>) lies
+    /// beside the zips: the advisory is the storm's last, so it is drawn as
+    /// a final advisory (design note <c>vector-weather.md</c> §7).
+    /// </summary>
+    public bool IsFinal { get; init; }
+
+    /// <summary>
     /// Finds the zips of an advisory from <paramref name="path"/>: a
     /// <c>_5day_</c> zip, whose siblings are looked for in its folder, or a
     /// folder holding one storm's zips, whose latest advisory is taken.
@@ -54,7 +61,10 @@ public sealed partial record NhcAdvisoryFiles(string ForecastZip, string? WindRa
         return new NhcAdvisoryFiles(
             path,
             Sibling(files, WindRadiiZipName(atcfId, advisory)),
-            Sibling(files, BestTrackZipName(atcfId)));
+            Sibling(files, BestTrackZipName(atcfId)))
+        {
+            IsFinal = File.Exists(Path.Combine(folder, FinalMarkerName(atcfId))),
+        };
     }
 
     /// <summary>
@@ -119,6 +129,17 @@ public sealed partial record NhcAdvisoryFiles(string ForecastZip, string? WindRa
         $"{atcfId.ToLowerInvariant()}_best_track.zip";
 
     /// <summary>
+    /// The name of the marker a host writes beside a storm's zips once NHC
+    /// stops listing the storm as active (its advisories have ended), for
+    /// example <c>al092022_final.txt</c>: the advisory there is then read as
+    /// the storm's final one (<see cref="TropicalCycloneAdvisory.IsFinal"/>).
+    /// NHC's files don't say which advisory is the last.
+    /// </summary>
+    /// <param name="atcfId">The storm's ATCF id.</param>
+    public static string FinalMarkerName(string atcfId) =>
+        $"{atcfId.ToLowerInvariant()}_final.txt";
+
+    /// <summary>
     /// Orders advisories as NHC numbers them: by number, an intermediate
     /// advisory (<c>"20A"</c>) after its full one, and <c>"latest"</c> last.
     /// </summary>
@@ -150,7 +171,10 @@ public sealed partial record NhcAdvisoryFiles(string ForecastZip, string? WindRa
         return new NhcAdvisoryFiles(
             latest.Path,
             Sibling(files, WindRadiiZipName(latest.Id, latest.Advisory)),
-            Sibling(files, BestTrackZipName(latest.Id)));
+            Sibling(files, BestTrackZipName(latest.Id)))
+        {
+            IsFinal = File.Exists(Path.Combine(folder, FinalMarkerName(latest.Id))),
+        };
     }
 
     private static string[] SafeFiles(string folder)

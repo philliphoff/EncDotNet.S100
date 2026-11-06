@@ -114,7 +114,7 @@ public sealed class SurfaceAnalysisStyleTests
     [Fact]
     public void A_centre_is_its_letter_over_a_cross_and_its_pressure_at_larger_scales()
     {
-        var instructions = SurfaceAnalysisStyle.BuildCentre("LOW 1", new PressureCentre(PressureCentreKind.Low, 996, new GeoPosition(45, -50)));
+        var instructions = SurfaceAnalysisStyle.BuildCentre("LOW 1", new PressureCentre(PressureCentreKind.Low, 996, new GeoPosition(45, -50)), staleAge: null);
 
         var texts = instructions.OfType<TextInstruction>().ToArray();
         var letter = Assert.Single(texts, t => t.Text == "L");
