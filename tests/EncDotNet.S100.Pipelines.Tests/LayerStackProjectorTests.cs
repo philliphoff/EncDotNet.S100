@@ -8,8 +8,6 @@ using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using Mapsui.Layers;
-using Mapsui.Nts;
-using NetTopologySuite.Geometries;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
@@ -191,9 +189,7 @@ public class LayerStackProjectorTests
         var layer = new InstrumentedMemoryLayer
         {
             Name = "S-101 (areas)",
-            Features = refs.Select(PickFeature).ToList(),
             CustomLayerRendererName = S100VectorTileRenderer.RendererName,
-            RepeatsAcrossWorldCopies = true,
         };
         S100VectorTileRenderer.BindScene(layer, new VectorScene(
             refs.Select(r => (PaintOp)new AreaPaintOp { FeatureReference = r, WorldShell = square }).ToArray()));
@@ -210,13 +206,6 @@ public class LayerStackProjectorTests
             S98DisplayPlane.BaseChartUnder,
             0,
             original.SourceDatasetId);
-
-    private static GeometryFeature PickFeature(string featureReference)
-    {
-        var feature = new GeometryFeature(new Point(0, 0));
-        feature[MapsuiDisplayListRenderer.FeatureRefKey] = featureReference;
-        return feature;
-    }
 
     private static VectorSubLayer BuildAreaSubLayer(params string[] featureReferences) => new()
     {

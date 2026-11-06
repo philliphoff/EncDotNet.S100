@@ -2,7 +2,6 @@ using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Mapsui;
 using Mapsui;
-using Mapsui.Layers;
 using Mapsui.Styles;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -22,6 +21,11 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// at a single anchor; without deduplication, the stacked rectangles accumulate
 /// their faint fill into a visibly darkened box around the sounding. These
 /// tests pin the rectangle to exactly one per (feature, anchor).
+/// </para>
+/// <para>
+/// Only features built for Mapsui carry the rectangle: those of
+/// <see cref="MapsuiDisplayListRenderer.RenderFeatures"/> and the single-surface
+/// arm. A tiled layer has no features and is picked from its bound scene.
 /// </para>
 /// </remarks>
 public class MapsuiSoundingHitRectTests
@@ -64,9 +68,9 @@ public class MapsuiSoundingHitRectTests
             SymbolProvider = ResolveSymbol,
         };
 
-        var layer = renderer.Render(instructions, new StubGeometryProvider());
-        var memLayer = Assert.IsAssignableFrom<MemoryLayer>(layer);
-        return memLayer.Features.ToList();
+        // RenderFeatures builds the same per-op features as the single-surface
+        // arm; a tiled layer builds none (it is picked from its bound scene).
+        return renderer.RenderFeatures(instructions, new StubGeometryProvider()).ToList();
     }
 
     private static int CountHitRects(IEnumerable<IFeature> features) =>

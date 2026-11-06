@@ -317,22 +317,6 @@ public sealed class WorldCopyTests
     }
 
     [Fact]
-    public void TiledDatasetLayer_ReturnsPickFeaturesOnAdjacentWorld()
-    {
-        // A click on the west copy of 185°–195°E data (at 170°W) hits its
-        // pick feature there, so the Object Information panel resolves it.
-        var feature = Box(185, 195);
-        feature[MapsuiDisplayListRenderer.FeatureRefKey] = "ice-1";
-        var layer = new InstrumentedMemoryLayer { Features = [feature], RepeatsAcrossWorldCopies = true };
-        var click = new MRect(X(-170), Y(0), X(-170), Y(0));
-
-        var hit = Assert.Single(layer.GetFeatures(click, Resolution));
-
-        Assert.Equal("ice-1", hit[MapsuiDisplayListRenderer.FeatureRefKey]);
-        Assert.Equal(X(185) - C, hit.Extent!.MinX, 3);
-    }
-
-    [Fact]
     public void UntiledDatasetLayer_ReturnsOwnFrameOnly()
     {
         var layer = new InstrumentedMemoryLayer { Features = [Box(185, 195)] };

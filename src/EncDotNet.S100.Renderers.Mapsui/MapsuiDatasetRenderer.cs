@@ -219,15 +219,11 @@ public sealed class MapsuiDatasetRenderer
                 AreaFillProvider = result.AreaFillProvider,
                 LineStyleProvider = result.LineStyleProvider,
                 Options = _options,
-                // The out-of-scale-band cap is applied through two mechanisms that
-                // stay in sync, so features lacking their own SCAMIN are hidden out
-                // of band on both the rendered plane and in picking:
-                //  - OutOfBandMinDisplayScale here propagates the cap onto the
-                //    VectorScene IR, so the tiled renderer hides out-of-band
-                //    features in the *rendered* base plane;
-                //  - ApplyOutOfScaleBandCap below stamps the equivalent per-feature
-                //    MaxVisible onto the built Mapsui features, so *picking*
-                //    (GetFeatures) hides them too.
+                // The out-of-scale-band cap goes onto the VectorScene IR, so
+                // features lacking their own SCAMIN are hidden out of band in
+                // both the rendered plane and the session pick. The
+                // single-surface arm also picks through its Mapsui features, so
+                // ApplyOutOfScaleBandCap below stamps the cap onto those too.
                 OutOfBandMinDisplayScale = sub.ApplyOutOfBandCap
                     ? result.OutOfBandMinDisplayScale
                     : null,
@@ -238,11 +234,10 @@ public sealed class MapsuiDatasetRenderer
             if (sub.Opacity < 1.0)
                 layer.Opacity = Math.Clamp(sub.Opacity, 0.0, 1.0);
 
-            TagFeatures(layer, result.FeatureTags);
-
             if (sub.ApplyOutOfBandCap
                 && result.OutOfBandMinDisplayScale is int denom
-                && layer is MemoryLayer memoryLayer)
+                && layer is MemoryLayer memoryLayer
+                && memoryLayer.Features.Any())
             {
                 // Convert the cell-wide out-of-band denominator at the layer's
                 // centre latitude so the cutoff matches the cell's true scale in
@@ -635,35 +630,6 @@ public sealed class MapsuiDatasetRenderer
             + "|tol:" + EncDotNet.S100.Rendering.Scene.PatternPriorityClipper.SimplifyToleranceMetres.ToString("R", c)
             + "|gate:" + EncDotNet.S100.Rendering.Scene.PatternPriorityClipper.MinPointsToSimplify.ToString(c)
             + "|fmt:" + DiskPatternClipCache.FormatVersion.ToString(c);
-    }
-
-    /// <summary>
-    /// Copies the S-98 feature tags (feature-type code and, for depth contours,
-    /// the VALDCO depth value) onto each built Mapsui feature so the
-    /// cross-dataset suppression rules can filter without re-portrayal
-    /// (R-101-102-B). The feature id is read back from the renderer's
-    /// feature-ref tag.
-    /// </summary>
-    private static void TagFeatures(ILayer layer, IReadOnlyDictionary<long, VectorFeatureTag>? tags)
-    {
-        if (tags is null || tags.Count == 0)
-            return;
-        if (layer is not MemoryLayer memoryLayer)
-            return;
-
-        foreach (var feature in memoryLayer.Features)
-        {
-            if (feature[MapsuiDisplayListRenderer.FeatureRefKey] is not string featureRef)
-                continue;
-            if (!long.TryParse(featureRef, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
-                continue;
-            if (!tags.TryGetValue(id, out var tag))
-                continue;
-
-            feature[FeatureTagKeys.FeatureType] = tag.FeatureType;
-            if (tag.DepthContourValue is not null)
-                feature[FeatureTagKeys.DepthContourValue] = tag.DepthContourValue;
-        }
     }
 
     /// <summary>

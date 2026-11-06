@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using EncDotNet.S100.Rendering.Engine;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Styles;
@@ -58,18 +57,16 @@ public sealed class InstrumentedMemoryLayer : MemoryLayer
             : new[] { new KeyValuePair<string, object?>("s100.product", product) };
     }
 
-    private WorldCopyFeatures? _worldCopies;
-
     /// <summary>
-    /// Whether <see cref="GetFeatures"/> also returns the features at the
-    /// adjacent world copies, as the tiled renderer draws them. Set for a
-    /// tile-rendered layer, whose features only carry pick identity.
+    /// The layer's extent when it has no features to derive one from: a
+    /// tile-rendered layer is drawn and picked from its bound scene, so its
+    /// extent is the scene's. When <see langword="null"/>, the extent comes
+    /// from <see cref="MemoryLayer.Features"/>.
     /// </summary>
-    internal bool RepeatsAcrossWorldCopies
-    {
-        get => _worldCopies is not null;
-        set => _worldCopies = value ? _worldCopies ?? new WorldCopyFeatures() : null;
-    }
+    internal MRect? SceneExtent { get; init; }
+
+    /// <inheritdoc />
+    public override MRect? Extent => SceneExtent ?? base.Extent;
 
     /// <summary>
     /// Per-session redraw sink. The S-100 vector renderers rasterise cached /
@@ -144,26 +141,6 @@ public sealed class InstrumentedMemoryLayer : MemoryLayer
             total++;
             if (feature is not null && feature.Extent?.Intersects(biggerRect) == true)
                 visible.Add(feature);
-        }
-
-        if (_worldCopies is { } copies)
-        {
-            // The tiled renderer draws the chart at every world copy in view
-            // (issue #773); the features only carry pick identity, so a pick
-            // on a copy must find them there too.
-            foreach (var offset in WorldCopies.OffsetsX)
-            {
-                if (offset == 0.0)
-                    continue;
-                var shifted = WorldCopyFeatures.ShiftBack(biggerRect, offset);
-                if (Extent?.Intersects(shifted) != true)
-                    continue;
-                foreach (var feature in Features)
-                {
-                    if (feature is not null && feature.Extent?.Intersects(shifted) == true)
-                        visible.Add(copies.Get(feature, offset));
-                }
-            }
         }
 
         var elapsedMs = Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds;

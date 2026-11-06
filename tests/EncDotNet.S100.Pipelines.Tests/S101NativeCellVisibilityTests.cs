@@ -4,9 +4,9 @@ using EncDotNet.S100.Features;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Rendering.Engine;
+using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.TestSupport;
-using Mapsui;
 using Mapsui.Layers;
 using SkiaSharp;
 
@@ -54,22 +54,23 @@ public class S101NativeCellVisibilityTests
             cellMinimum >= InBandScaleDenominator,
             $"{cell}: cell band ends at 1:{cellMinimum}, so it is hidden at 1:{InBandScaleDenominator}.");
 
-        var features = result.Layers.OfType<MemoryLayer>().SelectMany(static l => l.Features).ToList();
-        Assert.NotEmpty(features);
-
-        var latitudeRadians = MapsuiDisplayListRenderer.WebMercatorYToLatitudeRadians(
-            (result.Extent.MinY + result.Extent.MaxY) / 2.0);
-        var resolution = MapsuiDisplayListRenderer.DenominatorToResolution(InBandScaleDenominator, latitudeRadians);
+        var ops = result.Layers.SelectMany(BoundOps).ToList();
+        Assert.NotEmpty(ops);
 
         // Line work, points and text carry the out-of-scale-band cap; at least
         // one of them must survive it at an in-band scale.
         var lineworkVisible = result.Layers
-            .OfType<MemoryLayer>()
             .Where(static l => l.Name.Contains("(lines)", StringComparison.Ordinal))
-            .SelectMany(static l => l.Features)
-            .Count(f => IsVisibleAt(f, resolution));
-        Assert.True(lineworkVisible > 0, $"{cell}: no line/point/text feature is visible at 1:{InBandScaleDenominator}.");
+            .SelectMany(BoundOps)
+            .Count(static op => ScaleVisibility.IsVisibleAtScale(op, InBandScaleDenominator));
+        Assert.True(lineworkVisible > 0, $"{cell}: no line/point/text op is visible at 1:{InBandScaleDenominator}.");
     }
+
+    /// <summary>The ops of the scene bound to a tiled layer (base and overlay planes).</summary>
+    private static IEnumerable<PaintOp> BoundOps(ILayer layer) =>
+        S100VectorTileRenderer.TryGetPartitionedScene(layer, out var baseScene, out var overlay)
+            ? baseScene.Ops.Concat(overlay.Ops)
+            : [];
 
     [Theory]
     [MemberData(nameof(Cells))]
@@ -197,9 +198,6 @@ public class S101NativeCellVisibilityTests
 
         return count;
     }
-
-    private static bool IsVisibleAt(IFeature feature, double resolution) =>
-        feature.Styles.Any(s => s.Enabled && s.MinVisible <= resolution && resolution <= s.MaxVisible);
 
     private static DatasetPipelineFactory CreateFactory()
     {
