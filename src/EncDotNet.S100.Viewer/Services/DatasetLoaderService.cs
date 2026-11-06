@@ -493,9 +493,20 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             EncDotNet.S100.Validation.ValidationReport? validation;
             using (validationLease)
             {
-                validation = await Task.Run(
-                    () => SafeValidate(processor),
-                    token).ConfigureAwait(true);
+                // Validation runs in the scheduler's lowest class, whatever
+                // the load's demand, so it never delays drawing (map
+                // rendering slice 5).
+                Task<EncDotNet.S100.Validation.ValidationReport?> validating;
+                using (WorkDemand.Enter(null))
+                {
+                    validating = WorkScheduler.Shared.RunAsync(
+                        WorkStage.Validate,
+                        _ => SafeValidate(processor),
+                        token,
+                        WorkPriority.Validation());
+                }
+
+                validation = await validating.ConfigureAwait(true);
             }
             if (!IsCurrentLoad(entry, loadGeneration)
                 || !OwnsProcessor(entry, processor))
