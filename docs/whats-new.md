@@ -28,6 +28,7 @@ month. For package versions and release assets, see
   change: a storm's own parts (the storm and its radii) now come after the
   advisory's other parts in `EnumerateFeatures`. See
   [Show tropical cyclones](weather.md#time).
+
 - **Surface analyses follow the Timeline, from the Library.** A WPC
   bulletin's analysis or forecast is now drawn from its valid time for 12
   hours: after 6 it's stale, at half opacity with its age on each **H** and
@@ -48,6 +49,7 @@ month. For package versions and release assets, see
   `SurfaceAnalysisDatasetProcessor.DrawnAnalysisOf` takes a time step, and
   `SurfaceAnalysisStyle.BuildCentre` takes the analysis's stale age. See
   [Show a surface analysis](weather.md#show-a-surface-analysis).
+
 - **Tropical cyclones on the chart.** SoundCharts and `s100 render` now draw
   an NHC advisory in one plum-grey storm ink: the cone, tinted and stippled
   beyond 72 hours, the 34, 50 and 64 kt wind radii, the forecast and past
@@ -67,6 +69,7 @@ month. For package versions and release assets, see
   `TropicalCycloneDatasetProcessor.NotForNavigationNotice` reads "Tropical
   cyclone forecast, not for navigation. Follow official NHC advisories." See
   [Show tropical cyclones](weather.md#show-tropical-cyclones).
+
 - **Fronts and pressure centres on the chart.** A WPC coded surface
   bulletin now draws its cold, warm, occluded and stationary fronts and its
   troughs with the triangles and semicircles of a printed weather map, on

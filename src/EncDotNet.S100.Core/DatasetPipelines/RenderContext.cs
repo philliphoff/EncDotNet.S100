@@ -188,18 +188,18 @@ public sealed record RenderContext
     public DateTime? TimeStep { get; init; }
 
     /// <summary>
-    /// The time zone that times drawn on the chart are written in, such as a
-    /// tropical cyclone's forecast times; <see langword="null"/> for UTC. A
-    /// host sets the zone the user reads times in: SoundCharts passes the
-    /// machine's zone or UTC, as its Local/UTC preference says.
-    /// </summary>
-    public TimeZoneInfo? DisplayTimeZone { get; init; }
-
-    /// <summary>
     /// How old <see cref="TimeStep"/> is at the map time, to the nearest hour, once
     /// it is past the dataset's <see cref="TimeSemantics.StaleAfter"/>;
     /// <see langword="null"/> while it is current or the dataset has no such
     /// limit. A processor draws stale data as old (faded, with its age).
     /// </summary>
     public TimeSpan? TimeStepAge { get; init; }
+
+    /// <summary>
+    /// The time zone that times drawn on the chart are written in, such as a
+    /// tropical cyclone's forecast times; <see langword="null"/> for UTC. A
+    /// host sets the zone the user reads times in: SoundCharts passes the
+    /// machine's zone or UTC, as its Local/UTC preference says.
+    /// </summary>
+    public TimeZoneInfo? DisplayTimeZone { get; init; }
 }
