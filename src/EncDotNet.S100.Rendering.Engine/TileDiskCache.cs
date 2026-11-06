@@ -578,7 +578,10 @@ internal sealed class TileDiskCache : IDisposable
 
     /// <summary>Maps a tile key to its file name within a namespace directory.</summary>
     private static string FileName(TileKey key) =>
-        key.ScaleClass == 0
+        key.Slice != UInt128.Zero
+            ? string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"{key.Band}_{key.X}_{key.Y}_s{key.ScaleClass}_{key.Slice:x32}{FileExtension}")
+            : key.ScaleClass == 0
             ? string.Create(System.Globalization.CultureInfo.InvariantCulture,
                 $"{key.Band}_{key.X}_{key.Y}{FileExtension}")
             : string.Create(System.Globalization.CultureInfo.InvariantCulture,

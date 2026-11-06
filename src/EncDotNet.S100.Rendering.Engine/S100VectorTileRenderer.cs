@@ -661,10 +661,7 @@ public static partial class S100VectorTileRenderer
             state.Scene = baseScene;
             state.LiveBase = DrawsLive(scene, baseScene);
             state.BaseIndex = new BaseSpatialIndex(baseScene);
-            state.OverlayScene = overlayScene;
-            state.OverlayIndex = new OverlaySpatialIndex(overlayScene);
-            state.OverlayCandidates.Clear();
-            state.OverlayScopedScene = new VectorScene(state.OverlayCandidates);
+            state.Overlay = new OverlaySource(overlayScene);
             state.Generation++;
             state.DiskNamespace = diskNamespace;
             state.Cache.Clear();
@@ -1064,7 +1061,7 @@ public static partial class S100VectorTileRenderer
         // An off-screen frame never touches GPU residency: its surface (if GPU
         // at all) is not the live context, and a CPU surface would otherwise
         // drop the live view's resident textures. It blits the raster tiles.
-        var grContext = GpuResidencyEnabled && !offscreen ? (canvas.Context as GRContext) : null;
+        var grContext = state.Options.TileGpuResidencyEnabled && !offscreen ? (canvas.Context as GRContext) : null;
 
         var band = TileGrid.BandForResolution(resolution);
         var centerX = viewport.CenterX;
@@ -1115,10 +1112,17 @@ public static partial class S100VectorTileRenderer
         lock (state.Sync)
         {
             compositeLockAcquired = Stopwatch.GetTimestamp();
-            if (state.Scene is null)
+            var chart = state.Chart;
+            if (state.Scene is null && chart is null)
             {
                 return;
             }
+
+            // A chart layer's slots are planned against the live scale at the
+            // view centre, where each layer's out-of-band cap is applied (#761).
+            var liveDenominator = chart is null
+                ? 0.0
+                : S100VectorSceneRenderer.ScaleDenominatorFor(centerX, centerY, resolution);
 
             // Only tiles that intersect this cell's base content can draw
             // anything; the rest would rasterise to pure transparency. Dropping
@@ -1137,13 +1141,10 @@ public static partial class S100VectorTileRenderer
             var copyTiles = new CopyTiles[copies.Count];
             for (var i = 0; i < copies.Count; i++)
             {
-                var tiles = WithScaleClasses(
-                    state.Scene,
-                    WithContent(
-                        state,
-                        TileGrid.VisibleTiles(centerX - copies[i], centerY, coverWidth, coverHeight, resolution, band),
-                        hidden),
-                    bandRatio);
+                var grid = TileGrid.VisibleTiles(centerX - copies[i], centerY, coverWidth, coverHeight, resolution, band);
+                var tiles = chart is not null
+                    ? ChartTiles(state, chart, grid, bandRatio, resolution, liveDenominator)
+                    : WithScaleClasses(state.Scene!, WithContent(state, grid, hidden), bandRatio);
                 copyTiles[i] = new CopyTiles(
                     copies[i],
                     copies.Count > 1 && layerExtent is { } dataExtent
@@ -1254,18 +1255,28 @@ public static partial class S100VectorTileRenderer
                 // entirely when prediction is disabled (Phase-2 A/B baseline).
                 state.PendingPredicted.Clear();
                 state.CurrentSpeculative.Clear();
-                if (PredictionEnabled)
+                if (state.Options.TilePredictionEnabled)
                 {
                     foreach (var gridKey in SpeculativeTiles(copies, offset => TileGrid.PredictedTiles(
                         centerX - offset, centerY, coverWidth, coverHeight, resolution, band,
                         state.VelocityX, state.VelocityY)))
                     {
-                        if (!TileHasContent(state, gridKey) || IsTileHidden(state, gridKey, hidden))
+                        TileKey key;
+                        if (chart is not null)
+                        {
+                            if (!TryChartTile(state, chart, gridKey, bandRatio, resolution, liveDenominator, out key))
+                            {
+                                continue;
+                            }
+                        }
+                        else if (!TileHasContent(state, gridKey) || IsTileHidden(state, gridKey, hidden))
                         {
                             continue;
                         }
-
-                        var key = WithScaleClass(state.Scene, gridKey, bandRatio);
+                        else
+                        {
+                            key = WithScaleClass(state.Scene!, gridKey, bandRatio);
+                        }
 
                         state.CurrentSpeculative.Add(key);
                         if (!visibleSet.Contains(key)
@@ -1295,7 +1306,7 @@ public static partial class S100VectorTileRenderer
                 // viewport still had cold holes mid-raster and steal a worker from
                 // finishing the on-screen fill — breaking the guarantee above.
                 state.PendingCrossBand.Clear();
-                if (CrossBandPrewarmEnabled
+                if (state.Options.TileCrossBandPrewarmEnabled
                     && coldExposure == 0
                     && state.Cache.Pool.ResidentBytes < (long)(state.Cache.Pool.LimitBytes * CrossBandPrewarmHeadroomFraction))
                 {
@@ -1306,15 +1317,29 @@ public static partial class S100VectorTileRenderer
                         // Zooming in only adds active finer coverages, so a tile of a
                         // finer band hidden now stays hidden there. Zooming out can
                         // drop them, so coarser-band tiles are never skipped.
-                        if (!TileHasContent(state, gridKey)
+                        // A zoom step keeps the live-to-band ratio, so warm the
+                        // class the neighbouring band would be shown at.
+                        TileKey key;
+                        if (chart is not null)
+                        {
+                            var bandResolution = TileGrid.ResolutionForBand(gridKey.Band) * bandRatio;
+                            if (!TryChartTile(
+                                    state, chart, gridKey, bandRatio, bandResolution,
+                                    S100VectorSceneRenderer.ScaleDenominatorFor(centerX, centerY, bandResolution),
+                                    out key))
+                            {
+                                continue;
+                            }
+                        }
+                        else if (!TileHasContent(state, gridKey)
                             || (gridKey.Band > band && IsTileHidden(state, gridKey, hidden)))
                         {
                             continue;
                         }
-
-                        // A zoom step keeps the live-to-band ratio, so warm the
-                        // class the neighbouring band would be shown at.
-                        var key = WithScaleClass(state.Scene, gridKey, bandRatio);
+                        else
+                        {
+                            key = WithScaleClass(state.Scene!, gridKey, bandRatio);
+                        }
 
                         state.CurrentSpeculative.Add(key);
                         // Also exclude keys already queued in a higher tier this frame:
@@ -1348,6 +1373,10 @@ public static partial class S100VectorTileRenderer
                 }
 
                 SyncTileJobs(state, resolution);
+                if (chart is not null)
+                {
+                    PrunePlans(state);
+                }
 
                 // Bound the prediction-hit bookkeeping: a tile predicted then
                 // evicted before it was ever shown would otherwise linger. When the
@@ -1427,11 +1456,17 @@ public static partial class S100VectorTileRenderer
                     // world copy draws (and declutters) its own overlay. A cell
                     // whose base plane has not appeared yet keeps its symbols
                     // back too, so they appear with its fills, not before them.
-                    if (offscreen || outcome.ShowsBase)
+                    if (chart is not null)
+                    {
+                        DrawChartOverlay(
+                            canvas, chart, offscreen ? null : outcome.Unrevealed, viewport, copies,
+                            centerX, centerY, widthDip, heightDip, resolution, rotationDeg, deviceScale, liveDenominator);
+                    }
+                    else if (offscreen || outcome.ShowsBase)
                     {
                         foreach (var offset in copies)
                         {
-                            DrawOverlay(canvas, state, centerX - offset, centerY, widthDip, heightDip, resolution, rotationDeg, deviceScale);
+                            DrawOverlay(canvas, state.Overlay, centerX - offset, centerY, widthDip, heightDip, resolution, rotationDeg, deviceScale);
                         }
                     }
 
@@ -1653,7 +1688,7 @@ public static partial class S100VectorTileRenderer
 
                     foreach (var offset in copies)
                     {
-                        DrawOverlay(canvas, state, centerX - offset, centerY, widthDip, heightDip, resolution, rotationDeg, deviceScale);
+                        DrawOverlay(canvas, state.Overlay, centerX - offset, centerY, widthDip, heightDip, resolution, rotationDeg, deviceScale);
                     }
                 }
                 finally
@@ -1867,7 +1902,7 @@ public static partial class S100VectorTileRenderer
     /// coverages attached to <paramref name="layer"/>. Finer cells draw at
     /// their own copies, so a finer cell in any copy hides whatever copy of
     /// this cell lies beneath it on screen; coverages off-view are culled by
-    /// <see cref="CoverageClip.BuildActiveDifferencePaths"/>.
+    /// <see cref="CoverageClip.BuildActiveDifferencePaths(object, ViewState, double)"/>.
     /// </summary>
     private static List<SKPath> BuildCopyClipPaths(object layer, ViewState viewport, double resolution)
     {
@@ -2208,19 +2243,36 @@ public static partial class S100VectorTileRenderer
         // tile that is on screen this frame, no matter how small the budget is:
         // a tile in active use must never be evicted by speculative/predicted
         // inserts, or it would flicker between rendered and blank.
-        if (pinVisible)
-        {
-            state.Cache.Protect(target);
-            gpuCache?.Protect(target);
-        }
-
         // A tile whose SCAMIN scale class has just changed (issue #774) shows
         // its cached sibling class until its own raster lands: same band and
-        // pixels but for the ops whose limit was crossed, so no gap opens.
+        // pixels but for the ops whose limit was crossed, so no gap opens. A
+        // chart tile whose slot content changed shows the slot's last tile
+        // instead (stale-while-revalidate).
+        var chart = state.Chart is not null;
         var copyTargets = new IReadOnlyList<TileKey>[copies.Count];
         for (var i = 0; i < copies.Count; i++)
         {
-            copyTargets[i] = WithCachedScaleClasses(state, copies[i].Tiles);
+            copyTargets[i] = chart
+                ? WithStandIns(state, copies[i].Tiles)
+                : WithCachedScaleClasses(state, copies[i].Tiles);
+        }
+
+        if (pinVisible)
+        {
+            IReadOnlyCollection<TileKey> pinned = target;
+            if (chart)
+            {
+                var withStandIns = new HashSet<TileKey>(target);
+                foreach (var keys in copyTargets)
+                {
+                    withStandIns.UnionWith(keys);
+                }
+
+                pinned = withStandIns;
+            }
+
+            state.Cache.Protect(pinned);
+            gpuCache?.Protect(pinned);
         }
 
         // Cached tiles a sibling layer of the same dataset does not have yet
@@ -2365,6 +2417,16 @@ public static partial class S100VectorTileRenderer
             anyBackdrop |= blit.Fallback.Count > 0;
         }
 
+        HashSet<ChartLayerState>? unrevealed = null;
+        if (chart)
+        {
+            unrevealed = UnrevealedLayers(state, copies, copyTargets, anyBackdrop);
+            if (pinVisible)
+            {
+                RecordShown(state, copies);
+            }
+        }
+
         // The target shows exactly when every visible tile is its own cached
         // tile: none held for a sibling and none stood in for by another SCAMIN
         // scale class (WithCachedScaleClasses returns its input unchanged when
@@ -2379,7 +2441,8 @@ public static partial class S100VectorTileRenderer
         return new CompositeOutcome(
             ShowsBase: !anyTarget || anyShown || anyBackdrop,
             Holding: held is { Count: > 0 },
-            TargetExact: targetExact);
+            TargetExact: targetExact,
+            Unrevealed: unrevealed);
     }
 
     /// <summary>
@@ -2452,7 +2515,12 @@ public static partial class S100VectorTileRenderer
     /// Whether every target tile drew as itself: cached, not held, and not
     /// replaced by another scale class, so no fallback or predecessor drew.
     /// </param>
-    private readonly record struct CompositeOutcome(bool ShowsBase, bool Holding, bool TargetExact);
+    /// <param name="Unrevealed">
+    /// A chart layer's stack layers whose symbols wait for their base to
+    /// appear (see <see cref="UnrevealedLayers"/>), or null.
+    /// </param>
+    private readonly record struct CompositeOutcome(
+        bool ShowsBase, bool Holding, bool TargetExact, HashSet<ChartLayerState>? Unrevealed = null);
 
     /// <summary>
     /// <paramref name="keys"/> with each uncached tile replaced by a cached
@@ -3225,7 +3293,7 @@ public static partial class S100VectorTileRenderer
                 }
 
                 var currentScene = state.Scene;
-                if (currentScene is null)
+                if (currentScene is null && state.Chart is null)
                 {
                     return false;
                 }
@@ -3252,8 +3320,9 @@ public static partial class S100VectorTileRenderer
                     return false;
                 }
 
-                var keys = TakeMetatile(pending, key, MetatileEnabled);
-                if (MetatileEnabled && keys.Count == 1)
+                var metatiles = state.Options.TileMetatileEnabled;
+                var keys = TakeMetatile(pending, key, metatiles);
+                if (metatiles && keys.Count == 1)
                 {
                     RecordMetatileFallback("sparse");
                 }
@@ -3281,6 +3350,19 @@ public static partial class S100VectorTileRenderer
                     }
                 }
 
+                Dictionary<TileKey, SlotPlan>? plans = null;
+                if (state.Chart is not null)
+                {
+                    plans = new Dictionary<TileKey, SlotPlan>(keys.Count);
+                    foreach (var taken in keys)
+                    {
+                        if (state.Plans.TryGetValue(taken, out var plan))
+                        {
+                            plans[taken] = plan;
+                        }
+                    }
+                }
+
                 job = new TileJob(
                     keys,
                     state.PendingDeviceScale,
@@ -3288,6 +3370,7 @@ public static partial class S100VectorTileRenderer
                     state.ViewportEpoch,
                     currentScene,
                     state.BaseIndex,
+                    plans,
                     priority,
                     state.DiskNamespace is { } diskNamespace
                         ? TileDiskCache.NamespaceFor(
@@ -3355,6 +3438,11 @@ public static partial class S100VectorTileRenderer
                 var tilePx = TilePixelSize(job.DeviceScale);
                 foreach (var key in activeKeys)
                 {
+                    if (!IsPersistable(job, key))
+                    {
+                        continue;
+                    }
+
                     var image = disk.TryRead(job.DiskNamespace, key);
                     if (image is null)
                     {
@@ -3403,9 +3491,13 @@ public static partial class S100VectorTileRenderer
             {
                 var rasterStart = Stopwatch.GetTimestamp();
                 IReadOnlyDictionary<TileKey, SKImage> fresh;
-                if (misses.Count > 1)
+                if (job.Plans is { } jobPlans)
                 {
-                    fresh = RasterizeMetatile(job.Scene, job.BaseIndex, misses, job.DeviceScale);
+                    fresh = RasterizeChartTiles(misses, jobPlans, job.DeviceScale);
+                }
+                else if (misses.Count > 1)
+                {
+                    fresh = RasterizeMetatile(job.Scene!, job.BaseIndex, misses, job.DeviceScale);
                 }
                 else
                 {
@@ -3415,7 +3507,7 @@ public static partial class S100VectorTileRenderer
                     }
 
                     using var bitmap = RasterizeTile(
-                        job.Scene, job.BaseIndex, misses[0], job.DeviceScale);
+                        job.Scene!, job.BaseIndex, misses[0], job.DeviceScale);
                     fresh = new Dictionary<TileKey, SKImage>
                     {
                         [misses[0]] = SKImage.FromBitmap(bitmap),
@@ -3501,7 +3593,8 @@ public static partial class S100VectorTileRenderer
                         if (relevance == TileRelevance.Visible
                             && rasterized.Contains(key)
                             && disk is not null
-                            && job.DiskNamespace is not null)
+                            && job.DiskNamespace is not null
+                            && IsPersistable(job, key))
                         {
                             (persistenceKeys ??= []).Add(key);
                         }
@@ -3586,6 +3679,15 @@ public static partial class S100VectorTileRenderer
         }
     }
 
+    /// <summary>
+    /// Whether <paramref name="key"/>'s tile may be read from and written to
+    /// disk: always for a layer bound to one scene (its namespace is its style
+    /// state), and for a chart tile only when every scene in its plan has a
+    /// stable key, so its slice names the same content in every session.
+    /// </summary>
+    private static bool IsPersistable(TileJob job, TileKey key) =>
+        job.Plans is not { } plans || (plans.TryGetValue(key, out var plan) && plan.Persistable);
+
     private static void RecordMetatileFallback(string reason) =>
         S100Diag.Telemetry.MetatileFallbacks.Add(
             1, new KeyValuePair<string, object?>("reason", reason));
@@ -3667,8 +3769,9 @@ public static partial class S100VectorTileRenderer
         float DeviceScale,
         long Generation,
         long ViewportEpoch,
-        VectorScene Scene,
+        VectorScene? Scene,
         BaseSpatialIndex? BaseIndex,
+        IReadOnlyDictionary<TileKey, SlotPlan>? Plans,
         TileJobPriority Priority,
         string? DiskNamespace,
         double? QueueWaitMs);
@@ -3767,12 +3870,12 @@ public static partial class S100VectorTileRenderer
     /// </para>
     /// </summary>
     private static void DrawOverlay(
-        SKCanvas canvas, TileState state,
+        SKCanvas canvas, OverlaySource? source,
         double centerX, double centerY, double widthDip, double heightDip,
         double resolution, double rotationDeg, float deviceScale)
     {
-        var overlay = state.OverlayScene;
-        if (overlay is null || overlay.Ops.Count == 0)
+        var overlay = source?.Scene;
+        if (source is null || overlay is null || overlay.Ops.Count == 0)
         {
             return;
         }
@@ -3838,7 +3941,7 @@ public static partial class S100VectorTileRenderer
         // visible feature is dropped (fidelity neutral). Falls back to the whole
         // overlay if the index is somehow absent.
         var scene = ScopeOverlay(
-            state, overlay, rotate ? rotatedCull : screenCull,
+            source, overlay, rotate ? rotatedCull : screenCull,
             centerX, centerY, widthDip, heightDip, resolution);
 
         // Declutter labels deterministically: footprints are computed in final
@@ -3872,14 +3975,10 @@ public static partial class S100VectorTileRenderer
     /// when no index is available.
     /// </summary>
     private static VectorScene ScopeOverlay(
-        TileState state, VectorScene overlay, SKRect queryCull,
+        OverlaySource source, VectorScene overlay, SKRect queryCull,
         double centerX, double centerY, double widthDip, double heightDip, double resolution)
     {
-        var index = state.OverlayIndex;
-        if (index is null || state.OverlayScopedScene is null)
-        {
-            return overlay;
-        }
+        var index = source.Index;
 
         // Inflate by the max op offset (px) because the per-op screen cull tests
         // the anchor plus its offset, while the index keys on the anchor alone.
@@ -3900,9 +3999,9 @@ public static partial class S100VectorTileRenderer
         index.Query(
             Math.Min(wxA, wxB), Math.Min(wyA, wyB),
             Math.Max(wxA, wxB), Math.Max(wyA, wyB),
-            state.OverlayQueryScratch, state.OverlayCandidates);
+            source.QueryScratch, source.Candidates);
 
-        return state.OverlayScopedScene;
+        return source.ScopedScene;
     }
 
     /// <summary>
@@ -4446,6 +4545,24 @@ public static partial class S100VectorTileRenderer
 
         public readonly object Sync = new();
 
+        // The session options this layer's tiles follow: the process-wide
+        // options for a layer bound to one scene, its session's for a chart
+        // layer (see BindStack).
+        public ChartSessionOptions Options = ChartEngine.Options;
+
+        // The chart stack a chart layer draws (map rendering slice 8), or null
+        // for a layer bound to one scene. Under Sync.
+        public ResolvedChartStack? Chart;
+
+        // Chart layer only, under Sync: each slot's stack layers with ops
+        // (per stack), the last plan of each slot (per live resolution and
+        // cap state), the plan behind every key handed out, and the last
+        // tile each slot showed exactly (the stand-in while it re-rasters).
+        public readonly Dictionary<(int Band, int X, int Y), SlotContent> SlotContents = new();
+        public readonly Dictionary<(int Band, int X, int Y), PlanMemoEntry> PlanMemo = new();
+        public readonly Dictionary<TileKey, SlotPlan> Plans = new();
+        public readonly Dictionary<(int Band, int X, int Y), TileKey> ShownBySlot = new();
+
         public VectorScene? Scene;
 
         // Whether Scene is sparse enough to draw live each frame, skipping the
@@ -4465,17 +4582,11 @@ public static partial class S100VectorTileRenderer
         // constant on-screen size instead of scaling with the band-resolution
         // tiles. Null until a scene is bound; empty when the scene has no
         // point/text ops.
-        public VectorScene? OverlayScene;
+        public VectorScene? OverlayScene => Overlay?.Scene;
 
-        // Spatial index over the overlay anchors (#332 lever b), built once when
-        // the scene is bound so the per-frame overlay walk can be scoped to the
-        // viewport instead of the whole cell. The candidate list + sort scratch
-        // are render-thread-only reusable buffers; the scoped scene is a stable
-        // wrapper over the candidate list so a frame allocates nothing here.
-        public OverlaySpatialIndex? OverlayIndex;
-        public readonly List<int> OverlayQueryScratch = new();
-        public readonly List<PaintOp> OverlayCandidates = new();
-        public VectorScene? OverlayScopedScene;
+        // The overlay with its spatial index and per-frame scratch (see
+        // OverlaySource). Null until a scene is bound.
+        public OverlaySource? Overlay;
         public long Generation;
 
         // Persistent disk-cache namespace for this layer's current style state

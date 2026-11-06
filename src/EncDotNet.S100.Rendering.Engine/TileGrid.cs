@@ -12,8 +12,20 @@ namespace EncDotNet.S100.Rendering.Engine;
 /// <paramref name="ScaleClass"/> is the tile's SCAMIN scale class within its
 /// band (see <see cref="TileScaleClass"/>); the grid itself always yields
 /// class 0, and the tile renderer assigns the class for the live scale.
+/// <paramref name="Slice"/> is the chart tile's stack slice (see
+/// <see cref="ChartTileKey.StackSlice"/>): zero for a layer bound to one scene,
+/// and the hash of the slot's ordered scene keys and clip inputs for a layer
+/// bound to a <see cref="ChartStack"/>, so a slot whose content changes gets a
+/// new key while its old image stays on screen.
 /// </summary>
-internal readonly record struct TileKey(int Band, int X, int Y, int ScaleClass = 0);
+internal readonly record struct TileKey(int Band, int X, int Y, int ScaleClass = 0, UInt128 Slice = default)
+{
+    /// <summary>The slot this key draws: band and position, without class or slice.</summary>
+    public (int Band, int X, int Y) Slot => (Band, X, Y);
+
+    /// <summary>The public chart tile key for this tile at <paramref name="pixelSize"/>.</summary>
+    public ChartTileKey ToChartTileKey(int pixelSize) => new(Band, X, Y, ScaleClass, pixelSize, Slice);
+}
 
 /// <summary>
 /// A screen-space rectangle in device-independent pixels (DIP), corners
