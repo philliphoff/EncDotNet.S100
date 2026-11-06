@@ -157,7 +157,7 @@ public static class OverlapSuppression
     /// tracks the finer cell's content visibility exactly, for both exchange-set
     /// and standalone-loaded cells.
     /// </summary>
-    private static double ContentCutoffResolution(int denominator, Geometry coverage)
+    internal static double ContentCutoffResolution(int denominator, Geometry coverage)
     {
         var envelope = coverage.EnvelopeInternal;
         var latitudeRadians = MapsuiDisplayListRenderer.WebMercatorYToLatitudeRadians(

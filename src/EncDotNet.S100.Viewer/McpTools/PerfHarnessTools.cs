@@ -70,7 +70,22 @@ internal sealed record MetricsWindowDto(
     [property: Description("Peak GC heap size sampled through the window.")] long PeakGcHeapBytes,
     [property: Description("Peak GC committed bytes sampled through the window.")] long PeakGcCommittedBytes,
     [property: Description("Peak tile-cache native bytes sampled through the window.")] long PeakTileNativeBytes,
-    [property: Description("Samples behind the peaks.")] int PeakSamples);
+    [property: Description("Samples behind the peaks.")] int PeakSamples,
+    [property: Description("How long the UI thread took to pick up a probe posted about every millisecond, or null when no probe runs. maxMs is, to within about a millisecond, the longest single UI-thread task.")] UiThreadDelayDto? UiThread = null);
+
+/// <summary>UI-thread probe delays in a <see cref="MetricsWindowDto"/>.</summary>
+[Description("Delays of UI-thread probes in milliseconds (map rendering slice 6).")]
+internal sealed record UiThreadDelayDto(
+    [property: Description("Probes measured.")] long Count,
+    [property: Description("95th percentile.")] double P95Ms,
+    [property: Description("99th percentile.")] double P99Ms,
+    [property: Description("Longest (to within one bucket, 10%): about the longest UI-thread task.")] double MaxMs,
+    [property: Description("Probes that waited more than 8 ms.")] long Over8Ms,
+    [property: Description("Probes that waited more than 50 ms.")] long Over50Ms)
+{
+    public static UiThreadDelayDto Of(LatencySnapshot s) =>
+        new(s.Count, s.Percentile(0.95), s.Percentile(0.99), s.MaxMs, s.CountAbove(8), s.CountAbove(50));
+}
 
 /// <summary>Map paint times in a <see cref="ProcessMetricsDto"/>.</summary>
 [Description("On-screen map paint times over get_render_stats' rolling window.")]
@@ -312,7 +327,8 @@ internal sealed class GetProcessMetricsTool(
         w.Peaks.GcHeapBytes,
         w.Peaks.GcCommittedBytes,
         w.Peaks.TileNativeBytes,
-        w.Peaks.Samples);
+        w.Peaks.Samples,
+        w.UiDelays is { } ui ? UiThreadDelayDto.Of(ui) : null);
 
     /// <summary>The environment of this process.</summary>
     internal static PerfEnvironmentDto DescribeEnvironment(ViewerSettings settings, string? renderCacheDirectory) => new(
