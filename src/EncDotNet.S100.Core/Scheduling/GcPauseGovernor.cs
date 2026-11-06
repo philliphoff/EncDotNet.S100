@@ -43,6 +43,26 @@ public sealed record GcPauseGovernorOptions
         };
     }
 
+    /// <summary>
+    /// The environment variable that fixes the limit (map rendering slice 3's
+    /// pre-warm knob, which now pins the work scheduler's admission of every
+    /// allocation-heavy background job).
+    /// </summary>
+    public const string FixedConcurrencyVariable = "S100_PREWARM_CONCURRENCY";
+
+    /// <summary>
+    /// <see cref="ForProcessors"/>, or <see cref="Fixed"/> when
+    /// <paramref name="fixedConcurrency"/> is a positive whole number.
+    /// </summary>
+    /// <param name="processorCount">Logical processors.</param>
+    /// <param name="fixedConcurrency">The value of <see cref="FixedConcurrencyVariable"/>, or null.</param>
+    /// <returns>The options.</returns>
+    public static GcPauseGovernorOptions Resolve(int processorCount, string? fixedConcurrency) =>
+        int.TryParse(fixedConcurrency, System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture, out var n) && n > 0
+            ? Fixed(n)
+            : ForProcessors(processorCount);
+
     /// <summary>Options that hold the limit at <paramref name="concurrency"/>.</summary>
     /// <param name="concurrency">The fixed limit, at least 1.</param>
     /// <returns>The options.</returns>
@@ -129,9 +149,11 @@ public sealed class GcPauseGovernor
         else if (share < _options.GrowPauseShare && _windowSaturated)
             Limit = Math.Min(_options.MaxConcurrency, Limit + 1);
 
+        // The next window is judged by the observations inside it: after a
+        // change the producer fills the new slots before it observes again.
         _windowStart = now;
         _windowPauseStart = _gcPauseTotal();
-        _windowSaturated = running >= Limit;
+        _windowSaturated = true;
         return Limit != previous;
     }
 
