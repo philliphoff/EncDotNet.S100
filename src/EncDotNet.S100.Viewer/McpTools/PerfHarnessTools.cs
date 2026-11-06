@@ -93,7 +93,8 @@ internal sealed record PerfEnvironmentDto(
     [property: Description("Process architecture.")] string Architecture,
     [property: Description(".NET runtime.")] string Runtime,
     [property: Description("Where the render caches live when --cache-dir or S100_CACHE_DIR moved them, else null.")] string? RenderCacheDirectory,
-    [property: Description("Whether the build is optimised (Release).")] bool Optimized);
+    [property: Description("Whether the build is optimised (Release).")] bool Optimized,
+    [property: Description("Whether macOS App Nap is off for the process. The perf-harness tools turn it off on first use, so a hidden or covered window doesn't throttle the run; false off macOS.")] bool AppNapDisabled);
 
 /// <summary>Wait or run times of one work class in a <see cref="SchedulerWindowDto"/>.</summary>
 [Description("A distribution of times in milliseconds.")]
@@ -326,7 +327,8 @@ internal sealed class GetProcessMetricsTool(
         RuntimeInformation.ProcessArchitecture.ToString(),
         RuntimeInformation.FrameworkDescription,
         renderCacheDirectory,
-        IsOptimized());
+        IsOptimized(),
+        MacAppNap.IsDisabled);
 
     private static bool IsOptimized()
     {
@@ -427,6 +429,15 @@ internal sealed record PerfHarnessServices(
 /// <summary>MCP adapters for the perf-harness tools.</summary>
 internal static class PerfHarnessMcpAdapters
 {
+    /// <summary>
+    /// Runs on every perf-harness tool call. The first call turns macOS App
+    /// Nap off for the rest of the process: App Nap throttles a viewer whose
+    /// window is hidden or covered (lower CPU priority, coalesced timers), which
+    /// made about half of the harness's cold runs several times slower,
+    /// depending only on whether the window happened to be visible.
+    /// </summary>
+    private static void Attach() => MacAppNap.Disable("SoundCharts performance measurement");
+
     /// <summary>Creates <c>await_settled</c>.</summary>
     public static McpServerTool Create(AwaitSettledTool inner)
     {
@@ -436,7 +447,11 @@ internal static class PerfHarnessMcpAdapters
             [Description("How long the view must stay settled before the call returns, in ms; default 250, 0 to 10000. The reported settleMs doesn't include it.")] int? confirmMs = null,
             [Description("Sampling interval in ms; default 10, 1 to 1000.")] int? pollMs = null,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(timeoutMs, confirmMs, pollMs, ct));
+            McpAdapterShared.DispatchAsync(() =>
+            {
+                Attach();
+                return inner.InvokeAsync(timeoutMs, confirmMs, pollMs, ct);
+            });
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
@@ -462,6 +477,7 @@ internal static class PerfHarnessMcpAdapters
             McpAdapterShared.DispatchAsync(() =>
             {
                 ct.ThrowIfCancellationRequested();
+                Attach();
                 return Task.FromResult(inner.Invoke(window));
             });
 
@@ -490,6 +506,7 @@ internal static class PerfHarnessMcpAdapters
             McpAdapterShared.DispatchAsync(() =>
             {
                 ct.ThrowIfCancellationRequested();
+                Attach();
                 return Task.FromResult(inner.Invoke(enabled));
             });
 

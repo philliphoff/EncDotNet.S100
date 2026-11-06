@@ -351,6 +351,16 @@ public sealed class PerfHarnessTests
     // ── Pre-warm control ─────────────────────────────────────────────
 
     [Fact]
+    public void MacAppNap_Disable_HoldsTheActivityOnMacOSOnly()
+    {
+        var disabled = MacAppNap.Disable("EncDotNet.S100.Viewer.Tests");
+
+        Assert.Equal(OperatingSystem.IsMacOS(), disabled);
+        Assert.Equal(disabled, MacAppNap.IsDisabled);
+        Assert.Equal(disabled, MacAppNap.Disable("again"));
+    }
+
+    [Fact]
     public void PortrayalPrewarm_OverridesTheSettingForTheSession()
     {
         var holder = new PortrayalPrewarmOverride();
@@ -466,7 +476,7 @@ public sealed class PerfHarnessTests
     // ── Helpers ──────────────────────────────────────────────────────
 
     private static PerfEnvironmentDto Environment() =>
-        new("luacsharp", false, true, true, "Interactive", 16, "test", "Arm64", ".NET", null, true);
+        new("luacsharp", false, true, true, "Interactive", 16, "test", "Arm64", ".NET", null, true, true);
 
     private static ProcessMetricsReading Reading(
         long timestamp, double cpuMs, double pauseMs, (int, int, int) gen, long allocated, long workingSet) =>

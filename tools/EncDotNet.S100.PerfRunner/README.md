@@ -475,6 +475,20 @@ run's table. See [PerfReport](../EncDotNet.S100.PerfReport/README.md#settle-runs
 A single run is noisy. Use `--repeat <n>` for several runs of each engine and
 mode, and compare medians.
 
+### Keep runs comparable on macOS
+
+- **App Nap.** macOS throttles an app whose windows are all hidden or covered:
+  it lowers the app's CPU priority and coalesces its timers. A viewer in that
+  state settles several times slower, with three to four times the CPU time and
+  frame p95 in the hundreds of milliseconds. The viewer turns App Nap off when
+  the first perf-harness tool is called, so the window's visibility doesn't
+  matter. The manifest's `viewer.appNapDisabled` records it, and `summarise`
+  marks a macOS run with **App Nap on**.
+- **Screen lock.** With the screen locked the viewer doesn't paint, so
+  `await_settled` times out. Keep the screen unlocked.
+- **Other work.** On macOS the load average overstates how busy the machine is.
+  Wait for `top` to show at least 85% idle before each run.
+
 ### When a view is settled
 
 The viewer's MCP tool `await_settled` decides. The view is settled when both

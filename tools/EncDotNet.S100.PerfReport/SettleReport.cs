@@ -219,7 +219,8 @@ internal static class SettleReport
             writer.WriteLine(
                 $"- **Viewer:** Lua {Text(viewer, "luaEngine")}, {(Bool(viewer, "serverGc") == true ? "server" : "workstation")} GC, "
                 + $"{Text(viewer, "processorCount")} cores, {Text(viewer, "os")} {Text(viewer, "architecture")}, "
-                + $"{Text(viewer, "runtime")}{(Bool(viewer, "optimized") == false ? ", **Debug build**" : string.Empty)}");
+                + $"{Text(viewer, "runtime")}{(Bool(viewer, "optimized") == false ? ", **Debug build**" : string.Empty)}"
+                + $"{(Bool(viewer, "appNapDisabled") == false && Text(viewer, "os").Contains("Darwin", StringComparison.OrdinalIgnoreCase) ? ", **App Nap on**" : string.Empty)}");
         }
 
         if (manifest["prewarm"] is { } prewarm)
