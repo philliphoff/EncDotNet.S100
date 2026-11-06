@@ -15,7 +15,8 @@ public sealed record CheckRouteDetails(
     [property: Description("A finding of the clearance check: a stretch below your UKC setting, of lower confidence or of missing data.")] CheckRouteClearanceDetails? Clearance = null,
     [property: Description("Areas of a kind whose indication is off (route_check.area_kind_off): the kind and how many the route meets.")] CheckRouteAreaKindOffDetails? AreaKindOff = null,
     [property: Description("A navigational hazard other than a danger: an aid to navigation, structure or overhead feature whose S-101 portrayal raises the NavHazard alert (route_check.aid_to_navigation, route_check.structure_on_track, route_check.structure_in_corridor, route_check.overhead_on_route).")] CheckRouteHazardDetails? Hazard = null,
-    [property: Description("A finding of the weather check: a stretch above a wind or wave limit, or not checked, with its time window.")] CheckRouteWeatherDetails? Weather = null)
+    [property: Description("A finding of the weather check: a stretch above a wind or wave limit, or not checked, with its time window.")] CheckRouteWeatherDetails? Weather = null,
+    [property: Description("A finding of the weather check's tropical cyclone rule (weather.tc_*): a stretch inside a wind radius or the cone, the closest approach, or a stretch beyond the forecast.")] CheckRouteCycloneDetails? Cyclone = null)
 {
     /// <summary>
     /// Projects a finding's details, or returns <c>null</c> when it has none
@@ -96,6 +97,23 @@ public sealed record CheckRouteDetails(
             w.ModelRun?.ToUniversalTime(),
             w.ForecastStart?.ToUniversalTime(),
             w.ForecastEnd?.ToUniversalTime())),
+        TropicalCycloneDetails c => new(Cyclone: new CheckRouteCycloneDetails(
+            Snake(c.Kind.ToString()),
+            c.Storm.DatasetId,
+            c.Storm.StormId,
+            c.Storm.Name,
+            c.Storm.Advisory,
+            c.Radius is { } r ? (int)r : null,
+            c.FirstLegIndex,
+            c.LastLegIndex,
+            Math.Round(c.Length.TotalNauticalMiles, 4),
+            c.StartTime.ToUniversalTime(),
+            c.EndTime?.ToUniversalTime(),
+            c.ClosestDistance is { } d ? Math.Round(d.TotalNauticalMiles, 2) : null,
+            c.StormAtClosest?.Centre.Latitude,
+            c.StormAtClosest?.Centre.Longitude,
+            c.StormAtClosest is { } at ? CheckRouteCycloneApproach.BasisCode(at.Basis) : null,
+            c.ForecastEnd?.ToUniversalTime())),
         _ => null,
     };
 
@@ -212,3 +230,22 @@ public sealed record CheckRouteWeatherDetails(
     [property: Description("That dataset's model run, ISO 8601 UTC, or null.")] DateTimeOffset? ModelRun,
     [property: Description("forecast_starts_late: the forecast's first step, ISO 8601 UTC.")] DateTimeOffset? ForecastStart,
     [property: Description("forecast_ends: the forecast's last step, ISO 8601 UTC.")] DateTimeOffset? ForecastEnd);
+
+/// <summary>A tropical cyclone finding's numbers (#1299).</summary>
+public sealed record CheckRouteCycloneDetails(
+    [property: Description("radius, cone, closest_approach or beyond_forecast.")] string Kind,
+    [property: Description("The advisory's dataset id.")] string DatasetId,
+    [property: Description("The storm's ATCF id.")] string StormId,
+    [property: Description("The storm's name.")] string Name,
+    [property: Description("The advisory number.")] string Advisory,
+    [property: Description("radius: the wind radius, knots (34, 50 or 64); otherwise null.")] int? RadiusKnots,
+    [property: Description("Zero-based first leg of the stretch (the closest approach's leg).")] int FirstLegIndex,
+    [property: Description("Zero-based last leg of the stretch.")] int LastLegIndex,
+    [property: Description("The stretch's length, nautical miles (0 for the closest approach).")] double LengthNm,
+    [property: Description("When the vessel reaches the stretch, or is at the closest approach, ISO 8601 UTC (the departure without ETAs).")] DateTimeOffset StartTime,
+    [property: Description("When the vessel leaves the stretch, ISO 8601 UTC; null without ETAs.")] DateTimeOffset? EndTime,
+    [property: Description("closest_approach: the distance to the storm's centre, nautical miles.")] double? ClosestNm,
+    [property: Description("closest_approach: latitude of the storm's centre then.")] double? StormLatitude,
+    [property: Description("closest_approach: longitude of the storm's centre then.")] double? StormLongitude,
+    [property: Description("closest_approach: forecast, estimated or best_track.")] string? Basis,
+    [property: Description("beyond_forecast: the storm's last forecast point, ISO 8601 UTC.")] DateTimeOffset? ForecastEnd);
