@@ -22,6 +22,25 @@ internal enum FindingsFilter
 
     /// <summary>S-124 navigational warnings.</summary>
     Warnings,
+
+    /// <summary>The weather check's findings (#1093): wind or waves above your limits, and stretches not checked.</summary>
+    Weather,
+}
+
+/// <summary>Whether the weather check ran, for the verdict card's Weather row (#1093).</summary>
+/// <param name="State">Whether it ran.</param>
+/// <param name="Reason">Why it was skipped or ran in part, such as <see cref="RouteCheckReasons.WeatherLimitsMissing"/>.</param>
+/// <param name="Result">Its result, or <c>null</c> when skipped.</param>
+internal sealed record WeatherRowState(RouteCheckState State, string? Reason, WeatherCheckResult? Result)
+{
+    /// <summary>
+    /// The row's state for a report, or <c>null</c> when there's no row: no
+    /// weather is loaded, so the weather check had nothing to read.
+    /// </summary>
+    public static WeatherRowState? Of(RouteCheckReport report) =>
+        report.Status(WeatherCheck.CheckName) is { } status && status.Reason != RouteCheckReasons.WeatherMissing
+            ? new WeatherRowState(status.State, status.Reason, report.Weather)
+            : null;
 }
 
 /// <summary>
@@ -34,13 +53,15 @@ internal enum FindingsFilter
 /// <param name="Chip">The chip text, e.g. "2 below", or <c>null</c> for none.</param>
 /// <param name="ChipTone">The chip's tone.</param>
 /// <param name="AddDraft">Whether the row ends with the "+ Add draft" link (no draft).</param>
+/// <param name="Tooltip">The row's tooltip, or <c>null</c> for "Show these findings".</param>
 internal sealed record RouteCheckSummaryRow(
     FindingsFilter Filter,
     string Label,
     string Text,
     string? Chip,
     CheckTone ChipTone,
-    bool AddDraft = false);
+    bool AddDraft = false,
+    string? Tooltip = null);
 
 /// <summary>
 /// The Check route verdict card (#959, handoff B1–B5): the report's verdict
@@ -86,7 +107,10 @@ internal sealed record RouteCheckCard(
         var near = RouteFindingsService.Overlapping(datasets, input.Legs);
         var list = findings?.Findings ?? report.Findings;
         var warningsChecked = near.Any(d => IsSpec(d, "S-124")) || list.Any(f => f.Category == RouteFindingCategory.Warning);
-        return Build(report.Verdict.Kind, input.HasDraft, snapshot, list, warningsChecked, Products(snapshot?.Result.Sources, near), depthUnit, timeFormat);
+        var products = Products(snapshot?.Result.Sources, near);
+        if (report.Weather is { DatasetsUsed.Count: > 0 })
+            products = [.. products, Strings.Check_FooterWeather];
+        return Build(report.Verdict.Kind, input.HasDraft, snapshot, list, warningsChecked, WeatherRowState.Of(report), products, depthUnit, timeFormat);
     }
 
     /// <summary>Builds the card from its parts (for tests).</summary>
@@ -95,6 +119,7 @@ internal sealed record RouteCheckCard(
     /// <param name="snapshot">The clearance result; <c>null</c> without a draft.</param>
     /// <param name="findings">Every finding, in list order.</param>
     /// <param name="warningsChecked">Whether S-124 warnings were checked (the Warnings row shows).</param>
+    /// <param name="weather">Whether the weather check ran (the Weather row shows), or <c>null</c> without weather.</param>
     /// <param name="products">The products the check used, e.g. "S-101", "S-124".</param>
     /// <param name="depthUnit">The depth unit.</param>
     /// <param name="timeFormat">Local or UTC.</param>
@@ -104,6 +129,7 @@ internal sealed record RouteCheckCard(
         PassageCheckSnapshot? snapshot,
         IReadOnlyList<RouteFinding> findings,
         bool warningsChecked,
+        WeatherRowState? weather,
         IReadOnlyList<string> products,
         DepthUnit depthUnit,
         TimeFormat timeFormat)
@@ -175,6 +201,8 @@ internal sealed record RouteCheckCard(
         };
         if (warningsChecked)
             rows.Add(WarningsRow(findings.Where(f => FilterOf(f) == FindingsFilter.Warnings).ToList()));
+        if (weather is not null)
+            rows.Add(WeatherRow(weather, findings.Where(f => FilterOf(f) == FindingsFilter.Weather).ToList(), depthUnit));
 
         var footer = products.Count == 0
             ? Strings.Check_FooterNoData
@@ -200,6 +228,7 @@ internal sealed record RouteCheckCard(
     internal static FindingsFilter FilterOf(RouteFinding finding) => finding.Category switch
     {
         RouteFindingCategory.Warning => FindingsFilter.Warnings,
+        RouteFindingCategory.Weather => FindingsFilter.Weather,
         RouteFindingCategory.Chart or RouteFindingCategory.Depth or RouteFindingCategory.Area => FindingsFilter.Route,
         _ when finding.Code == RouteFindingCodes.OutsideChartCoverage => FindingsFilter.Route,
         _ => FindingsFilter.Clearance,
@@ -296,6 +325,50 @@ internal sealed record RouteCheckCard(
             (onRoute + near).ToString(CultureInfo.CurrentCulture),
             onRoute > 0 ? CheckTone.Destructive : CheckTone.Warning);
     }
+
+    /// <summary>
+    /// The Weather row (#1093): above your limits, not checked, or within
+    /// them; "No limits set" before any is. Its tooltip names the limits in
+    /// use and where each comes from.
+    /// </summary>
+    private static RouteCheckSummaryRow WeatherRow(WeatherRowState state, IReadOnlyList<RouteFinding> weather, DepthUnit depthUnit)
+    {
+        if (state.Result is not { } result || state.Reason == RouteCheckReasons.WeatherLimitsMissing)
+            return new RouteCheckSummaryRow(FindingsFilter.Weather, Strings.Check_SummaryWeather, Strings.Check_SummaryWeatherNoLimits, null, CheckTone.Neutral,
+                Tooltip: Strings.Tooltip_CheckSummaryWeatherNoLimits);
+
+        var above = weather.Count(f => f.Code == RouteFindingCodes.WindAboveLimit || f.Code == RouteFindingCodes.WavesAboveLimit);
+        var gaps = weather.Count - above;
+        var tooltip = string.Format(CultureInfo.CurrentCulture, Strings.Tooltip_CheckSummaryWeatherFormat, LimitsText(result, depthUnit));
+        if (above + gaps == 0)
+            return new RouteCheckSummaryRow(FindingsFilter.Weather, Strings.Check_SummaryWeather, Strings.Check_SummaryWeatherWithin, "0", CheckTone.Success, Tooltip: tooltip);
+
+        var text = above > 0
+            ? Count(Strings.Check_SummaryWeatherAboveFormat, above) + (gaps > 0 ? Strings.RouteCheck_Separator + Count(Strings.Check_SummaryWeatherNotCheckedFormat, gaps) : string.Empty)
+            : result.Verdict == WeatherVerdict.ForecastEndsBeforeArrival ? Strings.Check_SummaryWeatherForecastEnds
+            : Count(Strings.Check_SummaryWeatherNotCheckedFormat, gaps);
+        return new RouteCheckSummaryRow(
+            FindingsFilter.Weather,
+            Strings.Check_SummaryWeather,
+            text,
+            (above + gaps).ToString(CultureInfo.CurrentCulture),
+            above > 0 ? CheckTone.Warning : CheckTone.Neutral,
+            Tooltip: tooltip);
+    }
+
+    /// <summary>"Wind 25 kn (Settings) · Waves 3.0 m (route)": the limits a weather check used.</summary>
+    internal static string LimitsText(WeatherCheckResult result, DepthUnit depthUnit) => string.Join(Strings.RouteCheck_Separator, result.Limits.Select(limit =>
+    {
+        var origin = limit.Origin == WeatherLimitOrigin.Route ? Strings.Check_WeatherLimitFromRoute : Strings.Check_WeatherLimitFromSettings;
+        return limit.Quantity == WeatherQuantity.WindSpeed
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Check_WeatherLimitWindFormat,
+                Quantities.Speed.FromMetresPerSecond(limit.Value).TotalKnots.ToString("0.#", CultureInfo.CurrentCulture) + " kn", origin)
+            : string.Format(CultureInfo.CurrentCulture, Strings.Check_WeatherLimitWavesFormat,
+                depthUnit == DepthUnit.Metres
+                    ? limit.Value.ToString("0.0", CultureInfo.CurrentCulture) + " m"
+                    : Quantities.Length.FromMetres(limit.Value).TotalFeet.ToString("0", CultureInfo.CurrentCulture) + " ft",
+                origin);
+    }));
 
     /// <summary>Where and when the minimum UKC is: "Leg 6 → 7 · Thorn Channel · 07:52 · 12 min below".</summary>
     internal static string? Where(PassageCheckSnapshot current, TimeFormat timeFormat)

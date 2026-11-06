@@ -187,6 +187,24 @@ public static class RouteFindingCodes
     /// <summary>A stretch with no charted depth from S-102 or S-101. CHECK.</summary>
     public static RouteFindingCode NoChartedDepth { get; } = new("data.no_charted_depth", RouteFindingCategory.Data, RouteFindingGroup.Check);
 
+    /// <summary>A stretch where the forecast wind is above the wind limit at the ETA. CHECK: weather findings are advisory.</summary>
+    public static RouteFindingCode WindAboveLimit { get; } = new("weather.wind_above_limit", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>A stretch where the forecast significant wave height is above the wave limit at the ETA. CHECK.</summary>
+    public static RouteFindingCode WavesAboveLimit { get; } = new("weather.waves_above_limit", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>The forecast ends before the vessel reaches a stretch, so wind or waves aren't checked there. CHECK.</summary>
+    public static RouteFindingCode WeatherForecastEnds { get; } = new("weather.forecast_ends", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>The forecast starts after the vessel passes a stretch, so wind or waves aren't checked there. CHECK.</summary>
+    public static RouteFindingCode WeatherForecastStartsLate { get; } = new("weather.forecast_starts_late", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>A stretch outside every weather grid with the quantity, so it isn't checked there. CHECK.</summary>
+    public static RouteFindingCode NoWeatherCoverage { get; } = new("weather.no_coverage", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>A stretch inside a weather grid where the forecast has no value, such as waves near land. CHECK.</summary>
+    public static RouteFindingCode WeatherNoData { get; } = new("weather.no_data", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
     /// <summary>Every code, by category and then as listed here.</summary>
     public static IReadOnlyList<RouteFindingCode> All { get; } =
     [
@@ -201,6 +219,7 @@ public static class RouteFindingCodes
         ChartedDepthFromS101, DatumUnconfirmed,
         OutsideChartCoverage, WaterLevelEnds, WaterLevelStartsLate, NoWaterLevelCoverage,
         WaterLevelNoData, DatumMismatch, NoChartedDepth,
+        WindAboveLimit, WavesAboveLimit, WeatherForecastEnds, WeatherForecastStartsLate, NoWeatherCoverage, WeatherNoData,
     ];
 
     private static readonly Dictionary<string, RouteFindingCode> ByValue = All.ToDictionary(c => c.Value, StringComparer.Ordinal);

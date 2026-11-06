@@ -6,6 +6,33 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Weather along a route.** Check route, `check_route` and
+  `s100 route check` gain a weather check: with a GRIB2 or NetCDF forecast
+  loaded, they sample the route every nautical mile at the ETA and compare
+  the wind at 10 m and the significant wave height with the vessel's limits.
+  Stretches above a limit are Check findings with their time window ("Wind
+  above 25 kn for 3 h", `weather.wind_above_limit`,
+  `weather.waves_above_limit`); where the forecast ends before the vessel
+  gets there, or a grid doesn't cover it, the stretch is reported as not
+  checked (`weather.forecast_ends` and others), never passed. Each sample
+  reads the nearest grid node and time step, and the finest grid with the
+  newest run wins where grids overlap. In SoundCharts the limits are in
+  **Settings** > **Chart display** > **Mariner Settings** > **Weather on a
+  route** (`get_route_weather_settings`, `set_route_weather_settings`), the
+  verdict card gains a **Weather** row whose tooltip names the limits in use,
+  and **Findings** gains a **Weather** chip. An RTZ route's `vesselMaxWind`
+  (knots) and `vesselMaxWave` are used where no limit is set. `check_route`
+  takes `maxWindKnots` and `maxWaveHeightMeters` and returns a `weather`
+  section with an optional departure sweep; the CLI takes `--max-wind` and
+  `--max-wave`. In the libraries, `WeatherCheck` joins the built-in checks,
+  with `IRouteWeatherSource` (on `RouteCheckSources.Weather`), `WeatherLimits`
+  on `RouteCheckSettings` and `PassagePlan.VesselLimits`, `WeatherDetails`,
+  `WeatherFindings`, `RouteFindingCategory.Weather` and
+  `RtzPassagePlan.VesselLimits`. Breaking changes: `RouteChecker` runs five
+  built-in checks, so `RouteCheckReport.Checks` has a `weather` entry; the
+  `PassageRouteSnapshot` record has a new last positional parameter. See
+  [Weather along the route](route-checks.md#weather-along-the-route).
+
 - **Precipitation, thunderstorm risk and cloud cover on the chart.** GRIB2
   and NetCDF files with a precipitation rate, CAPE or total cloud cover,
   such as GFS, can now draw them: precipitation in rain radar colours from

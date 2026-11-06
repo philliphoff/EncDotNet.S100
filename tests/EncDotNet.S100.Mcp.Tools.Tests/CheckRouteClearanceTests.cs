@@ -78,8 +78,8 @@ public class CheckRouteClearanceTests
 
         // Every check ran; without safety settings the chart check's depth
         // checks didn't, and with no cells the route leaves chart coverage.
-        Assert.Equal(["chart", "areas", "warnings", "clearance"], value.Checks.Select(c => c.Name));
-        Assert.Equal(["partial", "ran", "ran", "ran"], value.Checks.Select(c => c.State));
+        Assert.Equal(["chart", "areas", "warnings", "clearance", "weather"], value.Checks.Select(c => c.Name));
+        Assert.Equal(["partial", "ran", "ran", "ran", "skipped"], value.Checks.Select(c => c.State));
         Assert.Equal(RouteCheckReasons.SafetySettingsMissing, value.Checks[0].Reason);
         Assert.All(value.Findings, f => Assert.Equal(RouteFindingCodes.OutsideChartCoverage.Value, f.Code));
         Assert.Equal("check", value.Verdict.Kind);

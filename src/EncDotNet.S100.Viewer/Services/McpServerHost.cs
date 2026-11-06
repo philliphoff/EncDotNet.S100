@@ -47,6 +47,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService? _routeFindings;
     private readonly EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState? _routeCheckLegend;
     private readonly EncDotNet.S100.Viewer.ViewModels.EcdisDisplayPanelViewModel? _ecdisDisplay;
+    private readonly EncDotNet.S100.Viewer.ViewModels.SettingsViewModel? _settingsViewModel;
     private readonly EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService? _followPassage;
     private readonly RouteExchangeService? _routeExchange;
     private readonly IViewerDatasetStateController? _datasetState;
@@ -123,9 +124,11 @@ internal sealed class McpServerHost : IAsyncDisposable
         MeasureSession? measure = null,
         EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel? measureCard = null,
         EncDotNet.S100.Viewer.Tools.RangeBearingState? rangeBearing = null,
-        EncDotNet.S100.Viewer.ViewModels.EcdisDisplayPanelViewModel? ecdisDisplay = null)
+        EncDotNet.S100.Viewer.ViewModels.EcdisDisplayPanelViewModel? ecdisDisplay = null,
+        EncDotNet.S100.Viewer.ViewModels.SettingsViewModel? settingsViewModel = null)
     {
         _ecdisDisplay = ecdisDisplay;
+        _settingsViewModel = settingsViewModel;
         _rangeBearing = rangeBearing;
         _depthBasis = depthBasis;
         _logBuffer = logBuffer;
@@ -409,6 +412,13 @@ internal sealed class McpServerHost : IAsyncDisposable
             var weatherDisplay = new WeatherDisplayTools(_ecdisDisplay, new DispatcherRouteEditInvoker());
             tools.Add(WeatherDisplayMcpAdapters.CreateGet(weatherDisplay));
             tools.Add(WeatherDisplayMcpAdapters.CreateSet(weatherDisplay));
+        }
+
+        if (_settingsViewModel is not null)
+        {
+            var routeWeather = new RouteWeatherSettingsTools(_settingsViewModel, new DispatcherRouteEditInvoker());
+            tools.Add(RouteWeatherSettingsMcpAdapters.CreateGet(routeWeather));
+            tools.Add(RouteWeatherSettingsMcpAdapters.CreateSet(routeWeather));
         }
 
         if (_renderActivityMonitor is not null)

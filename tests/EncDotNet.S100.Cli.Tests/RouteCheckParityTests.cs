@@ -116,6 +116,7 @@ public sealed class RouteCheckParityTests : IDisposable
                     l.Name,
                     l.PortLimit?.TotalMetres,
                     l.StarboardLimit?.TotalMetres)).ToList(),
-                plan.Departure!.Value)));
+                plan.Departure!.Value,
+                plan.VesselLimits)));
     }
 }

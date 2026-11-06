@@ -32,6 +32,8 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// <param name="TrackClearanceMeters">How close to the track line an aid, structure or overhead feature counts as on the track; default 30 m.</param>
 /// <param name="NearbyDistanceMeters">How far beyond the cross-track limits a danger or hazard is near the route; default 185.2 m.</param>
 /// <param name="AreaKindsOff">The kinds of prohibited area and area with special conditions whose indication is off, by name.</param>
+/// <param name="MaxWindKnots">The wind limit for the weather check, in knots; replaces a route's own.</param>
+/// <param name="MaxWaveHeightMeters">The significant wave height limit for the weather check, in metres; replaces a route's own.</param>
 public sealed record CheckRouteRequest(
     [property: Description("Id of a host route to check (viewer only). Omit, with no polyline, for the active route.")] string? RouteId = null,
     [property: Description("A route given directly: each pair of consecutive vertices is a leg. Takes precedence over routeId. Its corridorWidthMeters, when set, is the half-width either side of the track.")] GeoPolyline? Polyline = null,
@@ -53,13 +55,16 @@ public sealed record CheckRouteRequest(
     [property: Description("Minutes between swept departures (default 5).")] int WindowStepMinutes = 5,
     [property: Description("How close to the track line, in metres, an aid to navigation, structure or overhead feature counts as on the track (default 30). A structure on the track is must review.")] double? TrackClearanceMeters = null,
     [property: Description("How far beyond the cross-track limits, in metres, a danger or hazard counts as near the route (default 185.2, 0.1 NM).")] double? NearbyDistanceMeters = null,
-    [property: Description("Kinds of prohibited area and area with special conditions to turn off (S-101 alert catalogue ProhAre kinds): traffic_separation_zone, inshore_traffic_zone, restricted_area, area_to_be_avoided, particularly_sensitive_sea_area, caution_area, offshore_production_area, user_area_to_be_avoided, military_practice_area, seaplane_landing_area, submarine_transit_lane, anchorage_area, marine_farm. Their areas aren't reported; one route_check.area_kind_off finding per kind says the route meets them. Default: every kind on.")] IReadOnlyList<string>? AreaKindsOff = null);
+    [property: Description("Kinds of prohibited area and area with special conditions to turn off (S-101 alert catalogue ProhAre kinds): traffic_separation_zone, inshore_traffic_zone, restricted_area, area_to_be_avoided, particularly_sensitive_sea_area, caution_area, offshore_production_area, user_area_to_be_avoided, military_practice_area, seaplane_landing_area, submarine_transit_lane, anchorage_area, marine_farm. Their areas aren't reported; one route_check.area_kind_off finding per kind says the route meets them. Default: every kind on.")] IReadOnlyList<string>? AreaKindsOff = null,
+    [property: Description("Wind limit in knots for the weather check: stretches where a loaded GRIB2 or NetCDF forecast has a higher 10 m wind at the ETA are weather.wind_above_limit (check). Replaces the route's own (RTZ vesselMaxWind). SoundCharts uses the mariner's route weather limits (get_mariner_settings).")] double? MaxWindKnots = null,
+    [property: Description("Significant wave height limit in metres for the weather check (weather.waves_above_limit). Replaces the route's own (RTZ vesselMaxWave).")] double? MaxWaveHeightMeters = null);
 
 /// <summary>
 /// Checks a route with <see cref="RouteChecker"/> against the loaded data:
 /// the charts (land, drying ground, the safety contour, dangers and chart
-/// coverage), regulated and protected areas, S-124 warnings, and, with a
-/// draft, the under-keel clearance. Returns the whole <see cref="RouteCheckReport"/>.
+/// coverage), regulated and protected areas, S-124 warnings, with a draft
+/// the under-keel clearance, and with wind or wave limits the forecast
+/// weather along the route. Returns the whole <see cref="RouteCheckReport"/>.
 /// </summary>
 /// <remarks>
 /// Takes a host route (the viewer's active or a named route, with each leg's
@@ -111,6 +116,7 @@ public sealed class CheckRouteTool
 
         string? routeId = null;
         string? routeName = null;
+        WeatherLimits? vesselLimits = null;
         var legs = new List<PassageLeg>();
         DateTimeOffset? departure;
         if (request.Polyline is { } polyline)
@@ -166,10 +172,11 @@ public sealed class CheckRouteTool
             legs.AddRange(route.Legs.Select(l => l.ToPassageLeg(request.DraftMeters, request.SpeedKnots, request.SquatMeters, request.RequiredUkcMeters)));
             routeId = route.RouteId;
             routeName = route.Name;
+            vesselLimits = route.VesselLimits;
             departure = request.Departure ?? route.DefaultDeparture;
         }
 
-        var plan = new PassagePlan(legs, departure);
+        var plan = new PassagePlan(legs, departure) { VesselLimits = vesselLimits };
         var settings = new RouteCheckSettings
         {
             At = departure ?? _time.GetUtcNow(),
@@ -179,6 +186,11 @@ public sealed class CheckRouteTool
             TrackClearance = request.TrackClearanceMeters is { } clearance ? Length.FromMetres(clearance) : null,
             NearbyDistance = request.NearbyDistanceMeters is { } nearby ? Length.FromMetres(nearby) : null,
             AreaKindsOff = request.AreaKindsOff is { } off ? off.Select(name => RouteAreaKinds.Parse(name)!.Value).ToList() : [],
+            WeatherLimits = request.MaxWindKnots is null && request.MaxWaveHeightMeters is null ? null : new WeatherLimits
+            {
+                MaxWind = request.MaxWindKnots is { } wind ? Speed.FromKnots(wind) : null,
+                MaxWaveHeight = request.MaxWaveHeightMeters is { } wave ? Length.FromMetres(wave) : null,
+            },
             DepartureWindow = !request.IncludeWindow ? null
                 : request.WindowFrom is { } from && request.WindowTo is { } to ? DepartureRange.Between(from, to, TimeSpan.FromMinutes(request.WindowStepMinutes))
                 : DepartureRange.WaterLevelData(TimeSpan.FromMinutes(request.WindowStepMinutes), MaxWindowDepartures),
@@ -237,6 +249,8 @@ public sealed class CheckRouteTool
         if (Bad(request.SpeedKnots, allowZero: false)) return new InvalidArgument("speedKnots", "must be a positive number of knots");
         if (Bad(request.SquatMeters)) return new InvalidArgument("squatMeters", "must be zero or more metres");
         if (Bad(request.RequiredUkcMeters)) return new InvalidArgument("requiredUkcMeters", "must be zero or more metres");
+        if (Bad(request.MaxWindKnots, allowZero: false)) return new InvalidArgument("maxWindKnots", "must be a positive number of knots");
+        if (Bad(request.MaxWaveHeightMeters, allowZero: false)) return new InvalidArgument("maxWaveHeightMeters", "must be a positive number of metres");
         if (Bad(request.SampleSpacingMeters, allowZero: false) || request.SampleSpacingMeters is < 1) return new InvalidArgument("sampleSpacingMeters", "must be at least 1 m");
         if (request.MaxSamples < 1) return new InvalidArgument("maxSamples", "must be at least 1");
         if ((request.WindowFrom is null) != (request.WindowTo is null)) return new InvalidArgument("windowTo", "windowFrom and windowTo go together");

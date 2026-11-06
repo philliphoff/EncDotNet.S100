@@ -260,7 +260,7 @@ internal sealed class RouteFindingsService : IDisposable
             return Findings;
         }
 
-        if (PassageCheckService.CheckInput.For(route, _routes.ViewTime.Current, _mariner?.Current) is not { } input)
+        if (PassageCheckService.CheckInput.For(route, _routes.ViewTime.Current, _check.WeatherLimits, _mariner?.Current) is not { } input)
             return null;
 
         var report = await _check.CheckOnceAsync(input, cancellationToken).ConfigureAwait(true);
