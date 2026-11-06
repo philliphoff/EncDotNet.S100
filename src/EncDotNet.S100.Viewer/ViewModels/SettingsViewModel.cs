@@ -546,7 +546,7 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
 
     // ── Base-plane tiled-pipeline knobs ────────────────────────────────────
     // The tiled base-plane renderer's scene-mode and cache/prediction knobs. All
-    // values mirror RenderingOptimizations (the renderer source of truth) and
+    // values mirror ChartEngine.Options (the renderer source of truth) and
     // persist to ViewerSettings; an explicit environment variable pins a knob (the
     // perf harness), in which case the matching *Editable flag is false and the
     // control is shown disabled.
