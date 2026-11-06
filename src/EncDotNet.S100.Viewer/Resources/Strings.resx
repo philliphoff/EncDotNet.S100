@@ -7756,4 +7756,8 @@
   <data name="Findings_HoursFormat" xml:space="preserve">
     <value>{0:0.#} h</value>
   </data>
+  <data name="Findings_TagWeather" xml:space="preserve">
+    <value>Weather</value>
+    <comment>Tag of a weather finding in the findings list</comment>
+  </data>
 </root>

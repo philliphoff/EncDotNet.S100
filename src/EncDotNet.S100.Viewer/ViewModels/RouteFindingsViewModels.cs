@@ -659,6 +659,7 @@ internal sealed class RouteFindingRowViewModel : ViewModelBase
         RouteFindingCategory.Chart or RouteFindingCategory.Depth or RouteFindingCategory.Area => Strings.Findings_TagRouteCheck,
         RouteFindingCategory.Warning => Strings.Findings_TagS124,
         RouteFindingCategory.Confidence => Strings.Findings_TagConfidence,
+        RouteFindingCategory.Weather => Strings.Findings_TagWeather,
         _ => Strings.Findings_TagData,
     };
 

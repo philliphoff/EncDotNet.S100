@@ -72,7 +72,8 @@ internal sealed record CheckSummaryRowDto(
     [property: Description("The row's value, e.g. \"min 0.4 m · required 1.0 m\", \"2 to review · 1 to check\", \"2 in force on route · 1 near\", \"Nothing found\" or \"Not checked\".")] string Text,
     [property: Description("The chip, e.g. \"2 below\", \"tight\", \"meets\", \"no water level\" or a count; null when none.")] string? Chip,
     [property: Description("The chip's tone: destructive, warning, success or neutral; null without a chip.")] string? ChipTone,
-    [property: Description("The link at the end of the row, \"+ Add draft\" on the clearance row without a draft; null otherwise.")] string? Link);
+    [property: Description("The link at the end of the row, \"+ Add draft\" on the clearance row without a draft; null otherwise.")] string? Link,
+    [property: Description("The row's tooltip: \"Show these findings\", or on the weather row the limits in use and where each comes from, e.g. \"Wind 25 kn (Settings) · Waves 3.0 m (route). Forecast model data, not for navigation; …\".")] string Tooltip);
 
 /// <summary>The departure window (#903).</summary>
 [Description("The departure window: departures swept across the S-104 range that covers the route, the runs that meet your settings, and the departures that arrive after the data ends.")]
@@ -242,7 +243,8 @@ internal abstract class PassageCheckToolBase : RouteToolBase
         row.Text,
         row.Chip,
         row.Chip is null ? null : Tone(row.ChipTone),
-        row.AddDraft ? Resources.Strings.Check_SummaryAddDraft : null);
+        row.AddDraft ? Resources.Strings.Check_SummaryAddDraft : null,
+        row.Tooltip ?? Resources.Strings.Tooltip_CheckSummaryRow);
 
     private static DepartureWindowDto Window(PassageDepartureWindow window, PassageCheckService check)
     {

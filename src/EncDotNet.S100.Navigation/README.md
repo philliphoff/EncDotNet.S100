@@ -32,7 +32,7 @@ To check a passage against loaded datasets, also install
 ## Check a route
 
 `RouteChecker` runs every check on a plan and returns one `RouteCheckReport`:
-the findings of the chart, area, warning and clearance checks in one sorted
+the findings of the chart, area, warning, clearance and weather checks in one sorted
 list, a verdict, and whether each check ran. Create one checker per sources
 bundle and keep it while the data is loaded:
 
@@ -73,8 +73,8 @@ foreach (var check in report.Checks)
   `new RouteChecker(sources, [new ClearanceCheck()])`.
 
 `RouteCheckOptions` tunes every check at once: `DefaultLimit` (50 m) and
-`Formatter` apply to all of them, and `Chart`, `Areas`, `Warnings` and
-`Clearance` tune each one. `Check` may be called from several threads at once.
+`Formatter` apply to all of them, and `Chart`, `Areas`, `Warnings`,
+`Clearance` and `Weather` tune each one. `Check` may be called from several threads at once.
 
 [How a route check works](../../docs/how-a-route-check-works.md) explains
 which dataset feeds each check, the time and keel rules, the verdict and
@@ -103,6 +103,7 @@ Console.WriteLine(chart.Detail?.LengthMeters);                    // null only w
 | `AreaCheck` | `areas` | `AreaCheckResult`: every area near the route | `report.Areas` |
 | `WarningCheck` | `warnings` | `WarningCheckResult`: every warning near the route | `report.Warnings` |
 | `ClearanceCheck` | `clearance` | `ClearanceCheckResult`: the `PassageCheckResult` and the departure sweep | `report.Clearance`, `report.Departures` |
+| `WeatherCheck` | `weather` | `WeatherCheckResult`: the limits used, the samples, the verdict and the departure sweep | `report.Weather` |
 
 A check object keeps what its last run computed, as it does inside a
 checker, so keep one per sources bundle when you run it often. A check of
@@ -389,6 +390,51 @@ judged at. `WarningCheckResult.Matches` (`report.Warnings`) also lists the
 warnings near the route that give no finding. The meta line names the series
 and number, the locality, the validity and the status; the wording comes from
 `RouteCheckOptions.Formatter`.
+
+## Check a route against the weather
+
+`WeatherCheck` samples the track every `WeatherCheckOptions.SampleSpacingMeters`
+(1 NM) at the vessel's ETA and compares forecast wind speed at 10 m and
+significant wave height with the vessel's limits. It reads them through
+`IRouteWeatherSource` (`sources.Weather`): for a position and a
+`WeatherQuantity`, the time series (`IRouteWeatherSeries`) of every grid that
+covers it, best first. `CatalogRouteCheckSources` implements it over loaded
+GRIB2 and NetCDF grids, at the nearest node; a later check can read other
+quantities, such as surface currents, through the same interface.
+
+```csharp
+var settings = new RouteCheckSettings
+{
+    At = DateTimeOffset.UtcNow,
+    WeatherLimits = new WeatherLimits { MaxWind = Speed.FromKnots(25), MaxWaveHeight = Length.FromMetres(3) },
+};
+var weather = new WeatherCheck().Run(new RouteCheckContext(plan, settings, sources));
+
+Console.WriteLine(weather.Detail?.Verdict);                                     // AboveLimits
+foreach (var finding in weather.Findings)
+{
+    Console.WriteLine($"{finding.Title} · {finding.Meta}");                     // Wind above 25 kn for 3 h · Leg 4 → 5 · max 31 kn at …
+}
+```
+
+- **Limits.** `RouteCheckSettings.WeatherLimits` replaces the plan's
+  `PassagePlan.VesselLimits` value by value. `RtzPassagePlan` fills
+  `VesselLimits` from RTZ `vesselMaxWind` (knots) and `vesselMaxWave`
+  (metres). `WeatherCheckResult.Limits` says where each came from.
+- **Time.** Each sample reads the forecast step nearest its ETA, no
+  interpolation. A time more than half a step beyond a series' range isn't
+  checked: `WeatherSampleState.ForecastEnds` or `ForecastStartsLate`. A
+  covering series without a value (a masked cell) gives way to the next
+  series that has one; with none, `NoData`.
+- **Findings.** One per run of samples in the same state, per quantity, with
+  `WeatherDetails`: above the limit with its time window (`StartTime`,
+  `EndTime`) and highest value, or a gap with its reason and the forecast's
+  end. Every weather finding is Check: model data is advisory.
+- **Reuse and sweep.** The located series are kept while the legs and source
+  stay the same, so changing the departure or the limits reads no new places.
+  With `DepartureWindow` it also sweeps departures
+  (`WeatherCheckResult.Departures`), following the forecast's range when the
+  window follows the data.
 
 ## Check a route against restricted and protected areas
 

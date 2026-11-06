@@ -1,9 +1,7 @@
 using System.Globalization;
 using Avalonia.Controls;
-using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
-using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Navigation;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Quantities;

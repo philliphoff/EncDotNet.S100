@@ -24,6 +24,7 @@ internal static partial class Strings
     public static string Check_WeatherLimitFromSettings => Get(nameof(Check_WeatherLimitFromSettings));
     public static string Check_WeatherLimitFromRoute => Get(nameof(Check_WeatherLimitFromRoute));
     public static string Check_FooterWeather => Get(nameof(Check_FooterWeather));
+    public static string Findings_TagWeather => Get(nameof(Findings_TagWeather));
     public static string Findings_FilterWeatherFormat => Get(nameof(Findings_FilterWeatherFormat));
     public static string Findings_WindAboveForFormat => Get(nameof(Findings_WindAboveForFormat));
     public static string Findings_WavesAboveForFormat => Get(nameof(Findings_WavesAboveForFormat));
