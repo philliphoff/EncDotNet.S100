@@ -400,8 +400,8 @@ internal sealed partial class TimelineViewModel
                 ? LayerTimes.Describe(dataset, at, dataset.DatasetId is { } id && _progress?.IsDatasetDrawing(id) == true, format, zone, run, _service.TimedDatasets)
                 : null;
             lane.LayerTime = time?.Text ?? string.Empty;
-            lane.IsHidden = time?.IsHidden == true;
-            lane.Nearest = time?.IsHidden == true ? time.Nearest : null;
+            lane.IsHidden = time?.IsWarning == true;
+            lane.Nearest = time?.IsWarning == true ? time.Nearest : null;
             lane.Tooltip = string.Format(
                 CultureInfo.CurrentCulture,
                 Strings.TimelinePanel_LaneTooltipFormat,

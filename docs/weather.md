@@ -295,8 +295,8 @@ scrubbing the Timeline moves them along the track:
 | On a forecast point | The forecast point, drawn large in a solid ring | The point's forecast radii | `18:00Z · T+24 h` |
 | Between two forecast points | An estimate, in a dashed ring, labelled `est. Wed 9:00 PM · Adv 17 · NW 9 kt` | Each quadrant between the two points' | `est. 20:00Z · T+2 h` |
 | Before the advisory, on the past track | The best-track position, in a solid ring, labelled `best track …` | The observed radii, where the best track has them | `12:00Z · best track` |
-| After the last forecast point | None | None | A **Beyond forecast** tag |
-| Before the first best-track point | None | None | A **Before track** tag |
+| After the last forecast point | None; the cone and tracks stay | None | A **Beyond forecast** tag |
+| Before the first best-track point | None; the cone and tracks stay | None | A **Before track** tag |
 
 Between two points the position follows the great circle, and the wind,
 pressure and each radius change evenly with time. A radius that's zero at
@@ -304,7 +304,7 @@ one end shrinks to nothing; NHC forecasts no radii beyond 72 hours, so none
 are drawn there. The estimate keeps the class of the earlier point. NHC
 doesn't forecast these in-between positions, and Object information says so:
 its **At view time** row gives the time, and **Basis** reads "Estimated
-between forecast points; NHC doesn't forecast this position." Click a hidden
+between forecast points; NHC doesn't forecast this position." Click a tagged
 row's time to jump to the nearest end of the storm's track.
 
 In Live mode the view time follows the clock, so the storm creeps along the

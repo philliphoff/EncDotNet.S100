@@ -238,8 +238,8 @@ internal sealed record TimelineLayerState(
     /// <summary>For a layer drawing stale data (its row's Stale tag), the data's age to the nearest hour; otherwise null.</summary>
     public int? StaleHours { get; init; }
 
-    /// <summary>For a hidden layer, its row's tag: "Hidden", or why, such as "Beyond forecast"; otherwise null.</summary>
-    public string? HiddenTag { get; init; }
+    /// <summary>The row's warning tag: "Hidden" for a hidden layer, or "Beyond forecast" or "Before track" for a storm outside its range; otherwise null.</summary>
+    public string? Tag { get; init; }
 }
 
 /// <summary>The outcome of <see cref="IViewerTimelineController.SetViewTimeAsync"/>.</summary>

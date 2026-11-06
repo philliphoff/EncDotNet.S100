@@ -46,7 +46,7 @@ internal sealed record TimelineLayerDto(
     [property: Description("True when the layer has no data within its tolerance of the view time and hides (its row's Hidden tag).")] bool Hidden,
     [property: Description("True while the layer is drawing the view time.")] bool Drawing,
     [property: Description("For a layer drawing stale data at the view time (its row's Stale tag), such as a surface analysis over 6 hours old, the data's age to the nearest hour; null otherwise.")] int? StaleHours = null,
-    [property: Description("For a hidden layer, its row's tag: 'Hidden', or why, such as 'Beyond forecast' or 'Before track' for a tropical cyclone outside its track and forecast; null when not hidden.")] string? HiddenTag = null);
+    [property: Description("The row's warning tag: 'Hidden' for a hidden layer, or 'Beyond forecast' or 'Before track' for a tropical cyclone outside its track and forecast (its cone still draws, so it isn't hidden); null otherwise.")] string? Tag = null);
 
 /// <summary>The Timeline as the user sees it.</summary>
 [Description("The viewer's Timeline: mode, now, view time, loaded range and what each time-aware layer draws.")]
@@ -259,7 +259,7 @@ internal sealed class GetTimelineStateTool(IViewerTimelineController timeline)
         state.StepDriver,
         [.. state.Gaps.Select(g => new TimelineGapDto(g.From, g.To, TimelineAxisLabels.GapLength(g.Length, CultureInfo.InvariantCulture)))],
         [.. state.Layers.Select(layer => new TimelineLayerDto(
-            layer.Id, layer.Spec, layer.Visible, layer.DrawnTime, layer.PreviousSample, layer.NextSample, layer.SampleCount, layer.Time, layer.Hidden, layer.Drawing, layer.StaleHours, layer.HiddenTag))],
+            layer.Id, layer.Spec, layer.Visible, layer.DrawnTime, layer.PreviousSample, layer.NextSample, layer.SampleCount, layer.Time, layer.Hidden, layer.Drawing, layer.StaleHours, layer.Tag))],
         state.InMapView,
         state.CollapsedToStrip ? "strip" : "lanes",
         [.. state.Lanes.Select(lane => new TimelineLaneDto(

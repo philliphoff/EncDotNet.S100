@@ -1176,11 +1176,13 @@ public sealed class MapsuiDatasetLayerSessionTests
         Assert.Equal([new MapsuiMapTimeSegment(first.AddHours(-18), first.AddHours(24))], timed.Coverage);
         Assert.Equal(processor.AvailableTimes, timed.Samples);
 
-        // Any time in range is drawn, to the minute; none outside it.
+        // Any time is drawn, to the minute; outside its range the processor
+        // draws only what doesn't move (a storm's cone), so it never hides.
         Assert.Equal(first.AddHours(5).AddMinutes(7), timed.SampleAt(first.AddHours(5).AddMinutes(7).AddSeconds(42)));
         Assert.Equal(first.AddHours(-18), timed.SampleAt(first.AddHours(-18)));
-        Assert.Null(timed.SampleAt(first.AddHours(-18).AddMinutes(-1)));
-        Assert.Null(timed.SampleAt(first.AddHours(24).AddMinutes(1)));
+        Assert.Equal(first.AddHours(30), timed.SampleAt(first.AddHours(30)));
+        Assert.True(timed.Covers(first.AddHours(24)));
+        Assert.False(timed.Covers(first.AddHours(24).AddMinutes(1)));
 
         // The processor gets the clock, not a forecast point, so the storm moves.
         session.SetCurrentTime(first.AddHours(5).AddMinutes(7));
@@ -1195,6 +1197,12 @@ public sealed class MapsuiDatasetLayerSessionTests
         session.SetCurrentTime(first.AddHours(6));
         await session.RefreshTimeAsync(MapPresentationState.Default, TestContext.Current.CancellationToken);
         Assert.Equal(first.AddHours(6), processor.LastContext!.TimeStep);
+
+        // Beyond the range it still draws, with the time it's at.
+        session.SetCurrentTime(first.AddHours(30));
+        await session.RefreshTimeAsync(MapPresentationState.Default, TestContext.Current.CancellationToken);
+        Assert.Equal(first.AddHours(30), processor.LastContext!.TimeStep);
+        Assert.NotEmpty(session.GetDataset(id)!.Layers);
     }
 
     [Fact]

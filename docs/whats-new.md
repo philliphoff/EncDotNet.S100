@@ -11,8 +11,8 @@ month. For package versions and release assets, see
   scrubbing moves them smoothly along the track. Between forecast points the
   storm is an estimate, in a dashed ring labelled "est.", with its position
   on the great circle and its wind and radii in between; before the advisory
-  it follows the best track; beyond the forecast the Datasets row has a
-  **Beyond forecast** tag. Object information gives the storm at the view
+  it follows the best track; beyond the forecast the cone stays and the
+  Datasets row has a **Beyond forecast** tag. Object information gives the storm at the view
   time and says when it's an estimate. The Timeline groups storms under
   **Tropical cyclones**, in a lane named for the storm with a tick at each
   forecast point and diamonds at the issue time and the next advisory due;
@@ -24,7 +24,7 @@ month. For package versions and release assets, see
   `TimelineDetail` (on `MapsuiMapTimedDataset` too), and
   `TropicalCycloneStyle.StormDetailLabel`; `TropicalCycloneDatasetProcessor`
   is time-aware. `get_timeline_state` reports a lane's `sub`, `issued`,
-  `nextIssue` and `stepTicks` and a hidden layer's `hiddenTag`. Breaking
+  `nextIssue` and `stepTicks` and a layer's warning `tag`. Breaking
   change: a storm's own parts (the storm and its radii) now come after the
   advisory's other parts in `EnumerateFeatures`. See
   [Show tropical cyclones](weather.md#time).

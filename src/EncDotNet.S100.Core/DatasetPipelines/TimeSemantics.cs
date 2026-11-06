@@ -23,10 +23,12 @@ public enum TimeStepSelection
     AtOrBefore,
 
     /// <summary>
-    /// The map time itself, to the minute, anywhere from the validity before
-    /// the first step to the last step: the dataset draws any time in its
-    /// range, not just its steps, which are the points to step between (a
-    /// tropical cyclone, whose storm moves between forecast points, V14).
+    /// The map time itself, to the minute: the dataset draws any time, not
+    /// just its steps, which are the points to step between. Its range runs
+    /// from the validity before the first step to the last step; outside it
+    /// the processor draws only what doesn't move with time (a tropical
+    /// cyclone, whose storm moves between forecast points and whose cone
+    /// stays, V11, V14).
     /// </summary>
     Continuous,
 }

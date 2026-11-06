@@ -73,28 +73,32 @@ public sealed class TropicalCycloneTimeViewerTests
     }
 
     [Fact]
-    public void Beyond_the_forecast_and_before_the_track_the_row_is_hidden_with_its_reason()
+    public void Beyond_the_forecast_and_before_the_track_the_row_is_tagged_with_its_reason_but_not_hidden()
     {
         var beyond = Describe(Synoptic.AddHours(54));
         var before = Describe(Synoptic.AddHours(-30));
 
-        Assert.True(beyond.IsHidden);
-        Assert.Equal("Beyond forecast", beyond.HiddenTagText);
+        // The cone still draws, so the layer isn't hidden, but the row warns.
+        Assert.False(beyond.IsHidden);
+        Assert.True(beyond.IsWarning);
+        Assert.Equal(LayerTimeState.OutOfRange, beyond.State);
+        Assert.Equal("Beyond forecast", beyond.TagText);
         Assert.Equal("last forecast point 18:00Z, 6 h earlier", beyond.Text);
         Assert.Equal(Synoptic.AddHours(48), beyond.Nearest);
-        Assert.True(before.IsHidden);
-        Assert.Equal("Before track", before.HiddenTagText);
+        Assert.True(before.IsWarning);
+        Assert.Equal("Before track", before.TagText);
         Assert.Equal("track starts 18:00Z, 6 h later", before.Text);
         Assert.Equal(Synoptic.AddHours(-24), before.Nearest);
 
         // The Datasets row shows the reason as its tag.
         var entry = new DatasetEntry("/tmp/al142026_5day_017.zip", "TC");
         entry.SetLayerTime(beyond, null);
-        Assert.True(entry.IsLayerHidden);
-        Assert.Equal("Beyond forecast", entry.LayerHiddenTagText);
-        entry.SetLayerTime(Describe(Synoptic.AddHours(2)), null);
         Assert.False(entry.IsLayerHidden);
-        Assert.Equal("Hidden", new DatasetEntry("/tmp/a.h5", "S-111").LayerHiddenTagText);
+        Assert.True(entry.IsLayerWarning);
+        Assert.Equal("Beyond forecast", entry.LayerTagText);
+        entry.SetLayerTime(Describe(Synoptic.AddHours(2)), null);
+        Assert.False(entry.IsLayerWarning);
+        Assert.Equal("Hidden", new DatasetEntry("/tmp/a.h5", "S-111").LayerTagText);
     }
 
     [Fact]

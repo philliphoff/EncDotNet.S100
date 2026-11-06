@@ -24,6 +24,13 @@ internal enum LayerTimeState
     /// draws in its place (a newer surface analysis, V30) and it hides.
     /// </summary>
     Superseded,
+
+    /// <summary>
+    /// The view time is outside the layer's range, but it still draws what
+    /// doesn't move with time: a tropical cyclone's cone and track beyond its
+    /// forecast, with no storm (V11).
+    /// </summary>
+    OutOfRange,
 }
 
 /// <summary>A layer's time as its row shows it.</summary>
@@ -34,17 +41,23 @@ internal enum LayerTimeState
 /// For a layer whose data drawn is stale at the view time (older than its
 /// <see cref="MapsuiMapTimedDataset.StaleAfter"/>), its age to the nearest hour; otherwise null.
 /// </param>
-/// <param name="HiddenTag">
-/// The tag a hidden layer's row shows in place of "Hidden", such as "Beyond
-/// forecast" for a tropical cyclone (V11); null for "Hidden".
+/// <param name="Tag">
+/// The warning tag the row shows, such as "Beyond forecast" for a tropical
+/// cyclone (V11); null for "Hidden" on a hidden layer.
 /// </param>
-internal sealed record LayerTime(string Text, LayerTimeState State, DateTime? Nearest, TimeSpan? StaleAge = null, string? HiddenTag = null)
+internal sealed record LayerTime(string Text, LayerTimeState State, DateTime? Nearest, TimeSpan? StaleAge = null, string? Tag = null)
 {
     /// <summary>True when the layer draws nothing at the view time and hides.</summary>
     public bool IsHidden => State is LayerTimeState.NoData or LayerTimeState.Superseded;
 
-    /// <summary>The hidden layer's tag: <see cref="HiddenTag"/>, else "Hidden".</summary>
-    public string HiddenTagText => HiddenTag ?? Strings.LayerTime_Hidden;
+    /// <summary>True when the view time is outside the layer's range though it still draws (<see cref="LayerTimeState.OutOfRange"/>).</summary>
+    public bool IsOutOfRange => State == LayerTimeState.OutOfRange;
+
+    /// <summary>True when the row's time is a warning with a tag: hidden or out of range.</summary>
+    public bool IsWarning => IsHidden || IsOutOfRange;
+
+    /// <summary>The warning tag: <see cref="Tag"/>, else "Hidden".</summary>
+    public string TagText => Tag ?? Strings.LayerTime_Hidden;
 
     /// <summary>True when the layer draws stale data (the Stale tag, §7).</summary>
     public bool IsStale => StaleAge is not null;
@@ -129,9 +142,9 @@ internal static class LayerTimes
     /// <summary>
     /// A tropical cyclone at the view time (V11): "est. 5:00 PM · T+2 h"
     /// between forecast points, "5:00 PM · T+24 h" on one, "3:00 PM · best
-    /// track" before the advisory, and outside the track and forecast a hidden
-    /// layer tagged "Beyond forecast" or "Before track", which jumps to the
-    /// nearest end.
+    /// track" before the advisory, and outside the track and forecast (where
+    /// the cone still draws) out of range, tagged "Beyond forecast" or "Before
+    /// track", jumping to the nearest end.
     /// </summary>
     private static LayerTime DescribeCyclone(MapsuiMapTimedDataset dataset, DateTime viewTime, TimeFormat format, TimeZoneInfo zone, CultureInfo culture)
     {
@@ -139,7 +152,7 @@ internal static class LayerTimes
             return new LayerTime(Strings.LayerTime_NoData, LayerTimeState.NoData, null);
         var synoptic = dataset.Samples[0];
         var last = dataset.Samples[^1];
-        if (dataset.SampleAt(viewTime) is not { } at)
+        if (viewTime < dataset.First || viewTime > last || dataset.SampleAt(viewTime) is not { } at)
         {
             var beyond = viewTime > last;
             var nearest = beyond ? last : dataset.First;
@@ -151,7 +164,7 @@ internal static class LayerTimes
                 beyond ? Strings.LayerTime_BeyondForecastFormat : Strings.LayerTime_BeforeTrackFormat,
                 when,
                 Span((nearest - viewTime).Duration(), culture));
-            return new LayerTime(text, LayerTimeState.NoData, nearest, HiddenTag: beyond ? Strings.LayerTime_BeyondForecast : Strings.LayerTime_BeforeTrack);
+            return new LayerTime(text, LayerTimeState.OutOfRange, nearest, Tag: beyond ? Strings.LayerTime_BeyondForecast : Strings.LayerTime_BeforeTrack);
         }
 
         var clock = Clock(at, format, zone, culture);

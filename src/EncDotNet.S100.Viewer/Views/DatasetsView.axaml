@@ -508,17 +508,17 @@
                                                     AutomationProperties.AutomationId="Datasets.Source.Dataset.LayerTime"
                                                     AutomationProperties.Name="{Binding LayerTimeText}"
                                                     Classes="LayerTime"
-                                                    Classes.hidden="{Binding IsLayerHidden}"
+                                                    Classes.hidden="{Binding IsLayerWarning}"
                                                     Classes.drawing="{Binding IsLayerDrawing}"
                                                     Command="{Binding JumpToLayerDataCommand}"
                                                     ToolTip.Tip="{Binding LayerTimeText}">
                                                 <TextBlock Text="{Binding LayerTimeText}" TextTrimming="CharacterEllipsis" />
                                             </Button>
                                             <Panel Grid.Column="1">
-                                                <Border Classes="HiddenTag" IsVisible="{Binding IsLayerHidden}"
-                                                        AutomationProperties.AutomationId="Datasets.Source.Dataset.HiddenTag"
-                                                        AutomationProperties.Name="{Binding LayerHiddenTagText}">
-                                                    <TextBlock Text="{Binding LayerHiddenTagText}"
+                                                <Border Classes="HiddenTag" IsVisible="{Binding IsLayerWarning}"
+                                                        AutomationProperties.AutomationId="Datasets.Source.Dataset.TimeTag"
+                                                        AutomationProperties.Name="{Binding LayerTagText}">
+                                                    <TextBlock Text="{Binding LayerTagText}"
                                                                FontSize="10"
                                                                FontWeight="SemiBold"
                                                                Foreground="{DynamicResource WarningColor}" />
@@ -696,17 +696,17 @@
                                                 AutomationProperties.AutomationId="Datasets.Row.LayerTime"
                                                 AutomationProperties.Name="{Binding LayerTimeText}"
                                                 Classes="LayerTime"
-                                                Classes.hidden="{Binding IsLayerHidden}"
+                                                Classes.hidden="{Binding IsLayerWarning}"
                                                 Classes.drawing="{Binding IsLayerDrawing}"
                                                 Command="{Binding JumpToLayerDataCommand}"
                                                 ToolTip.Tip="{Binding LayerTimeText}">
                                             <TextBlock Text="{Binding LayerTimeText}" TextTrimming="CharacterEllipsis" />
                                         </Button>
                                         <Panel Grid.Column="1">
-                                            <Border Classes="HiddenTag" IsVisible="{Binding IsLayerHidden}"
-                                                    AutomationProperties.AutomationId="Datasets.Row.HiddenTag"
-                                                    AutomationProperties.Name="{Binding LayerHiddenTagText}">
-                                                <TextBlock Text="{Binding LayerHiddenTagText}"
+                                            <Border Classes="HiddenTag" IsVisible="{Binding IsLayerWarning}"
+                                                    AutomationProperties.AutomationId="Datasets.Row.TimeTag"
+                                                    AutomationProperties.Name="{Binding LayerTagText}">
+                                                <TextBlock Text="{Binding LayerTagText}"
                                                            FontSize="10"
                                                            FontWeight="SemiBold"
                                                            Foreground="{DynamicResource WarningColor}" />
