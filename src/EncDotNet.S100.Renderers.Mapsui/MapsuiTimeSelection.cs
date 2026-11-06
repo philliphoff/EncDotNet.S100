@@ -8,6 +8,13 @@ public enum MapsuiTimeSelectionKind
 
     /// <summary>The latest sample at or before the clock, held for the tolerance (S-104, S-411).</summary>
     AtOrBefore,
+
+    /// <summary>
+    /// The clock itself, to the minute, from the tolerance before the first
+    /// sample to the last (a tropical cyclone, whose storm moves between
+    /// forecast points; <see cref="EncDotNet.S100.Datasets.Pipelines.TimeStepSelection.Continuous"/>).
+    /// </summary>
+    Continuous,
 }
 
 /// <summary>
@@ -30,6 +37,17 @@ public static class MapsuiTimeSelection
         ArgumentNullException.ThrowIfNull(sorted);
         if (sorted.Count == 0)
             return null;
+
+        if (kind == MapsuiTimeSelectionKind.Continuous)
+        {
+            var start = sorted[0] - tolerance;
+            if (time < start || time > sorted[^1])
+                return null;
+
+            // To the minute, so a moving clock redraws once a minute at most.
+            var minute = new DateTime(time.Ticks - time.Ticks % TimeSpan.TicksPerMinute, time.Kind);
+            return minute < start ? start : minute;
+        }
 
         var next = FirstAfterOrAt(sorted, time);
         if (next < sorted.Count && sorted[next] == time)

@@ -21,6 +21,14 @@ public enum TimeStepSelection
 
     /// <summary>The latest step at or before the map time, held for the validity.</summary>
     AtOrBefore,
+
+    /// <summary>
+    /// The map time itself, to the minute, anywhere from the validity before
+    /// the first step to the last step: the dataset draws any time in its
+    /// range, not just its steps, which are the points to step between (a
+    /// tropical cyclone, whose storm moves between forecast points, V14).
+    /// </summary>
+    Continuous,
 }
 
 /// <summary>
@@ -37,7 +45,9 @@ public enum TimeStepSelection
 /// <see cref="TimeStepSelection.Nearest"/>, after the step for
 /// <see cref="TimeStepSelection.AtOrBefore"/>), or <see langword="null"/> for
 /// the dataset's typical step: the median interval between its steps, or one
-/// hour when it has a single step.
+/// hour when it has a single step. For <see cref="TimeStepSelection.Continuous"/>,
+/// how long before the first step the dataset already draws (a storm's past
+/// track), or <see langword="null"/> for none.
 /// </param>
 /// <param name="StaleAfter">
 /// For <see cref="TimeStepSelection.AtOrBefore"/>: how long after its step the

@@ -293,6 +293,35 @@ public static class TropicalCycloneStyle
         return text;
     }
 
+    /// <summary>
+    /// The second line of the storm's label at a time (V11): at the advisory,
+    /// <see cref="AdvisoryLabel"/>; on a later forecast point,
+    /// <c>Thu 6:00 AM · Adv 20</c>; estimated between points,
+    /// <c>est. Wed 9:00 PM · Adv 20 · NW 9 kt</c>; on the best track,
+    /// <c>best track Tue 3:00 PM</c>.
+    /// </summary>
+    /// <param name="advisory">The advisory.</param>
+    /// <param name="storm">The storm at the time (<see cref="TropicalCycloneAdvisory.StormAt"/>).</param>
+    /// <param name="zone">The zone the time is written in.</param>
+    /// <param name="culture">The culture the time is written in.</param>
+    public static string StormDetailLabel(TropicalCycloneAdvisory advisory, TropicalCycloneStormAt storm, TimeZoneInfo zone, CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(advisory);
+        ArgumentNullException.ThrowIfNull(storm);
+        var point = storm.Point;
+        var time = ShortTime(storm.Time, zone, culture);
+        switch (storm.Source)
+        {
+            case TropicalCycloneStormSource.BestTrack:
+                return $"best track {time}";
+            case TropicalCycloneStormSource.Estimated:
+                var text = $"est. {time} · Adv {advisory.Advisory}";
+                return Motion(point) is { } motion ? text + " · " + motion : text;
+            default:
+                return point.Tau == 0 ? AdvisoryLabel(advisory, point, zone, culture) : $"{time} · Adv {advisory.Advisory}";
+        }
+    }
+
     /// <summary>The label beside a forecast point (V9): <c>Thu 6:00 AM · 110 kt</c>.</summary>
     /// <param name="point">The forecast point.</param>
     /// <param name="zone">The zone the time is written in.</param>

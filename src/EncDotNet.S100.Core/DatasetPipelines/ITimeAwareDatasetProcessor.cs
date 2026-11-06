@@ -29,6 +29,13 @@ public interface ITimeAwareDatasetProcessor
     DateTime? IssueTime => null;
 
     /// <summary>
+    /// When the producer is next expected to issue a newer dataset (UTC), such
+    /// as NHC's next regular advisory; <see langword="null"/> (the default)
+    /// when it doesn't say. A host marks it on the timeline (V14).
+    /// </summary>
+    DateTime? NextIssueTime => null;
+
+    /// <summary>
     /// What the time steps are, which one is drawn between steps, and how long
     /// a step stays valid. Defaults to <see cref="TimeSemantics.Default"/>:
     /// forecast steps, nearest within the typical step.
