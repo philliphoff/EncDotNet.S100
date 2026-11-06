@@ -81,9 +81,6 @@ public sealed class PortrayalCacheWarmerTests : IDisposable
         public MapViewportSnapshot? View;
         public Func<DatasetEntry, CancellationToken, Task<IReadOnlyList<string>?>>? Portray;
         public int Concurrency = 1;
-        public int? InitialConcurrency;
-        public Func<TimeSpan> GcPause = () => TimeSpan.Zero;
-        public TimeSpan ConcurrencyWindow = TimeSpan.FromSeconds(30);
 
         public PortrayalCacheWarmer Create(PortrayalWarmLedger ledger) => new(
             candidates: () => { lock (Cells) return Cells.ToList(); },
@@ -96,17 +93,7 @@ public sealed class PortrayalCacheWarmerTests : IDisposable
             signature: () => Volatile.Read(ref Signature),
             ledger: ledger,
             options: FastOptions,
-            concurrency: new PrewarmConcurrency(
-                new PrewarmConcurrencyOptions
-                {
-                    MaxConcurrency = Concurrency,
-                    InitialConcurrency = InitialConcurrency ?? Concurrency,
-                    Window = ConcurrencyWindow,
-                    BackOffPauseShare = 0.10,
-                    GrowPauseShare = 0.04,
-                },
-                () => GcPause(),
-                TimeProvider.System),
+            concurrencyLimit: () => Volatile.Read(ref Concurrency),
             time: TimeProvider.System,
             logger: NullLogger<PortrayalCacheWarmer>.Instance);
 
@@ -211,53 +198,19 @@ public sealed class PortrayalCacheWarmerTests : IDisposable
     }
 
     [Fact]
-    public async Task RunsMoreCellsAtOnce_WhileGcPausesStayLow_EvenWhenCellsFinishQuickly()
+    public async Task KeepsAsManyCellsGoingAsTheSchedulerAdmits()
     {
-        var host = new Host
-        {
-            Concurrency = 4,
-            InitialConcurrency = 1,
-            ConcurrencyWindow = TimeSpan.FromMilliseconds(40),
-        };
+        // The work scheduler's GC pause governor sets the limit (map rendering
+        // slice 5); the warmer follows it as it rises and falls.
+        var host = new Host { Concurrency = 1 };
         for (var i = 0; i < 400; i++)
             host.Cells.Add(Cell("c" + i, 47.6 + (i * 0.001), -122.4));
         var running = 0;
         var peak = 0;
-        host.Portray = async (entry, ct) =>
-        {
-            InterlockedMax(ref peak, Interlocked.Increment(ref running));
-            try { await Task.Delay(10, ct); }
-            finally { Interlocked.Decrement(ref running); }
-            return await host.Default(entry);
-        };
-        using var warmer = host.Create(new PortrayalWarmLedger(null));
-
-        warmer.Start();
-
-        // Slots refill as cells finish, so every window counts as saturated.
-        Assert.True(await WaitUntilAsync(() => warmer.ConcurrencyLimit == 4));
-        Assert.True(await WaitUntilAsync(() => Volatile.Read(ref peak) == 4));
-        Assert.True(Volatile.Read(ref peak) <= 4);
-    }
-
-    [Fact]
-    public async Task RunsFewerCellsAtOnce_WhenGcPausesClimb()
-    {
-        // GC pauses take half of wall time from the start: the limit halves each window.
-        var clock = System.Diagnostics.Stopwatch.StartNew();
-        var host = new Host
-        {
-            Concurrency = 8,
-            ConcurrencyWindow = TimeSpan.FromMilliseconds(30),
-            GcPause = () => clock.Elapsed / 2,
-        };
-        for (var i = 0; i < 40; i++)
-            host.Cells.Add(Cell("c" + i, 47.6 + (i * 0.01), -122.4));
-        var running = 0;
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         host.Portray = async (entry, ct) =>
         {
-            Interlocked.Increment(ref running);
+            InterlockedMax(ref peak, Interlocked.Increment(ref running));
             try { await gate.Task.WaitAsync(ct); }
             finally { Interlocked.Decrement(ref running); }
             return await host.Default(entry);
@@ -265,13 +218,20 @@ public sealed class PortrayalCacheWarmerTests : IDisposable
         using var warmer = host.Create(new PortrayalWarmLedger(null));
 
         warmer.Start();
-        Assert.True(await WaitUntilAsync(() => Volatile.Read(ref running) == 8));
-        Assert.True(await WaitUntilAsync(() => warmer.ConcurrencyLimit == 1));
+        Assert.True(await WaitUntilAsync(() => Volatile.Read(ref running) == 1));
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.Equal(1, Volatile.Read(ref peak));
 
-        // Running cells finish; only one at a time replaces them.
+        Volatile.Write(ref host.Concurrency, 4);
+        Assert.Equal(4, warmer.ConcurrencyLimit);
+        Assert.True(await WaitUntilAsync(() => Volatile.Read(ref running) == 4));
+
+        // The limit falls: running cells finish, and only one at a time replaces them.
+        Volatile.Write(ref host.Concurrency, 1);
         gate.SetResult();
         Assert.True(await WaitUntilAsync(() => host.Portrayed.Count >= 12));
         Assert.True(Volatile.Read(ref running) <= 1);
+        Assert.Equal(4, Volatile.Read(ref peak));
     }
 
     private static void InterlockedMax(ref int target, int value)
@@ -507,131 +467,6 @@ public sealed class PortrayalCacheWarmerTests : IDisposable
         Assert.Equal(string.Empty, PortrayalWarmStatusViewModel.Describe(new(PortrayalWarmState.Idle, 0, 0)));
         Assert.Contains("34", PortrayalWarmStatusViewModel.Describe(new(PortrayalWarmState.Working, 34, 120)), StringComparison.Ordinal);
         Assert.Contains("120", PortrayalWarmStatusViewModel.Describe(new(PortrayalWarmState.Paused, 34, 120)), StringComparison.Ordinal);
-    }
-}
-
-/// <summary>
-/// <see cref="PrewarmConcurrency"/> (map rendering slice 3): additive increase
-/// while GC pauses stay low and every slot is busy, halving when they climb.
-/// </summary>
-public sealed class PrewarmConcurrencyTests
-{
-    private static readonly PrewarmConcurrencyOptions Options = new()
-    {
-        MaxConcurrency = 6,
-        InitialConcurrency = 2,
-        Window = TimeSpan.FromSeconds(1),
-        BackOffPauseShare = 0.10,
-        GrowPauseShare = 0.04,
-    };
-
-    private sealed class Rig
-    {
-        public Microsoft.Extensions.Time.Testing.FakeTimeProvider Time { get; } = new();
-        public TimeSpan Pause;
-        public PrewarmConcurrency Create(PrewarmConcurrencyOptions? options = null) =>
-            new(options ?? Options, () => Pause, Time);
-
-        /// <summary>Advances one window with <paramref name="share"/> of it spent in GC pauses.</summary>
-        public bool Window(PrewarmConcurrency c, double share, int running)
-        {
-            Time.Advance(TimeSpan.FromSeconds(1));
-            Pause += TimeSpan.FromSeconds(share);
-            return c.Observe(running);
-        }
-    }
-
-    [Fact]
-    public void GrowsByOne_PerQuietSaturatedWindow_UpToTheMaximum()
-    {
-        var rig = new Rig();
-        var c = rig.Create();
-        Assert.Equal(2, c.Limit);
-        c.Observe(running: 2);
-
-        for (var expected = 3; expected <= 6; expected++)
-        {
-            Assert.True(rig.Window(c, 0.01, running: c.Limit));
-            Assert.Equal(expected, c.Limit);
-        }
-
-        Assert.False(rig.Window(c, 0.0, running: 6));
-        Assert.Equal(6, c.Limit);
-        Assert.Equal(0.0, c.LastPauseShare);
-    }
-
-    [Fact]
-    public void Holds_WhenSlotsWereFree_OrThePauseShareIsBetweenTheThresholds()
-    {
-        var rig = new Rig();
-        var c = rig.Create();
-        c.Observe(running: 1);
-
-        Assert.False(rig.Window(c, 0.01, running: 1));
-        Assert.Equal(2, c.Limit);
-
-        c.Observe(running: 2);
-        Assert.False(rig.Window(c, 0.07, running: 2));
-        Assert.Equal(2, c.Limit);
-        Assert.Equal(0.07, c.LastPauseShare!.Value, 6);
-    }
-
-    [Fact]
-    public void Halves_WhenThePauseShareClimbs_DownToOne()
-    {
-        var rig = new Rig();
-        var c = rig.Create(Options with { InitialConcurrency = 6 });
-        c.Observe(running: 6);
-
-        Assert.True(rig.Window(c, 0.30, running: 6));
-        Assert.Equal(3, c.Limit);
-        Assert.True(rig.Window(c, 0.30, running: 3));
-        Assert.Equal(1, c.Limit);
-        Assert.False(rig.Window(c, 0.30, running: 1));
-        Assert.Equal(1, c.Limit);
-    }
-
-    [Fact]
-    public void Restart_DropsTheOpenWindow_SoPausesWhileTheMapWorkedDontCount()
-    {
-        var rig = new Rig();
-        var c = rig.Create();
-        c.Observe(running: 2);
-
-        // The map loads and pauses heavily; the warmer is paused meanwhile.
-        rig.Time.Advance(TimeSpan.FromSeconds(5));
-        rig.Pause += TimeSpan.FromSeconds(3);
-        c.Restart();
-
-        Assert.False(c.Observe(running: 2));
-        Assert.True(rig.Window(c, 0.0, running: 2));
-        Assert.Equal(3, c.Limit);
-    }
-
-    [Theory]
-    [InlineData(16, null, 14, 7)]
-    [InlineData(4, null, 2, 1)]
-    [InlineData(1, null, 1, 1)]
-    [InlineData(16, "1", 1, 1)]
-    [InlineData(16, "5", 5, 5)]
-    [InlineData(16, "0", 14, 7)]
-    [InlineData(16, "lots", 14, 7)]
-    public void Resolve_BoundsByCores_AndHonoursAFixedLimit(int processors, string? variable, int max, int initial)
-    {
-        var options = PrewarmConcurrencyOptions.Resolve(processors, variable);
-
-        Assert.Equal((max, initial), (options.MaxConcurrency, options.InitialConcurrency));
-    }
-
-    [Fact]
-    public void AFixedLimit_DoesNotBackOff()
-    {
-        var rig = new Rig();
-        var c = rig.Create(PrewarmConcurrencyOptions.Resolve(16, "8") with { Window = TimeSpan.FromSeconds(1) });
-        c.Observe(running: 8);
-
-        Assert.False(rig.Window(c, 1.0, running: 8));
-        Assert.Equal(8, c.Limit);
     }
 }
 

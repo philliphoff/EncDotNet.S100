@@ -19,8 +19,14 @@ public sealed record WorkSchedulerOptions
     public IReadOnlySet<WorkStage> AllocationHeavyStages { get; init; } =
         new HashSet<WorkStage> { WorkStage.Portray, WorkStage.Clip };
 
-    /// <summary>The GC pause governor's settings.</summary>
-    public GcPauseGovernorOptions Admission { get; init; } = GcPauseGovernorOptions.ForProcessors(Environment.ProcessorCount);
+    /// <summary>
+    /// The GC pause governor's settings: by default
+    /// <see cref="GcPauseGovernorOptions.Resolve"/> for this machine, so
+    /// <see cref="GcPauseGovernorOptions.FixedConcurrencyVariable"/> pins it.
+    /// </summary>
+    public GcPauseGovernorOptions Admission { get; init; } = GcPauseGovernorOptions.Resolve(
+        Environment.ProcessorCount,
+        Environment.GetEnvironmentVariable(GcPauseGovernorOptions.FixedConcurrencyVariable));
 
     /// <summary>The worker threads' name prefix.</summary>
     public string ThreadName { get; init; } = "S100 work";
@@ -148,6 +154,22 @@ public sealed class WorkScheduler : IWorkScheduler, IDisposable
 
     /// <summary>The number of worker threads.</summary>
     public int WorkerCount => _threads.Length;
+
+    /// <summary>
+    /// How many allocation-heavy background jobs the GC pause governor admits
+    /// now. Cheaper than <see cref="GetStats"/> for a producer that sizes how
+    /// much it queues, such as the portrayal pre-warm.
+    /// </summary>
+    public int AllocationHeavyLimit
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _governor.Limit;
+            }
+        }
+    }
 
     /// <inheritdoc />
     public WorkInterest<T> Schedule<T>(WorkKey key, WorkStage stage, WorkPriority priority, Func<WorkContext, ValueTask<T>> run)

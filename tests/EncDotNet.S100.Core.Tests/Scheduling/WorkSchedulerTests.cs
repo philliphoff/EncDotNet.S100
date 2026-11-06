@@ -404,6 +404,47 @@ public sealed class GcPauseGovernorTests
     }
 }
 
+public sealed class GcPauseGovernorOptionsTests
+{
+    [Theory]
+    [InlineData(16, null, 14, 7)]
+    [InlineData(4, null, 2, 1)]
+    [InlineData(1, null, 1, 1)]
+    [InlineData(16, "1", 1, 1)]
+    [InlineData(16, "5", 5, 5)]
+    [InlineData(16, "0", 14, 7)]
+    [InlineData(16, "lots", 14, 7)]
+    public void Resolve_BoundsByCores_AndHonoursAFixedLimit(int processors, string? variable, int max, int initial)
+    {
+        var options = GcPauseGovernorOptions.Resolve(processors, variable);
+
+        Assert.Equal((max, initial), (options.MaxConcurrency, options.InitialConcurrency));
+    }
+
+    [Fact]
+    public void Restart_DropsTheOpenWindow_SoPausesWhileNothingWasAdmittedDontCount()
+    {
+        var time = new FakeTimeProvider();
+        var pause = TimeSpan.Zero;
+        var governor = new GcPauseGovernor(
+            GcPauseGovernorOptions.ForProcessors(8) with { Window = TimeSpan.FromSeconds(1) },
+            () => pause,
+            time);
+        governor.Observe(governor.Limit);
+
+        // The map loads and pauses heavily while no background job runs.
+        time.Advance(TimeSpan.FromSeconds(5));
+        pause += TimeSpan.FromSeconds(3);
+        governor.Restart();
+
+        var limit = governor.Limit;
+        Assert.False(governor.Observe(limit));
+        time.Advance(TimeSpan.FromSeconds(1));
+        Assert.True(governor.Observe(limit));
+        Assert.Equal(limit + 1, governor.Limit);
+    }
+}
+
 public sealed class LatencyHistogramTests
 {
     [Fact]

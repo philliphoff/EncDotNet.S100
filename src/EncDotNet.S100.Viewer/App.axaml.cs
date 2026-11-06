@@ -964,15 +964,11 @@ public partial class App : Application
                 ledger: new EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalWarmLedger(
                     settings.IsReadOnly ? null : Path.Combine(paths.PortrayalInstructionCacheDirectory, "prewarm-ledger.json")),
                 options: options,
-                // Several cells at once while the map is idle, backing off
-                // when GC pauses climb (map rendering slice 3).
-                concurrency: new EncDotNet.S100.Viewer.Services.LazyLoading.PrewarmConcurrency(
-                    EncDotNet.S100.Viewer.Services.LazyLoading.PrewarmConcurrencyOptions.Resolve(
-                        Environment.ProcessorCount,
-                        Environment.GetEnvironmentVariable(
-                            EncDotNet.S100.Viewer.Services.LazyLoading.PrewarmConcurrencyOptions.FixedConcurrencyVariable)),
-                    GC.GetTotalPauseDuration,
-                    sp.GetRequiredService<TimeProvider>()),
+                // Several cells at once while the map is idle: as many as the
+                // work scheduler admits allocation-heavy background jobs, a
+                // limit its GC pause governor backs off when pauses climb
+                // (map rendering slices 3 and 5).
+                concurrencyLimit: () => EncDotNet.S100.Core.Scheduling.WorkScheduler.Shared.AllocationHeavyLimit,
                 time: sp.GetRequiredService<TimeProvider>(),
                 logger: sp.GetRequiredService<ILogger<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalCacheWarmer>>());
         });
