@@ -112,8 +112,10 @@
                 </StackPanel>
 
                 <!-- Weather (#1072): map-wide switches for the optional weather
-                     layers, applied to every GRIB2 and NetCDF dataset and kept
-                     between sessions. Shown while a weather dataset is loaded.
+                     layers, applied to every weather dataset and kept between
+                     sessions. Shown while a weather dataset (GRIB2, NetCDF, a
+                     tropical cyclone or a surface analysis) is loaded; the
+                     cyclone switches (V26) only while a cyclone is.
                      The wave height, sea temperature, visibility and
                      freezing spray fills and the wind barbs are always drawn. -->
                 <StackPanel Spacing="4" IsVisible="{Binding HasWeatherData}">
@@ -169,6 +171,30 @@
                                       AutomationProperties.AutomationId="EcdisDisplayPanel.Weather.AirTemperature"
                                       AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_AirTemperature}"
                                       AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_AirTemperature}" />
+                    </Grid>
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto" IsVisible="{Binding HasTropicalCyclone}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_WindRadii}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.EcdisPanel_Weather_WindRadii}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsWindRadiiVisible}"
+                                      AutomationProperties.AutomationId="EcdisDisplayPanel.Weather.WindRadii"
+                                      AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_WindRadii}"
+                                      AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_WindRadii}" />
+                    </Grid>
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto" IsVisible="{Binding HasTropicalCyclone}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_PastTrack}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.EcdisPanel_Weather_PastTrack}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsPastTrackVisible}"
+                                      AutomationProperties.AutomationId="EcdisDisplayPanel.Weather.PastTrack"
+                                      AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_PastTrack}"
+                                      AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_PastTrack}" />
+                    </Grid>
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto" IsVisible="{Binding HasTropicalCyclone}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_ForecastTimes}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.EcdisPanel_Weather_ForecastTimes}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsForecastTimesVisible}"
+                                      AutomationProperties.AutomationId="EcdisDisplayPanel.Weather.ForecastTimes"
+                                      AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_ForecastTimes}"
+                                      AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_ForecastTimes}" />
                     </Grid>
                 </StackPanel>
 

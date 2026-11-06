@@ -22,6 +22,17 @@ public static class WeatherRuns
     /// <summary>The item property that marks a pinned run (a kept copy), <c>true</c>.</summary>
     public const string PinnedProperty = "pinned";
 
+    /// <summary>
+    /// The item property saying where the data covers, when that's narrower
+    /// than its area suggests: "North America and adjacent waters" for WPC's
+    /// surface analysis (V36). The Library shows it on the item's row.
+    /// </summary>
+    public const string CoverageProperty = "coverage";
+
+    /// <summary>The coverage note <paramref name="item"/> carries (<see cref="CoverageProperty"/>), if any.</summary>
+    public static string? CoverageOf(CollectionItem item) =>
+        item?.Properties.GetValueOrDefault(CoverageProperty) is { Length: > 0 } value ? value : null;
+
     /// <summary>The item property naming the data's licence.</summary>
     public const string LicenceProperty = "licence";
 
@@ -31,7 +42,7 @@ public static class WeatherRuns
     /// <summary>The item property naming, on a pinned run, the managed folder it is kept in (relative to the downloads root).</summary>
     public const string DownloadFolderProperty = "downloadFolder";
 
-    /// <summary>The item property naming the weather service kind (<c>gribFilter</c>, <c>gribIndex</c>, <c>nwsAlerts</c>, <c>erddapGriddap</c>).</summary>
+    /// <summary>The item property naming the weather service kind (<c>gribFilter</c>, <c>gribIndex</c>, <c>nwsAlerts</c>, <c>erddapGriddap</c>, <c>wpcBulletins</c>).</summary>
     public const string ServiceProperty = "weatherService";
 
     /// <summary>True when <paramref name="item"/> is a weather item whose runs can go stale.</summary>

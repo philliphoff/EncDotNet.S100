@@ -11,6 +11,13 @@ internal sealed class GlobalTimeService
     private MapsuiDatasetLayerSession? _session;
     private MapsuiMapTimeSnapshot _snapshot = MapsuiMapTimeSnapshot.Empty;
 
+    /// <summary>
+    /// The app's clock (the test clock under <c>--mcp-test-hooks</c>), which
+    /// the map session takes a storm's advisory age at (V28); set before
+    /// <see cref="AttachTo"/>.
+    /// </summary>
+    public TimeProvider Clock { get; init; } = TimeProvider.System;
+
     /// <summary>The earliest sample across all registered datasets.</summary>
     public DateTime? MinTime => _snapshot.Minimum;
 
@@ -52,6 +59,7 @@ internal sealed class GlobalTimeService
                 "GlobalTimeService is already attached to a map session.");
 
         _session = session;
+        _session.Clock = Clock;
         _session.TimeRangeChanged += OnTimeRangeChanged;
         _session.CurrentTimeChanged += OnCurrentTimeChanged;
         UpdateSnapshot();

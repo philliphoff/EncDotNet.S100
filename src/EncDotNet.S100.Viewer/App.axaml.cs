@@ -1086,7 +1086,7 @@ public partial class App : Application
         });
 
         // Phase 3 services: dataset orchestration, pick dispatch, file dialogs
-        services.AddSingleton<GlobalTimeService>();
+        services.AddSingleton<GlobalTimeService>(sp => new GlobalTimeService { Clock = sp.GetRequiredService<TimeProvider>() });
         services.AddSingleton<TimeRefreshProgress>();
         services.AddSingleton(sp => new LayerTimeCoordinator(
             sp.GetRequiredService<GlobalTimeService>(),
@@ -1373,7 +1373,8 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MeasureSession>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Tools.RangeBearingState>())
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Tools.RangeBearingState>(),
+            sp.GetRequiredService<EcdisDisplayPanelViewModel>())
         {
             // Settle harness and render metrics (map rendering slice 1).
             PerfHarness = new McpTools.PerfHarnessServices(

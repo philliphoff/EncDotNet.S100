@@ -1126,6 +1126,15 @@
                        Foreground="{DynamicResource WarningColor}"
                        Margin="0,0,0,6"
                        TextWrapping="Wrap" />
+            <!-- Stale data (vector-weather.md §7): how old the picked analysis is. -->
+            <TextBlock Text="{Binding StaleNotice}"
+                       IsVisible="{Binding HasStaleNotice}"
+                       AutomationProperties.AutomationId="PickReport.StaleNotice"
+                       AutomationProperties.Name="{Binding StaleNotice}"
+                       FontSize="12"
+                       Foreground="{DynamicResource WarningColor}"
+                       Margin="0,0,0,6"
+                       TextWrapping="Wrap" />
             <!-- The data's credit from its Library source (#1075): attribution and licence. -->
             <SelectableTextBlock Text="{Binding DataCredit}"
                                  IsVisible="{Binding HasDataCredit}"

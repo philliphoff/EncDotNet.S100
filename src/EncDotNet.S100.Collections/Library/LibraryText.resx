@@ -712,4 +712,28 @@
     <value>Stale</value>
     <comment>A weather model run more than 12 hours old</comment>
   </data>
+  <data name="Weather_StormTitleFormat" xml:space="preserve">
+    <value>{0} ({1}), advisory {2}</value>
+    <comment>An NHC storm's Library title. {0} storm name, {1} ATCF id (AL142026), {2} advisory number</comment>
+  </data>
+  <data name="Weather_NhcBasins" xml:space="preserve">
+    <value>Atlantic, East and Central Pacific</value>
+    <comment>The basins NHC's active-storm list covers</comment>
+  </data>
+  <data name="Weather_NoActiveStorms" xml:space="preserve">
+    <value>No active storms</value>
+    <comment>NHC is issuing no advisories now</comment>
+  </data>
+  <data name="Weather_ActiveStormsFormat" xml:space="preserve">
+    <value>{0} active</value>
+    <comment>How many storms NHC is issuing advisories for. {0} count</comment>
+  </data>
+  <data name="Weather_WpcDomain" xml:space="preserve">
+    <value>North America and adjacent waters</value>
+    <comment>The area WPC's surface analysis covers (WPC's domain)</comment>
+  </data>
+  <data name="Weather_BulletinsTitle" xml:space="preserve">
+    <value>Bulletins</value>
+    <comment>Heading over the WPC bulletins to include: the analysis and the forecast fronts</comment>
+  </data>
 </root>
