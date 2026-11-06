@@ -38,6 +38,9 @@ public static class WeatherProducts
             [Weather.VisibilityStyle.Key] = S98DisplayPlane.OnDemandSurface,
             [Weather.FreezingSprayStyle.Key] = S98DisplayPlane.OnDemandSurface,
             [Weather.AirTemperatureIsothermStyle.Key] = S98DisplayPlane.OtherChartOverlays,
+            [Weather.PrecipitationStyle.Key] = S98DisplayPlane.OnDemandSurface,
+            [Weather.ThunderstormRiskStyle.Key] = S98DisplayPlane.OnDemandSurface,
+            [Weather.CloudCoverStyle.Key] = S98DisplayPlane.OnDemandSurface,
             [ProductRegistration.AnyLayerKind] = S98DisplayPlane.OnDemandSurface,
         };
 

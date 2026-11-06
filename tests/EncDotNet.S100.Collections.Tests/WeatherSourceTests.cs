@@ -180,6 +180,19 @@ public sealed class WeatherSourceTests : IDisposable
         Assert.False(visibility.Default);
     }
 
+    [Theory]
+    [InlineData("noaa-nomads-gfs")]
+    [InlineData("noaa-aws-gfs")]
+    public void The_GFS_sources_offer_precipitation_CAPE_and_cloud_cover_off_by_default(string id)
+    {
+        var parameters = Known(id).Weather!.Parameters;
+
+        Assert.Equal(
+            [":PRATE:surface:", ":CAPE:surface:", ":TCDC:entire atmosphere:"],
+            parameters.Where(p => p.Id is "PRATE" or "CAPE" or "TCDC").Select(p => p.IndexMatch));
+        Assert.DoesNotContain(parameters, p => p.Id is "PRATE" or "CAPE" or "TCDC" && p.Default);
+    }
+
     [Fact]
     public void The_grib_filter_url_names_the_runs_file_the_parameters_their_levels_and_the_area_rounded_out_to_the_grid()
     {

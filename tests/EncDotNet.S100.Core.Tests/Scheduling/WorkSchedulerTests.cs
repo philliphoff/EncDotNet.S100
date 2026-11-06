@@ -281,6 +281,38 @@ public sealed class WorkSchedulerTests
     }
 
     [Fact]
+    public async Task Admission_grows_for_a_producer_that_refills_after_each_job()
+    {
+        using var scheduler = Create(4, new GcPauseGovernorOptions
+        {
+            MaxConcurrency = 3,
+            InitialConcurrency = 1,
+            Window = TimeSpan.FromMilliseconds(40),
+            BackOffPauseShare = 0.5,
+            GrowPauseShare = 0.1,
+        });
+
+        // Like the pre-warm: keep as many jobs going as admitted, refilling a
+        // little after each finishes.
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        var running = new List<Task>();
+        while (scheduler.AllocationHeavyLimit < 3 && DateTime.UtcNow < deadline)
+        {
+            running.RemoveAll(t => t.IsCompleted);
+            while (running.Count < scheduler.AllocationHeavyLimit)
+            {
+                running.Add(scheduler.RunAsync(WorkStage.Portray, _ => { Thread.Sleep(15); return 0; },
+                    TestContext.Current.CancellationToken, WorkPriority.Background()));
+            }
+
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        }
+
+        Assert.Equal(3, scheduler.AllocationHeavyLimit);
+        await Task.WhenAll(running).WaitAsync(Timeout, TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public async Task Yield_gives_the_worker_to_a_better_job()
     {
         using var scheduler = Create(1);
@@ -401,6 +433,47 @@ public sealed class GcPauseGovernorTests
         time.Advance(TimeSpan.FromSeconds(2));
         Assert.False(governor.Observe(3));
         Assert.Equal(3, governor.Limit);
+    }
+}
+
+public sealed class GcPauseGovernorOptionsTests
+{
+    [Theory]
+    [InlineData(16, null, 14, 7)]
+    [InlineData(4, null, 2, 1)]
+    [InlineData(1, null, 1, 1)]
+    [InlineData(16, "1", 1, 1)]
+    [InlineData(16, "5", 5, 5)]
+    [InlineData(16, "0", 14, 7)]
+    [InlineData(16, "lots", 14, 7)]
+    public void Resolve_BoundsByCores_AndHonoursAFixedLimit(int processors, string? variable, int max, int initial)
+    {
+        var options = GcPauseGovernorOptions.Resolve(processors, variable);
+
+        Assert.Equal((max, initial), (options.MaxConcurrency, options.InitialConcurrency));
+    }
+
+    [Fact]
+    public void Restart_DropsTheOpenWindow_SoPausesWhileNothingWasAdmittedDontCount()
+    {
+        var time = new FakeTimeProvider();
+        var pause = TimeSpan.Zero;
+        var governor = new GcPauseGovernor(
+            GcPauseGovernorOptions.ForProcessors(8) with { Window = TimeSpan.FromSeconds(1) },
+            () => pause,
+            time);
+        governor.Observe(governor.Limit);
+
+        // The map loads and pauses heavily while no background job runs.
+        time.Advance(TimeSpan.FromSeconds(5));
+        pause += TimeSpan.FromSeconds(3);
+        governor.Restart();
+
+        var limit = governor.Limit;
+        Assert.False(governor.Observe(limit));
+        time.Advance(TimeSpan.FromSeconds(1));
+        Assert.True(governor.Observe(limit));
+        Assert.Equal(limit + 1, governor.Limit);
     }
 }
 

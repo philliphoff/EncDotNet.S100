@@ -33,6 +33,25 @@ month. For package versions and release assets, see
   `PassageRouteSnapshot` record has a new last positional parameter. See
   [Weather along the route](route-checks.md#weather-along-the-route).
 
+- **Precipitation, thunderstorm risk and cloud cover on the chart.** GRIB2
+  and NetCDF files with a precipitation rate, CAPE or total cloud cover,
+  such as GFS, can now draw them: precipitation in rain radar colours from
+  0.1 mm/h, thunderstorm risk in ochre where CAPE is 1000 J/kg or more
+  (moderate, high and extreme), and cloud cover as a light grey veil from
+  25 %. All three are off by default, behind new **Precipitation**,
+  **Thunderstorm risk** and **Cloud cover** switches in Display controls
+  (and in `set_weather_display`), and each has a legend. Picks give the rate
+  in mm/h, CAPE in J/kg with its risk, and cloud cover in percent, and the
+  Library's GFS sources can fetch PRATE, CAPE and TCDC. `s100 render` gains
+  `--show-layer` to draw layers that are off by default. In the libraries,
+  `WeatherParameters` gains `PrecipitationRate`, `Cape` and `CloudCover`,
+  `WeatherUnit` gains `KilogramsPerSquareMetrePerSecond`, `JoulesPerKilogram`
+  and `Percent`, `WeatherLevel` gains `EntireAtmosphere` (GRIB2 fixed
+  surface 10), and the new styles are `PrecipitationStyle`,
+  `ThunderstormRiskStyle` and `CloudCoverStyle`. `WeatherCoverageStyle.Opacity`
+  is now set per style, and `StyleVersion` is 7. See
+  [Show wind and waves on the chart](weather.md).
+
 - **Tropical cyclones from the Library.** A new Library source,
   **Tropical cyclones — NHC** (`FEED`), lists every storm NHC is issuing
   advisories for in the Atlantic, East and Central Pacific, one item each,

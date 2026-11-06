@@ -172,6 +172,9 @@ internal static partial class Strings
     public static string SubLayer_Weather_Visibility => Get(nameof(SubLayer_Weather_Visibility));
     public static string SubLayer_Weather_FreezingSpray => Get(nameof(SubLayer_Weather_FreezingSpray));
     public static string SubLayer_Weather_AirTemperature => Get(nameof(SubLayer_Weather_AirTemperature));
+    public static string SubLayer_Weather_Precipitation => Get(nameof(SubLayer_Weather_Precipitation));
+    public static string SubLayer_Weather_ThunderstormRisk => Get(nameof(SubLayer_Weather_ThunderstormRisk));
+    public static string SubLayer_Weather_CloudCover => Get(nameof(SubLayer_Weather_CloudCover));
     public static string Tooltip_ToggleSubLayerVisibility => Get(nameof(Tooltip_ToggleSubLayerVisibility));
     public static string Tooltip_SubLayerOpacity => Get(nameof(Tooltip_SubLayerOpacity));
     public static string Tooltip_ExpandSubLayers => Get(nameof(Tooltip_ExpandSubLayers));
@@ -869,6 +872,12 @@ internal static partial class Strings
     public static string Tooltip_EcdisPanel_Weather_Currents => Get(nameof(Tooltip_EcdisPanel_Weather_Currents));
     public static string EcdisPanel_Weather_AirTemperature => Get(nameof(EcdisPanel_Weather_AirTemperature));
     public static string Tooltip_EcdisPanel_Weather_AirTemperature => Get(nameof(Tooltip_EcdisPanel_Weather_AirTemperature));
+    public static string EcdisPanel_Weather_Precipitation => Get(nameof(EcdisPanel_Weather_Precipitation));
+    public static string Tooltip_EcdisPanel_Weather_Precipitation => Get(nameof(Tooltip_EcdisPanel_Weather_Precipitation));
+    public static string EcdisPanel_Weather_ThunderstormRisk => Get(nameof(EcdisPanel_Weather_ThunderstormRisk));
+    public static string Tooltip_EcdisPanel_Weather_ThunderstormRisk => Get(nameof(Tooltip_EcdisPanel_Weather_ThunderstormRisk));
+    public static string EcdisPanel_Weather_CloudCover => Get(nameof(EcdisPanel_Weather_CloudCover));
+    public static string Tooltip_EcdisPanel_Weather_CloudCover => Get(nameof(Tooltip_EcdisPanel_Weather_CloudCover));
     public static string EcdisPanel_Weather_WindRadii => Get(nameof(EcdisPanel_Weather_WindRadii));
     public static string Tooltip_EcdisPanel_Weather_WindRadii => Get(nameof(Tooltip_EcdisPanel_Weather_WindRadii));
     public static string EcdisPanel_Weather_PastTrack => Get(nameof(EcdisPanel_Weather_PastTrack));

@@ -19,8 +19,14 @@ public sealed record WorkSchedulerOptions
     public IReadOnlySet<WorkStage> AllocationHeavyStages { get; init; } =
         new HashSet<WorkStage> { WorkStage.Portray, WorkStage.Clip };
 
-    /// <summary>The GC pause governor's settings.</summary>
-    public GcPauseGovernorOptions Admission { get; init; } = GcPauseGovernorOptions.ForProcessors(Environment.ProcessorCount);
+    /// <summary>
+    /// The GC pause governor's settings: by default
+    /// <see cref="GcPauseGovernorOptions.Resolve"/> for this machine, so
+    /// <see cref="GcPauseGovernorOptions.FixedConcurrencyVariable"/> pins it.
+    /// </summary>
+    public GcPauseGovernorOptions Admission { get; init; } = GcPauseGovernorOptions.Resolve(
+        Environment.ProcessorCount,
+        Environment.GetEnvironmentVariable(GcPauseGovernorOptions.FixedConcurrencyVariable));
 
     /// <summary>The worker threads' name prefix.</summary>
     public string ThreadName { get; init; } = "S100 work";
@@ -60,6 +66,9 @@ public sealed class WorkScheduler : IWorkScheduler, IDisposable
 {
     private const int ClassCount = 4;
 
+    /// <summary>How long a freed admission slot counts as busy, for its producer to refill it.</summary>
+    private static readonly TimeSpan RefillGrace = TimeSpan.FromMilliseconds(250);
+
     private static readonly object SharedSync = new();
     private static WorkScheduler? _shared;
     private static WorkSchedulerOptions? _sharedOptions;
@@ -79,6 +88,7 @@ public sealed class WorkScheduler : IWorkScheduler, IDisposable
     private int _busyWorkers;
     private int _suspended;
     private int _heavyRunning;
+    private long _lastHeavyFinishTicks;
     private long _completed;
     private long _cancelled;
     private long _busyTicks;
@@ -148,6 +158,22 @@ public sealed class WorkScheduler : IWorkScheduler, IDisposable
 
     /// <summary>The number of worker threads.</summary>
     public int WorkerCount => _threads.Length;
+
+    /// <summary>
+    /// How many allocation-heavy background jobs the GC pause governor admits
+    /// now. Cheaper than <see cref="GetStats"/> for a producer that sizes how
+    /// much it queues, such as the portrayal pre-warm.
+    /// </summary>
+    public int AllocationHeavyLimit
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _governor.Limit;
+            }
+        }
+    }
 
     /// <inheritdoc />
     public WorkInterest<T> Schedule<T>(WorkKey key, WorkStage stage, WorkPriority priority, Func<WorkContext, ValueTask<T>> run)
@@ -458,10 +484,18 @@ public sealed class WorkScheduler : IWorkScheduler, IDisposable
 
     private bool TryTakeLocked(out WorkJob job, out bool starting, out int dispatchClass)
     {
-        if (_heavyRunning > 0 || HasHeavyQueuedLocked())
-            _governor.Observe(_heavyRunning);
+        // A slot freed moments ago still counts as busy: its producer (the
+        // pre-warm) refills it on its next pass, and the governor only grows
+        // after windows in which every slot was used.
+        var refilling = Stopwatch.GetElapsedTime(_lastHeavyFinishTicks) < RefillGrace;
+        if (_heavyRunning > 0 || refilling || HasHeavyQueuedLocked())
+        {
+            _governor.Observe(refilling ? Math.Max(_heavyRunning, _governor.Limit) : _heavyRunning);
+        }
         else
+        {
             _governor.Restart();
+        }
 
         var heavyAllowed = _heavyRunning < _governor.Limit;
         for (var c = 0; c < ClassCount; c++)
@@ -655,6 +689,7 @@ public sealed class WorkScheduler : IWorkScheduler, IDisposable
             {
                 job.Admitted = false;
                 _heavyRunning--;
+                _lastHeavyFinishTicks = Stopwatch.GetTimestamp();
                 if (_idleWorkers > 0)
                     Monitor.Pulse(_sync);
             }

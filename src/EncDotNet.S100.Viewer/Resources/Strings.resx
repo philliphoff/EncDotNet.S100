@@ -271,6 +271,18 @@
     <value>Air temperature</value>
     <comment>Weather sub-layer name (#1231): dashed 2 m air temperature isotherms every 5 °C.</comment>
   </data>
+  <data name="SubLayer_Weather_Precipitation" xml:space="preserve">
+    <value>Precipitation</value>
+    <comment>Weather sub-layer name (#1230): the precipitation rate fill in rain radar colours.</comment>
+  </data>
+  <data name="SubLayer_Weather_ThunderstormRisk" xml:space="preserve">
+    <value>Thunderstorm risk</value>
+    <comment>Weather sub-layer name (#1230): the fill of convective available potential energy (CAPE) from 1000 J/kg.</comment>
+  </data>
+  <data name="SubLayer_Weather_CloudCover" xml:space="preserve">
+    <value>Cloud cover</value>
+    <comment>Weather sub-layer name (#1230): the grey veil of total cloud cover from 25 %.</comment>
+  </data>
   <data name="Tooltip_ToggleSubLayerVisibility" xml:space="preserve">
     <value>Show or hide this sub-layer</value>
   </data>
@@ -7134,6 +7146,27 @@
   </data>
   <data name="Tooltip_EcdisPanel_Weather_AirTemperature" xml:space="preserve">
     <value>Draw dashed air temperature isotherms, every 5 °C at 2 m above the surface, on every weather dataset that has air temperature. Off by default.</value>
+  </data>
+  <data name="EcdisPanel_Weather_Precipitation" xml:space="preserve">
+    <value>Precipitation</value>
+    <comment>Display controls switch (#1230): the precipitation rate fill on every weather dataset.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_Precipitation" xml:space="preserve">
+    <value>Draw the precipitation rate in rain radar colours, from light rain (0.1 mm/h) to violent (50 mm/h and more), on every weather dataset that has it. Off by default.</value>
+  </data>
+  <data name="EcdisPanel_Weather_ThunderstormRisk" xml:space="preserve">
+    <value>Thunderstorm risk</value>
+    <comment>Display controls switch (#1230): the CAPE fill on every weather dataset.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_ThunderstormRisk" xml:space="preserve">
+    <value>Shade where the atmosphere is unstable enough for thunderstorms and squalls: convective available potential energy (CAPE) from 1000 J/kg, in moderate, high and extreme classes. A risk, not a forecast of storms. Off by default.</value>
+  </data>
+  <data name="EcdisPanel_Weather_CloudCover" xml:space="preserve">
+    <value>Cloud cover</value>
+    <comment>Display controls switch (#1230): the total cloud cover veil on every weather dataset.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_CloudCover" xml:space="preserve">
+    <value>Draw total cloud cover as a light grey veil, from partly cloudy (25 %) to overcast, on every weather dataset that has it. Off by default.</value>
   </data>
   <data name="EcdisPanel_Weather_WindRadii" xml:space="preserve">
     <value>Wind radii</value>

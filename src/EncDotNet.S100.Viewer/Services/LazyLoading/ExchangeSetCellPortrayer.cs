@@ -1,3 +1,4 @@
+using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.ViewModels;
@@ -55,12 +56,13 @@ internal sealed class ExchangeSetCellPortrayer
     }
 
     /// <summary>
-    /// Renders <paramref name="entry"/> on a pool thread and returns the cache
+    /// Renders <paramref name="entry"/> as one background portrayal job on the
+    /// work scheduler (map rendering slice 5) and returns the cache
     /// keys it used, or <see langword="null"/> when the cell used no cache (it
     /// is not a vector product portrayed through the cache).
     /// </summary>
     /// <param name="entry">A registered exchange-set cell. Read on the calling thread only.</param>
-    /// <param name="cancellationToken">Stops the render at its next check.</param>
+    /// <param name="cancellationToken">Drops the job if it hasn't started, else stops the render at its next check.</param>
     /// <returns>The keys, or <see langword="null"/> for a cell this does not apply to.</returns>
     public Task<IReadOnlyList<string>?> PortrayAsync(DatasetEntry entry, CancellationToken cancellationToken)
     {
@@ -73,18 +75,20 @@ internal sealed class ExchangeSetCellPortrayer
         var spec = entry.ProductSpec;
         var presentation = _presentation();
 
-        return Task.Run(async () =>
+        // A background portrayal: it never runs ahead of map work, and the
+        // scheduler's GC pause governor decides how many run at once.
+        return WorkScheduler.Shared.RunAsync<IReadOnlyList<string>?>(WorkStage.Portray, async token =>
         {
             var processor = DatasetLoaderService.CreateExchangeSetCellProcessor(
                 _factory, source, relativePath, updates, spec);
             try
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                token.ThrowIfCancellationRequested();
                 using var recording = _recorder.BeginRecording();
                 var result = await _renderer.RenderAsync(
                     processor,
                     presentation.CreateRenderContext(processor),
-                    cancellationToken).ConfigureAwait(false);
+                    token);
                 foreach (var layer in result.Layers)
                     (layer as IDisposable)?.Dispose();
                 var keys = recording.Keys;
@@ -99,6 +103,6 @@ internal sealed class ExchangeSetCellPortrayer
             {
                 (processor as IDisposable)?.Dispose();
             }
-        }, cancellationToken);
+        }, cancellationToken, WorkPriority.Background());
     }
 }

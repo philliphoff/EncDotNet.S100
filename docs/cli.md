@@ -200,6 +200,7 @@ other extension writes PNG, unless you set `--format`.
 | `--hide <categories>` | none | Hides drawing-instruction categories, comma-separated: `text`, `points`, `lines`, `areas`. Adds to `--no-text`. |
 | `--basemap <mode>` | `none` | `offline` draws the bundled Natural Earth 1:10m land layer under the chart, in a parchment tone (`238,232,220`). Online tile basemaps aren't available. |
 | `--display-mode <mode>` | `ice-concentration` | S-411 only. `ice-concentration`, `ice-sod` (stage of development), or `ice-navigational`. See [Sea-ice display modes](#sea-ice-display-modes). |
+| `--show-layer <keys>` | none | Single-dataset form only. Draws sub-layers that are off by default, comma-separated by key, as the SoundCharts Display controls switches do: for example `weather.precipitation,weather.cape,weather.cloud`. `s100 info` lists a dataset's layer keys. |
 | `--no-updates` | off | Single-dataset form only. Renders an S-101 base cell without its update files. See [S-101 updates](#s-101-updates). |
 | `--lua-engine <engine>` | `luacsharp` | The Lua engine that runs the portrayal rules: `luacsharp` or `moonsharp`. See [Lua engine](#lua-engine). |
 | `--debug` | off | Prints full stack traces on error, and portrayal and Lua diagnostics on standard error. |
