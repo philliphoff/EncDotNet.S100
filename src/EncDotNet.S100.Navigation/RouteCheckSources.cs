@@ -7,7 +7,7 @@ namespace EncDotNet.S100.Navigation;
 /// <summary>
 /// Everything the route checks read from loaded data, as one bundle: the
 /// charted features, charted depth, water level, regulated areas,
-/// navigational warnings and weather. A host builds one per set of loaded datasets
+/// navigational warnings, weather and tropical cyclones. A host builds one per set of loaded datasets
 /// (<c>CatalogRouteCheckSources</c> in <c>EncDotNet.S100.Datasets.Pipelines</c>)
 /// and checks as often as the route changes.
 /// </summary>
@@ -50,6 +50,13 @@ public sealed class RouteCheckSources
 
     /// <summary>GRIB2 and NetCDF weather grids (wind and waves), for the weather check.</summary>
     public IRouteWeatherSource? Weather { get; init; }
+
+    /// <summary>
+    /// Tropical cyclone advisories (their wind radii and forecast cones), for
+    /// the weather check's tropical cyclone rule (#1299). <c>null</c> or empty
+    /// when none is loaded.
+    /// </summary>
+    public IReadOnlyList<IRouteCyclone>? Cyclones { get; init; }
 }
 
 /// <summary>

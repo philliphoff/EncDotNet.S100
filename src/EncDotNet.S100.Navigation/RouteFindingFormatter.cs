@@ -89,6 +89,7 @@ public class RouteFindingFormatter
             RouteFindingCategory.Clearance or RouteFindingCategory.Confidence => ClearanceTitle(finding),
             RouteFindingCategory.Data when finding.Code != RouteFindingCodes.OutsideChartCoverage => ClearanceTitle(finding),
             RouteFindingCategory.Weather when finding.Details is WeatherDetails weather => WeatherTitle(finding, weather),
+            RouteFindingCategory.Weather when finding.Details is TropicalCycloneDetails cyclone => CycloneTitle(cyclone),
             _ => ChartTitle(finding),
         };
     }
@@ -107,6 +108,7 @@ public class RouteFindingFormatter
             RouteFindingCategory.Clearance or RouteFindingCategory.Confidence => ClearanceMeta(finding),
             RouteFindingCategory.Data when finding.Code != RouteFindingCodes.OutsideChartCoverage => ClearanceMeta(finding),
             RouteFindingCategory.Weather when finding.Details is WeatherDetails weather => WeatherMeta(weather),
+            RouteFindingCategory.Weather when finding.Details is TropicalCycloneDetails cyclone => CycloneMeta(cyclone),
             _ => ChartMeta(finding),
         };
     }
@@ -1027,6 +1029,71 @@ public class RouteFindingFormatter
             _ => null,
         };
         return Join(legs, Format(StretchFromFormat, FormatEta(details.StartTime)), edge, Format(StretchLengthFormat, Nm(details.Length)));
+    }
+
+    // ---- Tropical cyclone findings (#1299) ----
+
+    /// <summary>Title inside a wind radius ({0}: its knots, 34, 50 or 64).</summary>
+    protected virtual string CycloneRadiusFormat => "Inside the {0} kt radius";
+
+    /// <summary>Title inside the forecast cone.</summary>
+    protected virtual string CycloneConeTitle => "Inside the forecast cone";
+
+    /// <summary>Title of the closest approach ({0}: the distance in nautical miles).</summary>
+    protected virtual string CycloneClosestFormat => "Closest approach {0:0} NM";
+
+    /// <summary>Title of a stretch after the forecast ends ({0}: the storm's name).</summary>
+    protected virtual string CycloneBeyondFormat => "{0} not checked: beyond the forecast";
+
+    /// <summary>The storm and its advisory ({0}: the name, {1}: the advisory number), "ZELDA adv 17".</summary>
+    protected virtual string CycloneStormFormat => "{0} adv {1}";
+
+    /// <summary>The storm position is an estimate between two forecast points.</summary>
+    protected virtual string CycloneEstimated => "est. position";
+
+    /// <summary>The storm position is on the best track, before the advisory.</summary>
+    protected virtual string CycloneBestTrack => "best track";
+
+    /// <summary>The title of a tropical cyclone finding.</summary>
+    /// <param name="details">Its details.</param>
+    /// <returns>The title.</returns>
+    protected virtual string CycloneTitle(TropicalCycloneDetails details) => details.Kind switch
+    {
+        TropicalCycloneFindingKind.Radius => Format(CycloneRadiusFormat, (int)(details.Radius ?? TropicalCycloneRadius.Knots34)),
+        TropicalCycloneFindingKind.Cone => CycloneConeTitle,
+        TropicalCycloneFindingKind.ClosestApproach => Format(CycloneClosestFormat, details.ClosestDistance is { } d ? Nm(d) : 0),
+        _ => Format(CycloneBeyondFormat, details.Storm.Name),
+    };
+
+    /// <summary>The meta line of a tropical cyclone finding: "Leg 2 → 4 · 02:00–07:00 · ZELDA adv 17".</summary>
+    /// <param name="details">The finding's details.</param>
+    /// <returns>The meta line.</returns>
+    protected virtual string CycloneMeta(TropicalCycloneDetails details)
+    {
+        var legs = LegLabel(details.FirstLegIndex, details.LastLegIndex);
+        var storm = Format(CycloneStormFormat, details.Storm.Name, details.Storm.Advisory);
+        switch (details.Kind)
+        {
+            case TropicalCycloneFindingKind.ClosestApproach:
+                var basis = details.StormAtClosest?.Basis switch
+                {
+                    RouteCycloneBasis.Estimated => CycloneEstimated,
+                    RouteCycloneBasis.BestTrack => CycloneBestTrack,
+                    _ => null,
+                };
+                return Join(FormatEta(details.StartTime), legs, storm, basis);
+            case TropicalCycloneFindingKind.BeyondForecast:
+                return Join(
+                    legs,
+                    Format(StretchFromFormat, FormatEta(details.StartTime)),
+                    details.ForecastEnd is { } e ? Format(ForecastEndsAtFormat, FormatTime(e)) : null,
+                    storm);
+            default:
+                var window = details.EndTime is { } end
+                    ? Format(TimeWindowFormat, FormatEta(details.StartTime), FormatEta(end))
+                    : Format(StretchFromFormat, FormatEta(details.StartTime));
+                return Join(legs, window, storm);
+        }
     }
 
     private string WeatherValue(WeatherQuantity quantity, double value) =>
