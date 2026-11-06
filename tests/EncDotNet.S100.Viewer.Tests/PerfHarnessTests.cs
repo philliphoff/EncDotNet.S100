@@ -372,11 +372,15 @@ public sealed class PerfHarnessTests
         // Work before the window doesn't count.
         await scheduler.Schedule(new WorkKey("before"), WorkStage.Raster, WorkPriority.Visible(), _ => ValueTask.FromResult(true))
             .Result.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        // A job's result completes before its worker records the run, so wait
+        // for the workers to go idle before opening or closing the window.
+        await WaitForIdleWorkersAsync(scheduler);
         Assert.True(tool.Invoke("start").TryGetValue(out _));
         var jobs = Enumerable.Range(0, 3)
             .Select(i => scheduler.Schedule(new WorkKey("in", i), WorkStage.Raster, WorkPriority.Visible(), _ => ValueTask.FromResult(true)).Result)
             .Append(scheduler.Schedule(new WorkKey("bg"), WorkStage.Raster, WorkPriority.Background(), _ => ValueTask.FromResult(true)).Result);
         await Task.WhenAll(jobs).WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await WaitForIdleWorkersAsync(scheduler);
 
         Assert.True(tool.Invoke("restart").TryGetValue(out var window));
         var reported = window!.Scheduler;
@@ -391,6 +395,16 @@ public sealed class PerfHarnessTests
         Assert.Equal(0, stopped!.Scheduler!.Completed);
         Assert.True(tool.Invoke(null).TryGetValue(out var after));
         Assert.Null(after!.Scheduler);
+    }
+
+    private static async Task WaitForIdleWorkersAsync(WorkScheduler scheduler)
+    {
+        var deadline = Stopwatch.GetTimestamp() + Stopwatch.Frequency * 10;
+        while (scheduler.GetStats().BusyWorkers > 0)
+        {
+            Assert.True(Stopwatch.GetTimestamp() < deadline, "Scheduler workers didn't go idle.");
+            await Task.Delay(5, TestContext.Current.CancellationToken);
+        }
     }
 
     // ── Pre-warm control ─────────────────────────────────────────────
