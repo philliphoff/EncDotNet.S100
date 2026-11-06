@@ -30,8 +30,7 @@ public static class S100MapsuiRendering
             OverscaleCurtainRenderer.Register();
             IsolineRenderer.Register();
 
-            S100VectorSceneRenderer.Register();
-            S100VectorTileRenderer.Register();
+            MapsuiChartLayers.Register();
 
             _registered = true;
         }

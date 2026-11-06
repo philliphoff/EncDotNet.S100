@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using Mapsui;
 using Mapsui.Layers;
@@ -21,7 +22,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// process-wide pool, so a sibling class's dense layer could otherwise hold
 /// every worker while these frames wait for their tiles.
 /// </remarks>
-[Collection(RenderingOptimizationsCollection.Name)]
+[Collection(ChartSessionOptionsCollection.Name)]
 public sealed class WorldCopyTests
 {
     private const double C = WorldCopies.Circumference;
@@ -85,7 +86,7 @@ public sealed class WorldCopyTests
         var layer = ExtentLayer(175, 225);
         var viewport = new Mapsui.Viewport(X(-170), 0, Resolution, 0, 256, 256);
 
-        Assert.Equal([-C], LayerExtentCulling.VisibleWorldCopies(layer, viewport, Resolution, marginPx: 0));
+        Assert.Equal([-C], LayerExtentCulling.VisibleWorldCopies(MapsuiChartLayers.ToFrame(layer).Extent, MapsuiChartLayers.ToViewState(viewport), Resolution, marginPx: 0));
     }
 
     [Fact]
@@ -94,7 +95,7 @@ public sealed class WorldCopyTests
         var layer = new MemoryLayer();
         var viewport = new Mapsui.Viewport(0, 0, Resolution, 0, 256, 256);
 
-        Assert.Equal([0.0], LayerExtentCulling.VisibleWorldCopies(layer, viewport, Resolution, marginPx: 0));
+        Assert.Equal([0.0], LayerExtentCulling.VisibleWorldCopies(MapsuiChartLayers.ToFrame(layer).Extent, MapsuiChartLayers.ToViewState(viewport), Resolution, marginPx: 0));
     }
 
     [Fact]
@@ -103,7 +104,7 @@ public sealed class WorldCopyTests
         var layer = ExtentLayer(175, 225);
         var viewport = new Mapsui.Viewport(X(-170), Y(-60), Resolution, 0, 256, 256);
 
-        Assert.Empty(LayerExtentCulling.VisibleWorldCopies(layer, viewport, Resolution, marginPx: 0));
+        Assert.Empty(LayerExtentCulling.VisibleWorldCopies(MapsuiChartLayers.ToFrame(layer).Extent, MapsuiChartLayers.ToViewState(viewport), Resolution, marginPx: 0));
     }
 
     [Fact]
@@ -403,7 +404,7 @@ public sealed class WorldCopyTests
         while (true)
         {
             surface.Canvas.Clear(SKColors.Transparent);
-            S100VectorTileRenderer.Render(surface.Canvas, viewport, layer, renderService);
+            MapsuiChartLayers.RenderTiles(surface.Canvas, viewport, layer, renderService);
             if (S100VectorTileRenderer.IsVisibleSettledForTest(layer, tilePx))
             {
                 break;
@@ -421,7 +422,7 @@ public sealed class WorldCopyTests
         }
 
         surface.Canvas.Clear(SKColors.Transparent);
-        S100VectorTileRenderer.Render(surface.Canvas, viewport, layer, renderService);
+        MapsuiChartLayers.RenderTiles(surface.Canvas, viewport, layer, renderService);
         return surface;
     }
 
@@ -437,7 +438,7 @@ public sealed class WorldCopyTests
         do
         {
             surface.Canvas.Clear(SKColors.Transparent);
-            S100VectorTileRenderer.Render(surface.Canvas, viewport, layer, renderService);
+            MapsuiChartLayers.RenderTiles(surface.Canvas, viewport, layer, renderService);
             Thread.Sleep(20);
         }
         while (sw.Elapsed < duration);

@@ -384,7 +384,7 @@ public partial class MainWindow : ShadUI.Window
             // a snapshot of the layers; inert until a harness turns tracking on.
             var settle = App.Services.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor>();
             _settleMonitor = settle;
-            settle.TileProbe = () => EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.EvaluateSettle(
+            settle.TileProbe = () => EncDotNet.S100.Renderers.Mapsui.MapsuiChartLayers.EvaluateSettle(
                 activityMap.Layers.ToArray());
             settle.RequestRedraw = activityMap.RefreshGraphics;
         }

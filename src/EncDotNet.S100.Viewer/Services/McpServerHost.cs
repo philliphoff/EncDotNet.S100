@@ -434,7 +434,7 @@ internal sealed class McpServerHost : IAsyncDisposable
                 harness.Metrics,
                 _renderActivityMonitor,
                 () => GetProcessMetricsTool.DescribeEnvironment(settings, harness.RenderCacheDirectory),
-                () => EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.GetTileCacheMemory().Tiles,
+                () => EncDotNet.S100.Rendering.Engine.S100VectorTileRenderer.GetTileCacheMemory().Tiles,
                 () => EncDotNet.S100.Core.Scheduling.WorkScheduler.Shared.GetStats())));
             tools.Add(PerfHarnessMcpAdapters.Create(new PortrayalPrewarmTool(
                 harness.PrewarmStatus,

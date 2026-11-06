@@ -14,6 +14,7 @@
     <!-- BaseSpatialIndex is shared by the viewer's tile renderer and the
          headless composite layers, without becoming public API. -->
     <InternalsVisibleTo Include="EncDotNet.S100.Renderers.Mapsui" />
+    <InternalsVisibleTo Include="EncDotNet.S100.Rendering.Engine" />
     <InternalsVisibleTo Include="EncDotNet.S100.Renderers.Skia" />
     <InternalsVisibleTo Include="EncDotNet.S100.Pipelines.Tests" />
   </ItemGroup>

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using Mapsui.Layers;
 using Mapsui.Rendering;
@@ -15,7 +16,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// otherwise composited a stack of mostly transparent tiles per dataset every
 /// frame.
 /// </summary>
-[Collection(RenderingOptimizationsCollection.Name)]
+[Collection(ChartSessionOptionsCollection.Name)]
 public sealed class TileLiveBaseTests
 {
     private const int Band = 10;
@@ -119,7 +120,7 @@ public sealed class TileLiveBaseTests
     {
         var surface = CreateSurface(deviceScale);
         surface.Canvas.Scale(deviceScale);
-        S100VectorTileRenderer.Render(surface.Canvas, viewport, layer, new RenderService());
+        MapsuiChartLayers.RenderTiles(surface.Canvas, viewport, layer, new RenderService());
         return surface;
     }
 
@@ -134,7 +135,7 @@ public sealed class TileLiveBaseTests
             using (var scratch = CreateSurface(deviceScale))
             {
                 scratch.Canvas.Scale(deviceScale);
-                S100VectorTileRenderer.Render(scratch.Canvas, viewport, layer, renderService);
+                MapsuiChartLayers.RenderTiles(scratch.Canvas, viewport, layer, renderService);
             }
 
             if (S100VectorTileRenderer.IsVisibleSettledForTest(layer, px))

@@ -5,6 +5,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Rendering.Engine;
 using Mapsui;
 using Mapsui.Layers;
 
@@ -1053,7 +1054,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
         if (stackVersion is { } version)
         {
             // The stack job raises LayersChanged when it applies.
-            using var stackWait = Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.stack_wait");
+            using var stackWait = Rendering.Engine.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.stack_wait");
             await AwaitStackAsync(datasetId, renderEntry, generation, version, restore!).ConfigureAwait(true);
         }
         else if (compose)
@@ -1765,6 +1766,8 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
         IReadOnlyList<MapsuiProjectedDatasetLayer> projected)
     {
         var cells = new List<OverlapSuppressionCell>();
+        // The engine's cells hold opaque owners; keep the typed layers alongside.
+        var cellLayers = new List<ILayer[]>();
         foreach (var group in projected.GroupBy(item => item.DatasetId))
         {
             if (!input.Entries.TryGetValue(group.Key, out var info))
@@ -1775,6 +1778,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             // applied (Enabled and Opacity > 0), worked out without touching
             // the layers, which the map may be drawing from.
             var drawing = group.Any(item => DrawsWithDisplayState(info, item));
+            cellLayers.Add(layers);
             cells.Add(new OverlapSuppressionCell
             {
                 Layers = layers,
@@ -1788,7 +1792,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
         if (input.IgnoreScaleMinimum)
         {
             for (var i = 0; i < cells.Count; i++)
-                result[i] = (cells[i].Layers, null);
+                result[i] = (cellLayers[i], null);
             return result;
         }
 
@@ -1800,7 +1804,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
         }
 
         for (var i = 0; i < cells.Count; i++)
-            result[i] = (cells[i].Layers, finer[i]);
+            result[i] = (cellLayers[i], finer[i]);
         return result;
     }
 

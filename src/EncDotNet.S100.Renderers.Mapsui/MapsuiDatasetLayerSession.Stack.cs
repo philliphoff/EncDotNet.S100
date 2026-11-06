@@ -2,6 +2,7 @@ using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Rendering.Engine;
 using Mapsui.Layers;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
@@ -108,7 +109,7 @@ public sealed partial class MapsuiDatasetLayerSession
     /// </summary>
     private StackPlan ComputeStack(StackInput input)
     {
-        using var activity = Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.compose");
+        using var activity = Rendering.Engine.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.compose");
         Interlocked.Increment(ref _stackComputes);
         var (projected, stackEntries, stackedLayers) = ProjectLayerStack(input);
         ValidateProjection(projected, input.Snapshots);

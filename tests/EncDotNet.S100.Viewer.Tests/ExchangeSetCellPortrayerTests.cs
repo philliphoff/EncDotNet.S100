@@ -7,6 +7,7 @@ using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Pipelines.Vector.Caching;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.TestSupport;
 using EncDotNet.S100.Viewer.Services;

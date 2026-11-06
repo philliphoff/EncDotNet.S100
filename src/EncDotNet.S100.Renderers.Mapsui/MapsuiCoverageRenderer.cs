@@ -10,7 +10,7 @@ using Mapsui.Projections;
 using Mapsui.Styles;
 using SkiaSharp;
 using PipelineViewport = EncDotNet.S100.Pipelines.Viewport;
-using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
+using S100Diag = EncDotNet.S100.Rendering.Engine.Diagnostics;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
 

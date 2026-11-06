@@ -2,6 +2,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
+using EncDotNet.S100.Rendering.Engine;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
 
@@ -11,7 +12,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// </summary>
 /// <remarks>
 /// Defaults are copied from the environment-backed
-/// <see cref="RenderingOptimizations"/> store when an instance is created.
+/// <see cref="ChartSessionOptions"/> store when an instance is created.
 /// Hosts can override individual values without mutating process-global state.
 /// Additional renderer settings will move onto this type incrementally as the
 /// reusable Mapsui session API evolves.
@@ -23,7 +24,7 @@ public sealed record S100MapsuiOptions
     /// renderer (tiled vs single-surface).
     /// </summary>
     public VectorSceneMode SceneMode { get; init; } =
-        RenderingOptimizations.SceneMode;
+        ChartEngine.Options.SceneMode;
 
     /// <summary>
     /// Gets the CRS transform factory used to build the default dataset renderer

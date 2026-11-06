@@ -578,8 +578,8 @@ S-57 records.
 
 | Test | Reference | v2.0.0 data | Status | Evidence | Note |
 |---|---|---|---|---|---|
-| Dataset Selection | S-98 Appendix E | — | Partial | `src/EncDotNet.S100.Renderers.Mapsui/OverlapSuppression.cs` | Cells ranked by minimum display scale, finer clip coarser; not the S-98 Appendix E selection. The S-164 test is still TODO. |
-| DatasetRendering | S-98 Appendix E | — | Partial | `src/EncDotNet.S100.Renderers.Mapsui/CoverageClip.cs` | Coarser cells clipped to finer coverage; not the Appendix E algorithm. The S-164 test is still TODO. |
+| Dataset Selection | S-98 Appendix E | — | Partial | `src/EncDotNet.S100.Rendering.Engine/OverlapSuppression.cs` | Cells ranked by minimum display scale, finer clip coarser; not the S-98 Appendix E selection. The S-164 test is still TODO. |
+| DatasetRendering | S-98 Appendix E | — | Partial | `src/EncDotNet.S100.Rendering.Engine/CoverageClip.cs` | Coarser cells clipped to finer coverage; not the Appendix E algorithm. The S-164 test is still TODO. |
 | DisplayBase | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayBase | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | No rule fails, the dangers are Display Base at the test settings, and the safety contour follows its edges ([#1126](https://github.com/philliphoff/EncDotNet.S100/issues/1126)). Dock and lock areas leave holes in Display Base (§6.2). |
 | DisplayStandard | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayStandard | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Every feature draws in Standard Display, with symbolised boundaries ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141)). |
 | DisplayOther | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayOther | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Features draw as Other information, with their text and line styles. |
@@ -625,8 +625,8 @@ S-57 records.
 | OverscaleIndication1 | S-98 12.3 | PowerUp | Supported | `src/EncDotNet.S100.Renderers.Mapsui/OverscaleEvaluator.cs` | Status-bar overscale pill with factor. |
 | LargerScaleData | S-98 12.3.3 | PowerUp | Partial | `src/EncDotNet.S100.Renderers.Mapsui/S100DatasetExtentIndicatorLayer.cs` | Outlines hint at larger-scale data; no explicit indication. |
 | ScaleBoundary | S-98 12.3.1 | PowerUp | Partial | `src/EncDotNet.S100.Renderers.Mapsui/OverscaleCurtain.cs` | Overscale shown; scale-boundary line missing. |
-| DifferentScale1 | S-98 Appendix E | PowerUp | Supported | `src/EncDotNet.S100.Renderers.Mapsui/CoverageClip.cs` | Coarser cell fills where no finer cell covers. |
-| OverlappingData | S-98 20.3.1 | — | Gap | `src/EncDotNet.S100.Renderers.Mapsui/OverlapSuppression.cs` | Same-band overlaps both draw; no overlap indication. |
+| DifferentScale1 | S-98 Appendix E | PowerUp | Supported | `src/EncDotNet.S100.Rendering.Engine/CoverageClip.cs` | Coarser cell fills where no finer cell covers. |
+| OverlappingData | S-98 20.3.1 | — | Gap | `src/EncDotNet.S100.Rendering.Engine/OverlapSuppression.cs` | Same-band overlaps both draw; no overlap indication. |
 | GraphicalIndex | S-98 12.4.1 | PowerUp | Supported | `src/EncDotNet.S100.Viewer/Services/LibraryCoverageOverlayController.cs` | Library coverage overlay with edition and update. |
 | DisplayScaleChange | S-98 12 | PowerUp | Partial | `src/EncDotNet.S100.Viewer/MapScaleFormatter.cs` | Zoom and scale readout; no chart-scale or range picker outside MCP. |
 | WaterLevelAdjustment | S-98 Appendix D-2 | WaterLevelAdjustment | Passes | `tests/EncDotNet.S100.S164.Tests/Part3WaterLevelAdjustmentTests.cs` | With **Water level adjustment** on, the S-101 depths in the S-104 footprint are re-portrayed with the water level at the view time (the cell declares no datum, so with **Apply anyway when datum is not declared**). The boundary is drawn and the status bar **DEPTHS** says "+ water level 14:20" with the datum status. The S-102 in this set is on MLLW and the S-104 on LAT, so the surface stays charted and the flyout says why. Not run: the manual's Interoperability Level 2 and the 100 m boundary setting. |

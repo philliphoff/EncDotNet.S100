@@ -12,6 +12,7 @@ using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services.Notifications;

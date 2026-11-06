@@ -907,6 +907,25 @@ files as listed there, swap `ILayer` for an opaque identity token, use the core
 `ChartSessionOptions`. Doing this after slice 5 means the scheduler, rather than
 the per-layer worker code, moves into the new project.
 
+*Done.* `EncDotNet.S100.Rendering.Engine` holds the compositors, the tile
+grid, caches and memory pool, coverage clipping, overlap suppression, the
+overscale model and the `s100.render.*` telemetry, with no Mapsui reference. Per-layer state is keyed on an
+opaque owner token, and the engine asks the host to repaint through a callback
+(`LayerRepaint`). The live frame takes the engine's own `ViewState` (EPSG:3857
+centre, resolution and rotation, DIP size) rather than the core `Viewport`: the
+core type is a geographic box with a scale denominator, which would round-trip
+the Mercator frame lossily, and raster jobs keep using it as before.
+`ChartSessionOptions` replaces the `RenderingOptimizations` statics; the engine
+reads one process-wide instance, `ChartEngine.Options`, until slice 8 gives each
+session its own. Every `S100_VECTOR_TILE_*` and `S100_VECTOR_SCENE_*` tuning
+knob ships as an option, seeded and pinned by its environment variable as
+before; the two `…_DIAG` switches stay environment-only diagnostics, and
+`S100_VECTOR_TILE_WORKERS` was already deleted in slice 5. The Mapsui adapter,
+`MapsuiChartLayers`, keeps the `RegisterLayerRenderer` delegates and converts
+Mapsui's viewport and layer each frame. The scheduler itself stays in
+`EncDotNet.S100.Core.Scheduling`, where slice 5 put it, since the dataset
+loaders use it too.
+
 **8. Chart tiles and one chart layer.** Replace per-layer tiles with chart
 tiles and `StackSlice` keys. Replace per-cell Mapsui layers with one
 `ChartLayer`, and per-op pick features with engine picks. Delete

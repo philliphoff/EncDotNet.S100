@@ -184,7 +184,7 @@ public partial class App : Application
         // its shared disk cache below.
         if (_services.GetRequiredService<ViewerDataPaths>().TileDiskCacheDirectory is { } tileDir)
         {
-            EncDotNet.S100.Renderers.Mapsui.RenderingOptimizations.TileDiskDirectory = tileDir;
+            EncDotNet.S100.Rendering.Engine.ChartEngine.Options.TileDiskDirectory = tileDir;
         }
 
         // Detect an unclean shutdown from the previous run (native crash,
@@ -435,7 +435,7 @@ public partial class App : Application
                 portrayalWarmer.Dispose();
                 idleCompactor?.Dispose();
                 library.Dispose();
-                EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.ShutdownAndDrain(TimeSpan.FromSeconds(5));
+                EncDotNet.S100.Rendering.Engine.S100VectorTileRenderer.ShutdownAndDrain(TimeSpan.FromSeconds(5));
             };
         }
 
@@ -446,14 +446,14 @@ public partial class App : Application
     /// Starts the idle compacting collection (map rendering slice 4, #1276
     /// item 1) unless <c>S100_IDLE_GC=0</c>, logging what each one gives back.
     /// </summary>
-    private static EncDotNet.S100.Renderers.Mapsui.IdleMemoryCompactor? StartIdleCompactor(ILogger? logger)
+    private static EncDotNet.S100.Rendering.Engine.IdleMemoryCompactor? StartIdleCompactor(ILogger? logger)
     {
-        if (!EncDotNet.S100.Renderers.Mapsui.IdleMemoryCompactor.EnabledByEnvironment)
+        if (!EncDotNet.S100.Rendering.Engine.IdleMemoryCompactor.EnabledByEnvironment)
         {
             return null;
         }
 
-        var compactor = EncDotNet.S100.Renderers.Mapsui.IdleMemoryCompactor.Start();
+        var compactor = EncDotNet.S100.Rendering.Engine.IdleMemoryCompactor.Start();
         if (logger is not null)
         {
             compactor.Compacted += c => logger.LogInformation(
@@ -853,10 +853,10 @@ public partial class App : Application
             // FormatVersion stamped, so persisted entries auto-invalidate.
             var cacheDir = sp.GetRequiredService<ViewerDataPaths>().PatternClipCacheDirectory;
             const long maxBytes = 256L * 1024 * 1024;
-            return new EncDotNet.S100.Renderers.Mapsui.DiskPatternClipCache(cacheDir, maxBytes);
+            return new EncDotNet.S100.Rendering.Engine.DiskPatternClipCache(cacheDir, maxBytes);
         });
-        services.AddSingleton<EncDotNet.S100.Renderers.Mapsui.IPatternClipCache>(sp =>
-            sp.GetRequiredService<EncDotNet.S100.Renderers.Mapsui.DiskPatternClipCache>());
+        services.AddSingleton<EncDotNet.S100.Rendering.Engine.IPatternClipCache>(sp =>
+            sp.GetRequiredService<EncDotNet.S100.Rendering.Engine.DiskPatternClipCache>());
         services.AddSingleton(sp =>
         {
             // One process-wide disk cache shared by every S-101 and S-57 processor so a
@@ -910,7 +910,7 @@ public partial class App : Application
         services.AddSingleton(sp =>
             new EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalWarmRecorder(
                 sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache>(),
-                sp.GetRequiredService<EncDotNet.S100.Renderers.Mapsui.DiskPatternClipCache>()));
+                sp.GetRequiredService<EncDotNet.S100.Rendering.Engine.DiskPatternClipCache>()));
         services.AddSingleton(sp =>
         {
             var recorder = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalWarmRecorder>();
@@ -933,7 +933,7 @@ public partial class App : Application
             var datasets = sp.GetRequiredService<DatasetsViewModel>();
             var settings = sp.GetRequiredService<ViewerSettings>();
             var cache = sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache>();
-            var clips = sp.GetRequiredService<EncDotNet.S100.Renderers.Mapsui.DiskPatternClipCache>();
+            var clips = sp.GetRequiredService<EncDotNet.S100.Rendering.Engine.DiskPatternClipCache>();
             var recorder = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalWarmRecorder>();
             var portrayer = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetCellPortrayer>();
             var notifier = sp.GetRequiredService<IMapViewportNotifier>();
@@ -948,7 +948,7 @@ public partial class App : Application
                 portrayAsync: portrayer.PortrayAsync,
                 // Busy while the map loads, draws or moves: a pan over tiles
                 // already drawn does neither of the first two.
-                isBusy: () => EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.HasVisibleTileWork
+                isBusy: () => EncDotNet.S100.Rendering.Engine.S100VectorTileRenderer.HasVisibleTileWork
                     || viewMoves.MovedWithin(options.QuietPeriod)
                     || datasets.Entries.Any(e => e.IsLoading),
                 view: () => notifier.Current,
@@ -982,7 +982,7 @@ public partial class App : Application
         services.AddSingleton<EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer>(sp =>
             new EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer(
                 new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory(),
-                sp.GetRequiredService<EncDotNet.S100.Renderers.Mapsui.IPatternClipCache>()));
+                sp.GetRequiredService<EncDotNet.S100.Rendering.Engine.IPatternClipCache>()));
 
         // Leaf services extracted in phase 2
         services.AddSingleton<IThemeService, ThemeService>();
@@ -1175,7 +1175,7 @@ public partial class App : Application
                     else Avalonia.Threading.Dispatcher.UIThread.Post(action);
                 },
                 hasVisibleTileWork: () =>
-                    EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.HasVisibleTileWork,
+                    EncDotNet.S100.Rendering.Engine.S100VectorTileRenderer.HasVisibleTileWork,
                 unloadMany: loader.UnloadEntries);
         });
 
@@ -1392,7 +1392,7 @@ public partial class App : Application
         });
         services.AddSingleton(_ => new EncDotNet.S100.Viewer.Diagnostics.ProcessMetricsSampler(
             new EncDotNet.S100.Viewer.Diagnostics.RuntimeProcessMetricsSource(
-                () => EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.GetTileCacheMemory().TotalBytes),
+                () => EncDotNet.S100.Rendering.Engine.S100VectorTileRenderer.GetTileCacheMemory().TotalBytes),
             uiStalls: new EncDotNet.S100.Viewer.Diagnostics.UiThreadStallMonitor(
                 action => Avalonia.Threading.Dispatcher.UIThread.Post(action, Avalonia.Threading.DispatcherPriority.Send))));
         services.AddSingleton<McpTools.PortrayalPrewarmOverride>();

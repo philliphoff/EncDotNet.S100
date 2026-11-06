@@ -1,4 +1,5 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Rendering.Engine;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.Index.Quadtree;
 

@@ -5,6 +5,7 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using Mapsui.Layers;
 using Mapsui.Nts;

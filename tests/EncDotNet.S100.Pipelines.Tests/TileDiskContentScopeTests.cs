@@ -9,6 +9,7 @@ using EncDotNet.S100.Pipelines.Vector.Caching;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Portrayals.Application;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.Testing.Scenarios.Hdf5;
 using SkiaSharp;

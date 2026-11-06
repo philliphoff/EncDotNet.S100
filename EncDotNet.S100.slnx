@@ -43,6 +43,7 @@
     <Project Path="src/EncDotNet.S100.Renderers.Mapsui.Avalonia/EncDotNet.S100.Renderers.Mapsui.Avalonia.csproj" />
     <Project Path="src/EncDotNet.S100.Renderers.Mapsui/EncDotNet.S100.Renderers.Mapsui.csproj" />
     <Project Path="src/EncDotNet.S100.Renderers.Skia/EncDotNet.S100.Renderers.Skia.csproj" />
+    <Project Path="src/EncDotNet.S100.Rendering.Engine/EncDotNet.S100.Rendering.Engine.csproj" />
     <Project Path="src/EncDotNet.S100.Rendering.Scene/EncDotNet.S100.Rendering.Scene.csproj" />
     <Project Path="src/EncDotNet.S100.Scripting.LuaCSharp/EncDotNet.S100.Scripting.LuaCSharp.csproj" />
     <Project Path="src/EncDotNet.S100.Scripting.MoonSharp/EncDotNet.S100.Scripting.MoonSharp.csproj" />
