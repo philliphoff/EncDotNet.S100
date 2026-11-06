@@ -7,8 +7,8 @@ namespace EncDotNet.S100.Navigation;
 /// The numbers behind a <see cref="RouteFinding"/>, by kind, so a client
 /// gets the depth that fired or an area's restrictions without parsing its
 /// text: <see cref="DangerDetails"/>, <see cref="ShoalDetails"/>,
-/// <see cref="AreaDetails"/>, <see cref="WarningDetails"/> or
-/// <see cref="ClearanceDetails"/>.
+/// <see cref="AreaDetails"/>, <see cref="WarningDetails"/>,
+/// <see cref="ClearanceDetails"/> or <see cref="WeatherDetails"/>.
 /// </summary>
 /// <remarks>
 /// Findings about land, drying ground and chart coverage carry no details:
@@ -318,4 +318,62 @@ public sealed class AreaKindOffDetails : RouteFindingDetails
 
     /// <summary>How many areas of the kind the route meets.</summary>
     public required int Count { get; init; }
+}
+
+/// <summary>
+/// A finding of the weather check: a stretch where wind or waves are above
+/// the limit at the ETA (<see cref="RouteFindingCodes.WindAboveLimit"/>,
+/// <see cref="RouteFindingCodes.WavesAboveLimit"/>), or a stretch the
+/// forecast doesn't check (<see cref="Gap"/>).
+/// </summary>
+/// <remarks>Weather model data isn't official S-100 data. These findings are advisory and aren't for navigation.</remarks>
+public sealed class WeatherDetails : RouteFindingDetails
+{
+    /// <summary>What was checked: wind or waves.</summary>
+    public required WeatherQuantity Quantity { get; init; }
+
+    /// <summary>Why a stretch isn't checked, for a gap finding; <c>null</c> for one above the limit.</summary>
+    public WeatherSampleState? Gap { get; init; }
+
+    /// <summary>The first leg of the stretch.</summary>
+    public int FirstLegIndex { get; init; }
+
+    /// <summary>The last leg of the stretch.</summary>
+    public int LastLegIndex { get; init; }
+
+    /// <summary>The stretch's length along the route.</summary>
+    public Length Length { get; init; }
+
+    /// <summary>When the vessel reaches the stretch (the departure without ETAs).</summary>
+    public DateTimeOffset StartTime { get; init; }
+
+    /// <summary>When the vessel leaves the stretch, or <c>null</c> without ETAs there.</summary>
+    public DateTimeOffset? EndTime { get; init; }
+
+    /// <summary>Above the limit: the limit, in the quantity's SI unit (m/s, m).</summary>
+    public double? Limit { get; init; }
+
+    /// <summary>Above the limit: where it came from.</summary>
+    public WeatherLimitOrigin? LimitOrigin { get; init; }
+
+    /// <summary>Above the limit: the highest value in the stretch, in the quantity's SI unit.</summary>
+    public double? Maximum { get; init; }
+
+    /// <summary>Above the limit: the forecast time step the highest value is from.</summary>
+    public DateTimeOffset? MaximumStepTime { get; init; }
+
+    /// <summary>Above the limit: when the vessel is at the highest value, or <c>null</c> without an ETA there.</summary>
+    public DateTimeOffset? MaximumTime { get; init; }
+
+    /// <summary>The weather dataset the values come from (the highest value's, for a stretch above the limit), or <c>null</c> for a stretch no dataset covers.</summary>
+    public string? DatasetId { get; init; }
+
+    /// <summary>That dataset's model run, or <c>null</c>.</summary>
+    public DateTimeOffset? ModelRun { get; init; }
+
+    /// <summary>For <see cref="WeatherSampleState.ForecastStartsLate"/>: the forecast's first step; otherwise <c>null</c>.</summary>
+    public DateTimeOffset? ForecastStart { get; init; }
+
+    /// <summary>For <see cref="WeatherSampleState.ForecastEnds"/>: the forecast's last step; otherwise <c>null</c>.</summary>
+    public DateTimeOffset? ForecastEnd { get; init; }
 }

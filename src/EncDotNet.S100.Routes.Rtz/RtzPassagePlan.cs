@@ -27,6 +27,9 @@ namespace EncDotNet.S100.Routes.Rtz;
 /// </description></item>
 /// </list>
 /// RTZ has no squat allowance, so every leg's squat is zero.
+/// The route's <c>vesselMaxWind</c> (knots) and <c>vesselMaxWave</c>
+/// (metres) become the plan's <see cref="PassagePlan.VesselLimits"/>, which
+/// the weather check uses unless the check's settings set their own.
 /// </remarks>
 public static class RtzPassagePlan
 {
@@ -57,7 +60,13 @@ public static class RtzPassagePlan
         }
 
         var departure = route.Waypoints.Count > 0 ? schedule?.ElementFor(route.Waypoints[0].Id)?.Departure : null;
-        return new PassagePlan(legs, departure);
+        var info = route.Info;
+        var limits = new WeatherLimits
+        {
+            MaxWind = info.VesselMaxWind is { } wind && double.IsFinite(wind) && wind > 0 ? Speed.FromKnots(wind) : null,
+            MaxWaveHeight = info.VesselMaxWave is { } wave && double.IsFinite(wave) && wave > 0 ? Length.FromMetres(wave) : null,
+        };
+        return new PassagePlan(legs, departure) { VesselLimits = limits.IsEmpty ? null : limits };
     }
 
     private static double? LegSpeedKnots(RtzRoute route, RtzSchedule schedule, int legIndex, LegGeometry geometry)

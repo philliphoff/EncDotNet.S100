@@ -89,6 +89,17 @@ internal sealed class WeatherGridSampler : ICoverageSampler
     /// <summary>The union of the parameters' valid times, in time order.</summary>
     public IReadOnlyList<DateTime> Times => _times;
 
+    /// <summary>The grid set sampled.</summary>
+    internal WeatherGridSet GridSet => _gridSet;
+
+    /// <summary>The model run's reference time, or <see langword="null"/>.</summary>
+    internal DateTime? Run => _run;
+
+    /// <summary>One decoded step of a parameter, from the same recent-steps cache the picks use.</summary>
+    /// <param name="parameter">A parameter of the grid set.</param>
+    /// <param name="step">Index into the parameter's steps.</param>
+    internal float[] ReadStep(WeatherParameter parameter, int step) => GetStep(parameter, step);
+
     /// <inheritdoc />
     public CoverageSiteSearch FindSites(CoverageSampleQuery query)
     {

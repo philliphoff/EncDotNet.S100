@@ -192,3 +192,39 @@ internal static class Checks
         CancellationToken? cancellationToken = null) =>
         Run(new ClearanceCheck(), plan, settings, new RouteCheckSources { Depth = depth, WaterLevel = water }, options, cancellationToken);
 }
+
+/// <summary>A weather series with fixed steps and values from a function of the step time.</summary>
+internal sealed class FakeWeatherSeries(IReadOnlyList<DateTimeOffset> steps, Func<DateTimeOffset, double?> valueAt, string datasetId = "gfs.grib2", DateTimeOffset? run = null) : IRouteWeatherSeries
+{
+    public RouteWeatherSourceInfo Source { get; } = new(datasetId, run, "0,0");
+
+    public IReadOnlyList<DateTimeOffset> Steps => steps;
+
+    public double? ValueAt(int stepIndex) => valueAt(steps[stepIndex]);
+
+    /// <summary>Every <paramref name="step"/> from <paramref name="from"/> for <paramref name="count"/> steps.</summary>
+    public static IReadOnlyList<DateTimeOffset> Hourly(DateTimeOffset from, int count, TimeSpan? step = null) =>
+        Enumerable.Range(0, count).Select(i => from + (i * (step ?? TimeSpan.FromHours(1)))).ToArray();
+}
+
+/// <summary>A weather source whose series come from a function of the position and quantity; it counts its lookups.</summary>
+internal sealed class FakeWeather(Func<GeoPosition, WeatherQuantity, IReadOnlyList<IRouteWeatherSeries>> locate, params WeatherQuantity[] carries) : IRouteWeatherSource
+{
+    private int _locates;
+
+    public int Locates => _locates;
+
+    public bool Carries(WeatherQuantity quantity) => carries.Length == 0 || carries.Contains(quantity);
+
+    public IReadOnlyList<IRouteWeatherSeries> Locate(GeoPosition position, WeatherQuantity quantity)
+    {
+        Interlocked.Increment(ref _locates);
+        return locate(position, quantity);
+    }
+
+    /// <summary>The same values everywhere: wind in knots, waves in metres, over hourly steps from <paramref name="from"/>.</summary>
+    public static FakeWeather Uniform(double windKnots, double waveMetres, DateTimeOffset from, int hours) =>
+        new((_, q) => [new FakeWeatherSeries(
+            FakeWeatherSeries.Hourly(from, hours),
+            _ => q == WeatherQuantity.WindSpeed ? Speed.FromKnots(windKnots).TotalMetresPerSecond : waveMetres)]);
+}
