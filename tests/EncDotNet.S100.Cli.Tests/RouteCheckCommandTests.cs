@@ -184,6 +184,70 @@ public sealed class RouteCheckCommandTests
     }
 
     [Fact]
+    public void A_route_through_a_tropical_cyclone_reports_its_radii_and_the_options_change_them()
+    {
+        // Hurricane Ian, advisory 20: due east through the storm's estimated
+        // centre six hours after the synoptic time, at 10 kn.
+        var folder = Directory.CreateTempSubdirectory("s100-route-cyclone-").FullName;
+        try
+        {
+            var synoptic = new DateTime(2022, 9, 28, 0, 0, 0, DateTimeKind.Utc);
+            var advisory = new EncDotNet.S100.Datasets.Pipelines.TropicalCycloneDatasetProcessor(TropicalCycloneFixtures.IanForecast).Advisory;
+            var centre = advisory.StormAt(synoptic.AddHours(6))!.Point.Position;
+            var halfNm = 1.5 * 60 * Math.Cos(centre.Latitude * Math.PI / 180);
+            var route = Path.Combine(folder, "ian.rtz");
+            RtzWriter.Write(new RtzRoute
+            {
+                Version = RtzVersions.Latest,
+                Info = new RtzRouteInfo { RouteName = "Through Ian" },
+                Waypoints =
+                [
+                    new RtzWaypoint { Id = 1, Position = new(centre.Latitude, centre.Longitude - 1.5) },
+                    new RtzWaypoint { Id = 2, Position = new(centre.Latitude, centre.Longitude + 1.5) },
+                ],
+                Schedules =
+                [
+                    new RtzSchedule
+                    {
+                        Id = 1,
+                        Name = "Plan",
+                        Manual = new RtzScheduleTable
+                        {
+                            Elements =
+                            [
+                                new RtzScheduleElement { WaypointId = 1, Etd = new DateTimeOffset(synoptic.AddHours(6 - (halfNm / 10))) },
+                                new RtzScheduleElement { WaypointId = 2, Speed = 10 },
+                            ],
+                        },
+                    },
+                ],
+            }, route);
+
+            var (exit, json) = RunJson(route, TropicalCycloneFixtures.IanForecast);
+            Assert.Equal(7, exit);
+            Assert.Equal(
+                ["weather.tc_cone", "weather.tc_cpa", "weather.tc_radius_34", "weather.tc_radius_50", "weather.tc_radius_64"],
+                Codes(json).Where(c => c.StartsWith("weather.", StringComparison.Ordinal)).Order(StringComparer.Ordinal));
+            Assert.Equal("inside_cyclone_radius", json["check"]!["weather"]!["verdict"]!.GetValue<string>());
+
+            var (changedExit, changed) = RunJson(route, TropicalCycloneFixtures.IanForecast, "--cyclone-radius", "64", "--cyclone-must-review", "never", "--no-cyclone-cpa");
+            Assert.Equal(["weather.tc_cone", "weather.tc_radius_64"], Codes(changed).Where(c => c.StartsWith("weather.", StringComparison.Ordinal)).Order(StringComparer.Ordinal));
+            Assert.Equal(0, changedExit);
+            Assert.Equal(64, changed["settings"]!["cycloneCheckAgainstKnots"]!.GetValue<int>());
+
+            var (_, text) = Run([route, TropicalCycloneFixtures.IanForecast, "--fail-on", "never"]);
+            Assert.Contains("inside_cyclone_radius (limits none)", text, StringComparison.Ordinal);
+            Assert.Contains("Ian adv 20: inside the 64 kt radius, in the cone, closest", text, StringComparison.Ordinal);
+
+            Assert.Equal(-1, Run([route, TropicalCycloneFixtures.IanForecast, "--cyclone-radius", "40"]).Exit);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
     public void A_file_that_is_not_a_route_exits_with_code_2()
     {
         using var scenario = new Scenario(SyntheticScenarios.WarningsOnRoute());
