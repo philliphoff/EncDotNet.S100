@@ -523,10 +523,14 @@ period.
 | Tile native | Native bytes the tile raster caches and GPU tile textures hold, summed over every layer. |
 | Working set | Resident memory. The peak is sampled every 100 ms through the window, because the process's own peak counter isn't reliable on macOS. |
 | Frame p50, p95, max | Map paint times over the window, from `get_render_stats`. The `pan` scenario's frame times are the pan's. |
+| Scheduler cores busy | Work scheduler worker time ÷ wall: how many of its workers were busy on average. |
+| Visible job wait p95 | 95th percentile of the time from a visible job (a tile on screen) being queued, or promoted to visible, to a worker starting it. The totals take the largest step's p95. |
+| Job run p95 | 95th percentile of how long a job held a worker per run, every class. |
 
 Peaks of the GC heap, GC committed and tile native bytes are sampled the same
 way. The manifest's `totals` add CPU, wall, GC pause and allocation over the
-moves, divide for cores busy and pause share, and take the largest peaks.
+moves, divide for cores busy and pause share, and take the largest peaks and
+job-wait percentiles.
 Each step also keeps the raw MCP replies under `raw`.
 
 ### Split a warm cell load by stage

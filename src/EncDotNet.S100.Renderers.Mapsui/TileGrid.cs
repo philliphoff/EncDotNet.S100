@@ -464,8 +464,7 @@ internal static class TileGrid
         // Drain worst-first (the comparer puts the farthest tile on top) and fill the
         // result back-to-front, producing the centre-first order — identical to the
         // previous Sort's (Dist, Band, Y, X) ordering. Ties are impossible because
-        // each TileKey is unique, so the order is fully deterministic and matches the
-        // (Band, Y, X) tie-break S100VectorTileRenderer.TakeNearest also uses.
+        // each TileKey is unique, so the order is fully deterministic.
         var result = new TileKey[heap.Count];
         for (var i = result.Length - 1; i >= 0; i--)
         {

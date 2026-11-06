@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Rendering.Scene;
 using Mapsui;
@@ -37,11 +38,13 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// rasterisation and never blocks.
 /// </para>
 /// <para>
-/// <b>Workers.</b> A tier-sized pool of coalescing workers per layer drains the
-/// visible-miss set (replaced every frame, so tiles panned out of view are
-/// dropped before they render) in parallel. The pool size is
-/// <see cref="RenderingOptimizations.TileWorkerCount"/> (one on low-end hosts,
-/// scaling with cores on high-end). Each tile is rendered with a <b>gutter</b>
+/// <b>Jobs.</b> Each pending tile is a job on the process-wide work scheduler
+/// (<see cref="WorkScheduler.Shared"/>, map rendering slice&#160;5) at its class
+/// (visible, predicted or cross-band pre-warm) and its distance from the view
+/// centre, so every layer's central visible tiles rasterise first and no layer
+/// holds workers of its own. The pending sets are rebuilt every frame and a
+/// tile that leaves them drops its job, so tiles panned out of view are
+/// dropped before they render. Each tile is rendered with a <b>gutter</b>
 /// (bleed beyond the tile bounds) and hard-clipped to its core on composite, so
 /// lines and area fills stay continuous across seams. Finished tiles enter the
 /// native-byte-bounded <see cref="TileCache"/> and trigger a single repaint via
@@ -225,7 +228,33 @@ public static partial class S100VectorTileRenderer
     /// while this is true; hosts can hold back their own speculative work
     /// (such as loading cells ahead of the viewport) the same way.
     /// </summary>
-    public static bool HasVisibleTileWork => HasActiveVisibleWork(Stopwatch.GetTimestamp());
+    public static bool HasVisibleTileWork
+    {
+        get
+        {
+            var last = Volatile.Read(ref _lastVisibleTileWorkTicks);
+            return last != 0
+                && Stopwatch.GetElapsedTime(last).TotalSeconds <= VisibleWorkWindowSeconds;
+        }
+    }
+
+    /// <summary>
+    /// How long after a frame last had cold visible tiles
+    /// <see cref="HasVisibleTileWork"/> still reports them: a couple of frames,
+    /// enough to bridge the per-layer paints of one frame.
+    /// </summary>
+    private const double VisibleWorkWindowSeconds = 0.5;
+
+    private static long _lastVisibleTileWorkTicks;
+
+    /// <summary>
+    /// The scheduler tile raster jobs run on (map rendering slice 5): the
+    /// process-wide <see cref="WorkScheduler.Shared"/>, whose dedicated workers
+    /// take the best job across every layer and stage. Visible tiles run
+    /// before predicted ones, and those before cross-band pre-warm, with no
+    /// per-layer worker floors.
+    /// </summary>
+    internal static IWorkScheduler Scheduler => WorkScheduler.Shared;
 
     private static long _lastViewChangeTicks;
 
@@ -431,79 +460,6 @@ public static partial class S100VectorTileRenderer
     /// <see cref="WorkerDrainGate"/>.
     /// </summary>
     private static readonly WorkerDrainGate DrainGate = new();
-
-    /// <summary>
-    /// Process-wide cap on the total number of concurrent tile workers across
-    /// <em>all</em> layers. A single dense layer gets the full per-layer pool
-    /// (<see cref="RenderingOptimizations.TileWorkerCount"/>) to parallelise its
-    /// cold-miss burst, but N layers × N workers must not exceed the core count or
-    /// they oversubscribe the CPU/GPU and starve the UI paint thread (a paint-p95
-    /// blow-up on big multi-cell exchange sets). Read once at start-up.
-    /// </summary>
-    private static readonly int MaxTotalWorkers =
-        Math.Max(RenderingOptimizations.TileWorkerCount, Environment.ProcessorCount);
-
-    private static int _activeWorkerTotal;
-
-    /// <summary>
-    /// Sliding window, in seconds, over which a layer that had visible cold work
-    /// is still counted as an active competitor for the fairness reservation used
-    /// by elastic borrowing (issue #432). A layer that stops painting (culled,
-    /// resolution-hidden, torn down) or that fully caches its visible tiles ages
-    /// out of the <see cref="VisibleLayerStamps"/> registry within this window,
-    /// so the "active visible layers" divisor never inflates with dead layers.
-    /// A couple of frames' worth is enough to bridge the serialized per-layer
-    /// paint of one frame without over-holding.
-    /// </summary>
-    private const double ElasticFairnessWindowSeconds = 0.5;
-
-    /// <summary>
-    /// Guards <see cref="VisibleLayerStamps"/> and <see cref="VisibleLayerPruneScratch"/>.
-    /// Usually taken on the render/UI thread (layer paint is serialized there);
-    /// tile workers also take it briefly when checking process-wide speculative
-    /// admission. Always acquired <em>after</em> a layer's <c>state.Sync</c> and
-    /// never the reverse, so it introduces no lock-order cycle.
-    /// </summary>
-    private static readonly object VisibleLayerSync = new();
-
-    /// <summary>
-    /// Registry of layers that recently had visible cold work, keyed by their
-    /// <see cref="TileState"/>. Each entry records the <see cref="Stopwatch"/> tick
-    /// of the layer's last such paint and the worker count it held at that point,
-    /// so elastic borrowing can reserve each <em>other</em> active-visible layer
-    /// only its <em>shortfall</em> to the <see cref="RenderingOptimizations.TileWorkerCount"/>
-    /// floor before lending idle capacity (issue #432 fairness floor). Counting a
-    /// competitor's own workers — rather than all other layers' workers — stops an
-    /// unrelated predicted-only layer's workers from wrongly satisfying an
-    /// active-visible sibling's reservation.
-    /// <para>
-    /// Keyed <b>weakly</b> via <see cref="ConditionalWeakTable{TKey,TValue}"/> so it
-    /// never roots a <see cref="TileState"/>. <see cref="TileState"/> is otherwise
-    /// held only weakly (in <see cref="States"/>, keyed by <see cref="ILayer"/>);
-    /// a plain <see cref="Dictionary{TKey,TValue}"/> here would keep a removed
-    /// layer's tiling state — including its rasterised tile cache and scenes — alive
-    /// for the process lifetime if the layer disappeared while still registered and
-    /// no later paint pruned it. With a weak key the GC reclaims a dead layer's
-    /// entry even when no further paint occurs.
-    /// </para>
-    /// </summary>
-    private static readonly ConditionalWeakTable<TileState, ActiveVisibleEntry> VisibleLayerStamps = new();
-
-    /// <summary>Reusable scratch for time-pruning <see cref="VisibleLayerStamps"/> without per-call allocation.</summary>
-    private static readonly List<TileState> VisibleLayerPruneScratch = new();
-
-    /// <summary>
-    /// A layer's active-visible registry entry: the <see cref="Stopwatch"/> tick of
-    /// its last paint with visible cold work, and the workers it held then. A mutable
-    /// reference type because <see cref="ConditionalWeakTable{TKey,TValue}"/> requires
-    /// a reference value; it is only ever read/written under <see cref="VisibleLayerSync"/>.
-    /// </summary>
-    private sealed class ActiveVisibleEntry(long stampTicks, int activeWorkers)
-    {
-        public long StampTicks = stampTicks;
-        public int ActiveWorkers = activeWorkers;
-    }
-
 
     /// <summary>
     /// Signals every tile worker to stop and blocks until in-flight tile
@@ -727,6 +683,7 @@ public static partial class S100VectorTileRenderer
             state.PendingVisible.Clear();
             state.PendingPredicted.Clear();
             state.PendingCrossBand.Clear();
+            ReleaseTileJobs(state);
             state.CurrentVisible.Clear();
             state.CurrentSpeculative.Clear();
             state.CurrentViewport = null;
@@ -849,6 +806,7 @@ public static partial class S100VectorTileRenderer
             predecessor.PendingVisible.Clear();
             predecessor.PendingPredicted.Clear();
             predecessor.PendingCrossBand.Clear();
+            ReleaseTileJobs(predecessor);
             predecessor.CurrentVisible.Clear();
             predecessor.CurrentSpeculative.Clear();
 
@@ -1125,9 +1083,7 @@ public static partial class S100VectorTileRenderer
             ? copies[0]
             : WorldCopies.Nearest(copies, layerExtent.MinX, layerExtent.MaxX, centerX);
 
-        var workersToStart = 0;
         var repaintForHold = false;
-        var requestAdmissionRetry = false;
         var coldExposure = 0;
         var visibleQueueDepth = 0;
         var predictionHits = 0L;
@@ -1252,20 +1208,10 @@ public static partial class S100VectorTileRenderer
 
                 visibleQueueDepth = state.PendingVisible.Count;
 
-                // Refresh this layer's active-visible-layer registry entry and read the
-                // worker reservation owed to OTHER layers that currently have visible
-                // cold work, so the worker-start block below lends only leftover global
-                // capacity to this layer (issue #432 fairness floor). A layer counts as
-                // active-visible whenever it has visible cold tiles (pending OR already
-                // in flight), so a layer mid-raster of its visible burst still keeps its
-                // reservation; the reservation is each sibling's shortfall to its floor,
-                // so siblings already running their share owe nothing.
-                var reservedForOtherLayers = RefreshActiveVisibleLayers(
-                    state,
-                    coldExposure > 0,
-                    state.ActiveWorkers,
-                    frameTicks,
-                    out requestAdmissionRetry);
+                if (coldExposure > 0)
+                {
+                    Volatile.Write(ref _lastVisibleTileWorkTicks, frameTicks);
+                }
 
                 // Drop enqueue stamps for tiles no longer visible (panned away before
                 // they landed) so the dictionary stays bounded by the visible set.
@@ -1377,55 +1323,14 @@ public static partial class S100VectorTileRenderer
                     state.PendingGeneration = state.Generation;
                     state.PendingCenterX = centerX - primaryOffset;
                     state.PendingCenterY = centerY;
-                    // Spin up workers to cover the pending tiles. The per-layer
-                    // TileWorkerCount is a *floor* (reservation), not a hard ceiling:
-                    // a layer with a visible backlog may borrow idle global capacity
-                    // toward MaxTotalWorkers (issue #432), but only for *visible*
-                    // work — predicted/speculative tiles (including the idle cross-band
-                    // ±1 pre-warm, issue #428) never justify borrowing, so a busy
-                    // layer's prewarm can't occupy cores a sibling wants for on-screen
-                    // tiles. On a LowEnd (single-worker) host there is nothing to
-                    // borrow, so the elastic ceiling collapses to the floor and this
-                    // reduces to the pre-elastic behaviour. A per-layer floor is
-                    // reserved for every other active-visible layer before any elastic
-                    // extra is granted, so a dense bottom-of-z-order layer can't starve
-                    // siblings that paint later in the frame.
-                    var baseline = RenderingOptimizations.TileWorkerCount;
-                    var elasticCeiling = RenderingOptimizations.ResolvedProfile == PerformanceProfile.LowEnd
-                        ? baseline
-                        : MaxTotalWorkers;
-                    var pendingSpeculative =
-                        state.PendingPredicted.Count + state.PendingCrossBand.Count;
-                    if (state.PendingVisible.Count == 0
-                        && HasActiveVisibleWork(frameTicks))
-                    {
-                        pendingSpeculative = 0;
-                    }
-
-                    workersToStart = ComputeWorkersToStart(
-                        baseline,
-                        elasticCeiling,
-                        MaxTotalWorkers,
-                        Volatile.Read(ref _activeWorkerTotal),
-                        state.ActiveWorkers,
-                        state.PendingVisible.Count,
-                        pendingSpeculative,
-                        reservedForOtherLayers);
-
-                    if (workersToStart > 0)
-                    {
-                        state.ActiveWorkers += workersToStart;
-                        Interlocked.Add(ref _activeWorkerTotal, workersToStart);
-
-                        // Publish the post-grant worker count so a sibling painting later
-                        // in this same frame sees this layer's true share and reserves
-                        // only its own shortfall against it.
-                        if (coldExposure > 0)
-                        {
-                            RecordActiveVisibleLayerWorkers(state, state.ActiveWorkers, frameTicks);
-                        }
-                    }
+                    // The pending sets are this layer's interests in scheduler
+                    // jobs: one per tile, at the tile's class (visible, predicted
+                    // or cross-band pre-warm) and its distance from the view
+                    // centre. Tiles that left the sets drop their interest, which
+                    // cancels them if they haven't started.
                 }
+
+                SyncTileJobs(state, resolution);
 
                 // Bound the prediction-hit bookkeeping: a tile predicted then
                 // evicted before it was ever shown would otherwise linger. When the
@@ -1443,11 +1348,9 @@ public static partial class S100VectorTileRenderer
             // current context + scene generation before compositing, so stale
             // textures are never blitted.
             //
-            // Guard the whole paint block: a throw here would escape the lock and
-            // skip the worker-start Task.Run below while ActiveWorkers stays
-            // elevated, permanently stalling tile production (a blank chart until
-            // the layer is rebuilt). A dropped frame is always recoverable; a
-            // stalled worker is not.
+            // Guard the whole paint block: a throw here would escape the frame
+            // and drop its telemetry and repaint requests. A dropped frame is
+            // always recoverable.
             compositePaintStart = Stopwatch.GetTimestamp();
             compositeGpuEnd = compositePaintStart;
             compositeClipEnd = compositePaintStart;
@@ -1617,41 +1520,9 @@ public static partial class S100VectorTileRenderer
         {
             S100Diag.Telemetry.TilePredictionHits.Add(predictionHits);
         }
-        if (requestAdmissionRetry || repaintForHold)
+        if (repaintForHold)
         {
             VectorLayerRepaint.Request(layer);
-        }
-
-        if (workersToStart > 0)
-        {
-            // Spawn the worker pool. Each worker is independently registered with
-            // the drain gate; ShutdownAndDrain waits for all of them. If a register
-            // is refused (process tearing down), give back the slot we reserved so
-            // ActiveWorkers reflects only the workers actually running, and undo the
-            // remaining reservations in one go.
-            var started = 0;
-            for (var i = 0; i < workersToStart; i++)
-            {
-                if (DrainGate.TryRegister())
-                {
-                    _ = Task.Run(() => Worker(state));
-                    started++;
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            if (started < workersToStart)
-            {
-                lock (state.Sync)
-                {
-                    state.ActiveWorkers -= workersToStart - started;
-                }
-
-                Interlocked.Add(ref _activeWorkerTotal, -(workersToStart - started));
-            }
         }
     }
 
@@ -2180,22 +2051,8 @@ public static partial class S100VectorTileRenderer
             state.PendingPredicted.Clear();
             state.PendingCrossBand.Clear();
             state.VisibleEnqueueTicks.Clear();
-            return RemoveActiveVisibleLayer(state);
-        }
-    }
-
-    private static bool RemoveActiveVisibleLayer(TileState state)
-    {
-        lock (VisibleLayerSync)
-        {
-            var hadActiveVisibleWork = HasActiveVisibleWorkLocked(
-                Stopwatch.GetTimestamp());
-            VisibleLayerStamps.Remove(state);
-            var hasActiveVisibleWork = HasActiveVisibleWorkLocked(
-                Stopwatch.GetTimestamp());
-            return ShouldRequestSpeculativeRetry(
-                hadActiveVisibleWork,
-                hasActiveVisibleWork);
+            ReleaseTileJobs(state);
+            return false;
         }
     }
 
@@ -3077,7 +2934,8 @@ public static partial class S100VectorTileRenderer
     /// </summary>
     internal static string DescribeTileWorkForTest(ILayer layer)
     {
-        var pool = $"workers total={Volatile.Read(ref _activeWorkerTotal)}/{MaxTotalWorkers}";
+        var stats = Scheduler.GetStats();
+        var pool = $"scheduler busy={stats.BusyWorkers}/{stats.Workers} queued={string.Join('/', stats.QueuedByClass)}";
         if (!States.TryGetValue(layer, out var state))
         {
             return $"no tile state; {pool}";
@@ -3089,7 +2947,7 @@ public static partial class S100VectorTileRenderer
             return $"visible={state.CurrentVisible.Count} resident={resident} "
                 + $"pendingVisible={state.PendingVisible.Count} inFlight={state.InFlight.Count} "
                 + $"pendingPredicted={state.PendingPredicted.Count} pendingCrossBand={state.PendingCrossBand.Count} "
-                + $"cached={state.Cache.Count} layerWorkers={state.ActiveWorkers}; {pool}";
+                + $"cached={state.Cache.Count} jobs={state.Jobs.Count}; {pool}";
         }
     }
 
@@ -3230,406 +3088,208 @@ public static partial class S100VectorTileRenderer
     }
 
     /// <summary>
-    /// Computes how many new tile workers a layer may start this paint, turning
-    /// the per-layer <paramref name="baseline"/> from a hard ceiling into a floor
-    /// that a busy layer may exceed by borrowing idle global capacity for
-    /// <em>visible</em> work (issue #432). Pure and deterministic given its inputs
-    /// so the borrow policy is unit-testable without a live render.
+    /// Brings <paramref name="state"/>'s scheduler interests in line with its
+    /// pending sets: a job per pending tile at that tile's class and its
+    /// on-screen distance from the view centre, so central tiles of every
+    /// layer run first. Tiles that left the sets release their interest,
+    /// which drops a job that hasn't started. Caller holds <c>state.Sync</c>.
     /// </summary>
-    /// <param name="baseline">
-    /// The per-layer worker reservation (<see cref="RenderingOptimizations.TileWorkerCount"/>).
-    /// Always reachable (subject to <paramref name="maxTotalWorkers"/>); predicted
-    /// work is never served above this count.
-    /// </param>
-    /// <param name="elasticCeiling">
-    /// The maximum workers a single layer may reach when borrowing for visible
-    /// work. Equal to <paramref name="baseline"/> on a LowEnd host (no borrowing),
-    /// otherwise <paramref name="maxTotalWorkers"/>.
-    /// </param>
-    /// <param name="maxTotalWorkers">The process-wide worker cap (<see cref="MaxTotalWorkers"/>).</param>
-    /// <param name="activeWorkerTotal">Current total live workers across all layers.</param>
-    /// <param name="layerActiveWorkers">This layer's current live workers.</param>
-    /// <param name="pendingVisible">This layer's pending visible (on-screen) cold tiles.</param>
-    /// <param name="pendingPredicted">This layer's pending predicted (speculative) tiles.</param>
-    /// <param name="reservedForOthers">
-    /// Total workers reserved for <em>other</em> active-visible layers — each such
-    /// layer's shortfall to its <paramref name="baseline"/> floor — which this
-    /// layer may not borrow. The fairness floor that stops a dense low-z layer
-    /// starving later-painting siblings.
-    /// </param>
-    /// <returns>The number of new workers to start (never negative).</returns>
-    internal static int ComputeWorkersToStart(
-        int baseline,
-        int elasticCeiling,
-        int maxTotalWorkers,
-        int activeWorkerTotal,
-        int layerActiveWorkers,
-        int pendingVisible,
-        int pendingPredicted,
-        int reservedForOthers)
+    /// <param name="state">The layer's tile state.</param>
+    /// <param name="resolution">The frame's resolution, metres per pixel, to put urgency in pixels.</param>
+    private static void SyncTileJobs(TileState state, double resolution)
     {
-        var totalPending = pendingVisible + pendingPredicted;
-        if (totalPending <= 0)
+        var jobs = state.Jobs;
+        if (jobs.Count == 0
+            && state.PendingVisible.Count == 0
+            && state.PendingPredicted.Count == 0
+            && state.PendingCrossBand.Count == 0)
         {
-            return 0;
+            return;
         }
 
-        var globalRoom = maxTotalWorkers - activeWorkerTotal;
-        if (globalRoom <= 0)
+        state.JobPruneScratch.Clear();
+        foreach (var key in jobs.Keys)
         {
-            return 0;
-        }
-
-        // Floor grant: reach the per-layer reservation regardless of siblings,
-        // bounded only by global room (the pre-elastic behaviour). Serves visible
-        // and predicted work alike.
-        var desiredBaseline = Math.Min(baseline, totalPending);
-        var baselineStart = Math.Clamp(desiredBaseline - layerActiveWorkers, 0, globalRoom);
-
-        // Elastic grant: borrow toward the elastic ceiling for VISIBLE work only,
-        // from whatever room remains after this layer's own floor and the floor
-        // reservation owed to every other active-visible layer.
-        var elasticStart = 0;
-        var layerCeiling = Math.Max(desiredBaseline, Math.Min(elasticCeiling, pendingVisible));
-        if (layerCeiling > desiredBaseline)
-        {
-            var elasticRoom = globalRoom - baselineStart - Math.Max(0, reservedForOthers);
-            var elasticWant = layerCeiling - Math.Max(layerActiveWorkers, desiredBaseline);
-            if (elasticWant > 0 && elasticRoom > 0)
+            if (!state.PendingVisible.Contains(key)
+                && !state.PendingPredicted.Contains(key)
+                && !state.PendingCrossBand.Contains(key))
             {
-                elasticStart = Math.Min(elasticWant, elasticRoom);
+                state.JobPruneScratch.Add(key);
             }
         }
 
-        return baselineStart + elasticStart;
+        foreach (var key in state.JobPruneScratch)
+        {
+            if (jobs.Remove(key, out var stale))
+            {
+                stale.Dispose();
+            }
+        }
+
+        WantTileJobs(state, state.PendingVisible, WorkClass.Visible, resolution);
+        WantTileJobs(state, state.PendingPredicted, WorkClass.Predicted, resolution);
+        WantTileJobs(state, state.PendingCrossBand, WorkClass.Background, resolution);
     }
 
-    /// <summary>
-    /// Decides whether a tile worker should leave its drain loop this iteration.
-    /// A worker exits when its layer's scene is gone or all pending work has
-    /// drained, and — the elastic addition (issue #432) — when it is an
-    /// above-<paramref name="baseline"/> ("borrowed") worker that has reached the
-    /// visible→predicted boundary: with no visible work left it sheds instead of
-    /// falling through to speculative work, so borrowed global capacity returns to
-    /// the pool within roughly one tile's raster time rather than leaking into
-    /// prewarm. Pure so the shed policy is unit-testable.
-    /// </summary>
-    /// <param name="sceneNull">True when the layer's scene has been cleared.</param>
-    /// <param name="hasVisible">True when the layer has pending visible tiles.</param>
-    /// <param name="hasPredicted">True when the layer has pending predicted tiles.</param>
-    /// <param name="layerActiveWorkers">This layer's current live workers.</param>
-    /// <param name="baseline">The per-layer floor (<see cref="RenderingOptimizations.TileWorkerCount"/>).</param>
-    /// <returns>True when the worker should exit its loop.</returns>
-    internal static bool ShouldWorkerExit(
-        bool sceneNull,
-        bool hasVisible,
-        bool hasPredicted,
-        int layerActiveWorkers,
-        int baseline) =>
-        sceneNull
-        || (!hasVisible && !hasPredicted)
-        || (!hasVisible && layerActiveWorkers > baseline);
-
-    internal static bool ShouldAdmitSpeculativeWork(
-        bool hasVisible,
-        bool hasGlobalVisibleWork) =>
-        hasVisible || !hasGlobalVisibleWork;
-
-    internal static bool ShouldRequestSpeculativeRetry(
-        bool hadActiveVisibleWork,
-        bool hasActiveVisibleWork) =>
-        hadActiveVisibleWork && !hasActiveVisibleWork;
-
-    /// <summary>
-    /// Refreshes <paramref name="state"/>'s entry in the active-visible-layer
-    /// registry and returns the worker reservation owed to <em>other</em> layers
-    /// that have had visible cold work within <see cref="ElasticFairnessWindowSeconds"/>
-    /// — the sum over those layers of their shortfall to the per-layer floor
-    /// (<see cref="RenderingOptimizations.TileWorkerCount"/>). Counting each
-    /// competitor's own workers, rather than all other layers', keeps an unrelated
-    /// predicted-only layer's workers from wrongly satisfying an active-visible
-    /// sibling's reservation. Stamps (or removes) this layer, then prunes stale
-    /// entries so layers that stopped painting — culled, resolution-hidden, or torn
-    /// down — age out of the reservation. Called only on the render thread under
-    /// the layer's <c>state.Sync</c>; takes <see cref="VisibleLayerSync"/> second,
-    /// never the reverse.
-    /// </summary>
-    /// <param name="state">The painting layer's tile state.</param>
-    /// <param name="hasVisibleWork">True when the layer has visible cold tiles (pending or in flight) this paint.</param>
-    /// <param name="layerActiveWorkers">This layer's current live workers (its own entry excludes itself from the reservation).</param>
-    /// <param name="nowTicks">The current <see cref="Stopwatch"/> tick.</param>
-    /// <param name="activeVisibleDrained">
-    /// Set when this refresh removes the final active-visible registry entry, so
-    /// the caller can request one follow-up frame for deferred speculative queues.
-    /// </param>
-    /// <returns>The total worker reservation owed to other active-visible layers.</returns>
-    private static int RefreshActiveVisibleLayers(
-        TileState state,
-        bool hasVisibleWork,
-        int layerActiveWorkers,
-        long nowTicks,
-        out bool activeVisibleDrained)
+    private static void WantTileJobs(TileState state, HashSet<TileKey> pending, WorkClass workClass, double resolution)
     {
-        var windowTicks = (long)(Stopwatch.Frequency * ElasticFairnessWindowSeconds);
-        var baseline = RenderingOptimizations.TileWorkerCount;
-        lock (VisibleLayerSync)
+        if (pending.Count == 0)
         {
-            var hadActiveVisibleWork = VisibleLayerStamps.Any();
-            if (hasVisibleWork)
+            return;
+        }
+
+        var scheduler = Scheduler;
+        foreach (var key in pending)
+        {
+            var priority = new WorkPriority(
+                workClass,
+                TileUrgency(key, state.PendingCenterX, state.PendingCenterY, resolution));
+            if (state.Jobs.TryGetValue(key, out var interest))
             {
-                if (VisibleLayerStamps.TryGetValue(state, out var box))
+                // A pan moves every tile's urgency a little each frame; only a
+                // class change or a move of a quarter tile re-sorts the queue.
+                if (interest.Priority.Class != workClass
+                    || Math.Abs(interest.Priority.Urgency - priority.Urgency) >= UrgencyResortPixels)
                 {
-                    box.StampTicks = nowTicks;
-                    box.ActiveWorkers = layerActiveWorkers;
+                    interest.Update(priority);
                 }
-                else
-                {
-                    VisibleLayerStamps.Add(state, new ActiveVisibleEntry(nowTicks, layerActiveWorkers));
-                }
-            }
-            else
-            {
-                VisibleLayerStamps.Remove(state);
+
+                continue;
             }
 
-            var reserved = 0;
-            var hasActiveVisibleWork = false;
-            VisibleLayerPruneScratch.Clear();
-            // A dead layer's weak key drops out of the table on its own; this pass
-            // only evicts still-live layers whose last visible paint aged out.
-            foreach (var entry in VisibleLayerStamps)
-            {
-                if (nowTicks - entry.Value.StampTicks > windowTicks)
-                {
-                    VisibleLayerPruneScratch.Add(entry.Key);
-                }
-                else
-                {
-                    hasActiveVisibleWork = true;
-                    if (!ReferenceEquals(entry.Key, state))
-                    {
-                        reserved += Math.Max(0, baseline - entry.Value.ActiveWorkers);
-                    }
-                }
-            }
-
-            foreach (var stale in VisibleLayerPruneScratch)
-            {
-                VisibleLayerStamps.Remove(stale);
-            }
-
-            activeVisibleDrained = ShouldRequestSpeculativeRetry(
-                hadActiveVisibleWork,
-                hasActiveVisibleWork);
-            return reserved;
+            var tileKey = key;
+            state.Jobs[key] = scheduler.Schedule(
+                new WorkKey(state, tileKey),
+                WorkStage.Raster,
+                priority,
+                _ => ValueTask.FromResult(RunTileJob(state, tileKey)));
         }
     }
 
     /// <summary>
-    /// Updates <paramref name="state"/>'s registry entry with its post-grant worker
-    /// count, so a sibling painting later in the same frame sees this layer's true
-    /// share and reserves only its own shortfall against it. No-op if the layer is
-    /// not currently registered as active-visible.
+    /// How far, in pixels, a queued tile's distance from the view centre must
+    /// move before its job is re-sorted: a quarter of a 256&#160;px tile.
     /// </summary>
-    private static void RecordActiveVisibleLayerWorkers(TileState state, int layerActiveWorkers, long nowTicks)
+    private const double UrgencyResortPixels = 64;
+
+    /// <summary>Releases every scheduler interest of <paramref name="state"/>. Caller holds <c>state.Sync</c>.</summary>
+    private static void ReleaseTileJobs(TileState state)
     {
-        lock (VisibleLayerSync)
+        foreach (var interest in state.Jobs.Values)
         {
-            if (VisibleLayerStamps.TryGetValue(state, out var box))
-            {
-                box.StampTicks = nowTicks;
-                box.ActiveWorkers = layerActiveWorkers;
-            }
+            interest.Dispose();
         }
+
+        state.Jobs.Clear();
     }
 
-    private static bool HasActiveVisibleWork(long nowTicks)
+    /// <summary>
+    /// A scheduler job: takes <paramref name="key"/> from whichever pending
+    /// set still holds it (with its metatile peers, when metatiles are on),
+    /// then reads it from disk or rasterises it and publishes it. A tile that
+    /// has left the pending sets since the job was queued is skipped.
+    /// </summary>
+    /// <returns>Whether the job did any work.</returns>
+    private static bool RunTileJob(TileState state, TileKey key)
     {
-        lock (VisibleLayerSync)
+        if (!DrainGate.TryRegister())
         {
-            return HasActiveVisibleWorkLocked(nowTicks);
-        }
-    }
-
-    private static bool HasActiveVisibleWorkLocked(long nowTicks)
-    {
-        var windowTicks = (long)(Stopwatch.Frequency * ElasticFairnessWindowSeconds);
-        var hasActiveVisibleWork = false;
-        VisibleLayerPruneScratch.Clear();
-        foreach (var entry in VisibleLayerStamps)
-        {
-            if (nowTicks - entry.Value.StampTicks > windowTicks)
-            {
-                VisibleLayerPruneScratch.Add(entry.Key);
-            }
-            else
-            {
-                hasActiveVisibleWork = true;
-            }
+            return false;
         }
 
-        foreach (var stale in VisibleLayerPruneScratch)
-        {
-            VisibleLayerStamps.Remove(stale);
-        }
-
-        return hasActiveVisibleWork;
-    }
-
-    private static void Worker(TileState state)
-    {
-        var slotReleased = false;
         try
         {
-            while (true)
+            TileJob job;
+            lock (state.Sync)
             {
-                if (DrainGate.IsDraining)
+                if (state.Jobs.Remove(key, out var own))
                 {
-                    return;
+                    own.Dispose();
                 }
 
-                TileJob job;
-                var speculativeAdmissionHeld = false;
-                try
+                var currentScene = state.Scene;
+                if (currentScene is null)
                 {
-                    lock (state.Sync)
-                    {
-                        var currentScene = state.Scene;
-                        var hasVisible = state.PendingVisible.Count > 0;
-                        var hasPredicted = state.PendingPredicted.Count > 0;
-                        var hasCrossBand = state.PendingCrossBand.Count > 0;
-                        var hasSpeculative = hasPredicted || hasCrossBand;
-                        var speculationDeferred = false;
-                        if (!hasVisible && hasSpeculative)
-                        {
-                            Monitor.Enter(VisibleLayerSync);
-                            speculativeAdmissionHeld = true;
-                            speculationDeferred = !ShouldAdmitSpeculativeWork(
-                                hasVisible,
-                                HasActiveVisibleWorkLocked(
-                                    Stopwatch.GetTimestamp()));
-                        }
-
-                        if (ShouldWorkerExit(
-                                sceneNull: currentScene is null,
-                                hasVisible: hasVisible,
-                                hasPredicted: hasSpeculative,
-                                layerActiveWorkers: state.ActiveWorkers,
-                                baseline: RenderingOptimizations.TileWorkerCount)
-                            || speculationDeferred)
-                        {
-                            if (speculationDeferred)
-                            {
-                                S100Diag.Telemetry.TileSpeculationDeferred.Add(
-                                    1,
-                                    new KeyValuePair<string, object?>(
-                                        "priority",
-                                        hasPredicted ? "predicted" : "cross_band"));
-                            }
-
-                            state.ActiveWorkers--;
-                            Interlocked.Decrement(ref _activeWorkerTotal);
-                            slotReleased = true;
-                            return;
-                        }
-
-                        IReadOnlyList<TileKey> keys;
-                        var priority = TileJobPriority.Visible;
-                        if (hasVisible)
-                        {
-                            keys = TakeMetatile(
-                                state.PendingVisible, state.PendingCenterX, state.PendingCenterY,
-                                MetatileEnabled);
-                        }
-                        else if (hasPredicted)
-                        {
-                            keys = TakeMetatile(
-                                state.PendingPredicted, state.PendingCenterX, state.PendingCenterY,
-                                MetatileEnabled);
-                            priority = TileJobPriority.Predicted;
-                        }
-                        else
-                        {
-                            keys = TakeMetatile(
-                                state.PendingCrossBand, state.PendingCenterX, state.PendingCenterY,
-                                MetatileEnabled);
-                            priority = TileJobPriority.CrossBand;
-                        }
-
-                        if (MetatileEnabled && keys.Count == 1)
-                        {
-                            RecordMetatileFallback("sparse");
-                        }
-
-                        foreach (var key in keys)
-                        {
-                            state.InFlight.Add(key);
-                        }
-
-                        double? queueWaitMs = null;
-                        if (priority == TileJobPriority.Visible)
-                        {
-                            foreach (var key in keys)
-                            {
-                                if (state.VisibleEnqueueTicks.TryGetValue(
-                                        key,
-                                        out var enqueuedAt))
-                                {
-                                    var keyWaitMs = Stopwatch.GetElapsedTime(
-                                        enqueuedAt).TotalMilliseconds;
-                                    queueWaitMs = Math.Max(
-                                        queueWaitMs ?? 0,
-                                        keyWaitMs);
-                                }
-                            }
-                        }
-
-                        job = new TileJob(
-                            keys,
-                            state.PendingDeviceScale,
-                            state.PendingGeneration,
-                            state.ViewportEpoch,
-                            currentScene ?? throw new InvalidOperationException(
-                                "Scene became null after ShouldWorkerExit returned false."),
-                            state.BaseIndex,
-                            priority,
-                            state.DiskNamespace is { } diskNamespace
-                                ? TileDiskCache.NamespaceFor(
-                                    diskNamespace,
-                                    TilePixelSize(state.PendingDeviceScale))
-                                : null,
-                            queueWaitMs,
-                            state.ActiveWorkers,
-                            Volatile.Read(ref _activeWorkerTotal));
-                    }
+                    return false;
                 }
-                finally
+
+                HashSet<TileKey> pending;
+                TileJobPriority priority;
+                if (state.PendingVisible.Contains(key))
                 {
-                    if (speculativeAdmissionHeld)
+                    pending = state.PendingVisible;
+                    priority = TileJobPriority.Visible;
+                }
+                else if (state.PendingPredicted.Contains(key))
+                {
+                    pending = state.PendingPredicted;
+                    priority = TileJobPriority.Predicted;
+                }
+                else if (state.PendingCrossBand.Contains(key))
+                {
+                    pending = state.PendingCrossBand;
+                    priority = TileJobPriority.CrossBand;
+                }
+                else
+                {
+                    return false;
+                }
+
+                var keys = TakeMetatile(pending, key, MetatileEnabled);
+                if (MetatileEnabled && keys.Count == 1)
+                {
+                    RecordMetatileFallback("sparse");
+                }
+
+                foreach (var taken in keys)
+                {
+                    state.InFlight.Add(taken);
+                    if (!taken.Equals(key) && state.Jobs.Remove(taken, out var peer))
                     {
-                        Monitor.Exit(VisibleLayerSync);
+                        peer.Dispose();
                     }
                 }
 
-                ProcessTileJob(state, job);
+                double? queueWaitMs = null;
+                if (priority == TileJobPriority.Visible)
+                {
+                    foreach (var taken in keys)
+                    {
+                        if (state.VisibleEnqueueTicks.TryGetValue(taken, out var enqueuedAt))
+                        {
+                            queueWaitMs = Math.Max(
+                                queueWaitMs ?? 0,
+                                Stopwatch.GetElapsedTime(enqueuedAt).TotalMilliseconds);
+                        }
+                    }
+                }
+
+                job = new TileJob(
+                    keys,
+                    state.PendingDeviceScale,
+                    state.PendingGeneration,
+                    state.ViewportEpoch,
+                    currentScene,
+                    state.BaseIndex,
+                    priority,
+                    state.DiskNamespace is { } diskNamespace
+                        ? TileDiskCache.NamespaceFor(
+                            diskNamespace,
+                            TilePixelSize(state.PendingDeviceScale))
+                        : null,
+                    queueWaitMs);
             }
+
+            ProcessTileJob(state, job);
+            return true;
         }
         catch (Exception ex)
         {
             S100Diag.Telemetry.RecordRenderFault(ex);
+            return false;
         }
         finally
         {
-            if (!slotReleased)
-            {
-                lock (state.Sync)
-                {
-                    state.ActiveWorkers--;
-                }
-
-                Interlocked.Decrement(ref _activeWorkerTotal);
-            }
-
             DrainGate.Complete();
         }
     }
@@ -3937,9 +3597,6 @@ public static partial class S100VectorTileRenderer
         activity.SetTag("s100.render.tile.viewport_epoch", job.ViewportEpoch);
         activity.SetTag("s100.render.tile.queue_wait_ms", job.QueueWaitMs);
         activity.SetTag("s100.render.tile.disk.enabled", job.DiskNamespace is not null);
-        activity.SetTag("s100.render.tile.worker.layer_active", job.LayerActiveWorkers);
-        activity.SetTag("s100.render.tile.worker.total_active", job.TotalActiveWorkers);
-        activity.SetTag("s100.render.tile.worker.total_max", MaxTotalWorkers);
         return activity;
     }
 
@@ -3997,82 +3654,45 @@ public static partial class S100VectorTileRenderer
         BaseSpatialIndex? BaseIndex,
         TileJobPriority Priority,
         string? DiskNamespace,
-        double? QueueWaitMs,
-        int LayerActiveWorkers,
-        int TotalActiveWorkers);
+        double? QueueWaitMs);
 
     /// <summary>
-    /// Removes and returns the pending tile whose world centre is nearest the
-    /// viewport centre (<paramref name="centerX"/>, <paramref name="centerY"/> in
-    /// EPSG:3857 metres), so central tiles rasterise before the perimeter within
-    /// a priority tier — cutting time-to-centre-fill on a cold pan/zoom without
-    /// disturbing the visible-before-predicted ordering (that is the caller's
-    /// two-tier drain). Ties are broken deterministically on
-    /// (<c>Band</c>, <c>Y</c>, <c>X</c>) so the drain order never depends on the
-    /// set's hash iteration order. Returns <see langword="default"/> for an empty
-    /// set. O(n) per call over a viewport-sized set (tens of tiles).
+    /// A tile job's urgency within its class: the on-screen distance, in
+    /// pixels, from the view centre (<paramref name="centerX"/>,
+    /// <paramref name="centerY"/> in EPSG:3857 metres) to the tile's centre,
+    /// so central tiles of every layer rasterise before the perimeter. Pixels
+    /// rather than metres keep layers at different bands comparable.
     /// </summary>
-    /// <param name="pending">The pending tile set to draw from; mutated in place.</param>
-    /// <param name="centerX">Viewport centre X in EPSG:3857 metres.</param>
-    /// <param name="centerY">Viewport centre Y in EPSG:3857 metres.</param>
-    /// <returns>The removed nearest-to-centre tile, or <see langword="default"/> when empty.</returns>
-    internal static TileKey TakeNearest(HashSet<TileKey> pending, double centerX, double centerY)
+    /// <param name="key">The tile.</param>
+    /// <param name="centerX">View centre X in EPSG:3857 metres.</param>
+    /// <param name="centerY">View centre Y in EPSG:3857 metres.</param>
+    /// <param name="resolution">The live resolution, metres per pixel.</param>
+    /// <returns>The urgency; lower runs first.</returns>
+    internal static double TileUrgency(TileKey key, double centerX, double centerY, double resolution)
     {
-        var found = false;
-        var best = default(TileKey);
-        var bestScore = double.PositiveInfinity;
-        foreach (var k in pending)
-        {
-            var (minX, minY, maxX, maxY) = TileGrid.TileWorldBounds(k);
-            var dx = (minX + maxX) * 0.5 - centerX;
-            var dy = (minY + maxY) * 0.5 - centerY;
-            var score = dx * dx + dy * dy;
-            if (!found)
-            {
-                found = true;
-                best = k;
-                bestScore = score;
-                continue;
-            }
-
-            // Squared distances in EPSG:3857 metres are large and involve π and
-            // division, so exact equality is unreliable for detecting a tie.
-            // Distinct tiles differ by at least ~a tile edge, which dwarfs this
-            // relative tolerance, so genuine ties (including mirror-image tiles)
-            // fall through to the deterministic (Band, Y, X) order while nearer
-            // tiles still win outright.
-            var tolerance = 1e-9 * Math.Max(Math.Abs(score), Math.Abs(bestScore));
-            var isTie = Math.Abs(score - bestScore) <= tolerance;
-            if (isTie ? TileOrderLess(k, best) : score < bestScore)
-            {
-                best = k;
-                bestScore = score;
-            }
-        }
-
-        if (found)
-        {
-            pending.Remove(best);
-        }
-
-        return best;
+        var (minX, minY, maxX, maxY) = TileGrid.TileWorldBounds(key);
+        var dx = (minX + maxX) * 0.5 - centerX;
+        var dy = (minY + maxY) * 0.5 - centerY;
+        return Math.Sqrt(dx * dx + dy * dy) / (resolution > 0 ? resolution : 1);
     }
 
     /// <summary>
-    /// Removes the nearest pending tile and, when enabled, claims the other
-    /// pending tiles in its stable 2&#215;2 grid-aligned metatile. The seed is
-    /// always first, preserving center-priority latency; peers remain confined
-    /// to the caller's priority tier.
+    /// Removes <paramref name="seed"/> from <paramref name="pending"/> and,
+    /// when enabled, claims the other pending tiles in its stable 2&#215;2
+    /// grid-aligned metatile. The seed is always first; peers come only from
+    /// the same pending set, so they keep the seed's class.
     /// </summary>
-    internal static IReadOnlyList<TileKey> TakeMetatile(
-        HashSet<TileKey> pending, double centerX, double centerY, bool enabled)
+    /// <param name="pending">The pending set holding the seed; mutated in place.</param>
+    /// <param name="seed">The tile the scheduler picked.</param>
+    /// <param name="enabled">Whether metatiles are on.</param>
+    /// <returns>The seed, then any peers.</returns>
+    internal static IReadOnlyList<TileKey> TakeMetatile(HashSet<TileKey> pending, TileKey seed, bool enabled)
     {
-        if (pending.Count == 0)
+        if (!pending.Remove(seed))
         {
             return [];
         }
 
-        var seed = TakeNearest(pending, centerX, centerY);
         var result = new List<TileKey>(4) { seed };
         if (!enabled)
         {
@@ -4094,26 +3714,6 @@ public static partial class S100VectorTileRenderer
         }
 
         return result;
-    }
-
-    /// <summary>
-    /// Deterministic total order on tiles by (<c>Band</c>, <c>Y</c>, <c>X</c>),
-    /// used only to break equal centre-distance ties in <see cref="TakeNearest"/>
-    /// so the drain order is stable across runs.
-    /// </summary>
-    private static bool TileOrderLess(TileKey a, TileKey b)
-    {
-        if (a.Band != b.Band)
-        {
-            return a.Band < b.Band;
-        }
-
-        if (a.Y != b.Y)
-        {
-            return a.Y < b.Y;
-        }
-
-        return a.X < b.X;
     }
 
     /// <summary>
@@ -4933,7 +4533,11 @@ public static partial class S100VectorTileRenderer
         public long LastCenterTimestamp;
         public bool HasLastCenter;
 
-        public int ActiveWorkers;
+        // The layer's interests in scheduler jobs, one per pending tile (see
+        // SyncTileJobs). Under Sync.
+        public readonly Dictionary<TileKey, WorkInterest<bool>> Jobs = new();
+        public readonly List<TileKey> JobPruneScratch = new();
+
         public float PendingDeviceScale = 1f;
         public long PendingGeneration;
 
