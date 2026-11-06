@@ -67,7 +67,7 @@ internal sealed class LayerTimeCoordinator
                 // The Library knows the run of a tile it loaded (#720); resolved
                 // only once a layer needs it, so startup stays as it was.
                 var run = ForecastRunNames.RunOf(dataset, _library?.Invoke()?.Entries);
-                var layerTime = LayerTimes.Describe(dataset, at, _progress.IsDatasetDrawing(entry.Id.Value), format, zone, run, all);
+                var layerTime = LayerTimes.Describe(dataset, at, _progress.IsDatasetDrawing(entry.Id.Value), format, zone, run, all, _clock.GetUtcNow().UtcDateTime);
                 entry.SetLayerTime(layerTime, _time.SetCurrentTime);
             }
             else

@@ -47,6 +47,15 @@ public sealed record WeatherServiceSummary(DateTimeOffset? LatestRun, int Items,
 /// domain (V36) and are stale after the service's <see cref="WeatherService.StaleAfterHours"/>.
 /// </description></item>
 /// <item><description>
+/// <b>NHC storms</b>: <c>CurrentStorms.json</c> is read whole
+/// (<see cref="NhcActiveStorms"/>), one item per active storm, keyed and named
+/// by its ATCF id. The item's run is its latest advisory's issue time, and it
+/// downloads that advisory's GIS zips as separate files in one folder
+/// (<see cref="RemotePart.FileName"/>), so the next advisory replaces it in
+/// place. Items have no area: a storm's extent is only known once its files
+/// are read. A storm NHC stops listing (its final advisory issued) drops out.
+/// </description></item>
+/// <item><description>
 /// <b>ERDDAP</b>: each dataset's <c>info</c> gives its axes and time coverage;
 /// the item downloads a NetCDF subset from now to the last chosen hour (or
 /// the dataset's last hours, when it has ended).
@@ -158,13 +167,18 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
                     }
 
                     break;
+                case WeatherServiceKind.NhcStorms:
+                    items.AddRange(await StormItemsAsync(feed, cancellationToken).ConfigureAwait(false));
+                    break;
             }
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException
             && !cancellationToken.IsCancellationRequested)
         {
             diagnostics.Add(new IndexDiagnostic(IndexDiagnosticSeverity.Error, ex.Message, feed.ServiceUri.AbsoluteUri));
-            if (DownloadedItem(feed, NameOf(feed)) is { } offline)
+            if (feed.Service.Kind == WeatherServiceKind.NhcStorms)
+                items.AddRange(DownloadedStorms(feed));
+            else if (DownloadedItem(feed, NameOf(feed)) is { } offline)
                 items.Add(offline);
         }
 
@@ -201,6 +215,12 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
                 }
 
                 return new WeatherServiceSummary(latest, chosen.Count);
+            case WeatherServiceKind.NhcStorms:
+                var storms = await ReadStormsAsync(feed, cancellationToken).ConfigureAwait(false);
+                return new WeatherServiceSummary(
+                    storms.Count == 0 ? null : storms.Max(s => s.Issued),
+                    storms.Count,
+                    storms.Count == 0 ? null : string.Join("; ", storms.Select(StormTitle)));
             default:
                 var titles = new List<string>();
                 foreach (var dataset in feed.Selection.DatasetsOf(feed.Service))
@@ -446,6 +466,133 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
         };
     }
 
+    /// <summary>The item property holding an NHC storm's latest advisory number, as people read it: <c>17</c> or <c>17A</c>.</summary>
+    public const string AdvisoryProperty = "advisory";
+
+    /// <summary>The item property holding an NHC storm's name ("Zelda").</summary>
+    public const string StormNameProperty = "stormName";
+
+    /// <summary>The item property holding an NHC storm's class code (<c>HU</c>, <c>TS</c>, <c>TD</c>, <c>PTC</c> …).</summary>
+    public const string StormClassProperty = "stormClass";
+
+    /// <summary>The item property holding an NHC storm's maximum sustained wind in knots.</summary>
+    public const string IntensityProperty = "intensityKnots";
+
+    /// <summary>The item property holding an NHC storm's latitude in degrees, which picks its hemisphere's symbol.</summary>
+    public const string LatitudeProperty = "latitude";
+
+    /// <summary>The item property holding an NHC storm's basin: "Atlantic", "East Pacific" or "Central Pacific".</summary>
+    public const string BasinProperty = "basin";
+
+    /// <summary>
+    /// How long NHC's five-day forecast runs from the advisory's synoptic
+    /// time: 120 hours. An item's valid window ends then.
+    /// </summary>
+    public static TimeSpan StormForecastPeriod { get; } = TimeSpan.FromHours(120);
+
+    /// <summary>
+    /// The storm list's items (V27): one per active storm, named by its ATCF
+    /// id (<c>al142026</c>), the download folder its advisories replace each
+    /// other in. Its run is the advisory's issue time, so a newer advisory
+    /// makes the downloaded one outdated; it is valid to the end of the
+    /// five-day forecast, counted from the advisory's synoptic time (the
+    /// six-hourly hour at least three hours before it is issued).
+    /// </summary>
+    private async Task<IReadOnlyList<CollectionItem>> StormItemsAsync(WeatherFeedSource feed, CancellationToken cancellationToken)
+    {
+        var storms = await ReadStormsAsync(feed, cancellationToken).ConfigureAwait(false);
+        return [.. storms.Select(storm => StormItem(feed, storm))];
+    }
+
+    private async Task<IReadOnlyList<NhcActiveStorm>> ReadStormsAsync(WeatherFeedSource feed, CancellationToken cancellationToken)
+    {
+        var uri = feed.Service.StormListUri ?? throw new InvalidDataException("The NHC source has no storm list address.");
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        Identify(request);
+        using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return NhcActiveStorms.Parse(text, uri);
+    }
+
+    private static CollectionItem StormItem(WeatherFeedSource feed, NhcActiveStorm storm)
+    {
+        var synoptic = SynopticTimeOf(storm.Issued);
+        var properties = Stamp(feed, storm.Issued, synoptic + StormForecastPeriod);
+        properties[AdvisoryProperty] = storm.AdvisoryNumber;
+        properties[StormNameProperty] = storm.Name;
+        properties[StormClassProperty] = storm.Classification;
+        if (storm.IntensityKnots is { } wind)
+            properties[IntensityProperty] = wind.ToString(CultureInfo.InvariantCulture);
+        if (storm.Latitude is { } latitude)
+            properties[LatitudeProperty] = latitude.ToString("0.0", CultureInfo.InvariantCulture);
+        if (storm.Basin is { } basin)
+            properties[BasinProperty] = basin;
+
+        var files = storm.Files;
+        return new CollectionItem
+        {
+            Key = storm.AtcfId,
+            ProductSpec = SpecOf(WeatherServiceKind.NhcStorms),
+            Name = storm.AtcfId,
+            Title = StormTitle(storm),
+            IssueDate = DateOnly.FromDateTime(storm.Issued.UtcDateTime),
+            Location = new RemoteItemLocation(storm.ForecastZip, null, storm.Issued, DownloadFolderFor(feed),
+                Layout: new PackageLayout(files[0].FileName, []))
+            {
+                Parts = [.. files.Select(f => new RemotePart(f.Uri, null, f.FileName))],
+            },
+            Properties = properties,
+        };
+    }
+
+    /// <summary>"Zelda (AL142026), advisory 17": an NHC storm item's title.</summary>
+    private static string StormTitle(NhcActiveStorm storm) => string.Format(
+        CultureInfo.CurrentCulture, Library.LibraryText.Get("Weather_StormTitleFormat"), storm.Name, storm.AtcfId.ToUpperInvariant(), storm.AdvisoryNumber);
+
+    /// <summary>
+    /// The synoptic time of an NHC advisory issued at <paramref name="issued"/>:
+    /// the six-hourly hour (00, 06, 12, 18 UTC) at least three hours before,
+    /// which an intermediate advisory three hours later shares.
+    /// </summary>
+    internal static DateTimeOffset SynopticTimeOf(DateTimeOffset issued)
+    {
+        var utc = issued.ToUniversalTime().AddHours(-3);
+        return new DateTimeOffset(utc.Year, utc.Month, utc.Day, utc.Hour / 6 * 6, 0, 0, TimeSpan.Zero);
+    }
+
+    /// <summary>
+    /// The storms downloaded from the source, listed while NHC can't be reached:
+    /// each downloaded storm folder as a local item at its advisory.
+    /// </summary>
+    private IEnumerable<CollectionItem> DownloadedStorms(WeatherFeedSource feed)
+    {
+        if (Downloader(feed) is not { } downloader)
+            yield break;
+        foreach (var name in downloader.ListDownloaded())
+        {
+            if (WeatherRuns.RunOfPinnedName(name, out _) is not null || downloader.TryGetDownloaded(name) is not { } copy)
+                continue;
+            var properties = Stamp(feed, copy.PublishedAt, null);
+            if (copy.PublishedAt is null)
+            {
+                properties.Remove(S100ForecastFeedIndexer.RunProperty);
+                properties.Remove(WeatherRuns.StaleAfterProperty);
+            }
+
+            yield return new CollectionItem
+            {
+                Key = name,
+                ProductSpec = SpecOf(WeatherServiceKind.NhcStorms),
+                Name = name,
+                Title = name.ToUpperInvariant(),
+                IssueDate = copy.PublishedAt is { } published ? DateOnly.FromDateTime(published.UtcDateTime) : null,
+                Location = copy.Location,
+                Properties = properties,
+            };
+        }
+    }
+
     /// <summary>An ERDDAP dataset's metadata, from <c>info/&lt;id&gt;/index.json</c>.</summary>
     internal sealed record ErddapInfo(
         IReadOnlyList<ErddapAxis> Axes, DateTimeOffset? Start, DateTimeOffset? End, DateTimeOffset? Issued, string? Title);
@@ -576,7 +723,9 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
                 Title = string.Create(CultureInfo.InvariantCulture,
                     $"{feed.Service.ModelName ?? feed.Service.Model} {WeatherRequests.FormatRun(run)}"),
                 IssueDate = DateOnly.FromDateTime(run.UtcDateTime),
-                Bounds = AreaOf(feed, feed.Service.Kind == WeatherServiceKind.GribIndex ? null : RequestArea(feed)),
+                Bounds = feed.Service.Kind == WeatherServiceKind.NhcStorms
+                    ? null
+                    : AreaOf(feed, feed.Service.Kind == WeatherServiceKind.GribIndex ? null : RequestArea(feed)),
                 Location = copy.Location,
                 Properties = properties,
             };
@@ -645,6 +794,7 @@ public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
     {
         WeatherServiceKind.NwsAlerts => "CAP",
         WeatherServiceKind.WpcBulletins => "CODSUS",
+        WeatherServiceKind.NhcStorms => "TC",
         WeatherServiceKind.ErddapGriddap => "NetCDF",
         _ => "GRIB2",
     };

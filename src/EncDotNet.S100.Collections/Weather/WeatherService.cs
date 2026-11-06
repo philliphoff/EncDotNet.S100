@@ -33,6 +33,16 @@ public enum WeatherServiceKind
     /// data root, whole-domain, re-read on every index.
     /// </summary>
     WpcBulletins,
+
+    /// <summary>
+    /// NHC's active tropical cyclones (design note <c>vector-weather.md</c>
+    /// §6.4, §8.1): the storm list <c>CurrentStorms.json</c>, the service's
+    /// <see cref="WeatherService.File"/> below its data root, is read on every
+    /// index, one item per storm; an item downloads its latest advisory's GIS
+    /// zips (forecast, wind radii and best track). A new advisory replaces the
+    /// downloaded one as a newer model run does.
+    /// </summary>
+    NhcStorms,
 }
 
 /// <summary>A parameter a GRIB2 service offers: its NCEP short name and level as the <c>.idx</c> files spell them.</summary>
@@ -71,7 +81,8 @@ public sealed record WeatherServiceDataset(string Id, string Name, IReadOnlyList
 /// by asking for the <c>.idx</c> of their last chosen hour there.
 /// </param>
 /// <param name="File">
-/// For a GRIB2 service, the path of one forecast hour's file below
+/// For NHC, the storm list's path below <paramref name="DataRoot"/>
+/// (<c>CurrentStorms.json</c>). For a GRIB2 service, the path of one forecast hour's file below
 /// <paramref name="DataRoot"/>, with <c>{date}</c> (<c>yyyyMMdd</c>),
 /// <c>{cycle}</c> (<c>HH</c>) and <c>{hour}</c> (three digits) in it, e.g.
 /// <c>gfs.{date}/{cycle}/wave/gridded/gfswave.t{cycle}z.global.0p25.f{hour}.grib2</c>.
@@ -86,12 +97,13 @@ public sealed record WeatherServiceDataset(string Id, string Name, IReadOnlyList
 /// <param name="StaleAfterHours">
 /// How old an item's run may be before it is stale, in hours, or 0 for
 /// <see cref="WeatherRuns.StaleAfter"/> (12 hours). WPC's analyses are stale
-/// after 6 (V28).
+/// after 6, NHC's storms 7 hours after their advisory (V28).
 /// </param>
 /// <param name="RefreshHours">
 /// How often a host re-reads the source while its latest item is loaded, and
 /// loads a newer one in its place, in hours; 0 (the default) for only when
-/// asked. WPC's is 3, its analysis cadence.
+/// asked. WPC's is 3, its analysis cadence. For NHC, a newer advisory of a
+/// loaded storm is announced rather than loaded (decision Q4).
 /// </param>
 public sealed record WeatherService(
     WeatherServiceKind Kind,
@@ -133,6 +145,13 @@ public sealed record WeatherService(
         return new Uri(root, dataset.File.TrimStart('/'));
     }
 
+    /// <summary>The address of an NHC storm list: <see cref="DataRoot"/> joined with <see cref="File"/> (<c>CurrentStorms.json</c>).</summary>
+    [JsonIgnore]
+    public Uri? StormListUri =>
+        Kind == WeatherServiceKind.NhcStorms && DataRoot is { IsAbsoluteUri: true } root && !string.IsNullOrWhiteSpace(File)
+            ? new Uri(root, File.TrimStart('/'))
+            : null;
+
     /// <summary>The forecast hours offered: 0, <see cref="StepHours"/>, … up to <see cref="MaxHours"/>.</summary>
     [JsonIgnore]
     public IReadOnlyList<int> OfferedHours =>
@@ -149,6 +168,7 @@ public sealed record WeatherService(
         WeatherServiceKind.NwsAlerts => true,
         WeatherServiceKind.WpcBulletins => DataRoot is { IsAbsoluteUri: true } && Datasets.Count > 0
             && Datasets.All(d => !string.IsNullOrWhiteSpace(d.File)),
+        WeatherServiceKind.NhcStorms => StormListUri is not null,
         _ => false,
     };
 }

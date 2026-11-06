@@ -1,4 +1,5 @@
 using System.Globalization;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.TropicalCyclones;
 using EncDotNet.S100.Pipelines;
@@ -72,13 +73,41 @@ public static class TropicalCycloneStyle
     public const string Name = "WeatherTropicalCyclone";
 
     /// <summary>The style's version: bump it whenever its symbols, palette or rules change.</summary>
-    public const int Version = 1;
+    public const int Version = 2;
 
     /// <summary>The key of the lines, symbols and labels sub-layer, <c>"weather.tc.track"</c>.</summary>
     public const string TrackLayerKey = "weather.tc.track";
 
     /// <summary>The key of the fills sub-layer, <c>"weather.tc.areas"</c>.</summary>
     public const string AreasLayerKey = "weather.tc.areas";
+
+    /// <summary>
+    /// The map-wide switch of the 34, 50 and 64 kt wind radii,
+    /// <c>"weather.tc.radii"</c> (V26): a key of
+    /// <see cref="EcdisDisplaySettings.LayerVisibility"/>, on by default.
+    /// </summary>
+    public const string WindRadiiKey = "weather.tc.radii";
+
+    /// <summary>
+    /// The map-wide switch of the past track, its line and best-track points,
+    /// <c>"weather.tc.pastTrack"</c> (V26), on by default.
+    /// </summary>
+    public const string PastTrackKey = "weather.tc.pastTrack";
+
+    /// <summary>
+    /// The map-wide switch of the time and intensity labels beside forecast
+    /// points, <c>"weather.tc.forecastTimes"</c> (V26), on by default.
+    /// </summary>
+    public const string ForecastTimesKey = "weather.tc.forecastTimes";
+
+    /// <summary>The display switches of tropical cyclones, in the order the Weather section lists them (V26). Each is on by default.</summary>
+    public static IReadOnlyList<string> SwitchKeys { get; } = [WindRadiiKey, PastTrackKey, ForecastTimesKey];
+
+    /// <summary>Whether the switch <paramref name="key"/> (one of <see cref="SwitchKeys"/>) is on in <paramref name="display"/>; on when unset.</summary>
+    /// <param name="display">The display settings, or <see langword="null"/> for the defaults.</param>
+    /// <param name="key">The switch.</param>
+    public static bool IsShown(EcdisDisplaySettings? display, string key) =>
+        display?.IsLayerVisible(key, defaultVisible: true) ?? true;
 
     /// <summary>The track sub-layer's order on the Other chart overlays plane: 95, above the isobars and fronts.</summary>
     public const int TrackPriority = 95;
@@ -291,6 +320,31 @@ public static class TropicalCycloneStyle
         if (Motion(point) is { } motion)
             text += " · " + motion;
         return text;
+    }
+
+    /// <summary>
+    /// The second line of a stale storm's label (V29, §7):
+    /// <c>Adv 17 · 9 h old · newer advisory likely</c>. The storm itself isn't faded.
+    /// </summary>
+    /// <param name="advisory">The advisory.</param>
+    /// <param name="age">How old the advisory is.</param>
+    public static string StaleAdvisoryLabel(TropicalCycloneAdvisory advisory, TimeSpan age)
+    {
+        ArgumentNullException.ThrowIfNull(advisory);
+        return string.Create(CultureInfo.InvariantCulture, $"Adv {advisory.Advisory} · {Math.Round(age.TotalHours):0} h old · newer advisory likely");
+    }
+
+    /// <summary>
+    /// The second line of a final advisory's storm label (§7):
+    /// <c>Final advisory issued Wed 9:00 AM</c>.
+    /// </summary>
+    /// <param name="advisory">The advisory.</param>
+    /// <param name="zone">The zone the time is written in.</param>
+    /// <param name="culture">The culture the time is written in.</param>
+    public static string FinalAdvisoryLabel(TropicalCycloneAdvisory advisory, TimeZoneInfo zone, CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(advisory);
+        return $"Final advisory issued {ShortTime(advisory.IssueTime.UtcDateTime, zone, culture)}";
     }
 
     /// <summary>

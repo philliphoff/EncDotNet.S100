@@ -281,6 +281,31 @@
       }
     },
     {
+      "id": "noaa-nhc-storms",
+      "name": "Tropical cyclones — NHC",
+      "provider": "NOAA/NWS National Hurricane Center",
+      "region": ["North America", "United States", "Atlantic", "Pacific"],
+      "format": "weather",
+      "catalogUri": "https://www.nhc.noaa.gov/CurrentStorms.json",
+      "homepage": "https://www.nhc.noaa.gov/gis/",
+      "editions": false,
+      "sizes": false,
+      "note": "The storms NHC is issuing advisories for in the Atlantic, East and Central Pacific, one item each, from its active-storm list. An item downloads the latest advisory's GIS files: the cone, the forecast track and points, the wind radii and the best track. A new advisory, usually every 6 hours, replaces the download; a storm is stale 7 hours after its advisory, and a new advisory for a loaded storm is announced. The list is empty between storms.",
+      "product": "TC",
+      "notForNavigation": true,
+      "licence": "Public domain",
+      "attribution": "NOAA/NWS National Hurricane Center",
+      "weather": {
+        "service": "nhcStorms",
+        "model": "nhc-storms",
+        "modelName": "Tropical cyclones · NHC",
+        "dataRoot": "https://www.nhc.noaa.gov/",
+        "file": "CurrentStorms.json",
+        "staleAfterHours": 7,
+        "refreshHours": 1
+      }
+    },
+    {
       "id": "noaa-wpc-surface",
       "name": "Surface analysis — WPC",
       "provider": "NOAA/NWS Weather Prediction Center",

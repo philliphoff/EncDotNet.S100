@@ -397,7 +397,7 @@ internal sealed partial class TimelineViewModel
             lane.IsExpired = (IsForecastDataset(dataset) || LayerTimes.IsTropicalCyclone(dataset)) && now > dataset.Last;
 
             var time = view is { } at
-                ? LayerTimes.Describe(dataset, at, dataset.DatasetId is { } id && _progress?.IsDatasetDrawing(id) == true, format, zone, run, _service.TimedDatasets)
+                ? LayerTimes.Describe(dataset, at, dataset.DatasetId is { } id && _progress?.IsDatasetDrawing(id) == true, format, zone, run, _service.TimedDatasets, now)
                 : null;
             lane.LayerTime = time?.Text ?? string.Empty;
             lane.IsHidden = time?.IsWarning == true;

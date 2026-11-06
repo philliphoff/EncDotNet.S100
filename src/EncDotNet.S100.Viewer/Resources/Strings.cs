@@ -869,6 +869,12 @@ internal static partial class Strings
     public static string Tooltip_EcdisPanel_Weather_Currents => Get(nameof(Tooltip_EcdisPanel_Weather_Currents));
     public static string EcdisPanel_Weather_AirTemperature => Get(nameof(EcdisPanel_Weather_AirTemperature));
     public static string Tooltip_EcdisPanel_Weather_AirTemperature => Get(nameof(Tooltip_EcdisPanel_Weather_AirTemperature));
+    public static string EcdisPanel_Weather_WindRadii => Get(nameof(EcdisPanel_Weather_WindRadii));
+    public static string Tooltip_EcdisPanel_Weather_WindRadii => Get(nameof(Tooltip_EcdisPanel_Weather_WindRadii));
+    public static string EcdisPanel_Weather_PastTrack => Get(nameof(EcdisPanel_Weather_PastTrack));
+    public static string Tooltip_EcdisPanel_Weather_PastTrack => Get(nameof(Tooltip_EcdisPanel_Weather_PastTrack));
+    public static string EcdisPanel_Weather_ForecastTimes => Get(nameof(EcdisPanel_Weather_ForecastTimes));
+    public static string Tooltip_EcdisPanel_Weather_ForecastTimes => Get(nameof(Tooltip_EcdisPanel_Weather_ForecastTimes));
 
     // Text group toolbar pill
     public static string Toolbar_Text => Get(nameof(Toolbar_Text));

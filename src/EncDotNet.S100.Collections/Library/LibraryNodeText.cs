@@ -86,7 +86,7 @@ public static partial class LibraryNodeText
     /// <c>WEB</c> (an online catalogue), <c>AWS</c> (a catalogue on AWS Open
     /// Data), <c>LIST</c> (a community list), <c>FEED</c> (a shared feed, or
     /// a weather service that publishes bulletins rather than model runs, such
-    /// as WPC's surface analysis),
+    /// as WPC's surface analysis or NHC's active storms),
     /// <c>SECOM</c>, <c>JSON</c> (a collection manifest) or <c>S-128</c>.
     /// </summary>
     /// <param name="source">The source.</param>
@@ -100,7 +100,7 @@ public static partial class LibraryNodeText
         S100ForecastFeedSource { ModelsUri.Host: var forecastHost }
             when forecastHost.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase) => "AWS",
         S100ForecastFeedSource => "WEB",
-        WeatherFeedSource { Service.Kind: Weather.WeatherServiceKind.WpcBulletins } => "FEED",
+        WeatherFeedSource { Service.Kind: Weather.WeatherServiceKind.WpcBulletins or Weather.WeatherServiceKind.NhcStorms } => "FEED",
         WeatherFeedSource { ServiceUri.Host: var weatherHost }
             when weatherHost.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase) => "AWS",
         WeatherFeedSource => "WEB",
@@ -334,6 +334,15 @@ public static partial class LibraryNodeText
             return SyncStatus(attention, c);
         if (sources is [{ Definition: S100ForecastFeedSource forecast, Index: { } runs }] && problems == 0)
             return ForecastStatus(runs, input.Health?.Invoke(forecast), input.ForecastCounts, c, input.TimeFormat);
+        // NHC's storms say how many are active (V27), not the latest advisory.
+        if (sources is [{ Definition: WeatherFeedSource { Service.Kind: Weather.WeatherServiceKind.NhcStorms }, Index: { } storms }] && problems == 0)
+        {
+            var active = storms.Items.Count(i => !Weather.WeatherRuns.IsPinned(i));
+            return (active == 0
+                ? LibraryText.Get("Weather_NoActiveStorms")
+                : string.Format(c, LibraryText.Get("Weather_ActiveStormsFormat"), active), LibraryNodeStatusKind.Info);
+        }
+
         if (sources is [{ Definition: WeatherFeedSource, Index.PublishedAt: { } latestRun }] && problems == 0)
             return (string.Format(c, LibraryText.Get("Weather_LatestRunFormat"), Weather.WeatherRequests.FormatRun(latestRun)), LibraryNodeStatusKind.Info);
         if (sources is [{ Definition: S100CatalogueFeedSource catalogue, Index: { } catalogueIndex }] && problems == 0)

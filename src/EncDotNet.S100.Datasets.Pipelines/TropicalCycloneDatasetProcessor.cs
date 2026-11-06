@@ -109,6 +109,10 @@ public sealed class TropicalCycloneDatasetProcessor :
     // storm and its radii at the time.
     private Drawn _drawn;
 
+    // How old the advisory was at the last portrayal, once stale (V28), for the
+    // pick card's stale line; null while current.
+    private TimeSpan? _staleAge;
+
     /// <summary>Reads the advisory at <paramref name="path"/>: a forecast zip or a folder of one storm's zips.</summary>
     /// <param name="path">The forecast zip or folder.</param>
     /// <exception cref="NhcFormatException">The path isn't a readable NHC advisory.</exception>
@@ -146,7 +150,8 @@ public sealed class TropicalCycloneDatasetProcessor :
         _timeSemantics = new TimeSemantics(
             TimeStepKind.Forecast,
             TimeStepSelection.Continuous,
-            lead > TimeSpan.Zero ? lead : null);
+            lead > TimeSpan.Zero ? lead : null,
+            StaleAfterIssue: advisory.IsFinal ? null : AdvisoryStaleAfter);
         _drawn = Draw(timeStep: null);
     }
 
@@ -185,6 +190,26 @@ public sealed class TropicalCycloneDatasetProcessor :
             HorizontalCrsEpsg = 4326,
             TimeCoverage = new TimeCoverage(advisory.TrackStart, advisory.ForecastEnd),
         };
+    }
+
+    /// <summary>
+    /// How long after it's issued an advisory is stale (V28): 7 hours, NHC's
+    /// 6-hour cycle and an hour's grace, when a newer one is likely. The
+    /// <see cref="TimeSemantics.StaleAfterIssue"/> of every advisory but a final one.
+    /// </summary>
+    public static TimeSpan AdvisoryStaleAfter { get; } = TimeSpan.FromHours(7);
+
+    /// <summary>
+    /// The pick card's stale line (V28, §7): "Advisory 17 is 9 h old. NHC has
+    /// probably issued a newer one." Time-free, so it reads the same in Local and UTC.
+    /// </summary>
+    /// <param name="advisory">The advisory.</param>
+    /// <param name="age">How old it is.</param>
+    public static string StaleText(TropicalCycloneAdvisory advisory, TimeSpan age)
+    {
+        ArgumentNullException.ThrowIfNull(advisory);
+        return string.Create(CultureInfo.InvariantCulture,
+            $"Advisory {advisory.Advisory} is {Math.Round(age.TotalHours):0} h old. NHC has probably issued a newer one.");
     }
 
     /// <summary>How often NHC issues a regular advisory: every 6 hours (03, 09, 15 and 21 UTC).</summary>
@@ -238,7 +263,8 @@ public sealed class TropicalCycloneDatasetProcessor :
         var palette = context?.Palette ?? PaletteType.Day;
         var zone = context?.DisplayTimeZone ?? TimeZoneInfo.Utc;
         var drawn = Select(context?.TimeStep);
-        var (areas, track) = BuildInstructions(drawn, palette, zone, CultureInfo.CurrentCulture);
+        _staleAge = Advisory.IsFinal ? null : context?.TimeStepAge;
+        var (areas, track) = BuildInstructions(drawn, palette, zone, CultureInfo.CurrentCulture, context?.EcdisDisplay, _staleAge);
         VectorSubLayer[] subLayers =
         [
             new VectorSubLayer
@@ -324,7 +350,9 @@ public sealed class TropicalCycloneDatasetProcessor :
             return Task.FromResult(HeadlessVectorRenderer.RenderBlank(widthPixels, heightPixels, bg));
 
         var palette = context?.Palette ?? PaletteType.Day;
-        var (areas, track) = BuildInstructions(drawn, palette, context?.DisplayTimeZone ?? TimeZoneInfo.Utc, CultureInfo.CurrentCulture);
+        var (areas, track) = BuildInstructions(
+            drawn, palette, context?.DisplayTimeZone ?? TimeZoneInfo.Utc, CultureInfo.CurrentCulture, context?.EcdisDisplay,
+            Advisory.IsFinal ? null : context?.TimeStepAge);
         return Task.FromResult(HeadlessVectorRenderer.Render(
             [.. areas, .. track],
             new FeatureGeometryProvider<TropicalCyclonePart>(drawn.Parts),
@@ -359,8 +387,10 @@ public sealed class TropicalCycloneDatasetProcessor :
 
     /// <inheritdoc />
     /// <remarks>
-    /// The attributes (V23), in order: the notice; the storm's name; the
-    /// advisory, its issue time and the next advisory due; at a time step,
+    /// The attributes (V23), in order: the notice; once the advisory is stale,
+    /// its age (<see cref="PickAttribute.StaleNotice"/>); the storm's name; the
+    /// advisory, its issue time and the next advisory due (for a final
+    /// advisory, when it was issued); at a time step,
     /// the view time and what the storm there is (V13), or why there's none;
     /// the position, max wind, pressure and movement of the storm drawn; the
     /// part picked; the 64, 50 and 34 kn radii by quadrant; and NHC's caution
@@ -373,12 +403,15 @@ public sealed class TropicalCycloneDatasetProcessor :
         if (ordinal < 0 || ordinal >= drawn.Parts.Length)
             return null;
         var part = drawn.Parts[ordinal];
+        var attributes = Describe(Advisory, part, drawn.TimeStep, drawn.Storm);
+        if (_staleAge is { } age)
+            attributes.Insert(1, PickAttribute.StaleNotice(StaleText(Advisory, age)));
         return new FeatureInfo
         {
             FeatureRef = StormId,
             FeatureType = FeatureType,
             FeatureTypeName = StormClassName(Advisory, drawn.Storm),
-            Attributes = Describe(Advisory, part, drawn.TimeStep, drawn.Storm),
+            Attributes = attributes,
             DrawingPriority = part.DrawingPriority,
             Geometry = part.GeometryType,
         };
@@ -537,6 +570,9 @@ public sealed class TropicalCycloneDatasetProcessor :
                 var folder = relativePath[..^fileName.Length];
                 radii = TryOpen(source, folder + NhcAdvisoryFiles.WindRadiiZipName(atcfId, advisory));
                 bestTrack = TryOpen(source, folder + NhcAdvisoryFiles.BestTrackZipName(atcfId));
+                using var final = TryOpen(source, folder + NhcAdvisoryFiles.FinalMarkerName(atcfId));
+                if (final is not null)
+                    return NhcAdvisoryReader.Read(forecast, radii, bestTrack) with { IsFinal = true };
             }
 
             return NhcAdvisoryReader.Read(forecast, radii, bestTrack);
@@ -566,8 +602,12 @@ public sealed class TropicalCycloneDatasetProcessor :
     }
 
     // The storm at a time step, or at the advisory's first forecast point without one.
+    // A final advisory has no forecast (§7): from its synoptic time on, the
+    // storm stays where the advisory last put it.
     private static TropicalCycloneStormAt? StormOf(TropicalCycloneAdvisory advisory, DateTime? timeStep) =>
-        timeStep is { } t ? advisory.StormAt(t) : advisory.StormAt(advisory.SynopticTime);
+        timeStep is { } t && !(advisory.IsFinal && t >= advisory.SynopticTime)
+            ? advisory.StormAt(t)
+            : advisory.StormAt(advisory.SynopticTime);
 
     // What a portrayal at the time step draws; the last is kept for picks.
     private Drawn Select(DateTime? timeStep)
@@ -608,8 +648,8 @@ public sealed class TropicalCycloneDatasetProcessor :
         parts.Add(TropicalCyclonePart.Point(id, TropicalCyclonePartKind.Storm, description, point.Position, 16, 0) with { Forecast = point, Storm = storm });
 
         // The radii at the time (V12): NHC's polygons on a forecast point,
-        // else built from the quadrants.
-        foreach (var radius in point.Radii.Where(r => !r.IsEmpty).OrderByDescending(r => r.ThresholdKnots))
+        // else built from the quadrants. A final advisory has none (§7).
+        foreach (var radius in point.Radii.Where(r => !r.IsEmpty && !advisory.IsFinal).OrderByDescending(r => r.ThresholdKnots))
         {
             var surfaces = radius.Surfaces.Count > 0 ? radius.Surfaces : radius.QuadrantSurface(point.Position, 16);
             if (surfaces.Count == 0)
@@ -633,7 +673,10 @@ public sealed class TropicalCycloneDatasetProcessor :
         var parts = new List<TropicalCyclonePart>();
         var current = advisory.Current;
 
-        foreach (var (point, i) in advisory.Forecast.Select((p, i) => (p, i)).Where(x => x.p.Tau > 0))
+        // A final advisory draws the storm and its past track only (§7): no
+        // forecast, cone or radii.
+        var forecast = advisory.IsFinal ? [] : advisory.Forecast;
+        foreach (var (point, i) in forecast.Select((p, i) => (p, i)).Where(x => x.p.Tau > 0))
         {
             var wind = point.MaxWindKnots is { } kt ? string.Create(CultureInfo.InvariantCulture, $", {kt} kn") : string.Empty;
             parts.Add(TropicalCyclonePart.Point(
@@ -643,7 +686,7 @@ public sealed class TropicalCycloneDatasetProcessor :
                 point.Position,
                 15,
                 0) with
-            { Forecast = point, IsLastForecast = i == advisory.Forecast.Count - 1 });
+            { Forecast = point, IsLastForecast = i == forecast.Count - 1 });
         }
 
         var past = advisory.PastTrack.Where(p => p.Time < advisory.SynopticTime).ToArray();
@@ -659,7 +702,8 @@ public sealed class TropicalCycloneDatasetProcessor :
                 0));
         }
 
-        var forecastTrack = advisory.ForecastTrack.Count >= 2
+        var forecastTrack = advisory.IsFinal ? []
+            : advisory.ForecastTrack.Count >= 2
             ? advisory.ForecastTrack
             : advisory.Forecast.Select(p => p.Position).ToArray();
         if (forecastTrack.Count >= 2)
@@ -674,7 +718,7 @@ public sealed class TropicalCycloneDatasetProcessor :
                 parts.Add(TropicalCyclonePart.Curve($"{id} past track", TropicalCyclonePartKind.PastTrack, "Past track", pastLine, 13, 1));
         }
 
-        if (advisory.Cone is { } cone)
+        if (advisory.Cone is { } cone && !advisory.IsFinal)
         {
             if (cone.DaysOneToThree.Count > 0)
                 parts.Add(TropicalCyclonePart.Surface($"{id} cone days 1-3", TropicalCyclonePartKind.ConeDaysOneToThree, "Cone, days 1–3", cone.DaysOneToThree, 11, 5));
@@ -688,15 +732,26 @@ public sealed class TropicalCycloneDatasetProcessor :
     }
 
     // The drawing instructions of the parts: the fills, then the lines,
-    // symbols and labels. The fills' opacity depends on the palette and the
-    // labels' times on the zone and culture.
+    // symbols and labels. The fills' opacity depends on the palette, the
+    // labels' times on the zone and culture, what's drawn on the Weather
+    // section's switches (V26) and the storm's label on the advisory's age
+    // once it's stale (V29).
     private (IReadOnlyList<DrawingInstruction> Areas, IReadOnlyList<DrawingInstruction> Track) BuildInstructions(
-        Drawn drawn, PaletteType palette, TimeZoneInfo zone, CultureInfo culture)
+        Drawn drawn, PaletteType palette, TimeZoneInfo zone, CultureInfo culture, EcdisDisplaySettings? display, TimeSpan? staleAge)
     {
         var areas = new List<DrawingInstruction>();
         var track = new List<DrawingInstruction>();
+        var radii = TropicalCycloneStyle.IsShown(display, TropicalCycloneStyle.WindRadiiKey);
+        var pastTrack = TropicalCycloneStyle.IsShown(display, TropicalCycloneStyle.PastTrackKey);
+        var forecastTimes = TropicalCycloneStyle.IsShown(display, TropicalCycloneStyle.ForecastTimesKey);
         foreach (var part in drawn.Parts)
         {
+            if ((part.Kind == TropicalCyclonePartKind.Radius && !radii)
+                || (part.Kind is TropicalCyclonePartKind.PastTrack or TropicalCyclonePartKind.PastPoint && !pastTrack))
+            {
+                continue;
+            }
+
             switch (part.Kind)
             {
                 case TropicalCyclonePartKind.ConeDaysOneToThree:
@@ -725,16 +780,22 @@ public sealed class TropicalCycloneDatasetProcessor :
                     track.AddRange(TropicalCycloneStyle.BuildForecastPoint(
                         part.Id,
                         TropicalCycloneStyle.SymbolFor(point.Classification, point.SaffirSimpsonCategory, point.Position.Latitude),
-                        TropicalCycloneStyle.IsLabelled(point, part.IsLastForecast) ? TropicalCycloneStyle.ForecastLabel(point, zone, culture) : null));
+                        forecastTimes && TropicalCycloneStyle.IsLabelled(point, part.IsLastForecast) ? TropicalCycloneStyle.ForecastLabel(point, zone, culture) : null));
                     break;
                 case TropicalCyclonePartKind.Storm when part.Storm is { } storm:
                     var at = storm.Point;
                     track.AddRange(TropicalCycloneStyle.BuildStorm(
                         part.Id,
-                        TropicalCycloneStyle.SymbolFor(at.Classification, at.SaffirSimpsonCategory, at.Position.Latitude),
+                        Advisory.IsFinal && storm.Source != TropicalCycloneStormSource.BestTrack
+                            ? TropicalCycloneStyle.SymbolFor(TropicalCycloneClass.PostTropical, null, at.Position.Latitude)
+                            : TropicalCycloneStyle.SymbolFor(at.Classification, at.SaffirSimpsonCategory, at.Position.Latitude),
                         estimated: storm.IsEstimated,
                         TropicalCycloneStyle.StormLabel(Advisory.Storm, at),
-                        TropicalCycloneStyle.StormDetailLabel(Advisory, storm, zone, culture)));
+                        Advisory.IsFinal && storm.Source != TropicalCycloneStormSource.BestTrack
+                            ? TropicalCycloneStyle.FinalAdvisoryLabel(Advisory, zone, culture)
+                            : staleAge is { } age && storm.Source != TropicalCycloneStormSource.BestTrack
+                            ? TropicalCycloneStyle.StaleAdvisoryLabel(Advisory, age)
+                            : TropicalCycloneStyle.StormDetailLabel(Advisory, storm, zone, culture)));
                     break;
             }
         }
@@ -749,9 +810,18 @@ public sealed class TropicalCycloneDatasetProcessor :
             PickAttribute.NavigationNotice(NotForNavigationNotice),
             Text("name", "Name", StormName(advisory, storm)),
             Text("advisory", "Advisory", advisory.Advisory),
-            Time("issued", "Issued", advisory.IssueTime),
-            Time("nextAdvisory", "Next advisory", NextAdvisoryDue(advisory.IssueTime)),
         };
+
+        // A final advisory (§7) says so in place of when the next is due.
+        if (advisory.IsFinal)
+        {
+            attributes.Add(Time("finalAdvisory", "Final advisory issued", advisory.IssueTime));
+        }
+        else
+        {
+            attributes.Add(Time("issued", "Issued", advisory.IssueTime));
+            attributes.Add(Time("nextAdvisory", "Next advisory", NextAdvisoryDue(advisory.IssueTime)));
+        }
 
         // At the view time (V11, V13): when it is, and what the storm there
         // is, or why there's none.
@@ -794,7 +864,8 @@ public sealed class TropicalCycloneDatasetProcessor :
 
         attributes.Add(Text("pickedPart", "Picked part", part.Description));
 
-        var radii = (timeStep is null ? advisory.Current : storm?.Point)?.Radii ?? [];
+        // A final advisory has no radii (§7).
+        var radii = advisory.IsFinal ? [] : (timeStep is null ? advisory.Current : storm?.Point)?.Radii ?? [];
         foreach (var threshold in (int[])[64, 50, 34])
         {
             if (radii.FirstOrDefault(r => r.ThresholdKnots == threshold && !r.IsEmpty) is not { } radius)
@@ -807,7 +878,7 @@ public sealed class TropicalCycloneDatasetProcessor :
                     $"{radius.NortheastNauticalMiles:0} / {radius.SoutheastNauticalMiles:0} / {radius.SouthwestNauticalMiles:0} / {radius.NorthwestNauticalMiles:0} nm (NE/SE/SW/NW)")));
         }
 
-        if (advisory.Cone is not null)
+        if (advisory.Cone is not null && !advisory.IsFinal)
             attributes.Add(Text("cone", "Cone", ConeCaution));
 
         return attributes;

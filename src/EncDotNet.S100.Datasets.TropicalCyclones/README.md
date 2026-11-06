@@ -85,6 +85,12 @@ The last two can be `null`.
   with the intensity, class and observed radii at each. A best track
   downloaded later holds the storm's whole life, so points after the advisory
   are left out.
+- **Final advisory.** `IsFinal` is true for a storm's last advisory, when
+  NHC has stopped issuing advisories for it. NHC's files don't say so: a
+  host that sees the storm leave NHC's active list writes a marker beside the
+  zips (`NhcAdvisoryFiles.FinalMarkerName`, `al092022_final.txt`), and
+  `NhcAdvisoryFiles.Find` reports it (`IsFinal`) so the reader marks the
+  advisory.
 
 All positions are WGS-84 degrees. NHC computes on a sphere, and the
 difference is far smaller than the data's precision.

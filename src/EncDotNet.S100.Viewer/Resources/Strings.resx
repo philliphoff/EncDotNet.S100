@@ -7141,6 +7141,27 @@
   <data name="Tooltip_EcdisPanel_Weather_AirTemperature" xml:space="preserve">
     <value>Draw dashed air temperature isotherms, every 5 °C at 2 m above the surface, on every weather dataset that has air temperature. Off by default.</value>
   </data>
+  <data name="EcdisPanel_Weather_WindRadii" xml:space="preserve">
+    <value>Wind radii</value>
+    <comment>Display controls switch (#1298, V26): the 34, 50 and 64 kt wind radii of every tropical cyclone.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_WindRadii" xml:space="preserve">
+    <value>Draw the 34, 50 and 64 knot wind radii of every tropical cyclone. The cone and the forecast track are always drawn. On by default.</value>
+  </data>
+  <data name="EcdisPanel_Weather_PastTrack" xml:space="preserve">
+    <value>Past track</value>
+    <comment>Display controls switch (#1298, V26): every tropical cyclone's best track.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_PastTrack" xml:space="preserve">
+    <value>Draw where each tropical cyclone has been: its best-track line and points. On by default.</value>
+  </data>
+  <data name="EcdisPanel_Weather_ForecastTimes" xml:space="preserve">
+    <value>Forecast times</value>
+    <comment>Display controls switch (#1298, V26): time and intensity labels beside tropical cyclone forecast points.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Weather_ForecastTimes" xml:space="preserve">
+    <value>Write the time and intensity beside each tropical cyclone's forecast points. On by default.</value>
+  </data>
   <data name="EcdisPanel_NavigationalWarnings" xml:space="preserve">
     <value>Navigational warnings</value>
     <comment>Switch label and accessible name: draw S-124 navigational warnings on the chart (#995).</comment>
@@ -7231,6 +7252,42 @@
   <data name="Library_StaleRunFormat" xml:space="preserve">
     <value>Run {0} is over {1} hours old</value>
     <comment>{0}: a weather model run, e.g. 2026-10-25 00Z; {1}: hours after which a run is stale, e.g. 12</comment>
+  </data>
+  <data name="Library_StaleAdvisoryFormat" xml:space="preserve">
+    <value>Advisory {0} is over {1} hours old</value>
+    <comment>{0}: a tropical cyclone advisory number, e.g. 17; {1}: hours after which it is stale, e.g. 7</comment>
+  </data>
+  <data name="Library_StormNameFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>An NHC storm's Library row name. {0}: class and name, e.g. HURRICANE ZELDA; {1}: basin and number, e.g. AL14</comment>
+  </data>
+  <data name="Library_StormAdvisoryFormat" xml:space="preserve">
+    <value>Advisory {0} · {1}</value>
+    <comment>A storm row's subtitle. {0}: advisory number; {1}: when it was issued</comment>
+  </data>
+  <data name="Library_StormNextFormat" xml:space="preserve">
+    <value>next {0}</value>
+    <comment>When NHC's next advisory is due. {0}: a time</comment>
+  </data>
+  <data name="Library_StormNewerFormat" xml:space="preserve">
+    <value>advisory {0} available</value>
+    <comment>NHC has issued a newer advisory than the one downloaded. {0}: its number</comment>
+  </data>
+  <data name="Library_StormForecastToFormat" xml:space="preserve">
+    <value>Forecast to {0}</value>
+    <comment>The end of a storm's five-day forecast. {0}: a time</comment>
+  </data>
+  <data name="Library_StormIntensityFormat" xml:space="preserve">
+    <value>{0} kn</value>
+    <comment>A storm's maximum sustained wind. {0}: knots</comment>
+  </data>
+  <data name="Toast_StormAdvisoryTitleFormat" xml:space="preserve">
+    <value>{0}: advisory {1} is available</value>
+    <comment>Notification when NHC issues a new advisory for a loaded storm (V28). {0}: e.g. HURRICANE ZELDA; {1}: advisory number</comment>
+  </data>
+  <data name="Toast_StormAdvisoryContent" xml:space="preserve">
+    <value>The storm on the chart is from an older advisory. Not for navigation.</value>
+    <comment>Body of the new-advisory notification.</comment>
   </data>
   <data name="Library_StaleAnalysisFormat" xml:space="preserve">
     <value>Analysis {0} is over {1} hours old</value>

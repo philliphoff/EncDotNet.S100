@@ -131,6 +131,9 @@ public sealed record MapsuiMapTimedDataset(string Name, DateTime First, DateTime
     /// <summary>The key of the datasets of which only one draws at a time (<see cref="TimeSemantics.Supersession"/>), or null.</summary>
     public string? Supersession { get; init; }
 
+    /// <summary>How long after <see cref="IssueTime"/> the dataset is stale (<see cref="TimeSemantics.StaleAfterIssue"/>), or null for never.</summary>
+    public TimeSpan? StaleAfterIssue { get; init; }
+
     /// <summary>
     /// The sample the dataset draws at <paramref name="time"/> under its time
     /// rule, or <see langword="null"/> when it has no data near that time and hides.
@@ -168,10 +171,21 @@ public sealed record MapsuiMapTimedDataset(string Name, DateTime First, DateTime
 
     /// <summary>
     /// How old the sample drawn at <paramref name="time"/> is, to the nearest hour,
-    /// once past <see cref="StaleAfter"/>; null while current.
+    /// once past <see cref="StaleAfter"/>, or how old the dataset is since
+    /// <see cref="IssueTime"/> once past <see cref="StaleAfterIssue"/>; null
+    /// while current or when it draws nothing then.
     /// </summary>
     /// <param name="time">The clock value.</param>
-    public TimeSpan? StaleAgeAt(DateTime time) => MapsuiTimeSupersession.StaleAge(SampleAt(time), time, StaleAfter);
+    /// <param name="now">
+    /// The host's clock, which an issue-based age is taken at when it's earlier
+    /// than <paramref name="time"/>; null to take it at <paramref name="time"/>.
+    /// </param>
+    public TimeSpan? StaleAgeAt(DateTime time, DateTime? now = null)
+    {
+        if (StaleAfterIssue is not null)
+            return SampleAt(time) is null ? null : MapsuiTimeSupersession.StaleAgeFromIssue(IssueTime, time, now, StaleAfterIssue);
+        return MapsuiTimeSupersession.StaleAge(SampleAt(time), time, StaleAfter);
+    }
 
     private MapsuiTimeCandidate Candidate(DateTime? sample) => new(DatasetId ?? Name, Supersession, StepKind, sample);
 
@@ -222,6 +236,7 @@ public sealed record MapsuiMapTimedDataset(string Name, DateTime First, DateTime
         && Tolerance == other.Tolerance
         && StepKind == other.StepKind
         && StaleAfter == other.StaleAfter
+        && StaleAfterIssue == other.StaleAfterIssue
         && Supersession == other.Supersession
         && Coverage.SequenceEqual(other.Coverage)
         && Samples.SequenceEqual(other.Samples);

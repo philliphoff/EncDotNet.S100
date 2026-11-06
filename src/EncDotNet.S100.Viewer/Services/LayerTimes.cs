@@ -85,6 +85,10 @@ internal static class LayerTimes
     /// Every time-aware dataset, for those of which only one draws at a time
     /// (<see cref="MapsuiMapTimedDataset.Supersession"/>); null to describe the dataset alone.
     /// </param>
+    /// <param name="now">
+    /// The clock, which an issue-based stale age (a storm's advisory, V28) is
+    /// taken at when the view time is ahead of it; null to take it at the view time.
+    /// </param>
     public static LayerTime Describe(
         MapsuiMapTimedDataset dataset,
         DateTime viewTime,
@@ -92,7 +96,8 @@ internal static class LayerTimes
         TimeFormat format,
         TimeZoneInfo zone,
         ForecastRun? run = null,
-        IReadOnlyList<MapsuiMapTimedDataset>? all = null)
+        IReadOnlyList<MapsuiMapTimedDataset>? all = null,
+        DateTime? now = null)
     {
         ArgumentNullException.ThrowIfNull(dataset);
         var culture = CultureInfo.CurrentCulture;
@@ -103,11 +108,11 @@ internal static class LayerTimes
             return new LayerTime(Strings.LayerTime_Superseded, LayerTimeState.Superseded, null);
 
         if (IsTropicalCyclone(dataset))
-            return DescribeCyclone(dataset, viewTime, format, zone, culture);
+            return DescribeCyclone(dataset, viewTime, format, zone, culture, now);
 
         if (dataset.SampleAt(viewTime) is { } sample)
         {
-            var staleAge = dataset.StaleAgeAt(viewTime);
+            var staleAge = dataset.StaleAgeAt(viewTime, now);
             var text = Clock(sample, format, zone, culture);
             if (sample == viewTime)
             {
@@ -146,10 +151,17 @@ internal static class LayerTimes
     /// the cone still draws) out of range, tagged "Beyond forecast" or "Before
     /// track", jumping to the nearest end.
     /// </summary>
-    private static LayerTime DescribeCyclone(MapsuiMapTimedDataset dataset, DateTime viewTime, TimeFormat format, TimeZoneInfo zone, CultureInfo culture)
+    /// <remarks>
+    /// Once the advisory is stale (7 hours after its issue at the view time,
+    /// or at <paramref name="now"/> when that's earlier; V28), each carries
+    /// its age, for the Stale tag.
+    /// </remarks>
+    private static LayerTime DescribeCyclone(
+        MapsuiMapTimedDataset dataset, DateTime viewTime, TimeFormat format, TimeZoneInfo zone, CultureInfo culture, DateTime? now)
     {
         if (dataset.Samples.Count == 0)
             return new LayerTime(Strings.LayerTime_NoData, LayerTimeState.NoData, null);
+        var staleAge = MapsuiTimeSupersession.StaleAgeFromIssue(dataset.IssueTime, viewTime, now, dataset.StaleAfterIssue);
         var synoptic = dataset.Samples[0];
         var last = dataset.Samples[^1];
         if (viewTime < dataset.First || viewTime > last || dataset.SampleAt(viewTime) is not { } at)
@@ -164,16 +176,16 @@ internal static class LayerTimes
                 beyond ? Strings.LayerTime_BeyondForecastFormat : Strings.LayerTime_BeforeTrackFormat,
                 when,
                 Span((nearest - viewTime).Duration(), culture));
-            return new LayerTime(text, LayerTimeState.OutOfRange, nearest, Tag: beyond ? Strings.LayerTime_BeyondForecast : Strings.LayerTime_BeforeTrack);
+            return new LayerTime(text, LayerTimeState.OutOfRange, nearest, staleAge, beyond ? Strings.LayerTime_BeyondForecast : Strings.LayerTime_BeforeTrack);
         }
 
         var clock = Clock(at, format, zone, culture);
         if (at < synoptic)
-            return new LayerTime(string.Format(culture, Strings.LayerTime_BestTrackFormat, clock), LayerTimeState.Exact, null);
+            return new LayerTime(string.Format(culture, Strings.LayerTime_BestTrackFormat, clock), LayerTimeState.Exact, null, staleAge);
         var onPoint = dataset.Samples.Contains(at);
         var hours = (int)Math.Floor((at - synoptic).TotalHours);
         var shown = string.Format(culture, Strings.LayerTime_ForecastHourFormat, clock, hours);
-        return new LayerTime(onPoint ? shown : string.Format(culture, Strings.LayerTime_EstimatedFormat, shown), LayerTimeState.Exact, null);
+        return new LayerTime(onPoint ? shown : string.Format(culture, Strings.LayerTime_EstimatedFormat, shown), LayerTimeState.Exact, null, staleAge);
     }
 
     /// <summary>True for a tropical cyclone advisory (spec <c>TC</c>).</summary>
