@@ -76,8 +76,12 @@ internal sealed class PassageCheckFixture
             Catalog,
             checks: allChecks ? null : () => [new EncDotNet.S100.Navigation.ClearanceCheck(), .. checks ?? []],
             debounce: debounce ?? TimeSpan.Zero,
-            post: post ?? SerialPost);
+            post: post ?? SerialPost,
+            weather: Weather);
     }
+
+    /// <summary>The mariner's weather limits the check reads; none until a test sets them.</summary>
+    public FixedWeatherLimits Weather { get; } = new();
 
     public FixedCatalog Catalog { get; }
 
@@ -219,4 +223,22 @@ internal sealed class PassageCheckFixture
 
         public event EventHandler<DatasetCatalogChangedEventArgs>? Changed { add { } remove { } }
     }
+}
+
+/// <summary>Mariner weather limits a test sets (#1093).</summary>
+internal sealed class FixedWeatherLimits : EncDotNet.S100.Viewer.Services.PassageCheck.IRouteWeatherLimits
+{
+    private EncDotNet.S100.Navigation.WeatherLimits? _limits;
+
+    public EncDotNet.S100.Navigation.WeatherLimits? Limits
+    {
+        get => _limits;
+        set
+        {
+            _limits = value;
+            RouteWeatherLimitsChanged?.Invoke();
+        }
+    }
+
+    public event Action? RouteWeatherLimitsChanged;
 }

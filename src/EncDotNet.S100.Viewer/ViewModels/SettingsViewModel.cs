@@ -11,7 +11,7 @@ using ShadUI;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
-internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLevelAdjustmentSettings
+internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLevelAdjustmentSettings, Services.PassageCheck.IRouteWeatherLimits
 {
     private readonly ViewerSettings _settings;
     private readonly IDataMaintenanceService? _dataMaintenance;
@@ -333,6 +333,8 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
                 OnPropertyChanged(nameof(SafetyDepthDisplay));
                 OnPropertyChanged(nameof(ShallowContourDisplay));
                 OnPropertyChanged(nameof(DeepContourDisplay));
+                OnPropertyChanged(nameof(RouteMaxWaveDisplay));
+                OnPropertyChanged(nameof(RouteMaxWaveLabel));
                 RaiseMarinerChanged();
             }
         }
@@ -542,6 +544,105 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
     {
         _settings.Save();
         WaterLevelAdjustmentChanged?.Invoke();
+    }
+
+    // ── Weather on a route (#1093) ─────────────────────────────────────────
+    // Check route's weather limits: kept with the mariner settings, not with a
+    // route, and raised on their own event so a change re-runs the route check
+    // without re-portraying the chart.
+
+    private double? _routeMaxWindKnots;
+
+    /// <summary>The wind limit in knots, or <c>null</c> when wind isn't checked.</summary>
+    public double? RouteMaxWindKnots
+    {
+        get => _routeMaxWindKnots;
+        set
+        {
+            var v = value is { } x && double.IsFinite(x) && x > 0 ? x : (double?)null;
+            if (SetProperty(ref _routeMaxWindKnots, v))
+            {
+                _settings.RouteMaxWindKnots = v;
+                OnPropertyChanged(nameof(RouteMaxWindDisplay));
+                RaiseRouteWeatherLimitsChanged();
+            }
+        }
+    }
+
+    /// <summary>The wind limit as the Settings box shows it, in knots; empty when off.</summary>
+    public string RouteMaxWindDisplay
+    {
+        get => _routeMaxWindKnots is { } k ? k.ToString("0.#", System.Globalization.CultureInfo.CurrentCulture) : string.Empty;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                RouteMaxWindKnots = null;
+            else if (double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.CurrentCulture, out var k) && k > 0)
+                RouteMaxWindKnots = k;
+            else
+                OnPropertyChanged(nameof(RouteMaxWindDisplay));
+        }
+    }
+
+    private double? _routeMaxWaveHeightMetres;
+
+    /// <summary>The significant wave height limit in metres, or <c>null</c> when waves aren't checked.</summary>
+    public double? RouteMaxWaveHeightMetres
+    {
+        get => _routeMaxWaveHeightMetres;
+        set
+        {
+            var v = value is { } x && double.IsFinite(x) && x > 0 ? x : (double?)null;
+            if (SetProperty(ref _routeMaxWaveHeightMetres, v))
+            {
+                _settings.RouteMaxWaveHeightMetres = v;
+                OnPropertyChanged(nameof(RouteMaxWaveDisplay));
+                RaiseRouteWeatherLimitsChanged();
+            }
+        }
+    }
+
+    // Waves show in metres, or in feet for any other depth unit, as the findings do.
+    private bool WavesInMetres => _selectedDepthUnit == DepthUnit.Metres;
+
+    /// <summary>"Wave height limit (m)" or "(ft)", by the depth unit.</summary>
+    public string RouteMaxWaveLabel => string.Format(
+        System.Globalization.CultureInfo.CurrentCulture, Strings.Settings_RouteMaxWaveFormat, WavesInMetres ? "m" : "ft");
+
+    /// <summary>The wave limit as the Settings box shows it, in metres or feet; empty when off.</summary>
+    public string RouteMaxWaveDisplay
+    {
+        get => _routeMaxWaveHeightMetres is { } m
+            ? (WavesInMetres ? m : Quantities.Length.FromMetres(m).TotalFeet).ToString("0.#", System.Globalization.CultureInfo.CurrentCulture)
+            : string.Empty;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                RouteMaxWaveHeightMetres = null;
+            else if (double.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.CurrentCulture, out var h) && h > 0)
+                RouteMaxWaveHeightMetres = WavesInMetres ? h : Quantities.Length.FromFeet(h).TotalMetres;
+            else
+                OnPropertyChanged(nameof(RouteMaxWaveDisplay));
+        }
+    }
+
+    /// <inheritdoc />
+    public EncDotNet.S100.Navigation.WeatherLimits? Limits =>
+        _routeMaxWindKnots is null && _routeMaxWaveHeightMetres is null
+            ? null
+            : new EncDotNet.S100.Navigation.WeatherLimits
+            {
+                MaxWind = _routeMaxWindKnots is { } k ? Quantities.Speed.FromKnots(k) : null,
+                MaxWaveHeight = _routeMaxWaveHeightMetres is { } m ? Quantities.Length.FromMetres(m) : null,
+            };
+
+    /// <inheritdoc />
+    public event Action? RouteWeatherLimitsChanged;
+
+    private void RaiseRouteWeatherLimitsChanged()
+    {
+        _settings.Save();
+        RouteWeatherLimitsChanged?.Invoke();
     }
 
     // ── Base-plane tiled-pipeline knobs ────────────────────────────────────
@@ -1071,6 +1172,8 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
             ? waterLevelAdjustment
             : Services.Depth.WaterLevelAdjustmentMode.Off;
         _waterLevelApplyUndeclaredDatum = settings.WaterLevelApplyUndeclaredDatum ?? false;
+        _routeMaxWindKnots = settings.RouteMaxWindKnots is { } wind && double.IsFinite(wind) && wind > 0 ? wind : null;
+        _routeMaxWaveHeightMetres = settings.RouteMaxWaveHeightMetres is { } wave && double.IsFinite(wave) && wave > 0 ? wave : null;
 
         // Tiled base-plane scene mode: push the persisted preference into the
         // renderer (the write is ignored when pinned by an explicit env var — the

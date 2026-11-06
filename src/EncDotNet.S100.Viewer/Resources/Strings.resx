@@ -7629,4 +7629,131 @@
   <data name="Status_DepthBasisPopup_NotAdjustedProductFormat" xml:space="preserve">
     <value>Not adjusted: {0} ({1} depths are drawn as charted).</value>
   </data>
+  <data name="Settings_RouteWeather" xml:space="preserve">
+    <value>Weather on a route</value>
+  </data>
+  <data name="Settings_RouteWeather_Help" xml:space="preserve">
+    <value>Check route compares the loaded GRIB2 or NetCDF forecast along the route, at each ETA, with these limits. Leave a limit empty to leave it unchecked; an RTZ route's own limits are used where these are empty. Forecast model data isn't for navigation.</value>
+  </data>
+  <data name="Settings_RouteMaxWind" xml:space="preserve">
+    <value>Wind limit (kn)</value>
+  </data>
+  <data name="Settings_RouteMaxWaveFormat" xml:space="preserve">
+    <value>Wave height limit ({0})</value>
+    <comment>{0}: the unit, m or ft</comment>
+  </data>
+  <data name="Settings_RouteLimitOff" xml:space="preserve">
+    <value>Off</value>
+    <comment>Placeholder of an empty weather limit box</comment>
+  </data>
+  <data name="Tooltip_RouteMaxWind" xml:space="preserve">
+    <value>The highest wind speed at 10 m the vessel accepts, in knots. Stretches of the route where the forecast is higher at the ETA are findings to check. Empty: wind isn't checked unless the route sets a limit.</value>
+  </data>
+  <data name="Tooltip_RouteMaxWave" xml:space="preserve">
+    <value>The highest significant wave height the vessel accepts. Stretches of the route where the forecast is higher at the ETA are findings to check. Empty: waves aren't checked unless the route sets a limit.</value>
+  </data>
+  <data name="Check_SummaryWeather" xml:space="preserve">
+    <value>Weather</value>
+    <comment>Label of the verdict card's Weather row</comment>
+  </data>
+  <data name="Check_SummaryWeatherNoLimits" xml:space="preserve">
+    <value>No limits set</value>
+  </data>
+  <data name="Check_SummaryWeatherWithin" xml:space="preserve">
+    <value>Within your limits</value>
+  </data>
+  <data name="Check_SummaryWeatherAboveFormat" xml:space="preserve">
+    <value>{0} above limits</value>
+  </data>
+  <data name="Check_SummaryWeatherNotCheckedFormat" xml:space="preserve">
+    <value>{0} not checked</value>
+  </data>
+  <data name="Check_SummaryWeatherForecastEnds" xml:space="preserve">
+    <value>Forecast ends before arrival</value>
+  </data>
+  <data name="Tooltip_CheckSummaryWeatherNoLimits" xml:space="preserve">
+    <value>Set wind and wave limits in Settings › Chart display › Mariner Settings › Weather on a route.</value>
+  </data>
+  <data name="Tooltip_CheckSummaryWeatherFormat" xml:space="preserve">
+    <value>{0}. Forecast model data, not for navigation; ETAs don't include set and drift.</value>
+    <comment>{0}: the limits in use, e.g. Wind 25 kn (Settings) · Waves 3.0 m (route)</comment>
+  </data>
+  <data name="Check_WeatherLimitWindFormat" xml:space="preserve">
+    <value>Wind {0} ({1})</value>
+    <comment>{0}: the limit; {1}: where it comes from</comment>
+  </data>
+  <data name="Check_WeatherLimitWavesFormat" xml:space="preserve">
+    <value>Waves {0} ({1})</value>
+    <comment>{0}: the limit; {1}: where it comes from</comment>
+  </data>
+  <data name="Check_WeatherLimitFromSettings" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Check_WeatherLimitFromRoute" xml:space="preserve">
+    <value>route</value>
+  </data>
+  <data name="Check_FooterWeather" xml:space="preserve">
+    <value>weather forecast</value>
+    <comment>Named in the verdict card's footer among the products used</comment>
+  </data>
+  <data name="Findings_FilterWeatherFormat" xml:space="preserve">
+    <value>Weather {0}</value>
+  </data>
+  <data name="Findings_WindAboveForFormat" xml:space="preserve">
+    <value>Wind above {0} for {1}</value>
+    <comment>{0}: the limit; {1}: a time</comment>
+  </data>
+  <data name="Findings_WavesAboveForFormat" xml:space="preserve">
+    <value>Waves above {0} for {1}</value>
+    <comment>{0}: the limit; {1}: a time</comment>
+  </data>
+  <data name="Findings_WindAboveDistanceFormat" xml:space="preserve">
+    <value>Wind above {0} for {1:0.0} NM</value>
+  </data>
+  <data name="Findings_WavesAboveDistanceFormat" xml:space="preserve">
+    <value>Waves above {0} for {1:0.0} NM</value>
+  </data>
+  <data name="Findings_WindNoun" xml:space="preserve">
+    <value>Wind</value>
+  </data>
+  <data name="Findings_WavesNoun" xml:space="preserve">
+    <value>Waves</value>
+  </data>
+  <data name="Findings_WeatherForecastEndsFormat" xml:space="preserve">
+    <value>{0} not checked: forecast ends before arrival</value>
+    <comment>{0}: Wind or Waves</comment>
+  </data>
+  <data name="Findings_WeatherForecastStartsLateFormat" xml:space="preserve">
+    <value>{0} not checked: forecast starts later</value>
+    <comment>{0}: Wind or Waves</comment>
+  </data>
+  <data name="Findings_NoWeatherCoverageFormat" xml:space="preserve">
+    <value>{0} not checked: outside forecast coverage</value>
+    <comment>{0}: Wind or Waves</comment>
+  </data>
+  <data name="Findings_WeatherNoDataFormat" xml:space="preserve">
+    <value>{0} not checked: no forecast value</value>
+    <comment>{0}: Wind or Waves</comment>
+  </data>
+  <data name="Findings_WeatherMaxAtFormat" xml:space="preserve">
+    <value>max {0} at {1}</value>
+  </data>
+  <data name="Findings_WeatherMaxFormat" xml:space="preserve">
+    <value>max {0}</value>
+  </data>
+  <data name="Findings_TimeWindowFormat" xml:space="preserve">
+    <value>{0}–{1}</value>
+  </data>
+  <data name="Findings_ForecastEndsAtFormat" xml:space="preserve">
+    <value>forecast ends {0}</value>
+  </data>
+  <data name="Findings_ForecastStartsAtFormat" xml:space="preserve">
+    <value>forecast starts {0}</value>
+  </data>
+  <data name="Findings_MinutesFormat" xml:space="preserve">
+    <value>{0} min</value>
+  </data>
+  <data name="Findings_HoursFormat" xml:space="preserve">
+    <value>{0:0.#} h</value>
+  </data>
 </root>

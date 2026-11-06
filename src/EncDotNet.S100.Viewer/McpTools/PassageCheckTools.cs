@@ -67,7 +67,7 @@ internal sealed record CheckStateDto(
 /// <summary>A verdict-card summary row (#959, B3).</summary>
 [Description("A verdict-card summary row: what one part of the check found.")]
 internal sealed record CheckSummaryRowDto(
-    [property: Description("Which row, and the findings filter clicking it sets: clearance, route or warnings.")] string Key,
+    [property: Description("Which row, and the findings filter clicking it sets: clearance, route, warnings or weather (shown while a weather forecast is loaded; its tooltip names the wind and wave limits in use).")] string Key,
     [property: Description("The row's label, e.g. \"Clearance\".")] string Label,
     [property: Description("The row's value, e.g. \"min 0.4 m · required 1.0 m\", \"2 to review · 1 to check\", \"2 in force on route · 1 near\", \"Nothing found\" or \"Not checked\".")] string Text,
     [property: Description("The chip, e.g. \"2 below\", \"tight\", \"meets\", \"no water level\" or a count; null when none.")] string? Chip,
@@ -232,6 +232,7 @@ internal abstract class PassageCheckToolBase : RouteToolBase
         FindingsFilter.Clearance => "clearance",
         FindingsFilter.Route => "route",
         FindingsFilter.Warnings => "warnings",
+        FindingsFilter.Weather => "weather",
         _ => "all",
     };
 

@@ -194,6 +194,42 @@
                 <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding WaterLevelApplyUndeclaredDatum}"  AutomationProperties.AutomationId="Settings.WaterLevelApplyUndeclaredDatum" AutomationProperties.Name="{x:Static loc:Strings.Label_WaterLevelApplyUndeclaredDatum}" AutomationProperties.HelpText="{x:Static loc:Strings.Settings_WaterLevelApplyUndeclaredDatum}"/>
             </Grid>
 
+            <!-- Weather on a route (#1093): Check route's wind and wave limits,
+                 kept with the mariner settings. #1299 adds its cyclone rows after these. -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_RouteWeather}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="{x:Static loc:Strings.Settings_RouteWeather_Help}"
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_RouteMaxWind}"
+                           FontSize="12" />
+                <TextBox Text="{Binding RouteMaxWindDisplay, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         PlaceholderText="{x:Static loc:Strings.Settings_RouteLimitOff}"
+                         AutomationProperties.AutomationId="Settings.RouteMaxWind"
+                         AutomationProperties.Name="{x:Static loc:Strings.Settings_RouteMaxWind}"
+                         AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_RouteMaxWind}"
+                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_RouteMaxWind}"
+                         MinWidth="120"
+                         HorizontalAlignment="Left" />
+            </StackPanel>
+            <StackPanel Spacing="6">
+                <TextBlock Text="{Binding RouteMaxWaveLabel}"
+                           FontSize="12" />
+                <TextBox Text="{Binding RouteMaxWaveDisplay, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                         PlaceholderText="{x:Static loc:Strings.Settings_RouteLimitOff}"
+                         AutomationProperties.AutomationId="Settings.RouteMaxWave"
+                         AutomationProperties.Name="{Binding RouteMaxWaveLabel}"
+                         AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_RouteMaxWave}"
+                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_RouteMaxWave}"
+                         MinWidth="120"
+                         HorizontalAlignment="Left" />
+            </StackPanel>
+
             <!-- National Language -->
             <StackPanel Spacing="6">
                 <TextBlock Text="{x:Static loc:Strings.Settings_NationalLanguage}"

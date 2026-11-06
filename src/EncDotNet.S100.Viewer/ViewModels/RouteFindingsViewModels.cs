@@ -434,7 +434,7 @@ internal sealed class FindingsFilterChipViewModel : ViewModelBase
 
     public FindingsFilter Filter { get; }
 
-    /// <summary>A stable AutomationId suffix: All, Clearance, Route or Warnings.</summary>
+    /// <summary>A stable AutomationId suffix: All, Clearance, Route, Warnings or Weather.</summary>
     public string Key => Filter.ToString();
 
     private int _count;
@@ -455,6 +455,7 @@ internal sealed class FindingsFilterChipViewModel : ViewModelBase
         FindingsFilter.Clearance => Strings.Findings_FilterClearanceFormat,
         FindingsFilter.Route => Strings.Findings_FilterRouteFormat,
         FindingsFilter.Warnings => Strings.Findings_FilterWarningsFormat,
+        FindingsFilter.Weather => Strings.Findings_FilterWeatherFormat,
         _ => Strings.Findings_FilterAllFormat,
     }, Count);
 

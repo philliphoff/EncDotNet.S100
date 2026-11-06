@@ -49,7 +49,7 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
 
     // The kind is the report's (RouteCheckVerdict.From); the card words it.
     private static RouteCheckCard Build(bool hasDraft, params RouteFinding[] findings) =>
-        RouteCheckCard.Build(RouteCheckVerdict.From(findings, null).Kind, hasDraft, null, findings, warningsChecked: true, ["S-101", "S-124"], DepthUnit.Metres, TimeFormat.Utc);
+        RouteCheckCard.Build(RouteCheckVerdict.From(findings, null).Kind, hasDraft, null, findings, warningsChecked: true, weather: null, ["S-101", "S-124"], DepthUnit.Metres, TimeFormat.Utc);
 
     [Fact]
     public void Must_review_titles_name_the_worst_kind_in_order()
@@ -125,7 +125,7 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
         Assert.Equal(("2 in force on route · 1 near", "3", CheckTone.Destructive), (verdict.Rows[2].Text, verdict.Rows[2].Chip, verdict.Rows[2].ChipTone));
         Assert.Equal("Not for navigation · computed from S-101, S-124 for your settings", verdict.Footer);
 
-        var nothing = RouteCheckCard.Build(RouteCheckVerdictKind.Clear, false, null, [], warningsChecked: false, [], DepthUnit.Metres, TimeFormat.Utc);
+        var nothing = RouteCheckCard.Build(RouteCheckVerdictKind.Clear, false, null, [], warningsChecked: false, weather: null, [], DepthUnit.Metres, TimeFormat.Utc);
         Assert.Equal(2, nothing.Rows.Count); // no Warnings row when no warnings were checked
         Assert.Equal(("Nothing found", "0", CheckTone.Success), (nothing.Rows[1].Text, nothing.Rows[1].Chip, nothing.Rows[1].ChipTone));
         Assert.Equal("Not for navigation · no data loaded for this route", nothing.Footer);
@@ -299,7 +299,7 @@ internal sealed record WarningsRouteCheck(RoutesService Routes, Route Route, Pas
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
         var check = new PassageCheckService(routes, catalog, warnings: new PanelRouteWarningSource(warnings),
             checks: () => [new WarningCheck(), new ClearanceCheck()],
-            options: options is null ? null : new RouteCheckOptions { Warnings = options }, debounce: TimeSpan.Zero, post: post ?? PassageCheckFixture.SerialPost);
+            options: options is null ? null : new RouteCheckOptions { Warnings = options }, debounce: TimeSpan.Zero, post: post ?? PassageCheckFixture.SerialPost, weather: new FixedWeatherLimits());
         var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(), warnings: warnings);
         return new WarningsRouteCheck(routes, route, check, findings) { Warnings = warnings };
     }

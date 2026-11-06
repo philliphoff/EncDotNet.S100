@@ -60,13 +60,25 @@ public static class RtzPassagePlan
         }
 
         var departure = route.Waypoints.Count > 0 ? schedule?.ElementFor(route.Waypoints[0].Id)?.Departure : null;
+        return new PassagePlan(legs, departure) { VesselLimits = route.VesselLimits() };
+    }
+
+    /// <summary>
+    /// The route's <c>vesselMaxWind</c> (knots, RTZ 1.2 XSD) and
+    /// <c>vesselMaxWave</c> (metres) as weather limits.
+    /// </summary>
+    /// <param name="route">The route.</param>
+    /// <returns>The limits, or <c>null</c> when the route sets neither (or only non-positive values).</returns>
+    public static WeatherLimits? VesselLimits(this RtzRoute route)
+    {
+        ArgumentNullException.ThrowIfNull(route);
         var info = route.Info;
         var limits = new WeatherLimits
         {
             MaxWind = info.VesselMaxWind is { } wind && double.IsFinite(wind) && wind > 0 ? Speed.FromKnots(wind) : null,
             MaxWaveHeight = info.VesselMaxWave is { } wave && double.IsFinite(wave) && wave > 0 ? Length.FromMetres(wave) : null,
         };
-        return new PassagePlan(legs, departure) { VesselLimits = limits.IsEmpty ? null : limits };
+        return limits.IsEmpty ? null : limits;
     }
 
     private static double? LegSpeedKnots(RtzRoute route, RtzSchedule schedule, int legIndex, LegGeometry geometry)

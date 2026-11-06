@@ -121,6 +121,7 @@ internal sealed class PassageCheckService : IDisposable
     private readonly RouteCheckSourceCache _sources;
     private readonly PanelRouteWarningSource? _warnings;
     private readonly IMarinerSettingsProvider? _mariner;
+    private readonly IRouteWeatherLimits _weather;
     private readonly RouteCheckOptions? _options;
     private readonly Func<IEnumerable<IRouteCheck>> _checks;
     private readonly Action<Action> _post;
@@ -147,6 +148,7 @@ internal sealed class PassageCheckService : IDisposable
     /// service's state (the UI dispatcher in the app). Results finish on the
     /// thread pool, so it must not run them there concurrently with edits.
     /// </param>
+    /// <param name="weather">The mariner's wind and wave limits for the weather check; a change re-runs the check.</param>
     /// <param name="sources">The route-check sources, shared with other checks, or <c>null</c> for its own over ProjNet.</param>
     /// <param name="warnings">The panel's warnings, or <c>null</c> to check the loaded S-124 datasets' own.</param>
     /// <param name="mariner">The mariner's safety contour and depth for the chart check's depth checks, or <c>null</c> to skip them.</param>
@@ -161,6 +163,7 @@ internal sealed class PassageCheckService : IDisposable
         RoutesService routes,
         IDatasetCatalog catalog,
         Action<Action> post,
+        IRouteWeatherLimits weather,
         RouteCheckSourceCache? sources = null,
         PanelRouteWarningSource? warnings = null,
         IMarinerSettingsProvider? mariner = null,
@@ -171,7 +174,9 @@ internal sealed class PassageCheckService : IDisposable
         ArgumentNullException.ThrowIfNull(routes);
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(post);
+        ArgumentNullException.ThrowIfNull(weather);
         _routes = routes;
+        _weather = weather;
         _catalog = catalog;
         _sources = sources ?? new RouteCheckSourceCache(new ProjNetCrsTransformFactory());
         _warnings = warnings;
@@ -189,7 +194,11 @@ internal sealed class PassageCheckService : IDisposable
             _warnings.Changed += OnWarningsChanged;
         if (_mariner is not null)
             _mariner.Changed += OnMarinerChanged;
+        _weather.RouteWeatherLimitsChanged += OnWeatherLimitsChanged;
     }
+
+    /// <summary>The mariner's wind and wave limits, or <c>null</c> when neither is set.</summary>
+    public WeatherLimits? WeatherLimits => _weather.Limits;
 
     /// <summary>The delay between the last change and a recompute.</summary>
     public TimeSpan Debounce { get; }
@@ -332,6 +341,7 @@ internal sealed class PassageCheckService : IDisposable
             _warnings.Changed -= OnWarningsChanged;
         if (_mariner is not null)
             _mariner.Changed -= OnMarinerChanged;
+        _weather.RouteWeatherLimitsChanged -= OnWeatherLimitsChanged;
         _pending?.Cancel();
         _windowPending?.Cancel();
     }
@@ -344,6 +354,8 @@ internal sealed class PassageCheckService : IDisposable
     private void OnWarningsChanged(object? sender, EventArgs e) => _post(() => Schedule(force: true));
 
     private void OnMarinerChanged(MarinerSettings settings) => _post(() => Schedule());
+
+    private void OnWeatherLimitsChanged() => _post(() => Schedule());
 
     private void Schedule() => Schedule(force: false);
 
@@ -369,7 +381,7 @@ internal sealed class PassageCheckService : IDisposable
             return;
         }
 
-        var input = CheckInput.From(_routes, _mariner?.Current);
+        var input = CheckInput.From(_routes, _weather.Limits, _mariner?.Current);
         if (input is null)
         {
             CancelPending();
@@ -576,6 +588,7 @@ internal sealed class PassageCheckService : IDisposable
                 WaterLevel = sources.WaterLevel,
                 Areas = sources.Areas,
                 Warnings = _warnings,
+                Weather = sources.Weather,
             };
             _bundles.AddOrUpdate(sources, bundle);
             return bundle;
@@ -652,8 +665,8 @@ internal sealed class PassageCheckService : IDisposable
         return new PassageCursor(d, index, position, bearing, eta);
     }
 
-    /// <summary>Every built-in check, in the order <see cref="RouteChecker"/> runs them: chart, areas, warnings and clearance.</summary>
-    public static IEnumerable<IRouteCheck> BuiltInChecks() => [new ChartCheck(), new AreaCheck(), new WarningCheck(), new ClearanceCheck()];
+    /// <summary>Every built-in check, in the order <see cref="RouteChecker"/> runs them: chart, areas, warnings, clearance and weather.</summary>
+    public static IEnumerable<IRouteCheck> BuiltInChecks() => [new ChartCheck(), new AreaCheck(), new WarningCheck(), new ClearanceCheck(), new WeatherCheck()];
 
     /// <summary>The live checker and the window sweeper for one set of loaded data, sharing one clearance check.</summary>
     private sealed record Checkers(RouteChecker Checker, RouteChecker Sweeper)
@@ -673,20 +686,24 @@ internal sealed class PassageCheckService : IDisposable
     /// <param name="HasDraft">Whether every leg has a draft, which the clearance check needs.</param>
     /// <param name="SafetyContour">The mariner's safety contour, or <c>null</c> (no depth checks).</param>
     /// <param name="SafetyDepth">The mariner's safety depth, or <c>null</c> (no depth checks).</param>
+    /// <param name="WeatherLimits">The mariner's wind and wave limits, or <c>null</c>.</param>
+    /// <param name="VesselLimits">The route's own wind and wave limits (RTZ), or <c>null</c>.</param>
     internal sealed record CheckInput(
         string RouteId,
         IReadOnlyList<PassageLeg> Legs,
         DateTimeOffset Departure,
         bool HasDraft,
-        Quantities.Depth? SafetyContour = null,
-        Quantities.Depth? SafetyDepth = null)
+        Quantities.Depth? SafetyContour,
+        Quantities.Depth? SafetyDepth,
+        WeatherLimits? WeatherLimits,
+        WeatherLimits? VesselLimits)
     {
         /// <summary>
         /// The plan the checks take. Its departure is <see cref="Departure"/>
         /// (the route's, or the view time when it has none), so a leg without
         /// an ETA is judged at it.
         /// </summary>
-        public PassagePlan Plan => new(Legs, Departure);
+        public PassagePlan Plan => new(Legs, Departure) { VesselLimits = VesselLimits };
 
         /// <summary>The settings the checks take: the departure as <c>At</c>, and the mariner's depths.</summary>
         public EncDotNet.S100.Navigation.RouteCheckSettings Settings => SettingsWith(null);
@@ -698,16 +715,18 @@ internal sealed class PassageCheckService : IDisposable
             SafetyContour = SafetyContour,
             SafetyDepth = SafetyDepth,
             DepartureWindow = window,
+            WeatherLimits = WeatherLimits,
         };
 
-        public static CheckInput? From(RoutesService routes, MarinerSettings? mariner = null) =>
-            routes.Routes.ActiveRoute is { } route ? For(route, routes.ViewTime.Current, mariner) : null;
+        public static CheckInput? From(RoutesService routes, WeatherLimits? weather, MarinerSettings? mariner = null) =>
+            routes.Routes.ActiveRoute is { } route ? For(route, routes.ViewTime.Current, weather, mariner) : null;
 
         /// <summary>The inputs for <paramref name="route"/>, or <c>null</c> when it has no legs.</summary>
         /// <param name="route">The route.</param>
         /// <param name="viewTime">The view time, the departure when the route has none.</param>
+        /// <param name="weather">The mariner's wind and wave limits, or <c>null</c>.</param>
         /// <param name="mariner">The mariner's settings for the depth checks, or <c>null</c> to skip them.</param>
-        public static CheckInput? For(Route route, DateTimeOffset viewTime, MarinerSettings? mariner = null)
+        public static CheckInput? For(Route route, DateTimeOffset viewTime, WeatherLimits? weather, MarinerSettings? mariner = null)
         {
             if (route.Legs.Count == 0)
                 return null;
@@ -715,11 +734,12 @@ internal sealed class PassageCheckService : IDisposable
             var legs = RouteEtas.ToPassageLegs(route);
             return new CheckInput(
                 route.Id, legs, route.Passage.Departure ?? viewTime, legs.All(l => l.Draft is not null),
-                mariner?.SafetyContour, mariner?.SafetyDepth);
+                mariner?.SafetyContour, mariner?.SafetyDepth, weather, RouteVesselLimits.Of(route));
         }
 
         public bool SameAs(CheckInput other) =>
-            Departure == other.Departure && SafetyContour == other.SafetyContour && SafetyDepth == other.SafetyDepth && SameLegs(other);
+            Departure == other.Departure && SafetyContour == other.SafetyContour && SafetyDepth == other.SafetyDepth
+            && WeatherLimits == other.WeatherLimits && VesselLimits == other.VesselLimits && SameLegs(other);
 
         /// <summary>Same route, legs and vessel values; the departure may differ.</summary>
         public bool SameLegs(CheckInput other)

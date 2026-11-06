@@ -1017,6 +1017,7 @@ public partial class App : Application
                 sources: sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>(),
                 warnings: sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PanelRouteWarningSource>(),
                 mariner: sp.GetService<IMarinerSettingsProvider>(),
+                weather: sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.IRouteWeatherLimits>(),
                 post: action =>
                 {
                     if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
@@ -1374,7 +1375,8 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MeasureSession>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Tools.RangeBearingState>(),
-            sp.GetRequiredService<EcdisDisplayPanelViewModel>())
+            sp.GetRequiredService<EcdisDisplayPanelViewModel>(),
+            sp.GetRequiredService<SettingsViewModel>())
         {
             // Settle harness and render metrics (map rendering slice 1).
             PerfHarness = new McpTools.PerfHarnessServices(
@@ -1460,6 +1462,8 @@ public partial class App : Application
             sp.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.Ais.ExcludingAisFeatureSource>()?.Inner));
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentSettings>(sp =>
+            sp.GetRequiredService<SettingsViewModel>());
+        services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.IRouteWeatherLimits>(sp =>
             sp.GetRequiredService<SettingsViewModel>());
         services.AddSingleton<IMarinerSettingsProvider, MarinerSettingsProvider>();
         services.AddSingleton<MapPresentationStateProjection>();
