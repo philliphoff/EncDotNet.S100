@@ -31,6 +31,7 @@ public sealed partial class MapsuiDatasetLayerSession
     private long _stackRequested;
     private long _stackApplied;
     private long _stackFailed;
+    private Exception? _stackFailure;
     private bool _stackJobRunning;
 
     /// <summary>Stack versions asked for so far (a test seam).</summary>
@@ -274,9 +275,18 @@ public sealed partial class MapsuiDatasetLayerSession
         {
             if (_stackApplied >= version)
                 return;
-            var waiter = new StackWaiter(version, new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
-            _stackWaiters.Add(waiter);
-            wait = waiter.Completion.Task;
+
+            if (_stackFailed >= version && _stackFailure is { } failure)
+            {
+                // The compose failed before this waiter arrived.
+                wait = Task.FromException(failure);
+            }
+            else
+            {
+                var waiter = new StackWaiter(version, new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+                _stackWaiters.Add(waiter);
+                wait = waiter.Completion.Task;
+            }
         }
 
         try
@@ -338,7 +348,12 @@ public sealed partial class MapsuiDatasetLayerSession
     // Under _sync. Fails the waiters the failed compose would have satisfied.
     private void FailStackWaitersCore(long version, Exception error)
     {
-        _stackFailed = Math.Max(_stackFailed, version);
+        if (version >= _stackFailed)
+        {
+            _stackFailed = version;
+            _stackFailure = error;
+        }
+
         for (var i = _stackWaiters.Count - 1; i >= 0; i--)
         {
             if (_stackWaiters[i].Version <= version)

@@ -209,6 +209,41 @@ public sealed class StackOffUiThreadTests
     }
 
     [Fact]
+    public async Task AFailedBackgroundCompose_RestoresTheCellAndFailsItsRender()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        var authority = new SwitchableAuthority();
+        using var session = new MapsuiDatasetLayerSession(
+            new MapsuiLayerBands(map),
+            owner,
+            new MapsuiDatasetRenderer(new IdentityCrsTransformFactory()),
+            new InteroperabilityAuthorityProvider(authority),
+            redrawRequested: null,
+            stackMarshal: static action => action());
+        var id = new MapDatasetId("cell");
+        var processor = new StubProcessor(id.Value);
+        Assert.True(owner.TryRegister(id, processor));
+        session.SetDataset(Dataset(id));
+        await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
+        var original = Assert.Single(map.Layers);
+
+        authority.Throw = true;
+        processor.Version = 2;
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken));
+
+        Assert.Same(original, Assert.Single(map.Layers));
+        Assert.Same(original, Assert.Single(session.GetDataset(id)!.Layers));
+
+        // The next landing composes again once the cause is gone.
+        authority.Throw = false;
+        processor.Version = 3;
+        await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
+        Assert.NotSame(original, Assert.Single(map.Layers));
+    }
+
+    [Fact]
     public async Task OffThreadStack_MatchesTheSynchronousStack()
     {
         // Overlapping cells of three bands, one hidden: the same stack order,
@@ -383,6 +418,32 @@ public sealed class StackOffUiThreadTests
             Assert.True(DateTime.UtcNow < deadline, "timed out");
             await Task.Delay(5, TestContext.Current.CancellationToken);
         }
+    }
+
+    private sealed class SwitchableAuthority : IInteroperabilityAuthority
+    {
+        private readonly InteroperabilityAuthority _inner = new();
+
+        private volatile bool _throw;
+
+        public bool Throw
+        {
+            get => _throw;
+            set => _throw = value;
+        }
+
+        public S98DisplayPlane GetDefaultPlane(string productSpec, string? featureTypeOrLayerKind = null) =>
+            _inner.GetDefaultPlane(productSpec, featureTypeOrLayerKind);
+
+        public IReadOnlyList<SubLayerStackItem> Sort(IEnumerable<SubLayerStackItem> entries) =>
+            Throw ? throw new InvalidOperationException("Projection failed.") : _inner.Sort(entries);
+
+        public IReadOnlyList<SubLayerStackItem> ApplyRules(
+            IReadOnlyList<SubLayerStackItem> sortedStack,
+            IReadOnlyList<LoadedDatasetInfo> loadedDatasets,
+            MarinerSettings? mariner = null,
+            IReadOnlyCollection<S98InteroperabilityRule>? rules = null) =>
+            _inner.ApplyRules(sortedStack, loadedDatasets, mariner, rules);
     }
 
     /// <summary>A map thread the test pumps by hand.</summary>

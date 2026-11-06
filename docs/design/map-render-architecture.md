@@ -877,6 +877,29 @@ coverages through an envelope R-tree, only for the new cell. Publish the
 result and apply it to Mapsui in one dispatcher post. Add stack-version
 batching here.
 
+*Result (slice 6).* A landing cell's compose runs as a `Stack` job and
+reaches Mapsui in one post (`S100MapsuiOptions.StackMarshal`; the Avalonia
+`AddS100` sets it). Cells that land while a compose is computing or applying
+join the next one, and a stack older than the one on the map is dropped.
+Order, display and removal changes still compose synchronously, as newer
+versions. `CoverageOverlapIndex` finds finer coverages through a quadtree of
+envelopes, and it tests each pair once. Measured:
+
+- **Overlap suppression per landing** (synthetic overlapping cells, 600
+  vertices each): 25 cells 9.0 → 0.9 ms, 100 cells 123 → 3.3 ms, 300 cells
+  1 088 → 9.8 ms. That remainder now runs on a worker.
+- **Washington, cold, quiet machine.** With 8–23 cells the whole compose was
+  only 2–3 ms (suppression about 70%), so the longest UI-thread task (the new
+  `get_process_metrics` `uiThread` probe) was already 3.7–5.9 ms on main. With
+  the change it's 1.3–8.7 ms, with one 27 ms outlier in three runs. Settle and
+  frame p95 don't change.
+- **Under load the gain is larger.** When other processes compete, the same
+  compose took 10–56 ms on the UI thread on main.
+- **About half the cold runs on either build land in a slow regime.** They
+  load 11 cells at Seattle instead of 8, settle in 6–15 s, and show UI p99 of
+  20–60 ms with frame p95 of 160–500 ms. The compose doesn't cause it: the
+  regime looks the same on both builds.
+
 **7. Extract the engine.** This is
 [#607](https://github.com/philliphoff/EncDotNet.S100/issues/607). Move the Tier 1
 files as listed there, swap `ILayer` for an opaque identity token, use the core
