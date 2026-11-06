@@ -74,12 +74,6 @@ public static class RenderingOptimizations
     /// <inheritdoc cref="MinSkiaGpuResourceMb"/>
     public const double MaxSkiaGpuResourceMb = 4096.0;
 
-    /// <summary>Minimum / maximum accepted concurrent tile-rasterisation workers per layer.</summary>
-    public const int MinTileWorkers = 1;
-
-    /// <inheritdoc cref="MinTileWorkers"/>
-    public const int MaxTileWorkers = 8;
-
     private static PerformanceProfile _resolvedProfile;
     private static VectorSceneMode _sceneMode;
     private static double _tileGutterDip;
@@ -91,7 +85,6 @@ public static class RenderingOptimizations
     private static double _tileDiskMb;
     private static bool _tileGpuResidencyEnabled;
     private static double _tileGpuBudgetMb;
-    private static int _tileWorkerCount;
     private static string? _tileDiskDirectory;
     private static PerformanceProfile _profile;
 
@@ -131,8 +124,6 @@ public static class RenderingOptimizations
             SeedBool("S100_VECTOR_TILE_GPU", defaultValue: false);
         (_tileGpuBudgetMb, TileGpuBudgetMbEnvExplicit) =
             SeedDouble("S100_VECTOR_TILE_GPU_MB", MachineProfile.TileGpuBudgetMb(tier), MinTileGpuBudgetMb, MaxTileGpuBudgetMb);
-        (_tileWorkerCount, TileWorkerCountEnvExplicit) =
-            SeedInt("S100_VECTOR_TILE_WORKERS", MachineProfile.TileWorkers(tier), MinTileWorkers, MaxTileWorkers);
         (SkiaGpuResourceMb, _) =
             SeedDouble("S100_SKIA_GPU_RESOURCE_MB", MachineProfile.SkiaGpuResourceMb(tier), MinSkiaGpuResourceMb, MaxSkiaGpuResourceMb);
 
@@ -336,23 +327,6 @@ public static class RenderingOptimizations
     public static double SkiaGpuResourceMb { get; }
 
     /// <summary>
-    /// Number of concurrent tile-rasterisation workers per layer
-    /// (<c>S100_VECTOR_TILE_WORKERS</c>, default <see cref="MachineProfile.TileWorkers(PerformanceProfile)"/>).
-    /// Multiple workers drain the visible-miss queue in parallel so a cold pan's
-    /// tiles no longer rasterise strictly one at a time. The count is captured
-    /// when a layer first starts producing tiles, so a change applies on the next
-    /// dataset reload. Clamped to <see cref="MinTileWorkers"/>..<see cref="MaxTileWorkers"/>.
-    /// </summary>
-    public static int TileWorkerCount
-    {
-        get => _tileWorkerCount;
-        set { if (!TileWorkerCountEnvExplicit) _tileWorkerCount = ClampInt(value, MinTileWorkers, MaxTileWorkers); }
-    }
-
-    /// <summary>True when <see cref="TileWorkerCount"/> is pinned by an explicit environment variable.</summary>
-    public static bool TileWorkerCountEnvExplicit { get; }
-
-    /// <summary>
     /// The selected performance profile. <see cref="PerformanceProfile.Auto"/>
     /// (the default) derives a tier from detected cores + RAM. Setting a profile
     /// recomputes any tile budget / worker default that is not pinned by an env
@@ -381,7 +355,6 @@ public static class RenderingOptimizations
         if (!TileBudgetMbEnvExplicit) _tileBudgetMb = MachineProfile.TileBudgetMb(tier);
         if (!TileGpuBudgetMbEnvExplicit) _tileGpuBudgetMb = MachineProfile.TileGpuBudgetMb(tier);
         if (!TileDiskMbEnvExplicit) _tileDiskMb = MachineProfile.TileDiskMb(tier);
-        if (!TileWorkerCountEnvExplicit) _tileWorkerCount = MachineProfile.TileWorkers(tier);
         if (!TileCrossBandPrewarmEnvExplicit) _tileCrossBandPrewarmEnabled = tier != PerformanceProfile.LowEnd;
     }
 

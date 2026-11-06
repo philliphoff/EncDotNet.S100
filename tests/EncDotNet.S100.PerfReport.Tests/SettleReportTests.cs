@@ -43,6 +43,38 @@ public sealed class SettleReportTests
     }
 
     [Fact]
+    public void Flatten_AndTotals_ReadTheSchedulerWindow()
+    {
+        var steps = new JsonArray
+        {
+            SettleReport.Flatten("a", 0, 0, Settle(1000), WithScheduler(Metrics(3000, 1000, 1), coresBusy: 2, visibleP95: 40, runP95: 30), Frames()),
+            SettleReport.Flatten("b", 0, 0, Settle(1000), WithScheduler(Metrics(3000, 3000, 1), coresBusy: 4, visibleP95: 90, runP95: 20), Frames()),
+        };
+
+        Assert.Equal(40, SettleReport.Number(steps[0], "visibleWaitP95Ms"));
+        Assert.Equal(5, SettleReport.Number(steps[0], "visibleJobs"));
+        var totals = SettleReport.Totals(steps);
+        Assert.Equal(3.5, SettleReport.Number(totals, "schedulerCoresBusy"));
+        Assert.Equal(90, SettleReport.Number(totals, "visibleWaitP95Ms"));
+        Assert.Equal(30, SettleReport.Number(totals, "jobRunP95Ms"));
+
+        // A viewer without the scheduler window reports nothing, not zero.
+        var old = SettleReport.Flatten("c", 0, 0, Settle(1000), Metrics(1, 1, 1), Frames());
+        Assert.Null(SettleReport.Number(old, "visibleWaitP95Ms"));
+    }
+
+    private static JsonNode WithScheduler(JsonNode metrics, double coresBusy, double visibleP95, double runP95)
+    {
+        metrics["scheduler"] = new JsonObject
+        {
+            ["coresBusy"] = coresBusy,
+            ["visibleWait"] = new JsonObject { ["count"] = 5, ["p95Ms"] = visibleP95, ["maxMs"] = visibleP95 * 2 },
+            ["run"] = new JsonObject { ["count"] = 9, ["p95Ms"] = runP95 },
+        };
+        return metrics;
+    }
+
+    [Fact]
     public void WriteSummary_ListsEachStepAndTheTotal()
     {
         var manifest = Manifest("moonsharp", 1500);

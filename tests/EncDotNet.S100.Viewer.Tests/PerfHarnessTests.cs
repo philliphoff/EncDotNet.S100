@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.ExchangeSets;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Diagnostics;
@@ -310,6 +311,41 @@ public sealed class PerfHarnessTests
         Assert.Equal(0, stopped!.Window!.AllocatedBytes);
         Assert.False(sampler.IsWindowOpen);
         Assert.False(tool.Invoke("bogus").TryGetValue(out _));
+    }
+
+    [Fact]
+    public async Task GetProcessMetrics_ReportsTheSchedulerOverTheWindow()
+    {
+        var source = new FakeSource();
+        using var sampler = new ProcessMetricsSampler(source, interval: TimeSpan.FromHours(1), processorCount: 4);
+        using var scheduler = new WorkScheduler(new WorkSchedulerOptions { WorkerCount = 2, ThreadName = "metrics test" });
+        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), schedulerStats: scheduler.GetStats);
+
+        Assert.True(tool.Invoke(null).TryGetValue(out var none));
+        Assert.Null(none!.Scheduler);
+
+        // Work before the window doesn't count.
+        await scheduler.Schedule(new WorkKey("before"), WorkStage.Raster, WorkPriority.Visible(), _ => ValueTask.FromResult(true))
+            .Result.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        Assert.True(tool.Invoke("start").TryGetValue(out _));
+        var jobs = Enumerable.Range(0, 3)
+            .Select(i => scheduler.Schedule(new WorkKey("in", i), WorkStage.Raster, WorkPriority.Visible(), _ => ValueTask.FromResult(true)).Result)
+            .Append(scheduler.Schedule(new WorkKey("bg"), WorkStage.Raster, WorkPriority.Background(), _ => ValueTask.FromResult(true)).Result);
+        await Task.WhenAll(jobs).WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        Assert.True(tool.Invoke("restart").TryGetValue(out var window));
+        var reported = window!.Scheduler;
+        Assert.NotNull(reported);
+        Assert.Equal(2, reported.Workers);
+        Assert.Equal(3, reported.VisibleWait.Count);
+        Assert.Equal(1, reported.BackgroundWait.Count);
+        Assert.Equal(4, reported.Run.Count);
+        Assert.Equal(4, reported.Completed);
+
+        Assert.True(tool.Invoke("stop").TryGetValue(out var stopped));
+        Assert.Equal(0, stopped!.Scheduler!.Completed);
+        Assert.True(tool.Invoke(null).TryGetValue(out var after));
+        Assert.Null(after!.Scheduler);
     }
 
     // ── Pre-warm control ─────────────────────────────────────────────
