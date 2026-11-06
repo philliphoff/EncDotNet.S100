@@ -79,6 +79,8 @@ public static class FeatureAccessor
             // Surface analyses: the fronts and centres of the analysis a
             // render without a time step draws (the bulletin's first).
             SurfaceAnalysisDatasetData analysis => FilterByExtent(SurfaceAnalysisDatasetProcessor.DrawnFeatures(analysis.Bulletin, timeStep: null), extent),
+            // Tropical cyclones: every drawn part of the storm (#1296).
+            TropicalCycloneDatasetData tc => FilterByExtent(TropicalCycloneDatasetProcessor.DrawnFeatures(tc.Advisory), extent),
             _ => null,
         };
     }
