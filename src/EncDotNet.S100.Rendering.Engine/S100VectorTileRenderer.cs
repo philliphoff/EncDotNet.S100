@@ -3332,6 +3332,20 @@ public static partial class S100VectorTileRenderer
                         }
                     }
                     else if (image is not null
+                        && relevance == TileRelevance.Irrelevant
+                        && state.Chart is not null
+                        && IsWantedStandIn(state, key)
+                        && !SupersededByLiveScale(state, key, image))
+                    {
+                        // A chart tile of a stack the slot has since moved
+                        // past: still better than nothing while the slot's
+                        // current tile rasterises, so it stands in for it.
+                        state.Cache.Put(key, image);
+                        state.ShownBySlot[key.Slot] = key;
+                        published++;
+                        publishedVisible = true;
+                    }
+                    else if (image is not null
                         || discardedBeforeRaster.Contains(key))
                     {
                         image?.Dispose();
