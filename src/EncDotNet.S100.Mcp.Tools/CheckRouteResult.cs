@@ -66,7 +66,10 @@ public sealed record CheckRouteResult(
     private static string DisclaimerFor(CheckRouteClearance? clearance, WeatherCheckResult? weather)
     {
         var text = clearance is null ? DisclaimerText : DisclaimerText + " · clearance " + clearance.Disclaimer;
-        return weather is null ? text : text + " · " + CheckRouteWeather.DisclaimerText;
+        if (weather is null)
+            return text;
+        text += " · " + CheckRouteWeather.DisclaimerText;
+        return weather.Cyclones.Count == 0 ? text : text + " · " + CheckRouteWeather.CycloneDisclaimerText;
     }
 
     /// <summary>The summary line for a set of findings, as SoundCharts' no-draft verdict titles.</summary>
@@ -659,18 +662,29 @@ public sealed record CheckRouteDeparture(
 
 /// <summary>The weather check's result.</summary>
 public sealed record CheckRouteWeather(
-    [property: Description("within_limits, above_limits, forecast_ends_before_arrival (nothing above a limit, but the forecast ends before the vessel reaches part of the route) or incomplete (part of the route isn't checked: no coverage, no value, or the forecast starts later).")] string Verdict,
+    [property: Description("inside_cyclone_radius (inside a tropical cyclone's tested wind radius somewhere), above_limits, forecast_ends_before_arrival (nothing above a limit, but a grid's or a nearby storm's forecast ends before the vessel reaches part of the route), incomplete (part of the route isn't checked: no coverage, no value, or the forecast starts later) or within_limits.")] string Verdict,
     [property: Description("The limits checked, each with where it came from: settings (the request) or route (RTZ vesselMaxWind/vesselMaxWave).")] IReadOnlyList<CheckRouteWeatherLimit> Limits,
     [property: Description("The highest checked wind along the route, or null when none was checked.")] CheckRouteWeatherMaximum? MaxWind,
     [property: Description("The highest checked significant wave height along the route, or null when none was checked.")] CheckRouteWeatherMaximum? MaxWaveHeight,
     [property: Description("Number of places along the track the forecast was read (one per nautical mile).")] int SampleCount,
-    [property: Description("Number of those where a limited quantity wasn't checked (the forecast ends or starts later, no coverage, or no value).")] int NotCheckedCount,
+    [property: Description("Number of those where a limited quantity, or a nearby tropical cyclone, wasn't checked (the forecast ends or starts later, no coverage, or no value).")] int NotCheckedCount,
     [property: Description("The weather datasets read.")] IReadOnlyList<string> Datasets,
     [property: Description("The departure sweep, with includeWindow: across windowFrom..windowTo, or across the forecast that covers the route. Null without includeWindow.")] CheckRouteWeatherWindow? Window,
     [property: Description("Disclaimer for the weather findings.")] string Disclaimer)
 {
     /// <summary>The disclaimer of the weather check.</summary>
     public const string DisclaimerText = "weather from forecast model data, nearest grid node and time step at each ETA, advisory, not official S-100 data";
+
+    /// <summary>The disclaimer added when tropical cyclones were checked.</summary>
+    public const string CycloneDisclaimerText = "tropical cyclones from NHC advisories, the storm interpolated between forecast points at each ETA, advisory, not for navigation";
+
+    /// <summary>The tropical cyclone settings the check used (#1299).</summary>
+    [Description("The tropical cyclone rule's settings used: the radius checked against, whether the closest approach is reported, and the weakest radius that is must_review.")]
+    public CheckRouteCycloneSettings? CycloneSettings { get; init; }
+
+    /// <summary>The tropical cyclones near the route (#1299).</summary>
+    [Description("The tropical cyclones (NHC advisories) within 600 NM of the route: the strongest tested radius met, the cone, whether part of the route is beyond the forecast, and the closest approach. Empty without any.")]
+    public IReadOnlyList<CheckRouteCyclone> Cyclones { get; init; } = [];
 
     /// <summary>Projects a weather check's result.</summary>
     /// <param name="result">The result.</param>
@@ -688,10 +702,14 @@ public sealed record CheckRouteWeather(
             Maximum(result, WeatherQuantity.WindSpeed),
             Maximum(result, WeatherQuantity.SignificantWaveHeight),
             result.Samples.Count,
-            result.Samples.Count(s => s.Readings.Any(r => !r.IsChecked)),
+            result.Samples.Count(s => s.Readings.Any(r => !r.IsChecked) || s.Cyclones.Any(c => c.BeyondForecast)),
             result.DatasetsUsed,
             result.Departures is { } sweep ? CheckRouteWeatherWindow.From(sweep) : null,
-            DisclaimerText);
+            DisclaimerText)
+        {
+            CycloneSettings = CheckRouteCycloneSettings.From(result.CycloneSettings),
+            Cyclones = [.. result.Cyclones.Select(CheckRouteCyclone.From)],
+        };
     }
 
     /// <summary>The wire code of a weather verdict.</summary>
@@ -699,6 +717,7 @@ public sealed record CheckRouteWeather(
     /// <returns>The code.</returns>
     public static string VerdictCode(WeatherVerdict verdict) => verdict switch
     {
+        WeatherVerdict.InsideCycloneRadius => "inside_cyclone_radius",
         WeatherVerdict.AboveLimits => "above_limits",
         WeatherVerdict.ForecastEndsBeforeArrival => "forecast_ends_before_arrival",
         WeatherVerdict.Incomplete => "incomplete",
@@ -774,7 +793,11 @@ public sealed record CheckRouteWeatherWindow(
                 CheckRouteWeather.VerdictCode(o.Verdict),
                 o.MaxWindMetresPerSecond is { } w ? CheckRouteWeather.Value(WeatherQuantity.WindSpeed, w) : null,
                 o.MaxWaveHeightMetres is { } h ? Math.Round(h, 2) : null,
-                Math.Round(o.TimeAboveLimits.TotalMinutes, 1))).ToList());
+                Math.Round(o.TimeAboveLimits.TotalMinutes, 1))
+            {
+                CycloneRadiusKnots = o.CycloneRadius is { } r ? (int)r : null,
+                CycloneClosestNm = o.CycloneClosestMeters is { } m ? CheckRouteResult.Nm(m) : null,
+            }).ToList());
     }
 }
 
@@ -785,4 +808,108 @@ public sealed record CheckRouteWeatherDeparture(
     [property: Description("Weather verdict code for this departure (see weather.verdict).")] string Verdict,
     [property: Description("Highest wind checked, knots; null when none was.")] double? MaxWindKnots,
     [property: Description("Highest significant wave height checked, metres; null when none was.")] double? MaxWaveHeightMeters,
-    [property: Description("Minutes the vessel spends where wind or waves are above a limit (0 without ETAs).")] double MinutesAboveLimits);
+    [property: Description("Minutes the vessel spends where wind or waves are above a limit (0 without ETAs).")] double MinutesAboveLimits)
+{
+    /// <summary>The strongest tested tropical cyclone radius the route meets for this departure.</summary>
+    [Description("The strongest tested tropical cyclone wind radius the route meets for this departure, in knots (34, 50 or 64); null when it stays outside them.")]
+    public int? CycloneRadiusKnots { get; init; }
+
+    /// <summary>The closest approach to a storm's centre for this departure.</summary>
+    [Description("The closest the route comes to a tropical cyclone's centre for this departure, nautical miles; null without a storm near the route.")]
+    public double? CycloneClosestNm { get; init; }
+}
+
+/// <summary>The tropical cyclone rule's settings (#1299).</summary>
+public sealed record CheckRouteCycloneSettings(
+    [property: Description("The outermost wind radius tested, knots: 34, 50 or 64. The cone is always tested.")] int CheckAgainstKnots,
+    [property: Description("Whether the closest approach is reported (weather.tc_cpa).")] bool ReportClosestApproach,
+    [property: Description("The weakest radius whose findings are must_review, knots (34, 50 or 64), or null for never. Weaker radii and the cone are check.")] int? MustReviewInsideKnots)
+{
+    /// <summary>Projects the settings, with Must review inside moved in to Check against when it lies outside it.</summary>
+    /// <param name="settings">The settings.</param>
+    /// <returns>The DTO.</returns>
+    public static CheckRouteCycloneSettings From(TropicalCycloneCheckSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        return new((int)settings.CheckAgainst, settings.ReportClosestApproach, settings.EffectiveMustReviewInside is { } m ? (int)m : null);
+    }
+}
+
+/// <summary>A tropical cyclone near the route (#1299).</summary>
+public sealed record CheckRouteCyclone(
+    [property: Description("The advisory's dataset id.")] string DatasetId,
+    [property: Description("The storm's ATCF id, such as AL142026.")] string StormId,
+    [property: Description("The storm's name.")] string Name,
+    [property: Description("The advisory number.")] string Advisory,
+    [property: Description("When the advisory was issued, ISO 8601 UTC.")] DateTimeOffset IssueTime,
+    [property: Description("The advisory's last forecast point, ISO 8601 UTC. Later ETAs aren't checked against the storm.")] DateTimeOffset ForecastEnd,
+    [property: Description("The strongest tested wind radius the route meets at the ETAs, knots; null when it stays outside them.")] int? StrongestRadiusKnots,
+    [property: Description("Whether the route meets the forecast cone while the forecast runs.")] bool InCone,
+    [property: Description("Whether part of the route near the storm is reached after its last forecast point (weather.tc_beyond_forecast).")] bool BeyondForecast,
+    [property: Description("The closest approach to the storm's centre at the ETAs, or null when the vessel is never on the route while the storm is.")] CheckRouteCycloneApproach? ClosestApproach)
+{
+    /// <summary>Projects a storm's result.</summary>
+    /// <param name="storm">The storm.</param>
+    /// <returns>The DTO.</returns>
+    public static CheckRouteCyclone From(CycloneCheckStorm storm)
+    {
+        ArgumentNullException.ThrowIfNull(storm);
+        return new(
+            storm.Info.DatasetId,
+            storm.Info.StormId,
+            storm.Info.Name,
+            storm.Info.Advisory,
+            storm.Info.IssueTime.ToUniversalTime(),
+            storm.ForecastEnd.ToUniversalTime(),
+            storm.StrongestRadius is { } r ? (int)r : null,
+            storm.InCone,
+            storm.BeyondForecast,
+            storm.ClosestApproach is { } c ? CheckRouteCycloneApproach.From(c.DistanceMeters, c.LegIndex, c.RouteDistanceMeters, c.RoutePosition, c.HasEta ? c.Time : null, c.Storm) : null);
+    }
+}
+
+/// <summary>The route's closest approach to a storm's centre.</summary>
+public sealed record CheckRouteCycloneApproach(
+    [property: Description("The distance from the route to the storm's centre, nautical miles.")] double DistanceNm,
+    [property: Description("Zero-based leg.")] int LegIndex,
+    [property: Description("Distance from departure, nautical miles.")] double RouteDistanceNm,
+    [property: Description("Latitude of the place on the route.")] double Latitude,
+    [property: Description("Longitude of the place on the route.")] double Longitude,
+    [property: Description("ETA there, ISO 8601 UTC; null without one.")] DateTimeOffset? Eta,
+    [property: Description("Latitude of the storm's centre then.")] double StormLatitude,
+    [property: Description("Longitude of the storm's centre then.")] double StormLongitude,
+    [property: Description("Where the storm position comes from: forecast (a forecast point), estimated (between two) or best_track.")] string Basis)
+{
+    /// <summary>Projects a closest approach.</summary>
+    /// <param name="metres">The distance, metres.</param>
+    /// <param name="legIndex">The leg.</param>
+    /// <param name="routeMetres">Distance from departure, metres.</param>
+    /// <param name="position">The place on the route.</param>
+    /// <param name="eta">The ETA, or null.</param>
+    /// <param name="storm">The storm then.</param>
+    /// <returns>The DTO.</returns>
+    public static CheckRouteCycloneApproach From(double metres, int legIndex, double routeMetres, DataModel.GeoPosition position, DateTimeOffset? eta, RouteCycloneAt storm)
+    {
+        ArgumentNullException.ThrowIfNull(storm);
+        return new(
+            CheckRouteResult.Nm(metres),
+            legIndex,
+            CheckRouteResult.Nm(routeMetres),
+            position.Latitude,
+            position.Longitude,
+            eta?.ToUniversalTime(),
+            storm.Centre.Latitude,
+            storm.Centre.Longitude,
+            BasisCode(storm.Basis));
+    }
+
+    /// <summary>The wire code of a storm position's basis.</summary>
+    /// <param name="basis">The basis.</param>
+    /// <returns>forecast, estimated or best_track.</returns>
+    public static string BasisCode(RouteCycloneBasis basis) => basis switch
+    {
+        RouteCycloneBasis.Estimated => "estimated",
+        RouteCycloneBasis.BestTrack => "best_track",
+        _ => "forecast",
+    };
+}

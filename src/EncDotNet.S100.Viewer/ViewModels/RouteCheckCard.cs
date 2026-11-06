@@ -110,6 +110,8 @@ internal sealed record RouteCheckCard(
         var products = Products(snapshot?.Result.Sources, near);
         if (report.Weather is { DatasetsUsed.Count: > 0 })
             products = [.. products, Strings.Check_FooterWeather];
+        if (report.Weather is { Cyclones.Count: > 0 })
+            products = [.. products, Strings.Check_FooterCyclones];
         return Build(report.Verdict.Kind, input.HasDraft, snapshot, list, warningsChecked, WeatherRowState.Of(report), products, depthUnit, timeFormat);
     }
 
@@ -327,34 +329,71 @@ internal sealed record RouteCheckCard(
     }
 
     /// <summary>
-    /// The Weather row (#1093): above your limits, not checked, or within
-    /// them; "No limits set" before any is. Its tooltip names the limits in
-    /// use and where each comes from.
+    /// The Weather row (#1093, #1299): Must review inside a tropical
+    /// cyclone's radii, above your limits, to check, not checked, or within
+    /// them, with the closest approach to a storm; "No limits set" before any
+    /// is and with no storm near the route. Its tooltip names the limits and
+    /// cyclone settings in use.
     /// </summary>
     private static RouteCheckSummaryRow WeatherRow(WeatherRowState state, IReadOnlyList<RouteFinding> weather, DepthUnit depthUnit)
     {
-        if (state.Result is not { } result || state.Reason == RouteCheckReasons.WeatherLimitsMissing)
-            return new RouteCheckSummaryRow(FindingsFilter.Weather, Strings.Check_SummaryWeather, Strings.Check_SummaryWeatherNoLimits, null, CheckTone.Neutral,
-                Tooltip: Strings.Tooltip_CheckSummaryWeatherNoLimits);
+        var result = state.Result;
+        var hasLimits = result is { Limits.Count: > 0 };
+        var hasStorms = result is { Cyclones.Count: > 0 };
+        if (result is null || (!hasLimits && !hasStorms))
+        {
+            // Only an advisory loaded and nothing near: say so rather than "No limits set".
+            return result is not null && state.Reason != RouteCheckReasons.WeatherLimitsMissing && weather.Count == 0
+                ? new RouteCheckSummaryRow(FindingsFilter.Weather, Strings.Check_SummaryWeather, Strings.Check_SummaryWeatherNoStorm, "0", CheckTone.Success,
+                    Tooltip: string.Format(CultureInfo.CurrentCulture, Strings.Tooltip_CheckSummaryWeatherFormat, CycloneSettingsText(result.CycloneSettings)))
+                : new RouteCheckSummaryRow(FindingsFilter.Weather, Strings.Check_SummaryWeather, Strings.Check_SummaryWeatherNoLimits, null, CheckTone.Neutral,
+                    Tooltip: Strings.Tooltip_CheckSummaryWeatherNoLimits);
+        }
 
+        var values = new List<string>(2);
+        if (hasLimits)
+            values.Add(LimitsText(result, depthUnit));
+        if (hasStorms)
+            values.Add(CycloneSettingsText(result.CycloneSettings));
+        var tooltip = string.Format(CultureInfo.CurrentCulture, Strings.Tooltip_CheckSummaryWeatherFormat, string.Join(Strings.RouteCheck_Separator, values));
+
+        var mustReview = weather.Count(f => f.Group == RouteFindingGroup.MustReview);
         var above = weather.Count(f => f.Code == RouteFindingCodes.WindAboveLimit || f.Code == RouteFindingCodes.WavesAboveLimit);
-        var gaps = weather.Count - above;
-        var tooltip = string.Format(CultureInfo.CurrentCulture, Strings.Tooltip_CheckSummaryWeatherFormat, LimitsText(result, depthUnit));
-        if (above + gaps == 0)
+        var cyclone = weather.Count(f => f.Group == RouteFindingGroup.Check && IsCyclone(f.Code) && f.Code != RouteFindingCodes.CycloneBeyondForecast);
+        var cpa = weather.Where(f => f.Code == RouteFindingCodes.CycloneClosestApproach).ToList();
+        var gaps = weather.Count - mustReview - above - cyclone - cpa.Count;
+        if (weather.Count == 0)
             return new RouteCheckSummaryRow(FindingsFilter.Weather, Strings.Check_SummaryWeather, Strings.Check_SummaryWeatherWithin, "0", CheckTone.Success, Tooltip: tooltip);
 
-        var text = above > 0
-            ? Count(Strings.Check_SummaryWeatherAboveFormat, above) + (gaps > 0 ? Strings.RouteCheck_Separator + Count(Strings.Check_SummaryWeatherNotCheckedFormat, gaps) : string.Empty)
-            : result.Verdict == WeatherVerdict.ForecastEndsBeforeArrival ? Strings.Check_SummaryWeatherForecastEnds
-            : Count(Strings.Check_SummaryWeatherNotCheckedFormat, gaps);
+        var parts = new List<string>(3);
+        if (mustReview > 0)
+            parts.Add(Count(Strings.Check_SummaryWeatherMustReviewFormat, mustReview));
+        if (above > 0)
+            parts.Add(Count(Strings.Check_SummaryWeatherAboveFormat, above));
+        if (cyclone > 0)
+            parts.Add(Count(Strings.Check_SummaryWeatherToCheckFormat, cyclone));
+        if (gaps > 0)
+            parts.Add(parts.Count == 0 && result.Verdict == WeatherVerdict.ForecastEndsBeforeArrival && cpa.Count == 0
+                ? Strings.Check_SummaryWeatherForecastEnds
+                : Count(Strings.Check_SummaryWeatherNotCheckedFormat, gaps));
+        if (cpa.Select(f => (f.Details as TropicalCycloneDetails)?.ClosestDistance).Where(d => d is not null).Min() is { } closest)
+            parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.Check_SummaryWeatherCpaFormat, closest.TotalNauticalMiles));
         return new RouteCheckSummaryRow(
             FindingsFilter.Weather,
             Strings.Check_SummaryWeather,
-            text,
-            (above + gaps).ToString(CultureInfo.CurrentCulture),
-            above > 0 ? CheckTone.Warning : CheckTone.Neutral,
+            string.Join(Strings.RouteCheck_Separator, parts),
+            weather.Count.ToString(CultureInfo.CurrentCulture),
+            mustReview > 0 ? CheckTone.Destructive : above + cyclone > 0 ? CheckTone.Warning : CheckTone.Neutral,
             Tooltip: tooltip);
     }
+
+    private static bool IsCyclone(RouteFindingCode code) => code.Value.StartsWith("weather.tc_", StringComparison.Ordinal);
+
+    /// <summary>"34 kt radius and cone · Must review inside 50 kt": the tropical cyclone settings a weather check used (V39).</summary>
+    internal static string CycloneSettingsText(TropicalCycloneCheckSettings settings) =>
+        settings.EffectiveMustReviewInside is { } inside
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Check_CycloneSettingsFormat, (int)settings.CheckAgainst, (int)inside)
+            : string.Format(CultureInfo.CurrentCulture, Strings.Check_CycloneSettingsNeverFormat, (int)settings.CheckAgainst);
 
     /// <summary>"Wind 25 kn (Settings) · Waves 3.0 m (route)": the limits a weather check used.</summary>
     internal static string LimitsText(WeatherCheckResult result, DepthUnit depthUnit) => string.Join(Strings.RouteCheck_Separator, result.Limits.Select(limit =>

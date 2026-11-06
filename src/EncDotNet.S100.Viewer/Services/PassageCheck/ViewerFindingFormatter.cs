@@ -145,4 +145,11 @@ internal sealed class ViewerFindingFormatter : RouteFindingFormatter
     protected override string ForecastStartsAtFormat => Strings.Findings_ForecastStartsAtFormat;
     protected override string MinutesFormat => Strings.Findings_MinutesFormat;
     protected override string HoursFormat => Strings.Findings_HoursFormat;
+    protected override string CycloneRadiusFormat => Strings.Findings_CycloneRadiusFormat;
+    protected override string CycloneConeTitle => Strings.Findings_CycloneConeTitle;
+    protected override string CycloneClosestFormat => Strings.Findings_CycloneClosestFormat;
+    protected override string CycloneBeyondFormat => Strings.Findings_CycloneBeyondFormat;
+    protected override string CycloneStormFormat => Strings.Findings_CycloneStormFormat;
+    protected override string CycloneEstimated => Strings.Findings_CycloneEstimated;
+    protected override string CycloneBestTrack => Strings.Findings_CycloneBestTrack;
 }

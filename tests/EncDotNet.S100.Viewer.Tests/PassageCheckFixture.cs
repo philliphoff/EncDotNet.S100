@@ -240,5 +240,17 @@ internal sealed class FixedWeatherLimits : EncDotNet.S100.Viewer.Services.Passag
         }
     }
 
+    private EncDotNet.S100.Navigation.TropicalCycloneCheckSettings _cyclones = EncDotNet.S100.Navigation.TropicalCycloneCheckSettings.Default;
+
+    public EncDotNet.S100.Navigation.TropicalCycloneCheckSettings Cyclones
+    {
+        get => _cyclones;
+        set
+        {
+            _cyclones = value;
+            RouteWeatherLimitsChanged?.Invoke();
+        }
+    }
+
     public event Action? RouteWeatherLimitsChanged;
 }

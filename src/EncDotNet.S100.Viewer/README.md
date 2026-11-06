@@ -829,6 +829,14 @@ default; an RTZ route's own `vesselMaxWind` and `vesselMaxWave` are used where
 a limit is off. They're kept with the mariner settings, not with a route, and
 changing one re-runs an open route check without redrawing the chart.
 
+**Tropical cyclones on a route** sets how Check route tests a route against a
+loaded NHC advisory: **Check against** (the 34, 50 or 64 kt radius; 34 kt by
+default; the cone is always tested), **Report closest approach** (on by
+default) and **Must review inside** (64, 50 or 34 kt, or Never; 50 kt by
+default, and never outside **Check against**). A line under them spells out
+which findings are Must review and which are Check. They're kept with the
+mariner settings, and a change re-runs an open route check.
+
 ## Identify features
 
 Turn on **Pick Mode** (the cross-hair button on the map toolbar, **View** >
@@ -1309,8 +1317,14 @@ and confidence. While it's on:
 
   While a weather forecast is loaded, the card has a **Weather** row: "No
   limits set", "Within your limits", "1 above limits" or "Forecast ends
-  before arrival". Its tooltip names the limits in use and where each comes
-  from (Settings or the route). Clicking it filters **Findings** to weather.
+  before arrival". With a tropical cyclone advisory loaded, it also counts the
+  storm's findings and gives the closest approach, as in "2 must review · 2 to
+  check · CPA 12 NM". Its tooltip names the limits in use and where each comes
+  from (Settings or the route), and the cyclone settings ("34 kt radius and
+  cone · Must review inside 50 kt"). Clicking it filters **Findings** to
+  weather. On the map, the storm at the ETA of the closest approach is drawn
+  as its class letter in a dashed ring, joined to the route by a dashed line,
+  and the legend gains a **Weather** group.
 
   Without a draft there's no clearance: the verdict card is titled from the
   findings, such as "2 items to review", and says "Add a draft to check

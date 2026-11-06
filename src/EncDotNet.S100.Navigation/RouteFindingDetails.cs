@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Quantities;
 
@@ -8,7 +9,7 @@ namespace EncDotNet.S100.Navigation;
 /// gets the depth that fired or an area's restrictions without parsing its
 /// text: <see cref="DangerDetails"/>, <see cref="ShoalDetails"/>,
 /// <see cref="AreaDetails"/>, <see cref="WarningDetails"/>,
-/// <see cref="ClearanceDetails"/> or <see cref="WeatherDetails"/>.
+/// <see cref="ClearanceDetails"/>, <see cref="WeatherDetails"/> or <see cref="TropicalCycloneDetails"/>.
 /// </summary>
 /// <remarks>
 /// Findings about land, drying ground and chart coverage carry no details:
@@ -375,5 +376,77 @@ public sealed class WeatherDetails : RouteFindingDetails
     public DateTimeOffset? ForecastStart { get; init; }
 
     /// <summary>For <see cref="WeatherSampleState.ForecastEnds"/>: the forecast's last step; otherwise <c>null</c>.</summary>
+    public DateTimeOffset? ForecastEnd { get; init; }
+}
+
+/// <summary>What a tropical cyclone finding is about (<see cref="TropicalCycloneDetails.Kind"/>).</summary>
+public enum TropicalCycloneFindingKind
+{
+    /// <summary>A stretch inside a wind radius (<see cref="TropicalCycloneDetails.Radius"/>).</summary>
+    Radius,
+
+    /// <summary>A stretch inside the forecast cone.</summary>
+    Cone,
+
+    /// <summary>The route's closest approach to the storm's centre.</summary>
+    ClosestApproach,
+
+    /// <summary>A stretch the vessel reaches after the last forecast point: not checked.</summary>
+    BeyondForecast,
+}
+
+/// <summary>
+/// A finding of the weather check's tropical cyclone rule (#1299, design
+/// note V38): a stretch inside a wind radius
+/// (<see cref="RouteFindingCodes.CycloneRadius34"/> and stronger) or the
+/// forecast cone (<see cref="RouteFindingCodes.CycloneCone"/>) at the ETA,
+/// the closest approach (<see cref="RouteFindingCodes.CycloneClosestApproach"/>),
+/// or a stretch after the forecast ends
+/// (<see cref="RouteFindingCodes.CycloneBeyondForecast"/>).
+/// </summary>
+/// <remarks>Tropical cyclone advisories aren't official S-100 data. These findings are advisory and aren't for navigation.</remarks>
+public sealed class TropicalCycloneDetails : RouteFindingDetails
+{
+    /// <summary>What the finding is about.</summary>
+    public required TropicalCycloneFindingKind Kind { get; init; }
+
+    /// <summary>The advisory.</summary>
+    public required RouteCycloneInfo Storm { get; init; }
+
+    /// <summary>For <see cref="TropicalCycloneFindingKind.Radius"/>: the wind radius; otherwise <c>null</c>.</summary>
+    public TropicalCycloneRadius? Radius { get; init; }
+
+    /// <summary>The first leg of the stretch (the leg of the closest approach).</summary>
+    public int FirstLegIndex { get; init; }
+
+    /// <summary>The last leg of the stretch (the leg of the closest approach).</summary>
+    public int LastLegIndex { get; init; }
+
+    /// <summary>The stretch's length along the route; zero for the closest approach.</summary>
+    public Length Length { get; init; }
+
+    /// <summary>When the vessel reaches the stretch, or is at the closest approach (the departure without ETAs).</summary>
+    public DateTimeOffset StartTime { get; init; }
+
+    /// <summary>When the vessel leaves the stretch, or <c>null</c> without ETAs there (and for the closest approach).</summary>
+    public DateTimeOffset? EndTime { get; init; }
+
+    /// <summary>Whether <see cref="StartTime"/> and <see cref="EndTime"/> are ETAs rather than the departure.</summary>
+    public bool HasEta { get; init; }
+
+    /// <summary>For <see cref="TropicalCycloneFindingKind.ClosestApproach"/>: the distance from the route to the storm's centre; otherwise <c>null</c>.</summary>
+    public Length? ClosestDistance { get; init; }
+
+    /// <summary>
+    /// For <see cref="TropicalCycloneFindingKind.ClosestApproach"/>: the storm
+    /// at that time (its centre, radii and where it comes from), drawn as the
+    /// storm-at-ETA ghost; otherwise <c>null</c>.
+    /// </summary>
+    public RouteCycloneAt? StormAtClosest { get; init; }
+
+    /// <summary>For <see cref="TropicalCycloneFindingKind.ClosestApproach"/>: the position on the route; otherwise <c>null</c>.</summary>
+    public GeoPosition? RoutePosition { get; init; }
+
+    /// <summary>For <see cref="TropicalCycloneFindingKind.BeyondForecast"/>: the time of the last forecast point; otherwise <c>null</c>.</summary>
     public DateTimeOffset? ForecastEnd { get; init; }
 }

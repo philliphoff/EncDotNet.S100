@@ -83,6 +83,21 @@ internal sealed record RouteCheckMap(
         string? Pill,
         bool IsSpan = false);
 
+    /// <summary>
+    /// A tropical cyclone at the time of the route's closest approach
+    /// (#1299, V38): the storm-at-ETA ghost, the class symbol with a dashed
+    /// ring, joined to the route by a thin dashed CPA line, with its label.
+    /// </summary>
+    /// <param name="FindingId">The closest-approach finding.</param>
+    /// <param name="Centre">The storm's centre at the ETA.</param>
+    /// <param name="RoutePoint">The place on the route.</param>
+    /// <param name="ClassLetter">The storm's class letter, such as H, or empty.</param>
+    /// <param name="Label">"at ETA 05:00 · CPA 85 NM".</param>
+    internal sealed record StormGhost(string FindingId, GeoPosition Centre, GeoPosition RoutePoint, string ClassLetter, string Label);
+
+    /// <summary>The storm-at-ETA ghosts, one per closest-approach finding; drawn whether or not it is selected.</summary>
+    public IReadOnlyList<StormGhost> Storms { get; init; } = [];
+
     /// <summary>The mark of the selected finding, or <c>null</c>.</summary>
     public Mark? SelectedMark => Marks.FirstOrDefault(m => m.IsSelected);
 
@@ -135,8 +150,20 @@ internal sealed record RouteCheckMap(
         var sleeves = new List<Sleeve>();
         var marks = new List<Mark>();
         var filled = new List<int>();
+        var storms = new List<StormGhost>();
         foreach (var finding in findings ?? [])
         {
+            if (finding.Details is TropicalCycloneDetails { Kind: TropicalCycloneFindingKind.ClosestApproach, StormAtClosest: { } storm, RoutePosition: { } on, ClosestDistance: { } cpa } closest)
+            {
+                var when = closest.HasEta ? PassageFormatting.FormatEta(closest.StartTime, track.Departure, timeFormat) : PassageFormatting.FormatEta(storm.Time, track.Departure, timeFormat);
+                storms.Add(new StormGhost(
+                    finding.Id,
+                    storm.Centre,
+                    on,
+                    storm.ClassLetter,
+                    string.Format(CultureInfo.CurrentCulture, Resources.Strings.Map_StormAtEtaFormat, when, cpa.TotalNauticalMiles)));
+            }
+
             if (!Draws(finding))
                 continue;
             var location = finding.Location!;
@@ -187,7 +214,7 @@ internal sealed record RouteCheckMap(
             _ => 0.45,
         })));
         var fill = accent.WithAlpha((byte)Math.Round(255 * (dark ? 0.12 : 0.08)));
-        return new RouteCheckMap(corridor, sleeves, marks, filled, edge, fill);
+        return new RouteCheckMap(corridor, sleeves, marks, filled, edge, fill) { Storms = storms };
     }
 
     // "Wreck 9,4 m · 07:52": the finding's title and, when known, the ETA there.

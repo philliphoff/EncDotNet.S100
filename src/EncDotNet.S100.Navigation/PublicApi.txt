@@ -139,6 +139,37 @@ namespace EncDotNet.S100.Navigation
         ChartedDepthFromS101 = 1,
         DatumUnconfirmed = 2,
     }
+    public sealed class CycloneCheckStorm : System.IEquatable<EncDotNet.S100.Navigation.CycloneCheckStorm>
+    {
+        public CycloneCheckStorm(EncDotNet.S100.Navigation.RouteCycloneInfo Info, System.DateTimeOffset ForecastEnd, EncDotNet.S100.Navigation.CycloneClosestApproach? ClosestApproach, EncDotNet.S100.Navigation.TropicalCycloneRadius? StrongestRadius, bool InCone, bool BeyondForecast) { }
+        public bool BeyondForecast { get; init; }
+        public EncDotNet.S100.Navigation.CycloneClosestApproach? ClosestApproach { get; init; }
+        public System.DateTimeOffset ForecastEnd { get; init; }
+        public bool InCone { get; init; }
+        public EncDotNet.S100.Navigation.RouteCycloneInfo Info { get; init; }
+        public EncDotNet.S100.Navigation.TropicalCycloneRadius? StrongestRadius { get; init; }
+    }
+    public sealed class CycloneClosestApproach : System.IEquatable<EncDotNet.S100.Navigation.CycloneClosestApproach>
+    {
+        public CycloneClosestApproach(double DistanceMeters, int LegIndex, double RouteDistanceMeters, EncDotNet.S100.DataModel.GeoPosition RoutePosition, System.DateTimeOffset Time, bool HasEta, EncDotNet.S100.Navigation.RouteCycloneAt Storm) { }
+        public double DistanceMeters { get; init; }
+        public bool HasEta { get; init; }
+        public int LegIndex { get; init; }
+        public double RouteDistanceMeters { get; init; }
+        public EncDotNet.S100.DataModel.GeoPosition RoutePosition { get; init; }
+        public EncDotNet.S100.Navigation.RouteCycloneAt Storm { get; init; }
+        public System.DateTimeOffset Time { get; init; }
+    }
+    public sealed class CycloneReading : System.IEquatable<EncDotNet.S100.Navigation.CycloneReading>
+    {
+        public CycloneReading(int StormIndex, EncDotNet.S100.Navigation.RouteCycloneAt? Storm, double? DistanceMeters, EncDotNet.S100.Navigation.TropicalCycloneRadius? Radius, bool InCone, bool BeyondForecast) { }
+        public bool BeyondForecast { get; init; }
+        public double? DistanceMeters { get; init; }
+        public bool InCone { get; init; }
+        public EncDotNet.S100.Navigation.TropicalCycloneRadius? Radius { get; init; }
+        public EncDotNet.S100.Navigation.RouteCycloneAt? Storm { get; init; }
+        public int StormIndex { get; init; }
+    }
     public sealed class DangerDetails : EncDotNet.S100.Navigation.RouteFindingDetails
     {
         public DangerDetails() { }
@@ -228,6 +259,15 @@ namespace EncDotNet.S100.Navigation
         where TDetail :  class
     {
         EncDotNet.S100.Navigation.RouteCheckOutcome<TDetail> Run(EncDotNet.S100.Navigation.RouteCheckContext context, System.Threading.CancellationToken cancellationToken);
+    }
+    public interface IRouteCyclone
+    {
+        System.DateTimeOffset ForecastEnd { get; }
+        System.DateTimeOffset ForecastStart { get; }
+        EncDotNet.S100.Navigation.RouteCycloneInfo Info { get; }
+        System.Collections.Generic.IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition> Track { get; }
+        EncDotNet.S100.Navigation.RouteCycloneAt? At(System.DateTimeOffset time);
+        bool InCone(EncDotNet.S100.DataModel.GeoPosition position);
     }
     public interface IRouteWarningSource
     {
@@ -653,6 +693,7 @@ namespace EncDotNet.S100.Navigation
         public EncDotNet.S100.Quantities.Depth? SafetyContour { get; init; }
         public EncDotNet.S100.Quantities.Depth? SafetyDepth { get; init; }
         public EncDotNet.S100.Quantities.Length? TrackClearance { get; init; }
+        public EncDotNet.S100.Navigation.TropicalCycloneCheckSettings? TropicalCyclones { get; init; }
         public EncDotNet.S100.Navigation.WeatherLimits? WeatherLimits { get; init; }
         public static EncDotNet.S100.Navigation.RouteCheckSettings FromMarinerSettings(EncDotNet.S100.Pipelines.MarinerSettings settings, System.DateTimeOffset at) { }
     }
@@ -661,6 +702,7 @@ namespace EncDotNet.S100.Navigation
         public RouteCheckSources() { }
         public EncDotNet.S100.Navigation.IRouteAreaSource? Areas { get; init; }
         public EncDotNet.S100.Navigation.IRouteChartSource? Charts { get; init; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.IRouteCyclone>? Cyclones { get; init; }
         public EncDotNet.S100.Navigation.IChartedDepthSource? Depth { get; init; }
         public EncDotNet.S100.Navigation.IRouteWarningSource? Warnings { get; init; }
         public EncDotNet.S100.Navigation.IWaterLevelSource? WaterLevel { get; init; }
@@ -701,6 +743,42 @@ namespace EncDotNet.S100.Navigation
         public RouteChecker(EncDotNet.S100.Navigation.RouteCheckSources sources, System.Collections.Generic.IEnumerable<EncDotNet.S100.Navigation.IRouteCheck> checks, EncDotNet.S100.Navigation.RouteCheckOptions? options = null) { }
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.IRouteCheck> Checks { get; }
         public EncDotNet.S100.Navigation.RouteCheckReport Check(EncDotNet.S100.Navigation.PassagePlan plan, EncDotNet.S100.Navigation.RouteCheckSettings settings, System.Threading.CancellationToken cancellationToken = default) { }
+    }
+    public sealed class RouteCycloneAt : System.IEquatable<EncDotNet.S100.Navigation.RouteCycloneAt>
+    {
+        public RouteCycloneAt(System.DateTimeOffset Time, EncDotNet.S100.DataModel.GeoPosition Centre, EncDotNet.S100.Navigation.RouteCycloneBasis Basis, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteCycloneRadii> Radii, string ClassLetter = "") { }
+        public EncDotNet.S100.Navigation.RouteCycloneBasis Basis { get; init; }
+        public EncDotNet.S100.DataModel.GeoPosition Centre { get; init; }
+        public string ClassLetter { get; init; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteCycloneRadii> Radii { get; init; }
+        public System.DateTimeOffset Time { get; init; }
+        public EncDotNet.S100.Navigation.RouteCycloneRadii? RadiiOf(EncDotNet.S100.Navigation.TropicalCycloneRadius radius) { }
+    }
+    public enum RouteCycloneBasis
+    {
+        Forecast = 0,
+        Estimated = 1,
+        BestTrack = 2,
+    }
+    public sealed class RouteCycloneInfo : System.IEquatable<EncDotNet.S100.Navigation.RouteCycloneInfo>
+    {
+        public RouteCycloneInfo(string DatasetId, string StormId, string Name, string Advisory, System.DateTimeOffset IssueTime) { }
+        public string Advisory { get; init; }
+        public string DatasetId { get; init; }
+        public System.DateTimeOffset IssueTime { get; init; }
+        public string Name { get; init; }
+        public string StormId { get; init; }
+    }
+    public sealed class RouteCycloneRadii : System.IEquatable<EncDotNet.S100.Navigation.RouteCycloneRadii>
+    {
+        public RouteCycloneRadii(EncDotNet.S100.Navigation.TropicalCycloneRadius Radius, double NortheastNauticalMiles, double SoutheastNauticalMiles, double SouthwestNauticalMiles, double NorthwestNauticalMiles) { }
+        public double MaximumNauticalMiles { get; }
+        public double NortheastNauticalMiles { get; init; }
+        public double NorthwestNauticalMiles { get; init; }
+        public EncDotNet.S100.Navigation.TropicalCycloneRadius Radius { get; init; }
+        public double SoutheastNauticalMiles { get; init; }
+        public double SouthwestNauticalMiles { get; init; }
+        public double ExtentToward(double bearingDegrees) { }
     }
     public sealed class RouteFinding
     {
@@ -761,6 +839,12 @@ namespace EncDotNet.S100.Navigation
         public static EncDotNet.S100.Navigation.RouteFindingCode CrossesLand { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode CrossesS102Shoal { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode CrossesSafetyContour { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode CycloneBeyondForecast { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode CycloneClosestApproach { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode CycloneCone { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode CycloneRadius34 { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode CycloneRadius50 { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode CycloneRadius64 { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode DangerInCorridor { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode DangerNearRoute { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode DatumMismatch { get; }
@@ -794,6 +878,7 @@ namespace EncDotNet.S100.Navigation
         public static EncDotNet.S100.Navigation.RouteFindingCode WeatherForecastStartsLate { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode WeatherNoData { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode WindAboveLimit { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode CycloneRadius(EncDotNet.S100.Navigation.TropicalCycloneRadius radius) { }
         public static bool TryGet(string value, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out EncDotNet.S100.Navigation.RouteFindingCode? code) { }
     }
     public sealed class RouteFindingCounts : System.IEquatable<EncDotNet.S100.Navigation.RouteFindingCounts>
@@ -836,6 +921,13 @@ namespace EncDotNet.S100.Navigation
         protected virtual string CrossesS102Shoal { get; }
         protected virtual string CrossesSafetyContour { get; }
         public System.Globalization.CultureInfo Culture { get; }
+        protected virtual string CycloneBestTrack { get; }
+        protected virtual string CycloneBeyondFormat { get; }
+        protected virtual string CycloneClosestFormat { get; }
+        protected virtual string CycloneConeTitle { get; }
+        protected virtual string CycloneEstimated { get; }
+        protected virtual string CycloneRadiusFormat { get; }
+        protected virtual string CycloneStormFormat { get; }
         protected virtual string DangerInCorridorFormat { get; }
         protected virtual string DangerNearRouteFormat { get; }
         protected virtual string DangerSafetyContourFormat { get; }
@@ -931,6 +1023,8 @@ namespace EncDotNet.S100.Navigation
         protected virtual string ChartTitle(EncDotNet.S100.Navigation.RouteFinding finding) { }
         protected virtual string ClearanceMeta(EncDotNet.S100.Navigation.RouteFinding finding) { }
         protected virtual string ClearanceTitle(EncDotNet.S100.Navigation.RouteFinding finding) { }
+        protected virtual string CycloneMeta(EncDotNet.S100.Navigation.TropicalCycloneDetails details) { }
+        protected virtual string CycloneTitle(EncDotNet.S100.Navigation.TropicalCycloneDetails details) { }
         protected virtual string DangerKind(string featureType) { }
         protected string Format(string format, params object?[] args) { }
         protected virtual string FormatDate(System.DateOnly date) { }
@@ -1098,6 +1192,47 @@ namespace EncDotNet.S100.Navigation
         None = 0,
         Water = 1,
         Land = 2,
+    }
+    public sealed class TropicalCycloneCheckSettings : System.IEquatable<EncDotNet.S100.Navigation.TropicalCycloneCheckSettings>
+    {
+        public TropicalCycloneCheckSettings() { }
+        public EncDotNet.S100.Navigation.TropicalCycloneRadius CheckAgainst { get; init; }
+        public EncDotNet.S100.Navigation.TropicalCycloneRadius? EffectiveMustReviewInside { get; }
+        public EncDotNet.S100.Navigation.TropicalCycloneRadius? MustReviewInside { get; init; }
+        public bool ReportClosestApproach { get; init; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.TropicalCycloneRadius> TestedRadii { get; }
+        public static EncDotNet.S100.Navigation.TropicalCycloneCheckSettings Default { get; }
+        public EncDotNet.S100.Navigation.RouteFindingGroup GroupOf(EncDotNet.S100.Navigation.TropicalCycloneRadius radius) { }
+    }
+    public sealed class TropicalCycloneDetails : EncDotNet.S100.Navigation.RouteFindingDetails
+    {
+        public TropicalCycloneDetails() { }
+        public EncDotNet.S100.Quantities.Length? ClosestDistance { get; init; }
+        public System.DateTimeOffset? EndTime { get; init; }
+        public int FirstLegIndex { get; init; }
+        public System.DateTimeOffset? ForecastEnd { get; init; }
+        public bool HasEta { get; init; }
+        public required EncDotNet.S100.Navigation.TropicalCycloneFindingKind Kind { get; init; }
+        public int LastLegIndex { get; init; }
+        public EncDotNet.S100.Quantities.Length Length { get; init; }
+        public EncDotNet.S100.Navigation.TropicalCycloneRadius? Radius { get; init; }
+        public EncDotNet.S100.DataModel.GeoPosition? RoutePosition { get; init; }
+        public System.DateTimeOffset StartTime { get; init; }
+        public required EncDotNet.S100.Navigation.RouteCycloneInfo Storm { get; init; }
+        public EncDotNet.S100.Navigation.RouteCycloneAt? StormAtClosest { get; init; }
+    }
+    public enum TropicalCycloneFindingKind
+    {
+        Radius = 0,
+        Cone = 1,
+        ClosestApproach = 2,
+        BeyondForecast = 3,
+    }
+    public enum TropicalCycloneRadius
+    {
+        Knots34 = 34,
+        Knots50 = 50,
+        Knots64 = 64,
     }
     public sealed class UkcMinimum : System.IEquatable<EncDotNet.S100.Navigation.UkcMinimum>
     {
@@ -1285,12 +1420,15 @@ namespace EncDotNet.S100.Navigation
     public sealed class WeatherCheckOptions : System.IEquatable<EncDotNet.S100.Navigation.WeatherCheckOptions>
     {
         public WeatherCheckOptions() { }
+        public double CycloneNearbyMeters { get; init; }
         public double SampleSpacingMeters { get; init; }
         public static EncDotNet.S100.Navigation.WeatherCheckOptions Default { get; }
     }
     public sealed class WeatherCheckResult : System.IEquatable<EncDotNet.S100.Navigation.WeatherCheckResult>
     {
         public WeatherCheckResult(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WeatherLimitUsed> Limits, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WeatherSample> Samples, EncDotNet.S100.Navigation.WeatherVerdict Verdict, System.Collections.Generic.IReadOnlyList<string> DatasetsUsed, EncDotNet.S100.Navigation.WeatherDepartureSweep? Departures) { }
+        public EncDotNet.S100.Navigation.TropicalCycloneCheckSettings CycloneSettings { get; init; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.CycloneCheckStorm> Cyclones { get; init; }
         public System.Collections.Generic.IReadOnlyList<string> DatasetsUsed { get; init; }
         public EncDotNet.S100.Navigation.WeatherDepartureSweep? Departures { get; init; }
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WeatherLimitUsed> Limits { get; init; }
@@ -1306,6 +1444,8 @@ namespace EncDotNet.S100.Navigation
     {
         public WeatherDepartureOption(System.DateTimeOffset Departure, System.DateTimeOffset? Arrival, EncDotNet.S100.Navigation.WeatherVerdict Verdict, double? MaxWindMetresPerSecond, double? MaxWaveHeightMetres, System.TimeSpan TimeAboveLimits) { }
         public System.DateTimeOffset? Arrival { get; init; }
+        public double? CycloneClosestMeters { get; init; }
+        public EncDotNet.S100.Navigation.TropicalCycloneRadius? CycloneRadius { get; init; }
         public System.DateTimeOffset Departure { get; init; }
         public double? MaxWaveHeightMetres { get; init; }
         public double? MaxWindMetresPerSecond { get; init; }
@@ -1387,6 +1527,7 @@ namespace EncDotNet.S100.Navigation
     public sealed class WeatherSample : System.IEquatable<EncDotNet.S100.Navigation.WeatherSample>
     {
         public WeatherSample(int LegIndex, double StartDistanceMeters, double EndDistanceMeters, EncDotNet.S100.DataModel.GeoPosition Position, System.DateTimeOffset Time, bool HasEta, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WeatherReading> Readings) { }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.CycloneReading> Cyclones { get; init; }
         public double DistanceMeters { get; }
         public double EndDistanceMeters { get; init; }
         public bool HasEta { get; init; }
@@ -1395,6 +1536,7 @@ namespace EncDotNet.S100.Navigation
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WeatherReading> Readings { get; init; }
         public double StartDistanceMeters { get; init; }
         public System.DateTimeOffset Time { get; init; }
+        public EncDotNet.S100.Navigation.CycloneReading? Cyclone(int stormIndex) { }
         public EncDotNet.S100.Navigation.WeatherReading? Reading(EncDotNet.S100.Navigation.WeatherQuantity quantity) { }
     }
     public enum WeatherSampleState
@@ -1408,9 +1550,10 @@ namespace EncDotNet.S100.Navigation
     }
     public enum WeatherVerdict
     {
-        AboveLimits = 0,
-        ForecastEndsBeforeArrival = 1,
-        Incomplete = 2,
-        WithinLimits = 3,
+        InsideCycloneRadius = 0,
+        AboveLimits = 1,
+        ForecastEndsBeforeArrival = 2,
+        Incomplete = 3,
+        WithinLimits = 4,
     }
 }
