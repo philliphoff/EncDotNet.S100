@@ -131,12 +131,15 @@ public sealed class StackOffUiThreadTests
         Assert.Empty(map.Layers);
         Assert.Equal(0, changes);
 
+        // The post runs on this thread; read its id before awaiting, since the
+        // continuation after `await render` may resume on another thread.
+        var postThread = Environment.CurrentManagedThreadId;
         Assert.Equal(1, marshal.RunPending());
         Assert.NotNull(await render);
         Assert.Single(map.Layers);
         Assert.Single(session.GetStackedLayers());
         Assert.Equal(1, changes);
-        Assert.Equal(Environment.CurrentManagedThreadId, changedOn);
+        Assert.Equal(postThread, changedOn);
         Assert.Equal(1, session.StackComputeCount);
     }
 
