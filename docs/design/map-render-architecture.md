@@ -848,6 +848,29 @@ and pattern clipping. The per-layer pending sets become interests on scheduler
 jobs. After this, priority runs across stages and nothing has a private worker
 count.
 
+*Decision (slice 5): keep `ILuaContext` synchronous, and add no yield point
+inside Lua.* The step 0 note below deferred this to the scheduler. The
+measurements say a yield inside Lua isn't needed yet:
+
+- With tile raster and lazy-load portrayal on the scheduler
+  ([#1315](https://github.com/philliphoff/EncDotNet.S100/pull/1315),
+  [#1316](https://github.com/philliphoff/EncDotNet.S100/pull/1316)), a visible
+  tile job waits 9–17 ms at p95 on cold Washington jumps, 10 ms on jumps after
+  the pre-warm and 1–2 ms on a pan, well under the 100 ms target. A cell's portrayal is still one job of up to
+  about 1.3 s, but tiles are many short jobs. The 15 workers rarely all hold
+  portrayals at once: the lazy-load coordinator caps loads at half the cores,
+  and the GC pause governor caps background portrayals.
+- Slice 2 dropped Lua shards because cold jumps got slower
+  ([#1309](https://github.com/philliphoff/EncDotNet.S100/pull/1309)). An async
+  context would add an `await` per host call on the hottest path, and
+  MoonSharp can't suspend a running chunk at all, so the two engines would
+  diverge. The cancellation check in the per-feature emit hook stays.
+- **Revisit when** a run shows visible job wait p95 above 100 ms while every
+  worker holds a portrayal. The cheaper fix then is to let a portrayal
+  started in a lower class check `WorkContext.YieldRequested` in the emit hook
+  and hand off the rest of the cell as a continuation job, before making
+  `ILuaContext` async.
+
 **6. Stack off the UI thread.** Run `ProjectLayerStack`,
 `ApplyOverlapSuppression` and the layer diff as a `Stack` job. Find finer
 coverages through an envelope R-tree, only for the new cell. Publish the
