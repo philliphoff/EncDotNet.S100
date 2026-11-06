@@ -1,20 +1,24 @@
+using System.Diagnostics.Metrics;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Rendering.Engine;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
 /// <summary>
-/// Cross-cell scale-band overlap suppression in the headless composite
-/// (issue #859): a finer chart cell hides an overlapping coarser one where its
-/// data coverage reaches and while it is itself drawing, as in the viewer.
+/// Cross-cell scale-band overlap suppression in the chart engine's compositor
+/// (issues #859, #1279 slice 10): a finer chart cell hides an overlapping
+/// coarser one where its normalised NTS coverage footprint reaches and while it
+/// is itself drawing, as in the viewer.
 /// </summary>
-public class HeadlessOverlapSuppressionTests
+public class ChartOverlapSuppressionTests
 {
     private static readonly SKColor Red = new(0xFF, 0x00, 0x00);
     private static readonly SKColor Blue = new(0x00, 0x00, 0xFF);
@@ -131,12 +135,96 @@ public class HeadlessOverlapSuppressionTests
         Assert.Equal(Red, Pixel(bitmap, -0.5, -0.25));
     }
 
+    [Fact]
+    public void Overlapping_coverage_areas_of_one_finer_cell_hide_their_overlap()
+    {
+        // Two coverage areas that overlap over (-1..0°, -1..0°). Drawn ring by
+        // ring with the even-odd rule they would cancel there; the normalised
+        // footprint is their union, so the overlap is hidden like the rest.
+        var fine = Cell(
+            "fine.000", "#0000FF", Box(-1.5, 0, -1.5, 0), Box(-1.5, -1.2, -1.5, -1.2), rank: 10_000,
+            extraCoverage: Box(-1, 0.5, -1, 0.5));
+        var coarse = Cell("coarse.000", "#FF0000", World, World, rank: 100_000);
+
+        using var bitmap = Render([fine, coarse], ViewportAt(5_000));
+
+        Assert.Equal(White, Pixel(bitmap, -0.5, -0.25));
+        Assert.Equal(White, Pixel(bitmap, 0.25, 0.25));
+        Assert.Equal(Red, Pixel(bitmap, 1, 1));
+    }
+
+    [Fact]
+    public void Finer_cell_whose_footprint_misses_the_coarser_cell_does_not_hide_it()
+    {
+        // The coarse cell's coverage is an L along the south and west edges, so
+        // its bounding box is the whole view but its footprint never reaches
+        // the fine cell's (0..1°, 0..1°). Its fill spills past its coverage, as
+        // symbols and labels can; the fine cell takes no part, so it stays.
+        (double Lon, double Lat)[] ell = [(-2, -2), (2, -2), (2, -1), (-1, -1), (-1, 2), (-2, 2)];
+        var fine = Cell("fine.000", "#0000FF", Box(0, 1, 0, 1), Box(0, 1, 0, 0.2), rank: 10_000);
+        var coarse = Cell("coarse.000", "#FF0000", ell, World, rank: 100_000);
+
+        using var bitmap = Render([fine, coarse], ViewportAt(5_000));
+
+        Assert.Equal(Red, Pixel(bitmap, 0.5, 0.5));
+        Assert.Equal(Blue, Pixel(bitmap, 0.5, 0.1));
+    }
+
+    [Fact]
+    public void Layer_hidden_across_a_whole_view_is_skipped_with_the_same_picture()
+    {
+        var fine = Cell("fine.000", "#0000FF", FineCoverage, FineFill, rank: 10_000);
+        var coarse = Cell("coarse.000", "#FF0000", World, World, rank: 100_000);
+        var composition = NewCompositor().Prepare([fine, coarse], new ChartCompositeOptions());
+
+        // Wholly inside the fine coverage and north of its fill.
+        var viewport = new Viewport
+        {
+            MinLongitude = -0.9,
+            MaxLongitude = -0.1,
+            MinLatitude = -0.4,
+            MaxLatitude = -0.1,
+            WidthPixels = 80,
+            HeightPixels = 30,
+            ScaleDenominator = 5_000,
+        };
+
+        long skipped = 0;
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, l) =>
+            {
+                if (instrument.Name == "s100.render.chart.layers.hidden.count")
+                    l.EnableMeasurementEvents(instrument);
+            },
+        };
+        listener.SetMeasurementEventCallback<long>((_, value, _, _) => Interlocked.Add(ref skipped, value));
+        listener.Start();
+
+        using var bitmap = new SKBitmap(80, 30, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using (var canvas = new SKCanvas(bitmap))
+        {
+            canvas.Clear(SKColors.White);
+            composition.Draw(canvas, viewport, []);
+        }
+
+        Assert.True(Interlocked.Read(ref skipped) >= 1);
+        for (int y = 0; y < bitmap.Height; y++)
+        {
+            for (int x = 0; x < bitmap.Width; x++)
+                Assert.Equal(White, bitmap.GetPixel(x, y));
+        }
+    }
+
+    private static ChartCompositor NewCompositor() =>
+        new(new ProjNetCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes));
+
     private static SKBitmap Render(
-        HeadlessCompositeInput[] inputs,
+        ChartCompositeInput[] inputs,
         Viewport viewport,
         bool honorScaleVisibility = false,
         MarinerSettings? mariner = null) =>
-        new HeadlessCompositor(new ProjNetCrsTransformFactory()).Render(inputs, new HeadlessCompositeOptions
+        NewCompositor().Render(inputs, new ChartCompositeOptions
         {
             Viewport = viewport,
             Background = new RgbaColor(255, 255, 255, 255),
@@ -161,7 +249,7 @@ public class HeadlessOverlapSuppressionTests
     /// A chart cell with one area fill and a declared data coverage, which may
     /// differ, both sharing <paramref name="hole"/> when one is given.
     /// </summary>
-    private static HeadlessCompositeInput Cell(
+    private static ChartCompositeInput Cell(
         string datasetId,
         string fillHex,
         (double Lon, double Lat)[] coverage,
@@ -169,7 +257,8 @@ public class HeadlessOverlapSuppressionTests
         int rank,
         int? minimumDisplayScale = null,
         (double Lon, double Lat)[]? hole = null,
-        bool active = true)
+        bool active = true,
+        (double Lon, double Lat)[]? extraCoverage = null)
     {
         const string token = "FILL";
         const string featureRef = "1";
@@ -195,10 +284,12 @@ public class HeadlessOverlapSuppressionTests
             Info = "test",
             CellCompilationScale = rank,
             CellMinimumDisplayScale = minimumDisplayScale,
-            CoverageAreas = [new CoverageArea { ExteriorRing = Ring(coverage), InteriorRings = holes }],
+            CoverageAreas = extraCoverage is null
+                ? [new CoverageArea { ExteriorRing = Ring(coverage), InteriorRings = holes }]
+                : [new CoverageArea { ExteriorRing = Ring(coverage), InteriorRings = holes }, new CoverageArea { ExteriorRing = Ring(extraCoverage), InteriorRings = [] }],
         };
 
-        return HeadlessCompositeInput.ForVector(result, active);
+        return ChartCompositeInput.ForVector(result, active);
 
         static GeoPosition[] Ring((double Lon, double Lat)[] box) =>
             [.. box.Select(p => new GeoPosition(p.Lat, p.Lon)), new GeoPosition(box[0].Lat, box[0].Lon)];

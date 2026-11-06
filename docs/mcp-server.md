@@ -679,7 +679,10 @@ In SoundCharts:
   view, palette, time step and loaded datasets match what the user sees.
 
 In `s100 mcp serve`, the image is a headless composite of the session's
-datasets. It fits all of them unless `set_viewport` has set a view.
+datasets. It fits all of them unless `set_viewport` has set a view. `width` and
+`height` are device-independent pixels, as in SoundCharts: with a
+`pixelDensity` of 2 the PNG is twice as wide and tall, and its symbols, text
+and lines are twice as many pixels across.
 
 ## Differences between the hosts
 

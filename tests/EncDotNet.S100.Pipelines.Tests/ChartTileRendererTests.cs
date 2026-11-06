@@ -2,9 +2,11 @@ using EncDotNet.S100.Core;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
 
@@ -13,12 +15,12 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// <summary>
 /// Covers the XYZ tile path (issue #847): the Mapsui-free
 /// <see cref="XyzTileGrid"/> math, block planning, and that
-/// <see cref="HeadlessTileRenderer"/> paints tiles that join without seams,
+/// <see cref="ChartTileRenderer"/> paints tiles that join without seams,
 /// honour scale visibility per zoom, and pick up data stored one world east.
 /// </summary>
-public class HeadlessTileRendererTests
+public class ChartTileRendererTests
 {
-    private static readonly HeadlessCompositeOptions TileCompositeOptions = new()
+    private static readonly ChartCompositeOptions TileCompositeOptions = new()
     {
         HonorScaleVisibility = true,
         EnableSeamWrap = false,
@@ -89,7 +91,7 @@ public class HeadlessTileRendererTests
     [Fact]
     public void PlanBlocks_aligns_blocks_to_the_block_grid_and_covers_every_tile_once()
     {
-        var blocks = HeadlessTileRenderer.PlanBlocks(5, [3, 4, 5, 6, 7, 8, 9], 1, 2, 4);
+        var blocks = ChartTileRenderer.PlanBlocks(5, [3, 4, 5, 6, 7, 8, 9], 1, 2, 4);
 
         Assert.Equal(
             [new TileBlock(5, 3, 1, 1, 2), new TileBlock(5, 4, 1, 4, 2), new TileBlock(5, 8, 1, 2, 2)],
@@ -100,7 +102,7 @@ public class HeadlessTileRendererTests
     [Fact]
     public void PlanBlocks_splits_wrapped_columns_into_separate_runs()
     {
-        var blocks = HeadlessTileRenderer.PlanBlocks(3, [0, 1, 6, 7], 0, 0, 8);
+        var blocks = ChartTileRenderer.PlanBlocks(3, [0, 1, 6, 7], 0, 0, 8);
 
         Assert.Equal([new TileBlock(3, 0, 0, 2, 1), new TileBlock(3, 6, 0, 2, 1)], blocks);
     }
@@ -110,7 +112,7 @@ public class HeadlessTileRendererTests
     {
         // A triangle whose slanted edges cross the tile boundaries.
         var scene = Prepare(Area("tri.000", "#2060C0", [(-0.9, -0.8), (0.95, -0.1), (-0.2, 0.9)]));
-        var renderer = new HeadlessTileRenderer(scene);
+        var renderer = new ChartTileRenderer(scene);
         const int zoom = 8;
         int center = XyzTileGrid.TilesPerAxis(zoom) / 2;
 
@@ -162,7 +164,7 @@ public class HeadlessTileRendererTests
     public void Render_marks_tiles_with_nothing_drawn_as_empty()
     {
         var scene = Prepare(Area("a.000", "#FF0000", Box(10, 40, 10, 40)));
-        var renderer = new HeadlessTileRenderer(scene);
+        var renderer = new ChartTileRenderer(scene);
 
         // At zoom 2 the box lies well inside tile (2, 1).
         var tiles = renderer.Render(new TileBlock(2, 1, 1, 2, 2));
@@ -182,7 +184,7 @@ public class HeadlessTileRendererTests
     public void Render_stops_drawing_a_cell_past_its_minimum_display_scale()
     {
         var scene = Prepare(Area("a.000", "#FF0000", Box(-1, 1, -1, 1), minimumDisplayScale: 2_000_000));
-        var renderer = new HeadlessTileRenderer(scene);
+        var renderer = new ChartTileRenderer(scene);
 
         // Zoom 8 at the equator is about 1:2.2 million, zoom 9 about 1:1.1 million.
         Assert.True(renderer.ScaleDenominator(8) > 2_000_000);
@@ -197,7 +199,7 @@ public class HeadlessTileRendererTests
         // A box kept in a 0…360° frame, at 181°–183°: it belongs in the tiles
         // just east of -180°.
         var scene = Prepare(Area("east.000", "#00A000", Box(181, 183, -1, 1)));
-        var renderer = new HeadlessTileRenderer(scene);
+        var renderer = new ChartTileRenderer(scene);
         const int zoom = 5;
         int row = XyzTileGrid.TilesPerAxis(zoom) / 2;
 
@@ -212,7 +214,7 @@ public class HeadlessTileRendererTests
     public void Render_with_pixel_ratio_two_doubles_the_tile_image()
     {
         var scene = Prepare(Area("a.000", "#FF0000", Box(-1, 1, -1, 1)));
-        var renderer = new HeadlessTileRenderer(scene, new HeadlessTileOptions { PixelRatio = 2 });
+        var renderer = new ChartTileRenderer(scene, new ChartTileOptions { PixelRatio = 2 });
 
         using var tile = RenderCenterTile(renderer, 9);
         Assert.Equal(512, renderer.TilePixelSize);
@@ -220,20 +222,20 @@ public class HeadlessTileRendererTests
         Assert.Equal(new SKColor(0xFF, 0x00, 0x00), tile.Bitmap.GetPixel(10, 500));
     }
 
-    private static HeadlessTile RenderCenterTile(HeadlessTileRenderer renderer, int zoom)
+    private static ChartTile RenderCenterTile(ChartTileRenderer renderer, int zoom)
     {
         // The tile just north-east of (0°, 0°).
         int center = XyzTileGrid.TilesPerAxis(zoom) / 2;
         return Assert.Single(renderer.Render(new TileBlock(zoom, center, center - 1, 1, 1)));
     }
 
-    private static HeadlessCompositeScene Prepare(HeadlessCompositeInput input) =>
-        new HeadlessCompositor(new ProjNetCrsTransformFactory()).Prepare([input], TileCompositeOptions);
+    private static ChartComposition Prepare(ChartCompositeInput input) =>
+        new ChartCompositor(new ProjNetCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes)).Prepare([input], TileCompositeOptions);
 
     private static (double Lon, double Lat)[] Box(double west, double east, double south, double north) =>
         [(west, south), (east, south), (east, north), (west, north)];
 
-    private static HeadlessCompositeInput Area(
+    private static ChartCompositeInput Area(
         string datasetId, string fillHex, (double Lon, double Lat)[] ring, int? minimumDisplayScale = null)
     {
         const string token = "FILL";
@@ -260,7 +262,7 @@ public class HeadlessTileRendererTests
             CellMinimumDisplayScale = minimumDisplayScale,
         };
 
-        return HeadlessCompositeInput.ForVector(result);
+        return ChartCompositeInput.ForVector(result);
     }
 
     private sealed class RingGeometryProvider(string featureRef, (double Lon, double Lat)[] ring) : IFeatureGeometryProvider

@@ -1,6 +1,8 @@
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Testing.Scenarios.Hdf5;
 using SkiaSharp;
 
@@ -10,7 +12,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// Headless rendering of fixed-station coverage (issue #191): an S-111 dcf3
 /// (ungeorectified nodes) dataset renders on its own, and station glyphs of
 /// S-104 / S-111 station series survive the composite path the CLI's
-/// <c>--layer</c> and <c>--bbox</c> renders use (<see cref="HeadlessCompositor"/>).
+/// <c>--layer</c> and <c>--bbox</c> renders use (<see cref="ChartCompositor"/>).
 /// The single-dataset dcf8 renders are covered by the dcf8 processor tests.
 /// </summary>
 public class StationSeriesHeadlessTests
@@ -79,9 +81,9 @@ public class StationSeriesHeadlessTests
 
             var portrayal = await ((ICoveragePortrayalSource)processor)
                 .BuildCoveragePortrayalAsync(context with { Viewport = viewport }, TestContext.Current.CancellationToken);
-            using var bitmap = new HeadlessCompositor(new ProjNetCrsTransformFactory()).Render(
-                [HeadlessCompositeInput.ForCoverage(portrayal)],
-                new HeadlessCompositeOptions { Viewport = viewport });
+            using var bitmap = new ChartCompositor(new ProjNetCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes)).Render(
+                [ChartCompositeInput.ForCoverage(portrayal)],
+                new ChartCompositeOptions { Viewport = viewport });
 
             // The centre station's glyph is drawn around the centre pixel; the
             // corners, well away from it, stay background.

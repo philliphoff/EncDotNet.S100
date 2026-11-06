@@ -1068,6 +1068,70 @@ portrayal, the cell horizon can be shorter than it would be on MoonSharp.
 and `mcp serve` to `ChartSession`. Delete `HeadlessCompositor` and
 `HeadlessTileRenderer`. Captures honour density.
 
+*Done, ahead of slice 8.* Slice 8 was still in flight, so this slice didn't
+create `ChartSession` or chart tiles. It added a host-neutral entry point in
+new engine files instead: `ChartRenderer` (`PortrayAsync`, `RenderAsync` and
+`RenderTilesAsync`), `ChartCompositor` (`Prepare` and `PrepareAsync`),
+`ChartComposition` and `ChartTileRenderer`. Slice 8 can fold them into the
+session. `s100 render`, `tiles export`, `tiles serve`, `mcp serve` and the
+library's `PngS100DatasetRenderer` all go through it, and
+`HeadlessCompositor` and `HeadlessTileRenderer` are gone.
+
+- **Parallel work.** Cells parse, portray and lower to scenes as `Visible`
+  jobs on the work scheduler (`Parse`, `Portray` and `Scene` stages); the CLI
+  configures the shared scheduler with `ForBatch`. Tile blocks render and
+  encode as `Raster` jobs in the `Visible` class, with urgency in write
+  order, and reach the sink in that order. The MBTiles, PMTiles and XYZ sinks
+  are unchanged. `tiles serve` prepares scenes off the request threads and
+  renders each block as a `Visible` job.
+- **Density.** `ChartCompositeOptions.DeviceScale` and
+  `HeadlessCompositeRenderer.Render(viewport, layers, deviceScale)` draw a
+  device-independent viewport at more image pixels, rotated views included.
+  `render_to_image`'s `pixelDensity` in `mcp serve` now returns an image
+  `width × density` wide, as SoundCharts does.
+- **Coverage model (open question 7).** Overlap suppression uses the viewer's
+  NTS model: a footprint is the cell's coverage areas unioned and normalised
+  (`Buffer(0)`), a finer cell takes part only where `OverlapSuppression`'s
+  envelope-then-geometry test says it meets the coarser one, and the clip
+  draws the normalised rings. A layer that one active finer coverage hides
+  across a whole tile isn't drawn (`s100.render.chart.layers.hidden.count`).
+  The finer cell's cut-off stays a scale denominator, as before, because the
+  headless layers stop drawing by denominator.
+- **Measured** on an M4 Max (16 cores), three interleaved runs each,
+  median wall time, base 7391b8ed. Sources: the 17 IC-ENC Solent S-101 cells
+  (bands 3 to 6) and 14 NOAA Charleston S-57 cells (bands 3 to 5).
+
+  | Command | Base | Slice 10 |
+  |---|---|---|
+  | `render`, Solent, 2048 px fit | 13.9 s | 10.0 s |
+  | `render`, Charleston, 2048 px fit | 12.1 s | 8.5 s |
+  | `tiles export`, Solent, z9–15, 1,871 tiles | 13.5 s | 10.5 s |
+  | `tiles export`, Charleston, z10–16, 1,755 tiles | 12.4 s | 9.4 s |
+
+  The tile raster phase itself is unchanged (about 0.8 s for each set); the
+  gain is portrayal and scene lowering. Lowering 17 cells in parallel takes
+  4.9 s against 6.3 s in turn, though the largest single sub-layer takes
+  1.1 s: area-pattern lowering allocates heavily and the jobs appear to be
+  GC-bound, which belongs with
+  [#1276](https://github.com/philliphoff/EncDotNet.S100/issues/1276).
+- **Parity** against base, seven views (pixels that differ): Solent fit 661
+  (0.016%), Southampton 1:50,000 1,163, Cowes 1:25,000 674, Portsmouth
+  1:10,000 0; Charleston fit 30,173 (0.72%), harbour 1:40,000 28, town
+  1:12,000 0. Tiles: Charleston byte-identical; Solent 27 of 1,871 tiles,
+  1,914 pixels, largest channel change 22. Output is deterministic whatever
+  the worker count. Two causes, isolated by rebuilding with the raw rings:
+  - Clip rings. Drawing the normalised footprint rather than the raw rings
+    shifts anti-aliasing at finer coverage edges by a few levels. This is all
+    of the Solent change; with raw rings Solent matches base to one pixel.
+  - Selection. NOAA US3SC10M's coverage is not a rectangle and doesn't reach
+    Charleston harbour, though its bounding box does. Base clipped it with all
+    12 harbour cells; now none of them clip it, so its symbols that spill past
+    its coverage show there, and the different clip stack shifts its
+    anti-aliasing across the whole layer at small scale. In the Solent set,
+    0062022A against 0040242B is the one such pair.
+  Whether this one-time change in CLI output is acceptable is the owner's call
+  (open question 7); it has not been treated as accepted.
+
 **11. Content store.** One store and budget for every kind, a running size
 index ([#691](https://github.com/philliphoff/EncDotNet.S100/issues/691) item 4),
 the faster tile codec, and cell scenes on disk if slice 1's warm-load breakdown

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json.Nodes;
-using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Core.Scheduling;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 
 namespace EncDotNet.S100.Cli.Infrastructure.Tiles;
@@ -226,8 +227,16 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         await _renderSlots.WaitAsync().ConfigureAwait(false);
         try
         {
-            // Rendering is CPU-bound; keep it off the request threads.
-            var tiles = await Task.Run(() => Render(palette, time, block)).ConfigureAwait(false);
+            // Preparing the scene and the zoom level's renderer may portray,
+            // which runs its own jobs on the work scheduler, so it happens off
+            // the request threads but outside a job; the block itself renders
+            // and encodes as one Visible job.
+            var renderer = await Task.Run(() => _scenes.Get(palette, time).RendererFor(block.Zoom, _layout)).ConfigureAwait(false);
+            var tiles = await WorkScheduler.Shared.RunAsync(
+                WorkStage.Raster,
+                _ => Render(renderer, block),
+                CancellationToken.None,
+                WorkPriority.Visible()).ConfigureAwait(false);
             foreach (var ((x, y), data) in tiles)
             {
                 var key = new TileKey(palette, block.Zoom, x, y, time);
@@ -248,10 +257,9 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
         }
     }
 
-    private Dictionary<(int X, int Y), byte[]> Render(string palette, DateTime? time, TileBlock block)
+    private Dictionary<(int X, int Y), byte[]> Render(ChartTileRenderer renderer, TileBlock block)
     {
-        var scene = _scenes.Get(palette, time);
-        var rendered = scene.RendererFor(block.Zoom, _layout).Render(block);
+        var rendered = renderer.Render(block);
         try
         {
             return rendered.ToDictionary(t => (t.X, t.Y), t => t.IsEmpty ? [] : _session.Encode(t));

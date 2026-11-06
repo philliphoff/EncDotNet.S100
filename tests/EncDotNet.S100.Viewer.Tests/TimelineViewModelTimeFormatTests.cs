@@ -47,7 +47,7 @@ public class TimelineViewModelTimeFormatTests
     {
         var svc = WithSamples();
         var tf = new StubTimeFormat(TimeFormat.Utc);
-        var vm = new TimelineViewModel(svc, tf);
+        var vm = new TimelineViewModel(svc, tf, new Microsoft.Extensions.Time.Testing.FakeTimeProvider());
         Assert.Contains("UTC", vm.CurrentTimeLabel);
     }
 
@@ -56,7 +56,7 @@ public class TimelineViewModelTimeFormatTests
     {
         var svc = WithSamples();
         var tf = new StubTimeFormat(TimeFormat.Local);
-        var vm = new TimelineViewModel(svc, tf);
+        var vm = new TimelineViewModel(svc, tf, new Microsoft.Extensions.Time.Testing.FakeTimeProvider());
         Assert.DoesNotContain("UTC", vm.CurrentTimeLabel, StringComparison.Ordinal);
     }
 
@@ -65,7 +65,7 @@ public class TimelineViewModelTimeFormatTests
     {
         var svc = WithSamples();
         var tf = new StubTimeFormat(TimeFormat.Local);
-        var vm = new TimelineViewModel(svc, tf);
+        var vm = new TimelineViewModel(svc, tf, new Microsoft.Extensions.Time.Testing.FakeTimeProvider());
         var changed = new HashSet<string>();
         vm.PropertyChanged += (_, e) =>
         {

@@ -1,6 +1,8 @@
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Renderers.Skia.Scene;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
 
@@ -10,7 +12,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// Verifies the bundled Natural Earth land basemap (issues #411, #731): the shared
 /// <see cref="NaturalEarthBasemap"/> source decodes to tiled levels of detail
 /// that keep the full Natural Earth coastline, lowers to a non-empty parchment
-/// <see cref="VectorScene"/>, and the <see cref="HeadlessCompositor"/> honours
+/// <see cref="VectorScene"/>, and the <see cref="ChartCompositor"/> honours
 /// <see cref="BasemapKind.Offline"/> by painting land beneath the chart so the
 /// output differs from <see cref="BasemapKind.None"/>.
 /// </summary>
@@ -110,15 +112,15 @@ public sealed class NaturalEarthBasemapTests
     [Fact]
     public void Compositor_offline_basemap_paints_land_and_differs_from_none()
     {
-        var compositor = new HeadlessCompositor(new ProjNetCrsTransformFactory());
+        var compositor = new ChartCompositor(new ProjNetCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes));
 
         var viewport = SaharaViewport;
 
         var white = new RgbaColor(255, 255, 255, 255);
 
         using var none = compositor.Render(
-            Array.Empty<HeadlessCompositeInput>(),
-            new HeadlessCompositeOptions
+            Array.Empty<ChartCompositeInput>(),
+            new ChartCompositeOptions
             {
                 Viewport = viewport,
                 Background = white,
@@ -126,8 +128,8 @@ public sealed class NaturalEarthBasemapTests
             });
 
         using var offline = compositor.Render(
-            Array.Empty<HeadlessCompositeInput>(),
-            new HeadlessCompositeOptions
+            Array.Empty<ChartCompositeInput>(),
+            new ChartCompositeOptions
             {
                 Viewport = viewport,
                 Background = white,
@@ -171,10 +173,10 @@ public sealed class NaturalEarthBasemapTests
             ScaleDenominator = 100_000_000,
         };
 
-        var compositor = new HeadlessCompositor(new ProjNetCrsTransformFactory());
+        var compositor = new ChartCompositor(new ProjNetCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes));
         using var bitmap = compositor.Render(
-            Array.Empty<HeadlessCompositeInput>(),
-            new HeadlessCompositeOptions
+            Array.Empty<ChartCompositeInput>(),
+            new ChartCompositeOptions
             {
                 Viewport = viewport,
                 Background = new RgbaColor(255, 255, 255, 255),

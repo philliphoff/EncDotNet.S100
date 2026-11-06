@@ -1,11 +1,13 @@
 using System.Text;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.Weather;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Skia;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.TestSupport;
 using SkiaSharp;
 
@@ -37,9 +39,9 @@ public sealed class SurfaceAnalysisRenderingTests
             AtlanticPressure(), [new PressureIsobarStyle()], "gfs.grb2", new RenderContext { Palette = palette }, cancellationToken: Ct);
         var vector = await fronts.BuildVectorPortrayalAsync(new RenderContext { Palette = palette }, Ct);
 
-        var bitmap = new HeadlessCompositor(new ProjNetCrsTransformFactory()).Render(
-            [HeadlessCompositeInput.ForCoverage(isobars), HeadlessCompositeInput.ForVector(vector)],
-            new HeadlessCompositeOptions
+        var bitmap = new ChartCompositor(new ProjNetCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes)).Render(
+            [ChartCompositeInput.ForCoverage(isobars), ChartCompositeInput.ForVector(vector)],
+            new ChartCompositeOptions
             {
                 Viewport = Viewport(-72, -24, 27, 51, 900, 600, 15_000_000),
                 Background = Background(palette),
@@ -59,9 +61,9 @@ public sealed class SurfaceAnalysisRenderingTests
         var fronts = new SurfaceAnalysisDatasetProcessor(CodsusFixtures.Fixture(CodsusFixtures.HighResolution));
         var vector = WithoutText(await fronts.BuildVectorPortrayalAsync(new RenderContext(), Ct));
 
-        using var bitmap = new HeadlessCompositor(new ProjNetCrsTransformFactory()).Render(
-            [HeadlessCompositeInput.ForVector(vector)],
-            new HeadlessCompositeOptions
+        using var bitmap = new ChartCompositor(new ProjNetCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes)).Render(
+            [ChartCompositeInput.ForVector(vector)],
+            new ChartCompositeOptions
             {
                 Viewport = Viewport(-125, -60, 20, 55, 1000, 640, 25_000_000),
                 Background = RgbaColor.FromHex("#FFFFFF"),

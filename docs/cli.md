@@ -263,9 +263,11 @@ With an explicit viewport:
   so it usually has no visible effect. For example, an S-102 surface already
   draws above an S-101 chart.
 - **Overlapping cells.** Where a finer chart cell's data coverage overlaps a
-  coarser cell, the coarser cell is hidden there, as in SoundCharts. Cells are
-  ranked by compilation scale, or by minimum display scale when a cell has
-  none. Cells of the same scale don't hide each other.
+  coarser cell, the coarser cell is hidden there, as in SoundCharts. A cell's
+  data coverage is the union of its coverage areas, and a finer cell takes part
+  only where its coverage meets the coarser cell's, not just its bounding box.
+  Cells are ranked by compilation scale, or by minimum display scale when a
+  cell has none. Cells of the same scale don't hide each other.
 - **No S-101 updates.** The composite and exchange-set forms don't apply S-101
   update files. To render a cell with its updates, render it on its own.
 - **Skipped datasets.** In an exchange set, datasets with an unsupported

@@ -1,12 +1,12 @@
 using System.ComponentModel;
 using System.Globalization;
 using EncDotNet.S100.Cli.Infrastructure;
-using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Hdf5;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Rendering.Engine;
 using SkiaSharp;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -528,10 +528,9 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 subLayer => subLayer is GridCoverageSubLayer or ArrowCoverageSubLayer or GlyphCoverageSubLayer);
             if (hasRenderableCoverage)
             {
-                var compositor = new HeadlessCompositor(new ProjNetCrsTransformFactory());
-                return compositor.Render(
-                    [HeadlessCompositeInput.ForCoverage(portrayal)],
-                    new HeadlessCompositeOptions
+                return ChartCompositorFactory.Create().Render(
+                    [ChartCompositeInput.ForCoverage(portrayal)],
+                    new ChartCompositeOptions
                     {
                         Width = width,
                         Height = height,
