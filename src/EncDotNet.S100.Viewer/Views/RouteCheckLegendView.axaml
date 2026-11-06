@@ -180,13 +180,15 @@
                 <StackPanel Spacing="2" IsVisible="{Binding HasStormAtEta}"
                             AutomationProperties.AutomationId="Map.RouteCheckLegend.Weather">
                     <TextBlock Classes="sectionTitle" Margin="0,6,0,2" Text="{x:Static loc:Strings.Legend_Weather}" />
-                    <StackPanel Classes="row">
-                        <Panel Width="22" Height="18">
+                    <!-- The label is longer than the others, so it wraps under its own column. -->
+                    <Grid ColumnDefinitions="22,*" ColumnSpacing="8">
+                        <Panel Grid.Column="0" Width="22" Height="18" VerticalAlignment="Top">
                             <Ellipse Width="16" Height="16" Stroke="{Binding InkBrush}" StrokeThickness="1.4" StrokeDashArray="2,1.5" />
                             <TextBlock Classes="glyph" Text="H" Foreground="{Binding InkBrush}" />
                         </Panel>
-                        <TextBlock Classes="row" Text="{x:Static loc:Strings.Legend_StormAtEta}" />
-                    </StackPanel>
+                        <TextBlock Grid.Column="1" Classes="row" TextWrapping="Wrap" Margin="0,1,0,0"
+                                   Text="{x:Static loc:Strings.Legend_StormAtEta}" />
+                    </Grid>
                 </StackPanel>
             </StackPanel>
         </StackPanel>
