@@ -82,6 +82,8 @@
       href: EncDotNet.S100.Rendering.Scene/README.md
     - name: EncDotNet.S100.Renderers.Skia
       href: EncDotNet.S100.Renderers.Skia/README.md
+    - name: EncDotNet.S100.Rendering.Engine
+      href: EncDotNet.S100.Rendering.Engine/README.md
     - name: EncDotNet.S100.Renderers.Mapsui
       href: EncDotNet.S100.Renderers.Mapsui/README.md
     - name: EncDotNet.S100.Renderers.Mapsui.Avalonia
