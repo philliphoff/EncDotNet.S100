@@ -1,7 +1,6 @@
 using System.Globalization;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
-using EncDotNet.S100.Datasets.TropicalCyclones;
 using EncDotNet.S100.Datasets.Weather;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.TestSupport;
