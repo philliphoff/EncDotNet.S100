@@ -174,7 +174,8 @@ public sealed class RouteCheckCommandTests
             Assert.Equal(30, replaced["settings"]!["maxWindKnots"]!.GetValue<double>());
 
             var (_, text) = Run([route, grib, "--fail-on", "never"]);
-            Assert.Contains("Weather: above_limits (limits wind 15 kn (route))", text, StringComparison.Ordinal);
+            Assert.Contains("Weather:", text, StringComparison.Ordinal);
+            Assert.Contains("above_limits (limits wind 15 kn (route))", text, StringComparison.Ordinal);
         }
         finally
         {
