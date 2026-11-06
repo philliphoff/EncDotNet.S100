@@ -95,6 +95,27 @@ internal static class CfUnits
                 "%" or "percent" => 0.01,
                 _ => null,
             },
+            // Precipitation as a mass flux or as a depth of water a unit of
+            // time: 1 kg m-2 is 1 mm of water.
+            WeatherUnit.KilogramsPerSquareMetrePerSecond => key switch
+            {
+                "kg m-2 s-1" or "kg/m2/s" or "kg m-2.s-1" or "kg.m-2.s-1" or "kg/(m2 s)" or "kg m-2 sec-1" or
+                "mm s-1" or "mm/s" or "mm.s-1" => 1,
+                "mm h-1" or "mm/h" or "mm/hr" or "mm hr-1" or "mm.h-1" or "kg m-2 h-1" => 1 / 3600.0,
+                "m s-1" or "m/s" => 1000,
+                _ => null,
+            },
+            WeatherUnit.JoulesPerKilogram => key switch
+            {
+                "j kg-1" or "j/kg" or "j.kg-1" or "m2 s-2" or "m2/s2" => 1,
+                _ => null,
+            },
+            WeatherUnit.Percent => key switch
+            {
+                "%" or "percent" => 1,
+                "1" or "fraction" or "proportion" => 100,
+                _ => null,
+            },
             _ => null,
         };
         return factor is { } f ? new CfUnitConversion(f, 0) : null;

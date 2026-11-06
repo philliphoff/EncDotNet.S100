@@ -274,6 +274,126 @@ public class WeatherCoverageStyleTests
         Assert.True(Luminance(2, c => c.Night) > Luminance(3, c => c.Night));
     }
 
+    [Theory]
+    // Rain radar bands in mm/h: light from 0.1, moderate from 2.5, heavy from 7.5, very heavy from 15, violent from 50.
+    [InlineData(0.1, 1)]
+    [InlineData(0.49, 1)]
+    [InlineData(0.5, 2)]
+    [InlineData(2.4, 2)]
+    [InlineData(2.5, 3)]
+    [InlineData(7.5, 4)]
+    [InlineData(15, 5)]
+    [InlineData(49, 5)]
+    [InlineData(50, 6)]
+    [InlineData(200, 6)]
+    public void Precipitation_resolves_to_its_rain_radar_band(double millimetresPerHour, int band)
+    {
+        var scheme = new PrecipitationStyle().ResolveColorScheme(MarinerSettings.Default);
+
+        Assert.Equal(WeatherParameters.PrecipitationRate, scheme.FieldName);
+        Assert.Equal(
+            WeatherPalette.Palette.Resolve(WeatherPalette.PrecipitationToken(band), PaletteType.Day).ToHex(),
+            scheme.Resolve((float)(millimetresPerHour / 3600)));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(0.09)]
+    [InlineData(float.NaN)]
+    public void Drier_than_0_1_mm_an_hour_is_not_drawn(float millimetresPerHour)
+    {
+        Assert.Null(new PrecipitationStyle().ResolveColorScheme(MarinerSettings.Default).Resolve(millimetresPerHour / 3600));
+    }
+
+    [Theory]
+    [InlineData(1000, 1)]
+    [InlineData(2499, 1)]
+    [InlineData(2500, 2)]
+    [InlineData(3999, 2)]
+    [InlineData(4000, 3)]
+    [InlineData(7000, 3)]
+    public void CAPE_from_1000_J_kg_resolves_to_its_risk_class(float joulesPerKilogram, int band)
+    {
+        var scheme = new ThunderstormRiskStyle().ResolveColorScheme(MarinerSettings.Default);
+
+        Assert.Equal(WeatherParameters.Cape, scheme.FieldName);
+        Assert.Equal(
+            WeatherPalette.Palette.Resolve(WeatherPalette.CapeToken(band), PaletteType.Day).ToHex(),
+            scheme.Resolve(joulesPerKilogram));
+        Assert.Equal(new[] { "moderate", "high", "extreme" }[band - 1], ThunderstormRiskStyle.Classify(joulesPerKilogram));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(999)]
+    [InlineData(float.NaN)]
+    public void A_stable_atmosphere_under_1000_J_kg_is_not_drawn(float joulesPerKilogram)
+    {
+        Assert.Null(new ThunderstormRiskStyle().ResolveColorScheme(MarinerSettings.Default).Resolve(joulesPerKilogram));
+        Assert.Null(ThunderstormRiskStyle.Classify(joulesPerKilogram));
+    }
+
+    [Theory]
+    [InlineData(25, 1)]
+    [InlineData(49.9, 1)]
+    [InlineData(50, 2)]
+    [InlineData(75, 3)]
+    [InlineData(100, 3)]
+    public void Cloud_cover_from_25_percent_resolves_to_its_band(float percent, int band)
+    {
+        var scheme = new CloudCoverStyle().ResolveColorScheme(MarinerSettings.Default);
+
+        Assert.Equal(WeatherParameters.CloudCover, scheme.FieldName);
+        Assert.Equal(WeatherPalette.Palette.Resolve(WeatherPalette.CloudToken(band), PaletteType.Day).ToHex(), scheme.Resolve(percent));
+        Assert.Null(scheme.Resolve(24.9f));
+    }
+
+    [Fact]
+    public void Precipitation_thunderstorm_risk_and_cloud_are_off_by_default_and_labelled()
+    {
+        WeatherCoverageStyle[] styles = [new PrecipitationStyle(), new ThunderstormRiskStyle(), new CloudCoverStyle()];
+
+        Assert.All(styles, style => Assert.False(style.IsVisibleByDefault, style.LayerKey));
+        Assert.All(styles, style => Assert.False(style.IsDrawnWith(null), style.LayerKey));
+        Assert.Equal(["weather.precipitation", "weather.cape", "weather.cloud"], styles.Select(s => s.LayerKey));
+        Assert.Equal(["Precipitation", "Thunderstorm risk", "Cloud cover"], styles.Select(s => s.Name));
+        Assert.All(styles, style => Assert.Contains(WeatherCoverageStyle.CreateAll(), s => s.LayerKey == style.LayerKey));
+        Assert.Equal("Light, 0.1 to 0.5 mm/h", PrecipitationStyle.Bands[0].Label);
+        Assert.Equal("Violent, 50 mm/h and more", PrecipitationStyle.Bands[^1].Label);
+        Assert.Equal(["Moderate, 1000 to 2500 J/kg", "High, 2500 to 4000 J/kg", "Extreme, 4000 J/kg and more"], ThunderstormRiskStyle.Bands.Select(b => b.Label));
+        Assert.Equal(["Partly cloudy, 25 to 50 %", "Mostly cloudy, 50 to 75 %", "Cloudy, 75 % and more"], CloudCoverStyle.Bands.Select(b => b.Label));
+    }
+
+    [Fact]
+    public void Cloud_cover_is_a_lighter_veil_under_the_other_fills()
+    {
+        var cloud = new CloudCoverStyle();
+        var all = WeatherCoverageStyle.CreateAll().Select(s => s.LayerKey).ToList();
+
+        Assert.Equal(WeatherLayerKind.Fill, cloud.Kind);
+        Assert.Equal(S98DisplayPlane.OnDemandSurface, cloud.Plane);
+        Assert.Equal(WeatherCoverageStyle.VeilOpacity, cloud.Opacity);
+        Assert.True(cloud.Opacity < WeatherCoverageStyle.FillOpacity);
+        // The veil is drawn before the visibility, thunderstorm and precipitation fills, so they sit on it.
+        Assert.True(all.IndexOf(CloudCoverStyle.Key) < all.IndexOf(VisibilityStyle.Key));
+        Assert.True(all.IndexOf(ThunderstormRiskStyle.Key) < all.IndexOf(PrecipitationStyle.Key));
+    }
+
+    [Fact]
+    public void Thunderstorm_risk_and_cloud_darken_by_day_and_lighten_at_dusk_and_night_as_they_grow()
+    {
+        foreach (Func<int, string> token in new Func<int, string>[] { WeatherPalette.CapeToken, WeatherPalette.CloudToken })
+        {
+            double Luminance(int band, Func<PaletteColors, RgbaColor> pick) => RelativeLuminance(pick(WeatherPalette.Palette.Tokens[token(band)]));
+            for (int band = 1; band < 3; band++)
+            {
+                Assert.True(Luminance(band, c => c.Day) > Luminance(band + 1, c => c.Day), token(band));
+                Assert.True(Luminance(band, c => c.Dusk) < Luminance(band + 1, c => c.Dusk), token(band));
+                Assert.True(Luminance(band, c => c.Night) < Luminance(band + 1, c => c.Night), token(band));
+            }
+        }
+    }
+
     [Fact]
     public void Sea_temperature_bands_are_labelled_in_celsius()
     {
@@ -343,7 +463,7 @@ public class WeatherCoverageStyleTests
     [Fact]
     public void Fills_sit_under_S104_on_the_on_demand_surface_at_half_opacity()
     {
-        foreach (WeatherCoverageStyle style in new WeatherCoverageStyle[] { new WaveHeightStyle(), new WindSpeedStyle(), new SeaTemperatureStyle(), new VisibilityStyle() })
+        foreach (WeatherCoverageStyle style in new WeatherCoverageStyle[] { new WaveHeightStyle(), new WindSpeedStyle(), new SeaTemperatureStyle(), new VisibilityStyle(), new PrecipitationStyle(), new ThunderstormRiskStyle() })
         {
             Assert.Equal(WeatherLayerKind.Fill, style.Kind);
             Assert.Equal(S98DisplayPlane.OnDemandSurface, style.Plane);
@@ -407,8 +527,12 @@ public class WeatherCoverageStyleTests
         Assert.True(new SeaTemperatureStyle().ClipToWater);
         Assert.True(new VisibilityStyle().ClipToWater);
         Assert.True(new FreezingSprayStyle().ClipToWater);
+        Assert.True(new PrecipitationStyle().ClipToWater);
+        Assert.True(new ThunderstormRiskStyle().ClipToWater);
+        Assert.True(new CloudCoverStyle().ClipToWater);
         Assert.All(
-            WeatherCoverageStyle.CreateAll().Where(s => s is not (WaveHeightStyle or SeaTemperatureStyle or VisibilityStyle or FreezingSprayStyle)),
+            WeatherCoverageStyle.CreateAll().Where(s => s is not (WaveHeightStyle or SeaTemperatureStyle or VisibilityStyle or FreezingSprayStyle
+                or PrecipitationStyle or ThunderstormRiskStyle or CloudCoverStyle)),
             style => Assert.False(style.ClipToWater, style.LayerKey));
     }
 
@@ -566,14 +690,14 @@ public class WeatherCoverageStyleTests
     public void Palette_tokens_are_prefixed_so_they_never_resolve_against_S101_colours()
     {
         Assert.All(WeatherPalette.Palette.Tokens.Keys, token => Assert.StartsWith("WX", token, StringComparison.Ordinal));
-        Assert.Equal(8 + 6 + 15 + 13 + 32 + 9 + 3 + 4, WeatherPalette.Palette.Tokens.Count);
+        Assert.Equal(8 + 6 + 15 + 13 + 32 + 9 + 3 + 4 + 6 + 3 + 3, WeatherPalette.Palette.Tokens.Count);
     }
 
     [Fact]
     public void Content_scope_carries_the_style_version()
     {
         Assert.Equal(ApplicationContentScope.For("Weather", WeatherCoverageStyle.StyleVersion), WeatherCoverageStyle.ContentScope);
-        Assert.StartsWith("app:Weather@6|toolkit:", WeatherCoverageStyle.ContentScope, StringComparison.Ordinal);
+        Assert.StartsWith("app:Weather@7|toolkit:", WeatherCoverageStyle.ContentScope, StringComparison.Ordinal);
     }
 
     [Fact]

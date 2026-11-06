@@ -168,6 +168,47 @@ public sealed class GribRenderCommandTests : IDisposable
         Assert.True(ink > 0 && ink < 0.3, $"Ink fraction {ink}: expected barbs only.");
     }
 
+    [Fact]
+    public void Show_layer_draws_a_layer_that_is_off_by_default()
+    {
+        // GFS cloud cover (TCDC, entire atmosphere), overcast everywhere: its
+        // veil is off by default, so the plain render is blank.
+        var grid = new GribFixtures.Grid(40, -70, 1, 4, 4);
+        var dataset = Path.Combine(_dir, "cloud.grib2");
+        File.WriteAllBytes(dataset, GribFixtures.Encode(new GribFixtures.Message
+        {
+            Category = 6,
+            Number = 1,
+            SurfaceType = 10,
+            Grid = grid,
+            DecimalScale = 0,
+            Values = [.. Enumerable.Repeat(100.0, 16)],
+        }));
+        var plain = Path.Combine(_dir, "plain.png");
+        var shown = Path.Combine(_dir, "shown.png");
+        string[] size = ["--width", "160", "--height", "160", "--bbox", "-70,37,-67,40"];
+
+        Assert.Equal(0, CliApp.Build().Run(["render", dataset, plain, .. size], TestContext.Current.CancellationToken));
+        Assert.Equal(0, CliApp.Build().Run(["render", dataset, shown, .. size, "--show-layer", " weather.cloud ,"], TestContext.Current.CancellationToken));
+
+        using (var bitmap = SKBitmap.Decode(plain))
+            Assert.Equal(0, InkFraction(bitmap));
+        using (var bitmap = SKBitmap.Decode(shown))
+            Assert.True(InkFraction(bitmap) > 0.5, "The cloud veil should cover most of the image.");
+        Assert.Equal(["weather.cloud", "weather.cape"], Commands.RenderCommand.ParseLayerKeys(" weather.cloud ,,weather.cape"));
+    }
+
+    [Fact]
+    public void Show_layer_is_refused_in_the_composite_form()
+    {
+        var wind = GribFixtures.CopyFixture(GribFixtures.Wind10m, Path.Combine(_dir, "gfs.grib2"));
+
+        int exit = CliApp.Build().Run(
+            ["render", "--layer", wind, Path.Combine(_dir, "out.png"), "--show-layer", "weather.cloud"], TestContext.Current.CancellationToken);
+
+        Assert.NotEqual(0, exit);
+    }
+
     private static double InkFraction(SKBitmap bitmap)
     {
         int ink = 0, total = 0;
