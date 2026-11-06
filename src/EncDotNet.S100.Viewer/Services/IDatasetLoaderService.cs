@@ -209,6 +209,20 @@ internal interface IDatasetLoaderService
     IReadOnlyList<EncDotNet.S100.Rendering.Engine.OverscaleCellInput> GetOverscaleCells() => [];
 
     /// <summary>
+    /// Picks the features drawn at a geographic point through the map
+    /// session's engine pick: each drawn dataset's own spatial index, with
+    /// features an S-98 rule suppressed left out, ranked topmost-first by the
+    /// S-98 stack (map rendering slice&#160;8). Empty when there is no map.
+    /// </summary>
+    /// <param name="query">The point, radius and resolution to pick at.</param>
+    /// <param name="cancellationToken">Cancels the pick.</param>
+    /// <returns>The picks, topmost first.</returns>
+    Task<IReadOnlyList<EncDotNet.S100.Renderers.Mapsui.S100Pick>> PickAsync(
+        EncDotNet.S100.Renderers.Mapsui.GeographicPickQuery query,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<EncDotNet.S100.Renderers.Mapsui.S100Pick>>([]);
+
+    /// <summary>
     /// Snapshot of the current S-98-ordered layer stack across all
     /// loaded datasets (bottom-of-paint-stack first; index 0 paints
     /// under everything else). Updated whenever a dataset is loaded,

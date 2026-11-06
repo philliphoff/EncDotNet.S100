@@ -15,7 +15,7 @@ public class DispatcherGeographicPickPresenterTests
             => Presented = (latitude, longitude, features);
 
         // Unused members for this test.
-        public void HandlePick(Mapsui.MapInfo? mapInfo, IReadOnlyList<DynamicPickHit>? dynamicHits = null) { }
+        public System.Threading.Tasks.Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.DynamicPickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;
         public bool NavigateToReference(FeatureReference reference) => false;
         public bool OpenFeature(IDatasetProcessor processor, string featureRef, string datasetFileName) => false;
         public bool OpenFeatureAt(IDatasetProcessor processor, int ordinal, string datasetFileName) => false;

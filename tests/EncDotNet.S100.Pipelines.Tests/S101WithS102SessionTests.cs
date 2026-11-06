@@ -76,6 +76,78 @@ public sealed class S101WithS102SessionTests
         Assert.True(PaintedPixelsInBand(session) > 0, "The suppressed S-101 cell rasterised no pixels in band.");
     }
 
+    [Fact]
+    public async Task Features_an_s102_suppresses_are_not_picked()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var cellBounds = await LoadS101Async(session, owner);
+        await LoadCoverageAsync(session, owner, S102Id, "S-102", cellBounds);
+        var suppressed = S101Entries(session)
+            .SelectMany(entry => entry.SuppressedFeatures ?? new HashSet<string>())
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.NotEmpty(suppressed);
+
+        // Pick on a vertex of each suppressed feature: with the S-102 hiding
+        // them, the engine pick leaves them out.
+        var picks = await PickAtAsync(session, SuppressedVertices(session, suppressed));
+        Assert.DoesNotContain(picks, pick => pick.DatasetId == S101Id && suppressed.Contains(pick.Info.FeatureRef));
+
+        // Without the S-102 they are drawn, and picked, again.
+        Assert.True(session.RemoveDataset(S102Id));
+        Assert.DoesNotContain(S101Entries(session), entry => entry.SuppressedFeatures is not null);
+        picks = await PickAtAsync(session, SuppressedVertices(session, suppressed));
+        Assert.Contains(picks, pick => pick.DatasetId == S101Id && suppressed.Contains(pick.Info.FeatureRef));
+    }
+
+    /// <summary>A vertex of each op of the <paramref name="suppressed"/> features, as WGS-84.</summary>
+    private static List<(double Latitude, double Longitude)> SuppressedVertices(
+        MapsuiDatasetLayerSession session, HashSet<string> suppressed)
+    {
+        var points = new List<(double, double)>();
+        foreach (var entry in S101Entries(session))
+        {
+            if (!S100VectorTileRenderer.TryGetPartitionedScene(entry.Layer, out var baseScene, out _))
+                continue;
+
+            foreach (var op in baseScene.Ops.Where(op => suppressed.Contains(op.FeatureReference)))
+            {
+                (double X, double Y)? vertex = op switch
+                {
+                    AreaPaintOp area when area.WorldShell.Count > 0 => area.WorldShell[0],
+                    LinePaintOp line when line.World.Count > 0 => line.World[0],
+                    _ => null,
+                };
+                if (vertex is { } v)
+                {
+                    var (lon, lat) = SphericalMercator.ToLonLat(v.X, v.Y);
+                    points.Add((lat, lon));
+                }
+            }
+        }
+
+        Assert.NotEmpty(points);
+        return points;
+    }
+
+    private static async Task<List<S100Pick>> PickAtAsync(
+        MapsuiDatasetLayerSession session, IEnumerable<(double Latitude, double Longitude)> points)
+    {
+        var picks = new List<S100Pick>();
+        foreach (var (lat, lon) in points)
+        {
+            picks.AddRange(await session.Query.PickAsync(new GeographicPickQuery
+            {
+                Latitude = lat,
+                Longitude = lon,
+                RadiusMeters = 25,
+            }));
+        }
+
+        return picks;
+    }
+
     /// <summary>Hides and shows the S-102 and S-111 datasets, then closes the S-111.</summary>
     private static void ToggleAndClose(MapsuiDatasetLayerSession session)
     {

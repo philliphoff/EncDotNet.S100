@@ -11,8 +11,7 @@ internal sealed class StubFeatureSearchService : IFeatureSearchService
 
 internal sealed class StubPickService : IPickService
 {
-    public void HandlePick(MapInfo? mapInfo) { }
-    public void HandlePick(MapInfo? mapInfo, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.DynamicPickHit>? dynamicHits = null) { }
+    public System.Threading.Tasks.Task HandlePickAsync(Mapsui.MPoint? worldPosition, double resolution, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.DynamicPickHit>? dynamicHits = null) => System.Threading.Tasks.Task.CompletedTask;
 
     public void PresentGeographicPick(
         double latitude,

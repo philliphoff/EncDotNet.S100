@@ -4,28 +4,31 @@ using Mapsui;
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
-/// Dispatches Mapsui pick hits (single-tap, modifier-click, long-press)
-/// to the pick report view-model. Lifts the find-owning-entry +
+/// Dispatches map picks (single-tap, modifier-click, long-press) to the pick
+/// report view-model. Lifts the find-owning-entry +
 /// <see cref="EncDotNet.S100.Datasets.Pipelines.IDatasetProcessor.GetFeatureInfo"/>
 /// logic out of <see cref="MainWindow"/>; the window keeps the gesture
-/// detection and routes the resolved <see cref="MapInfo"/> here.
+/// detection and routes the clicked world position here.
 /// </summary>
 internal interface IPickService
 {
     /// <summary>
-    /// Resolves the supplied hit (or null for an empty-map tap) into a
-    /// pick-report update and a status-text message. Safe to call with
-    /// null or with hits that don't carry a feature reference.
+    /// Picks the drawn features at <paramref name="worldPosition"/> (EPSG:3857;
+    /// null for a tap off the map) through the map session's engine pick and
+    /// publishes them to the pick report, with a coverage sample when no
+    /// feature is hit. Must be called on the UI thread.
     /// </summary>
-    /// <remarks>
-    /// Also accepts an optional list of dynamic-source hits collected
-    /// in parallel by <see cref="DynamicSources.IDynamicSourcePickService"/>.
-    /// When non-empty the dynamic hits are published into the pick
-    /// report's dynamic section; an empty list is equivalent to no
-    /// dynamic hits. Either list (or both) being non-empty causes the
-    /// panel to open.
-    /// </remarks>
-    void HandlePick(MapInfo? mapInfo, IReadOnlyList<DynamicPickHit>? dynamicHits = null);
+    /// <param name="worldPosition">The clicked point in EPSG:3857 metres, or null.</param>
+    /// <param name="resolution">The map resolution, metres per DIP, which sizes the click tolerance.</param>
+    /// <param name="dynamicHits">
+    /// Dynamic-source hits collected in parallel by
+    /// <see cref="DynamicSources.IDynamicSourcePickService"/>. When non-empty
+    /// they are published into the pick report's dynamic section; an empty
+    /// list is equivalent to none. Either list (or both) being non-empty
+    /// opens the panel.
+    /// </param>
+    /// <returns>A task that completes once the pick report is updated.</returns>
+    Task HandlePickAsync(MPoint? worldPosition, double resolution, IReadOnlyList<DynamicPickHit>? dynamicHits = null);
 
     /// <summary>
     /// Publishes a pick at a geographic location whose features have already

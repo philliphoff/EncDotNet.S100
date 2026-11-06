@@ -168,6 +168,11 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
     public IReadOnlyList<ILayer> CurrentStackedLayers =>
         _mapSession?.GetStackedLayers() ?? [];
 
+    public Task<IReadOnlyList<S100Pick>> PickAsync(GeographicPickQuery query, CancellationToken cancellationToken = default) =>
+        _mapSession is null
+            ? Task.FromResult<IReadOnlyList<S100Pick>>([])
+            : _mapSession.Query.PickAsync(query, cancellationToken);
+
     public IReadOnlyList<LayerStackEntry> CurrentStackEntries =>
         _mapSession?.GetLayerStackEntries() ?? [];
 
