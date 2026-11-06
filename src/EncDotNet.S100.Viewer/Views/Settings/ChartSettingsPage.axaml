@@ -195,7 +195,7 @@
             </Grid>
 
             <!-- Weather on a route (#1093): Check route's wind and wave limits,
-                 kept with the mariner settings. #1299 adds its cyclone rows after these. -->
+                 kept with the mariner settings. -->
             <StackPanel Spacing="6">
                 <TextBlock Text="{x:Static loc:Strings.Settings_RouteWeather}"
                            FontSize="12"
@@ -229,6 +229,70 @@
                          MinWidth="120"
                          HorizontalAlignment="Left" />
             </StackPanel>
+
+            <!-- Tropical cyclones on a route (#1299, design note V39): the route
+                 check's cyclone rule, kept with the mariner settings. -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_RouteCyclones}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="{x:Static loc:Strings.Settings_RouteCyclones_Help}"
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_CycloneCheckAgainst}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_CycloneCheckAgainst}" VerticalAlignment="Center" />
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding AvailableCycloneCheckAgainst}"
+                          SelectedValue="{Binding CycloneCheckAgainstKnots}"
+                          SelectedValueBinding="{Binding Knots}"
+                          AutomationProperties.AutomationId="Settings.CycloneCheckAgainst"
+                          AutomationProperties.Name="{x:Static loc:Strings.Settings_CycloneCheckAgainst}"
+                          AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CycloneCheckAgainst}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_CycloneCheckAgainst}"
+                          MinWidth="140">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding DisplayName}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_CycloneReportClosestApproach}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_CycloneReportClosestApproach}" VerticalAlignment="Center" />
+                <ToggleSwitch Grid.Column="1" Classes="setting"
+                              IsChecked="{Binding CycloneReportClosestApproach}"
+                              AutomationProperties.AutomationId="Settings.CycloneReportClosestApproach"
+                              AutomationProperties.Name="{x:Static loc:Strings.Settings_CycloneReportClosestApproach}"
+                              AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CycloneReportClosestApproach}" />
+            </Grid>
+            <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_CycloneMustReviewInside}">
+                <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.Settings_CycloneMustReviewInside}" VerticalAlignment="Center" />
+                <ComboBox Grid.Column="1"
+                          ItemsSource="{Binding AvailableCycloneMustReviewInside}"
+                          SelectedValue="{Binding CycloneMustReviewInsideKnots}"
+                          SelectedValueBinding="{Binding Knots}"
+                          AutomationProperties.AutomationId="Settings.CycloneMustReviewInside"
+                          AutomationProperties.Name="{x:Static loc:Strings.Settings_CycloneMustReviewInside}"
+                          AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CycloneMustReviewInside}"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_CycloneMustReviewInside}"
+                          MinWidth="140">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding DisplayName}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </Grid>
+            <TextBlock Text="{Binding CycloneMappingText}"
+                       AutomationProperties.AutomationId="Settings.CycloneMapping"
+                       FontSize="11"
+                       Opacity="0.6"
+                       TextWrapping="Wrap" />
 
             <!-- National Language -->
             <StackPanel Spacing="6">

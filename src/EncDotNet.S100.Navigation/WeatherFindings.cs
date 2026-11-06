@@ -17,9 +17,18 @@ namespace EncDotNet.S100.Navigation;
 /// </para>
 /// <para>
 /// Every finding is CHECK: weather model data isn't official S-100 data, and
-/// these findings are advisory and aren't for navigation. A rule built on
-/// the same samples (a tropical cyclone's wind radii, #1299) adds its own
-/// codes in <see cref="RouteFindingCategory.Weather"/>.
+/// these findings are advisory and aren't for navigation.
+/// </para>
+/// <para>
+/// The tropical cyclone rule (#1299, design note V38) adds, per storm near
+/// the route: each stretch inside each tested wind radius (nested, so a
+/// stretch inside the 50 kt radius is also inside the 34 kt one), each
+/// stretch inside the forecast cone, each stretch reached after the
+/// forecast ends ("not checked"), and the closest approach when
+/// <see cref="TropicalCycloneCheckSettings.ReportClosestApproach"/> is on.
+/// Radii at or above <see cref="TropicalCycloneCheckSettings.MustReviewInside"/>
+/// are MUST REVIEW, weaker radii and the cone CHECK, the closest approach
+/// INFO.
 /// </para>
 /// </remarks>
 public static class WeatherFindings
@@ -69,7 +78,156 @@ public static class WeatherFindings
             }
         }
 
+        Cyclones(track, result, legs, findings);
         return RouteFinding.Sort(formatter.Render(findings));
+    }
+
+    private static void Cyclones(RouteTrack track, WeatherCheckResult result, IReadOnlyList<PassageLeg> legs, List<RouteFinding> findings)
+    {
+        var settings = result.CycloneSettings;
+        var samples = result.Samples;
+        for (var k = 0; k < result.Cyclones.Count; k++)
+        {
+            var storm = result.Cyclones[k];
+            var key = storm.Info.StormId;
+            foreach (var radius in settings.TestedRadii)
+            {
+                var code = RouteFindingCodes.CycloneRadius(radius);
+                var n = 0;
+                foreach (var (first, last) in Runs(samples, s => s.Cyclone(k)?.Radius >= radius))
+                {
+                    findings.Add(CycloneStretch(track, legs, $"{code.Value}.{key}.{n++}", code, settings.GroupOf(radius), TropicalCycloneFindingKind.Radius, storm, radius, samples, first, last, k));
+                }
+            }
+
+            var cone = 0;
+            foreach (var (first, last) in Runs(samples, s => s.Cyclone(k)?.InCone == true))
+            {
+                findings.Add(CycloneStretch(track, legs, $"{RouteFindingCodes.CycloneCone.Value}.{key}.{cone++}", RouteFindingCodes.CycloneCone, RouteFindingGroup.Check, TropicalCycloneFindingKind.Cone, storm, null, samples, first, last, k));
+            }
+
+            var beyond = 0;
+            foreach (var (first, last) in Runs(samples, s => s.Cyclone(k)?.BeyondForecast == true))
+            {
+                findings.Add(CycloneStretch(track, legs, $"{RouteFindingCodes.CycloneBeyondForecast.Value}.{key}.{beyond++}", RouteFindingCodes.CycloneBeyondForecast, RouteFindingGroup.Check, TropicalCycloneFindingKind.BeyondForecast, storm, null, samples, first, last, k));
+            }
+
+            if (settings.ReportClosestApproach && storm.ClosestApproach is { } cpa)
+            {
+                findings.Add(new RouteFinding($"{RouteFindingCodes.CycloneClosestApproach.Value}.{key}", RouteFindingCodes.CycloneClosestApproach)
+                {
+                    LegIndex = cpa.LegIndex,
+                    Distance = Length.FromMetres(cpa.RouteDistanceMeters),
+                    Location = RouteFindingLocation.Point(cpa.RoutePosition, cpa.RouteDistanceMeters),
+                    Details = new TropicalCycloneDetails
+                    {
+                        Kind = TropicalCycloneFindingKind.ClosestApproach,
+                        Storm = storm.Info,
+                        FirstLegIndex = cpa.LegIndex,
+                        LastLegIndex = cpa.LegIndex,
+                        StartTime = cpa.Time,
+                        HasEta = cpa.HasEta,
+                        ClosestDistance = Length.FromMetres(cpa.DistanceMeters),
+                        StormAtClosest = cpa.Storm,
+                        RoutePosition = cpa.RoutePosition,
+                    },
+                });
+            }
+        }
+    }
+
+    // The runs of consecutive samples that match, as (first, last) indexes.
+    private static IEnumerable<(int First, int Last)> Runs(IReadOnlyList<WeatherSample> samples, Func<WeatherSample, bool> match)
+    {
+        var i = 0;
+        while (i < samples.Count)
+        {
+            if (!match(samples[i]))
+            {
+                i++;
+                continue;
+            }
+
+            var start = i;
+            while (i < samples.Count && match(samples[i]))
+            {
+                i++;
+            }
+
+            yield return (start, i - 1);
+        }
+    }
+
+    private static (DateTimeOffset Start, DateTimeOffset? End, bool HasEta) Window(IReadOnlyList<PassageLeg> legs, IReadOnlyList<WeatherSample> samples, int first, int last)
+    {
+        var a = samples[first];
+        var b = samples[last];
+        var hasEta = true;
+        for (var k = first; k <= last; k++)
+        {
+            hasEta &= samples[k].HasEta;
+        }
+
+        var start = a.HasEta && legs[a.LegIndex].MetresPerSecond is { } va
+            ? a.Time - TimeSpan.FromSeconds((a.DistanceMeters - a.StartDistanceMeters) / va)
+            : a.Time;
+        DateTimeOffset? end = hasEta && legs[b.LegIndex].MetresPerSecond is { } vb
+            ? b.Time + TimeSpan.FromSeconds((b.EndDistanceMeters - b.DistanceMeters) / vb)
+            : null;
+        return (start, end, hasEta);
+    }
+
+    private static RouteFinding CycloneStretch(
+        RouteTrack track,
+        IReadOnlyList<PassageLeg> legs,
+        string id,
+        RouteFindingCode code,
+        RouteFindingGroup group,
+        TropicalCycloneFindingKind kind,
+        CycloneCheckStorm storm,
+        TropicalCycloneRadius? radius,
+        IReadOnlyList<WeatherSample> samples,
+        int first,
+        int last,
+        int stormIndex)
+    {
+        var a = samples[first];
+        var b = samples[last];
+        var (start, end, hasEta) = Window(legs, samples, first, last);
+
+        // Shown where the storm is nearest, or at the middle without a storm.
+        var shown = a;
+        for (var k = first + 1; k <= last; k++)
+        {
+            if (samples[k].Cyclone(stormIndex)?.DistanceMeters is { } d
+                && (shown.Cyclone(stormIndex)?.DistanceMeters is not { } best || d < best))
+            {
+                shown = samples[k];
+            }
+        }
+
+        var distance = kind == TropicalCycloneFindingKind.BeyondForecast || shown.Cyclone(stormIndex)?.DistanceMeters is null
+            ? (a.StartDistanceMeters + b.EndDistanceMeters) / 2
+            : shown.DistanceMeters;
+        return new RouteFinding(id, code, group)
+        {
+            LegIndex = kind == TropicalCycloneFindingKind.BeyondForecast ? a.LegIndex : shown.LegIndex,
+            Distance = Length.FromMetres(distance),
+            Location = track.Legs.Count > 0 ? track.Location(a.StartDistanceMeters, b.EndDistanceMeters) : null,
+            Details = new TropicalCycloneDetails
+            {
+                Kind = kind,
+                Storm = storm.Info,
+                Radius = radius,
+                FirstLegIndex = a.LegIndex,
+                LastLegIndex = b.LegIndex,
+                Length = Length.FromMetres(b.EndDistanceMeters - a.StartDistanceMeters),
+                StartTime = start,
+                EndTime = end,
+                HasEta = hasEta,
+                ForecastEnd = kind == TropicalCycloneFindingKind.BeyondForecast ? storm.ForecastEnd : null,
+            },
+        };
     }
 
     private static RouteFindingCode Code(WeatherQuantity quantity, WeatherSampleState state) => state switch

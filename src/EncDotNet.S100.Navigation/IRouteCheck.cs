@@ -87,10 +87,14 @@ public static class RouteCheckReasons
     /// <summary>The sources have no navigational warnings.</summary>
     public const string WarningsMissing = "warnings_missing";
 
-    /// <summary>The sources have no weather, so the weather check didn't run.</summary>
+    /// <summary>The sources have no weather grids and no tropical cyclones, so the weather check didn't run.</summary>
     public const string WeatherMissing = "weather_missing";
 
-    /// <summary>No wind or wave limit was set, so the weather check didn't run.</summary>
+    /// <summary>
+    /// No wind or wave limit was set, so the weather check didn't read the
+    /// weather grids: it didn't run, or (with tropical cyclones loaded) ran
+    /// their rule only.
+    /// </summary>
     public const string WeatherLimitsMissing = "weather_limits_missing";
 
     /// <summary>A wind limit was set, but no weather dataset has wind, so only waves were checked.</summary>

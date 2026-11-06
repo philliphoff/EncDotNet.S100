@@ -7789,6 +7789,130 @@
   <data name="Findings_HoursFormat" xml:space="preserve">
     <value>{0:0.#} h</value>
   </data>
+  <data name="Settings_RouteCyclones" xml:space="preserve">
+    <value>Tropical cyclones on a route</value>
+  </data>
+  <data name="Settings_RouteCyclones_Help" xml:space="preserve">
+    <value>Used by the route check's weather findings. Weather findings are advisory. Not for navigation.</value>
+  </data>
+  <data name="Settings_CycloneCheckAgainst" xml:space="preserve">
+    <value>Check against</value>
+  </data>
+  <data name="Settings_CycloneReportClosestApproach" xml:space="preserve">
+    <value>Report closest approach</value>
+  </data>
+  <data name="Settings_CycloneMustReviewInside" xml:space="preserve">
+    <value>Must review inside</value>
+  </data>
+  <data name="Settings_CycloneRadiusFormat" xml:space="preserve">
+    <value>{0} kt radius</value>
+    <comment>{0}: 34, 50 or 64</comment>
+  </data>
+  <data name="Settings_CycloneNever" xml:space="preserve">
+    <value>Never</value>
+    <comment>Must review inside: no radius is Must review</comment>
+  </data>
+  <data name="Tooltip_CycloneCheckAgainst" xml:space="preserve">
+    <value>The outermost wind radius the route check tests. Radii outside it aren't reported. The cone is always tested.</value>
+  </data>
+  <data name="Tooltip_CycloneReportClosestApproach" xml:space="preserve">
+    <value>Adds each storm's closest approach to the findings, and its line on the map.</value>
+  </data>
+  <data name="Tooltip_CycloneMustReviewInside" xml:space="preserve">
+    <value>Radii at or above this are Must review. Weaker radii and the cone are Check.</value>
+  </data>
+  <data name="Settings_CycloneMappingFormat" xml:space="preserve">
+    <value>Inside the {0}: Must review. {1}: Check.</value>
+    <comment>{0}: the radii, e.g. 50 kt and 64 kt radii; {1}: the rest, e.g. The 34 kt radius and the cone</comment>
+  </data>
+  <data name="Settings_CycloneMappingNever" xml:space="preserve">
+    <value>Every radius and the cone: Check.</value>
+  </data>
+  <data name="Settings_CycloneOneRadiusFormat" xml:space="preserve">
+    <value>{0} kt radius</value>
+    <comment>{0}: knots</comment>
+  </data>
+  <data name="Settings_CycloneTwoRadiiFormat" xml:space="preserve">
+    <value>{0} kt and {1} kt radii</value>
+    <comment>{0}, {1}: knots</comment>
+  </data>
+  <data name="Settings_CycloneThreeRadiiFormat" xml:space="preserve">
+    <value>{0} kt, {1} kt and {2} kt radii</value>
+    <comment>{0}–{2}: knots</comment>
+  </data>
+  <data name="Settings_CycloneRestFormat" xml:space="preserve">
+    <value>The {0} and the cone</value>
+    <comment>{0}: the weaker radii, e.g. 34 kt radius</comment>
+  </data>
+  <data name="Settings_CycloneConeOnly" xml:space="preserve">
+    <value>The cone</value>
+  </data>
+  <data name="Check_CycloneSettingsFormat" xml:space="preserve">
+    <value>{0} kt radius and cone · Must review inside {1} kt</value>
+    <comment>Weather row tooltip. {0}: radius checked against; {1}: must review radius</comment>
+  </data>
+  <data name="Check_CycloneSettingsNeverFormat" xml:space="preserve">
+    <value>{0} kt radius and cone · Must review never</value>
+    <comment>{0}: radius checked against</comment>
+  </data>
+  <data name="Check_SummaryWeatherMustReviewFormat" xml:space="preserve">
+    <value>{0} must review</value>
+    <comment>Weather row: tropical cyclone radii at or inside Must review inside</comment>
+  </data>
+  <data name="Check_SummaryWeatherToCheckFormat" xml:space="preserve">
+    <value>{0} to check</value>
+    <comment>Weather row: tropical cyclone radii or cone to check</comment>
+  </data>
+  <data name="Check_SummaryWeatherCpaFormat" xml:space="preserve">
+    <value>CPA {0:0} NM</value>
+    <comment>Weather row: the closest approach to a tropical cyclone, nautical miles</comment>
+  </data>
+  <data name="Check_SummaryWeatherNoStorm" xml:space="preserve">
+    <value>No storm near the route</value>
+    <comment>Weather row with only a tropical cyclone advisory loaded, none near the route</comment>
+  </data>
+  <data name="Check_FooterCyclones" xml:space="preserve">
+    <value>NHC advisory</value>
+    <comment>Named in the verdict card's footer among the products used</comment>
+  </data>
+  <data name="Findings_CycloneRadiusFormat" xml:space="preserve">
+    <value>Inside the {0} kt radius</value>
+    <comment>{0}: 34, 50 or 64</comment>
+  </data>
+  <data name="Findings_CycloneConeTitle" xml:space="preserve">
+    <value>Inside the forecast cone</value>
+  </data>
+  <data name="Findings_CycloneClosestFormat" xml:space="preserve">
+    <value>Closest approach {0:0} NM</value>
+    <comment>{0}: nautical miles</comment>
+  </data>
+  <data name="Findings_CycloneBeyondFormat" xml:space="preserve">
+    <value>{0} not checked: beyond the forecast</value>
+    <comment>{0}: the storm's name</comment>
+  </data>
+  <data name="Findings_CycloneStormFormat" xml:space="preserve">
+    <value>{0} adv {1}</value>
+    <comment>{0}: storm name; {1}: advisory number</comment>
+  </data>
+  <data name="Findings_CycloneEstimated" xml:space="preserve">
+    <value>est. position</value>
+    <comment>The storm position at the closest approach is estimated between forecast points</comment>
+  </data>
+  <data name="Findings_CycloneBestTrack" xml:space="preserve">
+    <value>best track</value>
+    <comment>The storm position at the closest approach is on the best track</comment>
+  </data>
+  <data name="Legend_Weather" xml:space="preserve">
+    <value>WEATHER</value>
+    <comment>Route check legend section</comment>
+  </data>
+  <data name="Legend_StormAtEta" xml:space="preserve">
+    <value>Storm at ETA (closest approach)</value>
+  </data>
+  <data name="Map_StormAtEtaFormat" xml:space="preserve">
+    <value>at ETA {0} · CPA {1:0} NM</value>
+    <comment>Label beside the storm-at-ETA ghost. {0}: the ETA; {1}: nautical miles</comment>
+  </data>
   <data name="Findings_TagWeather" xml:space="preserve">
     <value>Weather</value>
     <comment>Tag of a weather finding in the findings list</comment>

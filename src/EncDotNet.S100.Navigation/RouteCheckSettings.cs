@@ -84,6 +84,12 @@ public sealed class RouteCheckSettings
     /// </summary>
     public WeatherLimits? WeatherLimits { get; init; }
 
+    /// <summary>
+    /// The tropical cyclone rule's settings for the weather check (#1299), or
+    /// <c>null</c> for <see cref="TropicalCycloneCheckSettings.Default"/>.
+    /// </summary>
+    public TropicalCycloneCheckSettings? TropicalCyclones { get; init; }
+
     /// <summary>Whether the depth and danger checks run: both the safety contour and the safety depth are set.</summary>
     public bool ChecksDepths => SafetyContour is not null && SafetyDepth is not null;
 

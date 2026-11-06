@@ -56,8 +56,9 @@ public enum RouteFindingCategory
 
     /// <summary>
     /// Forecast weather along the route at its ETAs: wind or waves above the
-    /// vessel's limits, and the stretches the forecast doesn't reach. Advisory:
-    /// weather model data isn't official S-100 data and isn't for navigation.
+    /// vessel's limits, tropical cyclone wind radii and cones, and the stretches
+    /// the forecast doesn't reach. Advisory: weather model data and cyclone
+    /// advisories aren't official S-100 data and aren't for navigation.
     /// </summary>
     Weather,
 }

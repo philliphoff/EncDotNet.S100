@@ -200,6 +200,9 @@ internal sealed class PassageCheckService : IDisposable
     /// <summary>The mariner's wind and wave limits, or <c>null</c> when neither is set.</summary>
     public WeatherLimits? WeatherLimits => _weather.Limits;
 
+    /// <summary>The mariner's tropical cyclone settings for the weather check (#1299).</summary>
+    public TropicalCycloneCheckSettings CycloneSettings => _weather.Cyclones;
+
     /// <summary>The delay between the last change and a recompute.</summary>
     public TimeSpan Debounce { get; }
 
@@ -381,7 +384,7 @@ internal sealed class PassageCheckService : IDisposable
             return;
         }
 
-        var input = CheckInput.From(_routes, _weather.Limits, _mariner?.Current);
+        var input = CheckInput.From(_routes, _weather.Limits, _weather.Cyclones, _mariner?.Current);
         if (input is null)
         {
             CancelPending();
@@ -589,6 +592,7 @@ internal sealed class PassageCheckService : IDisposable
                 Areas = sources.Areas,
                 Warnings = _warnings,
                 Weather = sources.Weather,
+                Cyclones = sources.Cyclones,
             };
             _bundles.AddOrUpdate(sources, bundle);
             return bundle;
@@ -688,6 +692,7 @@ internal sealed class PassageCheckService : IDisposable
     /// <param name="SafetyDepth">The mariner's safety depth, or <c>null</c> (no depth checks).</param>
     /// <param name="WeatherLimits">The mariner's wind and wave limits, or <c>null</c>.</param>
     /// <param name="VesselLimits">The route's own wind and wave limits (RTZ), or <c>null</c>.</param>
+    /// <param name="Cyclones">The mariner's tropical cyclone settings (#1299).</param>
     internal sealed record CheckInput(
         string RouteId,
         IReadOnlyList<PassageLeg> Legs,
@@ -696,7 +701,8 @@ internal sealed class PassageCheckService : IDisposable
         Quantities.Depth? SafetyContour,
         Quantities.Depth? SafetyDepth,
         WeatherLimits? WeatherLimits,
-        WeatherLimits? VesselLimits)
+        WeatherLimits? VesselLimits,
+        TropicalCycloneCheckSettings Cyclones)
     {
         /// <summary>
         /// The plan the checks take. Its departure is <see cref="Departure"/>
@@ -716,17 +722,19 @@ internal sealed class PassageCheckService : IDisposable
             SafetyDepth = SafetyDepth,
             DepartureWindow = window,
             WeatherLimits = WeatherLimits,
+            TropicalCyclones = Cyclones,
         };
 
-        public static CheckInput? From(RoutesService routes, WeatherLimits? weather, MarinerSettings? mariner = null) =>
-            routes.Routes.ActiveRoute is { } route ? For(route, routes.ViewTime.Current, weather, mariner) : null;
+        public static CheckInput? From(RoutesService routes, WeatherLimits? weather, TropicalCycloneCheckSettings cyclones, MarinerSettings? mariner = null) =>
+            routes.Routes.ActiveRoute is { } route ? For(route, routes.ViewTime.Current, weather, cyclones, mariner) : null;
 
         /// <summary>The inputs for <paramref name="route"/>, or <c>null</c> when it has no legs.</summary>
         /// <param name="route">The route.</param>
         /// <param name="viewTime">The view time, the departure when the route has none.</param>
         /// <param name="weather">The mariner's wind and wave limits, or <c>null</c>.</param>
+        /// <param name="cyclones">The mariner's tropical cyclone settings.</param>
         /// <param name="mariner">The mariner's settings for the depth checks, or <c>null</c> to skip them.</param>
-        public static CheckInput? For(Route route, DateTimeOffset viewTime, WeatherLimits? weather, MarinerSettings? mariner = null)
+        public static CheckInput? For(Route route, DateTimeOffset viewTime, WeatherLimits? weather, TropicalCycloneCheckSettings cyclones, MarinerSettings? mariner = null)
         {
             if (route.Legs.Count == 0)
                 return null;
@@ -734,12 +742,12 @@ internal sealed class PassageCheckService : IDisposable
             var legs = RouteEtas.ToPassageLegs(route);
             return new CheckInput(
                 route.Id, legs, route.Passage.Departure ?? viewTime, legs.All(l => l.Draft is not null),
-                mariner?.SafetyContour, mariner?.SafetyDepth, weather, RouteVesselLimits.Of(route));
+                mariner?.SafetyContour, mariner?.SafetyDepth, weather, RouteVesselLimits.Of(route), cyclones);
         }
 
         public bool SameAs(CheckInput other) =>
             Departure == other.Departure && SafetyContour == other.SafetyContour && SafetyDepth == other.SafetyDepth
-            && WeatherLimits == other.WeatherLimits && VesselLimits == other.VesselLimits && SameLegs(other);
+            && WeatherLimits == other.WeatherLimits && VesselLimits == other.VesselLimits && Cyclones == other.Cyclones && SameLegs(other);
 
         /// <summary>Same route, legs and vessel values; the departure may differ.</summary>
         public bool SameLegs(CheckInput other)

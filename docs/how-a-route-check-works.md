@@ -116,6 +116,7 @@ once.
 | S-122 marine protected areas | `Areas` | areas | Marine protected and restricted areas |
 | S-124 navigational warnings | `Warnings` | warnings | Warning parts near the route, and the set of all warnings for cancellations and in-force bulletins |
 | GRIB2 and NetCDF weather grids | `Weather` | weather | Wind speed at 10 m and significant wave height at each sample's ETA, at the nearest grid node and time step |
+| NHC tropical cyclone advisories | `Cyclones` | weather | The storm at each sample's ETA (its centre and 34, 50 and 64 kt wind radii by quadrant) and the forecast cone |
 
 Other products, including S-111 surface currents, S-127 and S-131, aren't
 read. Speeds are speeds over ground, and currents aren't applied to ETAs.
@@ -126,7 +127,8 @@ For the order in which charted depth and water level are chosen, see
 `CatalogRouteCheckSources` fills every member but `Weather`, even when no
 dataset of that product is loaded. `Weather` is null without a weather
 dataset, so the weather check is skipped (`weather_missing`) rather than
-reporting the whole route as outside forecast coverage. So with the catalog bundle a missing product
+reporting the whole route as outside forecast coverage, unless a tropical
+cyclone advisory is loaded (`Cyclones`, empty without one). So with the catalog bundle a missing product
 doesn't skip a check. It shows up as coverage findings instead, such as
 `data.outside_chart_coverage` or `data.no_water_level_coverage`. To leave a
 check's data out, build `RouteCheckSources` yourself and leave that member
@@ -209,7 +211,7 @@ so rather than reporting nothing:
 | `areas` | `Areas` is null (`areas_missing`) | |
 | `warnings` | `Warnings` is null (`warnings_missing`) | |
 | `clearance` | `Depth` is null (`depth_missing`), `WaterLevel` is null (`water_level_missing`), or a leg has no draft (`draft_missing`) | |
-| `weather` | `Weather` is null (`weather_missing`), or no wind or wave limit is set in the settings or the plan (`weather_limits_missing`) | A limit is set for wind or waves, but no weather dataset has it (`wind_missing`, `waves_missing`) |
+| `weather` | Neither `Weather` nor `Cyclones` has anything (`weather_missing`), or no wind or wave limit is set in the settings or the plan and no tropical cyclone is loaded (`weather_limits_missing`) | A limit is set for wind or waves, but no weather dataset has it (`wind_missing`, `waves_missing`), or grids are loaded without a limit, so only the tropical cyclone rule ran (`weather_limits_missing`) |
 
 The reasons are constants in `RouteCheckReasons`. `report.Status("clearance")`
 returns one check's status. A skipped check's detail is `null`:

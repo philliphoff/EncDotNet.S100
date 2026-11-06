@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using EncDotNet.S100.Core.Scheduling;
 
 namespace EncDotNet.S100.Viewer.Diagnostics;
 
@@ -119,6 +120,7 @@ internal readonly record struct ProcessMetricsPeaks(
 /// <param name="AllocationRateBytesPerSecond">Bytes allocated ÷ wall seconds.</param>
 /// <param name="End">The reading at the window's end.</param>
 /// <param name="Peaks">Peaks sampled through the window, including both ends.</param>
+/// <param name="UiDelays">How long UI-thread probes waited to run in the window, or null when no probe runs.</param>
 internal sealed record ProcessMetricsWindow(
     double WallMs,
     double CpuMs,
@@ -132,19 +134,22 @@ internal sealed record ProcessMetricsWindow(
     long AllocatedBytes,
     double AllocationRateBytesPerSecond,
     ProcessMetricsReading End,
-    ProcessMetricsPeaks Peaks)
+    ProcessMetricsPeaks Peaks,
+    LatencySnapshot? UiDelays = null)
 {
     /// <summary>Derives the window metrics. Pure.</summary>
     /// <param name="start">The reading at the window's start.</param>
     /// <param name="end">The reading at its end.</param>
     /// <param name="peaks">The sampled peaks.</param>
     /// <param name="processorCount">Logical processors.</param>
+    /// <param name="uiDelays">The UI-thread probe delays in the window, or null.</param>
     /// <returns>The metrics.</returns>
     public static ProcessMetricsWindow Compute(
         ProcessMetricsReading start,
         ProcessMetricsReading end,
         ProcessMetricsPeaks peaks,
-        int processorCount)
+        int processorCount,
+        LatencySnapshot? uiDelays = null)
     {
         var wallMs = Math.Max(0, (end.Timestamp - start.Timestamp) * 1000.0 / Stopwatch.Frequency);
         var cpuMs = Math.Max(0, (end.CpuTime - start.CpuTime).TotalMilliseconds);
@@ -164,7 +169,8 @@ internal sealed record ProcessMetricsWindow(
             AllocatedBytes: allocated,
             AllocationRateBytesPerSecond: wallMs > 0 ? allocated / (wallMs / 1000.0) : 0,
             End: end,
-            Peaks: peaks.With(start).With(end));
+            Peaks: peaks.With(start).With(end),
+            UiDelays: uiDelays);
     }
 }
 
@@ -184,20 +190,28 @@ internal sealed record ProcessMetricsWindow(
 internal sealed class ProcessMetricsSampler : IDisposable
 {
     private readonly IProcessMetricsSource _source;
+    private readonly UiThreadStallMonitor? _uiStalls;
     private readonly int _processorCount;
     private readonly object _gate = new();
     private ProcessMetricsReading? _start;
     private ProcessMetricsPeaks _peaks;
+    private LatencySnapshot? _uiStart;
     private CancellationTokenSource? _samplerStop;
 
     /// <summary>Creates a sampler.</summary>
     /// <param name="source">Reads the counters.</param>
     /// <param name="interval">How often the peaks are sampled while a window is open.</param>
     /// <param name="processorCount">Logical processors; <see cref="Environment.ProcessorCount"/> by default.</param>
-    public ProcessMetricsSampler(IProcessMetricsSource source, TimeSpan? interval = null, int? processorCount = null)
+    /// <param name="uiStalls">Probes the UI thread while a window is open, or null for no probe.</param>
+    public ProcessMetricsSampler(
+        IProcessMetricsSource source,
+        TimeSpan? interval = null,
+        int? processorCount = null,
+        UiThreadStallMonitor? uiStalls = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         _source = source;
+        _uiStalls = uiStalls;
         Interval = interval ?? TimeSpan.FromMilliseconds(100);
         _processorCount = processorCount ?? Environment.ProcessorCount;
     }
@@ -225,6 +239,8 @@ internal sealed class ProcessMetricsSampler : IDisposable
         {
             _start = reading;
             _peaks = ProcessMetricsPeaks.Of(reading);
+            _uiStalls?.Start();
+            _uiStart = _uiStalls?.Snapshot();
             if (_samplerStop is null)
             {
                 _samplerStop = new CancellationTokenSource();
@@ -242,16 +258,19 @@ internal sealed class ProcessMetricsSampler : IDisposable
     public ProcessMetricsWindow? ReadWindow(bool restart)
     {
         var end = _source.Read();
+        var uiNow = _uiStalls?.Snapshot();
         lock (_gate)
         {
             if (_start is not { } start)
                 return null;
 
-            var window = ProcessMetricsWindow.Compute(start, end, _peaks, _processorCount);
+            var uiDelays = uiNow is not null && _uiStart is not null ? uiNow.Since(_uiStart) : null;
+            var window = ProcessMetricsWindow.Compute(start, end, _peaks, _processorCount, uiDelays);
             if (restart)
             {
                 _start = end;
                 _peaks = ProcessMetricsPeaks.Of(end);
+                _uiStart = uiNow;
             }
 
             return window;
@@ -264,6 +283,8 @@ internal sealed class ProcessMetricsSampler : IDisposable
         lock (_gate)
         {
             _start = null;
+            _uiStart = null;
+            _uiStalls?.Stop();
             _samplerStop?.Cancel();
             _samplerStop?.Dispose();
             _samplerStop = null;

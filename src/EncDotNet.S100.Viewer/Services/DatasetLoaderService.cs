@@ -381,7 +381,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             var parseStart = Stopwatch.GetTimestamp();
             IDatasetProcessor processor;
             // The parse stage of the warm-load breakdown (s100.cell.parse,
-            // then s100.cell.portray, s100.cell.scene_build, s100.cell.compose).
+            // then s100.cell.portray, s100.cell.scene_build, s100.cell.stack_wait).
             using (EncDotNet.S100.Viewer.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.parse"))
             {
                 processor = await CreateProcessorAsync(

@@ -277,18 +277,18 @@ public sealed class RouteWeatherCheckTests : IDisposable
         var ct = TestContext.Current.CancellationToken;
 
         Assert.True((await tools.GetAsync(ct)).TryGetValue(out var empty));
-        Assert.Equal(new RouteWeatherSettingsDto(null, null), empty);
+        Assert.Equal(((double?)null, (double?)null), (empty!.MaxWindKnots, empty.MaxWaveHeightMeters));
 
-        Assert.True((await tools.SetAsync(25, 3, null, ct)).TryGetValue(out var set));
-        Assert.Equal(new RouteWeatherSettingsDto(25, 3), set);
+        Assert.True((await tools.SetAsync(25, 3, null, null, null, null, ct)).TryGetValue(out var set));
+        Assert.Equal(((double?)25, (double?)3), (set!.MaxWindKnots, set.MaxWaveHeightMeters));
         Assert.Equal(25, settings.RouteMaxWindKnots);
 
-        Assert.True((await tools.SetAsync(null, null, ["maxWindKnots"], ct)).TryGetValue(out var cleared));
-        Assert.Equal(new RouteWeatherSettingsDto(null, 3), cleared);
+        Assert.True((await tools.SetAsync(null, null, ["maxWindKnots"], null, null, null, ct)).TryGetValue(out var cleared));
+        Assert.Equal(((double?)null, (double?)3), (cleared!.MaxWindKnots, cleared.MaxWaveHeightMeters));
 
-        Assert.True((await tools.SetAsync(-1, null, null, ct)).TryGetError(out var bad));
+        Assert.True((await tools.SetAsync(-1, null, null, null, null, null, ct)).TryGetError(out var bad));
         Assert.Equal("invalid_argument", bad!.Code);
-        Assert.True((await tools.SetAsync(null, null, ["gusts"], ct)).TryGetError(out _));
+        Assert.True((await tools.SetAsync(null, null, ["gusts"], null, null, null, ct)).TryGetError(out _));
     }
 
     private sealed class ImmediateInvoker : IRouteEditInvoker

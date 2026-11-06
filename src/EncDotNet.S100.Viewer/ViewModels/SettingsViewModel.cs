@@ -636,6 +636,118 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
                 MaxWaveHeight = _routeMaxWaveHeightMetres is { } m ? Quantities.Length.FromMetres(m) : null,
             };
 
+    // ── Tropical cyclones on a route (#1299, design note V39) ─────────────
+    // The cyclone rule's settings: Check against (34/50/64 kt), Report closest
+    // approach, and Must review inside (64/50/34 kt or Never, never outside
+    // Check against). Raised on RouteWeatherLimitsChanged too.
+
+    private Navigation.TropicalCycloneRadius _cycloneCheckAgainst = Navigation.TropicalCycloneRadius.Knots34;
+    private bool _cycloneReportClosestApproach = true;
+    private Navigation.TropicalCycloneRadius? _cycloneMustReviewInside = Navigation.TropicalCycloneRadius.Knots50;
+
+    /// <summary>The Check against choices: the 34, 50 and 64 kt radii.</summary>
+    public IReadOnlyList<CycloneRadiusOption> AvailableCycloneCheckAgainst { get; } =
+        [.. Enum.GetValues<Navigation.TropicalCycloneRadius>().Order().Select(CycloneRadiusOption.Of)];
+
+    /// <summary>The Must review inside choices: 64 kt down to Check against, then Never.</summary>
+    public IReadOnlyList<CycloneRadiusOption> AvailableCycloneMustReviewInside =>
+    [
+        .. Enum.GetValues<Navigation.TropicalCycloneRadius>().Where(r => r >= _cycloneCheckAgainst).OrderDescending().Select(CycloneRadiusOption.Of),
+        new CycloneRadiusOption(0, Strings.Settings_CycloneNever),
+    ];
+
+    /// <summary>The radius checked against, in knots: 34, 50 or 64.</summary>
+    public int CycloneCheckAgainstKnots
+    {
+        get => (int)_cycloneCheckAgainst;
+        set
+        {
+            if (!Enum.IsDefined((Navigation.TropicalCycloneRadius)value) || (int)_cycloneCheckAgainst == value)
+                return;
+            _cycloneCheckAgainst = (Navigation.TropicalCycloneRadius)value;
+            _settings.RouteCycloneCheckAgainstKnots = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(AvailableCycloneMustReviewInside));
+
+            // Narrowing Check against past Must review inside moves it in too.
+            if (_cycloneMustReviewInside is { } inside && inside < _cycloneCheckAgainst)
+            {
+                _cycloneMustReviewInside = _cycloneCheckAgainst;
+                _settings.RouteCycloneMustReviewInsideKnots = value;
+            }
+
+            OnPropertyChanged(nameof(CycloneMustReviewInsideKnots));
+            OnPropertyChanged(nameof(CycloneMappingText));
+            RaiseRouteWeatherLimitsChanged();
+        }
+    }
+
+    /// <summary>Whether the closest approach to each storm is reported.</summary>
+    public bool CycloneReportClosestApproach
+    {
+        get => _cycloneReportClosestApproach;
+        set
+        {
+            if (SetProperty(ref _cycloneReportClosestApproach, value))
+            {
+                _settings.RouteCycloneReportClosestApproach = value;
+                RaiseRouteWeatherLimitsChanged();
+            }
+        }
+    }
+
+    /// <summary>The weakest radius that is Must review, in knots (34, 50 or 64), or 0 for never.</summary>
+    public int CycloneMustReviewInsideKnots
+    {
+        get => _cycloneMustReviewInside is { } r ? (int)r : 0;
+        set
+        {
+            Navigation.TropicalCycloneRadius? radius = value == 0 ? null : (Navigation.TropicalCycloneRadius)value;
+            if ((radius is { } r && (!Enum.IsDefined(r) || r < _cycloneCheckAgainst)) || radius == _cycloneMustReviewInside)
+                return;
+            _cycloneMustReviewInside = radius;
+            _settings.RouteCycloneMustReviewInsideKnots = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CycloneMappingText));
+            RaiseRouteWeatherLimitsChanged();
+        }
+    }
+
+    /// <summary>
+    /// The line under the rows that spells out the mapping: "Inside the 50 kt
+    /// and 64 kt radii: Must review. The 34 kt radius and the cone: Check."
+    /// </summary>
+    public string CycloneMappingText => CycloneMapping(Cyclones);
+
+    /// <summary>The mapping line for a set of cyclone settings.</summary>
+    /// <param name="settings">The settings.</param>
+    /// <returns>The line.</returns>
+    internal static string CycloneMapping(Navigation.TropicalCycloneCheckSettings settings)
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        var tested = settings.TestedRadii;
+        if (settings.EffectiveMustReviewInside is not { } inside)
+            return Strings.Settings_CycloneMappingNever;
+        static string Radii(IReadOnlyList<Navigation.TropicalCycloneRadius> radii) => radii.Count switch
+        {
+            1 => string.Format(System.Globalization.CultureInfo.CurrentCulture, Strings.Settings_CycloneOneRadiusFormat, (int)radii[0]),
+            2 => string.Format(System.Globalization.CultureInfo.CurrentCulture, Strings.Settings_CycloneTwoRadiiFormat, (int)radii[0], (int)radii[1]),
+            _ => string.Format(System.Globalization.CultureInfo.CurrentCulture, Strings.Settings_CycloneThreeRadiiFormat, (int)radii[0], (int)radii[1], (int)radii[2]),
+        };
+        var must = tested.Where(r => r >= inside).ToList();
+        var check = tested.Where(r => r < inside).ToList();
+        var rest = check.Count == 0 ? Strings.Settings_CycloneConeOnly : string.Format(culture, Strings.Settings_CycloneRestFormat, Radii(check));
+        return string.Format(culture, Strings.Settings_CycloneMappingFormat, Radii(must), rest);
+    }
+
+    /// <inheritdoc />
+    public Navigation.TropicalCycloneCheckSettings Cyclones => new()
+    {
+        CheckAgainst = _cycloneCheckAgainst,
+        ReportClosestApproach = _cycloneReportClosestApproach,
+        MustReviewInside = _cycloneMustReviewInside,
+    };
+
     /// <inheritdoc />
     public event Action? RouteWeatherLimitsChanged;
 
@@ -1174,6 +1286,18 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
         _waterLevelApplyUndeclaredDatum = settings.WaterLevelApplyUndeclaredDatum ?? false;
         _routeMaxWindKnots = settings.RouteMaxWindKnots is { } wind && double.IsFinite(wind) && wind > 0 ? wind : null;
         _routeMaxWaveHeightMetres = settings.RouteMaxWaveHeightMetres is { } wave && double.IsFinite(wave) && wave > 0 ? wave : null;
+        _cycloneCheckAgainst = settings.RouteCycloneCheckAgainstKnots is { } against && Enum.IsDefined((Navigation.TropicalCycloneRadius)against)
+            ? (Navigation.TropicalCycloneRadius)against
+            : Navigation.TropicalCycloneRadius.Knots34;
+        _cycloneReportClosestApproach = settings.RouteCycloneReportClosestApproach ?? true;
+        _cycloneMustReviewInside = settings.RouteCycloneMustReviewInsideKnots switch
+        {
+            0 => null,
+            { } inside when Enum.IsDefined((Navigation.TropicalCycloneRadius)inside) => (Navigation.TropicalCycloneRadius)inside,
+            _ => Navigation.TropicalCycloneRadius.Knots50,
+        };
+        if (_cycloneMustReviewInside is { } stored && stored < _cycloneCheckAgainst)
+            _cycloneMustReviewInside = _cycloneCheckAgainst;
 
         // Tiled base-plane scene mode: push the persisted preference into the
         // renderer (the write is ignored when pinned by an explicit env var — the
@@ -1713,3 +1837,11 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
 /// <param name="Mode">The setting.</param>
 /// <param name="DisplayName">Its label.</param>
 internal sealed record WaterLevelAdjustmentOption(Services.Depth.WaterLevelAdjustmentMode Mode, string DisplayName);
+
+/// <summary>A tropical cyclone radius choice in Settings (#1299): its knots (0 for Never) and "34 kt radius".</summary>
+internal sealed record CycloneRadiusOption(int Knots, string DisplayName)
+{
+    /// <summary>The choice of a radius.</summary>
+    public static CycloneRadiusOption Of(Navigation.TropicalCycloneRadius radius) =>
+        new((int)radius, string.Format(System.Globalization.CultureInfo.CurrentCulture, Strings.Settings_CycloneRadiusFormat, (int)radius));
+}

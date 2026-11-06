@@ -436,6 +436,43 @@ foreach (var finding in weather.Findings)
   (`WeatherCheckResult.Departures`), following the forecast's range when the
   window follows the data.
 
+### Tropical cyclones
+
+With tropical cyclones on `RouteCheckSources.Cyclones` (`IRouteCyclone`:
+the storm at a time and the forecast cone; `CatalogRouteCheckSources` builds
+them from loaded NHC advisories), the weather check also tests each sample
+within `WeatherCheckOptions.CycloneNearbyMeters` (600 NM) of a storm's track
+against the storm at the sample's ETA. It runs without wind or wave limits.
+
+```csharp
+var settings = new RouteCheckSettings
+{
+    At = departure,
+    TropicalCyclones = new TropicalCycloneCheckSettings
+    {
+        CheckAgainst = TropicalCycloneRadius.Knots34,       // the default
+        ReportClosestApproach = true,                       // the default
+        MustReviewInside = TropicalCycloneRadius.Knots50,   // the default; null for never
+    },
+};
+var weather = new WeatherCheck().Run(new RouteCheckContext(plan, settings, sources));
+foreach (var storm in weather.Detail!.Cyclones)
+    Console.WriteLine($"{storm.Info.Name}: {storm.StrongestRadius} · CPA {storm.ClosestApproach?.DistanceMeters / 1852:0} NM");
+```
+
+- **Radii.** A sample is inside a radius when it's no farther from the
+  storm's centre than the radius reaches in the sample's quadrant. Every
+  radius from `CheckAgainst` up is tested, so the stretches nest.
+  `WeatherSample.Cyclones` holds each storm's reading.
+- **Findings.** `weather.tc_radius_34`, `_50` and `_64` stretches (grouped by
+  `MustReviewInside`), `weather.tc_cone` (Check), `weather.tc_cpa` (Info) and
+  `weather.tc_beyond_forecast` (Check, not checked), with
+  `TropicalCycloneDetails`.
+- **Verdict and sweep.** A radius met makes the verdict
+  `WeatherVerdict.InsideCycloneRadius`; a stretch beyond a storm's forecast
+  makes it `ForecastEndsBeforeArrival`. Each swept departure gives the
+  `CycloneRadius` it meets and its `CycloneClosestMeters`.
+
 ## Check a route against restricted and protected areas
 
 `AreaCheck` checks a route against regulated areas: S-101 restricted,
