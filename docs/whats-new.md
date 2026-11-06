@@ -27,7 +27,7 @@ month. For package versions and release assets, see
   `nextIssue` and `stepTicks` and a layer's warning `tag`. Breaking
   change: a storm's own parts (the storm and its radii) now come after the
   advisory's other parts in `EnumerateFeatures`. See
-  [Show tropical cyclones](weather.md#time).
+  [Show tropical cyclones](weather.md#storm-at-the-view-time).
 
 - **Surface analyses follow the Timeline, from the Library.** A WPC
   bulletin's analysis or forecast is now drawn from its valid time for 12

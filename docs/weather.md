@@ -284,7 +284,7 @@ information**: the advisory, its issue time and when the next is due, the
 position, wind, pressure and movement, the part you picked, and the radii in
 each quadrant.
 
-### Time
+### Storm at the view time
 
 The cone, the tracks and the forecast points are always drawn, whatever the
 view time. The storm and its wind radii are drawn at the view time, so
