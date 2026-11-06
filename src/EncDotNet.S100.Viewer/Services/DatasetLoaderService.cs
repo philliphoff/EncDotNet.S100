@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Avalonia.Input.Platform;
 using EncDotNet.S100.Collections.Library;
+using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S101;
@@ -712,15 +713,25 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         DatasetEntry entry,
         string spec,
         bool fromExchangeSet,
-        CancellationToken token) =>
-        Task.Run(() =>
+        CancellationToken token)
+    {
+        // DatasetEntry is UI-thread state: read it here, not on the worker.
+        var filePath = entry.FilePath;
+        var source = entry.Source;
+        var relativePath = entry.RelativePath;
+        var updates = entry.UpdateRelativePaths;
+
+        // On the work scheduler, at the priority of the load that asked for
+        // it (a lazy load's tier), else as visible work (map rendering slice 5).
+        return WorkScheduler.Shared.RunAsync(WorkStage.Parse, _ =>
         {
             if (!fromExchangeSet)
-                return _pipelineFactory.CreateProcessorWithFilesystemUpdates(entry.FilePath);
+                return _pipelineFactory.CreateProcessorWithFilesystemUpdates(filePath);
 
             return CreateExchangeSetCellProcessor(
-                _pipelineFactory, entry.Source!, entry.RelativePath!, entry.UpdateRelativePaths, spec);
+                _pipelineFactory, source!, relativePath!, updates, spec);
         }, token);
+    }
 
     /// <summary>
     /// Builds the processor for an exchange-set cell: the base cell alone, or

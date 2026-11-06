@@ -1,3 +1,4 @@
+using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.Viewer.ViewModels;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -402,10 +403,20 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
 
             // Cancel running loads this view no longer wants. The ahead margin
             // keeps a small pan from cancelling a cell that is nearly in view.
+            // The rest move to their tier for this view: a cell loading ahead
+            // that the view has reached becomes visible work.
             foreach (var (entry, running) in _running)
             {
-                if (Classify(entry, scaleDenominator, window) is null)
+                if (Classify(entry, scaleDenominator, window) is not { } tier)
+                {
                     running.Cancellation.Cancel();
+                    continue;
+                }
+
+                running.Demand.Update(PriorityFor(
+                    tier,
+                    LoadPrioritizer.Rank(entry.GeographicBounds, tier, window),
+                    snapshot.MercatorResolution));
             }
 
             // Warm the LRU for cells that remain in view so eviction favours
@@ -611,7 +622,10 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                 }
 
                 _queued.Remove(next);
-                var load = new RunningLoad(queued.Tier, new CancellationTokenSource());
+                var load = new RunningLoad(
+                    queued.Tier,
+                    new CancellationTokenSource(),
+                    new WorkDemand(PriorityFor(queued.Tier, queued.Rank, _lastResolution)));
                 _running[next] = load;
                 started.Add((next, load));
             }
@@ -655,7 +669,16 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         var failed = false;
         try
         {
-            await _loadAsync(entry, token).ConfigureAwait(true);
+            // The load's parse and portrayal jobs run on the work scheduler at
+            // the cell's tier, and follow it if the view moves (map rendering
+            // slice 5).
+            Task loading;
+            using (WorkDemand.Enter(load.Demand))
+            {
+                loading = _loadAsync(entry, token);
+            }
+
+            await loading.ConfigureAwait(true);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -799,13 +822,38 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         }
     }
 
+    /// <summary>
+    /// The work-scheduler priority of a cell's load: visible cells as visible
+    /// work, cells ahead of the view as predicted work, and covered or
+    /// unbounded cells as background work. Within a class, the cell's
+    /// distance from the view (<see cref="LoadPrioritizer.Rank"/>, in degrees)
+    /// is put in screen pixels at <paramref name="resolution"/>, the same
+    /// measure the tile renderer ranks its tiles by.
+    /// </summary>
+    internal static WorkPriority PriorityFor(LoadTier tier, double rank, double resolution)
+    {
+        const double metresPerDegree = 111_320;
+        var urgency = double.IsFinite(resolution) && resolution > 0
+            ? rank * metresPerDegree / resolution
+            : rank;
+        var workClass = tier switch
+        {
+            LoadTier.Visible => WorkClass.Visible,
+            LoadTier.Ahead => WorkClass.Predicted,
+            _ => WorkClass.Background,
+        };
+        return new WorkPriority(workClass, urgency);
+    }
+
     private readonly record struct QueuedLoad(LoadTier Tier, double Rank);
 
-    private sealed class RunningLoad(LoadTier tier, CancellationTokenSource cancellation)
+    private sealed class RunningLoad(LoadTier tier, CancellationTokenSource cancellation, WorkDemand demand)
     {
         public LoadTier Tier { get; } = tier;
 
         public CancellationTokenSource Cancellation { get; } = cancellation;
+
+        public WorkDemand Demand { get; } = demand;
     }
 }
 
