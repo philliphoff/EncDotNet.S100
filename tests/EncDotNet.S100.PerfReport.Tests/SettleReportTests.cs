@@ -89,6 +89,22 @@ public sealed class SettleReportTests
         Assert.Contains("Lua moonsharp, server GC, 16 cores", text);
     }
 
+    [Theory]
+    [InlineData("Darwin 25.0.0", false, true)]
+    [InlineData("Darwin 25.0.0", true, false)]
+    [InlineData("Microsoft Windows 10.0.26100", false, false)]
+    public void WriteSummary_FlagsAMacViewerWithAppNapOn(string os, bool appNapDisabled, bool flagged)
+    {
+        var manifest = Manifest("luacsharp", 1500);
+        manifest["viewer"]!["os"] = os;
+        manifest["viewer"]!["appNapDisabled"] = appNapDisabled;
+        using var writer = new StringWriter();
+
+        SettleReport.WriteSummary(writer, manifest, "/runs/a.json");
+
+        Assert.Equal(flagged, writer.ToString().Contains("**App Nap on**", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void WriteDiff_ComparesStepsAndTotals()
     {

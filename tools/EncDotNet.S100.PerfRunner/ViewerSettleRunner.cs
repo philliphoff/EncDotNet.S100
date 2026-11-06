@@ -81,6 +81,14 @@ internal static class ViewerSettleRunner
             AnsiConsole.MarkupLine("[yellow]Warning:[/] the viewer is a Debug build; measure a Release build.");
         }
 
+        if (viewer["appNapDisabled"]?.GetValue<bool>() == false
+            && viewer["os"]?.GetValue<string>()?.Contains("Darwin", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            AnsiConsole.MarkupLine(
+                "[yellow]Warning:[/] App Nap is on for the viewer, so a hidden or covered window slows the run several times over. "
+                + "Use a viewer that turns it off for the perf harness.");
+        }
+
         await EnsureLibrarySourceAsync(client, options.LibrarySource, ct);
 
         JsonObject? prewarm = null;
