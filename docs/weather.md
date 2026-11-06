@@ -1,7 +1,7 @@
 # Show wind and waves on the chart
 
 SoundCharts can draw forecast wind and waves, sea surface temperature,
-surface currents, restricted visibility, air temperature, freezing spray, marine weather warnings and live observations over your
+surface currents, restricted visibility, air temperature, freezing spray, precipitation, thunderstorm risk, cloud cover, marine weather warnings and live observations over your
 charts, with surface analyses (fronts and pressure centres). This page covers which files it reads,
 where to get them, how to show them in SoundCharts and `s100`, and what isn't
 supported.
@@ -16,7 +16,7 @@ supported.
 
 | Data | Formats | What's drawn |
 |---|---|---|
-| Forecast and analysis grids | GRIB2, NetCDF-3 and NetCDF-4 with CF conventions | Wave height fill, wind barbs, isobars, a sea surface temperature fill, current arrows, a restricted visibility fill and a freezing spray fill; optionally a wind speed fill, wave arrows, sea isotherms and air isotherms |
+| Forecast and analysis grids | GRIB2, NetCDF-3 and NetCDF-4 with CF conventions | Wave height fill, wind barbs, isobars, a sea surface temperature fill, current arrows, a restricted visibility fill and a freezing spray fill; optionally a wind speed fill, wave arrows, sea isotherms, air isotherms, a precipitation fill, a thunderstorm risk fill and a cloud cover veil |
 | Surface analyses | WPC coded surface bulletin (`CODSUS`), standard and high resolution, and WPC's coded forecast bulletins (such as `CODSRP`) | Fronts, troughs, highs and lows in the symbols of a printed weather map, in one dark ink |
 | Marine weather warnings | CAP 1.2 XML (one alert or an Atom feed of them), NWS alerts GeoJSON | Warning areas, hatched by severity and labelled with the event, while they're in force |
 | Buoy and coastal station observations | NOAA NDBC, fetched live | A wind barb and wave height at each station |
@@ -42,6 +42,9 @@ drawn or sampled are:
 | Air temperature at 2 m | TMP at 2 m above ground | `air_temperature` |
 | Surface (skin) temperature, for freezing spray | TMP at the surface | `surface_temperature` |
 | Land mask, for freezing spray | LAND | `land_binary_mask` |
+| Precipitation rate | PRATE at the surface | `precipitation_flux` |
+| Thunderstorm risk (CAPE) | CAPE at the surface | `atmosphere_convective_available_potential_energy` |
+| Total cloud cover | TCDC for the entire atmosphere | `cloud_area_fraction` |
 
 When a file has only U and V, wind or current speed and direction are worked
 out from them. Wind and wave directions are the direction they come from;
@@ -51,8 +54,13 @@ model's top layer: 0 m for HYCOM, about 0.5 m for Copernicus Marine. Sea surface
 temperature can be in kelvin, degrees Celsius or degrees Fahrenheit. GFS's
 surface temperature (TMP at the surface) isn't drawn as sea temperature,
 because over land it's the temperature of the ground; it's read only for the
-freezing spray risk. Other
-parameters are listed by `s100 info` but not drawn.
+freezing spray risk. GFS gives the precipitation rate and cloud cover twice
+at each forecast hour, as the value at that time and as an average over the
+hours before it; the value at that time is read. CAPE for layers above the
+ground (such as GFS's 180–0 hPa) and cloud cover for single levels or cloud
+layers aren't read. Accumulated precipitation (APCP) isn't drawn: GFS
+accumulates it over periods that change from one forecast hour to the next.
+Other parameters are listed by `s100 info` but not drawn.
 
 GRIB2 files can hold many messages, and you can append several files, such as
 one per forecast hour, into one. These data packings are read: simple (5.0),
@@ -99,7 +107,9 @@ made from its data. The Library can fetch some of these sources for you.
   For waves choose HTSGW, PERPW and DIRPW; for wind and pressure choose UGRD
   and VGRD at 10 m above ground and PRMSL; for visibility choose VIS at the
   surface; for freezing spray choose TMP at 2 m above ground and at the
-  surface, LAND at the surface, and the 10 m wind. The download has no file
+  surface, LAND at the surface, and the 10 m wind; for precipitation,
+  thunderstorm risk and cloud cover choose PRATE and CAPE at the surface and
+  TCDC for the entire atmosphere. The download has no file
   extension. The Library's two GFS sources offer these too; tick them when
   you choose parameters.
 - **NOAA on AWS.** The `noaa-gfs-bdp-pds` bucket holds every GFS and
@@ -194,7 +204,7 @@ made from its data. The Library can fetch some of these sources for you.
    draws; the wave height fill's entry shows a colour legend.
 2. Open **Display controls**. While a weather dataset is loaded (a GRIB2 or
    NetCDF grid, a tropical cyclone or a surface analysis), its **Weather**
-   section has six switches for every weather grid, and three for tropical
+   section has nine switches for every weather grid, and three for tropical
    cyclones ([Show tropical cyclones](#show-tropical-cyclones)):
 
    | Switch | Default | Draws |
@@ -205,6 +215,9 @@ made from its data. The Library can fetch some of these sources for you.
    | **Isotherms** | Off | Sea surface temperature every 2 °C |
    | **Currents** | On | Surface current arrows, coloured by speed |
    | **Air temperature** | Off | Dashed air temperature isotherms every 5 °C |
+   | **Precipitation** | Off | The precipitation rate in rain radar colours |
+   | **Thunderstorm risk** | Off | Where CAPE is 1000 J/kg or more |
+   | **Cloud cover** | Off | A light grey veil from 25 % cloud cover |
 
    The wave height, sea surface temperature, visibility and freezing spray
    fills and the wind barbs are always drawn; hide them for one dataset with its eye in the Datasets
@@ -216,7 +229,8 @@ made from its data. The Library can fetch some of these sources for you.
 4. Click the map to pick. Object information starts with "Weather model
    data, not for navigation." and lists each parameter at the nearest grid
    point and time step, in knots, metres and degrees Celsius, visibility in
-   nautical miles, and the freezing spray class.
+   nautical miles, the freezing spray class, the precipitation rate in
+   millimetres an hour, CAPE in J/kg and cloud cover in percent.
 
 Current arrows point the way the water flows. They use S-111's nine speed
 bands, colours and sizes, from purple under 0.5 kn to red at 13 kn and
@@ -240,8 +254,26 @@ out land; without the mask, only surface temperatures under −2 °C, which are
 ice or land, are left out. The rates are for a fishing vessel of 20 to 75 m;
 judge your own vessel's exposure from them.
 
-The wave height, sea surface temperature, visibility and freezing spray
-fills are clipped to water when an S-101 chart is loaded.
+Precipitation is drawn in rain radar colours: pale green for light rain from
+0.1 mm/h, then green to 2.5 mm/h, yellow for moderate rain to 7.5 mm/h,
+orange for heavy rain to 15 mm/h, red for very heavy rain to 50 mm/h, and
+violet beyond. Drier areas aren't drawn.
+
+Thunderstorm risk is drawn from CAPE, the energy a parcel of air rising from
+the surface can gain, in ochre in three classes: moderate (1000 to
+2500 J/kg), high (2500 to 4000 J/kg) and extreme (4000 J/kg and more). Under
+1000 J/kg nothing is drawn. CAPE says how strong a thunderstorm or squall
+could be if one forms, not that one will; over warm tropical seas moderate
+CAPE is common. Read it with the precipitation and the official forecast.
+
+Cloud cover is a light grey veil, drawn more faintly than the other fills,
+in three bands: partly cloudy (25 to 50 %), mostly cloudy (50 to 75 %) and
+cloudy (75 % and more). Precipitation, thunderstorm risk and cloud cover are
+off until you switch them on, and each shows its legend in the Layer stack.
+
+The wave height, sea surface temperature, visibility, freezing spray,
+precipitation, thunderstorm risk and cloud cover fills are clipped to water
+when an S-101 chart is loaded.
 Wind barbs south of the equator are drawn mirrored, as the convention is.
 
 ## Show warnings
@@ -507,6 +539,14 @@ at a time step, alone or over a chart:
 ```bash
 s100 render gfswave.grib2 waves.png --time-step 2
 s100 render --layer chart.000 --layer gfswave.grib2 --layer gfs.grib2 chart.png --time-step 1
+```
+
+Layers that are off by default, such as precipitation, thunderstorm risk
+and cloud cover, are drawn with `--show-layer` and their keys, which
+`s100 info` lists:
+
+```bash
+s100 render gfs.grib2 storms.png --bbox -100,5,-60,32 --show-layer weather.precipitation,weather.cape
 ```
 
 A surface analysis renders the same way, alone or over a grid's isobars:

@@ -117,7 +117,9 @@
                      tropical cyclone or a surface analysis) is loaded; the
                      cyclone switches (V26) only while a cyclone is.
                      The wave height, sea temperature, visibility and
-                     freezing spray fills and the wind barbs are always drawn. -->
+                     freezing spray fills and the wind barbs are always drawn;
+                     precipitation, thunderstorm risk and cloud cover (#1230)
+                     are off until switched on. -->
                 <StackPanel Spacing="4" IsVisible="{Binding HasWeatherData}">
                     <TextBlock Text="{x:Static loc:Strings.EcdisPanel_WeatherHeader}"
                                FontSize="11"
@@ -171,6 +173,30 @@
                                       AutomationProperties.AutomationId="EcdisDisplayPanel.Weather.AirTemperature"
                                       AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_AirTemperature}"
                                       AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_AirTemperature}" />
+                    </Grid>
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_Precipitation}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.EcdisPanel_Weather_Precipitation}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsPrecipitationVisible}"
+                                      AutomationProperties.AutomationId="EcdisDisplayPanel.Weather.Precipitation"
+                                      AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_Precipitation}"
+                                      AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_Precipitation}" />
+                    </Grid>
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_ThunderstormRisk}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.EcdisPanel_Weather_ThunderstormRisk}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsThunderstormRiskVisible}"
+                                      AutomationProperties.AutomationId="EcdisDisplayPanel.Weather.ThunderstormRisk"
+                                      AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_ThunderstormRisk}"
+                                      AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_ThunderstormRisk}" />
+                    </Grid>
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_CloudCover}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.EcdisPanel_Weather_CloudCover}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsCloudCoverVisible}"
+                                      AutomationProperties.AutomationId="EcdisDisplayPanel.Weather.CloudCover"
+                                      AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Weather_CloudCover}"
+                                      AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_CloudCover}" />
                     </Grid>
                     <Grid Classes="settingRow" ColumnDefinitions="*,Auto" IsVisible="{Binding HasTropicalCyclone}"
                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Weather_WindRadii}">

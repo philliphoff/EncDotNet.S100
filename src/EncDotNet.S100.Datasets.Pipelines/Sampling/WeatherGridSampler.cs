@@ -190,6 +190,8 @@ internal sealed class WeatherGridSampler : ICoverageSampler
                 fields.Add(NauticalMiles(reading));
             if (parameter.Id == WeatherParameters.AirTemperature)
                 fields.Add(new SampledField(WeatherParameters.AirTemperature + ".degc", "air_temperature", "degC", ToCelsius(reading)));
+            if (parameter.Id == WeatherParameters.PrecipitationRate)
+                fields.Add(MillimetresPerHour(reading));
         }
 
         if (_deriveWindSpeed)
@@ -284,6 +286,9 @@ internal sealed class WeatherGridSampler : ICoverageSampler
         WeatherParameters.AirTemperature => ("air_temperature", "K"),
         WeatherParameters.SurfaceTemperature => ("surface_temperature", "K"),
         WeatherParameters.LandCover => ("land_binary_mask", "1"),
+        WeatherParameters.PrecipitationRate => ("precipitation_flux", "kg m-2 s-1"),
+        WeatherParameters.Cape => ("atmosphere_convective_available_potential_energy", "J/kg"),
+        WeatherParameters.CloudCover => ("cloud_area_fraction", "%"),
         _ => (id, null),
     };
 
@@ -298,6 +303,11 @@ internal sealed class WeatherGridSampler : ICoverageSampler
             metresPerSecond is { } s ? Speed.FromMetresPerSecond(s).TotalKnots : null);
 
     private static double? ToCelsius(double? kelvin) => kelvin is { } k ? SeaTemperatureStyle.ToCelsius(k) : null;
+
+    // The precipitation rate again in millimetres an hour, the unit radar and forecasts give it in.
+    private static SampledField MillimetresPerHour(double? kilogramsPerSquareMetrePerSecond) =>
+        new(WeatherParameters.PrecipitationRate + ".mmh", "precipitation_flux", "mm/h",
+            kilogramsPerSquareMetrePerSecond is { } r ? PrecipitationStyle.ToMillimetresPerHour(r) : null);
 
     // The visibility again in nautical miles, the unit marine forecasts give it in.
     private static SampledField NauticalMiles(double? metres) =>

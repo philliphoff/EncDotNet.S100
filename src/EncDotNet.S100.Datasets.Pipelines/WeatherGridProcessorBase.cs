@@ -342,7 +342,10 @@ public abstract class WeatherGridProcessorBase :
     /// surface temperature in degrees Celsius (raw value in kelvin), current
     /// speed in knots (raw value in m/s), visibility in nautical miles (raw
     /// value in metres), air and surface temperature in degrees Celsius (raw
-    /// value in kelvin), and the freezing spray class with its predictor.
+    /// value in kelvin), the freezing spray class with its predictor, the
+    /// precipitation rate in millimetres an hour (raw value in kg m⁻² s⁻¹)
+    /// with its intensity, CAPE in J/kg with the thunderstorm risk, and the
+    /// total cloud cover in percent.
     /// </summary>
     /// <param name="latitude">Latitude, WGS-84 degrees.</param>
     /// <param name="longitude">Longitude, WGS-84 degrees.</param>
@@ -445,6 +448,22 @@ public abstract class WeatherGridProcessorBase :
             : miles;
     }
 
+    // The rate in mm/h, with its intensity from 0.1 mm/h: "3.1 mm/h (moderate)".
+    private static string PrecipitationText(double kilogramsPerSquareMetrePerSecond)
+    {
+        double rate = PrecipitationStyle.ToMillimetresPerHour(kilogramsPerSquareMetrePerSecond);
+        string text = rate.ToString("0.0", CultureInfo.InvariantCulture) + " mm/h";
+        var band = PrecipitationStyle.Bands.FirstOrDefault(b => kilogramsPerSquareMetrePerSecond >= b.Minimum && kilogramsPerSquareMetrePerSecond < b.Maximum);
+        return band.Label is { } label ? $"{text} ({label[..label.IndexOf(',', StringComparison.Ordinal)].ToLowerInvariant()})" : text;
+    }
+
+    // CAPE in J/kg, with the thunderstorm risk from 1000 J/kg: "1850 J/kg (moderate thunderstorm risk)".
+    private static string CapeText(double joulesPerKilogram)
+    {
+        string text = joulesPerKilogram.ToString("0", CultureInfo.InvariantCulture) + " J/kg";
+        return ThunderstormRiskStyle.Classify(joulesPerKilogram) is { } risk ? $"{text} ({risk} thunderstorm risk)" : text;
+    }
+
     private static PickAttribute? Pick(SampledField field)
     {
         string Number(double value, string format) => value.ToString(format, CultureInfo.InvariantCulture);
@@ -474,10 +493,14 @@ public abstract class WeatherGridProcessorBase :
             WeatherParameters.AirTemperature => new() { Code = field.Name, Name = "Air temperature at 2 m", RawValue = raw, DisplayValue = Display(x => $"{Number(SeaTemperatureStyle.ToCelsius(x), "0.0")} °C") },
             WeatherParameters.SurfaceTemperature => new() { Code = field.Name, Name = "Surface temperature", RawValue = raw, DisplayValue = Display(x => $"{Number(SeaTemperatureStyle.ToCelsius(x), "0.0")} °C") },
             WeatherParameters.FreezingSprayPredictor => new() { Code = field.Name, Name = "Freezing spray", RawValue = raw, DisplayValue = Display(x => $"{FreezingSpray.GetLabel(FreezingSpray.Classify(x)!.Value)} (predictor {Number(x, "0")})") },
+            WeatherParameters.PrecipitationRate => new() { Code = field.Name, Name = "Precipitation rate", RawValue = raw, DisplayValue = Display(PrecipitationText) },
+            WeatherParameters.Cape => new() { Code = field.Name, Name = "CAPE (convective energy)", RawValue = raw, DisplayValue = Display(CapeText) },
+            WeatherParameters.CloudCover => new() { Code = field.Name, Name = "Total cloud cover", RawValue = raw, DisplayValue = Display(x => $"{Number(x, "0")} %") },
             // The knots copies of the wind and current speeds, the Celsius
             // copies of the sea and air temperatures, the nautical-mile copy
-            // of the visibility and the freezing spray class are already in
-            // their display values; the land cover mask isn't shown.
+            // of the visibility, the mm/h copy of the precipitation rate and
+            // the freezing spray class are already in their display values;
+            // the land cover mask isn't shown.
             _ => null,
         };
     }

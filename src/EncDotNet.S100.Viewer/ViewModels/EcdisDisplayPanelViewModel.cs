@@ -212,6 +212,37 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         set => _state.SetLayerVisible(AirTemperatureIsothermStyle.Key, value);
     }
 
+    /// <summary>
+    /// The Weather section's Precipitation switch: the precipitation rate in
+    /// rain radar colours on every weather dataset with it. Off by default
+    /// (<see cref="PrecipitationStyle"/>).
+    /// </summary>
+    public bool IsPrecipitationVisible
+    {
+        get => GetWeatherLayer(PrecipitationStyle.Key);
+        set => _state.SetLayerVisible(PrecipitationStyle.Key, value);
+    }
+
+    /// <summary>
+    /// The Weather section's Thunderstorm risk switch: CAPE from 1000 J/kg on
+    /// every weather dataset with it. Off by default (<see cref="ThunderstormRiskStyle"/>).
+    /// </summary>
+    public bool IsThunderstormRiskVisible
+    {
+        get => GetWeatherLayer(ThunderstormRiskStyle.Key);
+        set => _state.SetLayerVisible(ThunderstormRiskStyle.Key, value);
+    }
+
+    /// <summary>
+    /// The Weather section's Cloud cover switch: the total cloud cover veil
+    /// on every weather dataset with it. Off by default (<see cref="CloudCoverStyle"/>).
+    /// </summary>
+    public bool IsCloudCoverVisible
+    {
+        get => GetWeatherLayer(CloudCoverStyle.Key);
+        set => _state.SetLayerVisible(CloudCoverStyle.Key, value);
+    }
+
     // The switch, or the style's own default when the mariner hasn't set it.
     private bool GetWeatherLayer(string layerKey) =>
         _state.GetLayerVisible(layerKey) ?? WeatherDefaults[layerKey];
@@ -321,6 +352,9 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsIsothermsVisible));
         OnPropertyChanged(nameof(IsCurrentArrowsVisible));
         OnPropertyChanged(nameof(IsAirTemperatureVisible));
+        OnPropertyChanged(nameof(IsPrecipitationVisible));
+        OnPropertyChanged(nameof(IsThunderstormRiskVisible));
+        OnPropertyChanged(nameof(IsCloudCoverVisible));
         OnPropertyChanged(nameof(IsWindRadiiVisible));
         OnPropertyChanged(nameof(IsPastTrackVisible));
         OnPropertyChanged(nameof(IsForecastTimesVisible));

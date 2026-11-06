@@ -156,6 +156,9 @@ public sealed class GribProcessorTests : IDisposable
         Assert.Equal("GRIB2", registry.PortrayalOf("GRIB2").AsApplication?.Basis);
         Assert.Equal(S98DisplayPlane.OnDemandSurface, registry.DisplayPlanes.GetDefaultPlane("GRIB2", WaveHeightStyle.Key));
         Assert.Equal(S98DisplayPlane.DynamicArrows, registry.DisplayPlanes.GetDefaultPlane("GRIB2", WindBarbStyle.Key));
+        Assert.Equal(S98DisplayPlane.OnDemandSurface, registry.DisplayPlanes.GetDefaultPlane("GRIB2", PrecipitationStyle.Key));
+        Assert.Equal(S98DisplayPlane.OnDemandSurface, registry.DisplayPlanes.GetDefaultPlane("GRIB2", ThunderstormRiskStyle.Key));
+        Assert.Equal(S98DisplayPlane.OnDemandSurface, registry.DisplayPlanes.GetDefaultPlane("GRIB2", CloudCoverStyle.Key));
     }
 
     // -----------------------------------------------------------------
@@ -270,6 +273,62 @@ public sealed class GribProcessorTests : IDisposable
         var fields = Assert.IsType<CoverageFieldsSample>(outcome.Value).Fields.ToDictionary(f => f.Name);
         Assert.Equal((double)(int)FreezingSprayClass.Heavy, fields["spray.predictor.class"].Value);
         Assert.Equal(-10, fields["air.temperature.degc"].Value!.Value, 2);
+    }
+
+    [Fact]
+    public async Task A_GFS_file_with_precipitation_CAPE_and_cloud_draws_them_only_when_switched_on_and_picks_them()
+    {
+        // GFS fields at 25°N, 6 h into the run. GFS writes the precipitation
+        // rate and cloud cover at the valid time, then as an average over
+        // the hours before it: the first is read. CAPE for the 180–0 hPa
+        // layer and low cloud aren't the rows' levels, so they're left out.
+        var grid = new Grid(25, -80, 1, 1, 2);
+        Message Field(byte category, byte number, byte surface, int value, double[] values, int decimals) =>
+            new() { Category = category, Number = number, SurfaceType = surface, SurfaceValue = value, ForecastHours = 6, Grid = grid, Values = values, DecimalScale = decimals };
+        var path = Write(PathFor("gfs-convection.grib2"), Concat(
+            Encode(Field(1, 7, 1, 0, [0.001, 0], 6)),
+            Encode(Field(1, 7, 1, 0, [0.01, 0.01], 6) with { ForecastHours = 0, IntervalHours = 6 }),
+            Encode(Field(7, 6, 1, 0, [1850, 400], 0)),
+            Encode(Field(7, 6, 108, 18000, [5000, 5000], 0) with { SecondSurfaceType = 108, SecondSurfaceValue = 0 }),
+            Encode(Field(6, 1, 10, 0, [80, 10], 0)),
+            Encode(Field(6, 1, 214, 0, [100, 100], 0))));
+        using var processor = new GribDatasetProcessor(path, new ProjNetCrsTransformFactory());
+
+        Assert.Equal(
+            [WeatherParameters.PrecipitationRate, WeatherParameters.Cape, WeatherParameters.CloudCover],
+            processor.GridSet.Parameters.Where(p => p.IsKnown).Select(p => p.Id));
+        Assert.Equal(WeatherLevel.EntireAtmosphere, processor.GridSet.FindParameter(WeatherParameters.CloudCover)!.Level);
+        string[] keys = [PrecipitationStyle.Key, ThunderstormRiskStyle.Key, CloudCoverStyle.Key];
+
+        // Off by default: the chart isn't covered until the mariner asks.
+        var portrayal = await processor.BuildCoveragePortrayalAsync(new RenderContext(), Ct);
+        Assert.DoesNotContain(portrayal.SubLayers, l => keys.Contains(l.LayerKey));
+
+        var on = new EcdisDisplaySettings { LayerVisibility = keys.ToDictionary(k => k, _ => true) };
+        var withAll = await processor.BuildCoveragePortrayalAsync(new RenderContext { EcdisDisplay = on }, Ct);
+        var fills = keys.Select(k => Assert.IsType<GridCoverageSubLayer>(withAll.SubLayers.Single(l => l.LayerKey == k))).ToArray();
+        Assert.All(fills, f => Assert.True(f.ClipToWater, f.LayerKey));
+        Assert.All(fills, f => Assert.Equal(S98DisplayPlane.OnDemandSurface, f.Plane));
+        Assert.Equal([0.5, 0.5, 0.3], fills.Select(f => f.Opacity));
+
+        IReadOnlyList<PickAttribute> At(double longitude) => processor.GetCoverageInfo(25, longitude, null)!.Attributes;
+        string? Pick(double longitude, string code) => At(longitude).Single(a => a.Code == code).DisplayValue;
+        Assert.Equal("3.6 mm/h (moderate)", Pick(-80, WeatherParameters.PrecipitationRate));
+        Assert.Equal("0.0 mm/h", Pick(-79, WeatherParameters.PrecipitationRate));
+        Assert.Equal("1850 J/kg (moderate thunderstorm risk)", Pick(-80, WeatherParameters.Cape));
+        Assert.Equal("400 J/kg", Pick(-79, WeatherParameters.Cape));
+        Assert.Equal("80 %", Pick(-80, WeatherParameters.CloudCover));
+        Assert.Equal("10 %", Pick(-79, WeatherParameters.CloudCover));
+        Assert.DoesNotContain(At(-80), a => a.Code == WeatherParameters.PrecipitationRate + ".mmh");
+
+        var query = new CoverageSampleQuery(25, -80, new ProjNetCrsTransformFactory());
+        var outcome = Assert.IsType<CoverageSampleOutcome<ICoverageSampler>.Sampled>(processor.SampleAt(query, null, nearestWhenOutOfRange: true));
+        var fields = Assert.IsType<CoverageFieldsSample>(outcome.Value).Fields.ToDictionary(f => f.Name);
+        Assert.Equal(("precipitation_flux", "kg m-2 s-1"), (fields["precipitation.rate"].Quantity, fields["precipitation.rate"].Unit));
+        Assert.Equal(("precipitation_flux", "mm/h"), (fields["precipitation.rate.mmh"].Quantity, fields["precipitation.rate.mmh"].Unit));
+        Assert.Equal(3.6, fields["precipitation.rate.mmh"].Value!.Value, 3);
+        Assert.Equal(("atmosphere_convective_available_potential_energy", "J/kg"), (fields["cape"].Quantity, fields["cape"].Unit));
+        Assert.Equal(("cloud_area_fraction", "%"), (fields["cloud.cover"].Quantity, fields["cloud.cover"].Unit));
     }
 
     [Fact]

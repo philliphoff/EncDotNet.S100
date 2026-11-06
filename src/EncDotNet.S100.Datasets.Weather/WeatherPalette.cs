@@ -7,8 +7,9 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// <summary>
 /// The colours of the weather styles: the band fills of
 /// <see cref="WaveHeightStyle"/>, <see cref="WindSpeedStyle"/>,
-/// <see cref="SeaTemperatureStyle"/>, <see cref="VisibilityStyle"/> and
-/// <see cref="FreezingSprayStyle"/>, and the inks of the wind barbs, wave
+/// <see cref="SeaTemperatureStyle"/>, <see cref="VisibilityStyle"/>,
+/// <see cref="FreezingSprayStyle"/>, <see cref="PrecipitationStyle"/>,
+/// <see cref="ThunderstormRiskStyle"/> and <see cref="CloudCoverStyle"/>, and the inks of the wind barbs, wave
 /// arrows, pressure isobars, isotherms and fronts, each with a Day, Dusk and
 /// Night value.
 /// </summary>
@@ -41,6 +42,18 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// in Day the heavier classes are darker, in Dusk and Night lighter. The air
 /// isotherms are a warm grey, set apart from the sea isotherms' neutral
 /// grey and dashed.
+/// </para>
+/// <para>
+/// Precipitation is the other exception to the hue rule: it's read by the
+/// rain radar's colour convention, pale green for light rain through green,
+/// yellow, orange and red to violet for violent rain. Like the sea
+/// temperature it's drawn at half opacity, and only where it rains, so no
+/// colour of it covers a large area alone. The thunderstorm risk (CAPE) is a
+/// low-chroma ochre ramp (OKLCH hue about 100), drawn only where storms can
+/// grow; in Day the higher classes are darker, in Dusk and Night lighter.
+/// Cloud cover is a neutral grey veil, drawn at
+/// <see cref="WeatherCoverageStyle.VeilOpacity"/>: in Day the cloudier bands
+/// are darker, in Dusk and Night lighter.
 /// </para>
 /// <para>
 /// Every Night colour stays under relative luminance 0.2, as the S-104
@@ -89,6 +102,15 @@ public static class WeatherPalette
 
     /// <summary>The colour token prefix of the visibility bands, followed by the band number: <c>WXVIS1</c> (very poor) to <c>WXVIS3</c> (moderate).</summary>
     public const string VisibilityTokenPrefix = "WXVIS";
+
+    /// <summary>The colour token prefix of the precipitation rate bands, followed by the band number: <c>WXRAIN1</c> (light) to <c>WXRAIN6</c> (violent).</summary>
+    public const string PrecipitationTokenPrefix = "WXRAIN";
+
+    /// <summary>The colour token prefix of the thunderstorm risk (CAPE) bands, followed by the band number: <c>WXCAPE1</c> (moderate) to <c>WXCAPE3</c> (extreme).</summary>
+    public const string CapeTokenPrefix = "WXCAPE";
+
+    /// <summary>The colour token prefix of the cloud cover bands, followed by the band number: <c>WXCLD1</c> (partly cloudy) to <c>WXCLD3</c> (overcast).</summary>
+    public const string CloudTokenPrefix = "WXCLD";
 
     /// <summary>Colour token of the outline of the current arrows (<see cref="CurrentArrowStyle"/>).</summary>
     public const string CurrentOutlineToken = "WXCUROUT";
@@ -241,6 +263,36 @@ public static class WeatherPalette
         ("#652873", "#C19BC8", "#6A4B71"),
     ];
 
+    // Day, Dusk, Night for each precipitation rate band (WXRAIN1 light): the
+    // rain radar's ramp, pale green to violet.
+    private static readonly (string Day, string Dusk, string Night)[] PrecipitationColors =
+    [
+        ("#B5E3B0", "#2F5A33", "#18301A"),
+        ("#62C26A", "#3E8445", "#204A25"),
+        ("#F2D64B", "#A79131", "#4E4416"),
+        ("#EE9A3A", "#B06B27", "#55331A"),
+        ("#D9473B", "#B23A30", "#5A1E1A"),
+        ("#9C3FA8", "#9A52A6", "#4A1F50"),
+    ];
+
+    // Day, Dusk, Night for each thunderstorm risk band (WXCAPE1 moderate):
+    // low-chroma ochre.
+    private static readonly (string Day, string Dusk, string Night)[] CapeColors =
+    [
+        ("#E6DE9A", "#5A5428", "#2A2712"),
+        ("#C9B852", "#7E7230", "#3A3417"),
+        ("#99832A", "#A89440", "#4A421C"),
+    ];
+
+    // Day, Dusk, Night for each cloud cover band (WXCLD1 partly cloudy):
+    // neutral greys, drawn as a veil.
+    private static readonly (string Day, string Dusk, string Night)[] CloudColors =
+    [
+        ("#C8CACE", "#4C5058", "#1E2024"),
+        ("#A9ACB2", "#666A72", "#282A2F"),
+        ("#8A8E96", "#80848C", "#33363B"),
+    ];
+
     /// <summary>
     /// The weather colours: <see cref="BarbInkToken"/>, <see cref="WaveArrowToken"/>,
     /// <see cref="IsobarInkToken"/>, <see cref="IsobarHaloToken"/>,
@@ -250,7 +302,9 @@ public static class WeatherPalette
     /// (<see cref="SeaTemperatureToken"/>), and the current speed bands
     /// (<see cref="CurrentToken"/>) with <see cref="CurrentOutlineToken"/>,
     /// the visibility bands (<see cref="VisibilityToken"/>), the freezing spray
-    /// bands (<see cref="FreezingSprayToken"/>), <see cref="AirIsothermInkToken"/>
+    /// bands (<see cref="FreezingSprayToken"/>), the precipitation, thunderstorm
+    /// risk and cloud cover bands (<see cref="PrecipitationToken"/>,
+    /// <see cref="CapeToken"/>, <see cref="CloudToken"/>), <see cref="AirIsothermInkToken"/>
     /// <see cref="FrontInkToken"/> and the tropical cyclone storm ink
     /// (<see cref="TropicalCycloneInkToken"/> and its family).
     /// </summary>
@@ -273,6 +327,15 @@ public static class WeatherPalette
 
     /// <summary>The number of visibility bands: 3 (very poor, poor and moderate).</summary>
     public static int VisibilityBandCount => VisibilityColors.Length;
+
+    /// <summary>The number of precipitation rate bands: 6 (light to violent).</summary>
+    public static int PrecipitationBandCount => PrecipitationColors.Length;
+
+    /// <summary>The number of thunderstorm risk bands: 3 (moderate, high and extreme).</summary>
+    public static int CapeBandCount => CapeColors.Length;
+
+    /// <summary>The number of cloud cover bands: 3 (partly cloudy, mostly cloudy and overcast).</summary>
+    public static int CloudBandCount => CloudColors.Length;
 
     /// <summary>The colour token of wave height band <paramref name="band"/>, 1 (lowest) to <see cref="WaveHeightBandCount"/>.</summary>
     /// <param name="band">The band number.</param>
@@ -326,6 +389,25 @@ public static class WeatherPalette
         ArgumentOutOfRangeException.ThrowIfLessThan(band, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(band, FreezingSprayBandCount);
         return FreezingSprayTokenPrefix + band.ToString(CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>The colour token of precipitation rate band <paramref name="band"/>, 1 (light) to <see cref="PrecipitationBandCount"/>.</summary>
+    /// <param name="band">The band number.</param>
+    public static string PrecipitationToken(int band) => BandToken(PrecipitationTokenPrefix, band, PrecipitationBandCount);
+
+    /// <summary>The colour token of thunderstorm risk band <paramref name="band"/>, 1 (moderate) to <see cref="CapeBandCount"/>.</summary>
+    /// <param name="band">The band number.</param>
+    public static string CapeToken(int band) => BandToken(CapeTokenPrefix, band, CapeBandCount);
+
+    /// <summary>The colour token of cloud cover band <paramref name="band"/>, 1 (partly cloudy) to <see cref="CloudBandCount"/>.</summary>
+    /// <param name="band">The band number.</param>
+    public static string CloudToken(int band) => BandToken(CloudTokenPrefix, band, CloudBandCount);
+
+    private static string BandToken(string prefix, int band, int count)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(band, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(band, count);
+        return prefix + band.ToString(CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -424,6 +506,24 @@ public static class WeatherPalette
         {
             var (day, dusk, night) = VisibilityColors[i];
             tokens[VisibilityToken(i + 1)] = PaletteColors.FromHex(day, dusk, night);
+        }
+
+        for (int i = 0; i < PrecipitationColors.Length; i++)
+        {
+            var (day, dusk, night) = PrecipitationColors[i];
+            tokens[PrecipitationToken(i + 1)] = PaletteColors.FromHex(day, dusk, night);
+        }
+
+        for (int i = 0; i < CapeColors.Length; i++)
+        {
+            var (day, dusk, night) = CapeColors[i];
+            tokens[CapeToken(i + 1)] = PaletteColors.FromHex(day, dusk, night);
+        }
+
+        for (int i = 0; i < CloudColors.Length; i++)
+        {
+            var (day, dusk, night) = CloudColors[i];
+            tokens[CloudToken(i + 1)] = PaletteColors.FromHex(day, dusk, night);
         }
 
         return tokens;
