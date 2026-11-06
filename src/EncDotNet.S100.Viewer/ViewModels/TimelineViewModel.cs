@@ -23,16 +23,6 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
     private readonly TimeRefreshProgress? _progress;
     private TimelineAxisMap? _axis;
 
-    public TimelineViewModel(GlobalTimeService service)
-        : this(service, timeFormat: null)
-    {
-    }
-
-    public TimelineViewModel(GlobalTimeService service, ITimeFormatProvider? timeFormat)
-        : this(service, timeFormat, TimeProvider.System)
-    {
-    }
-
     public TimelineViewModel(GlobalTimeService service, ITimeFormatProvider? timeFormat, TimeProvider time)
         : this(service, timeFormat, time, PostToUiThread)
     {
