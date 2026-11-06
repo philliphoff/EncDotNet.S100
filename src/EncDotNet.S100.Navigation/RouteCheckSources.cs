@@ -6,8 +6,8 @@ namespace EncDotNet.S100.Navigation;
 
 /// <summary>
 /// Everything the route checks read from loaded data, as one bundle: the
-/// charted features, charted depth, water level, regulated areas and
-/// navigational warnings. A host builds one per set of loaded datasets
+/// charted features, charted depth, water level, regulated areas,
+/// navigational warnings and weather. A host builds one per set of loaded datasets
 /// (<c>CatalogRouteCheckSources</c> in <c>EncDotNet.S100.Datasets.Pipelines</c>)
 /// and checks as often as the route changes.
 /// </summary>
@@ -47,6 +47,9 @@ public sealed class RouteCheckSources
 
     /// <summary>S-124 navigational warnings, for the warning check.</summary>
     public IRouteWarningSource? Warnings { get; init; }
+
+    /// <summary>GRIB2 and NetCDF weather grids (wind and waves), for the weather check.</summary>
+    public IRouteWeatherSource? Weather { get; init; }
 }
 
 /// <summary>

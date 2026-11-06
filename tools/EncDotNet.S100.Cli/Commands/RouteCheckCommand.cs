@@ -19,7 +19,8 @@ namespace EncDotNet.S100.Cli.Commands;
 /// <c>s100 route check</c> checks an RTZ or S-421 route against datasets
 /// headlessly: the chart check (land, drying ground, the safety contour,
 /// charted dangers and chart coverage), restricted and protected areas,
-/// S-124 warnings and, when the route has a draft, the under-keel clearance.
+/// S-124 warnings, when the route has a draft the under-keel clearance, and
+/// with wind or wave limits the forecast weather along the route.
 /// </summary>
 /// <remarks>
 /// The command reads the route into a <see cref="PassagePlan"/> with its
@@ -90,8 +91,16 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         [Description("Comma-separated kinds of prohibited area and area with special conditions to turn off, e.g. anchorage_area,marine_farm (the S-101 alert catalogue's ProhAre kinds). One finding per kind says the route meets them.")]
         public string? AreasOff { get; init; }
 
+        [CommandOption("--max-wind <KNOTS>")]
+        [Description("Wind limit in knots for the weather check: stretches where a loaded GRIB2 or NetCDF forecast has a higher 10 m wind at the ETA are reported (check). Overrides an RTZ route's vesselMaxWind.")]
+        public double? MaxWindKnots { get; init; }
+
+        [CommandOption("--max-wave <METERS>")]
+        [Description("Significant wave height limit in metres for the weather check. Overrides an RTZ route's vesselMaxWave.")]
+        public double? MaxWaveMeters { get; init; }
+
         [CommandOption("--window")]
-        [Description("Also sweep departures across the S-104 time range that covers the route, to find the departure window. Needs a draft.")]
+        [Description("Also sweep departures across the S-104 time range that covers the route, to find the departure window (needs a draft), and across the forecast for the weather check (needs a wind or wave limit).")]
         [DefaultValue(false)]
         public bool Window { get; init; }
 
@@ -136,6 +145,8 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
                 ("--safety-depth", SafetyDepthMeters, true),
                 ("--track-clearance", TrackClearanceMeters, true),
                 ("--nearby", NearbyMeters, true),
+                ("--max-wind", MaxWindKnots, false),
+                ("--max-wave", MaxWaveMeters, false),
             })
             {
                 if (value is { } v && (!double.IsFinite(v) || v < 0 || (!allowZero && v == 0)))
@@ -212,6 +223,11 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
                 NearbyDistance = settings.NearbyMeters is { } nearby ? Length.FromMetres(nearby) : null,
                 AreaKindsOff = Settings.AreaKindsOff(settings.AreasOff).Select(k => k.Kind!.Value).ToList(),
                 DepartureWindow = settings.Window ? DepartureRange.WaterLevelData(WindowStep) : null,
+                WeatherLimits = settings.MaxWindKnots is null && settings.MaxWaveMeters is null ? null : new WeatherLimits
+                {
+                    MaxWind = settings.MaxWindKnots is { } wind ? Speed.FromKnots(wind) : null,
+                    MaxWaveHeight = settings.MaxWaveMeters is { } wave ? Length.FromMetres(wave) : null,
+                },
             };
 
             var sources = new RouteCheckSourceCache(transforms).Get(catalog.Datasets);
@@ -266,7 +282,10 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
             RequiredUkc = settings.RequiredUkcMeters is { } ukc ? Depth.FromMetres(ukc) : l.RequiredUkc,
             Name = l.Name,
         }).ToList(),
-        departure);
+        departure)
+    {
+        VesselLimits = route.Plan.VesselLimits,
+    };
 
     private static bool TryResolveDatasets(
         Settings settings,
@@ -368,6 +387,8 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
         Add("squatMeters", settings.SquatMeters);
         Add("speedKnots", settings.SpeedKnots);
         Add("requiredUkcMeters", settings.RequiredUkcMeters);
+        Add("maxWindKnots", settings.MaxWindKnots);
+        Add("maxWaveHeightMeters", settings.MaxWaveMeters);
 
         var check = CheckRouteResult.From(report, route.RouteId ?? Path.GetFileName(route.Path), route.Name);
         var root = new JsonObject
@@ -437,6 +458,25 @@ internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
                 ? "The route has no draft on every leg; pass --draft for the under-keel clearance check."
                 : $"No charted depth or water level to check against ({report.Status(ClearanceCheck.CheckName)?.Reason}).";
             console.MarkupLineInterpolated($"[bold]Under-keel clearance:[/] not checked. {reason}");
+        }
+
+        if (check.Weather is { } weather)
+        {
+            console.WriteLine();
+            var limits = string.Join(", ", weather.Limits.Select(l =>
+                $"{(l.Quantity == "wind_speed" ? "wind" : "waves")} {l.Value.ToString("0.#", CultureInfo.InvariantCulture)} {l.Unit}{(l.Origin == "route" ? " (route)" : string.Empty)}"));
+            console.MarkupLineInterpolated($"[bold]Weather:[/] {weather.Verdict} (limits {limits})");
+            if (weather.MaxWind is { } wind)
+                console.MarkupLineInterpolated($"  Max wind {wind.Value.ToString("0", CultureInfo.InvariantCulture)} kn at {wind.DistanceNm.ToString("0.00", CultureInfo.InvariantCulture)} NM, leg {wind.LegIndex + 1}");
+            if (weather.MaxWaveHeight is { } wave)
+                console.MarkupLineInterpolated($"  Max significant wave height {wave.Value.ToString("0.0", CultureInfo.InvariantCulture)} m at {wave.DistanceNm.ToString("0.00", CultureInfo.InvariantCulture)} NM, leg {wave.LegIndex + 1}");
+            if (weather.NotCheckedCount > 0)
+                console.MarkupLineInterpolated($"  Not checked at {weather.NotCheckedCount} of {weather.SampleCount} places along the track");
+            if (weather.Window is { } window)
+            {
+                var runs = window.Windows.Select(w => $"{w.First.ToUniversalTime():yyyy-MM-dd HH:mm}–{w.Last.ToUniversalTime():HH:mm} UTC").ToList();
+                console.MarkupLineInterpolated($"  Departures within the limits: {(runs.Count == 0 ? "none" : string.Join(", ", runs))}");
+            }
         }
 
         console.WriteLine();

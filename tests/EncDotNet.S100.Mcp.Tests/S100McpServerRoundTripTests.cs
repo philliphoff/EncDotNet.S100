@@ -955,8 +955,9 @@ public class S100McpServerRoundTripTests
 
         Assert.False(result.IsError ?? false, $"check_route returned an error: {DumpText(result)}");
         var report = ParseSingleJson(result);
-        Assert.Equal("clearance", report["checks"]!.AsArray()[^1]!["name"]!.GetValue<string>());
-        Assert.Equal("ran", report["checks"]!.AsArray()[^1]!["state"]!.GetValue<string>());
+        var clearanceCheck = report["checks"]!.AsArray().Single(c => c!["name"]!.GetValue<string>() == "clearance")!;
+        Assert.Equal("ran", clearanceCheck["state"]!.GetValue<string>());
+        Assert.Equal("weather", report["checks"]!.AsArray()[^1]!["name"]!.GetValue<string>());
         Assert.NotNull(report["verdict"]!["kind"]);
         Assert.StartsWith("Not for navigation", report["disclaimer"]!.GetValue<string>());
         Assert.Contains(report["findings"]!.AsArray(), f => f!["code"]!.GetValue<string>() == "confidence.datum_unconfirmed" && f["details"]?["clearance"] is not null);

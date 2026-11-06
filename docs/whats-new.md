@@ -6,6 +6,52 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Weather along a route.** Check route, `check_route` and
+  `s100 route check` gain a weather check: with a GRIB2 or NetCDF forecast
+  loaded, they sample the route every nautical mile at the ETA and compare
+  the wind at 10 m and the significant wave height with the vessel's limits.
+  Stretches above a limit are Check findings with their time window ("Wind
+  above 25 kn for 3 h", `weather.wind_above_limit`,
+  `weather.waves_above_limit`); where the forecast ends before the vessel
+  gets there, or a grid doesn't cover it, the stretch is reported as not
+  checked (`weather.forecast_ends` and others), never passed. Each sample
+  reads the nearest grid node and time step, and the finest grid with the
+  newest run wins where grids overlap. In SoundCharts the limits are in
+  **Settings** > **Chart display** > **Mariner Settings** > **Weather on a
+  route** (`get_route_weather_settings`, `set_route_weather_settings`), the
+  verdict card gains a **Weather** row whose tooltip names the limits in use,
+  and **Findings** gains a **Weather** chip. An RTZ route's `vesselMaxWind`
+  (knots) and `vesselMaxWave` are used where no limit is set. `check_route`
+  takes `maxWindKnots` and `maxWaveHeightMeters` and returns a `weather`
+  section with an optional departure sweep; the CLI takes `--max-wind` and
+  `--max-wave`. In the libraries, `WeatherCheck` joins the built-in checks,
+  with `IRouteWeatherSource` (on `RouteCheckSources.Weather`), `WeatherLimits`
+  on `RouteCheckSettings` and `PassagePlan.VesselLimits`, `WeatherDetails`,
+  `WeatherFindings`, `RouteFindingCategory.Weather` and
+  `RtzPassagePlan.VesselLimits`. Breaking changes: `RouteChecker` runs five
+  built-in checks, so `RouteCheckReport.Checks` has a `weather` entry; the
+  `PassageRouteSnapshot` record has a new last positional parameter. See
+  [Weather along the route](route-checks.md#weather-along-the-route).
+
+- **Precipitation, thunderstorm risk and cloud cover on the chart.** GRIB2
+  and NetCDF files with a precipitation rate, CAPE or total cloud cover,
+  such as GFS, can now draw them: precipitation in rain radar colours from
+  0.1 mm/h, thunderstorm risk in ochre where CAPE is 1000 J/kg or more
+  (moderate, high and extreme), and cloud cover as a light grey veil from
+  25 %. All three are off by default, behind new **Precipitation**,
+  **Thunderstorm risk** and **Cloud cover** switches in Display controls
+  (and in `set_weather_display`), and each has a legend. Picks give the rate
+  in mm/h, CAPE in J/kg with its risk, and cloud cover in percent, and the
+  Library's GFS sources can fetch PRATE, CAPE and TCDC. `s100 render` gains
+  `--show-layer` to draw layers that are off by default. In the libraries,
+  `WeatherParameters` gains `PrecipitationRate`, `Cape` and `CloudCover`,
+  `WeatherUnit` gains `KilogramsPerSquareMetrePerSecond`, `JoulesPerKilogram`
+  and `Percent`, `WeatherLevel` gains `EntireAtmosphere` (GRIB2 fixed
+  surface 10), and the new styles are `PrecipitationStyle`,
+  `ThunderstormRiskStyle` and `CloudCoverStyle`. `WeatherCoverageStyle.Opacity`
+  is now set per style, and `StyleVersion` is 7. See
+  [Show wind and waves on the chart](weather.md).
+
 - **Tropical cyclones from the Library.** A new Library source,
   **Tropical cyclones — NHC** (`FEED`), lists every storm NHC is issuing
   advisories for in the Atlantic, East and Central Pacific, one item each,

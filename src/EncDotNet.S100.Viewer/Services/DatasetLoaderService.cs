@@ -493,9 +493,20 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             EncDotNet.S100.Validation.ValidationReport? validation;
             using (validationLease)
             {
-                validation = await Task.Run(
-                    () => SafeValidate(processor),
-                    token).ConfigureAwait(true);
+                // Validation runs in the scheduler's lowest class, whatever
+                // the load's demand, so it never delays drawing (map
+                // rendering slice 5).
+                Task<EncDotNet.S100.Validation.ValidationReport?> validating;
+                using (WorkDemand.Enter(null))
+                {
+                    validating = WorkScheduler.Shared.RunAsync(
+                        WorkStage.Validate,
+                        _ => SafeValidate(processor),
+                        token,
+                        WorkPriority.Validation());
+                }
+
+                validation = await validating.ConfigureAwait(true);
             }
             if (!IsCurrentLoad(entry, loadGeneration)
                 || !OwnsProcessor(entry, processor))
@@ -1374,6 +1385,9 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         "weather.visibility" => Strings.SubLayer_Weather_Visibility,
         "weather.spray" => Strings.SubLayer_Weather_FreezingSpray,
         "weather.air.temperature.isotherms" => Strings.SubLayer_Weather_AirTemperature,
+        "weather.precipitation" => Strings.SubLayer_Weather_Precipitation,
+        "weather.cape" => Strings.SubLayer_Weather_ThunderstormRisk,
+        "weather.cloud" => Strings.SubLayer_Weather_CloudCover,
         _ => key,
     };
 

@@ -1525,6 +1525,14 @@ result is item 9: a NetCDF wave file drawn over a chart.
 5. **Weather in route checks.** Wind and wave along a route at ETA is
    the obvious next step, after this epic. The `ICoverageSource` design
    makes it possible without new readers.
+   As built (#1093): `WeatherCheck` in `EncDotNet.S100.Navigation` reads an
+   `IRouteWeatherSource` (per position and quantity, the time series of
+   every covering grid, best first), which `CatalogRouteCheckSources`
+   builds over the weather grids' samplers. It reads the nearest node and
+   time step, as `sample_coverage` does, ranks overlapping grids the same way
+   (finest, then newest run), samples the track only, every nautical mile,
+   and reports a forecast that ends before arrival as "not checked". Its
+   findings are advisory (Check). ETAs still ignore set and drift (#1033).
 6. **JPEG 2000 and CCSDS packing.** GFS-Wave on AWS uses 5.40 and ECMWF
    Open Data uses 5.42 (§7.2, as built), so without them the main wave
    source and all of ECMWF can't be read. CCSDS (CCSDS 121.0-B, the

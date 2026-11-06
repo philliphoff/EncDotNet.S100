@@ -6,6 +6,7 @@ using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Routes.Rtz;
 using EncDotNet.S100.Testing.Scenarios;
 using EncDotNet.S100.Testing.Scenarios.Writers;
+using EncDotNet.S100.TestSupport;
 
 namespace EncDotNet.S100.Cli.Tests;
 
@@ -129,6 +130,57 @@ public sealed class RouteCheckCommandTests
         Assert.Contains("Route check:", stdout, StringComparison.Ordinal);
         Assert.Contains("Under-keel clearance:", stdout, StringComparison.Ordinal);
         Assert.Contains("Not for navigation", stdout, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_rtz_routes_wind_limit_checks_a_grib_forecast_and_the_options_replace_it()
+    {
+        // GFS-Wave at file index 566 (35.75°N, 74.75°W): about 20 kn and 2.54 m at f003.
+        var folder = Directory.CreateTempSubdirectory("s100-route-weather-").FullName;
+        try
+        {
+            var (lat, lon) = GribFixtures.CropPoint(566);
+            var departure = new DateTimeOffset(GribFixtures.Run.AddHours(3));
+            var route = Path.Combine(folder, "weather.rtz");
+            RtzWriter.Write(new RtzRoute
+            {
+                Version = RtzVersions.Latest,
+                Info = new RtzRouteInfo { RouteName = "Weather", VesselMaxWind = 15 },
+                Waypoints =
+                [
+                    new RtzWaypoint { Id = 1, Position = new(lat, lon) },
+                    new RtzWaypoint { Id = 2, Position = new(lat, lon + 0.1) },
+                ],
+                Schedules =
+                [
+                    new RtzSchedule
+                    {
+                        Id = 1,
+                        Name = "Plan",
+                        Manual = new RtzScheduleTable { Elements = [new RtzScheduleElement { WaypointId = 1, Etd = departure }, new RtzScheduleElement { WaypointId = 2, Speed = 6 }] },
+                    },
+                ],
+            }, route);
+            var grib = GribFixtures.Fixture(GribFixtures.WaveFilter);
+
+            var (_, own) = RunJson(route, grib, "--fail-on", "never");
+            Assert.Equal(["weather.wind_above_limit"], Codes(own).Where(c => c.StartsWith("weather.", StringComparison.Ordinal)));
+            var limit = own["check"]!["weather"]!["limits"]!.AsArray().Single()!;
+            Assert.Equal("route", limit["origin"]!.GetValue<string>());
+            Assert.Equal(15, limit["value"]!.GetValue<double>());
+
+            var (_, replaced) = RunJson(route, grib, "--fail-on", "never", "--max-wind", "30", "--max-wave", "2");
+            Assert.Equal(["weather.waves_above_limit"], Codes(replaced).Where(c => c.StartsWith("weather.", StringComparison.Ordinal)));
+            Assert.Equal(30, replaced["settings"]!["maxWindKnots"]!.GetValue<double>());
+
+            var (_, text) = Run([route, grib, "--fail-on", "never"]);
+            Assert.Contains("Weather:", text, StringComparison.Ordinal);
+            Assert.Contains("above_limits (limits wind 15 kn (route))", text, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
     }
 
     [Fact]

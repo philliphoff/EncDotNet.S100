@@ -8,8 +8,8 @@ namespace EncDotNet.S100.Navigation;
 /// <remarks>
 /// <para>
 /// The built-in checks are <see cref="ChartCheck"/>, <see cref="AreaCheck"/>,
-/// <see cref="WarningCheck"/> and <see cref="ClearanceCheck"/>, run in that
-/// order. Each one says when it can't run, with a reason, rather than
+/// <see cref="WarningCheck"/>, <see cref="ClearanceCheck"/> and
+/// <see cref="WeatherCheck"/>, run in that order. Each one says when it can't run, with a reason, rather than
 /// finding nothing.
 /// </para>
 /// <para>
@@ -34,7 +34,7 @@ public sealed class RouteChecker
     /// <param name="options">Tuning, or <c>null</c> for <see cref="RouteCheckOptions.Default"/>.</param>
     /// <param name="additionalChecks">Checks to run after the built-in ones, or <c>null</c>.</param>
     public RouteChecker(RouteCheckSources sources, RouteCheckOptions? options = null, IEnumerable<IRouteCheck>? additionalChecks = null)
-        : this(sources, [new ChartCheck(), new AreaCheck(), new WarningCheck(), new ClearanceCheck(), .. additionalChecks ?? []], options)
+        : this(sources, [new ChartCheck(), new AreaCheck(), new WarningCheck(), new ClearanceCheck(), new WeatherCheck(), .. additionalChecks ?? []], options)
     {
     }
 

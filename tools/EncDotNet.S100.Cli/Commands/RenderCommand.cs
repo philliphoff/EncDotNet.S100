@@ -140,6 +140,10 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
         [Description("Comma-separated list of drawing-instruction categories to suppress: text, points, lines, areas (e.g. --hide text,points). Combines additively with --no-text. In the composite form the suppression is global (applies to every layer).")]
         public string? Hide { get; init; }
 
+        [CommandOption("--show-layer <KEYS>")]
+        [Description("Single-dataset form only: comma-separated sub-layer keys to draw even when they're off by default, as the viewer's Display controls switches do, e.g. --show-layer weather.precipitation,weather.cape,weather.cloud. 's100 info' lists a dataset's layer keys.")]
+        public string? ShowLayer { get; init; }
+
         [CommandOption("--debug")]
         [Description("Show full stack traces on error, and surface host/Lua portrayal diagnostics on stderr.")]
         public bool Debug { get; init; }
@@ -241,6 +245,12 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             if (IsComposite && IsExplicitExchangeSet)
                 return ValidationResult.Error(
                     "--layer and --exchange-set/--from cannot be combined. Use one or the other.");
+
+            if (ShowLayer is not null && (IsComposite || IsExchangeSetComposite))
+                return ValidationResult.Error("--show-layer applies only to the single-dataset form.");
+
+            if (ShowLayer is not null && ParseLayerKeys(ShowLayer).Length == 0)
+                return ValidationResult.Error("--show-layer must be a comma-separated list of sub-layer keys (e.g. weather.precipitation).");
 
             if (Only is not null && !IsExchangeSetComposite)
                 return ValidationResult.Error(
@@ -434,6 +444,16 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
             var renderContext = RenderContextBuilder.Build(
                 processor, palette, settings.SymbolScale, settings.TextScale, settings.TimeStep, hidden,
                 ResolveBasemap(settings), displayModeId, viewport);
+            if (settings.ShowLayer is { } shown)
+            {
+                renderContext = renderContext with
+                {
+                    EcdisDisplay = (renderContext.EcdisDisplay ?? new EcdisDisplaySettings()) with
+                    {
+                        LayerVisibility = ParseLayerKeys(shown).ToDictionary(key => key, _ => true, StringComparer.Ordinal),
+                    },
+                };
+            }
 
             TryResolveOutput(settings.Format, outputPath, out var outputKind, out var imageFormat, out _);
 
@@ -653,6 +673,10 @@ internal sealed class RenderCommand : Command<RenderCommand.Settings>
                 dataset.Dispose();
         }
     }
+
+    // The sub-layer keys of --show-layer, trimmed, without empty entries.
+    internal static string[] ParseLayerKeys(string value) =>
+        value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private static RgbaColor? ResolveBackground(Settings settings)
     {

@@ -1,8 +1,8 @@
 # How a route check works
 
 A route check runs on one `PassagePlan` and returns one `RouteCheckReport`.
-`RouteChecker` in the `EncDotNet.S100.Navigation` package runs four checks
-(chart, areas, warnings and clearance) over one `RouteCheckSources` bundle,
+`RouteChecker` in the `EncDotNet.S100.Navigation` package runs five checks
+(chart, areas, warnings, clearance and weather) over one `RouteCheckSources` bundle,
 which `CatalogRouteCheckSources` in `EncDotNet.S100.Datasets.Pipelines`
 builds from loaded datasets. SoundCharts, the MCP `check_route` tool and
 `s100 route check` all call the same checker.
@@ -23,7 +23,8 @@ flowchart LR
   C --> K2[areas]
   C --> K3[warnings]
   C --> K4[clearance]
-  K1 & K2 & K3 & K4 --> R[RouteCheckReport]
+  C --> K5[weather]
+  K1 & K2 & K3 & K4 & K5 --> R[RouteCheckReport]
 ```
 
 ## Run a check
@@ -102,7 +103,7 @@ once.
 
 ## Where each dataset is used
 
-`CatalogRouteCheckSources` sorts the loaded datasets into the five members of
+`CatalogRouteCheckSources` sorts the loaded datasets into the six members of
 `RouteCheckSources`. Each check reads only the members it needs:
 
 | Product | Source | Check | Used for |
@@ -114,6 +115,7 @@ once.
 | S-104 water levels (grids and stations) | `WaterLevel` | clearance | The water level at each sample's ETA |
 | S-122 marine protected areas | `Areas` | areas | Marine protected and restricted areas |
 | S-124 navigational warnings | `Warnings` | warnings | Warning parts near the route, and the set of all warnings for cancellations and in-force bulletins |
+| GRIB2 and NetCDF weather grids | `Weather` | weather | Wind speed at 10 m and significant wave height at each sample's ETA, at the nearest grid node and time step |
 
 Other products, including S-111 surface currents, S-127 and S-131, aren't
 read. Speeds are speeds over ground, and currents aren't applied to ETAs.
@@ -121,8 +123,10 @@ read. Speeds are speeds over ground, and currents aren't applied to ETAs.
 For the order in which charted depth and water level are chosen, see
 [Under-keel clearance](route-checks.md#under-keel-clearance).
 
-`CatalogRouteCheckSources` always fills every member, even when no dataset
-of that product is loaded. So with the catalog bundle a missing product
+`CatalogRouteCheckSources` fills every member but `Weather`, even when no
+dataset of that product is loaded. `Weather` is null without a weather
+dataset, so the weather check is skipped (`weather_missing`) rather than
+reporting the whole route as outside forecast coverage. So with the catalog bundle a missing product
 doesn't skip a check. It shows up as coverage findings instead, such as
 `data.outside_chart_coverage` or `data.no_water_level_coverage`. To leave a
 check's data out, build `RouteCheckSources` yourself and leave that member
@@ -149,6 +153,9 @@ after it. The chart check doesn't use time.
   in-force bulletin.
 - **Water levels** are read from S-104 at each sample's ETA, interpolated
   between time steps.
+- **Weather** is read at each sample's ETA from the nearest forecast step,
+  not interpolated. An ETA more than half a step beyond the forecast isn't
+  checked.
 
 Each host picks `At` for itself. SoundCharts uses the view time. MCP
 `check_route` uses the departure (the `departure` argument, else the
@@ -202,6 +209,7 @@ so rather than reporting nothing:
 | `areas` | `Areas` is null (`areas_missing`) | |
 | `warnings` | `Warnings` is null (`warnings_missing`) | |
 | `clearance` | `Depth` is null (`depth_missing`), `WaterLevel` is null (`water_level_missing`), or a leg has no draft (`draft_missing`) | |
+| `weather` | `Weather` is null (`weather_missing`), or no wind or wave limit is set in the settings or the plan (`weather_limits_missing`) | A limit is set for wind or waves, but no weather dataset has it (`wind_missing`, `waves_missing`) |
 
 The reasons are constants in `RouteCheckReasons`. `report.Status("clearance")`
 returns one check's status. A skipped check's detail is `null`:
@@ -217,6 +225,7 @@ findings, the state and reason, and the check's own result, typed:
 | `AreaCheck` | `AreaCheckResult`: every area near the route | `report.Areas` |
 | `WarningCheck` | `WarningCheckResult`: every warning near the route | `report.Warnings` |
 | `ClearanceCheck` | `ClearanceCheckResult`: the clearance and the departure sweep | `report.Clearance`, `report.Departures` |
+| `WeatherCheck` | `WeatherCheckResult`: the limits used, every sample's readings, the verdict and the departure sweep | `report.Weather` |
 
 ```csharp
 var clearance = new ClearanceCheck().Run(new RouteCheckContext(plan, settings, sources));

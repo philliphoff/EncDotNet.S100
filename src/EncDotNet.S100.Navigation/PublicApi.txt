@@ -234,6 +234,17 @@ namespace EncDotNet.S100.Navigation
         EncDotNet.S100.Datasets.Pipelines.NavigationalWarningSet Set { get; }
         System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteWarning> WarningsNear(EncDotNet.S100.Pipelines.BoundingBox extent);
     }
+    public interface IRouteWeatherSeries
+    {
+        EncDotNet.S100.Navigation.RouteWeatherSourceInfo Source { get; }
+        System.Collections.Generic.IReadOnlyList<System.DateTimeOffset> Steps { get; }
+        double? ValueAt(int stepIndex);
+    }
+    public interface IRouteWeatherSource
+    {
+        bool Carries(EncDotNet.S100.Navigation.WeatherQuantity quantity);
+        System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.IRouteWeatherSeries> Locate(EncDotNet.S100.DataModel.GeoPosition position, EncDotNet.S100.Navigation.WeatherQuantity quantity);
+    }
     public interface IWaterLevelField
     {
         EncDotNet.S100.Navigation.WaterLevelBasis Basis { get; }
@@ -351,6 +362,7 @@ namespace EncDotNet.S100.Navigation
         public PassagePlan(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.PassageLeg> legs, System.DateTimeOffset? departure = default) { }
         public System.DateTimeOffset? Departure { get; }
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.PassageLeg> Legs { get; }
+        public EncDotNet.S100.Navigation.WeatherLimits? VesselLimits { get; init; }
         public System.DateTimeOffset EffectiveDeparture(EncDotNet.S100.Navigation.RouteCheckSettings settings) { }
         public EncDotNet.S100.Navigation.PassagePlan WithDeparture(System.DateTimeOffset? departure) { }
     }
@@ -573,6 +585,7 @@ namespace EncDotNet.S100.Navigation
         public EncDotNet.S100.Quantities.Length DefaultLimit { get; init; }
         public EncDotNet.S100.Navigation.RouteFindingFormatter Formatter { get; init; }
         public EncDotNet.S100.Navigation.RouteWarningOptions Warnings { get; init; }
+        public EncDotNet.S100.Navigation.WeatherCheckOptions Weather { get; init; }
         public static EncDotNet.S100.Navigation.RouteCheckOptions Default { get; }
     }
     public class RouteCheckOutcome
@@ -602,6 +615,10 @@ namespace EncDotNet.S100.Navigation
         public const string SafetySettingsMissing = "safety_settings_missing";
         public const string WarningsMissing = "warnings_missing";
         public const string WaterLevelMissing = "water_level_missing";
+        public const string WavesMissing = "waves_missing";
+        public const string WeatherLimitsMissing = "weather_limits_missing";
+        public const string WeatherMissing = "weather_missing";
+        public const string WindMissing = "wind_missing";
     }
     public sealed class RouteCheckReport
     {
@@ -619,6 +636,7 @@ namespace EncDotNet.S100.Navigation
         public EncDotNet.S100.Navigation.RouteTrack Track { get; }
         public EncDotNet.S100.Navigation.RouteCheckVerdict Verdict { get; }
         public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteWarningMatch> Warnings { get; }
+        public EncDotNet.S100.Navigation.WeatherCheckResult? Weather { get; }
         public T? Detail<T>(string name)
             where T :  class { }
         public EncDotNet.S100.Navigation.RouteCheckStatus? Status(string name) { }
@@ -635,6 +653,7 @@ namespace EncDotNet.S100.Navigation
         public EncDotNet.S100.Quantities.Depth? SafetyContour { get; init; }
         public EncDotNet.S100.Quantities.Depth? SafetyDepth { get; init; }
         public EncDotNet.S100.Quantities.Length? TrackClearance { get; init; }
+        public EncDotNet.S100.Navigation.WeatherLimits? WeatherLimits { get; init; }
         public static EncDotNet.S100.Navigation.RouteCheckSettings FromMarinerSettings(EncDotNet.S100.Pipelines.MarinerSettings settings, System.DateTimeOffset at) { }
     }
     public sealed class RouteCheckSources
@@ -645,6 +664,7 @@ namespace EncDotNet.S100.Navigation
         public EncDotNet.S100.Navigation.IChartedDepthSource? Depth { get; init; }
         public EncDotNet.S100.Navigation.IRouteWarningSource? Warnings { get; init; }
         public EncDotNet.S100.Navigation.IWaterLevelSource? WaterLevel { get; init; }
+        public EncDotNet.S100.Navigation.IRouteWeatherSource? Weather { get; init; }
         public static EncDotNet.S100.Navigation.RouteCheckSources Empty { get; }
     }
     public enum RouteCheckState
@@ -715,6 +735,7 @@ namespace EncDotNet.S100.Navigation
         Clearance = 4,
         Confidence = 5,
         Data = 6,
+        Weather = 7,
     }
     public sealed class RouteFindingCode : System.IEquatable<EncDotNet.S100.Navigation.RouteFindingCode>
     {
@@ -749,6 +770,7 @@ namespace EncDotNet.S100.Navigation
         public static EncDotNet.S100.Navigation.RouteFindingCode LandInCorridor { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode NoChartedDepth { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode NoWaterLevelCoverage { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode NoWeatherCoverage { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode OutsideChartCoverage { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode OverheadOnRoute { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode ProhibitedAreaInCorridor { get; }
@@ -767,6 +789,11 @@ namespace EncDotNet.S100.Navigation
         public static EncDotNet.S100.Navigation.RouteFindingCode WaterLevelEnds { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode WaterLevelNoData { get; }
         public static EncDotNet.S100.Navigation.RouteFindingCode WaterLevelStartsLate { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode WavesAboveLimit { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode WeatherForecastEnds { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode WeatherForecastStartsLate { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode WeatherNoData { get; }
+        public static EncDotNet.S100.Navigation.RouteFindingCode WindAboveLimit { get; }
         public static bool TryGet(string value, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out EncDotNet.S100.Navigation.RouteFindingCode? code) { }
     }
     public sealed class RouteFindingCounts : System.IEquatable<EncDotNet.S100.Navigation.RouteFindingCounts>
@@ -818,10 +845,13 @@ namespace EncDotNet.S100.Navigation
         public EncDotNet.S100.Pipelines.DepthUnit DepthUnit { get; }
         protected virtual string DepthUnknown { get; }
         protected virtual string DryingInCorridor { get; }
+        protected virtual string ForecastEndsAtFormat { get; }
+        protected virtual string ForecastStartsAtFormat { get; }
         protected virtual string FromFormat { get; }
         protected virtual string HazardInCorridorFormat { get; }
         protected virtual string HazardNearRouteFormat { get; }
         protected virtual string HazardOnTrackFormat { get; }
+        protected virtual string HoursFormat { get; }
         protected virtual string IucnCategoryFormat { get; }
         protected virtual string LandInCorridor { get; }
         protected virtual string LeastDepthFormat { get; }
@@ -831,10 +861,12 @@ namespace EncDotNet.S100.Navigation
         protected virtual string ListSeparator { get; }
         protected virtual string MinAtFormat { get; }
         protected virtual string MinFormat { get; }
+        protected virtual string MinutesFormat { get; }
         protected virtual string NoChartedDepth { get; }
         protected virtual string NoDepthSource { get; }
         protected virtual string NoValue { get; }
         protected virtual string NoWaterLevelCoverage { get; }
+        protected virtual string NoWeatherCoverageFormat { get; }
         protected virtual string Obstruction { get; }
         protected virtual string OnTrack { get; }
         protected virtual string OutsideChartCoverage { get; }
@@ -853,6 +885,7 @@ namespace EncDotNet.S100.Navigation
         protected virtual string StretchLengthFormat { get; }
         protected virtual string TideNotApplied { get; }
         protected virtual string TideNotAppliedForFormat { get; }
+        protected virtual string TimeWindowFormat { get; }
         public System.TimeZoneInfo? TimeZone { get; }
         protected virtual string ToPortFormat { get; }
         protected virtual string ToStarboardFormat { get; }
@@ -875,6 +908,17 @@ namespace EncDotNet.S100.Navigation
         protected virtual string WaterLevelEnds { get; }
         protected virtual string WaterLevelNoData { get; }
         protected virtual string WaterLevelStartsLate { get; }
+        protected virtual string WavesAboveDistanceFormat { get; }
+        protected virtual string WavesAboveForFormat { get; }
+        protected virtual string WavesNoun { get; }
+        protected virtual string WeatherForecastEndsFormat { get; }
+        protected virtual string WeatherForecastStartsLateFormat { get; }
+        protected virtual string WeatherMaxAtFormat { get; }
+        protected virtual string WeatherMaxFormat { get; }
+        protected virtual string WeatherNoDataFormat { get; }
+        protected virtual string WindAboveDistanceFormat { get; }
+        protected virtual string WindAboveForFormat { get; }
+        protected virtual string WindNoun { get; }
         protected virtual string Wreck { get; }
         public static EncDotNet.S100.Navigation.RouteFindingFormatter Default { get; }
         protected virtual string AlertAreaKindLabel(int kind) { }
@@ -892,9 +936,12 @@ namespace EncDotNet.S100.Navigation
         protected virtual string FormatDate(System.DateOnly date) { }
         protected virtual string FormatDayOfYear(int month, int day) { }
         protected virtual string FormatDepth(EncDotNet.S100.Quantities.Depth depth) { }
+        protected virtual string FormatDuration(System.TimeSpan duration) { }
         protected virtual string FormatEta(System.DateTimeOffset time) { }
         protected virtual string FormatSetting(EncDotNet.S100.Quantities.Depth depth) { }
         protected virtual string FormatTime(System.DateTimeOffset time) { }
+        protected virtual string FormatWaveHeight(double metres) { }
+        protected virtual string FormatWind(double metresPerSecond) { }
         protected virtual string HazardKind(string featureType) { }
         protected virtual string LegLabel(int firstLeg, int lastLeg) { }
         public virtual string Meta(EncDotNet.S100.Navigation.RouteFinding finding) { }
@@ -904,6 +951,8 @@ namespace EncDotNet.S100.Navigation
         public virtual string Title(EncDotNet.S100.Navigation.RouteFinding finding) { }
         protected virtual string WarningMeta(EncDotNet.S100.Navigation.WarningDetails warning) { }
         protected virtual string WarningTitle(EncDotNet.S100.Navigation.RouteFinding finding, EncDotNet.S100.Navigation.WarningDetails warning) { }
+        protected virtual string WeatherMeta(EncDotNet.S100.Navigation.WeatherDetails details) { }
+        protected virtual string WeatherTitle(EncDotNet.S100.Navigation.RouteFinding finding, EncDotNet.S100.Navigation.WeatherDetails details) { }
     }
     public enum RouteFindingGroup
     {
@@ -1014,6 +1063,13 @@ namespace EncDotNet.S100.Navigation
         InForce = 0,
         NotInForce = 1,
         Cancelled = 2,
+    }
+    public sealed class RouteWeatherSourceInfo : System.IEquatable<EncDotNet.S100.Navigation.RouteWeatherSourceInfo>
+    {
+        public RouteWeatherSourceInfo(string DatasetId, System.DateTimeOffset? ModelRun, string? GridCell = null) { }
+        public string DatasetId { get; init; }
+        public string? GridCell { get; init; }
+        public System.DateTimeOffset? ModelRun { get; init; }
     }
     public sealed class ShoalDetails : EncDotNet.S100.Navigation.RouteFindingDetails
     {
@@ -1217,5 +1273,144 @@ namespace EncDotNet.S100.Navigation
         AfterEnd = 3,
         NoData = 4,
         DatumMismatch = 5,
+    }
+    public sealed class WeatherCheck : EncDotNet.S100.Navigation.IRouteCheck, EncDotNet.S100.Navigation.IRouteCheck<EncDotNet.S100.Navigation.WeatherCheckResult>
+    {
+        public const string CheckName = "weather";
+        public WeatherCheck() { }
+        public string Name { get; }
+        public EncDotNet.S100.Navigation.RouteCheckOutcome<EncDotNet.S100.Navigation.WeatherCheckResult> Run(EncDotNet.S100.Navigation.RouteCheckContext context, System.Threading.CancellationToken cancellationToken = default) { }
+        public static System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WeatherLimitUsed> Limits(EncDotNet.S100.Navigation.WeatherLimits? settings, EncDotNet.S100.Navigation.WeatherLimits? vessel) { }
+    }
+    public sealed class WeatherCheckOptions : System.IEquatable<EncDotNet.S100.Navigation.WeatherCheckOptions>
+    {
+        public WeatherCheckOptions() { }
+        public double SampleSpacingMeters { get; init; }
+        public static EncDotNet.S100.Navigation.WeatherCheckOptions Default { get; }
+    }
+    public sealed class WeatherCheckResult : System.IEquatable<EncDotNet.S100.Navigation.WeatherCheckResult>
+    {
+        public WeatherCheckResult(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WeatherLimitUsed> Limits, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WeatherSample> Samples, EncDotNet.S100.Navigation.WeatherVerdict Verdict, System.Collections.Generic.IReadOnlyList<string> DatasetsUsed, EncDotNet.S100.Navigation.WeatherDepartureSweep? Departures) { }
+        public System.Collections.Generic.IReadOnlyList<string> DatasetsUsed { get; init; }
+        public EncDotNet.S100.Navigation.WeatherDepartureSweep? Departures { get; init; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WeatherLimitUsed> Limits { get; init; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WeatherSample> Samples { get; init; }
+        public EncDotNet.S100.Navigation.WeatherVerdict Verdict { get; init; }
+        public EncDotNet.S100.Navigation.WeatherLimitUsed? Limit(EncDotNet.S100.Navigation.WeatherQuantity quantity) { }
+        [return: System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "Sample",
+                "Reading"})]
+        public System.ValueTuple<EncDotNet.S100.Navigation.WeatherSample, EncDotNet.S100.Navigation.WeatherReading>? Maximum(EncDotNet.S100.Navigation.WeatherQuantity quantity) { }
+    }
+    public sealed class WeatherDepartureOption : System.IEquatable<EncDotNet.S100.Navigation.WeatherDepartureOption>
+    {
+        public WeatherDepartureOption(System.DateTimeOffset Departure, System.DateTimeOffset? Arrival, EncDotNet.S100.Navigation.WeatherVerdict Verdict, double? MaxWindMetresPerSecond, double? MaxWaveHeightMetres, System.TimeSpan TimeAboveLimits) { }
+        public System.DateTimeOffset? Arrival { get; init; }
+        public System.DateTimeOffset Departure { get; init; }
+        public double? MaxWaveHeightMetres { get; init; }
+        public double? MaxWindMetresPerSecond { get; init; }
+        public System.TimeSpan TimeAboveLimits { get; init; }
+        public EncDotNet.S100.Navigation.WeatherVerdict Verdict { get; init; }
+        public bool WithinLimits { get; }
+    }
+    public sealed class WeatherDepartureSweep : System.IEquatable<EncDotNet.S100.Navigation.WeatherDepartureSweep>
+    {
+        public WeatherDepartureSweep(System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WeatherDepartureOption> Options) { }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WeatherDepartureOption> Options { get; init; }
+        public System.TimeSpan Step { get; init; }
+        public EncDotNet.S100.Navigation.WeatherDepartureOption? NearestWithinLimits(System.DateTimeOffset departure) { }
+        [return: System.Runtime.CompilerServices.TupleElementNames(new string[] {
+                "First",
+                "Last"})]
+        public System.Collections.Generic.IReadOnlyList<System.ValueTuple<System.DateTimeOffset, System.DateTimeOffset>> Windows() { }
+    }
+    public sealed class WeatherDetails : EncDotNet.S100.Navigation.RouteFindingDetails
+    {
+        public WeatherDetails() { }
+        public string? DatasetId { get; init; }
+        public System.DateTimeOffset? EndTime { get; init; }
+        public int FirstLegIndex { get; init; }
+        public System.DateTimeOffset? ForecastEnd { get; init; }
+        public System.DateTimeOffset? ForecastStart { get; init; }
+        public EncDotNet.S100.Navigation.WeatherSampleState? Gap { get; init; }
+        public int LastLegIndex { get; init; }
+        public EncDotNet.S100.Quantities.Length Length { get; init; }
+        public double? Limit { get; init; }
+        public EncDotNet.S100.Navigation.WeatherLimitOrigin? LimitOrigin { get; init; }
+        public double? Maximum { get; init; }
+        public System.DateTimeOffset? MaximumStepTime { get; init; }
+        public System.DateTimeOffset? MaximumTime { get; init; }
+        public System.DateTimeOffset? ModelRun { get; init; }
+        public required EncDotNet.S100.Navigation.WeatherQuantity Quantity { get; init; }
+        public System.DateTimeOffset StartTime { get; init; }
+    }
+    public static class WeatherFindings
+    {
+        public static System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.RouteFinding> Build(EncDotNet.S100.Navigation.RouteTrack track, EncDotNet.S100.Navigation.WeatherCheckResult result, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.PassageLeg> legs, EncDotNet.S100.Navigation.RouteFindingFormatter? formatter = null) { }
+    }
+    public enum WeatherLimitOrigin
+    {
+        Settings = 0,
+        Route = 1,
+    }
+    public sealed class WeatherLimitUsed : System.IEquatable<EncDotNet.S100.Navigation.WeatherLimitUsed>
+    {
+        public WeatherLimitUsed(EncDotNet.S100.Navigation.WeatherQuantity Quantity, double Value, EncDotNet.S100.Navigation.WeatherLimitOrigin Origin) { }
+        public EncDotNet.S100.Navigation.WeatherLimitOrigin Origin { get; init; }
+        public EncDotNet.S100.Navigation.WeatherQuantity Quantity { get; init; }
+        public double Value { get; init; }
+    }
+    public sealed class WeatherLimits : System.IEquatable<EncDotNet.S100.Navigation.WeatherLimits>
+    {
+        public WeatherLimits() { }
+        public bool IsEmpty { get; }
+        public EncDotNet.S100.Quantities.Length? MaxWaveHeight { get; init; }
+        public EncDotNet.S100.Quantities.Speed? MaxWind { get; init; }
+        public static EncDotNet.S100.Navigation.WeatherLimits None { get; }
+        public double? Limit(EncDotNet.S100.Navigation.WeatherQuantity quantity) { }
+    }
+    public enum WeatherQuantity
+    {
+        WindSpeed = 0,
+        SignificantWaveHeight = 1,
+    }
+    public sealed class WeatherReading : System.IEquatable<EncDotNet.S100.Navigation.WeatherReading>
+    {
+        public WeatherReading(EncDotNet.S100.Navigation.WeatherQuantity Quantity, EncDotNet.S100.Navigation.WeatherSampleState State, double? Value, System.DateTimeOffset? StepTime, EncDotNet.S100.Navigation.RouteWeatherSourceInfo? Source) { }
+        public bool IsChecked { get; }
+        public EncDotNet.S100.Navigation.WeatherQuantity Quantity { get; init; }
+        public EncDotNet.S100.Navigation.RouteWeatherSourceInfo? Source { get; init; }
+        public EncDotNet.S100.Navigation.WeatherSampleState State { get; init; }
+        public System.DateTimeOffset? StepTime { get; init; }
+        public double? Value { get; init; }
+    }
+    public sealed class WeatherSample : System.IEquatable<EncDotNet.S100.Navigation.WeatherSample>
+    {
+        public WeatherSample(int LegIndex, double StartDistanceMeters, double EndDistanceMeters, EncDotNet.S100.DataModel.GeoPosition Position, System.DateTimeOffset Time, bool HasEta, System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WeatherReading> Readings) { }
+        public double DistanceMeters { get; }
+        public double EndDistanceMeters { get; init; }
+        public bool HasEta { get; init; }
+        public int LegIndex { get; init; }
+        public EncDotNet.S100.DataModel.GeoPosition Position { get; init; }
+        public System.Collections.Generic.IReadOnlyList<EncDotNet.S100.Navigation.WeatherReading> Readings { get; init; }
+        public double StartDistanceMeters { get; init; }
+        public System.DateTimeOffset Time { get; init; }
+        public EncDotNet.S100.Navigation.WeatherReading? Reading(EncDotNet.S100.Navigation.WeatherQuantity quantity) { }
+    }
+    public enum WeatherSampleState
+    {
+        WithinLimit = 0,
+        AboveLimit = 1,
+        ForecastEnds = 2,
+        ForecastStartsLate = 3,
+        NoCoverage = 4,
+        NoData = 5,
+    }
+    public enum WeatherVerdict
+    {
+        AboveLimits = 0,
+        ForecastEndsBeforeArrival = 1,
+        Incomplete = 2,
+        WithinLimits = 3,
     }
 }
