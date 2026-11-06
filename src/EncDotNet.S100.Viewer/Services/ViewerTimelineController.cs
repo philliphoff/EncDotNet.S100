@@ -250,6 +250,7 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
             Time = entry.LayerTime?.Text,
             Hidden = entry.IsLayerHidden,
             Drawing = entry.IsLayerDrawing,
+            StaleHours = entry.LayerTime?.StaleAge is { } age ? (int)age.TotalHours : null,
         };
     }
 }

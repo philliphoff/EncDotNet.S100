@@ -1246,6 +1246,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void OnClockTick()
     {
+        _ = RefreshDueWeatherAsync();
         var forecasts = _allItems.Where(i => i.IsForecast).ToArray();
         if (forecasts.Length == 0)
             return;

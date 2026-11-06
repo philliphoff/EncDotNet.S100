@@ -177,7 +177,9 @@ made from its data. The Library can fetch some of these sources for you.
   `https://tgftp.nws.noaa.gov/data/raw/as/asus02.kwbc.cod.sus.txt`, the
   standard one at `…/raw/as/asus01.kwbc.cod.sus.txt`, and the short-range
   forecast at `…/raw/fs/fsus02.kwbc.cod.srp.txt`. Save them with any name;
-  SoundCharts and `s100` recognise the contents.
+  SoundCharts and `s100` recognise the contents. In SoundCharts, the
+  Library's **Surface analysis — WPC** source fetches them for you; see
+  [Show a surface analysis](#show-a-surface-analysis).
 - **NDBC buoys.** There's nothing to download. SoundCharts fetches the
   latest observations from [NDBC](https://www.ndbc.noaa.gov/) for the
   stations in view; see [Show buoy observations](#show-buoy-observations).
@@ -316,8 +318,45 @@ later), its intensity if the bulletin gives one, and the bulletin's own
 points as the count and the two ends. A centre shows its pressure and
 position.
 
-Only the bulletin's first analysis is drawn: for a forecast bulletin, its
-first forecast time. Moving the Timeline doesn't change it yet.
+### Get the latest analysis from the Library
+
+In the Library, choose **Add** and pick **Surface analysis — WPC** from the
+weather sources. It has the `FEED` tag. The latest high-resolution analysis
+is ticked; tick **Forecast fronts · WPC** too to add WPC's coded forecast,
+12 and 24 hours ahead, as a second item. Both cover WPC's area only, North
+America and adjacent waters, which each item says.
+
+Download and load an item as any other. While the analysis is loaded, the
+Library reads the source again every 3 hours, as WPC issues a new analysis,
+and loads the newer one in its place. **Load latest run** does it at once;
+**Pin this run** keeps an analysis beside the latest.
+
+### Time
+
+An analysis or forecast is drawn from its valid time until 12 hours later,
+then nothing is drawn. The Datasets row says "No analysis at view time" and
+the Timeline lane hides; click the row's time to jump to the nearest one.
+
+| Age at the view time | Chart | Panels |
+|---|---|---|
+| Up to 6 hours | Drawn as above | The analysis time, and how far it is from the view time |
+| 6 to 12 hours | Lines and labels at half opacity, and each **H** and **L** says its age, such as `9 h old` | A **Stale** tag on the Datasets row, and a warning line in Object information: "This analysis is 9 h old. A newer one is likely." |
+| Over 12 hours | Not drawn | "No analysis at view time" |
+
+When several bulletins are loaded, one draws at a time: the one valid
+latest at or before the view time. A newer analysis takes over from an
+older one, and a forecast valid nearer the view time takes over from the
+analysis. For the same valid time, the analysis wins over the forecast.
+Hidden bulletins show "newer analysis drawn" on their Datasets row.
+
+The Timeline lists bulletins under **Surface analysis**, in a lane named
+**WPC** with "analysis · 3 h" or "forecast" under it. Step with ‹ › through
+the forecast's valid times.
+
+In the Library, an analysis more than 6 hours old has the **Stale** tag and
+"Analysis … is over 6 hours old" in its details, with **Load latest run**.
+WPC issues the forecast fronts about every 12 hours, so they are stale after
+13.
 
 ## Show buoy observations
 
@@ -408,9 +447,8 @@ centres; see the [MCP server](mcp-server.md).
   (such as Zstandard).
 - **BUFR** observations.
 - **Surface analyses outside WPC's area**, and fronts in WPC's colours (blue
-  cold, red warm). Fronts are drawn in one ink only. The Library doesn't
-  fetch bulletins yet, and the Timeline doesn't choose between the times of a
-  forecast bulletin.
+  cold, red warm). Fronts are drawn in one ink only. `s100 render` draws a
+  stale analysis at full opacity.
 - **Weather in route checks.** A route check doesn't consider wind, waves or
   model currents.
 - **Ocean model servers.** The Library fetches currents only from ERDDAP.

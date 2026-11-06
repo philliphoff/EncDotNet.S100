@@ -103,12 +103,58 @@ public sealed record MapsuiMapTimedDataset(string Name, DateTime First, DateTime
     /// <summary>How far from the clock a sample may be and still be drawn.</summary>
     public TimeSpan Tolerance { get; init; } = TimeSpan.MaxValue;
 
+    /// <summary>What the dataset's steps are (<see cref="TimeSemantics.Kind"/>).</summary>
+    public TimeStepKind StepKind { get; init; } = TimeStepKind.Forecast;
+
+    /// <summary>How long after its step the data drawn is stale (<see cref="TimeSemantics.StaleAfter"/>), or null for never.</summary>
+    public TimeSpan? StaleAfter { get; init; }
+
+    /// <summary>The key of the datasets of which only one draws at a time (<see cref="TimeSemantics.Supersession"/>), or null.</summary>
+    public string? Supersession { get; init; }
+
     /// <summary>
     /// The sample the dataset draws at <paramref name="time"/> under its time
     /// rule, or <see langword="null"/> when it has no data near that time and hides.
     /// </summary>
     /// <param name="time">The clock value.</param>
     public DateTime? SampleAt(DateTime time) => MapsuiTimeSelection.Select(Samples, Selection, Tolerance, time);
+
+    /// <summary>
+    /// The sample the dataset draws at <paramref name="time"/> beside
+    /// <paramref name="all"/>: <see cref="SampleAt"/>, or <see langword="null"/>
+    /// when another dataset with the same <see cref="Supersession"/> takes over
+    /// (<see cref="MapsuiTimeSupersession"/>).
+    /// </summary>
+    /// <param name="time">The clock value.</param>
+    /// <param name="all">Every time-aware dataset, as the snapshot lists them.</param>
+    public DateTime? DrawnSampleAt(DateTime time, IEnumerable<MapsuiMapTimedDataset> all)
+    {
+        ArgumentNullException.ThrowIfNull(all);
+        var sample = SampleAt(time);
+        if (Supersession is null || sample is null)
+            return sample;
+        return MapsuiTimeSupersession.IsSuperseded(Candidate(sample), all.Select(d => d.Candidate(d.SampleAt(time))))
+            ? null
+            : sample;
+    }
+
+    /// <summary>
+    /// True when another dataset with the same <see cref="Supersession"/>
+    /// draws in this one's place at <paramref name="time"/>, though it has data then.
+    /// </summary>
+    /// <param name="time">The clock value.</param>
+    /// <param name="all">Every time-aware dataset, as the snapshot lists them.</param>
+    public bool IsSupersededAt(DateTime time, IEnumerable<MapsuiMapTimedDataset> all) =>
+        SampleAt(time) is not null && DrawnSampleAt(time, all) is null;
+
+    /// <summary>
+    /// How old the sample drawn at <paramref name="time"/> is, to the nearest hour,
+    /// once past <see cref="StaleAfter"/>; null while current.
+    /// </summary>
+    /// <param name="time">The clock value.</param>
+    public TimeSpan? StaleAgeAt(DateTime time) => MapsuiTimeSupersession.StaleAge(SampleAt(time), time, StaleAfter);
+
+    private MapsuiTimeCandidate Candidate(DateTime? sample) => new(DatasetId ?? Name, Supersession, StepKind, sample);
 
     /// <summary>The dataset's own time samples, ascending; empty when not computed.</summary>
     public IReadOnlyList<DateTime> Samples
@@ -152,6 +198,9 @@ public sealed record MapsuiMapTimedDataset(string Name, DateTime First, DateTime
         && ForecastRun == other.ForecastRun
         && Selection == other.Selection
         && Tolerance == other.Tolerance
+        && StepKind == other.StepKind
+        && StaleAfter == other.StaleAfter
+        && Supersession == other.Supersession
         && Coverage.SequenceEqual(other.Coverage)
         && Samples.SequenceEqual(other.Samples);
 

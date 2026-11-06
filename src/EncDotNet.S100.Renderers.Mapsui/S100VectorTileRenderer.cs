@@ -978,12 +978,41 @@ public static partial class S100VectorTileRenderer
     /// <summary>
     /// The render handler Mapsui invokes for tagged layers. Composites the best
     /// available tiles for the live viewport and enqueues missing visible tiles.
+    /// A layer whose <see cref="ILayer.Opacity"/> is below 1 (a stale surface
+    /// analysis, drawn at half opacity) is drawn through one alpha layer, so
+    /// its overlapping tiles, lines and labels fade together.
     /// </summary>
     public static void Render(SKCanvas canvas, Viewport viewport, ILayer layer, RenderService renderService)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ArgumentNullException.ThrowIfNull(layer);
 
+        var opacity = layer.Opacity;
+        if (opacity >= 1.0)
+        {
+            RenderCore(canvas, viewport, layer, renderService);
+            return;
+        }
+
+        if (opacity <= 0.0)
+        {
+            return;
+        }
+
+        using var paint = new SKPaint { Color = SKColors.White.WithAlpha((byte)Math.Round(opacity * 255)) };
+        canvas.SaveLayer(paint);
+        try
+        {
+            RenderCore(canvas, viewport, layer, renderService);
+        }
+        finally
+        {
+            canvas.Restore();
+        }
+    }
+
+    private static void RenderCore(SKCanvas canvas, Viewport viewport, ILayer layer, RenderService renderService)
+    {
         var offscreen = IsOffscreenRender;
         if (!viewport.HasSize())
         {

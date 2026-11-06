@@ -167,6 +167,12 @@ public static class SurfaceAnalysisStyle
         OffsetY = 1.2,
     };
 
+    private static readonly TextInstructionStyle AgeStyle = PressureStyle with
+    {
+        FontSize = 10,
+        OffsetY = 5.2,
+    };
+
     /// <summary>The line style of a kind of front.</summary>
     /// <param name="type">The kind of front.</param>
     public static ComplexLineStyle LineStyleOf(SurfaceFrontType type) => type switch
@@ -207,13 +213,26 @@ public static class SurfaceAnalysisStyle
     }
 
     /// <summary>
+    /// The opacity a stale analysis is drawn at, lines and labels alike: half
+    /// (design note §7, V30).
+    /// </summary>
+    public const double StaleOpacity = 0.5;
+
+    /// <summary>"9 h old": a stale analysis's age, to the nearest hour, as its <c>H</c> and <c>L</c> show it.</summary>
+    /// <param name="age">The age.</param>
+    public static string FormatAge(TimeSpan age) =>
+        string.Create(CultureInfo.InvariantCulture, $"{Math.Max(0, (int)Math.Round(age.TotalHours, MidpointRounding.AwayFromZero))} h old");
+
+    /// <summary>
     /// The drawing instructions of one high or low: the letter, the <c>×</c>
     /// at the centre, and the pressure with its rule, referencing
-    /// <paramref name="featureReference"/>, a point at the centre.
+    /// <paramref name="featureReference"/>, a point at the centre. A stale
+    /// analysis's centres also say its age under the pressure (V30).
     /// </summary>
     /// <param name="featureReference">The centre's feature id.</param>
     /// <param name="centre">The high or low.</param>
-    public static IReadOnlyList<DrawingInstruction> BuildCentre(string featureReference, PressureCentre centre)
+    /// <param name="staleAge">The analysis's age once stale, or null while it is current.</param>
+    public static IReadOnlyList<DrawingInstruction> BuildCentre(string featureReference, PressureCentre centre, TimeSpan? staleAge)
     {
         ArgumentException.ThrowIfNullOrEmpty(featureReference);
         ArgumentNullException.ThrowIfNull(centre);
@@ -222,13 +241,21 @@ public static class SurfaceAnalysisStyle
         // scales, the cross alone.
         var value = builder with { ScaleMinimum = PressureValueScaleMinimum };
         var crossOnly = builder with { ScaleMaximum = PressureValueScaleMinimum };
-        return
+        List<DrawingInstruction> instructions =
         [
             crossOnly.Point(featureReference, CentreSymbol),
             value.Point(featureReference, CentreWithRuleSymbol),
             builder.Text(featureReference, LetterOf(centre.Kind), CentreLetterStyle),
             value.Text(featureReference, centre.PressureHectopascals.ToString(CultureInfo.InvariantCulture), PressureStyle),
         ];
+        if (staleAge is { } age)
+        {
+            // Under the pressure where it is drawn; under the cross alone otherwise.
+            instructions.Add(value.Text(featureReference, FormatAge(age), AgeStyle));
+            instructions.Add(crossOnly.Text(featureReference, FormatAge(age), AgeStyle with { OffsetY = PressureStyle.OffsetY }));
+        }
+
+        return instructions;
     }
 
     /// <summary>The letter of a high or a low: <c>H</c> or <c>L</c>.</summary>
