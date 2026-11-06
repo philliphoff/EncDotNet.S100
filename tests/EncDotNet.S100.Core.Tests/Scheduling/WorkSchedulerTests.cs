@@ -281,6 +281,38 @@ public sealed class WorkSchedulerTests
     }
 
     [Fact]
+    public async Task Admission_grows_for_a_producer_that_refills_after_each_job()
+    {
+        using var scheduler = Create(4, new GcPauseGovernorOptions
+        {
+            MaxConcurrency = 3,
+            InitialConcurrency = 1,
+            Window = TimeSpan.FromMilliseconds(40),
+            BackOffPauseShare = 0.5,
+            GrowPauseShare = 0.1,
+        });
+
+        // Like the pre-warm: keep as many jobs going as admitted, refilling a
+        // little after each finishes.
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        var running = new List<Task>();
+        while (scheduler.AllocationHeavyLimit < 3 && DateTime.UtcNow < deadline)
+        {
+            running.RemoveAll(t => t.IsCompleted);
+            while (running.Count < scheduler.AllocationHeavyLimit)
+            {
+                running.Add(scheduler.RunAsync(WorkStage.Portray, _ => { Thread.Sleep(15); return 0; },
+                    TestContext.Current.CancellationToken, WorkPriority.Background()));
+            }
+
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        }
+
+        Assert.Equal(3, scheduler.AllocationHeavyLimit);
+        await Task.WhenAll(running).WaitAsync(Timeout, TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public async Task Yield_gives_the_worker_to_a_better_job()
     {
         using var scheduler = Create(1);

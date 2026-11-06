@@ -149,9 +149,11 @@ public sealed class GcPauseGovernor
         else if (share < _options.GrowPauseShare && _windowSaturated)
             Limit = Math.Min(_options.MaxConcurrency, Limit + 1);
 
+        // The next window is judged by the observations inside it: after a
+        // change the producer fills the new slots before it observes again.
         _windowStart = now;
         _windowPauseStart = _gcPauseTotal();
-        _windowSaturated = running >= Limit;
+        _windowSaturated = true;
         return Limit != previous;
     }
 

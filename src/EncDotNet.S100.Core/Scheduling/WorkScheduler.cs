@@ -66,6 +66,9 @@ public sealed class WorkScheduler : IWorkScheduler, IDisposable
 {
     private const int ClassCount = 4;
 
+    /// <summary>How long a freed admission slot counts as busy, for its producer to refill it.</summary>
+    private static readonly TimeSpan RefillGrace = TimeSpan.FromMilliseconds(250);
+
     private static readonly object SharedSync = new();
     private static WorkScheduler? _shared;
     private static WorkSchedulerOptions? _sharedOptions;
@@ -85,6 +88,7 @@ public sealed class WorkScheduler : IWorkScheduler, IDisposable
     private int _busyWorkers;
     private int _suspended;
     private int _heavyRunning;
+    private long _lastHeavyFinishTicks;
     private long _completed;
     private long _cancelled;
     private long _busyTicks;
@@ -480,10 +484,18 @@ public sealed class WorkScheduler : IWorkScheduler, IDisposable
 
     private bool TryTakeLocked(out WorkJob job, out bool starting, out int dispatchClass)
     {
-        if (_heavyRunning > 0 || HasHeavyQueuedLocked())
-            _governor.Observe(_heavyRunning);
+        // A slot freed moments ago still counts as busy: its producer (the
+        // pre-warm) refills it on its next pass, and the governor only grows
+        // after windows in which every slot was used.
+        var refilling = Stopwatch.GetElapsedTime(_lastHeavyFinishTicks) < RefillGrace;
+        if (_heavyRunning > 0 || refilling || HasHeavyQueuedLocked())
+        {
+            _governor.Observe(refilling ? Math.Max(_heavyRunning, _governor.Limit) : _heavyRunning);
+        }
         else
+        {
             _governor.Restart();
+        }
 
         var heavyAllowed = _heavyRunning < _governor.Limit;
         for (var c = 0; c < ClassCount; c++)
@@ -677,6 +689,7 @@ public sealed class WorkScheduler : IWorkScheduler, IDisposable
             {
                 job.Admitted = false;
                 _heavyRunning--;
+                _lastHeavyFinishTicks = Stopwatch.GetTimestamp();
                 if (_idleWorkers > 0)
                     Monitor.Pulse(_sync);
             }
