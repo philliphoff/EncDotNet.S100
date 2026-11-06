@@ -147,14 +147,15 @@ var southeastBox = new Box(29.6, -82.2, 36.4, -71.8);
 string[] southeastStates = ["FL", "GA", "SC", "NC"];
 // W7: the Library over the East Coast.
 var eastCoastBox = new Box(29.5, -82.5, 46.5, -59.5);
-// W6: Charleston to the Chesapeake Bay entrance at 12 kn, departing at 00Z on
+// W6: Charleston to the Chesapeake Bay entrance at 12 kn, departing at 12Z on
 // 20 Aug 2025 as Erin passed offshore, checked against the GFS and GFS-Wave run
-// at departure, every 3 h. Erin's advisory 34 (21Z on 19 Aug) is loaded too.
+// at departure, every 3 h, and Erin's latest advisory then, 36 (09Z on 20 Aug):
+// legs 4 → 6 off Cape Hatteras fall inside its 34 kt wind radius.
 (double Lat, double Lon)[] charlestonToChesapeake =
 [
     (32.70, -79.70), (33.30, -78.60), (33.75, -77.70), (34.55, -76.40), (35.20, -75.30), (36.40, -75.50), (36.95, -75.95),
 ];
-var erinRoute = (Departure: new DateTimeOffset(2025, 8, 20, 0, 0, 0, TimeSpan.Zero), Advisory: 34);
+var erinRoute = (Departure: new DateTimeOffset(2025, 8, 20, 12, 0, 0, TimeSpan.Zero), Advisory: 36);
 var carolinasBox = new Box(31.4, -81.4, 38.0, -71.4);
 // W8: sea fog off eastern Maine and in the Bay of Fundy on a June morning. The minis are map renders
 // at 1280 × 720 logical pixels, so the band 3 charts still draw at their scale.
@@ -414,7 +415,8 @@ var shots = new List<Shot>
     // W6: weather on a route. Charleston to the Chesapeake Bay entrance as Erin
     // passed offshore, checked against GFS wind and GFS-Wave wave height every 3 h
     // from the run at departure, with 25 kn and 3.5 m limits, over the NOAA charts.
-    // The findings list is on its Weather filter, with the first stretch selected.
+    // The check also tests the route against Erin's advisory (#1299). The findings
+    // list is on its Weather filter, with the strongest radius finding selected.
     new("W6", v => WeatherRoute(v), Themed: true, TimeZone: "UTC"),
 
     // W7: the Library's weather sources: GFS on AWS, SST from ERDDAP, NHC's
@@ -912,7 +914,7 @@ async Task CoastalCharts(Viewer v, string[] states, Box box, string bands = "23"
 // checked against the GFS wind and GFS-Wave wave height (every 3 h for 36 h of
 // the run at departure), with wind and wave limits set, Erin's advisory loaded,
 // the clock pinned at departure, and the findings list on its Weather filter
-// with the first weather stretch selected.
+// with the strongest cyclone radius finding selected (#1299).
 async Task<byte[]> WeatherRoute(Viewer v)
 {
     await v.Reset(category: "DisplayBase");
@@ -923,7 +925,11 @@ async Task<byte[]> WeatherRoute(Viewer v)
     await v.OpenAll([await data.GfsHours(run, hours, ["UGRD:10 m above ground", "VGRD:10 m above ground", "PRMSL:mean sea level"])]);
     await v.OpenAll([await data.NhcAdvisory(erin.Storm, erinRoute.Advisory)]);
     await v.Call("set_test_clock", new() { ["now"] = erinRoute.Departure.ToString("O"), ["freeze"] = true });
-    await v.Call("set_route_weather_settings", new() { ["maxWindKnots"] = 25.0, ["maxWaveHeightMeters"] = 3.5 });
+    await v.Call("set_route_weather_settings", new()
+    {
+        ["maxWindKnots"] = 25.0, ["maxWaveHeightMeters"] = 3.5,
+        ["cycloneCheckAgainstKnots"] = 34, ["cycloneReportClosestApproach"] = true, ["cycloneMustReviewInsideKnots"] = 50,
+    });
     await v.Call("create_route", new() { ["name"] = "Charleston to the Chesapeake" });
     foreach (var (lat, lon) in charlestonToChesapeake)
         await v.Call("append_waypoint", new() { ["lat"] = lat, ["lon"] = lon });
@@ -933,7 +939,9 @@ async Task<byte[]> WeatherRoute(Viewer v)
     await v.Call("ui_select", new() { ["id"] = "Routes.Check.FindingsTab" });
     await v.Call("set_findings_view", new() { ["filter"] = "weather" });
     var findings = (await v.Call("get_findings"))?["findings"]?.AsArray() ?? [];
-    var weather = findings.FirstOrDefault(f => f?["code"]?.GetValue<string>() is "weather.wind_above_limit" or "weather.waves_above_limit")
+    // The strongest cyclone radius the route enters, else the first wind or wave stretch.
+    string[] preferred = ["weather.tc_radius_64", "weather.tc_radius_50", "weather.tc_radius_34", "weather.tc_cone", "weather.wind_above_limit", "weather.waves_above_limit"];
+    var weather = preferred.Select(code => findings.FirstOrDefault(f => f?["code"]?.GetValue<string>() == code)).FirstOrDefault(f => f is not null)
         ?? throw new InvalidOperationException($"no weather finding on the route; codes: {string.Join(", ", findings.Select(f => f?["code"]?.GetValue<string>()).Distinct())}");
     await v.Call("select_finding", new() { ["id"] = weather["id"]!.GetValue<string>(), ["zoom"] = false });
     // The weather is the story here, not the clearance profile or the UKC legend.
@@ -1414,7 +1422,11 @@ sealed class Viewer : IAsyncDisposable
             ["airTemperature"] = false, ["precipitation"] = false, ["thunderstormRisk"] = false, ["cloudCover"] = false,
             ["windRadii"] = true, ["pastTrack"] = true, ["forecastTimes"] = true,
         });
-        await Call("set_route_weather_settings", new() { ["clear"] = new[] { "maxWindKnots", "maxWaveHeightMeters" } });
+        await Call("set_route_weather_settings", new()
+        {
+            ["clear"] = new[] { "maxWindKnots", "maxWaveHeightMeters" },
+            ["cycloneCheckAgainstKnots"] = 34, ["cycloneReportClosestApproach"] = true, ["cycloneMustReviewInsideKnots"] = 50,
+        });
     }
 
     /// <summary>Forgets the bounds collected by <see cref="OpenAll"/>.</summary>

@@ -149,20 +149,22 @@ const miniSizes = '(max-width: 900px) 100vw, 360px';
           <p>
             Set a wind or wave limit and Check route reads the loaded forecast at the time you'd reach each point. It
             lists the stretches above a limit, with their time window and highest value, and the stretches the forecast
-            doesn't reach. Weather findings are always Check: they're for planning, not navigation.
+            doesn't reach. With an NHC advisory loaded, it also tests the route against the storm where it will be at
+            each ETA. The findings are for planning, not navigation.
           </p>
           <ul>
             <li>10 m wind and significant wave height</li>
-            <li>The departures that keep the route within your limits</li>
+            <li>The storm's 34, 50 and 64 kt wind radii, its cone and your closest approach, with Must review inside the 50 kt radius</li>
+            <li>The departures that keep the route within your limits and out of the storm</li>
             <li>The same check in <code>s100 route check</code></li>
           </ul>
           <a class="more" href={withBase(docs.routeWeather)}>Weather along the route</a>
         </div>
         <Shot
           id="W6"
-          alt="Check route from Charleston to the Chesapeake Bay entrance, with wind and wave findings above the limits off Cape Hatteras as Hurricane Erin passed offshore"
+          alt="Check route from Charleston to the Chesapeake Bay entrance as Hurricane Erin passed offshore: the stretch off Cape Hatteras inside Erin's 34 kt wind radius, and wind and wave findings above the limits"
           title="Weather on a route"
-          detail="Charleston → Chesapeake, departing 20 Aug 2025: GFS wind + GFS-Wave, 25 kn / 3.5 m limits, Weather findings"
+          detail="Charleston → Chesapeake, departing 20 Aug 2025 12Z: GFS wind + GFS-Wave, NHC advisory 36, 25 kn / 3.5 m limits, Weather findings"
           sizes={sizes}
         />
       </div>

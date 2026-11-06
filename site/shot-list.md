@@ -355,17 +355,21 @@ still draw at the frame's scale).
 
 ### W6 · Weather on a route
 - Charleston to the Chesapeake Bay entrance (7 waypoints offshore of Cape
-  Hatteras) at 12 kn, 9 m draft, departing 00Z on 20 Aug 2025 as Hurricane Erin
+  Hatteras) at 12 kn, 9 m draft, departing 12Z on 20 Aug 2025 as Hurricane Erin
   passed offshore, over the band 2/3 NOAA ENCs for SC, NC and VA. GFS 10 m wind
-  and PRMSL and GFS-Wave HTSGW/PERPW/DIRPW from the 2025-08-20 00Z run, f000–f036
-  every 3 h, appended into one file each. Erin's advisory 34 (21Z on 19 Aug) is
-  loaded too. Route weather limits 25 kn and 3.5 m
-  (`set_route_weather_settings`). Check route on, the findings list on its
-  Weather filter, the first above-limit stretch selected, the Clearance dock
-  and map legend closed. The verdict's Weather row reads "4 above limits · 1
-  not checked".
-- **#1299 (cyclone route check):** when it merges, recapture W6: the Erin
-  advisory is already loaded, so the cyclone findings join the Weather list.
+  and PRMSL and GFS-Wave HTSGW/PERPW/DIRPW from the 2025-08-20 12Z run, f000–f036
+  every 3 h, appended into one file each. Erin's advisory 36 (09Z on 20 Aug),
+  the latest before departure, is loaded too. Route weather limits 25 kn and
+  3.5 m, and the tropical cyclone settings at their defaults (34 kt, closest
+  approach on, Must review inside 50 kt), all via `set_route_weather_settings`.
+  Check route on, the findings list on its Weather filter, the strongest
+  cyclone radius finding selected ("Inside the 34 kt radius", legs 4 → 6 off
+  Cape Hatteras, with the closest-approach line to Erin at that ETA), the
+  Clearance dock and map legend closed.
+- Why 12Z: departing at 00Z, the route passes Hatteras before Erin's 34 kt
+  radius gets there (closest 261 NM). Probed with `s100 route check` over
+  advisories 34–38 and departures 00Z–18Z; 12Z with advisory 36 is the first
+  departure whose route enters the radius on the advisory it would have used.
 
 ### W7 · Weather sources (mini)
 - The Library with its weather sources added (`noaa-aws-gfs`, `noaa-erddap-sst`,
