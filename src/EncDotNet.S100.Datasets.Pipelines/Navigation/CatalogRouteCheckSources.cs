@@ -15,8 +15,9 @@ namespace EncDotNet.S100.Datasets.Pipelines.Navigation;
 /// features and regulated areas, S-102 surfaces with an S-101 fallback for
 /// charted depth, S-104 grids and station series for water level, S-122
 /// datasets for protected areas, S-124 datasets for navigational
-/// warnings, and GRIB2 and NetCDF weather grids for wind and waves. Other
-/// products are ignored.
+/// warnings, GRIB2 and NetCDF weather grids for wind and waves, and NHC
+/// tropical cyclone advisories (the last one loaded of each storm) for the
+/// weather check's tropical cyclone rule. Other products are ignored.
 /// </para>
 /// <para>
 /// Each cell's features and spatial index are built on first use and kept,
@@ -56,6 +57,7 @@ public static class CatalogRouteCheckSources
             Weather = CatalogRouteWeatherSource.HasWeather(snapshot)
                 ? new LazyWeather(() => new CatalogRouteWeatherSource(snapshot))
                 : null,
+            Cyclones = CatalogRouteCyclone.FromDatasets(snapshot),
         };
     }
 
