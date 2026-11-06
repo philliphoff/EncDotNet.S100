@@ -186,4 +186,12 @@ public sealed record RenderContext
     /// <c>null</c>.
     /// </remarks>
     public DateTime? TimeStep { get; init; }
+
+    /// <summary>
+    /// How old <see cref="TimeStep"/> is at the map time, to the nearest hour, once
+    /// it is past the dataset's <see cref="TimeSemantics.StaleAfter"/>;
+    /// <see langword="null"/> while it is current or the dataset has no such
+    /// limit. A processor draws stale data as old (faded, with its age).
+    /// </summary>
+    public TimeSpan? TimeStepAge { get; init; }
 }

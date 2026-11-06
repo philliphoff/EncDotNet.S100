@@ -76,8 +76,9 @@ public static class FeatureAccessor
             // CAP warnings: every area not superseded or cancelled, as a
             // render without a time step draws them.
             CapDatasetData cap => FilterByExtent(cap.Warnings.DrawnAt(null).Select(a => new CapAreaFeature(a)), extent),
-            // Surface analyses: the fronts and centres of the analysis drawn.
-            SurfaceAnalysisDatasetData analysis => FilterByExtent(SurfaceAnalysisDatasetProcessor.DrawnFeatures(analysis.Bulletin), extent),
+            // Surface analyses: the fronts and centres of the analysis a
+            // render without a time step draws (the bulletin's first).
+            SurfaceAnalysisDatasetData analysis => FilterByExtent(SurfaceAnalysisDatasetProcessor.DrawnFeatures(analysis.Bulletin, timeStep: null), extent),
             _ => null,
         };
     }

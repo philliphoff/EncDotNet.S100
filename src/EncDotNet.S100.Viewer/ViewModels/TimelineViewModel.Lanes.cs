@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Windows.Input;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.Input;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
@@ -20,6 +21,8 @@ internal sealed partial class TimelineViewModel
     /// <summary>Above this many lanes the In map view filter starts on (handoff E4).</summary>
     internal const int InMapViewDefaultThreshold = 6;
 
+    private static readonly Color OtherProductColor = Color.Parse("#52525B");
+
     private static readonly Dictionary<string, (string Title, Color Color, int Order)> Products = new(StringComparer.OrdinalIgnoreCase)
     {
         ["S-111"] = (Strings.TimelinePanel_ProductS111, Color.Parse("#2563EB"), 0),
@@ -27,9 +30,19 @@ internal sealed partial class TimelineViewModel
         ["S-411"] = (Strings.TimelinePanel_ProductS411, Color.Parse("#7C3AED"), 2),
         ["S-412"] = (Strings.TimelinePanel_ProductS412, Color.Parse("#C2410C"), 3),
         ["S-413"] = (Strings.TimelinePanel_ProductS413, Color.Parse("#4D7C0F"), 4),
+
+        // Vector weather (vector-weather.md §6.5): the "other" lane colour, as
+        // weather lanes have, under a group named for the product rather than
+        // the spec (GroupTitles). Tropical cyclones (#1297) go beside it.
+        [LayerTimes.SurfaceAnalysisSpec] = (string.Empty, OtherProductColor, 20),
     };
 
-    private static readonly Color OtherProductColor = Color.Parse("#52525B");
+    /// <summary>Groups titled in full, not "spec title": the vector weather products.</summary>
+    private static readonly Dictionary<string, string> GroupTitles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [LayerTimes.SurfaceAnalysisSpec] = Strings.TimelinePanel_GroupSurfaceAnalysis,
+    };
+
 
     private ITimelineMapScope? _scope;
     private bool? _inMapViewChoice;
@@ -361,17 +374,21 @@ internal sealed partial class TimelineViewModel
             var tiled = ForecastRunNames.ModelAndTile(dataset.Name);
             lane.Code = DriverLabel(dataset);
             var parts = new List<string>(3);
+            if (LayerTimes.IsSurfaceAnalysis(dataset))
+                parts.Add(dataset.StepKind == TimeStepKind.Forecast ? Strings.TimelinePanel_LaneForecast : Strings.TimelinePanel_LaneAnalysis);
             if (tiled is { } tile)
                 parts.Add(tile.Tile);
             if (run is { FromIssueTime: false } known)
                 parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.TimelinePanel_LaneRunFormat, ForecastRunNames.FormatRun(known.Time, format, zone, now)));
             if (TimelineStepper.Cadence(dataset.Samples) is { } cadence && cadence > TimeSpan.Zero)
                 parts.Add(Duration(cadence));
+            else if (LayerTimes.IsSurfaceAnalysis(dataset) && dataset.StepKind != TimeStepKind.Forecast)
+                parts.Add(Duration(SurfaceAnalysisDatasetProcessor.AnalysisInterval));
             lane.Sub = string.Join(" · ", parts);
             lane.IsExpired = IsForecastDataset(dataset) && now > dataset.Last;
 
             var time = view is { } at
-                ? LayerTimes.Describe(dataset, at, dataset.DatasetId is { } id && _progress?.IsDatasetDrawing(id) == true, format, zone, run)
+                ? LayerTimes.Describe(dataset, at, dataset.DatasetId is { } id && _progress?.IsDatasetDrawing(id) == true, format, zone, run, _service.TimedDatasets)
                 : null;
             lane.LayerTime = time?.Text ?? string.Empty;
             lane.IsHidden = time?.IsHidden == true;
@@ -394,7 +411,8 @@ internal sealed partial class TimelineViewModel
 
     /// <summary>"S-111 Surface currents", or the specification alone.</summary>
     internal static string GroupTitle(string spec) =>
-        Product(spec).Title is { Length: > 0 } title ? $"{spec} {title}" : spec;
+        GroupTitles.TryGetValue(spec, out var full) ? full
+        : Product(spec).Title is { Length: > 0 } title ? $"{spec} {title}" : spec;
 
     /// <summary>The window spanned by the layers in the map view, for the In view preset.</summary>
     private (DateTime, DateTime)? InViewWindow()

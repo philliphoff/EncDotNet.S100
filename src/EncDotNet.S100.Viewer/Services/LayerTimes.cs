@@ -18,16 +18,29 @@ internal enum LayerTimeState
 
     /// <summary>It is drawing the view time now.</summary>
     Drawing,
+
+    /// <summary>
+    /// It has data at the view time, but another dataset of the same kind
+    /// draws in its place (a newer surface analysis, V30) and it hides.
+    /// </summary>
+    Superseded,
 }
 
 /// <summary>A layer's time as its row shows it.</summary>
 /// <param name="Text">"08:00Z · T+20 h", "20:06Z (−24 min)", "no data · last 18:00Z, 6 h earlier", "drawing…".</param>
 /// <param name="State">What the layer draws.</param>
 /// <param name="Nearest">For a layer without data, its nearest sample (the jump target); otherwise null.</param>
-internal sealed record LayerTime(string Text, LayerTimeState State, DateTime? Nearest)
+/// <param name="StaleAge">
+/// For a layer whose data drawn is stale at the view time (older than its
+/// <see cref="MapsuiMapTimedDataset.StaleAfter"/>), its age to the nearest hour; otherwise null.
+/// </param>
+internal sealed record LayerTime(string Text, LayerTimeState State, DateTime? Nearest, TimeSpan? StaleAge = null)
 {
-    /// <summary>True when the layer has no data near the view time and hides.</summary>
-    public bool IsHidden => State == LayerTimeState.NoData;
+    /// <summary>True when the layer draws nothing at the view time and hides.</summary>
+    public bool IsHidden => State is LayerTimeState.NoData or LayerTimeState.Superseded;
+
+    /// <summary>True when the layer draws stale data (the Stale tag, §7).</summary>
+    public bool IsStale => StaleAge is not null;
 }
 
 /// <summary>
@@ -48,15 +61,30 @@ internal static class LayerTimes
     /// <param name="format">Local or UTC.</param>
     /// <param name="zone">The user's zone.</param>
     /// <param name="run">The dataset's forecast run (<see cref="ForecastRunNames.RunOf"/>); when null, the run in its name.</param>
-    public static LayerTime Describe(MapsuiMapTimedDataset dataset, DateTime viewTime, bool drawing, TimeFormat format, TimeZoneInfo zone, ForecastRun? run = null)
+    /// <param name="all">
+    /// Every time-aware dataset, for those of which only one draws at a time
+    /// (<see cref="MapsuiMapTimedDataset.Supersession"/>); null to describe the dataset alone.
+    /// </param>
+    public static LayerTime Describe(
+        MapsuiMapTimedDataset dataset,
+        DateTime viewTime,
+        bool drawing,
+        TimeFormat format,
+        TimeZoneInfo zone,
+        ForecastRun? run = null,
+        IReadOnlyList<MapsuiMapTimedDataset>? all = null)
     {
         ArgumentNullException.ThrowIfNull(dataset);
         var culture = CultureInfo.CurrentCulture;
         if (drawing)
             return new LayerTime(Strings.LayerTime_Drawing, LayerTimeState.Drawing, null);
 
+        if (all is not null && dataset.IsSupersededAt(viewTime, all))
+            return new LayerTime(Strings.LayerTime_Superseded, LayerTimeState.Superseded, null);
+
         if (dataset.SampleAt(viewTime) is { } sample)
         {
+            var staleAge = dataset.StaleAgeAt(viewTime);
             var text = Clock(sample, format, zone, culture);
             if (sample == viewTime)
             {
@@ -64,16 +92,21 @@ internal static class LayerTimes
                 var runTime = run is { FromIssueTime: false } known ? known.Time : ForecastRunNames.RunTime(dataset.Name);
                 if (runTime is { } start && sample >= start)
                     text = string.Format(culture, Strings.LayerTime_ForecastHourFormat, text, (int)Math.Round((sample - start).TotalHours));
-                return new LayerTime(text, LayerTimeState.Exact, null);
+                return new LayerTime(text, LayerTimeState.Exact, null, staleAge);
             }
-            return new LayerTime(string.Format(culture, Strings.LayerTime_OffsetFormat, text, SignedSpan(sample - viewTime, culture)), LayerTimeState.Offset, null);
+            return new LayerTime(string.Format(culture, Strings.LayerTime_OffsetFormat, text, SignedSpan(sample - viewTime, culture)), LayerTimeState.Offset, null, staleAge);
         }
+
+        // A surface analysis says what is missing (§7) rather than "no data".
+        var noData = IsSurfaceAnalysis(dataset) ? Strings.LayerTime_NoAnalysis : null;
 
         var previous = MapsuiTimeSelection.Previous(dataset.Samples, viewTime);
         var next = MapsuiTimeSelection.Next(dataset.Samples, viewTime);
         var useNext = next is { } n && (previous is not { } p || n - viewTime < viewTime - p);
         if ((useNext ? next : previous) is not { } nearest)
-            return new LayerTime(Strings.LayerTime_NoData, LayerTimeState.NoData, null);
+            return new LayerTime(noData ?? Strings.LayerTime_NoData, LayerTimeState.NoData, null);
+        if (noData is not null)
+            return new LayerTime(noData, LayerTimeState.NoData, nearest);
 
         var distance = (nearest - viewTime).Duration();
         var when = distance > DateThreshold
@@ -82,6 +115,13 @@ internal static class LayerTimes
         var format2 = useNext ? Strings.LayerTime_NoDataNextFormat : Strings.LayerTime_NoDataLastFormat;
         return new LayerTime(string.Format(culture, format2, when, Span(distance, culture)), LayerTimeState.NoData, nearest);
     }
+
+    /// <summary>True for a WPC coded surface bulletin (spec <c>CODSUS</c>).</summary>
+    internal static bool IsSurfaceAnalysis(MapsuiMapTimedDataset dataset) =>
+        string.Equals(dataset.ProductSpec, SurfaceAnalysisSpec, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The spec name surface analyses load under.</summary>
+    internal const string SurfaceAnalysisSpec = "CODSUS";
 
     /// <summary>"18:00Z" in UTC, the local short time otherwise.</summary>
     internal static string Clock(DateTime utc, TimeFormat format, TimeZoneInfo zone, CultureInfo culture) =>

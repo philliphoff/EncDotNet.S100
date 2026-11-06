@@ -6,6 +6,26 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Surface analyses follow the Timeline, from the Library.** A WPC
+  bulletin's analysis or forecast is now drawn from its valid time for 12
+  hours: after 6 it's stale, at half opacity with its age on each **H** and
+  **L**, a **Stale** tag in the Datasets panel and a warning line in Object
+  information; beyond 12 hours the Datasets row says "No analysis at view
+  time". Of several loaded bulletins, the one valid latest at or before the
+  view time draws, so a newer analysis or a nearer forecast takes over. The
+  Timeline groups them under **Surface analysis** in a **WPC** lane. A new
+  Library source, **Surface analysis — WPC** (`FEED`), lists the latest
+  analysis and, when chosen, the forecast fronts; a loaded analysis is
+  replaced by the next every 3 hours, and is stale after 6. In the
+  libraries, `TimeSemantics` gains `StaleAfter` and `Supersession`,
+  `RenderContext` gains `TimeStepAge`, `VectorSubLayer` gains `Opacity`,
+  `PickAttribute` gains `StaleNotice`, and `WeatherServiceKind` gains
+  `WpcBulletins`, with `WeatherService.StaleAfterHours` and `RefreshHours`
+  and `WeatherServiceDataset.File`. `get_timeline_state` reports a stale
+  layer's `staleHours`. Breaking changes:
+  `SurfaceAnalysisDatasetProcessor.DrawnAnalysisOf` takes a time step, and
+  `SurfaceAnalysisStyle.BuildCentre` takes the analysis's stale age. See
+  [Show a surface analysis](weather.md#show-a-surface-analysis).
 - **Fronts and pressure centres on the chart.** A WPC coded surface
   bulletin now draws its cold, warm, occluded and stationary fronts and its
   troughs with the triangles and semicircles of a printed weather map, on

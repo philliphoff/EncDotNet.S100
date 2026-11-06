@@ -7,7 +7,9 @@ namespace EncDotNet.S100.Collections.Library;
 /// <summary>
 /// A scope of a weather service (#1075; design note weather-sources.md §6.3):
 /// for a GRIB2 model, its parameters and forecast days; for ERDDAP, its
-/// datasets and forecast days; for alerts, nothing to choose. The area is the
+/// datasets and forecast days; for alerts, nothing to choose; for WPC, its
+/// bulletins (the analysis, and the forecast fronts when chosen), which always
+/// cover WPC's domain (V36). The area is the
 /// map view when the source is added (the GRIB filter and ERDDAP cut to it,
 /// alerts are its marine zones'); NOAA's whole-grid files on AWS take the
 /// whole globe. Reading the "catalogue" finds the service's latest run (or
@@ -76,7 +78,9 @@ public sealed class WeatherScope : LibraryCatalogueScope
         }.OfType<string>());
 
     /// <summary>"Area 32°N–40°N, 76°W–68°W", "Whole globe", or the marine zones.</summary>
-    public string AreaText => _service.Kind == WeatherServiceKind.NwsAlerts
+    public string AreaText => _service.Kind == WeatherServiceKind.WpcBulletins
+        ? LibraryText.Get("Weather_WpcDomain")
+        : _service.Kind == WeatherServiceKind.NwsAlerts
         ? _zones.Count == 0
             ? LibraryText.Get("Weather_AllMarineZones")
             : string.Format(CultureInfo.CurrentCulture, LibraryText.Get("Weather_ZonesFormat"), _zones.Count)
@@ -93,7 +97,7 @@ public sealed class WeatherScope : LibraryCatalogueScope
     /// <inheritdoc />
     public override Task<string?> LoadAsync(CancellationToken cancellationToken = default) => TryLoadAsync(async () =>
     {
-        _area = _service.Kind == WeatherServiceKind.GribIndex ? null : _currentView?.Invoke();
+        _area = _service.Kind is WeatherServiceKind.GribIndex or WeatherServiceKind.WpcBulletins ? null : _currentView?.Invoke();
         _zones = _service.Kind == WeatherServiceKind.NwsAlerts && _area is { } view && _marineZones is { } zones ? zones(view) : [];
         var groups = new List<LibraryChoiceGroup>();
         if (_service.IsGrib)
@@ -114,7 +118,16 @@ public sealed class WeatherScope : LibraryCatalogueScope
             });
         }
 
-        if (_service.Kind != WeatherServiceKind.NwsAlerts)
+        if (_service.Kind == WeatherServiceKind.WpcBulletins)
+        {
+            groups.Add(new LibraryChoiceGroup(LibraryText.Get("Weather_BulletinsTitle"),
+                [.. _service.Datasets.Select(d => new LibraryChoice(d.Id, d.Name, d.File ?? string.Empty) { IsSelected = d.Default || _service.Datasets.Count == 1 })])
+            {
+                Key = DatasetsKey,
+            });
+        }
+
+        if (_service.Kind is not (WeatherServiceKind.NwsAlerts or WeatherServiceKind.WpcBulletins))
         {
             var days = (int)Math.Ceiling(_service.MaxHours / 24d);
             groups.Add(new LibraryChoiceGroup(LibraryText.Get("Weather_DaysTitle"),
@@ -180,7 +193,7 @@ public sealed class WeatherScope : LibraryCatalogueScope
     /// <summary>The ticked parameters ("Significant wave height, Peak wave period"), or null when none.</summary>
     public override string? DescribeSelection() => _service.Kind switch
     {
-        WeatherServiceKind.ErddapGriddap => LibrarySourceText.List([.. DatasetChoices.Where(o => o.IsSelected).Select(o => o.Label)]),
+        WeatherServiceKind.ErddapGriddap or WeatherServiceKind.WpcBulletins => LibrarySourceText.List([.. DatasetChoices.Where(o => o.IsSelected).Select(o => o.Label)]),
         _ when _service.IsGrib => LibrarySourceText.List([.. Parameters.Where(o => o.IsSelected).Select(o => o.Label)]),
         _ => null,
     };
@@ -201,6 +214,8 @@ public sealed class WeatherScope : LibraryCatalogueScope
         var c = CultureInfo.CurrentCulture;
         if (_service.Kind == WeatherServiceKind.NwsAlerts)
             return string.Format(c, LibraryText.Get("Weather_AlertsInForceFormat"), _summary?.Items ?? 0) + " · " + AreaText;
+        if (_service.Kind == WeatherServiceKind.WpcBulletins)
+            return LibrarySourceText.List([.. selection.DatasetsOf(_service).Select(d => d.Name)]) + " · " + AreaText;
         var what = _service.IsGrib
             ? string.Format(c, LibraryText.Get("Weather_ParametersFormat"), selection.ParametersOf(_service).Count)
             : string.Format(c, LibraryText.Get("Weather_DatasetsFormat"), selection.DatasetsOf(_service).Count);

@@ -68,7 +68,7 @@ public sealed class WeatherSourceTests : IDisposable
         var weather = KnownCatalogueSources.All.Where(s => s.Format == KnownCatalogueFormat.Weather).ToArray();
 
         Assert.Equal(
-            ["noaa-nomads-gfswave", "noaa-nomads-gfs", "noaa-aws-gfswave", "noaa-aws-gfs", "nws-marine-alerts", "noaa-erddap-ww3", "noaa-erddap-sst",
+            ["noaa-nomads-gfswave", "noaa-nomads-gfs", "noaa-aws-gfswave", "noaa-aws-gfs", "nws-marine-alerts", "noaa-wpc-surface", "noaa-erddap-ww3", "noaa-erddap-sst",
                 "noaa-erddap-currents", "ioos-erddap-hfradar"],
             weather.Select(s => s.Id));
         Assert.All(weather, s =>
@@ -85,6 +85,7 @@ public sealed class WeatherSourceTests : IDisposable
         Assert.Equal(WeatherServiceKind.GribIndex, Known("noaa-aws-gfs").Weather!.Kind);
         Assert.Equal(WeatherServiceKind.NwsAlerts, Known("nws-marine-alerts").Weather!.Kind);
         Assert.Equal(WeatherServiceKind.ErddapGriddap, Known("noaa-erddap-ww3").Weather!.Kind);
+        Assert.Equal(WeatherServiceKind.WpcBulletins, Known("noaa-wpc-surface").Weather!.Kind);
         Assert.Equal(["HTSGW", "PERPW", "DIRPW", "UGRD", "VGRD"],
             Known("noaa-nomads-gfswave").Weather!.Parameters.Where(p => p.Default).Select(p => p.Id));
     }
