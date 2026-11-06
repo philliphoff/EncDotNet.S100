@@ -8,6 +8,15 @@ public enum MapsuiTimeSelectionKind
 
     /// <summary>The latest sample at or before the clock, held for the tolerance (S-104, S-411).</summary>
     AtOrBefore,
+
+    /// <summary>
+    /// The clock itself, to the minute, at any time: the dataset's range is
+    /// from the tolerance before the first sample to the last, and outside it
+    /// the dataset draws only what doesn't move with time (a tropical
+    /// cyclone, whose storm moves between forecast points and whose cone
+    /// always draws; <see cref="EncDotNet.S100.Datasets.Pipelines.TimeStepSelection.Continuous"/>).
+    /// </summary>
+    Continuous,
 }
 
 /// <summary>
@@ -30,6 +39,12 @@ public static class MapsuiTimeSelection
         ArgumentNullException.ThrowIfNull(sorted);
         if (sorted.Count == 0)
             return null;
+
+        // The clock to the minute, so a moving clock redraws once a minute at
+        // most. Outside its range the dataset still draws what isn't tied to
+        // a time (a storm's cone), so it's never hidden.
+        if (kind == MapsuiTimeSelectionKind.Continuous)
+            return new DateTime(time.Ticks - time.Ticks % TimeSpan.TicksPerMinute, time.Kind);
 
         var next = FirstAfterOrAt(sorted, time);
         if (next < sorted.Count && sorted[next] == time)

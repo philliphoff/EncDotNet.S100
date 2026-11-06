@@ -113,7 +113,8 @@ public sealed class TropicalCyclonePortrayalTests
         var processor = Ian();
         var parts = processor.EnumerateFeatures().ToArray();
 
-        Assert.Equal("AL092022", parts[0].FeatureRef);
+        // The storm and its radii come last, after the parts drawn at every time (#1297).
+        Assert.Equal("AL092022", parts.Single(p => p.FeatureRef == "AL092022").FeatureRef);
         Assert.All(parts, p => Assert.Equal(TropicalCycloneDatasetProcessor.FeatureType, p.FeatureType));
         var infos = parts.Select(p => processor.GetFeatureInfoAt(p.Ordinal)!).ToArray();
         Assert.All(infos, info => Assert.Equal("AL092022", info.FeatureRef));

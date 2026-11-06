@@ -321,13 +321,19 @@ public static partial class KnownCatalogueSources
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int DefaultHours = 0,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] double GridDegrees = 0,
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<WeatherParameterEntry>? Parameters = null,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<WeatherDatasetEntry>? Datasets = null);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<WeatherDatasetEntry>? Datasets = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] double StaleAfterHours = 0,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] double RefreshHours = 0);
 
     private sealed record WeatherParameterEntry(
         string? Id, string? Name, string? Level, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Default = false);
 
     private sealed record WeatherDatasetEntry(
-        string? Id, string? Name, IReadOnlyList<string>? Variables, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Default = false);
+        string? Id,
+        string? Name,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<string>? Variables,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool Default = false,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? File = null);
 
     private static WeatherService? ToService(WeatherEntry? entry)
     {
@@ -349,10 +355,13 @@ public static partial class KnownCatalogueSources
                 .Select(p => new WeatherServiceParameter(p.Id!, p.Name is { Length: > 0 } n ? n : p.Id!, p.Level!, p.Default))
                 .ToArray(),
             (entry.Datasets ?? [])
-                .Where(d => d.Id is { Length: > 0 } && d.Variables is { Count: > 0 })
+                .Where(d => d.Id is { Length: > 0 } && (d.Variables is { Count: > 0 } || d.File is { Length: > 0 }))
                 .Select(d => new WeatherServiceDataset(d.Id!, d.Name is { Length: > 0 } n ? n : d.Id!,
-                    d.Variables!.Where(v => v is { Length: > 0 }).ToArray(), d.Default))
-                .ToArray());
+                    (d.Variables ?? []).Where(v => v is { Length: > 0 }).ToArray(), d.Default,
+                    string.IsNullOrWhiteSpace(d.File) ? null : d.File.Trim()))
+                .ToArray(),
+            entry.StaleAfterHours > 0 ? entry.StaleAfterHours : 0,
+            entry.RefreshHours > 0 ? entry.RefreshHours : 0);
     }
 
     private static WeatherEntry? FromService(WeatherService? service) => service is null
@@ -369,7 +378,11 @@ public static partial class KnownCatalogueSources
             service.DefaultHours,
             service.GridDegrees,
             service.Parameters.Count == 0 ? null : service.Parameters.Select(p => new WeatherParameterEntry(p.Id, p.Name, p.Level, p.Default)).ToArray(),
-            service.Datasets.Count == 0 ? null : service.Datasets.Select(d => new WeatherDatasetEntry(d.Id, d.Name, d.Variables, d.Default)).ToArray());
+            service.Datasets.Count == 0
+                ? null
+                : service.Datasets.Select(d => new WeatherDatasetEntry(d.Id, d.Name, d.Variables.Count == 0 ? null : d.Variables, d.Default, d.File)).ToArray(),
+            service.StaleAfterHours,
+            service.RefreshHours);
 
     private sealed record ModelEntry(
         string? Id,

@@ -158,6 +158,9 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         // the Mapsui pick query) would repeat it (#1096).
         if (NavigationNotice is not null)
             reformatted = WithoutNavigationNotice(reformatted);
+        // The stale line shows under the notice (StaleNotice), not as a row.
+        if (reformatted.Any(r => r.IsStaleNotice))
+            reformatted = [.. reformatted.Where(r => !r.IsStaleNotice)];
         var rows = FeatureInfoBuilder.WithoutResolvedFileReferences(reformatted);
         if (_selectedHit?.NavigationalWarning is not null)
             rows = WithoutWarningText(rows);
@@ -283,6 +286,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         DepthMetresValue = row.DepthMetresValue,
         ExternalText = row.ExternalText,
         IsNavigationNotice = row.IsNavigationNotice,
+        IsStaleNotice = row.IsStaleNotice,
         Children = children,
     };
 
@@ -317,6 +321,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 DepthMetresValue = attr.DepthMetresValue,
                 ExternalText = attr.ExternalText,
                 IsNavigationNotice = attr.IsNavigationNotice,
+                IsStaleNotice = attr.IsStaleNotice,
                 Children = children,
             };
         }
@@ -334,6 +339,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 DepthMetresValue = attr.DepthMetresValue,
                 ExternalText = attr.ExternalText,
                 IsNavigationNotice = attr.IsNavigationNotice,
+                IsStaleNotice = attr.IsStaleNotice,
                 Children = children,
             };
         }
@@ -351,6 +357,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 DepthMetresValue = attr.DepthMetresValue,
                 ExternalText = attr.ExternalText,
                 IsNavigationNotice = attr.IsNavigationNotice,
+                IsStaleNotice = attr.IsStaleNotice,
                 Children = children,
             };
         }
@@ -368,6 +375,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 DepthMetresValue = attr.DepthMetresValue,
                 ExternalText = attr.ExternalText,
                 IsNavigationNotice = attr.IsNavigationNotice,
+                IsStaleNotice = attr.IsStaleNotice,
                 Children = children,
             };
         }
@@ -475,6 +483,18 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
 
     /// <summary>True when <see cref="NavigationNotice"/> has a value to show.</summary>
     public bool HasNavigationNotice => NavigationNotice is not null;
+
+    /// <summary>
+    /// A warning line under the notice when the data picked is old: "This
+    /// analysis is 9 h old. A newer one is likely." (vector-weather.md
+    /// §7); the processor's <see cref="PickAttribute.IsStaleNotice"/> row, else null.
+    /// </summary>
+    public string? StaleNotice => _selectedHit?.Attributes.FirstOrDefault(a => a.IsStaleNotice) is { } row
+        ? row.DisplayValue ?? row.RawValue
+        : null;
+
+    /// <summary>True when <see cref="StaleNotice"/> has a value to show.</summary>
+    public bool HasStaleNotice => StaleNotice is not null;
 
     /// <summary>"Data: NOAA/NCEP GFS-Wave · Public domain": the picked dataset's credit from its Library source (#1075), or null.</summary>
     public string? DataCredit => _selectedHit?.Credit is { } credit
@@ -1338,6 +1358,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(HasNavigationNotice));
         OnPropertyChanged(nameof(DataCredit));
         OnPropertyChanged(nameof(HasDataCredit));
+        OnPropertyChanged(nameof(StaleNotice));
+        OnPropertyChanged(nameof(HasStaleNotice));
         OnPropertyChanged(nameof(IsExaminerAvailable));
         (CopyIdentityCommand as RelayCommand)?.NotifyCanExecuteChanged();
         (OpenFeatureInExaminerCommand as RelayCommand)?.NotifyCanExecuteChanged();

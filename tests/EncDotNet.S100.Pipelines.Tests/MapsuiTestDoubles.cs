@@ -66,6 +66,8 @@ internal class StubProcessor :
 
     public DateTime? IssueTime { get; set; }
 
+    public DateTime? NextIssueTime { get; set; }
+
     private TimeSemantics? _timeSemantics;
 
     private DatasetForecastRun? _forecastRun;

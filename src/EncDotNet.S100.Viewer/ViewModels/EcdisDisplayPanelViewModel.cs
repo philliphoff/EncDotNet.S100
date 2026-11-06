@@ -100,12 +100,52 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
     public bool IsEmpty => Specs.Count == 0 && !HasWeatherData;
 
     /// <summary>
-    /// Whether a GRIB2 or NetCDF weather dataset is loaded, which shows the
-    /// Weather section (#1072), as the per-spec sections show only for loaded
-    /// specs. The switches apply to every weather dataset and are kept with
-    /// the display settings whether or not one is loaded.
+    /// Whether a weather dataset is loaded (a GRIB2 or NetCDF grid, a tropical
+    /// cyclone or a surface analysis), which shows the Weather section (#1072,
+    /// V26), as the per-spec sections show only for loaded specs. The switches
+    /// apply to every weather dataset and are kept with the display settings
+    /// whether or not one is loaded.
     /// </summary>
     public bool HasWeatherData { get; private set; }
+
+    /// <summary>
+    /// Whether a tropical cyclone is loaded, which shows the Weather section's
+    /// Wind radii, Past track and Forecast times switches (V26).
+    /// </summary>
+    public bool HasTropicalCyclone { get; private set; }
+
+    /// <summary>
+    /// The Weather section's Wind radii switch: the 34, 50 and 64 kt wind
+    /// radii of every tropical cyclone. On by default (V26).
+    /// </summary>
+    public bool IsWindRadiiVisible
+    {
+        get => GetCycloneSwitch(TropicalCycloneStyle.WindRadiiKey);
+        set => _state.SetLayerVisible(TropicalCycloneStyle.WindRadiiKey, value);
+    }
+
+    /// <summary>
+    /// The Weather section's Past track switch: every tropical cyclone's
+    /// best-track line and points. On by default (V26).
+    /// </summary>
+    public bool IsPastTrackVisible
+    {
+        get => GetCycloneSwitch(TropicalCycloneStyle.PastTrackKey);
+        set => _state.SetLayerVisible(TropicalCycloneStyle.PastTrackKey, value);
+    }
+
+    /// <summary>
+    /// The Weather section's Forecast times switch: the time and intensity
+    /// beside each tropical cyclone's forecast points. On by default (V26).
+    /// </summary>
+    public bool IsForecastTimesVisible
+    {
+        get => GetCycloneSwitch(TropicalCycloneStyle.ForecastTimesKey);
+        set => _state.SetLayerVisible(TropicalCycloneStyle.ForecastTimesKey, value);
+    }
+
+    // A cyclone switch, on unless the mariner turned it off.
+    private bool GetCycloneSwitch(string key) => _state.GetLayerVisible(key) ?? true;
 
     /// <summary>
     /// The Weather section's Isobars switch: mean sea level pressure isobars
@@ -181,7 +221,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
 
     private static readonly HashSet<string> WeatherSpecs = new(StringComparer.OrdinalIgnoreCase)
     {
-        WeatherProducts.Grib2.Spec, WeatherProducts.NetCdf.Spec,
+        WeatherProducts.Grib2.Spec, WeatherProducts.NetCdf.Spec, WeatherProducts.TropicalCyclone.Spec, WeatherProducts.Codsus.Spec,
     };
 
     /// <summary>Clears all overrides across every spec.</summary>
@@ -281,6 +321,9 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsIsothermsVisible));
         OnPropertyChanged(nameof(IsCurrentArrowsVisible));
         OnPropertyChanged(nameof(IsAirTemperatureVisible));
+        OnPropertyChanged(nameof(IsWindRadiiVisible));
+        OnPropertyChanged(nameof(IsPastTrackVisible));
+        OnPropertyChanged(nameof(IsForecastTimesVisible));
         OnPropertyChanged(nameof(ActiveCategory));
         OnPropertyChanged(nameof(IsDisplayBase));
         OnPropertyChanged(nameof(IsStandard));
@@ -311,6 +354,13 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(HasWeatherData));
             OnPropertyChanged(nameof(IsEmpty));
             OnPropertyChanged(nameof(ShowsViewAboveEmptyState));
+        }
+
+        var hasCyclone = _datasets.Entries.Any(e => string.Equals(e.ProductSpec, WeatherProducts.TropicalCyclone.Spec, StringComparison.OrdinalIgnoreCase));
+        if (hasCyclone != HasTropicalCyclone)
+        {
+            HasTropicalCyclone = hasCyclone;
+            OnPropertyChanged(nameof(HasTropicalCyclone));
         }
 
         // Determine which portrayal specs are currently loaded. An S-57 entry

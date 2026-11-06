@@ -46,6 +46,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly EncDotNet.S100.Viewer.ViewModels.ClearanceViewModel? _clearance;
     private readonly EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService? _routeFindings;
     private readonly EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState? _routeCheckLegend;
+    private readonly EncDotNet.S100.Viewer.ViewModels.EcdisDisplayPanelViewModel? _ecdisDisplay;
     private readonly EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService? _followPassage;
     private readonly RouteExchangeService? _routeExchange;
     private readonly IViewerDatasetStateController? _datasetState;
@@ -121,8 +122,10 @@ internal sealed class McpServerHost : IAsyncDisposable
         EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService? displayCombinations = null,
         MeasureSession? measure = null,
         EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel? measureCard = null,
-        EncDotNet.S100.Viewer.Tools.RangeBearingState? rangeBearing = null)
+        EncDotNet.S100.Viewer.Tools.RangeBearingState? rangeBearing = null,
+        EncDotNet.S100.Viewer.ViewModels.EcdisDisplayPanelViewModel? ecdisDisplay = null)
     {
+        _ecdisDisplay = ecdisDisplay;
         _rangeBearing = rangeBearing;
         _depthBasis = depthBasis;
         _logBuffer = logBuffer;
@@ -400,6 +403,13 @@ internal sealed class McpServerHost : IAsyncDisposable
         // shared capability seams (ViewerPresentationController,
         // ViewerTimeController) instead of carrying duplicate tool classes.
         AddSharedMutableTools(tools);
+
+        if (_ecdisDisplay is not null)
+        {
+            var weatherDisplay = new WeatherDisplayTools(_ecdisDisplay, new DispatcherRouteEditInvoker());
+            tools.Add(WeatherDisplayMcpAdapters.CreateGet(weatherDisplay));
+            tools.Add(WeatherDisplayMcpAdapters.CreateSet(weatherDisplay));
+        }
 
         if (_renderActivityMonitor is not null)
         {

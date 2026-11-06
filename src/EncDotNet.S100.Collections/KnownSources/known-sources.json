@@ -281,6 +281,61 @@
       }
     },
     {
+      "id": "noaa-nhc-storms",
+      "name": "Tropical cyclones — NHC",
+      "provider": "NOAA/NWS National Hurricane Center",
+      "region": ["North America", "United States", "Atlantic", "Pacific"],
+      "format": "weather",
+      "catalogUri": "https://www.nhc.noaa.gov/CurrentStorms.json",
+      "homepage": "https://www.nhc.noaa.gov/gis/",
+      "editions": false,
+      "sizes": false,
+      "note": "The storms NHC is issuing advisories for in the Atlantic, East and Central Pacific, one item each, from its active-storm list. An item downloads the latest advisory's GIS files: the cone, the forecast track and points, the wind radii and the best track. A new advisory, usually every 6 hours, replaces the download; a storm is stale 7 hours after its advisory, and a new advisory for a loaded storm is announced. The list is empty between storms.",
+      "product": "TC",
+      "notForNavigation": true,
+      "licence": "Public domain",
+      "attribution": "NOAA/NWS National Hurricane Center",
+      "weather": {
+        "service": "nhcStorms",
+        "model": "nhc-storms",
+        "modelName": "Tropical cyclones · NHC",
+        "dataRoot": "https://www.nhc.noaa.gov/",
+        "file": "CurrentStorms.json",
+        "staleAfterHours": 7,
+        "refreshHours": 1
+      }
+    },
+    {
+      "id": "noaa-wpc-surface",
+      "name": "Surface analysis — WPC",
+      "provider": "NOAA/NWS Weather Prediction Center",
+      "region": ["North America", "United States"],
+      "format": "weather",
+      "catalogUri": "https://tgftp.nws.noaa.gov/data/raw/as/asus02.kwbc.cod.sus.txt",
+      "homepage": "https://www.wpc.ncep.noaa.gov/html/sfc-zoom.php",
+      "coverage": "boundingBoxes",
+      "editions": false,
+      "sizes": false,
+      "note": "Fronts, troughs and pressure centres from WPC's coded surface bulletins: the latest high-resolution surface analysis, issued every 3 hours, and, when chosen, the coded forecast fronts 12 to 48 hours ahead. They cover WPC's domain, North America and adjacent waters, only. An analysis is stale after 6 hours, and a loaded one is replaced by the next every 3 hours.",
+      "product": "CODSUS",
+      "notForNavigation": true,
+      "licence": "Public domain",
+      "attribution": "NOAA/NWS Weather Prediction Center",
+      "weather": {
+        "service": "wpcBulletins",
+        "model": "wpc-surface",
+        "modelName": "Surface analysis · WPC",
+        "dataRoot": "https://tgftp.nws.noaa.gov/data/raw/",
+        "cadenceHours": 3,
+        "staleAfterHours": 6,
+        "refreshHours": 3,
+        "datasets": [
+          { "id": "wpc-analysis", "name": "Surface analysis · WPC", "file": "as/asus02.kwbc.cod.sus.txt", "default": true },
+          { "id": "wpc-forecast", "name": "Forecast fronts · WPC", "file": "fs/fsus02.kwbc.cod.srp.txt" }
+        ]
+      }
+    },
+    {
       "id": "noaa-erddap-ww3",
       "name": "WAVEWATCH III global waves — NOAA ERDDAP",
       "provider": "NOAA CoastWatch West Coast Node",

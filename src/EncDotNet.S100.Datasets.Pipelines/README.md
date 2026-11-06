@@ -337,10 +337,22 @@ It draws the advisory with `TropicalCycloneStyle` from
 as two sub-layers: the cone and wind radii fills (`weather.tc.areas`) on the
 On-demand surface plane at priority 10, and the lines, symbols and labels
 (`weather.tc.track`) on the Other chart overlays plane at priority 95, each
-with its legend. The storm and its radii are drawn at the advisory's first
-forecast point; following the view time is still to come. Labels are written
-in `RenderContext.DisplayTimeZone` (UTC when it's unset) and the current
-culture.
+with its legend. Labels are written in `RenderContext.DisplayTimeZone` (UTC
+when it's unset) and the current culture.
+
+The processor is an `ITimeAwareDatasetProcessor` with
+`TimeStepSelection.Continuous`: its `AvailableTimes` are the forecast points,
+the steps a host's ‹ › move between, but any time from the first best-track
+point (the `Validity` before tau 0) to the last forecast point draws. The
+cone, tracks and forecast points always draw; the storm and its wind radii
+are drawn at `RenderContext.TimeStep`, through
+`TropicalCycloneAdvisory.StormAt`: on a forecast point as it is, between
+two estimated (a dashed ring and "est." in the label), before the advisory
+on the best track, and outside the track and forecast not at all. Without a
+time step they're at the advisory's first forecast point. `IssueTime` is
+the advisory's, `NextIssueTime` NHC's next regular advisory, and
+`TimelineLabel` and `TimelineDetail` name the storm's lane (`IAN`,
+`adv 20`).
 
 Each drawn part is a feature: the storm (its id is the ATCF id, such as
 `AL092022`), the cone and its two parts, both tracks, every forecast and
@@ -349,8 +361,11 @@ part reports the storm when it's picked, with the same `FeatureRef`, class and
 attributes, and a **Picked part** row naming the part. `HitTestFeatures` gives
 one hit per storm, on the part nearest the pick. The attributes are the
 not-for-navigation notice, the storm's name, the advisory, its issue time, the
-next advisory due (the next of 03, 09, 15 and 21 UTC), the position, wind,
-pressure and movement, the part picked, the 64, 50 and 34 knot radii by
+next advisory due (the next of 03, 09, 15 and 21 UTC); after a portrayal
+with a time step, the **At view time** row and its **Basis** (on a forecast
+point, estimated between two, or the best track), or "Beyond the forecast"
+or "Before the track"; the position, wind, pressure and movement of the
+storm drawn, the part picked, the 64, 50 and 34 knot radii by
 quadrant, and NHC's caution about the cone. `FeatureAccessor` lists the parts
 for the catalog's identify and pick.
 

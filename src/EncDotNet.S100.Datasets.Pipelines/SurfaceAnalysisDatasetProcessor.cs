@@ -35,13 +35,23 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// (<c>+24h COLD 1</c>).
 /// </description></item>
 /// <item><description>
-/// <b>Drawing.</b> <see cref="DrawnAnalysis"/>, the bulletin's first
-/// analysis, with <see cref="SurfaceAnalysisStyle"/>: one sub-layer,
+/// <b>Drawing.</b> The analysis at the context's
+/// <see cref="RenderContext.TimeStep"/> (the first without one), with
+/// <see cref="SurfaceAnalysisStyle"/>: one sub-layer,
 /// <see cref="SurfaceAnalysisStyle.LayerKey"/>, on the Other chart overlays
 /// plane at priority 92, above the isobars (90), with its legend. Fronts are
 /// smoothed for drawing (<see cref="SurfaceAnalysisStyle.Smooth"/>) and are
-/// picked on the line drawn. Choosing the analysis by the view time is the
-/// fronts time slice (#1301).
+/// picked on the line drawn.
+/// </description></item>
+/// <item><description>
+/// <b>Time (V30, #1301).</b> Each analysis or forecast is a time step
+/// (<see cref="AvailableTimes"/>), drawn at or before the view time for
+/// <see cref="DrawWindow"/>, and stale after <see cref="StaleAfter"/>: drawn at
+/// half opacity, with the pressure centres saying their age
+/// (<see cref="RenderContext.TimeStepAge"/>). Every coded surface bulletin
+/// shares one <see cref="TimeSemantics.Supersession"/> key, so of the loaded
+/// bulletins the one valid nearest before the view time draws (an analysis
+/// before a forecast valid at the same time).
 /// </description></item>
 /// <item><description>
 /// <b>Picking (V24).</b> The notice, the analysis time, the time of the next
@@ -58,6 +68,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// </remarks>
 public sealed class SurfaceAnalysisDatasetProcessor :
     IDatasetProcessor,
+    ITimeAwareDatasetProcessor,
     IVectorPortrayalSource,
     IHeadlessImageRenderer,
     ILoadedDatasetProjection
@@ -80,14 +91,33 @@ public sealed class SurfaceAnalysisDatasetProcessor :
     /// </summary>
     public static TimeSpan AnalysisInterval { get; } = TimeSpan.FromHours(3);
 
+    /// <summary>
+    /// How long after its valid time an analysis or forecast stays current: 6
+    /// hours, two missed analyses (V28). Older, it is drawn as stale.
+    /// </summary>
+    public static TimeSpan StaleAfter { get; } = TimeSpan.FromHours(6);
+
+    /// <summary>
+    /// How long after its valid time an analysis or forecast is drawn at all:
+    /// 12 hours, stale for its second half. Beyond it nothing is drawn and the
+    /// host says there is no analysis at the view time.
+    /// </summary>
+    public static TimeSpan DrawWindow { get; } = TimeSpan.FromHours(12);
+
+    /// <summary>The <see cref="TimeSemantics.Supersession"/> key every coded surface bulletin shares: <c>"surface-analysis"</c>.</summary>
+    public const string SupersessionKey = "surface-analysis";
+
+    /// <summary>The model a forecast bulletin's <see cref="ForecastRun"/> names: <c>"WPC"</c>.</summary>
+    public const string ForecastModel = "WPC";
+
     /// <summary>The spec every coded surface bulletin reports: <c>CODSUS</c>, with no edition (the format has none).</summary>
     public static SpecRef CodsusSpec { get; } = new(SpecName, default);
 
     private readonly SurfaceAnalysisFeature[] _features;
-    private readonly SurfaceAnalysisFeature[] _drawn;
-    private readonly IReadOnlyList<DrawingInstruction> _instructions;
+    private readonly SurfaceAnalysisFeature[][] _byAnalysis;
     private readonly DatasetMetadata _metadata;
     private readonly string? _contentHash;
+    private volatile Drawn _current;
 
     /// <summary>
     /// Reads the bulletin at <paramref name="path"/>. A bulletin without an
@@ -128,9 +158,15 @@ public sealed class SurfaceAnalysisDatasetProcessor :
         FileName = fileName;
         _features = BuildFeatures(bulletin);
         _metadata = BuildMetadata(bulletin);
-        DrawnAnalysis = DrawnAnalysisOf(bulletin);
-        _drawn = [.. _features.Where(f => ReferenceEquals(f.Analysis, DrawnAnalysis))];
-        _instructions = BuildInstructions(_drawn);
+        _byAnalysis = [.. bulletin.Analyses.Select(a => _features.Where(f => ReferenceEquals(f.Analysis, a)).ToArray())];
+        AvailableTimes = [.. bulletin.Analyses.Select(a => a.ValidTime.UtcDateTime).Distinct().Order()];
+        TimeSemantics = new TimeSemantics(
+            bulletin.Kind == CodedSurfaceBulletinKind.Forecast ? TimeStepKind.Forecast : TimeStepKind.Analysis,
+            TimeStepSelection.AtOrBefore,
+            DrawWindow,
+            StaleAfter,
+            SupersessionKey);
+        _current = Draw(bulletin.Analyses.Count > 0 ? 0 : -1, age: null);
     }
 
     /// <inheritdoc />
@@ -146,11 +182,53 @@ public sealed class SurfaceAnalysisDatasetProcessor :
     public CodedSurfaceBulletin Bulletin { get; }
 
     /// <summary>
-    /// The analysis drawn and hit: the bulletin's first (the analysis, or a
-    /// forecast bulletin's earliest forecast); <see langword="null"/> for a
-    /// bulletin with none.
+    /// The analysis last drawn, and hit: the one at the last portrayal's time
+    /// step, the bulletin's first before any (the analysis, or a forecast
+    /// bulletin's earliest forecast); <see langword="null"/> for a bulletin
+    /// with none.
     /// </summary>
-    public SurfaceAnalysis? DrawnAnalysis { get; }
+    public SurfaceAnalysis? DrawnAnalysis => _current.Analysis;
+
+    /// <summary>How old <see cref="DrawnAnalysis"/> was when last drawn, once stale; null while current.</summary>
+    public TimeSpan? DrawnAge => _current.Age;
+
+    /// <inheritdoc />
+    /// <remarks>The valid time of every analysis or forecast in the bulletin.</remarks>
+    public IReadOnlyList<DateTime> AvailableTimes { get; }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Analysis steps for the analysis, forecast steps for a forecast
+    /// bulletin; at or before the view time within <see cref="DrawWindow"/>,
+    /// stale after <see cref="StaleAfter"/>, sharing <see cref="SupersessionKey"/>.
+    /// </remarks>
+    public TimeSemantics TimeSemantics { get; }
+
+    /// <inheritdoc />
+    /// <remarks>When the bulletin was issued, from its issuance line.</remarks>
+    public DateTime? IssueTime => Bulletin.Header.IssuedAt?.UtcDateTime;
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// For a forecast bulletin, WPC's, from the time its lead times count from
+    /// (the first forecast's valid time less its lead time); null for an analysis.
+    /// </remarks>
+    public DatasetForecastRun? ForecastRun =>
+        Bulletin.Kind == CodedSurfaceBulletinKind.Forecast
+            ? new DatasetForecastRun(
+                ForecastModel,
+                Bulletin.Analyses.FirstOrDefault(a => a.ForecastHours is not null) is { } first
+                    ? first.ValidTime.UtcDateTime.AddHours(-first.ForecastHours!.Value)
+                    : null)
+            : null;
+
+    /// <summary>
+    /// The analysis drawn at <paramref name="timeStep"/>: the latest valid at
+    /// or before it (a host passes a valid time); the first for
+    /// <see langword="null"/>; null when none is.
+    /// </summary>
+    /// <param name="timeStep">The time step, UTC.</param>
+    public SurfaceAnalysis? AnalysisAt(DateTime? timeStep) => IndexAt(timeStep) is var i and >= 0 ? Bulletin.Analyses[i] : null;
 
     /// <inheritdoc />
     /// <remarks>WPC's domain as the extent (V36), WGS-84, and the first to the last valid time.</remarks>
@@ -182,46 +260,52 @@ public sealed class SurfaceAnalysisDatasetProcessor :
     {
         cancellationToken.ThrowIfCancellationRequested();
         var palette = context?.Palette ?? PaletteType.Day;
+        var drawn = Select(context);
         var subLayer = new VectorSubLayer
         {
             LayerKey = SurfaceAnalysisStyle.LayerKey,
             LayerName = $"Surface analysis: {FileName}",
-            Instructions = _instructions,
+            Instructions = drawn.Instructions,
+            Opacity = drawn.Age is null ? 1.0 : SurfaceAnalysisStyle.StaleOpacity,
             Plane = S98DisplayPlane.OtherChartOverlays,
             WithinPlanePriority = SurfaceAnalysisStyle.WithinPlanePriority,
             SourceFeatureType = SurfaceAnalysisStyle.LayerKey,
             Legend = SurfaceAnalysisStyle.BuildLegend(palette),
         };
 
-        var info = DrawnAnalysis is { } analysis
+        var info = drawn.Analysis is { } analysis
             ? string.Create(
                 CultureInfo.InvariantCulture,
-                $"Surface analysis {FileName}: {analysis.Fronts.Count} fronts and troughs, {analysis.PressureCentres.Count} pressure centres, valid {analysis.ValidTime:yyyy-MM-dd HH:mm}Z. {NotForNavigationNotice}")
+                $"Surface analysis {FileName}: {analysis.Fronts.Count} fronts and troughs, {analysis.PressureCentres.Count} pressure centres, valid {analysis.ValidTime:yyyy-MM-dd HH:mm}Z{(drawn.Age is { } age ? $", {SurfaceAnalysisStyle.FormatAge(age)} (stale)" : string.Empty)}. {NotForNavigationNotice}")
             : $"Surface analysis {FileName}: no analysis. {NotForNavigationNotice}";
 
         return Task.FromResult(new VectorPortrayalResult
         {
             SubLayers = [subLayer],
             Palette = WeatherPalette.Palette.GetColorPalette(palette),
-            GeometryProvider = new FeatureGeometryProvider<SurfaceAnalysisFeature>(_drawn),
+            GeometryProvider = new FeatureGeometryProvider<SurfaceAnalysisFeature>(drawn.Features),
             Product = SpecName,
             Spec = Spec,
             SourceDatasetId = FileName,
-            ContentScope = _contentHash is null ? null : $"ds:{_contentHash}|{SurfaceAnalysisStyle.ContentScope}",
+            ContentScope = _contentHash is null
+                ? null
+                : string.Create(CultureInfo.InvariantCulture, $"ds:{_contentHash}|{SurfaceAnalysisStyle.ContentScope}|a{drawn.Index}|age{drawn.Age?.TotalHours ?? -1}"),
             Info = info,
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
             SymbolProvider = WeatherCoverageStyle.Symbols.Provider,
             LineStyleProvider = SurfaceAnalysisStyle.LineStyles.Provider,
             LayerNames = [SurfaceAnalysisStyle.LayerKey],
-            GeographicExtent = DrawnExtent(),
+            GeographicExtent = DrawnExtent(drawn.Features),
             PreferLiveDrawing = true,
         });
     }
 
     /// <summary>
-    /// Renders <see cref="DrawnAnalysis"/> to a bitmap, framed on everything
-    /// drawn (or on <see cref="RenderContext.Viewport"/>).
+    /// Renders the analysis at the context's time step (as
+    /// <see cref="BuildVectorPortrayalAsync"/> picks it) to a bitmap, framed on
+    /// everything drawn (or on <see cref="RenderContext.Viewport"/>). A stale
+    /// analysis is drawn with its age but at full opacity.
     /// </summary>
     /// <param name="widthPixels">Output width in pixels.</param>
     /// <param name="heightPixels">Output height in pixels.</param>
@@ -241,10 +325,11 @@ public sealed class SurfaceAnalysisDatasetProcessor :
         cancellationToken.ThrowIfCancellationRequested();
 
         var bg = background ?? new RgbaColor(255, 255, 255, 255);
+        var drawn = Select(context);
         var viewport = context?.Viewport;
-        if (viewport is null && _drawn.Length > 0)
+        if (viewport is null && drawn.Features.Length > 0)
         {
-            var extent = DrawnExtent();
+            var extent = DrawnExtent(drawn.Features);
             var (minX, minY) = WebMercator.FromLonLat(extent.MinLongitude, extent.MinLatitude);
             var (maxX, maxY) = WebMercator.FromLonLat(extent.MaxLongitude, extent.MaxLatitude);
             viewport = PointGlyphHeadlessAdapter.FitViewport(
@@ -256,8 +341,8 @@ public sealed class SurfaceAnalysisDatasetProcessor :
 
         var palette = context?.Palette ?? PaletteType.Day;
         return Task.FromResult(HeadlessVectorRenderer.Render(
-            _instructions,
-            new FeatureGeometryProvider<SurfaceAnalysisFeature>(_drawn),
+            drawn.Instructions,
+            new FeatureGeometryProvider<SurfaceAnalysisFeature>(drawn.Features),
             WeatherPalette.Palette.GetColorPalette(palette),
             symbolProvider: WeatherCoverageStyle.Symbols.Provider,
             lineStyleProvider: SurfaceAnalysisStyle.LineStyles.Provider,
@@ -295,12 +380,15 @@ public sealed class SurfaceAnalysisDatasetProcessor :
         if (ordinal < 0 || ordinal >= _features.Length)
             return null;
         var feature = _features[ordinal];
+        var attributes = Describe(feature);
+        if (_current is { Age: { } age } current && ReferenceEquals(feature.Analysis, current.Analysis))
+            attributes.Insert(1, PickAttribute.StaleNotice(StaleText(feature.Analysis, age)));
         return new FeatureInfo
         {
             FeatureRef = feature.Id,
             FeatureType = feature.FeatureType,
             FeatureTypeName = feature.Name,
-            Attributes = Describe(feature),
+            Attributes = attributes,
         };
     }
 
@@ -318,7 +406,7 @@ public sealed class SurfaceAnalysisDatasetProcessor :
     /// <inheritdoc />
     /// <remarks>Only the features of <see cref="DrawnAnalysis"/>, on the lines as drawn (smoothed).</remarks>
     public IReadOnlyList<FeatureGeometryHit> HitTestFeatures(double latitude, double longitude, double radiusMeters) =>
-        FeatureHitTester.HitTest(_drawn, latitude, longitude, radiusMeters);
+        FeatureHitTester.HitTest(_current.Features, latitude, longitude, radiusMeters);
 
     /// <inheritdoc />
     public IEnumerable<FeatureSummary> EnumerateFeatures()
@@ -335,23 +423,93 @@ public sealed class SurfaceAnalysisDatasetProcessor :
         }
     }
 
-    /// <summary>The analysis of <paramref name="bulletin"/> that is drawn: its first, or <see langword="null"/> for none.</summary>
+    /// <summary>
+    /// The analysis of <paramref name="bulletin"/> drawn at
+    /// <paramref name="timeStep"/>: the latest valid at or before it within
+    /// <see cref="DrawWindow"/>, or its first for <see langword="null"/>;
+    /// <see langword="null"/> when there is none.
+    /// </summary>
     /// <param name="bulletin">The bulletin.</param>
-    public static SurfaceAnalysis? DrawnAnalysisOf(CodedSurfaceBulletin bulletin)
+    /// <param name="timeStep">The time step (UTC), or null for none.</param>
+    public static SurfaceAnalysis? DrawnAnalysisOf(CodedSurfaceBulletin bulletin, DateTime? timeStep)
     {
         ArgumentNullException.ThrowIfNull(bulletin);
-        return bulletin.Analyses.Count > 0 ? bulletin.Analyses[0] : null;
+        var index = IndexAt(bulletin, timeStep);
+        return index >= 0 ? bulletin.Analyses[index] : null;
     }
 
     /// <summary>
-    /// The features of the analysis drawn, as the processor draws and hits
-    /// them: for the catalog's identify and pick (<see cref="Spec.FeatureAccessor"/>).
+    /// The features of the analysis drawn at <paramref name="timeStep"/>, as
+    /// the processor draws and hits them: for the catalog's identify and pick
+    /// (<see cref="Spec.FeatureAccessor"/>).
     /// </summary>
-    internal static IEnumerable<SurfaceAnalysisFeature> DrawnFeatures(CodedSurfaceBulletin bulletin)
+    internal static IEnumerable<SurfaceAnalysisFeature> DrawnFeatures(CodedSurfaceBulletin bulletin, DateTime? timeStep)
     {
-        var drawn = DrawnAnalysisOf(bulletin);
+        var drawn = DrawnAnalysisOf(bulletin, timeStep);
         return BuildFeatures(bulletin).Where(f => ReferenceEquals(f.Analysis, drawn));
     }
+
+    /// <summary>
+    /// "This analysis is 9 h old. A newer one is likely." (or "This forecast
+    /// …"), for the pick report's stale line. It names no time, so a host shows
+    /// it as it is whatever its time zone; the analysis time is its own row.
+    /// </summary>
+    /// <param name="analysis">The stale analysis or forecast.</param>
+    /// <param name="age">Its age at the view time.</param>
+    public static string StaleText(SurfaceAnalysis analysis, TimeSpan age)
+    {
+        ArgumentNullException.ThrowIfNull(analysis);
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"This {(analysis.ForecastHours is null ? "analysis" : "forecast")} is {SurfaceAnalysisStyle.FormatAge(age)}. A newer one is likely.");
+    }
+
+    private int IndexAt(DateTime? timeStep) => IndexAt(Bulletin, timeStep);
+
+    private static int IndexAt(CodedSurfaceBulletin bulletin, DateTime? timeStep)
+    {
+        if (bulletin.Analyses.Count == 0)
+            return -1;
+        if (timeStep is not { } t)
+            return 0;
+        var utc = t.Kind == DateTimeKind.Local ? t.ToUniversalTime() : t;
+        var best = -1;
+        for (var i = 0; i < bulletin.Analyses.Count; i++)
+        {
+            var valid = bulletin.Analyses[i].ValidTime.UtcDateTime;
+            if (valid <= utc && utc - valid <= DrawWindow && (best < 0 || valid > bulletin.Analyses[best].ValidTime.UtcDateTime))
+                best = i;
+        }
+
+        return best;
+    }
+
+    // What the last portrayal drew: picked by the context's time step, with
+    // the age the host passes once stale.
+    private Drawn Select(RenderContext? context)
+    {
+        var index = IndexAt(context?.TimeStep);
+        var age = index >= 0 ? context?.TimeStepAge : null;
+        var current = _current;
+        if (current.Index == index && current.Age == age)
+            return current;
+        var drawn = Draw(index, age);
+        _current = drawn;
+        return drawn;
+    }
+
+    private Drawn Draw(int index, TimeSpan? age)
+    {
+        var features = index >= 0 ? _byAnalysis[index] : [];
+        return new Drawn(index, index >= 0 ? Bulletin.Analyses[index] : null, age, features, BuildInstructions(features, age));
+    }
+
+    private sealed record Drawn(
+        int Index,
+        SurfaceAnalysis? Analysis,
+        TimeSpan? Age,
+        SurfaceAnalysisFeature[] Features,
+        IReadOnlyList<DrawingInstruction> Instructions);
 
     /// <summary>A front kind's name, for example "Cold front" or "Trough".</summary>
     /// <param name="type">The kind of front.</param>
@@ -435,7 +593,7 @@ public sealed class SurfaceAnalysisDatasetProcessor :
         return [.. features];
     }
 
-    private static IReadOnlyList<DrawingInstruction> BuildInstructions(IEnumerable<SurfaceAnalysisFeature> features)
+    private static IReadOnlyList<DrawingInstruction> BuildInstructions(IEnumerable<SurfaceAnalysisFeature> features, TimeSpan? age)
     {
         var instructions = new List<DrawingInstruction>();
         foreach (var feature in features)
@@ -447,7 +605,7 @@ public sealed class SurfaceAnalysisDatasetProcessor :
             }
             else if (feature.Centre is { } centre)
             {
-                instructions.AddRange(SurfaceAnalysisStyle.BuildCentre(feature.Id, centre));
+                instructions.AddRange(SurfaceAnalysisStyle.BuildCentre(feature.Id, centre, age));
             }
         }
 
@@ -513,10 +671,10 @@ public sealed class SurfaceAnalysisDatasetProcessor :
 
     // The bounds of everything drawn, padded a little; WPC's domain when
     // nothing is.
-    private GeographicBounds DrawnExtent()
+    private GeographicBounds DrawnExtent(SurfaceAnalysisFeature[] drawn)
     {
         double south = double.MaxValue, west = double.MaxValue, north = double.MinValue, east = double.MinValue;
-        foreach (var p in _drawn.SelectMany(f => f.Points.Concat(f.Curves.SelectMany(c => c))))
+        foreach (var p in drawn.SelectMany(f => f.Points.Concat(f.Curves.SelectMany(c => c))))
         {
             south = Math.Min(south, p.Latitude);
             north = Math.Max(north, p.Latitude);
