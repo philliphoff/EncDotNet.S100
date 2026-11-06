@@ -45,6 +45,11 @@ frame sequences (`step_time` / `set_view_time` → `render_to_image`) joined wit
 | IHO S-101 test dataset (`101AA00DS0010`, the current P01/F1a stand-in) | Producer code `AA` is the IHO test producer, not UKHO or IC-ENC. Probably fine, but **check the terms it was distributed under** before it appears on the site. |
 | Repo fixtures (`tests/datasets/*`) | Ours or from spec samples. Safe. Some are synthetic and look it. |
 | Natural Earth basemap | Public domain. |
+| NOAA NCEP GFS and GFS-Wave on AWS (`noaa-gfs-bdp-pds`) | US public domain. Safe; credit NOAA. |
+| NOAA NHC advisory GIS files (nhc.noaa.gov forecast archive, best track) | US public domain. Safe; credit NOAA NHC. |
+| NOAA NWS WPC coded surface bulletins (CODSUS), fetched from the Iowa Environmental Mesonet's archive of NWS text products | The product is NWS's, US public domain. IEM only archives it. Safe; credit NOAA WPC. |
+| NOAA AOML geostrophic currents (`miamicurrents`, NOAA CoastWatch ERDDAP) | US public domain. Safe; credit NOAA AOML. |
+| NASA JPL MUR SST v4.1 (`jplMURSST41`, NOAA CoastWatch ERDDAP) | Free and open (NASA JPL PO.DAAC, GHRSST); no restrictions on use, citation requested. Credited in `#weather-notice`. |
 
 Shots marked ⚖ depend on one of the uncleared rows. Each of them has a fallback.
 
@@ -276,7 +281,18 @@ as a desktop app.
   catalogue by URL. No data is downloaded.
 - **Light twin:** yes (`--theme light`).
 
-### W1 · Wind and waves over the chart (feature row)
+## W: Weather section
+
+The Weather section (`Weather.astro`, after Passage) has six feature rows, W1–W6, and three
+minis, W8, W9 and W7. Weather is drawn over NOAA charts, so every scene except W7 sits in US
+waters, framed so the weather stays inside the charts the Library downloads (`CoastalCharts`:
+NOAA ENC cells of usage bands 2 and 3, or 1 and 2 for W5, over the box). Each recipe pins its
+own moment, so it reproduces without live weather, and the viewer runs in UTC (`TimeZone:
+"UTC"`) so times read as the data gives them. Window shots have Light twins; the minis W8 and
+W9 are map-only (`render_to_image` at 1280 × 720 logical, 2560 × 1440 px, so the band 3 charts
+still draw at the frame's scale).
+
+### W1 · Wind and waves over the chart
 - **Done (2026-10-28).** Off Cape Hatteras (33.62–37.8 N, 76.75–71.0 W),
   Display Base: the NOAA ENC cells of usage bands 2 and 3 over the box
   (US2ATLOC and 17 `US3…` cells, checked against NOAA's ENC product
@@ -300,6 +316,74 @@ as a desktop app.
 - **Credit:** the footer's weather note (`#weather-notice`) covers NOAA and the
   other weather providers.
 
+
+### W2 · Sea temperature and currents
+- The Florida Straits (23.3–28.2 N, 83.6–76.4 W) at Display Base over the
+  Library's band 2/3 NOAA ENCs for Florida: NASA JPL MUR SST for 2025-02-10
+  09Z (every second point) and NOAA AOML geostrophic currents for 10 and 11 Feb
+  00Z (two daily steps, so the 09Z view time falls within the first), both as
+  NetCDF-3 subsets from ERDDAP. Isotherms on. The Gulf Stream's edge shows as
+  closely spaced bands, with the current arrows along it.
+
+### W3 · Freezing spray and air temperature
+- Kodiak Island and Shelikof Strait (54.6–60.6 N, 160–147.5 W) over the band
+  2/3 NOAA ENCs for Alaska: GFS 2025-12-15 00Z analysis (UGRD/VGRD 10 m, TMP
+  2 m and surface, LAND, PRMSL), cut by byte range. Air temperature isotherms
+  on. The date was picked by rendering candidate winter runs with
+  `s100 render`: an Arctic outbreak off the Alaska Peninsula.
+
+### W4 · Tropical cyclones
+- Hurricane Erin's NHC advisory 22 (21Z on 16 Aug 2025), from NHC's GIS
+  archive: `al052025_5day_022.zip`, `al052025_fcst_022.zip` and the season's
+  `al052025_best_track.zip` side by side in `.cache/nhc/al052025_022/`,
+  opened through the 5-day zip. Over the NOAA ENCs for Puerto Rico and the
+  Virgin Islands, which are band 3 only, draw from about 1:1 400 000 in and end
+  near 19° N. So the view is centred at 19.3 N, 65.0 W at 1:1 400 000, with the
+  wind radii reaching over the charted coast. Clock pinned an hour after the
+  advisory; the view time three hours on, so the storm is drawn between forecast
+  points (est.). No Timeline panel: it halves the map, and the charts then stop
+  drawing.
+
+### W5 · Surface analysis
+- WPC's high-resolution coded surface analysis (ASUS02) valid 00Z on 28 Oct
+  2025, from the Iowa Environmental Mesonet's NWS text archive (`pil=CODSUS`),
+  with the GFS 2025-10-28 00Z analysis isobars (PRMSL), over the band 2/3 NOAA
+  ENCs for FL, GA, SC and NC (29.6–36.4 N, 82.2–71.8 W): the low off South
+  Carolina and its cold front running out to sea. A wider East Coast frame
+  showed the fronts better but is too small a scale for the charts to draw.
+  Clock pinned an hour after the analysis.
+
+### W6 · Weather on a route
+- Charleston to the Chesapeake Bay entrance (7 waypoints offshore of Cape
+  Hatteras) at 12 kn, 9 m draft, departing 00Z on 20 Aug 2025 as Hurricane Erin
+  passed offshore, over the band 2/3 NOAA ENCs for SC, NC and VA. GFS 10 m wind
+  and PRMSL and GFS-Wave HTSGW/PERPW/DIRPW from the 2025-08-20 00Z run, f000–f036
+  every 3 h, appended into one file each. Erin's advisory 34 (21Z on 19 Aug) is
+  loaded too. Route weather limits 25 kn and 3.5 m
+  (`set_route_weather_settings`). Check route on, the findings list on its
+  Weather filter, the first above-limit stretch selected, the Clearance dock
+  and map legend closed. The verdict's Weather row reads "4 above limits · 1
+  not checked".
+- **#1299 (cyclone route check):** when it merges, recapture W6: the Erin
+  advisory is already loaded, so the cyclone findings join the Weather list.
+
+### W7 · Weather sources (mini)
+- The Library with its weather sources added (`noaa-aws-gfs`, `noaa-erddap-sst`,
+  `noaa-nhc-storms`, `noaa-wpc-surface`), nothing downloaded. Live, like F5: the
+  runs listed are the ones on the capture day.
+
+### W8 · Restricted visibility (mini)
+- Sea fog off eastern Maine and in the Bay of Fundy (43.4–45.0 N, 69.6–66.4 W):
+  GFS VIS from the 2025-06-20 12Z analysis over the band 2/3 NOAA ENCs for MA,
+  NH and ME. Map only. Picked by rendering candidate summer mornings with
+  `s100 render`; GFS fog is coarse (0.25°), and NOAA's charts end at the Canadian
+  border, so the fog over Penobscot Bay and Mount Desert is what shows on chart.
+
+### W9 · Rain and thunderstorms (mini)
+- South Florida (24.9–28.5 N, 83.8–79.4 W): GFS PRATE, CAPE and
+  PRMSL three hours into the 2025-08-10 18Z run, over the band 2/3 NOAA ENCs for
+  Florida, with the Precipitation and Thunderstorm risk switches on. Map only.
+  Cloud cover stays off: over this much rain its veil greys the whole view.
 ---
 
 ## D: Developer section

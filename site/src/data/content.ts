@@ -19,6 +19,11 @@ export const docs = {
   cli: 'docs/cli.html',
   mcp: 'docs/mcp-server.html',
   routeChecks: 'docs/route-checks.html',
+  routeWeather: 'docs/route-checks.html#weather-along-the-route',
+  weather: 'docs/weather.html',
+  weatherShow: 'docs/weather.html#show-a-forecast-in-soundcharts',
+  weatherCyclones: 'docs/weather.html#show-tropical-cyclones',
+  weatherFronts: 'docs/weather.html#show-a-surface-analysis',
   s57: 'docs/s57/',
   api: 'api/',
 };
