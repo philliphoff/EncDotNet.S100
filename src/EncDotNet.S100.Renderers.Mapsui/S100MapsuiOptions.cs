@@ -118,6 +118,14 @@ public sealed record S100MapsuiOptions
     public Action<Action>? StackMarshal { get; init; }
 
     /// <summary>
+    /// The options of the map's chart session (map rendering slice&#160;8):
+    /// prediction, cross-band pre-warm, metatiles, the warm disk cache and GPU
+    /// residency for the map's chart tiles. Defaults to the process-wide
+    /// <see cref="ChartEngine.Options"/>, which a host's settings write to.
+    /// </summary>
+    public ChartSessionOptions? ChartOptions { get; init; }
+
+    /// <summary>
     /// Gets the resolver the session's dynamic-source host uses to find an
     /// <see cref="IDynamicFeatureRenderer"/> for a source's
     /// <see cref="EncDotNet.S100.DynamicSources.DynamicSourceMetadata.RendererKey"/>.

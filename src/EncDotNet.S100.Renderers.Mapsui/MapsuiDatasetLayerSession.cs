@@ -144,13 +144,20 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
     /// <see langword="null"/>, every compose runs inline on the calling thread,
     /// which suits headless and single-threaded hosts.
     /// </param>
+    /// <param name="chartSession">
+    /// The map's chart session (map rendering slice&#160;8), which draws the
+    /// session's tiled layers as chart tiles through one chart layer per run.
+    /// When <see langword="null"/>, a session over the process-wide
+    /// <see cref="ChartEngine.Options"/>.
+    /// </param>
     public MapsuiDatasetLayerSession(
         MapsuiLayerBands layerBands,
         DatasetProcessorOwner processorOwner,
         MapsuiDatasetRenderer renderer,
         IInteroperabilityAuthorityProvider authorityProvider,
         Action? redrawRequested = null,
-        Action<Action>? stackMarshal = null)
+        Action<Action>? stackMarshal = null,
+        ChartSession? chartSession = null)
     {
         ArgumentNullException.ThrowIfNull(layerBands);
         ArgumentNullException.ThrowIfNull(processorOwner);
@@ -162,6 +169,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
         _authorityProvider = authorityProvider;
         _redrawRequested = redrawRequested;
         _stackMarshal = stackMarshal;
+        _chartSession = chartSession ?? new ChartSession(ChartEngine.Options);
         _authorityProvider.CurrentChanged += OnAuthorityChanged;
         Query = new S100MapQuery(this);
     }
@@ -1446,15 +1454,31 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
         double? scaleResolution =
             query.Resolution is { } r && double.IsFinite(r) && r > 0 ? r : null;
 
-        List<(MapDatasetId Id, int StackRank)> pickable = [];
+        List<(MapDatasetId Id, int StackRank, HashSet<string>? Suppressed)> pickable = [];
         DateTime? currentTime;
         lock (_sync)
         {
             ThrowIfDisposed();
             currentTime = _time.Current;
             var topStackIndex = new Dictionary<string, int>(StringComparer.Ordinal);
+            // Features an S-98 rule suppressed (R-101-102-B: S-101 depth
+            // areas under a visible S-102) aren't drawn, so they aren't picked.
+            var suppressed = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
             for (var i = 0; i < _stackEntries.Count; i++)
-                topStackIndex[_stackEntries[i].SourceDatasetId] = i; // last wins = topmost
+            {
+                var stackEntry = _stackEntries[i];
+                topStackIndex[stackEntry.SourceDatasetId] = i; // last wins = topmost
+                if (stackEntry.SuppressedFeatures is { Count: > 0 } dropped)
+                {
+                    if (!suppressed.TryGetValue(stackEntry.SourceDatasetId, out var set))
+                    {
+                        set = new HashSet<string>(StringComparer.Ordinal);
+                        suppressed[stackEntry.SourceDatasetId] = set;
+                    }
+
+                    set.UnionWith(dropped);
+                }
+            }
 
             foreach (var id in _order)
             {
@@ -1477,7 +1501,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
                     && entry.ContentMaxVisibleResolution is { } cutoff
                     && res > cutoff)
                     continue;
-                pickable.Add((id, index));
+                pickable.Add((id, index, suppressed.GetValueOrDefault(id.Value)));
             }
         }
 
@@ -1497,11 +1521,11 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
         GeographicPickQuery query,
         double radius,
         DateTime? currentTime,
-        List<(MapDatasetId Id, int StackRank)> pickable,
+        List<(MapDatasetId Id, int StackRank, HashSet<string>? Suppressed)> pickable,
         CancellationToken cancellationToken)
     {
         var ranked = new List<(int StackRank, int PrimitiveRank, double Distance, S100Pick Pick)>();
-        foreach (var (id, stackRank) in pickable)
+        foreach (var (id, stackRank, suppressed) in pickable)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!_processorOwner.TryAcquire(id, out var lease))
@@ -1517,7 +1541,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
                 foreach (var longitude in WorldCopies.CandidateLongitudes(
                     query.Longitude, extent?.WestLongitude, extent?.EastLongitude))
                 {
-                    if (PickDataset(processor, id, stackRank, query.Latitude, longitude, radius, currentTime, ranked))
+                    if (PickDataset(processor, id, stackRank, query.Latitude, longitude, radius, currentTime, suppressed, ranked))
                         break;
                 }
             }
@@ -1553,9 +1577,12 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
         double longitude,
         double radius,
         DateTime? currentTime,
+        HashSet<string>? suppressed,
         List<(int StackRank, int PrimitiveRank, double Distance, S100Pick Pick)> ranked)
     {
         var hits = processor.HitTestFeatures(latitude, longitude, radius);
+        if (suppressed is not null)
+            hits = [.. hits.Where(hit => !suppressed.Contains(hit.FeatureRef))];
         if (hits.Count > 0)
         {
             foreach (var hit in hits)
@@ -1631,6 +1658,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
 
             _stampedRedrawLayers.Clear();
             _layerBands.ReplaceDatasetLayers([]);
+            RemoveChartLayers();
             CancelStackWaiters();
         }
     }
@@ -1659,8 +1687,8 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
         ApplyDisplayAndScaleToProjectedLayers(plan.Input, plan.Projected);
         ApplyOverlapSuppression(plan);
         UpdateContentCutoffs(plan.Projected);
-        var datasetLayers = plan.Projected.Select(item => item.Layer).ToArray();
-        StampRedrawSink(datasetLayers);
+        var datasetLayers = BuildMapLayers(plan.Input.Version, plan.Projected);
+        StampRedrawSink([.. plan.Projected.Select(item => item.Layer), .. datasetLayers.OfType<ChartLayer>()]);
         _layerBands.ReplaceDatasetLayers(datasetLayers);
         _stackEntries = plan.StackEntries;
         _stackedLayers = plan.StackedLayers;
@@ -1703,6 +1731,10 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             {
                 instrumented.RequestRedraw = redraw;
                 _stampedRedrawLayers.Add(instrumented);
+            }
+            else if (layer is ChartLayer chart)
+            {
+                chart.RequestRedraw = redraw;
             }
         }
     }
@@ -2001,7 +2033,10 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
                 return new MapsuiProjectedDatasetLayer(
                     new MapDatasetId(entry.SourceDatasetId),
                     key.LayerKey,
-                    entry.Layer);
+                    entry.Layer)
+                {
+                    SuppressedFeatures = entry.SuppressedFeatures,
+                };
             })
             .ToArray();
         return (

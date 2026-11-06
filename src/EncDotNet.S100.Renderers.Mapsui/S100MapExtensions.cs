@@ -1,5 +1,6 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Rendering.Engine;
 using Mapsui;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
@@ -100,7 +101,8 @@ public static class S100MapExtensions
             ? () => marshal(refreshMap)
             : refreshMap;
         var session = new MapsuiDatasetLayerSession(
-            layerBands, processorOwner, renderer, authorityProvider, redraw, options.StackMarshal);
+            layerBands, processorOwner, renderer, authorityProvider, redraw, options.StackMarshal,
+            new ChartSession(options.ChartOptions ?? ChartEngine.Options));
         var navigator = new MapsuiMapNavigator(map);
         var dynamicSourceHost = new DynamicSources.S100DynamicSourceHost(
             layerBands,

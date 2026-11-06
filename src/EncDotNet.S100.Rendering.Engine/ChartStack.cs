@@ -24,6 +24,13 @@ public sealed class ChartStackEntry
     /// <summary>The owner token whose bound scene this entry draws.</summary>
     public object Source { get; }
 
+    /// <summary>
+    /// Whether the layer draws. A hidden layer keeps its place in the stack,
+    /// so showing it again re-rasters only the slots it touches. Defaults to
+    /// <see langword="true"/>.
+    /// </summary>
+    public bool Visible { get; init; } = true;
+
     /// <summary>The opacity, 0 to 1, the layer is drawn with. Defaults to 1.</summary>
     public double Opacity { get; init; } = 1.0;
 

@@ -57,6 +57,53 @@ public static partial class S100VectorTileRenderer
         LayerRepaint.Request(owner);
     }
 
+    /// <summary>
+    /// Whether the scene bound to <paramref name="source"/> can be drawn into
+    /// a chart layer: it is bound, and its base plane isn't drawn live (a
+    /// sparse overlay such as a route stays a layer of its own).
+    /// </summary>
+    internal static bool CanJoinChart(object source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (!States.TryGetValue(source, out var state))
+        {
+            return false;
+        }
+
+        lock (state.Sync)
+        {
+            return state.Scene is not null && state.Chart is null && !state.LiveBase;
+        }
+    }
+
+    /// <summary>
+    /// Builds the planes of <paramref name="source"/>'s scene without the
+    /// <paramref name="suppressed"/> features ahead of a stack that will draw
+    /// them, so publishing the stack finds them ready. Safe on any thread.
+    /// </summary>
+    internal static void PrepareSuppressedFeatures(object source, IReadOnlySet<string> suppressed)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(suppressed);
+        if (suppressed.Count == 0 || !States.TryGetValue(source, out var state))
+        {
+            return;
+        }
+
+        VectorScene? baseScene;
+        VectorScene? overlay;
+        lock (state.Sync)
+        {
+            baseScene = state.Scene;
+            overlay = state.Overlay?.Scene;
+        }
+
+        if (baseScene is not null)
+        {
+            FilterSuppressed(baseScene, overlay, suppressed);
+        }
+    }
+
     /// <summary>The extent of the stack bound to <paramref name="owner"/>, or null.</summary>
     internal static WorldRect? ChartExtent(object owner)
     {
@@ -80,7 +127,7 @@ public static partial class S100VectorTileRenderer
         double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
         foreach (var entry in stack.Entries)
         {
-            if (entry.Opacity <= 0 || !States.TryGetValue(entry.Source, out var source))
+            if (!entry.Visible || entry.Opacity <= 0 || !States.TryGetValue(entry.Source, out var source))
             {
                 continue;
             }

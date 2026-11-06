@@ -369,13 +369,6 @@ public static partial class S100VectorTileRenderer
     internal static bool DiagEnabled { get; } = ReadBool("S100_VECTOR_TILE_DIAG", false);
 
     /// <summary>
-    /// The longest a replaced layer's tiles stand in for its successor's
-    /// (see <see cref="AdoptPredecessor"/>), so a successor that never
-    /// completes its view does not keep them alive.
-    /// </summary>
-    internal static readonly TimeSpan PredecessorLifetime = TimeSpan.FromSeconds(5);
-
-    /// <summary>
     /// Whether a scene whose product hints live drawing
     /// (<see cref="VectorScene.PreferLiveDrawing"/>) is drawn directly each
     /// frame instead of tiled (see <see cref="DrawsLive"/>). Seeded from
@@ -686,165 +679,6 @@ public static partial class S100VectorTileRenderer
     }
 
     /// <summary>
-    /// Binds to <paramref name="target"/> a copy of the scene bound to
-    /// <paramref name="source"/> that keeps only the ops <paramref name="keep"/>
-    /// accepts, so a layer derived from another (for example one whose S-101
-    /// depth features an S-98 rule suppressed) is still painted by the tiled
-    /// renderer, pattern fills included, rather than by its pick-target
-    /// features. The copy bypasses the warm disk cache: its content no longer
-    /// matches the source's namespace.
-    /// </summary>
-    /// <param name="source">A layer a scene was bound to.</param>
-    /// <param name="target">The layer to bind the filtered scene to.</param>
-    /// <param name="keep">Returns <see langword="true"/> for each op to keep.</param>
-    /// <returns><see langword="true"/> when <paramref name="source"/> had a scene to copy.</returns>
-    public static bool TryBindFilteredScene(object source, object target, Func<PaintOp, bool> keep) =>
-        TryBindFilteredScene(source, target, keep, replaces: null);
-
-    /// <summary>
-    /// Binds to <paramref name="target"/> a filtered copy of the scene bound to
-    /// <paramref name="source"/>, as
-    /// <see cref="TryBindFilteredScene(object, object, Func{PaintOp, bool})"/>,
-    /// for a layer that takes the place of <paramref name="replaces"/> on the
-    /// map. Until its own tiles land, <paramref name="target"/> shows the
-    /// tiles <paramref name="replaces"/> already has, so the swap never blanks
-    /// the chart; <paramref name="replaces"/> stops producing tiles.
-    /// </summary>
-    /// <param name="source">A layer a scene was bound to.</param>
-    /// <param name="target">The layer to bind the filtered scene to.</param>
-    /// <param name="keep">Returns <see langword="true"/> for each op to keep.</param>
-    /// <param name="replaces">
-    /// The layer <paramref name="target"/> replaces (for example the previous
-    /// filtered copy of <paramref name="source"/>), or <see langword="null"/>.
-    /// </param>
-    /// <returns><see langword="true"/> when <paramref name="source"/> had a scene to copy.</returns>
-    public static bool TryBindFilteredScene(object source, object target, Func<PaintOp, bool> keep, object? replaces)
-    {
-        ArgumentNullException.ThrowIfNull(source);
-        ArgumentNullException.ThrowIfNull(target);
-        ArgumentNullException.ThrowIfNull(keep);
-
-        if (!TryGetPartitionedScene(source, out var baseScene, out var overlayScene))
-        {
-            return false;
-        }
-
-        // Base then overlay: BindScene re-partitions, and each plane keeps its
-        // own Part 9 order.
-        var ops = new List<PaintOp>(baseScene.Ops.Count + overlayScene.Ops.Count);
-        foreach (var op in baseScene.Ops)
-        {
-            if (keep(op))
-                ops.Add(op);
-        }
-        foreach (var op in overlayScene.Ops)
-        {
-            if (keep(op))
-                ops.Add(op);
-        }
-
-        BindScene(target, new VectorScene(ops)
-        {
-            ScaleMinimumCap = baseScene.ScaleMinimumCap,
-            PreferLiveDrawing = baseScene.PreferLiveDrawing,
-        });
-
-        // The filtered layer stands in for its source, so it takes the
-        // source's place among its dataset's sibling layers.
-        if (States.TryGetValue(source, out var sourceState)
-            && States.TryGetValue(target, out var targetState))
-        {
-            TileRevealGroup? group;
-            string? member;
-            lock (sourceState.Sync)
-            {
-                group = sourceState.RevealGroup;
-                member = sourceState.RevealMember;
-            }
-
-            lock (targetState.Sync)
-            {
-                targetState.RevealGroup = group;
-                targetState.RevealMember = member;
-            }
-        }
-
-        if (replaces is not null
-            && !ReferenceEquals(replaces, target)
-            && States.TryGetValue(replaces, out var replacedState)
-            && States.TryGetValue(target, out var successorState))
-        {
-            AdoptPredecessor(successorState, replacedState);
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// Lets <paramref name="successor"/> show <paramref name="predecessor"/>'s
-    /// cached tiles until its own land, and cancels the predecessor's queued
-    /// work: it is off the map, so nothing it would still raster is shown.
-    /// </summary>
-    private static void AdoptPredecessor(TileState successor, TileState predecessor)
-    {
-        lock (predecessor.Sync)
-        {
-            predecessor.PendingVisible.Clear();
-            predecessor.PendingPredicted.Clear();
-            predecessor.PendingCrossBand.Clear();
-            ReleaseTileJobs(predecessor);
-            predecessor.CurrentVisible.Clear();
-            predecessor.CurrentSpeculative.Clear();
-
-            // One step back only: a chain of replacements keeps no more than
-            // the latest tiles alive.
-            predecessor.Predecessor = null;
-        }
-
-        lock (successor.Sync)
-        {
-            successor.Predecessor = predecessor;
-            successor.PredecessorSince = Stopwatch.GetTimestamp();
-        }
-    }
-
-    /// <summary>
-    /// Makes the tiled layers of one dataset reveal each tile position
-    /// together (see <see cref="TileRevealGroup"/>), so a cell's fills and line
-    /// work appear in one step on first render. Layers not drawn by this
-    /// renderer are ignored; fewer than two tiled layers need no group.
-    /// </summary>
-    /// <param name="members">Each layer with its stable key within the dataset (its sub-layer key).</param>
-    internal static void JoinRevealGroup(IReadOnlyList<(object Layer, string Member)> members)
-    {
-        ArgumentNullException.ThrowIfNull(members);
-
-        var tiled = new List<(TileState State, string Member)>(members.Count);
-        foreach (var (layer, member) in members)
-        {
-            if (States.TryGetValue(layer, out var state))
-            {
-                tiled.Add((state, member));
-            }
-        }
-
-        if (tiled.Count < 2)
-        {
-            return;
-        }
-
-        var group = new TileRevealGroup();
-        foreach (var (state, member) in tiled)
-        {
-            lock (state.Sync)
-            {
-                state.RevealGroup = group;
-                state.RevealMember = member;
-            }
-        }
-    }
-
-    /// <summary>
     /// Attempts to retrieve the partitioned <i>base</i> and <i>overlay</i>
     /// <see cref="VectorScene"/>s most recently bound to <paramref name="layer"/>
     /// via <see cref="BindScene(object, VectorScene, string?, string?)"/>.
@@ -1097,7 +931,6 @@ public static partial class S100VectorTileRenderer
             ? copies[0]
             : WorldCopies.Nearest(copies, extent.MinX, extent.MaxX, centerX);
 
-        var repaintForHold = false;
         var coldExposure = 0;
         var visibleQueueDepth = 0;
         var predictionHits = 0L;
@@ -1198,7 +1031,8 @@ public static partial class S100VectorTileRenderer
                         if (state.PredictedInCache.Remove(key))
                         {
                             predictionHits++;
-                            if (state.DiskNamespace is not null)
+                            if (state.DiskNamespace is not null
+                                && (chart is null || (state.Plans.TryGetValue(key, out var plan) && plan.Persistable)))
                             {
                                 (predictionHitsToPersist ??= []).Add(
                                     (TileDiskCache.NamespaceFor(state.DiskNamespace, tilePx),
@@ -1445,11 +1279,6 @@ public static partial class S100VectorTileRenderer
                         RecordSettleComposite(state, viewport, resolution, visible, outcome.TargetExact, tilePx);
                     }
 
-                    // A held tile is revealed when its sibling's tile lands
-                    // (that publish repaints) or when the hold times out, which
-                    // nothing else would repaint for: keep painting until then.
-                    repaintForHold = outcome.Holding;
-
                     // Draw point symbols + soundings live, on top of the composited
                     // base tiles, at constant on-screen size (the base tiles are
                     // band-scaled, so symbols must not be baked into them). Each
@@ -1571,10 +1400,6 @@ public static partial class S100VectorTileRenderer
         if (predictionHits > 0)
         {
             S100Diag.Telemetry.TilePredictionHits.Add(predictionHits);
-        }
-        if (repaintForHold)
-        {
-            LayerRepaint.Request(layer);
         }
     }
 
@@ -2275,15 +2100,10 @@ public static partial class S100VectorTileRenderer
             gpuCache?.Protect(pinned);
         }
 
-        // Cached tiles a sibling layer of the same dataset does not have yet
-        // are held back so the dataset's layers reveal each position together
-        // (see TileRevealGroup). An off-screen frame draws what is cached.
-        var held = pinVisible ? HeldTiles(state, copyTargets) : null;
-
         // Whether the band fully covers the viewport (every visible tile
-        // cached and revealed). An empty target (no tile in view intersects
-        // this cell's content) is trivially complete: there is nothing to draw
-        // and no gap to backfill. A held tile is a miss, so its backdrop draws.
+        // cached). An empty target (no tile in view intersects this cell's
+        // content) is trivially complete: there is nothing to draw and no gap
+        // to backfill.
         var targetComplete = true;
         var anyTarget = false;
         var anyShown = false;
@@ -2292,7 +2112,7 @@ public static partial class S100VectorTileRenderer
             foreach (var key in keys)
             {
                 anyTarget = true;
-                if (!state.Cache.Contains(key) || held?.Contains(key) == true)
+                if (!state.Cache.Contains(key))
                 {
                     targetComplete = false;
                 }
@@ -2309,40 +2129,11 @@ public static partial class S100VectorTileRenderer
         // different scales cannot stack and ghost. Skipped once the target band
         // is complete (its opaque fills fully occlude any backdrop anyway). The
         // band is chosen across every world copy, then each copy keeps the
-        // tiles that land in view at its own centre. Held tiles are left out
-        // of the target and shown by the backdrop beneath instead.
+        // tiles that land in view at its own centre.
         var blits = new CopyBlits[copies.Count];
         for (var i = 0; i < copies.Count; i++)
         {
-            blits[i] = new CopyBlits(centerX - copies[i].OffsetX, new List<TileKey>(), WithoutHeld(copyTargets[i], held));
-        }
-
-        // A layer that replaced another on the map (an S-98 filtered copy
-        // whose dropped features changed) shows the replaced layer's tiles
-        // wherever its own are not shown yet, then lets them go once its
-        // target is complete.
-        if (state.Predecessor is { } predecessor)
-        {
-            if (targetComplete
-                || Stopwatch.GetElapsedTime(state.PredecessorSince) > PredecessorLifetime)
-            {
-                state.Predecessor = null;
-            }
-            else
-            {
-                for (var i = 0; i < copies.Count; i++)
-                {
-                    foreach (var key in copyTargets[i])
-                    {
-                        if ((!state.Cache.Contains(key) || held?.Contains(key) == true)
-                            && predecessor.Cache.Contains(key))
-                        {
-                            blits[i].Predecessor.Add(key);
-                            anyShown = true;
-                        }
-                    }
-                }
-            }
+            blits[i] = new CopyBlits(centerX - copies[i].OffsetX, new List<TileKey>(), copyTargets[i]);
         }
 
         if (!targetComplete)
@@ -2428,10 +2219,11 @@ public static partial class S100VectorTileRenderer
         }
 
         // The target shows exactly when every visible tile is its own cached
-        // tile: none held for a sibling and none stood in for by another SCAMIN
-        // scale class (WithCachedScaleClasses returns its input unchanged when
-        // it replaced nothing). Fallback and predecessor tiles only draw when
-        // the target is incomplete, so they are ruled out too.
+        // tile: none stood in for by another SCAMIN scale class or, for a chart
+        // tile, by the slot's previous tile (WithCachedScaleClasses and
+        // WithStandIns return their input unchanged when they replaced
+        // nothing). Fallback tiles only draw when the target is incomplete, so
+        // they are ruled out too.
         var targetExact = targetComplete;
         for (var i = 0; targetExact && i < copies.Count; i++)
         {
@@ -2440,68 +2232,9 @@ public static partial class S100VectorTileRenderer
 
         return new CompositeOutcome(
             ShowsBase: !anyTarget || anyShown || anyBackdrop,
-            Holding: held is { Count: > 0 },
             TargetExact: targetExact,
             Unrevealed: unrevealed);
     }
-
-    /// <summary>
-    /// The cached tiles among <paramref name="copyTargets"/> that the layer's
-    /// reveal group holds back this frame, or null when nothing is held (or
-    /// the layer is in no group). Reports the layer's targets to the group
-    /// first, so siblings painting later this frame see them. Call under
-    /// <c>state.Sync</c>.
-    /// </summary>
-    private static HashSet<TileKey>? HeldTiles(
-        TileState state, IReadOnlyList<IReadOnlyList<TileKey>> copyTargets)
-    {
-        if (state.RevealGroup is not { } group || state.RevealMember is not { } member)
-        {
-            return null;
-        }
-
-        var cache = state.Cache;
-        group.Report(member, copyTargets.SelectMany(static keys => keys), cache.Contains);
-
-        HashSet<TileKey>? held = null;
-        foreach (var keys in copyTargets)
-        {
-            foreach (var key in keys)
-            {
-                if (cache.Contains(key) && !group.IsRevealed(key))
-                {
-                    (held ??= []).Add(key);
-                }
-            }
-        }
-
-        return held;
-    }
-
-    private static IReadOnlyList<TileKey> WithoutHeld(IReadOnlyList<TileKey> keys, HashSet<TileKey>? held)
-    {
-        if (held is null)
-        {
-            return keys;
-        }
-
-        var shown = new List<TileKey>(keys.Count);
-        foreach (var key in keys)
-        {
-            if (!held.Contains(key))
-            {
-                shown.Add(key);
-            }
-        }
-
-        return shown;
-    }
-
-    /// <summary>
-    /// The texture-cache key of a predecessor's tile: the same position with a
-    /// negative scale class, which no real tile has.
-    /// </summary>
-    private static TileKey PredecessorGpuKey(TileKey key) => key with { ScaleClass = -1 - key.ScaleClass };
 
     /// <summary>What a composite drew.</summary>
     /// <param name="ShowsBase">
@@ -2510,17 +2243,16 @@ public static partial class S100VectorTileRenderer
     /// view has content. The live overlay waits for it, so a cell's symbols
     /// do not float over the chart before its fills and lines appear.
     /// </param>
-    /// <param name="Holding">Whether a cached tile was held back for a sibling layer.</param>
     /// <param name="TargetExact">
-    /// Whether every target tile drew as itself: cached, not held, and not
-    /// replaced by another scale class, so no fallback or predecessor drew.
+    /// Whether every target tile drew as itself: cached, and not replaced by
+    /// another scale class or a previous chart tile, so no stand-in drew.
     /// </param>
     /// <param name="Unrevealed">
     /// A chart layer's stack layers whose symbols wait for their base to
     /// appear (see <see cref="UnrevealedLayers"/>), or null.
     /// </param>
     private readonly record struct CompositeOutcome(
-        bool ShowsBase, bool Holding, bool TargetExact, HashSet<ChartLayerState>? Unrevealed = null);
+        bool ShowsBase, bool TargetExact, HashSet<ChartLayerState>? Unrevealed = null);
 
     /// <summary>
     /// <paramref name="keys"/> with each uncached tile replaced by a cached
@@ -2578,21 +2310,6 @@ public static partial class S100VectorTileRenderer
             foreach (var key in blit.Fallback)
             {
                 BlitTile(canvas, state, key, blit.CenterX, centerY, widthDip, heightDip, resolution, grContext, gpuCache);
-            }
-        }
-
-        // The replaced layer's tiles are raster images of another state. Their
-        // GPU twins go in this layer's texture cache under keys of their own
-        // (see PredecessorGpuKey), so they upload once, not every frame, and
-        // never stand in for this layer's own tile at the same position.
-        if (state.Predecessor is { } predecessor)
-        {
-            foreach (var blit in blits)
-            {
-                foreach (var key in blit.Predecessor)
-                {
-                    BlitTile(canvas, predecessor, key, blit.CenterX, centerY, widthDip, heightDip, resolution, grContext, gpuCache, PredecessorGpuKey(key));
-                }
             }
         }
 
@@ -3053,20 +2770,6 @@ public static partial class S100VectorTileRenderer
     /// leaves the process-wide registry clean for the next one. Not for
     /// production use.
     /// </summary>
-    /// <summary>Test-only: the reveal group a layer belongs to, or null.</summary>
-    internal static TileRevealGroup? RevealGroupForTest(object layer)
-    {
-        if (!States.TryGetValue(layer, out var state))
-        {
-            return null;
-        }
-
-        lock (state.Sync)
-        {
-            return state.RevealGroup;
-        }
-    }
-
     internal static void ClearGpuRegistryForTest()
     {
         lock (GpuRegistrySync)
@@ -3094,9 +2797,9 @@ public static partial class S100VectorTileRenderer
     private static void BlitTile(
         SKCanvas canvas, TileState state, TileKey key,
         double centerX, double centerY, double widthDip, double heightDip, double resolution,
-        GRContext? grContext, TileCache? gpuCache, TileKey? gpuKey = null)
+        GRContext? grContext, TileCache? gpuCache)
     {
-        var textureKey = gpuKey ?? key;
+        var textureKey = key;
         var image = state.Cache.TryGet(key);
         if (image is null)
         {
@@ -3740,14 +3443,7 @@ public static partial class S100VectorTileRenderer
     /// against (the live centre shifted back by the copy offset), its backdrop
     /// tiles and its exact target-band tiles.
     /// </summary>
-    private readonly record struct CopyBlits(double CenterX, List<TileKey> Fallback, IReadOnlyList<TileKey> Target)
-    {
-        /// <summary>
-        /// Target positions the layer cannot show yet that the layer it
-        /// replaced still has, drawn from <c>TileState.Predecessor</c>.
-        /// </summary>
-        public List<TileKey> Predecessor { get; } = new();
-    }
+    private readonly record struct CopyBlits(double CenterX, List<TileKey> Fallback, IReadOnlyList<TileKey> Target);
 
     internal enum TileRelevance
     {
@@ -4683,17 +4379,6 @@ public static partial class S100VectorTileRenderer
         // that placed them; the next composite frees them once it has flushed.
         public SKSurface? RotationSurface;
         public SKImage? RotationImage;
-
-        // The layer this one replaced on the map, whose cached tiles stand in
-        // for this layer's until they land (see AdoptPredecessor), and when it
-        // was adopted. Cleared once the target is complete.
-        public TileState? Predecessor;
-        public long PredecessorSince;
-
-        // The dataset's reveal group and this layer's key in it (see
-        // TileRevealGroup), or null for a layer that reveals on its own.
-        public TileRevealGroup? RevealGroup;
-        public string? RevealMember;
 
         // Settle tracking (map rendering slice 1): what the last live frame of
         // this layer showed, written only while SettleTrackingEnabled. Under Sync.
