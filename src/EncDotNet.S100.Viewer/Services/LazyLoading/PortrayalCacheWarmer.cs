@@ -77,10 +77,12 @@ internal sealed record PortrayalWarmOptions
 /// feature. Cells nearest the view go first.
 /// </para>
 /// <para>
-/// While the map is idle, up to <see cref="PrewarmConcurrency.Limit"/> cells
-/// are portrayed at once (map rendering slice 3). The limit rises while the
-/// process spends little of its time in GC pauses and halves when that
-/// share climbs, within the processor count.
+/// While the map is idle, several cells are portrayed at once, each as a
+/// background portrayal job on the work scheduler (map rendering slice 5), so
+/// map work always runs first. The warmer keeps as many cells going as the
+/// scheduler admits allocation-heavy background jobs; the scheduler's GC
+/// pause governor (slice 3's limit, now shared by every such job) raises that
+/// while GC pauses take little of the wall time and halves it when they climb.
 /// </para>
 /// <para>
 /// Progress is resumable: what has been portrayed is kept in a
@@ -112,7 +114,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
     private readonly Func<string> _signature;
     private readonly PortrayalWarmLedger _ledger;
     private readonly PortrayalWarmOptions _options;
-    private readonly PrewarmConcurrency _concurrency;
+    private readonly Func<int> _concurrencyLimit;
     private readonly TimeProvider _time;
     private readonly ILogger _logger;
     private readonly CancellationTokenSource _stop = new();
@@ -143,7 +145,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
     /// <param name="signature">Identifies the current presentation and build; cells portrayed under another are redone.</param>
     /// <param name="ledger">What has been portrayed, kept across restarts.</param>
     /// <param name="options">Timings.</param>
-    /// <param name="concurrency">How many cells may be portrayed at once; the warmer's loop owns it.</param>
+    /// <param name="concurrencyLimit">How many cells may be portrayed at once now; read every pass.</param>
     /// <param name="time">Clock for the timings.</param>
     /// <param name="logger">Logs progress.</param>
     public PortrayalCacheWarmer(
@@ -157,7 +159,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
         Func<string> signature,
         PortrayalWarmLedger ledger,
         PortrayalWarmOptions options,
-        PrewarmConcurrency concurrency,
+        Func<int> concurrencyLimit,
         TimeProvider time,
         ILogger<PortrayalCacheWarmer> logger)
     {
@@ -171,7 +173,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
         ArgumentNullException.ThrowIfNull(signature);
         ArgumentNullException.ThrowIfNull(ledger);
         ArgumentNullException.ThrowIfNull(options);
-        ArgumentNullException.ThrowIfNull(concurrency);
+        ArgumentNullException.ThrowIfNull(concurrencyLimit);
         ArgumentNullException.ThrowIfNull(time);
         ArgumentNullException.ThrowIfNull(logger);
         _candidates = candidates;
@@ -184,7 +186,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
         _signature = signature;
         _ledger = ledger;
         _options = options;
-        _concurrency = concurrency;
+        _concurrencyLimit = concurrencyLimit;
         _time = time;
         _logger = logger;
     }
@@ -199,7 +201,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
     public void Start() => _loop ??= RunAsync(_stop.Token);
 
     /// <summary>How many cells may be portrayed at once now.</summary>
-    public int ConcurrencyLimit => _concurrency.Limit;
+    public int ConcurrencyLimit => Math.Max(1, _concurrencyLimit());
 
     /// <summary>Stops the loop and saves the ledger. Does not wait for running portrayals.</summary>
     public void Dispose()
@@ -229,7 +231,6 @@ internal sealed class PortrayalCacheWarmer : IDisposable
                     if (!enabled)
                     {
                         quietSince = null;
-                        _concurrency.Restart();
                         if (_running.Count == 0)
                             Publish(PortrayalWarmState.Off, _status.Warm, _status.Total);
                         await WaitAsync(_running.Count == 0 ? _options.IdleInterval : _options.PollInterval, stop);
@@ -239,7 +240,6 @@ internal sealed class PortrayalCacheWarmer : IDisposable
                     if (busy)
                     {
                         quietSince = null;
-                        _concurrency.Restart();
                         if (_status.State is PortrayalWarmState.Working or PortrayalWarmState.Paused)
                             Publish(PortrayalWarmState.Paused, _status.Warm, _status.Total);
                         await WaitAsync(_options.PollInterval, stop);
@@ -254,16 +254,8 @@ internal sealed class PortrayalCacheWarmer : IDisposable
                     }
 
                     // Survey only when a slot is free: it reads every candidate.
-                    if (_running.Count < _concurrency.Limit && !await FillAsync(stop))
+                    if (_running.Count < ConcurrencyLimit && !await FillAsync(stop))
                         continue;
-
-                    // Observed after filling, so a slot counts as idle only
-                    // when the queue had nothing left to put in it.
-                    if (_running.Count > 0 && _concurrency.Observe(_running.Count))
-                    {
-                        _logger.LogDebug("Portrayal pre-warm now portrays up to {Limit} cells at once (GC pause share {Share:P1}).",
-                            _concurrency.Limit, _concurrency.LastPauseShare ?? 0);
-                    }
 
                     await WaitAsync(_options.PollInterval, stop);
                 }
@@ -311,7 +303,7 @@ internal sealed class PortrayalCacheWarmer : IDisposable
             return false;
         }
 
-        while (_running.Count < _concurrency.Limit && pending.Count > 0)
+        while (_running.Count < ConcurrencyLimit && pending.Count > 0)
             Start(TakeNearest(pending), stop);
 
         Publish(PortrayalWarmState.Working, warm, total);
