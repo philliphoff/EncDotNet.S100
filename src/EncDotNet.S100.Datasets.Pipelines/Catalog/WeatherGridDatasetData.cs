@@ -43,6 +43,9 @@ public sealed record WeatherGridDatasetData : ProductDatasetData, ICoverageSampl
     /// <summary>The grid set.</summary>
     public WeatherGridSet GridSet { get; }
 
+    /// <summary>The grid's sampler, shared with picks and <c>sample_coverage</c>.</summary>
+    internal Sampling.WeatherGridSampler Sampler => _sampler;
+
     /// <inheritdoc />
     public override DatasetMetadata Metadata { get; }
 

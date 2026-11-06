@@ -127,4 +127,29 @@ internal sealed class ViewerFindingFormatter : RouteFindingFormatter
     protected override string TideNotAppliedForFormat => Strings.Findings_TideNotAppliedForFormat;
     protected override string TideNotApplied => Strings.Findings_TideNotApplied;
     protected override string NoDepthSource => Strings.Findings_NoDepthSource;
+
+    protected override string WindAboveForFormat => Strings.Findings_WindAboveForFormat;
+    protected override string WavesAboveForFormat => Strings.Findings_WavesAboveForFormat;
+    protected override string WindAboveDistanceFormat => Strings.Findings_WindAboveDistanceFormat;
+    protected override string WavesAboveDistanceFormat => Strings.Findings_WavesAboveDistanceFormat;
+    protected override string WindNoun => Strings.Findings_WindNoun;
+    protected override string WavesNoun => Strings.Findings_WavesNoun;
+    protected override string WeatherForecastEndsFormat => Strings.Findings_WeatherForecastEndsFormat;
+    protected override string WeatherForecastStartsLateFormat => Strings.Findings_WeatherForecastStartsLateFormat;
+    protected override string NoWeatherCoverageFormat => Strings.Findings_NoWeatherCoverageFormat;
+    protected override string WeatherNoDataFormat => Strings.Findings_WeatherNoDataFormat;
+    protected override string WeatherMaxAtFormat => Strings.Findings_WeatherMaxAtFormat;
+    protected override string WeatherMaxFormat => Strings.Findings_WeatherMaxFormat;
+    protected override string TimeWindowFormat => Strings.Findings_TimeWindowFormat;
+    protected override string ForecastEndsAtFormat => Strings.Findings_ForecastEndsAtFormat;
+    protected override string ForecastStartsAtFormat => Strings.Findings_ForecastStartsAtFormat;
+    protected override string MinutesFormat => Strings.Findings_MinutesFormat;
+    protected override string HoursFormat => Strings.Findings_HoursFormat;
+    protected override string CycloneRadiusFormat => Strings.Findings_CycloneRadiusFormat;
+    protected override string CycloneConeTitle => Strings.Findings_CycloneConeTitle;
+    protected override string CycloneClosestFormat => Strings.Findings_CycloneClosestFormat;
+    protected override string CycloneBeyondFormat => Strings.Findings_CycloneBeyondFormat;
+    protected override string CycloneStormFormat => Strings.Findings_CycloneStormFormat;
+    protected override string CycloneEstimated => Strings.Findings_CycloneEstimated;
+    protected override string CycloneBestTrack => Strings.Findings_CycloneBestTrack;
 }

@@ -123,7 +123,7 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
         routes.Routes.SetActiveRoute(route);
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
         var check = new PassageCheckService(routes, catalog,
-            checks: () => [new ChartCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: new UiThread().Post);
+            checks: () => [new ChartCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: new UiThread().Post, weather: new FixedWeatherLimits());
         var findings = new RouteFindingsService(check, routes, catalog, timeFormat: new Utc());
         routes.IsCheckModeActive = true;
         await findings.WhenIdle();
@@ -221,15 +221,15 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
         route.AppendWaypoint(new DataModel.GeoPosition(0, 0.01));
         route.SetPassageValue(RoutePassageField.Draft, 5);
 
-        var input = PassageCheckService.CheckInput.For(route, Now, settings)!;
+        var input = PassageCheckService.CheckInput.For(route, Now, null, TropicalCycloneCheckSettings.Default, settings)!;
         var checkSettings = input.Settings;
 
         Assert.Equal((10.0, 8.0), (checkSettings.SafetyContour!.Value.TotalMetres, checkSettings.SafetyDepth!.Value.TotalMetres));
         Assert.True(checkSettings.ChecksDepths);
         Assert.Equal(Now, checkSettings.At);
-        Assert.False(PassageCheckService.CheckInput.For(route, Now)!.Settings.ChecksDepths);
+        Assert.False(PassageCheckService.CheckInput.For(route, Now, null, TropicalCycloneCheckSettings.Default)!.Settings.ChecksDepths);
         // A change to the mariner's depths is a new input; the legs are the same.
-        var other = PassageCheckService.CheckInput.For(route, Now, settings with { SafetyDepth = Depth.FromMetres(9) })!;
+        var other = PassageCheckService.CheckInput.For(route, Now, null, TropicalCycloneCheckSettings.Default, settings with { SafetyDepth = Depth.FromMetres(9) })!;
         Assert.False(input.SameAs(other));
         Assert.True(input.SameLegs(other));
         Assert.Equal("Crosses land", new ViewerFindingFormatter(DepthUnit.Metres, TimeFormat.Utc, Now).Title(new RouteFinding("x", RouteFindingCodes.CrossesLand)));

@@ -88,6 +88,8 @@ public class RouteFindingFormatter
             RouteFindingCategory.Warning when finding.Details is WarningDetails warning => WarningTitle(finding, warning),
             RouteFindingCategory.Clearance or RouteFindingCategory.Confidence => ClearanceTitle(finding),
             RouteFindingCategory.Data when finding.Code != RouteFindingCodes.OutsideChartCoverage => ClearanceTitle(finding),
+            RouteFindingCategory.Weather when finding.Details is WeatherDetails weather => WeatherTitle(finding, weather),
+            RouteFindingCategory.Weather when finding.Details is TropicalCycloneDetails cyclone => CycloneTitle(cyclone),
             _ => ChartTitle(finding),
         };
     }
@@ -105,6 +107,8 @@ public class RouteFindingFormatter
             RouteFindingCategory.Warning when finding.Details is WarningDetails warning => WarningMeta(warning),
             RouteFindingCategory.Clearance or RouteFindingCategory.Confidence => ClearanceMeta(finding),
             RouteFindingCategory.Data when finding.Code != RouteFindingCodes.OutsideChartCoverage => ClearanceMeta(finding),
+            RouteFindingCategory.Weather when finding.Details is WeatherDetails weather => WeatherMeta(weather),
+            RouteFindingCategory.Weather when finding.Details is TropicalCycloneDetails cyclone => CycloneMeta(cyclone),
             _ => ChartMeta(finding),
         };
     }
@@ -903,6 +907,197 @@ public class RouteFindingFormatter
             _ => Join(legs, length, TideNotApplied),
         };
     }
+
+    // ---- Weather findings ----
+
+    /// <summary>Title above the wind limit ({0}: the limit), with the time spent above it ({1}: from <see cref="FormatDuration"/>).</summary>
+    protected virtual string WindAboveForFormat => "Wind above {0} for {1}";
+
+    /// <summary>Title above the wave limit ({0}: the limit), with the time spent above it ({1}).</summary>
+    protected virtual string WavesAboveForFormat => "Waves above {0} for {1}";
+
+    /// <summary>Title above the wind limit ({0}: the limit) without ETAs, with the stretch's length ({1}: nautical miles).</summary>
+    protected virtual string WindAboveDistanceFormat => "Wind above {0} for {1:0.0} NM";
+
+    /// <summary>Title above the wave limit ({0}: the limit) without ETAs, with the stretch's length ({1}: nautical miles).</summary>
+    protected virtual string WavesAboveDistanceFormat => "Waves above {0} for {1:0.0} NM";
+
+    /// <summary>Wind, as the subject of a "not checked" title.</summary>
+    protected virtual string WindNoun => "Wind";
+
+    /// <summary>Waves, as the subject of a "not checked" title.</summary>
+    protected virtual string WavesNoun => "Waves";
+
+    /// <summary>Title of <see cref="RouteFindingCodes.WeatherForecastEnds"/> ({0}: <see cref="WindNoun"/> or <see cref="WavesNoun"/>).</summary>
+    protected virtual string WeatherForecastEndsFormat => "{0} not checked: forecast ends before arrival";
+
+    /// <summary>Title of <see cref="RouteFindingCodes.WeatherForecastStartsLate"/> ({0}: the quantity).</summary>
+    protected virtual string WeatherForecastStartsLateFormat => "{0} not checked: forecast starts later";
+
+    /// <summary>Title of <see cref="RouteFindingCodes.NoWeatherCoverage"/> ({0}: the quantity).</summary>
+    protected virtual string NoWeatherCoverageFormat => "{0} not checked: outside forecast coverage";
+
+    /// <summary>Title of <see cref="RouteFindingCodes.WeatherNoData"/> ({0}: the quantity).</summary>
+    protected virtual string WeatherNoDataFormat => "{0} not checked: no forecast value";
+
+    /// <summary>The highest value in a stretch ({0}) and when the vessel is there ({1}).</summary>
+    protected virtual string WeatherMaxAtFormat => "max {0} at {1}";
+
+    /// <summary>The highest value in a stretch ({0}) without an ETA.</summary>
+    protected virtual string WeatherMaxFormat => "max {0}";
+
+    /// <summary>The time window the vessel is in a stretch, from ({0}) to ({1}).</summary>
+    protected virtual string TimeWindowFormat => "{0}–{1}";
+
+    /// <summary>When the forecast ends ({0}: the time of its last step).</summary>
+    protected virtual string ForecastEndsAtFormat => "forecast ends {0}";
+
+    /// <summary>When the forecast starts ({0}: the time of its first step).</summary>
+    protected virtual string ForecastStartsAtFormat => "forecast starts {0}";
+
+    /// <summary>A time spent somewhere in whole minutes ({0}), under an hour.</summary>
+    protected virtual string MinutesFormat => "{0} min";
+
+    /// <summary>A time spent somewhere in hours ({0}, to a tenth).</summary>
+    protected virtual string HoursFormat => "{0:0.#} h";
+
+    /// <summary>A wind speed with its unit: knots to the whole knot, "25 kn".</summary>
+    /// <param name="metresPerSecond">The speed.</param>
+    /// <returns>The text.</returns>
+    protected virtual string FormatWind(double metresPerSecond) =>
+        Speed.FromMetresPerSecond(metresPerSecond).TotalKnots.ToString("0", Culture) + " kn";
+
+    /// <summary>A wave height with its unit: metres to a tenth, or feet to the whole foot when <see cref="DepthUnit"/> isn't metres.</summary>
+    /// <param name="metres">The height.</param>
+    /// <returns>The text.</returns>
+    protected virtual string FormatWaveHeight(double metres) => DepthUnit == DepthUnit.Metres
+        ? metres.ToString("0.0", Culture) + " m"
+        : Length.FromMetres(metres).TotalFeet.ToString("0", Culture) + " ft";
+
+    /// <summary>A time spent somewhere: whole minutes under an hour, hours to a tenth beyond.</summary>
+    /// <param name="duration">The time.</param>
+    /// <returns>The text.</returns>
+    protected virtual string FormatDuration(TimeSpan duration) => duration < TimeSpan.FromMinutes(59.5)
+        ? Format(MinutesFormat, Math.Max(1, (int)Math.Round(duration.TotalMinutes)))
+        : Format(HoursFormat, Math.Round(duration.TotalHours, 1));
+
+    /// <summary>The title of a weather finding.</summary>
+    /// <param name="finding">The finding.</param>
+    /// <param name="details">Its details.</param>
+    /// <returns>The title.</returns>
+    protected virtual string WeatherTitle(RouteFinding finding, WeatherDetails details)
+    {
+        var wind = details.Quantity == WeatherQuantity.WindSpeed;
+        if (details.Gap is not { } gap)
+        {
+            var limit = details.Limit is { } l ? WeatherValue(details.Quantity, l) : NoValue;
+            return details.EndTime is { } end
+                ? Format(wind ? WindAboveForFormat : WavesAboveForFormat, limit, FormatDuration(end - details.StartTime))
+                : Format(wind ? WindAboveDistanceFormat : WavesAboveDistanceFormat, limit, Nm(details.Length));
+        }
+
+        var noun = wind ? WindNoun : WavesNoun;
+        return gap switch
+        {
+            WeatherSampleState.ForecastEnds => Format(WeatherForecastEndsFormat, noun),
+            WeatherSampleState.ForecastStartsLate => Format(WeatherForecastStartsLateFormat, noun),
+            WeatherSampleState.NoCoverage => Format(NoWeatherCoverageFormat, noun),
+            _ => Format(WeatherNoDataFormat, noun),
+        };
+    }
+
+    /// <summary>The meta line of a weather finding: "Legs 4 → 6 · max 31 kn at 15:00 · 14:00–17:00".</summary>
+    /// <param name="details">The finding's details.</param>
+    /// <returns>The meta line.</returns>
+    protected virtual string WeatherMeta(WeatherDetails details)
+    {
+        var legs = LegLabel(details.FirstLegIndex, details.LastLegIndex);
+        var window = details.EndTime is { } end
+            ? Format(TimeWindowFormat, FormatEta(details.StartTime), FormatEta(end))
+            : null;
+        if (details.Gap is not { } gap)
+        {
+            var max = details.Maximum is { } m ? WeatherValue(details.Quantity, m) : NoValue;
+            var peak = details.MaximumTime is { } at ? Format(WeatherMaxAtFormat, max, FormatEta(at)) : Format(WeatherMaxFormat, max);
+            return Join(legs, peak, window);
+        }
+
+        var edge = gap switch
+        {
+            WeatherSampleState.ForecastEnds when details.ForecastEnd is { } e => Format(ForecastEndsAtFormat, FormatTime(e)),
+            WeatherSampleState.ForecastStartsLate when details.ForecastStart is { } s => Format(ForecastStartsAtFormat, FormatTime(s)),
+            _ => null,
+        };
+        return Join(legs, Format(StretchFromFormat, FormatEta(details.StartTime)), edge, Format(StretchLengthFormat, Nm(details.Length)));
+    }
+
+    // ---- Tropical cyclone findings (#1299) ----
+
+    /// <summary>Title inside a wind radius ({0}: its knots, 34, 50 or 64).</summary>
+    protected virtual string CycloneRadiusFormat => "Inside the {0} kt radius";
+
+    /// <summary>Title inside the forecast cone.</summary>
+    protected virtual string CycloneConeTitle => "Inside the forecast cone";
+
+    /// <summary>Title of the closest approach ({0}: the distance in nautical miles).</summary>
+    protected virtual string CycloneClosestFormat => "Closest approach {0:0} NM";
+
+    /// <summary>Title of a stretch after the forecast ends ({0}: the storm's name).</summary>
+    protected virtual string CycloneBeyondFormat => "{0} not checked: beyond the forecast";
+
+    /// <summary>The storm and its advisory ({0}: the name, {1}: the advisory number), "ZELDA adv 17".</summary>
+    protected virtual string CycloneStormFormat => "{0} adv {1}";
+
+    /// <summary>The storm position is an estimate between two forecast points.</summary>
+    protected virtual string CycloneEstimated => "est. position";
+
+    /// <summary>The storm position is on the best track, before the advisory.</summary>
+    protected virtual string CycloneBestTrack => "best track";
+
+    /// <summary>The title of a tropical cyclone finding.</summary>
+    /// <param name="details">Its details.</param>
+    /// <returns>The title.</returns>
+    protected virtual string CycloneTitle(TropicalCycloneDetails details) => details.Kind switch
+    {
+        TropicalCycloneFindingKind.Radius => Format(CycloneRadiusFormat, (int)(details.Radius ?? TropicalCycloneRadius.Knots34)),
+        TropicalCycloneFindingKind.Cone => CycloneConeTitle,
+        TropicalCycloneFindingKind.ClosestApproach => Format(CycloneClosestFormat, details.ClosestDistance is { } d ? Nm(d) : 0),
+        _ => Format(CycloneBeyondFormat, details.Storm.Name),
+    };
+
+    /// <summary>The meta line of a tropical cyclone finding: "Leg 2 → 4 · 02:00–07:00 · ZELDA adv 17".</summary>
+    /// <param name="details">The finding's details.</param>
+    /// <returns>The meta line.</returns>
+    protected virtual string CycloneMeta(TropicalCycloneDetails details)
+    {
+        var legs = LegLabel(details.FirstLegIndex, details.LastLegIndex);
+        var storm = Format(CycloneStormFormat, details.Storm.Name, details.Storm.Advisory);
+        switch (details.Kind)
+        {
+            case TropicalCycloneFindingKind.ClosestApproach:
+                var basis = details.StormAtClosest?.Basis switch
+                {
+                    RouteCycloneBasis.Estimated => CycloneEstimated,
+                    RouteCycloneBasis.BestTrack => CycloneBestTrack,
+                    _ => null,
+                };
+                return Join(FormatEta(details.StartTime), legs, storm, basis);
+            case TropicalCycloneFindingKind.BeyondForecast:
+                return Join(
+                    legs,
+                    Format(StretchFromFormat, FormatEta(details.StartTime)),
+                    details.ForecastEnd is { } e ? Format(ForecastEndsAtFormat, FormatTime(e)) : null,
+                    storm);
+            default:
+                var window = details.EndTime is { } end
+                    ? Format(TimeWindowFormat, FormatEta(details.StartTime), FormatEta(end))
+                    : Format(StretchFromFormat, FormatEta(details.StartTime));
+                return Join(legs, window, storm);
+        }
+    }
+
+    private string WeatherValue(WeatherQuantity quantity, double value) =>
+        quantity == WeatherQuantity.WindSpeed ? FormatWind(value) : FormatWaveHeight(value);
 
     private string Join(params string?[] parts) =>
         string.Join(Separator, parts.Where(p => !string.IsNullOrEmpty(p)));

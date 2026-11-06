@@ -382,7 +382,7 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             var parseStart = Stopwatch.GetTimestamp();
             IDatasetProcessor processor;
             // The parse stage of the warm-load breakdown (s100.cell.parse,
-            // then s100.cell.portray, s100.cell.scene_build, s100.cell.compose).
+            // then s100.cell.portray, s100.cell.scene_build, s100.cell.stack_wait).
             using (EncDotNet.S100.Viewer.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.parse"))
             {
                 processor = await CreateProcessorAsync(
@@ -494,9 +494,20 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
             EncDotNet.S100.Validation.ValidationReport? validation;
             using (validationLease)
             {
-                validation = await Task.Run(
-                    () => SafeValidate(processor),
-                    token).ConfigureAwait(true);
+                // Validation runs in the scheduler's lowest class, whatever
+                // the load's demand, so it never delays drawing (map
+                // rendering slice 5).
+                Task<EncDotNet.S100.Validation.ValidationReport?> validating;
+                using (WorkDemand.Enter(null))
+                {
+                    validating = WorkScheduler.Shared.RunAsync(
+                        WorkStage.Validate,
+                        _ => SafeValidate(processor),
+                        token,
+                        WorkPriority.Validation());
+                }
+
+                validation = await validating.ConfigureAwait(true);
             }
             if (!IsCurrentLoad(entry, loadGeneration)
                 || !OwnsProcessor(entry, processor))

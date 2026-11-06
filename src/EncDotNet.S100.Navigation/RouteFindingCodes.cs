@@ -187,6 +187,56 @@ public static class RouteFindingCodes
     /// <summary>A stretch with no charted depth from S-102 or S-101. CHECK.</summary>
     public static RouteFindingCode NoChartedDepth { get; } = new("data.no_charted_depth", RouteFindingCategory.Data, RouteFindingGroup.Check);
 
+    /// <summary>A stretch where the forecast wind is above the wind limit at the ETA. CHECK: weather findings are advisory.</summary>
+    public static RouteFindingCode WindAboveLimit { get; } = new("weather.wind_above_limit", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>A stretch where the forecast significant wave height is above the wave limit at the ETA. CHECK.</summary>
+    public static RouteFindingCode WavesAboveLimit { get; } = new("weather.waves_above_limit", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>The forecast ends before the vessel reaches a stretch, so wind or waves aren't checked there. CHECK.</summary>
+    public static RouteFindingCode WeatherForecastEnds { get; } = new("weather.forecast_ends", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>The forecast starts after the vessel passes a stretch, so wind or waves aren't checked there. CHECK.</summary>
+    public static RouteFindingCode WeatherForecastStartsLate { get; } = new("weather.forecast_starts_late", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>A stretch outside every weather grid with the quantity, so it isn't checked there. CHECK.</summary>
+    public static RouteFindingCode NoWeatherCoverage { get; } = new("weather.no_coverage", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>A stretch inside a weather grid where the forecast has no value, such as waves near land. CHECK.</summary>
+    public static RouteFindingCode WeatherNoData { get; } = new("weather.no_data", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>
+    /// A stretch inside a tropical cyclone's 34 kt wind radius at the ETA
+    /// (#1299). CHECK by default; the group follows
+    /// <see cref="TropicalCycloneCheckSettings.MustReviewInside"/>.
+    /// </summary>
+    public static RouteFindingCode CycloneRadius34 { get; } = new("weather.tc_radius_34", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>A stretch inside a tropical cyclone's 50 kt wind radius at the ETA. MUST REVIEW by default.</summary>
+    public static RouteFindingCode CycloneRadius50 { get; } = new("weather.tc_radius_50", RouteFindingCategory.Weather, RouteFindingGroup.MustReview);
+
+    /// <summary>A stretch inside a tropical cyclone's 64 kt wind radius at the ETA. MUST REVIEW by default.</summary>
+    public static RouteFindingCode CycloneRadius64 { get; } = new("weather.tc_radius_64", RouteFindingCategory.Weather, RouteFindingGroup.MustReview);
+
+    /// <summary>A stretch inside a tropical cyclone's forecast cone while the vessel is there. CHECK.</summary>
+    public static RouteFindingCode CycloneCone { get; } = new("weather.tc_cone", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>The route's closest approach to a tropical cyclone's centre, at the ETAs. INFO.</summary>
+    public static RouteFindingCode CycloneClosestApproach { get; } = new("weather.tc_cpa", RouteFindingCategory.Weather, RouteFindingGroup.Info);
+
+    /// <summary>A stretch the vessel reaches after a nearby tropical cyclone's last forecast point, so it isn't checked against it. CHECK.</summary>
+    public static RouteFindingCode CycloneBeyondForecast { get; } = new("weather.tc_beyond_forecast", RouteFindingCategory.Weather, RouteFindingGroup.Check);
+
+    /// <summary>The code of a stretch inside a wind radius.</summary>
+    /// <param name="radius">The radius.</param>
+    /// <returns><see cref="CycloneRadius34"/>, <see cref="CycloneRadius50"/> or <see cref="CycloneRadius64"/>.</returns>
+    public static RouteFindingCode CycloneRadius(TropicalCycloneRadius radius) => radius switch
+    {
+        TropicalCycloneRadius.Knots64 => CycloneRadius64,
+        TropicalCycloneRadius.Knots50 => CycloneRadius50,
+        _ => CycloneRadius34,
+    };
+
     /// <summary>Every code, by category and then as listed here.</summary>
     public static IReadOnlyList<RouteFindingCode> All { get; } =
     [
@@ -201,6 +251,8 @@ public static class RouteFindingCodes
         ChartedDepthFromS101, DatumUnconfirmed,
         OutsideChartCoverage, WaterLevelEnds, WaterLevelStartsLate, NoWaterLevelCoverage,
         WaterLevelNoData, DatumMismatch, NoChartedDepth,
+        WindAboveLimit, WavesAboveLimit, WeatherForecastEnds, WeatherForecastStartsLate, NoWeatherCoverage, WeatherNoData,
+        CycloneRadius34, CycloneRadius50, CycloneRadius64, CycloneCone, CycloneClosestApproach, CycloneBeyondForecast,
     ];
 
     private static readonly Dictionary<string, RouteFindingCode> ByValue = All.ToDictionary(c => c.Value, StringComparer.Ordinal);

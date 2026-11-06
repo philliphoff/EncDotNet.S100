@@ -822,6 +822,21 @@ dataset.
 - **National Language**: the 3-letter ISO 639-2/B code for chart text, or
   **(Catalogue default)**.
 
+**Weather on a route** sets the limits [Check route](#check-a-route) compares
+a loaded GRIB2 or NetCDF forecast with: **Wind limit (kn)** and **Wave height
+limit**, in metres or, for any other depth unit, feet. Both are off (empty) by
+default; an RTZ route's own `vesselMaxWind` and `vesselMaxWave` are used where
+a limit is off. They're kept with the mariner settings, not with a route, and
+changing one re-runs an open route check without redrawing the chart.
+
+**Tropical cyclones on a route** sets how Check route tests a route against a
+loaded NHC advisory: **Check against** (the 34, 50 or 64 kt radius; 34 kt by
+default; the cone is always tested), **Report closest approach** (on by
+default) and **Must review inside** (64, 50 or 34 kt, or Never; 50 kt by
+default, and never outside **Check against**). A line under them spells out
+which findings are Must review and which are Check. They're kept with the
+mariner settings, and a change re-runs an open route check.
+
 ## Identify features
 
 Turn on **Pick Mode** (the cross-hair button on the map toolbar, **View** >
@@ -1248,7 +1263,10 @@ It checks the active route against the loaded data: land and drying ground,
 chart coverage, water shallower than the **Safety Contour** and charted
 dangers (from [Mariner settings](#mariner-settings)), restricted and S-122
 protected areas, and S-124 navigational warnings, judged at each point's ETA.
-With a draft, on the passage or on every leg, it also checks under-keel
+With a GRIB2 or NetCDF forecast loaded and a wind or wave limit set (**Weather
+on a route** in [Mariner settings](#mariner-settings), or the RTZ route's own),
+it also compares the forecast wind and significant wave height at each
+point's ETA with the limits. With a draft, on the passage or on every leg, it also checks under-keel
 clearance at each point's ETA: UKC = charted depth + water level − draft −
 squat, against the **Required UKC** (0 m when unset). Charted depth comes from
 loaded S-102, or from S-101 where there's no S-102 (lower confidence); water
@@ -1287,11 +1305,26 @@ and confidence. While it's on:
   **INFO**: each stretch below your UKC setting, depths charted from S-101
   only, water-level gaps (such as data ending before arrival), expired S-111
   runs, which aren't used in ETAs, and the route check's findings, such as
-  land, dangers and areas the route crosses and warnings on it. A tag names
-  the check behind each one. Clicking a finding zooms the map to it, outlines it dashed in its tone
+  land, dangers and areas the route crosses and warnings on it, and the
+  stretches where wind or waves are above your limits ("Wind above 25 kn for
+  3 h", with the time window) or the forecast doesn't reach ("Wind not
+  checked: forecast ends before arrival"). Weather findings are always
+  **CHECK**: forecast model data is advisory. A tag names the check behind
+  each one, and a **Weather** chip filters to the weather findings. Clicking a finding zooms the map to it, outlines it dashed in its tone
   with a "Zoomed to finding" chip, and moves the profile cursor there. On the
   map, a small dot marks each finding, red for MUST REVIEW, amber for CHECK
   and grey for INFO.
+
+  While a weather forecast is loaded, the card has a **Weather** row: "No
+  limits set", "Within your limits", "1 above limits" or "Forecast ends
+  before arrival". With a tropical cyclone advisory loaded, it also counts the
+  storm's findings and gives the closest approach, as in "2 must review · 2 to
+  check · CPA 12 NM". Its tooltip names the limits in use and where each comes
+  from (Settings or the route), and the cyclone settings ("34 kt radius and
+  cone · Must review inside 50 kt"). Clicking it filters **Findings** to
+  weather. On the map, the storm at the ETA of the closest approach is drawn
+  as its class letter in a dashed ring, joined to the route by a dashed line,
+  and the legend gains a **Weather** group.
 
   Without a draft there's no clearance: the verdict card is titled from the
   findings, such as "2 items to review", and says "Add a draft to check

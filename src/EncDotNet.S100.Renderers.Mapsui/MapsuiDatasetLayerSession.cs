@@ -38,8 +38,19 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// layers must resume on the map-owning thread; UI hosts should call and await
 /// <see cref="RenderAsync"/> from that thread.
 /// </para>
+/// <para>
+/// With a stack marshal (map rendering slice 6), a rendered cell's arrival
+/// composes the layer stack — the S-98 projection, overlap suppression and
+/// the layer diff — as a <see cref="WorkStage.Stack"/> job on the work
+/// scheduler, and applies the result to the map in one marshalled post.
+/// Arrivals while a compose is in flight join the next one, and a result older
+/// than the stack on the map is dropped. <see cref="RenderAsync"/> completes
+/// once a stack that includes its cell is on the map. Every other change
+/// (order, display state, removal) still composes synchronously on the calling
+/// thread.
+/// </para>
 /// </remarks>
-public sealed class MapsuiDatasetLayerSession : IDisposable
+public sealed partial class MapsuiDatasetLayerSession : IDisposable
 {
     private readonly object _sync = new();
     private readonly MapsuiLayerBands _layerBands;
@@ -126,12 +137,20 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
     /// attached map (e.g. <c>Map.RefreshGraphics()</c>), optionally marshalled
     /// onto a UI thread.
     /// </param>
+    /// <param name="stackMarshal">
+    /// Optional post to the map-owning (UI) thread. When set, a rendered cell's
+    /// arrival composes the layer stack on the work scheduler and applies it
+    /// through this post (see the remarks on the type). When
+    /// <see langword="null"/>, every compose runs inline on the calling thread,
+    /// which suits headless and single-threaded hosts.
+    /// </param>
     public MapsuiDatasetLayerSession(
         MapsuiLayerBands layerBands,
         DatasetProcessorOwner processorOwner,
         MapsuiDatasetRenderer renderer,
         IInteroperabilityAuthorityProvider authorityProvider,
-        Action? redrawRequested = null)
+        Action? redrawRequested = null,
+        Action<Action>? stackMarshal = null)
     {
         ArgumentNullException.ThrowIfNull(layerBands);
         ArgumentNullException.ThrowIfNull(processorOwner);
@@ -142,6 +161,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         _renderer = renderer;
         _authorityProvider = authorityProvider;
         _redrawRequested = redrawRequested;
+        _stackMarshal = stackMarshal;
         _authorityProvider.CurrentChanged += OnAuthorityChanged;
         Query = new S100MapQuery(this);
     }
@@ -950,6 +970,8 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             return null;
 
         MapsuiDatasetResult result;
+        long? stackVersion = null;
+        RenderingState? restore = null;
         using (lease)
         {
             // Raise Started only once a lease is held, so it reliably means a
@@ -1010,9 +1032,13 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                     entry.TimePolicy.AvailableTimes,
                     selectedTime);
             }
-            if (compose)
+            if (compose && _stackMarshal is not null)
             {
-                using var composeActivity = Rendering.Engine.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.compose");
+                stackVersion = RequestStackCompose();
+                restore = previous;
+            }
+            else if (compose)
+            {
                 try
                 {
                     ComposeLayers();
@@ -1025,7 +1051,13 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             }
         }
 
-        if (compose)
+        if (stackVersion is { } version)
+        {
+            // The stack job raises LayersChanged when it applies.
+            using var stackWait = Rendering.Engine.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.stack_wait");
+            await AwaitStackAsync(datasetId, renderEntry, generation, version, restore!).ConfigureAwait(true);
+        }
+        else if (compose)
         {
             LayersChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -1599,23 +1631,41 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
             _stampedRedrawLayers.Clear();
             _layerBands.ReplaceDatasetLayers([]);
+            CancelStackWaiters();
         }
     }
 
+    /// <summary>
+    /// Composes the layer stack now, on the calling thread, under
+    /// <c>_sync</c>: captures, computes and applies it in one go. It counts as
+    /// a stack version, so a background compose captured before it never
+    /// overwrites it.
+    /// </summary>
     private void ComposeLayers()
     {
-        var snapshots = CreateOrderedSnapshots();
-        var (projected, stackEntries, stackedLayers) = ProjectLayerStack(snapshots);
-        ValidateProjection(projected, snapshots);
+        var input = CaptureStackInput(++_stackRequested);
+        ApplyStack(ComputeStack(input));
+    }
+
+    /// <summary>
+    /// Applies a computed stack to the layers and the map. Runs under
+    /// <c>_sync</c> on the map-owning thread: everything here is cheap
+    /// (display state, scale windows, clip attachment and the layer diff).
+    /// </summary>
+    private void ApplyStack(StackPlan plan)
+    {
+        var snapshots = plan.Input.Snapshots;
         ApplyDisplayAndScaleToSourceLayers(snapshots);
-        ApplyDisplayAndScaleToProjectedLayers(projected);
-        ApplyOverlapSuppression(projected);
-        UpdateContentCutoffs(projected);
-        var datasetLayers = projected.Select(item => item.Layer).ToArray();
+        ApplyDisplayAndScaleToProjectedLayers(plan.Input, plan.Projected);
+        ApplyOverlapSuppression(plan);
+        UpdateContentCutoffs(plan.Projected);
+        var datasetLayers = plan.Projected.Select(item => item.Layer).ToArray();
         StampRedrawSink(datasetLayers);
         _layerBands.ReplaceDatasetLayers(datasetLayers);
-        _stackEntries = stackEntries;
-        _stackedLayers = stackedLayers;
+        _stackEntries = plan.StackEntries;
+        _stackedLayers = plan.StackedLayers;
+        _stackApplied = Math.Max(_stackApplied, plan.Input.Version);
+        CompleteStackWaiters();
     }
 
     /// <summary>
@@ -1681,14 +1731,18 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
     }
 
     private void ApplyDisplayAndScaleToProjectedLayers(
+        StackInput input,
         IReadOnlyList<MapsuiProjectedDatasetLayer> projected)
     {
         foreach (var item in projected)
         {
-            if (!_entries.TryGetValue(item.DatasetId, out var entry))
+            if (!_entries.TryGetValue(item.DatasetId, out var entry)
+                || !input.Entries.TryGetValue(item.DatasetId, out var info))
+            {
                 continue;
+            }
 
-            RestoreProjectedBaseState(item, entry);
+            RestoreProjectedBaseState(item, info.Snapshot);
             ApplyDisplayState(entry.Dataset, item.LayerKey, item.Layer);
             if (!_ignoreScaleMinimum
                 && EffectiveMinimumDisplayScale(entry) is int minimumDisplayScale)
@@ -1700,44 +1754,146 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         }
     }
 
-    private void ApplyOverlapSuppression(
+    /// <summary>
+    /// The overlap-suppression cells of a projected stack, one per dataset in
+    /// the order the projection first lists it, with the finer coverages that
+    /// clip each (computed off the map thread through
+    /// <see cref="CoverageOverlapIndex"/>; the same answer as
+    /// <see cref="OverlapSuppression.Apply"/>).
+    /// </summary>
+    private IReadOnlyList<(IReadOnlyList<ILayer> Layers, FinerCoverage[]? Finer)> ComputeOverlapSuppression(
+        StackInput input,
         IReadOnlyList<MapsuiProjectedDatasetLayer> projected)
     {
-        var allLayers = _entries.Values
-            .SelectMany(entry => entry.Layers)
-            .Concat(projected.Select(item => item.Layer))
-            .Distinct()
-            .ToArray();
-        OverlapSuppression.ClearAll(
-        [
-            new OverlapSuppressionCell { Layers = allLayers },
-        ]);
-
         var cells = new List<OverlapSuppressionCell>();
+        // The engine's cells hold opaque owners; keep the typed layers alongside.
+        var cellLayers = new List<ILayer[]>();
         foreach (var group in projected.GroupBy(item => item.DatasetId))
         {
-            if (!_entries.TryGetValue(group.Key, out var entry))
+            if (!input.Entries.TryGetValue(group.Key, out var info))
                 continue;
 
             var layers = group.Select(item => item.Layer).ToArray();
-            var drawing = layers.Any(layer => layer.Enabled && layer.Opacity > 0);
+            // Whether any of the cell's layers draws once its display state is
+            // applied (Enabled and Opacity > 0), worked out without touching
+            // the layers, which the map may be drawing from.
+            var drawing = group.Any(item => DrawsWithDisplayState(info, item));
+            cellLayers.Add(layers);
             cells.Add(new OverlapSuppressionCell
             {
                 Layers = layers,
-                Coverage = drawing ? entry.CoverageGeometry : null,
-                ScaleDenominator = drawing
-                    ? RankingScale(entry)
-                    : null,
-                CutoffScaleDenominator = drawing
-                    ? EffectiveMinimumDisplayScale(entry)
-                    : null,
+                Coverage = drawing ? info.Snapshot.CoverageGeometry : null,
+                ScaleDenominator = drawing ? info.RankingScale : null,
+                CutoffScaleDenominator = drawing ? info.Snapshot.MinimumDisplayScale : null,
             });
         }
 
-        if (_ignoreScaleMinimum)
-            OverlapSuppression.ClearAll(cells);
+        var result = new (IReadOnlyList<ILayer>, FinerCoverage[]?)[cells.Count];
+        if (input.IgnoreScaleMinimum)
+        {
+            for (var i = 0; i < cells.Count; i++)
+                result[i] = (cellLayers[i], null);
+            return result;
+        }
+
+        FinerCoverage[]?[] finer;
+        lock (_overlapIndex)
+        {
+            _overlapIndex.Retain(input.Snapshots.Select(snapshot => snapshot.CoverageGeometry));
+            finer = _overlapIndex.Collect(cells);
+        }
+
+        for (var i = 0; i < cells.Count; i++)
+            result[i] = (cellLayers[i], finer[i]);
+        return result;
+    }
+
+    /// <summary>
+    /// Attaches a plan's overlap-suppression clips: clears every managed
+    /// layer that isn't in a cell, then sets each cell's finer coverages,
+    /// keeping a layer's attached set when it hasn't changed so its prepared
+    /// hidden region (<see cref="CoverageClip.GetHiddenCoverage"/>) survives.
+    /// </summary>
+    private void ApplyOverlapSuppression(StackPlan plan)
+    {
+        var inCell = new HashSet<ILayer>(ReferenceEqualityComparer.Instance);
+        foreach (var (layers, _) in plan.Suppression)
+        {
+            foreach (var layer in layers)
+                inCell.Add(layer);
+        }
+
+        foreach (var layer in _entries.Values
+            .SelectMany(entry => entry.Layers)
+            .Concat(plan.Projected.Select(item => item.Layer)))
+        {
+            if (!inCell.Contains(layer))
+                CoverageClip.Set(layer, null);
+        }
+
+        foreach (var (layers, finer) in plan.Suppression)
+        {
+            var attach = finer;
+            if (finer is not null
+                && layers.Count > 0
+                && CoverageClip.Get(layers[0]) is { } existing
+                && SameCoverages(existing, finer))
+            {
+                attach = existing;
+            }
+
+            foreach (var layer in layers)
+            {
+                if (attach is null || !ReferenceEquals(CoverageClip.Get(layer), attach))
+                    CoverageClip.Set(layer, attach);
+            }
+        }
+    }
+
+    private static bool SameCoverages(FinerCoverage[] a, FinerCoverage[] b)
+    {
+        if (a.Length != b.Length)
+            return false;
+        for (var i = 0; i < a.Length; i++)
+        {
+            if (!ReferenceEquals(a[i].Coverage, b[i].Coverage)
+                || !a[i].CutoffResolution.Equals(b[i].CutoffResolution))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="item"/>'s layer is enabled with a positive
+    /// opacity once <see cref="ApplyDisplayState"/> runs, from the same inputs:
+    /// the dataset and sub-layer state and the layer's portrayal opacity, which
+    /// a projected (S-98 rebuilt) layer takes from its source layer
+    /// (<see cref="RestoreProjectedBaseState"/>).
+    /// </summary>
+    private bool DrawsWithDisplayState(StackEntryInfo info, MapsuiProjectedDatasetLayer item)
+    {
+        var dataset = info.Snapshot.Dataset;
+        var subLayer = dataset.SubLayers.FirstOrDefault(
+            candidate => string.Equals(candidate.Key, item.LayerKey, StringComparison.Ordinal));
+        if (!dataset.IsActive || !dataset.IsVisible || !(subLayer?.IsVisible ?? true))
+            return false;
+
+        double portrayalOpacity;
+        if (item.Layer is not BaseLayer)
+        {
+            portrayalOpacity = _baseStates.TryGetValue(item.Layer, out var own) ? own.Opacity : 1.0;
+        }
         else
-            OverlapSuppression.Apply(cells);
+        {
+            var source = FindSourceLayer(item.LayerKey, info.Snapshot.LayerKeys, info.Snapshot.Layers, info.Snapshot.StackEntries);
+            var baseLayer = source is BaseLayer && !ReferenceEquals(source, item.Layer) ? source : item.Layer;
+            portrayalOpacity = _baseStates.TryGetValue(baseLayer, out var state) ? state.Opacity : baseLayer.Opacity;
+        }
+
+        return portrayalOpacity * dataset.Opacity * (subLayer?.Opacity ?? 1.0) > 0;
     }
 
     private void UpdateContentCutoffs(
@@ -1771,10 +1927,10 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
     private (
         IReadOnlyList<MapsuiProjectedDatasetLayer> Projected,
         IReadOnlyList<LayerStackEntry> StackEntries,
-        IReadOnlyList<ILayer> StackedLayers) ProjectLayerStack(
-        IReadOnlyList<MapsuiMapDatasetSnapshot> snapshots)
+        IReadOnlyList<ILayer> StackedLayers) ProjectLayerStack(StackInput input)
     {
-        var authority = _authorityProvider.Current;
+        var snapshots = input.Snapshots;
+        var authority = input.Authority;
         var perDataset = new List<IReadOnlyList<SubLayerStackItem>>(snapshots.Count);
         var prebuilt = new Dictionary<(string DatasetId, string LayerKey), LayerStackEntry>();
 
@@ -1790,7 +1946,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             if (snapshot.StackEntries is { Count: > 0 } stack)
             {
                 var items = new List<SubLayerStackItem>(stack.Count);
-                var layoutCache = _entries.GetValueOrDefault(snapshot.Dataset.Id)?.CoverageLayout;
+                var layoutCache = input.Entries.GetValueOrDefault(snapshot.Dataset.Id)?.CoverageLayout;
                 foreach (var stackEntry in stack)
                 {
                     items.Add(stackEntry.Item);
@@ -1823,7 +1979,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         var topFirst = perDataset.AsEnumerable().Reverse().ToArray();
         var sorted = LayerStackBuilder.Build(authority, topFirst);
         var loaded = BuildLoadedDatasetInfos(snapshots);
-        var ruled = authority.ApplyRules(sorted, loaded, _mariner);
+        var ruled = authority.ApplyRules(sorted, loaded, input.Mariner);
         var stackEntries = LayerStackProjector.Project(
             ruled,
             prebuilt,
@@ -2156,12 +2312,12 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
     private void RestoreProjectedBaseState(
         MapsuiProjectedDatasetLayer item,
-        Entry entry)
+        MapsuiMapDatasetSnapshot rendering)
     {
         if (item.Layer is not BaseLayer projectedBase)
             return;
 
-        var source = FindSourceLayer(item.LayerKey, entry);
+        var source = FindSourceLayer(item.LayerKey, rendering.LayerKeys, rendering.Layers, rendering.StackEntries);
         if (source is not BaseLayer sourceBase || ReferenceEquals(source, item.Layer))
         {
             RestoreBaseState(item.Layer);
@@ -2180,26 +2336,30 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         _baseStates.Add(item.Layer, range);
     }
 
-    private static ILayer? FindSourceLayer(string layerKey, Entry entry)
+    private static ILayer? FindSourceLayer(
+        string layerKey,
+        IReadOnlyList<string>? layerKeys,
+        IReadOnlyList<ILayer> layers,
+        IReadOnlyList<LayerStackEntry>? stackEntries)
     {
-        if (entry.LayerKeys is not null)
+        if (layerKeys is not null)
         {
-            for (var index = 0; index < entry.LayerKeys.Count; index++)
+            for (var index = 0; index < layerKeys.Count; index++)
             {
                 if (string.Equals(
-                        entry.LayerKeys[index],
+                        layerKeys[index],
                         layerKey,
                         StringComparison.Ordinal)
-                    && index < entry.Layers.Count)
+                    && index < layers.Count)
                 {
-                    return entry.Layers[index];
+                    return layers[index];
                 }
             }
         }
 
-        if (entry.StackEntries is not null)
+        if (stackEntries is not null)
         {
-            foreach (var stackEntry in entry.StackEntries)
+            foreach (var stackEntry in stackEntries)
             {
                 if (string.Equals(
                     LayerStackProjector.KeyOf(stackEntry.Item).LayerKey,
@@ -2218,9 +2378,9 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 System.Globalization.NumberStyles.None,
                 System.Globalization.CultureInfo.InvariantCulture,
                 out var syntheticIndex)
-            && syntheticIndex < entry.Layers.Count)
+            && syntheticIndex < layers.Count)
         {
-            return entry.Layers[syntheticIndex];
+            return layers[syntheticIndex];
         }
 
         return null;

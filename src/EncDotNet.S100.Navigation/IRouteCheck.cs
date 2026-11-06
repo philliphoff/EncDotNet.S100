@@ -1,8 +1,8 @@
 namespace EncDotNet.S100.Navigation;
 
 /// <summary>
-/// One check a <see cref="RouteChecker"/> runs: the chart, area, warning and
-/// clearance checks are built in, and a host can add its own.
+/// One check a <see cref="RouteChecker"/> runs: the chart, area, warning,
+/// clearance and weather checks are built in, and a host can add its own.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -86,6 +86,22 @@ public static class RouteCheckReasons
 
     /// <summary>The sources have no navigational warnings.</summary>
     public const string WarningsMissing = "warnings_missing";
+
+    /// <summary>The sources have no weather grids and no tropical cyclones, so the weather check didn't run.</summary>
+    public const string WeatherMissing = "weather_missing";
+
+    /// <summary>
+    /// No wind or wave limit was set, so the weather check didn't read the
+    /// weather grids: it didn't run, or (with tropical cyclones loaded) ran
+    /// their rule only.
+    /// </summary>
+    public const string WeatherLimitsMissing = "weather_limits_missing";
+
+    /// <summary>A wind limit was set, but no weather dataset has wind, so only waves were checked.</summary>
+    public const string WindMissing = "wind_missing";
+
+    /// <summary>A wave limit was set, but no weather dataset has waves, so only wind was checked.</summary>
+    public const string WavesMissing = "waves_missing";
 }
 
 /// <summary>What one check found, or why it didn't run.</summary>

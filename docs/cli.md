@@ -825,7 +825,12 @@ Other options:
 |---|---|---|
 | `--safety-contour <metres>` | `30` | Safety contour, as the mariner setting. |
 | `--safety-depth <metres>` | `30` | Safety depth, for charted dangers and soundings. |
-| `--window` | off | Also sweeps departures across the S-104 time range to find the departure window. Needs a draft. |
+| `--max-wind <knots>` | the file's | Wind limit for the weather check: stretches where a loaded GRIB2 or NetCDF forecast has a higher 10 m wind at the ETA are Check findings. Replaces an RTZ route's `vesselMaxWind`. |
+| `--max-wave <metres>` | the file's | Significant wave height limit for the weather check. Replaces an RTZ route's `vesselMaxWave`. |
+| `--cyclone-radius <knots>` | `34` | Tropical cyclones (loaded NHC advisories): the outermost wind radius tested, 34, 50 or 64 kt. The cone is always tested. |
+| `--cyclone-must-review <knots>` | `50` | The weakest radius whose findings are Must review: 64, 50, 34 or `never`. Weaker radii and the cone are Check. |
+| `--no-cyclone-cpa` | off | Doesn't report the route's closest approach to each storm. |
+| `--window` | off | Also sweeps departures across the S-104 time range to find the departure window (needs a draft), and across the forecast for the weather check (needs a wind or wave limit). |
 | `--only <specs>` | all | Exchange set or folder only. Loads only these product specifications, comma-separated. |
 | `--fail-on <level>` | `must-review` | When to exit with code `7`: `must-review`, `check` or `never`. See [Exit codes for CI](#exit-codes-for-ci). |
 | `--format <format>` | `text` | `text` or `json`. |
@@ -839,10 +844,14 @@ s100 route check route.rtz exchange-set/ --safety-contour 10 --safety-depth 10
 s100 route check route.gml enc.000 bathy.h5 tides.h5 warnings.gml --draft 7 --required-ukc 1
 s100 route check route.rtz exchange-set.zip --corridor 100 --fail-on check
 s100 route check route.gml exchange-set/ --departure 2026-03-01T06:00Z --speed 8 --window --format json
+s100 route check route.rtz enc.000 gfs.t06z.pgrb2.0p25 gfswave.t06z.grib2 --max-wind 25 --max-wave 3
+s100 route check route.rtz enc.000 al142026_5day_017.zip --cyclone-radius 50 --cyclone-must-review 64
 ```
 
 The text output gives the verdict, the checks that didn't run in full, the
-findings by group, then the clearance verdict and its minimum. The JSON output
+findings by group, then the clearance verdict and its minimum, and the weather
+verdict with the highest wind and waves and, for each tropical cyclone near
+the route, the strongest radius it meets and its closest approach. The JSON output
 is an object with:
 
 - `route`: the `file`, `format` (`rtz` or `s421`), `version`, `routeId`

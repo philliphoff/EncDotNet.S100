@@ -58,6 +58,7 @@ internal sealed class ViewerPassageRouteProvider : IPassageRouteProvider
         }
 
         return ToolResult<PassageRouteSnapshot>.Ok(new PassageRouteSnapshot(
-            route.Id, route.Name, legs, route.Passage.Departure ?? _routes.ViewTime.Current));
+            route.Id, route.Name, legs, route.Passage.Departure ?? _routes.ViewTime.Current,
+            Services.PassageCheck.RouteVesselLimits.Of(route)));
     }
 }

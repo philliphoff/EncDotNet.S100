@@ -219,7 +219,10 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
         // #959 C2: sleeves over the line (and its labels' halos), under the
         // waypoints and markers.
         if (scene.Check is { } sleeved)
+        {
             DrawSleeves(canvas, sleeved.Map, toScreen, opacity);
+            DrawStorms(canvas, sleeved.Map, sleeved.Colors, toScreen, opacity);
+        }
         DrawWaypoints(canvas, route, scene, toScreen, opacity);
     }
 
@@ -399,6 +402,57 @@ internal sealed class RouteOverlayRenderer : ISkiaStyleRenderer
             band.StrokeCap = SKStrokeCap.Butt;
             foreach (var part in Geodesy.MarineGeodesy.SplitAtAntimeridian(sleeve.Path))
                 DrawPath(canvas, Project(part, toScreen), band);
+        }
+    }
+
+    /// <summary>The storm-at-ETA ghost's ring radius, px.</summary>
+    internal const float StormGhostRadius = 11f;
+
+    /// <summary>
+    /// #1299 (V38): each storm at the ETA of the closest approach, the class
+    /// letter in a dashed ring, joined to the route by a thin dashed CPA line,
+    /// with "at ETA … · CPA … NM" beside it, all in ink.
+    /// </summary>
+    private static void DrawStorms(SKCanvas canvas, RouteCheckMap map, RouteCheckColors colors, Func<GeoPosition, Point?> toScreen, float opacity)
+    {
+        if (map.Storms.Count == 0)
+            return;
+        using var line = Stroke(colors.Ink.WithAlpha(Alpha(0.8f * opacity)), 1.2f);
+        line.StrokeCap = SKStrokeCap.Butt;
+        line.PathEffect = SKPathEffect.CreateDash([4f, 3f], 0);
+        using var halo = Stroke(colors.Casing.WithAlpha(Alpha(0.85f * opacity)), 4f);
+        using var ring = Stroke(colors.Ink.WithAlpha(Alpha(opacity)), 1.6f);
+        ring.PathEffect = SKPathEffect.CreateDash([3f, 2f], 0);
+        using var ink = Fill(colors.Ink.WithAlpha(Alpha(opacity)));
+        using var letter = new SKFont(LabelBoldTypeface, 11f);
+        using var label = new SKFont(LabelBoldTypeface, LabelFontSize);
+        using var textHalo = Stroke(colors.Casing.WithAlpha(Alpha(0.9f * opacity)), 3f);
+        foreach (var storm in map.Storms)
+        {
+            if (toScreen(storm.Centre) is not { } c)
+                continue;
+            var (cx, cy) = ((float)c.X, (float)c.Y);
+            if (toScreen(storm.RoutePoint) is { } r)
+            {
+                // The line stops at the ring.
+                var (dx, dy) = ((float)r.X - cx, (float)r.Y - cy);
+                var length = MathF.Sqrt((dx * dx) + (dy * dy));
+                if (length > StormGhostRadius)
+                    canvas.DrawLine(cx + (dx / length * StormGhostRadius), cy + (dy / length * StormGhostRadius), (float)r.X, (float)r.Y, line);
+            }
+
+            canvas.DrawCircle(cx, cy, StormGhostRadius, halo);
+            canvas.DrawCircle(cx, cy, StormGhostRadius, ring);
+            if (storm.ClassLetter.Length > 0)
+            {
+                var baseline = cy - ((letter.Metrics.Ascent + letter.Metrics.Descent) / 2f);
+                canvas.DrawText(storm.ClassLetter, cx, baseline, SKTextAlign.Center, letter, textHalo);
+                canvas.DrawText(storm.ClassLetter, cx, baseline, SKTextAlign.Center, letter, ink);
+            }
+
+            var y = cy + StormGhostRadius + 14f;
+            canvas.DrawText(storm.Label, cx, y, SKTextAlign.Center, label, textHalo);
+            canvas.DrawText(storm.Label, cx, y, SKTextAlign.Center, label, ink);
         }
     }
 

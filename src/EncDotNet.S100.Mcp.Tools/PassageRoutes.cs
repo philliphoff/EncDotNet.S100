@@ -13,11 +13,13 @@ namespace EncDotNet.S100.Mcp.Tools;
 /// <param name="Name">The route name.</param>
 /// <param name="Legs">The legs in order.</param>
 /// <param name="DefaultDeparture">Departure to use when the request has none (the route's departure, or the view time).</param>
+/// <param name="VesselLimits">The route's own wind and wave limits (RTZ <c>vesselMaxWind</c> and <c>vesselMaxWave</c>), or <c>null</c>; the request's replace them.</param>
 public sealed record PassageRouteSnapshot(
     string RouteId,
     string? Name,
     IReadOnlyList<PassageRouteLeg> Legs,
-    DateTimeOffset DefaultDeparture);
+    DateTimeOffset DefaultDeparture,
+    WeatherLimits? VesselLimits = null);
 
 /// <summary>One leg of a <see cref="PassageRouteSnapshot"/>, with the effective values the host knows.</summary>
 /// <param name="Points">The leg's points (at least two).</param>

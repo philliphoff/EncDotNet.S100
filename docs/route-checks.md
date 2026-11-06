@@ -3,7 +3,9 @@
 A route check compares a route with the loaded data. It covers land, drying
 ground, the safety contour, charted dangers, regulated and protected areas,
 S-124 navigational warnings and chart coverage. With a draft, it also computes
-the under-keel clearance (UKC) along the route at each point's ETA. Three
+the under-keel clearance (UKC) along the route at each point's ETA. With wind
+or wave limits and a weather forecast loaded, it compares the forecast along
+the route at the ETAs with the limits. Three
 hosts run the same checks and report the same findings and codes:
 
 - **SoundCharts**: **Check route** in the **Routes** panel. See the
@@ -37,7 +39,13 @@ The results are an aid for exploring the data, not for navigation.
   leg's dangers are judged against, and the UKC check runs when every leg
   has a draft. See [Keel](how-a-route-check-works.md#keel).
 - **The departure and speeds.** Speeds give each point an ETA, and
-  warnings, seasonal areas and S-104 water levels are judged at the ETAs.
+  warnings, seasonal areas, S-104 water levels and the weather forecast are
+  judged at the ETAs.
+- **Wind and wave limits.** The highest wind speed and significant wave
+  height the vessel accepts, for the weather check. SoundCharts uses
+  **Mariner Settings**; MCP and the command line take them as arguments. An
+  RTZ route's `vesselMaxWind` and `vesselMaxWave` are used where those leave
+  a limit unset.
   See [Time](how-a-route-check-works.md#time) for the time used where there's
   no ETA.
 
@@ -263,6 +271,91 @@ findings:
 | `data.water_level_no_data` | Check | A stretch inside water-level coverage where the data has no value. |
 | `data.datum_mismatch` | Check | The water level's datum differs from the charted depth's, so it isn't applied. |
 | `data.no_charted_depth` | Check | A stretch with no charted depth from S-102 or S-101. |
+
+## Weather along the route
+
+With a wind or wave limit set and a GRIB2 or NetCDF weather grid loaded, the
+weather check samples the track every nautical mile at the vessel's ETA. At
+each sample it reads the wind speed at 10 m and the significant wave height
+and compares them with the limits.
+
+- **Where and when.** A sample reads the nearest grid node and the nearest
+  forecast step, as the weather layers draw them. There's no interpolation.
+- **Which grid.** Where grids overlap, the finest grid wins, then the newest
+  model run. A regional model is read before a global one. A grid that
+  reaches the ETA wins over one that doesn't, and a grid with no value at a
+  node, such as a wave model near the coast, gives way to the next one.
+- **Not checked.** An ETA more than half a time step after a forecast's last
+  step isn't checked, and the stretch is reported. It never counts as a
+  pass. The same applies before the first step, outside every grid, and
+  where the grid has no value.
+- **ETAs.** ETAs are distance over the entered speed. Set and drift aren't
+  applied, so weather at an ETA is only as good as the ETA.
+- **Advisory.** Weather model output isn't official S-100 data. Every
+  weather finding is Check, and none is for navigation.
+
+| Code | Group | When |
+|---|---|---|
+| `weather.wind_above_limit` | Check | A stretch where the forecast wind is above the wind limit at the ETA. |
+| `weather.waves_above_limit` | Check | A stretch where the forecast significant wave height is above the wave limit at the ETA. |
+| `weather.forecast_ends` | Check | The forecast ends before the vessel reaches a stretch, so wind or waves aren't checked there. |
+| `weather.forecast_starts_late` | Check | The forecast starts after the vessel passes a stretch. |
+| `weather.no_coverage` | Check | A stretch outside every weather grid that has the quantity. |
+| `weather.no_data` | Check | A stretch inside a weather grid where the forecast has no value, such as waves near land. |
+
+A stretch above a limit gives its time window and highest value, for example
+"Wind above 25 kn for 3 h" with "Leg 4 → 5 · max 31 kn at 15:00 ·
+14:00–17:00". A gap is reported once for each quantity, so a wave forecast that
+ends earlier than the wind forecast gives its own finding.
+
+With a departure window, the weather check also sweeps departures across the
+forecast. It lists the runs of departures that keep the route within the
+limits and outside the tropical cyclone radius you check against.
+
+### Tropical cyclones
+
+With an NHC tropical cyclone advisory loaded, the weather check also tests
+the route against the storm. It runs without wind or wave limits.
+
+- **The storm at the ETA.** At each sample within 600 NM of the storm's
+  track, the check takes the storm at the sample's ETA, as the cyclone layer
+  draws it: a forecast point, an estimate between two of them, or the best
+  track before the advisory.
+- **Wind radii.** The sample is inside a radius when it's no farther from
+  the centre than the radius reaches in the sample's quadrant (NE, SE, SW or
+  NW). The check tests the radius you check against and every stronger one,
+  so a stretch inside the 50 kt radius is also reported inside the 34 kt
+  radius. It doesn't add a buffer: the cone already widens with time.
+- **The cone.** A sample inside the forecast cone while the forecast runs is
+  reported. The cone is always tested.
+- **Closest approach.** The nearest any sample comes to the storm's centre
+  at its ETA, with where and when.
+- **Not checked.** A stretch the vessel reaches after the last forecast point
+  isn't checked against the storm, and is reported.
+- **Advisory.** NHC advisories aren't official S-100 data, and no finding is
+  for navigation.
+
+Three settings shape the rule. SoundCharts keeps them in **Settings > Chart
+display > Mariner Settings > Tropical cyclones on a route**; MCP and the
+command line take them as arguments.
+
+| Setting | Default | Effect |
+|---|---|---|
+| Check against | 34 kt radius | The outermost radius tested: 34, 50 or 64 kt. Weaker radii aren't reported. |
+| Report closest approach | On | Adds the `weather.tc_cpa` finding. |
+| Must review inside | 50 kt radius | Radii at or above it are Must review: 64, 50 or 34 kt, or Never. Weaker radii and the cone are Check. It can't be weaker than **Check against**. |
+
+| Code | Group | When |
+|---|---|---|
+| `weather.tc_radius_34` | Check | A stretch inside the storm's 34 kt wind radius at the ETA. Must review when **Must review inside** is 34 kt. |
+| `weather.tc_radius_50` | Must review | A stretch inside the 50 kt wind radius. Check when **Must review inside** is 64 kt or Never. |
+| `weather.tc_radius_64` | Must review | A stretch inside the 64 kt wind radius. Check when **Must review inside** is Never. |
+| `weather.tc_cone` | Check | A stretch inside the forecast cone while the forecast runs. |
+| `weather.tc_cpa` | Info | The route's closest approach to the storm's centre. |
+| `weather.tc_beyond_forecast` | Check | A stretch near the storm that the vessel reaches after its last forecast point, so it isn't checked. |
+
+A radius finding gives its time window and the advisory, for example "Inside
+the 50 kt radius" with "Legs 2 → 4 · 02:00–07:00 · ZELDA adv 17".
 
 ## Received routes and Copy to edit
 

@@ -189,7 +189,7 @@ public sealed class ApproachScenarioTests(ApproachScenarioFixture fixture) : ICl
         routes.Routes.SetActiveRoute(route);
 
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
-        var check = new PassageCheckService(routes, catalog, checks: () => [new ClearanceCheck()], debounce: TimeSpan.Zero, post: PassageCheckFixture.SerialPost);
+        var check = new PassageCheckService(routes, catalog, checks: () => [new ClearanceCheck()], debounce: TimeSpan.Zero, post: PassageCheckFixture.SerialPost, weather: new FixedWeatherLimits());
 
         var time = new GlobalTimeService();
         var samples = CoverageWriters.Times(definition.WaterLevelStart, definition.WaterLevelEnd, TimeSpan.FromMinutes(10)).ToArray();

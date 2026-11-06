@@ -143,7 +143,7 @@ public sealed class RtzRouteInfo
     /// <summary><c>vesselMaxWave</c>: the significant wave height limit, in metres.</summary>
     public double? VesselMaxWave { get; init; }
 
-    /// <summary><c>vesselMaxWind</c>: the wind speed limit.</summary>
+    /// <summary><c>vesselMaxWind</c>: the wind speed limit, in knots.</summary>
     public double? VesselMaxWind { get; init; }
 
     /// <summary><c>vesselSpeedMax</c>, in knots.</summary>

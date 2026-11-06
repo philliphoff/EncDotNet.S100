@@ -138,7 +138,7 @@ public sealed class RouteFindingsTests : IDisposable
 
         // F1: grouped MUST REVIEW, CHECK, INFO, then by distance along the route.
         Assert.Equal(findings.Findings.OrderBy(x => x.Group).ThenBy(x => x.Distance?.TotalMetres ?? double.MaxValue), findings.Findings);
-        Assert.Equal(["Route check", "Route check", "Route check", "S-124", "Clearance", "Confidence", "Data"],
+        Assert.Equal(["Route check", "Route check", "Route check", "S-124", "Clearance", "Confidence", "Data", "Weather"],
             Enum.GetValues<RouteFindingCategory>().Select(RouteFindingRowViewModel.TagOf));
     }
 

@@ -6,6 +6,55 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Tropical cyclones on a route.** With an NHC advisory loaded, Check
+  route, `check_route` and `s100 route check` test the route against the
+  storm at each ETA: stretches inside its 34, 50 or 64 kt wind radius (in the
+  quadrant the vessel is in) and inside the forecast cone, the closest
+  approach to its centre, and stretches reached after the forecast ends (not
+  checked). By default the 34 kt radius is tested, the 50 and 64 kt radii are
+  Must review, and the 34 kt radius and the cone are Check; SoundCharts sets
+  these in **Settings** > **Chart display** > **Mariner Settings** >
+  **Tropical cyclones on a route**, MCP with `set_route_weather_settings` and
+  `check_route`'s `cyclone*` arguments, and the CLI with `--cyclone-radius`,
+  `--cyclone-must-review` and `--no-cyclone-cpa`. The verdict card's
+  **Weather** row counts the storm's findings and gives the closest approach,
+  and the map draws the storm at that ETA. In the libraries,
+  `RouteCheckSources.Cyclones` (`IRouteCyclone`),
+  `RouteCheckSettings.TropicalCyclones` (`TropicalCycloneCheckSettings`),
+  `WeatherCheckResult.Cyclones`, `TropicalCycloneDetails` and the
+  `weather.tc_*` codes are new. Breaking changes: `WeatherVerdict` gains
+  `InsideCycloneRadius` as its first value, `CycloneCheckStorm` and
+  `WeatherSample.Cyclones` are new, and the weather check runs, rather than
+  being skipped, when only an advisory is loaded. See
+  [Tropical cyclones](route-checks.md#tropical-cyclones).
+
+- **Weather along a route.** Check route, `check_route` and
+  `s100 route check` gain a weather check: with a GRIB2 or NetCDF forecast
+  loaded, they sample the route every nautical mile at the ETA and compare
+  the wind at 10 m and the significant wave height with the vessel's limits.
+  Stretches above a limit are Check findings with their time window ("Wind
+  above 25 kn for 3 h", `weather.wind_above_limit`,
+  `weather.waves_above_limit`); where the forecast ends before the vessel
+  gets there, or a grid doesn't cover it, the stretch is reported as not
+  checked (`weather.forecast_ends` and others), never passed. Each sample
+  reads the nearest grid node and time step, and the finest grid with the
+  newest run wins where grids overlap. In SoundCharts the limits are in
+  **Settings** > **Chart display** > **Mariner Settings** > **Weather on a
+  route** (`get_route_weather_settings`, `set_route_weather_settings`), the
+  verdict card gains a **Weather** row whose tooltip names the limits in use,
+  and **Findings** gains a **Weather** chip. An RTZ route's `vesselMaxWind`
+  (knots) and `vesselMaxWave` are used where no limit is set. `check_route`
+  takes `maxWindKnots` and `maxWaveHeightMeters` and returns a `weather`
+  section with an optional departure sweep; the CLI takes `--max-wind` and
+  `--max-wave`. In the libraries, `WeatherCheck` joins the built-in checks,
+  with `IRouteWeatherSource` (on `RouteCheckSources.Weather`), `WeatherLimits`
+  on `RouteCheckSettings` and `PassagePlan.VesselLimits`, `WeatherDetails`,
+  `WeatherFindings`, `RouteFindingCategory.Weather` and
+  `RtzPassagePlan.VesselLimits`. Breaking changes: `RouteChecker` runs five
+  built-in checks, so `RouteCheckReport.Checks` has a `weather` entry; the
+  `PassageRouteSnapshot` record has a new last positional parameter. See
+  [Weather along the route](route-checks.md#weather-along-the-route).
+
 - **Precipitation, thunderstorm risk and cloud cover on the chart.** GRIB2
   and NetCDF files with a precipitation rate, CAPE or total cloud cover,
   such as GFS, can now draw them: precipitation in rain radar colours from

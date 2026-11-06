@@ -197,7 +197,7 @@ public sealed class RouteCheckReportTests : IDisposable
         var report = Assert.IsType<RouteCheckReport>(f.Check.Report);
         Assert.Same(report, findings.Report);
         Assert.Equal(
-            [ChartCheck.CheckName, AreaCheck.CheckName, WarningCheck.CheckName, ClearanceCheck.CheckName],
+            [ChartCheck.CheckName, AreaCheck.CheckName, WarningCheck.CheckName, ClearanceCheck.CheckName, WeatherCheck.CheckName],
             report.Checks.Select(c => c.Name));
         // No mariner settings: the chart check runs without its depth checks.
         Assert.Equal((RouteCheckState.Partial, RouteCheckReasons.SafetySettingsMissing),

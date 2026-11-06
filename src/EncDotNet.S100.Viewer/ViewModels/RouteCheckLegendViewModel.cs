@@ -70,6 +70,19 @@ internal sealed class RouteCheckLegendViewModel : ViewModelBase, IDisposable
             ? report.Status(ClearanceCheck.CheckName) is { State: not RouteCheckState.Skipped }
             : check.HasDraft);
 
+    /// <summary>
+    /// Whether the "WEATHER" section shows (#1299): the checked route's report
+    /// has a closest approach to a tropical cyclone, drawn as the storm-at-ETA
+    /// ghost.
+    /// </summary>
+    public bool HasStormAtEta =>
+        _check is { IsActive: true, Report: { } report } check
+        && check.ReportRouteId == check.Input?.RouteId
+        && report.Findings.Any(f => f.Code == RouteFindingCodes.CycloneClosestApproach);
+
+    /// <summary>The storm-at-ETA glyph's ink.</summary>
+    public IBrush InkBrush { get; private set; } = Brushes.Transparent;
+
     /// <summary>Whether the "No draft" note shows.</summary>
     public bool IsNoDraft => !HasClearance;
 
@@ -141,6 +154,7 @@ internal sealed class RouteCheckLegendViewModel : ViewModelBase, IDisposable
             SleeveBrush = Brush(_colors.Below.WithAlpha((byte)Math.Round(255 * sleeve)));
             CorridorBrush = Brush(_colors.Ink);
             CasingBrush = Brush(_colors.Casing);
+            InkBrush = Brush(_colors.Ink);
         }
 
         // Every property can change at once (mode, draft, fold, palette).

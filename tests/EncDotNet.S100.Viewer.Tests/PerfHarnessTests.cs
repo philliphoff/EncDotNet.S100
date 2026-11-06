@@ -292,6 +292,51 @@ public sealed class PerfHarnessTests
     }
 
     [Fact]
+    public async Task Sampler_ReportsUiThreadDelaysOverTheWindow()
+    {
+        // A fake UI thread that holds every probe for about 20 ms, as a busy
+        // UI thread would.
+        using var stalls = new UiThreadStallMonitor(action => ThreadPool.QueueUserWorkItem(_ =>
+        {
+            Thread.Sleep(20);
+            action();
+        }));
+        using var sampler = new ProcessMetricsSampler(
+            new FakeSource(), interval: TimeSpan.FromHours(1), processorCount: 4, uiStalls: stalls);
+        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment());
+
+        Assert.True(tool.Invoke("start").TryGetValue(out _));
+        var deadline = Stopwatch.StartNew();
+        while (stalls.Snapshot().Count < 3 && deadline.Elapsed < TimeSpan.FromSeconds(10))
+            await Task.Delay(10, TestContext.Current.CancellationToken);
+        Assert.True(tool.Invoke("restart").TryGetValue(out var metrics));
+
+        var ui = metrics!.Window!.UiThread;
+        Assert.NotNull(ui);
+        Assert.True(ui.Count >= 3);
+        Assert.InRange(ui.MaxMs, 18, 2_000);
+        Assert.Equal(ui.Count, ui.Over8Ms);
+
+        sampler.StopWindow();
+        var stopped = stalls.Snapshot().Count;
+        await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.InRange(stalls.Snapshot().Count, stopped, stopped + 1);
+    }
+
+    [Fact]
+    public void LatencySnapshot_CountAbove_CountsLongerDurations()
+    {
+        var histogram = new LatencyHistogram();
+        foreach (var ms in new[] { 1.0, 5.0, 9.0, 20.0, 60.0 })
+            histogram.Record(ms);
+
+        var snapshot = histogram.Snapshot();
+        Assert.Equal(3, snapshot.CountAbove(8));
+        Assert.Equal(1, snapshot.CountAbove(50));
+        Assert.Equal(0, snapshot.CountAbove(100));
+    }
+
+    [Fact]
     public void GetProcessMetrics_StartRestartStop()
     {
         var source = new FakeSource();

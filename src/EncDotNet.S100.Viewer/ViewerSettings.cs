@@ -209,6 +209,33 @@ internal sealed partial class ViewerSettings
     public bool? WaterLevelApplyUndeclaredDatum { get; set; }
 
     /// <summary>
+    /// Check route's wind limit in knots for the weather check (#1093), or
+    /// null when wind isn't checked (the default).
+    /// </summary>
+    public double? RouteMaxWindKnots { get; set; }
+
+    /// <summary>
+    /// Check route's significant wave height limit in metres for the weather
+    /// check (#1093), or null when waves aren't checked (the default).
+    /// </summary>
+    public double? RouteMaxWaveHeightMetres { get; set; }
+
+    /// <summary>
+    /// The tropical cyclone wind radius Check route tests (#1299): 34, 50 or
+    /// 64 knots. Null is 34.
+    /// </summary>
+    public int? RouteCycloneCheckAgainstKnots { get; set; }
+
+    /// <summary>Whether Check route reports the closest approach to each tropical cyclone (#1299). Null is on.</summary>
+    public bool? RouteCycloneReportClosestApproach { get; set; }
+
+    /// <summary>
+    /// The weakest tropical cyclone radius whose findings are Must review
+    /// (#1299): 34, 50 or 64 knots, or 0 for never. Null is 50.
+    /// </summary>
+    public int? RouteCycloneMustReviewInsideKnots { get; set; }
+
+    /// <summary>
     /// The base-plane scene mode (issue #331).
     /// One of "Tiled" (Phase-2 default) or "Single" (Phase-1 single surface),
     /// matching <see cref="Rendering.Engine.VectorSceneMode"/>.
