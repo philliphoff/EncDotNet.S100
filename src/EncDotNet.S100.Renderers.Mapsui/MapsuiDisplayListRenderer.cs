@@ -211,9 +211,9 @@ public sealed class MapsuiDisplayListRenderer
         // All S-100 Part 9 correctness (draw ordering, colour / mm→px / symbol /
         // line-style / pattern / text-anchor resolution, and the lat/lon →
         // EPSG:3857 projection half) lives in VectorSceneBuilder. The tiled
-        // renderer paints this scene; the Mapsui features built from it below
-        // only carry pick identity for hit-testing, so every painted op —
-        // pattern fills included — is a pick target (issue #604).
+        // renderer paints and picks this scene; only the single-surface arm
+        // builds Mapsui features from it, for pick identity, so every painted
+        // op — pattern fills included — is a pick target (issue #604).
         var sceneBuilder = new Scene.VectorSceneBuilder
         {
             ResolveColor = Scene.ColorResolver.Create(Palette),
@@ -228,64 +228,48 @@ public sealed class MapsuiDisplayListRenderer
         };
         var scene = sceneBuilder.Build(instructions, geometryProvider);
 
-        var mapFeatures = new List<IFeature>(scene.Ops.Count);
-        // Tracks the (feature reference, EPSG:3857 X, Y) anchors that have
-        // already been given a pick-target rectangle, so composite point
-        // symbology emits exactly one rectangle per anchor (see the build loop).
-        var pointHitRectKeys = new HashSet<(string FeatureReference, double X, double Y)>();
-
-        // Build Mapsui features from the IR, in Part 9 draw order. These features
-        // carry the pick identity used for hit-testing; the layer itself is
-        // painted by the TiledScene renderer from the same VectorScene, bound to
-        // the layer below.
-        foreach (var op in scene.Ops)
-        {
-            // A composite point symbol (e.g. a multi-digit sounding) emits one
-            // PointPaintOp per glyph, all sharing the same feature reference and
-            // EPSG:3857 anchor. Each op would otherwise carry its own faint
-            // pick-target rectangle; stacked, those rectangles darken into a
-            // visible box. Emit the rectangle only for the first symbol at each
-            // (feature, anchor) so picking still works without the artifact.
-            var includePointHitRect = true;
-            if (op is Scene.PointPaintOp { Symbol: not null } point)
-                includePointHitRect = pointHitRectKeys.Add(
-                    (point.FeatureReference, point.World.X, point.World.Y));
-
-            var mapFeature = CreateMapFeature(op, includePointHitRect);
-            if (mapFeature is null)
-                continue;
-
-            mapFeatures.Add(mapFeature);
-        }
-
-        S100Diag.Telemetry.StylesApplied.Add(mapFeatures.Sum(f => f.Styles.Count));
-        S100Diag.Telemetry.FrameDuration.Record(
-            (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
-
         // The layer is portrayed by the TiledScene renderer rasterising the
         // VectorScene IR on a worker, so bind the scene to the layer. The Phase-2
         // tiled renderer is the default; S100_VECTOR_SCENE_MODE=single selects
         // the Phase-1 single-surface arm. Both consume the same scene.
-        var tiledRendererName = TiledSceneModeIsTiled
-            ? S100VectorTileRenderer.RendererName
-            : S100VectorSceneRenderer.RendererName;
-
-        var layer = new InstrumentedMemoryLayer(Product)
-        {
-            Name = LayerName,
-            Features = mapFeatures,
-            Style = null,
-            CustomLayerRendererName = tiledRendererName,
-            RepeatsAcrossWorldCopies = TiledSceneModeIsTiled,
-        };
-
+        //
+        // A tiled layer is drawn and picked through the chart session from the
+        // bound scene, so it carries no Mapsui features: its extent comes from
+        // the scene. The single-surface arm still picks through Mapsui, so it
+        // keeps one pick-identity feature per paint op.
+        InstrumentedMemoryLayer layer;
         if (TiledSceneModeIsTiled)
         {
+            layer = new InstrumentedMemoryLayer(Product)
+            {
+                Name = LayerName,
+                Style = null,
+                CustomLayerRendererName = S100VectorTileRenderer.RendererName,
+                SceneExtent = SceneExtent(scene),
+            };
+
+            S100Diag.Telemetry.FrameDuration.Record(
+                (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
+
             var (productLayerSet, styleStateHash) = DiskCacheKey(instructions);
             S100VectorTileRenderer.BindScene(layer, scene, productLayerSet, styleStateHash);
         }
         else
         {
+            var mapFeatures = BuildPickFeatures(scene);
+
+            S100Diag.Telemetry.StylesApplied.Add(mapFeatures.Sum(f => f.Styles.Count));
+            S100Diag.Telemetry.FrameDuration.Record(
+                (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
+
+            layer = new InstrumentedMemoryLayer(Product)
+            {
+                Name = LayerName,
+                Features = mapFeatures,
+                Style = null,
+                CustomLayerRendererName = S100VectorSceneRenderer.RendererName,
+            };
+
             S100VectorSceneRenderer.BindScene(layer, scene);
         }
 
@@ -325,7 +309,22 @@ public sealed class MapsuiDisplayListRenderer
             TextScale = TextScale,
         }.Build(instructions, geometryProvider);
 
+        return BuildPickFeatures(scene);
+    }
+
+    /// <summary>
+    /// Builds one self-styled Mapsui feature per paint op of
+    /// <paramref name="scene"/>, in Part 9 draw order.
+    /// </summary>
+    private List<IFeature> BuildPickFeatures(Scene.VectorScene scene)
+    {
         var features = new List<IFeature>(scene.Ops.Count);
+        // Tracks the (feature reference, EPSG:3857 X, Y) anchors that have
+        // already been given a pick-target rectangle. A composite point symbol
+        // (e.g. a multi-digit sounding) emits one PointPaintOp per glyph, all
+        // sharing the same feature reference and anchor; stacked, their faint
+        // pick-target rectangles would darken into a visible box, so only the
+        // first symbol at each (feature, anchor) gets one.
         var pointHitRectKeys = new HashSet<(string FeatureReference, double X, double Y)>();
         foreach (var op in scene.Ops)
         {
@@ -339,6 +338,48 @@ public sealed class MapsuiDisplayListRenderer
         }
 
         return features;
+    }
+
+    /// <summary>
+    /// The EPSG:3857 box around every op of <paramref name="scene"/>, or
+    /// <see langword="null"/> for a scene with no ops.
+    /// </summary>
+    internal static MRect? SceneExtent(Scene.VectorScene scene)
+    {
+        double minX = double.MaxValue, minY = double.MaxValue;
+        double maxX = double.MinValue, maxY = double.MinValue;
+
+        void Add(double x, double y)
+        {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+        }
+
+        foreach (var op in scene.Ops)
+        {
+            switch (op)
+            {
+                case Scene.PointPaintOp p:
+                    Add(p.World.X, p.World.Y);
+                    break;
+                case Scene.TextPaintOp t:
+                    Add(t.World.X, t.World.Y);
+                    break;
+                case Scene.LinePaintOp l:
+                    foreach (var (x, y) in l.World) Add(x, y);
+                    break;
+                case Scene.AreaPaintOp a:
+                    foreach (var (x, y) in a.WorldShell) Add(x, y);
+                    break;
+                case Scene.PatternAreaPaintOp pa:
+                    foreach (var (x, y) in pa.WorldShell) Add(x, y);
+                    break;
+            }
+        }
+
+        return minX <= maxX ? new MRect(minX, minY, maxX, maxY) : null;
     }
 
     /// <summary>

@@ -1,19 +1,19 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Renderers.Skia.Scene;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Testing.Scenarios.Hdf5;
 using EncDotNet.S100.Validation;
-using Mapsui.Layers;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
 /// <summary>
 /// Pipeline-level tests for the S-104 dcf8 station-series branch of
-/// <see cref="S104DatasetProcessor"/>. Verifies that the processor
-/// emits a <see cref="MemoryLayer"/> of station features and that each
-/// feature carries the
-/// <c>"station:&lt;id&gt;"</c> ref recognised by the pick router.
+/// <see cref="S104DatasetProcessor"/>. Verifies that the processor's station
+/// layer binds a scene whose ops carry the
+/// <c>"station:&lt;id&gt;"</c> ref recognised by the pick router, and that a
+/// session pick on a station resolves it.
 /// </summary>
 public class S104Dcf8ProcessorTests
 {
@@ -65,26 +65,22 @@ public class S104Dcf8ProcessorTests
     }
 
     [Fact]
-    public async Task Render_Dcf8_EmitsMemoryLayer_WithFeaturePerStation_TaggedByFeatureRefKey()
+    public async Task Render_Dcf8_BindsAScene_WithOpsPerStation_TaggedByStationRef()
     {
         var path = WriteFixture();
         try
         {
-            using var processor = (System.IDisposable?)null; // placeholder so analyzers don't complain about disposable processors
             var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
 
             var result = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, cancellationToken: TestContext.Current.CancellationToken);
 
-            Assert.Single(result.Layers);
-            var memoryLayer = Assert.IsAssignableFrom<MemoryLayer>(result.Layers[0]);
-
-            var features = memoryLayer.Features?.ToList()
-                ?? throw new InvalidOperationException("MemoryLayer must expose features.");
+            var layer = Assert.Single(result.Layers);
+            Assert.True(S100VectorTileRenderer.TryGetPartitionedScene(layer, out var baseScene, out var overlay));
 
             // Each station is a symbol and a value label, both tagged with the
             // station's ref so either picks it.
-            var refs = features
-                .Select(f => f[MapsuiDisplayListRenderer.FeatureRefKey] as string ?? "")
+            var refs = baseScene.Ops.Concat(overlay.Ops)
+                .Select(op => op.FeatureReference)
                 .Distinct()
                 .Order(StringComparer.Ordinal)
                 .ToArray();
@@ -97,28 +93,29 @@ public class S104Dcf8ProcessorTests
         }
     }
 
-    [Theory]
-    [InlineData(0.0)]
-    [InlineData(45.0)]
-    public async Task Click_on_a_station_resolves_it_at_any_rotation(double rotation)
+    [Fact]
+    public async Task Pick_on_a_station_resolves_it()
     {
         var path = WriteFixture();
         try
         {
-            S100MapsuiRendering.Register();
+            using var map = new Mapsui.Map();
+            using var s100 = map.AddS100(new S100MapsuiOptions { CrsTransformFactory = IdentityFactory.Instance });
             var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
-            var result = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, cancellationToken: TestContext.Current.CancellationToken);
-            var layer = Assert.Single(result.Layers);
+            var id = new MapDatasetId("s104");
+            Assert.True(await s100.AddDatasetAsync(
+                new MapDataset(id, id.Value, p.Metadata),
+                p,
+                cancellationToken: TestContext.Current.CancellationToken));
 
-            // Alpha is at (51.5 N, 0.1 W); centre a 256 px view on it at ~1:35 000.
-            var (x, y) = Mapsui.Projections.SphericalMercator.FromLonLat(-0.1, 51.5);
-            var viewport = new Mapsui.Viewport(x, y, 10, rotation, 256, 256);
-            var mapInfo = new Mapsui.Rendering.Skia.MapRenderer().GetMapInfo(
-                new Mapsui.Manipulations.ScreenPosition(128, 128), viewport, [layer], new Mapsui.Rendering.RenderService(), margin: 0);
+            // Alpha is at (51.5 N, 0.1 W).
+            var picks = await s100.Query.PickAsync(
+                new GeographicPickQuery { Latitude = 51.5, Longitude = -0.1 },
+                TestContext.Current.CancellationToken);
 
-            Assert.Contains(
-                mapInfo.MapInfoRecords,
-                record => (string?)record.Feature[MapsuiDisplayListRenderer.FeatureRefKey] == "station:Alpha");
+            var pick = Assert.Single(picks);
+            Assert.Equal(id, pick.DatasetId);
+            Assert.Equal("Alpha", pick.Info.FeatureRef);
         }
         finally
         {

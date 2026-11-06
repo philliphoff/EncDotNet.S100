@@ -721,8 +721,10 @@ design note, cited below by appendix.
 headless `SkiaDisplayListRenderer` uses. Draw order, colour, symbol and
 line-style resolution, millimetre-to-pixel conversion, text anchors, pattern
 fills and the latitude/longitude-to-EPSG:3857 projection are all done there. The
-tiled renderer draws that scene; the Mapsui features built from it only carry
-pick identity, so every painted op, pattern fills included, can be picked.
+tiled renderer draws that scene, and the session picks against the dataset, so a
+tiled layer has no Mapsui features. Only the single-surface arm
+(`S100_VECTOR_SCENE_MODE=single`) and `RenderFeatures` build one Mapsui feature
+per painted op, pattern fills included, so each can be picked.
 
 It follows these S-100 Part 9 conventions:
 
