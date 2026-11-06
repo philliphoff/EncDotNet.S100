@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
@@ -955,12 +956,14 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 HiddenFeatures = hiddenFeatures,
                 PortrayalTime = portrayalTime,
             };
-            result = await Task.Run(
-                () => _renderer.RenderAsync(
-                    lease.Processor,
-                    context,
-                    renderEntry.CoverageLayout,
-                    cancellationToken),
+            // Portrayal runs on the work scheduler at the priority of the
+            // load that asked for it (a lazy load's tier), else as visible
+            // work (map rendering slice 5).
+            var processor = lease.Processor;
+            var layout = renderEntry.CoverageLayout;
+            result = await WorkScheduler.Shared.RunAsync(
+                WorkStage.Portray,
+                token => _renderer.RenderAsync(processor, context, layout, token),
                 cancellationToken).ConfigureAwait(true);
         }
 

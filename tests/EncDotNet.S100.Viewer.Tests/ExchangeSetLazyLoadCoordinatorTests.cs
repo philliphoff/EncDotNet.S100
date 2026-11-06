@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.ExchangeSets;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.LazyLoading;
@@ -544,6 +545,51 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
 
         Assert.True(await WaitUntilAsync(() => done.Count == 3));
         Assert.Equal(1, maxRunning);
+    }
+
+    [Theory]
+    [InlineData((int)LoadTier.Visible, WorkClass.Visible)]
+    [InlineData((int)LoadTier.Ahead, WorkClass.Predicted)]
+    [InlineData((int)LoadTier.Covered, WorkClass.Background)]
+    [InlineData((int)LoadTier.Unbounded, WorkClass.Background)]
+    public void PriorityFor_MapsTiersToWorkClassesWithUrgencyInPixels(int tier, WorkClass expected)
+    {
+        // 0.01° at 10 m/px is about 111 px.
+        var priority = ExchangeSetLazyLoadCoordinator.PriorityFor((LoadTier)tier, 0.01, 10);
+
+        Assert.Equal(expected, priority.Class);
+        Assert.Equal(111.32, priority.Urgency, 2);
+    }
+
+    [Fact]
+    public async Task LoadRunsUnderItsDemand_WhichFollowsTheCellIntoView()
+    {
+        var notifier = new FakeNotifier();
+        WorkDemand? seen = null;
+        var release = new TaskCompletionSource();
+        using var coordinator = new ExchangeSetLazyLoadCoordinator(
+            notifier,
+            async (entry, _) =>
+            {
+                seen = WorkDemand.Current;
+                await release.Task;
+                entry.IsLoaded = true;
+            },
+            _ => { },
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero });
+
+        var ahead = Cell("US5AHD", 40.2, -73.8, 40.4, -73.6);
+        coordinator.Register(new[] { ahead });
+        notifier.Publish(Viewport(40, -75, 41, -74));
+
+        Assert.True(await WaitUntilAsync(() => seen is not null));
+        Assert.Equal(WorkClass.Predicted, seen!.Priority.Class);
+        Assert.Null(WorkDemand.Current);
+
+        // The view reaches the cell while it loads: its work becomes visible.
+        notifier.Publish(Viewport(40, -74, 41, -73));
+        Assert.Equal(WorkClass.Visible, seen.Priority.Class);
+        release.SetResult();
     }
 
     [Fact]
