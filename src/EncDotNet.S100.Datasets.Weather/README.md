@@ -428,6 +428,15 @@ weather design note (`docs/design/vector-weather.md`, §3).
   `ForecastLabel` (`Thu 00:00 · 110 kt`) take the zone and culture to write
   times in. Forecast times are drawn at 1:20,000,000 and larger, and the
   storm's second line at 1:40,000,000 and larger.
+  A stale storm's second line is `StaleAdvisoryLabel`
+  (`Adv 20 · 9 h old · newer advisory likely`), from the age the host passes
+  in `RenderContext.TimeStepAge`; a final advisory's is `FinalAdvisoryLabel`
+  (`Final advisory issued Wed 03:00`), with the `WXTCPT` symbol.
+- **Switches.** `WindRadiiKey` (`weather.tc.radii`), `PastTrackKey`
+  (`weather.tc.pastTrack`) and `ForecastTimesKey` (`weather.tc.forecastTimes`)
+  are keys of `EcdisDisplaySettings.LayerVisibility`, each on by default
+  (`IsShown(display, key)`): the Display controls Weather switches that hide
+  every storm's wind radii, past track or forecast time labels (V26).
 - **Legends.** `BuildTrackLegend` has a symbol per class, the southern mirror
   and both tracks; `BuildAreasLegend` has the cone's two parts and the three
   radii.

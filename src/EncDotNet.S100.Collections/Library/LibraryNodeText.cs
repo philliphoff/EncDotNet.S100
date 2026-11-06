@@ -86,7 +86,7 @@ public static partial class LibraryNodeText
     /// <c>WEB</c> (an online catalogue), <c>AWS</c> (a catalogue on AWS Open
     /// Data), <c>LIST</c> (a community list), <c>FEED</c> (a shared feed, or
     /// a weather service that publishes bulletins rather than model runs, such
-    /// as WPC's surface analysis),
+    /// as WPC's surface analysis or NHC's active storms),
     /// <c>SECOM</c>, <c>JSON</c> (a collection manifest) or <c>S-128</c>.
     /// </summary>
     /// <param name="source">The source.</param>
@@ -100,7 +100,7 @@ public static partial class LibraryNodeText
         S100ForecastFeedSource { ModelsUri.Host: var forecastHost }
             when forecastHost.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase) => "AWS",
         S100ForecastFeedSource => "WEB",
-        WeatherFeedSource { Service.Kind: Weather.WeatherServiceKind.WpcBulletins } => "FEED",
+        WeatherFeedSource { Service.Kind: Weather.WeatherServiceKind.WpcBulletins or Weather.WeatherServiceKind.NhcStorms } => "FEED",
         WeatherFeedSource { ServiceUri.Host: var weatherHost }
             when weatherHost.EndsWith(".amazonaws.com", StringComparison.OrdinalIgnoreCase) => "AWS",
         WeatherFeedSource => "WEB",

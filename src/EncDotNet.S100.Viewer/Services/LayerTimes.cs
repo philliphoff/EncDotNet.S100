@@ -65,6 +65,10 @@ internal static class LayerTimes
     /// Every time-aware dataset, for those of which only one draws at a time
     /// (<see cref="MapsuiMapTimedDataset.Supersession"/>); null to describe the dataset alone.
     /// </param>
+    /// <param name="now">
+    /// The clock, which an issue-based stale age (a storm's advisory, V28) is
+    /// taken at when the view time is ahead of it; null to take it at the view time.
+    /// </param>
     public static LayerTime Describe(
         MapsuiMapTimedDataset dataset,
         DateTime viewTime,
@@ -72,7 +76,8 @@ internal static class LayerTimes
         TimeFormat format,
         TimeZoneInfo zone,
         ForecastRun? run = null,
-        IReadOnlyList<MapsuiMapTimedDataset>? all = null)
+        IReadOnlyList<MapsuiMapTimedDataset>? all = null,
+        DateTime? now = null)
     {
         ArgumentNullException.ThrowIfNull(dataset);
         var culture = CultureInfo.CurrentCulture;
@@ -84,7 +89,7 @@ internal static class LayerTimes
 
         if (dataset.SampleAt(viewTime) is { } sample)
         {
-            var staleAge = dataset.StaleAgeAt(viewTime);
+            var staleAge = dataset.StaleAgeAt(viewTime, now);
             var text = Clock(sample, format, zone, culture);
             if (sample == viewTime)
             {

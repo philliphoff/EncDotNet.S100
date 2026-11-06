@@ -53,12 +53,23 @@ public enum TimeStepSelection
 /// analysis or observation before a forecast for the same time), so a newer
 /// analysis, or a forecast valid nearer the map time, takes over (V30).
 /// </param>
+/// <param name="StaleAfterIssue">
+/// How long after the dataset's <see cref="ITimeAwareDatasetProcessor.IssueTime"/>
+/// it is stale, whatever step is drawn, or <see langword="null"/> for never:
+/// a tropical cyclone advisory is stale 7 hours after it's issued, when a newer
+/// one is likely (design note <c>vector-weather.md</c> V28). The age is taken
+/// at the map time, or at the host's clock when the map time is later, so
+/// looking ahead through a forecast doesn't make it older; a host passes it in
+/// <see cref="RenderContext.TimeStepAge"/> once it is past this. Unlike
+/// <paramref name="StaleAfter"/>, it counts from the issue, not the step.
+/// </param>
 public sealed record TimeSemantics(
     TimeStepKind Kind,
     TimeStepSelection Selection,
     TimeSpan? Validity = null,
     TimeSpan? StaleAfter = null,
-    string? Supersession = null)
+    string? Supersession = null,
+    TimeSpan? StaleAfterIssue = null)
 {
     /// <summary>
     /// Forecast steps, drawn from the nearest step within the typical step: the

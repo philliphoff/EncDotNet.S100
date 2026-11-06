@@ -750,6 +750,12 @@
                                     <views:LibrarySwatch Grid.Row="0" Grid.Column="0" State="{Binding PrimaryAvailability}"
                                                          Width="18" IsVisible="{Binding !IsGroupHeader}"
                                                          VerticalAlignment="Center" />
+                                    <!-- An NHC storm (V27): its class symbol, as on the chart. -->
+                                    <Border Grid.Row="0" Grid.Column="0" Width="18" Height="18" IsVisible="{Binding IsStorm}"
+                                            Background="{DynamicResource BackgroundColor}" VerticalAlignment="Center">
+                                        <Image Source="{Binding StormGlyph}" Stretch="Uniform"
+                                               AutomationProperties.AutomationId="Library.Row.StormSymbol" />
+                                    </Border>
                                     <Button Grid.Row="0" Grid.Column="0" Classes="Icon" Padding="0" Width="18" Height="20" MinHeight="0"
                                             AutomationProperties.AutomationId="Library.Row.ToggleGroup"
                                             AutomationProperties.Name="{x:Static loc:Strings.Label_ToggleGroup}"

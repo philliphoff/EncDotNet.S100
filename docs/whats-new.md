@@ -6,6 +6,32 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Tropical cyclones from the Library.** A new Library source,
+  **Tropical cyclones — NHC** (`FEED`), lists every storm NHC is issuing
+  advisories for in the Atlantic, East and Central Pacific, one item each,
+  named by the storm with its class symbol. An item downloads the advisory's
+  forecast, wind radii and best track zips, and NHC's next advisory replaces
+  it in place. While a storm is loaded, the Library reads NHC's list every
+  hour and announces a new advisory for it, with **Load latest run**; nothing
+  is loaded on its own, and a storm newly active doesn't notify. An advisory
+  is stale 7 hours after it's issued ("Advisory 17 is over 7 hours old"); a
+  stale storm isn't faded but says its age on its label and in Object
+  information. A loaded storm NHC stops listing is drawn as its final
+  advisory: past track and a post-tropical storm, "Final advisory issued".
+  **Display controls** shows its **Weather** section for cyclones and surface
+  analyses too, and ends it with **Wind radii**, **Past track** and
+  **Forecast times** switches while a cyclone is loaded; the new
+  `get_weather_display` and `set_weather_display` MCP tools read and set every
+  Weather switch. In the libraries, `WeatherServiceKind` gains `NhcStorms`
+  (`NhcActiveStorms` reads `CurrentStorms.json`), `RemotePart` gains
+  `FileName` (a download's parts saved side by side), `TimeSemantics` gains
+  `StaleAfterIssue`, `TropicalCycloneAdvisory` gains `IsFinal`,
+  `NhcAdvisoryFiles` gains `IsFinal` and `FinalMarkerName`, and
+  `TropicalCycloneStyle` gains the switch keys. Breaking changes:
+  `MapsuiMapTimedDataset.StaleAgeAt` takes an optional clock, and
+  `TimeSemantics` has a new last positional parameter. See
+  [Get active storms from the Library](weather.md#get-active-storms-from-the-library).
+
 - **Tropical cyclones on the chart.** SoundCharts and `s100 render` now draw
   an NHC advisory in one plum-grey storm ink: the cone, tinted and stippled
   beyond 72 hours, the 34, 50 and 64 kt wind radii, the forecast and past

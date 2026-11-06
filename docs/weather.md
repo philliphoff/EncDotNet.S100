@@ -192,8 +192,10 @@ made from its data. The Library can fetch some of these sources for you.
 
    The Datasets panel lists it, and the Layer stack lists the layers it
    draws; the wave height fill's entry shows a colour legend.
-2. Open **Display controls**. While a GRIB2 or NetCDF dataset is loaded, its
-   **Weather** section has six switches for every weather dataset:
+2. Open **Display controls**. While a weather dataset is loaded (a GRIB2 or
+   NetCDF grid, a tropical cyclone or a surface analysis), its **Weather**
+   section has six switches for every weather grid, and three for tropical
+   cyclones ([Show tropical cyclones](#show-tropical-cyclones)):
 
    | Switch | Default | Draws |
    |---|---|---|
@@ -251,7 +253,9 @@ description.
 
 ## Show tropical cyclones
 
-Download an advisory's zips from NHC's
+Add the storms NHC is issuing advisories for from the Library
+([Get active storms from the Library](#get-active-storms-from-the-library)).
+Or download an advisory's zips from NHC's
 [GIS page](https://www.nhc.noaa.gov/gis/) into one folder: the forecast track
 and cone (`al092022_5day_020.zip`), the wind radii (`al092022_fcst_020.zip`)
 and the past track (`al092022_best_track.zip`). Then open the forecast zip,
@@ -284,9 +288,65 @@ information**: the advisory, its issue time and when the next is due, the
 position, wind, pressure and movement, the part you picked, and the radii in
 each quadrant.
 
-The storm is drawn where the advisory puts it now. Moving it along the track
-with the Timeline, NHC's feed in the Library and switches to hide the radii,
-past track and forecast times are still to come.
+While a storm is loaded, three switches end the **Weather** section of
+**Display controls**. They apply to every storm and are kept after a restart:
+
+| Switch | Default | Draws |
+|---|---|---|
+| **Wind radii** | On | The 34, 50 and 64 knot areas |
+| **Past track** | On | The best-track line and points |
+| **Forecast times** | On | The time and wind beside forecast points |
+
+The cone, the forecast track and points, and the storm have no switch. To
+hide a whole storm, use its eye in the Datasets panel.
+
+### Get active storms from the Library
+
+In the Library, choose **Add** and pick **Tropical cyclones — NHC** from the
+weather sources. It has the `FEED` tag and nothing to choose: it lists every
+storm NHC is issuing advisories for in the Atlantic, East and Central Pacific,
+one item each, from NHC's active-storm list. Between storms the list is
+empty.
+
+Each item is named by the storm, such as **HURRICANE ZELDA · AL14**, with its
+class symbol beside it. Under the name are the advisory, when it was issued
+and when the next is due, then where the forecast ends and the storm's wind;
+the bar shows how much of the forecast has passed. Downloading an item fetches
+the advisory's forecast, wind radii and best track zips into one folder.
+
+NHC usually issues an advisory every 6 hours. A newer advisory makes the
+download outdated, as a newer model run does: the item gets the **New run**
+tag and is listed under **Updates**, and downloading it again replaces the
+storm on the chart in place. **Pin this run** keeps an advisory beside the
+latest.
+
+While a storm is loaded, the Library reads NHC's list every hour. When NHC
+issues a new advisory for it, a notification says so ("HURRICANE ZELDA:
+advisory 18 is available"), with **Load latest run** to download and load it.
+Nothing is loaded without you, and a storm that isn't loaded, or one that
+newly becomes active, doesn't notify; it just appears in the Library.
+
+### Stale and final advisories
+
+An advisory is stale 7 hours after it was issued, when a newer one is likely.
+Its age is counted up to the view time, or up to now when you look ahead, so
+stepping through a forecast doesn't make it older. A stale storm isn't faded:
+
+- on the chart, the second line of its label says its age, such as
+  `Adv 17 · 9 h old · newer advisory likely`;
+- in **Object information**, a warning line under the notice says
+  "Advisory 17 is 9 h old. NHC has probably issued a newer one.";
+- in the Library, the item has the **Stale** tag, its details say
+  "Advisory 17 is over 7 hours old", and **Load latest run** fetches the
+  newest.
+
+When NHC stops listing a loaded storm, its last advisory was its final one:
+the storm dissipated, became post-tropical or was handed over. The item
+leaves the Library, but the storm stays loaded and is drawn as a final
+advisory: its past track, and the storm with the post-tropical symbol and
+"Final advisory issued" and the time on its label, with no cone, forecast or
+radii. SoundCharts marks it with a file beside its zips
+(`al142026_final.txt`), so it's drawn the same way after a restart.
 
 ## Show a surface analysis
 

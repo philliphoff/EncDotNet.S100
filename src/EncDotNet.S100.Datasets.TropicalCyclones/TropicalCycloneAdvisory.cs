@@ -57,6 +57,16 @@ public sealed record TropicalCycloneAdvisory
     /// </summary>
     public IReadOnlyList<TropicalCycloneTrackPoint> PastTrack { get; init; } = [];
 
+    /// <summary>
+    /// Whether this is the storm's final advisory: NHC has stopped issuing
+    /// advisories for it (it dissipated, became post-tropical or was handed
+    /// over). It is drawn with its past track and the storm only (design note
+    /// <c>vector-weather.md</c> §7). NHC's files don't say so; a host that
+    /// sees the storm leave NHC's active list marks it
+    /// (<see cref="NhcAdvisoryFiles.FinalMarkerName"/>).
+    /// </summary>
+    public bool IsFinal { get; init; }
+
     /// <summary>The time of the first forecast point (tau 0), in UTC.</summary>
     public DateTime SynopticTime => Forecast.Count > 0 ? Forecast[0].ValidTime : IssueTime.UtcDateTime;
 

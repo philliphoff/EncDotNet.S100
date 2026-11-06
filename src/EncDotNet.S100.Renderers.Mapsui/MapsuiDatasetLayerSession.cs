@@ -2004,6 +2004,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 Tolerance = entry.TimePolicy.Tolerance,
                 StepKind = entry.TimePolicy.StepKind,
                 StaleAfter = entry.TimePolicy.StaleAfter,
+                StaleAfterIssue = entry.TimePolicy.StaleAfterIssue,
                 Supersession = entry.TimePolicy.Supersession,
                 Coverage = entry.TimePolicy.CoverageSegments,
                 Samples = entry.TimePolicy.AvailableTimes,
@@ -2354,6 +2355,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             _tolerance = tolerance;
             StepKind = semantics.Kind;
             StaleAfter = semantics.StaleAfter;
+            StaleAfterIssue = semantics.StaleAfterIssue;
             Supersession = semantics.Supersession;
             CoverageSegments = ComputeSegments();
         }
@@ -2363,6 +2365,9 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
         /// <summary>How long after its step the data is stale (<see cref="TimeSemantics.StaleAfter"/>).</summary>
         public TimeSpan? StaleAfter { get; }
+
+        /// <summary>How long after its issue the data is stale (<see cref="TimeSemantics.StaleAfterIssue"/>).</summary>
+        public TimeSpan? StaleAfterIssue { get; }
 
         /// <summary>The key of the datasets of which only one draws at a time (<see cref="TimeSemantics.Supersession"/>).</summary>
         public string? Supersession { get; }
@@ -2478,11 +2483,30 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         return MapsuiTimeSupersession.IsSuperseded(candidate, rivals) ? null : sample;
     }
 
-    /// <summary>The age of <paramref name="selectedTime"/> at the clock once stale, for <see cref="RenderContext.TimeStepAge"/>. Call under <c>_sync</c>.</summary>
-    private TimeSpan? StaleAgeOf(Entry entry, DateTime? selectedTime) =>
-        entry.TimePolicy is { StaleAfter: { } limit } && _time.Current is { } clock
+    /// <summary>
+    /// The age of <paramref name="selectedTime"/> at the clock once stale, or of
+    /// the dataset since its issue (<see cref="TimeSemantics.StaleAfterIssue"/>,
+    /// taken at <see cref="Clock"/> when the map time is later), for
+    /// <see cref="RenderContext.TimeStepAge"/>. Call under <c>_sync</c>.
+    /// </summary>
+    private TimeSpan? StaleAgeOf(Entry entry, DateTime? selectedTime)
+    {
+        if (_time.Current is not { } clock || selectedTime is null)
+            return null;
+        if (entry.TimePolicy is { StaleAfterIssue: { } fromIssue })
+            return MapsuiTimeSupersession.StaleAgeFromIssue(entry.IssueTime, clock, Clock.GetUtcNow().UtcDateTime, fromIssue);
+        return entry.TimePolicy is { StaleAfter: { } limit }
             ? MapsuiTimeSupersession.StaleAge(selectedTime, clock, limit)
             : null;
+    }
+
+    /// <summary>
+    /// The host's clock, which an issue-based stale age
+    /// (<see cref="TimeSemantics.StaleAfterIssue"/>) is taken at while the map
+    /// time is ahead of it: the system clock unless the host has its own (a
+    /// test clock, as SoundCharts' <c>set_test_clock</c> sets).
+    /// </summary>
+    public TimeProvider Clock { get; set; } = TimeProvider.System;
 
     private enum TimePolicyKind
     {

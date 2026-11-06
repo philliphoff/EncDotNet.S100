@@ -71,5 +71,26 @@ public static class MapsuiTimeSupersession
         return age > limit ? TimeSpan.FromHours(Math.Round(age.TotalHours, MidpointRounding.AwayFromZero)) : null;
     }
 
+    /// <summary>
+    /// How old a dataset issued at <paramref name="issued"/> is when looked at
+    /// at <paramref name="time"/>, to the nearest hour, once past
+    /// <paramref name="staleAfterIssue"/> (<see cref="TimeSemantics.StaleAfterIssue"/>);
+    /// else null. The age is taken at <paramref name="time"/>, or at
+    /// <paramref name="now"/> when that's earlier, so looking ahead through a
+    /// forecast doesn't make the dataset older than it is.
+    /// </summary>
+    /// <param name="issued">When the dataset was issued, if known.</param>
+    /// <param name="time">The map time.</param>
+    /// <param name="now">The host's clock, or null to take the age at the map time.</param>
+    /// <param name="staleAfterIssue">The limit.</param>
+    public static TimeSpan? StaleAgeFromIssue(DateTime? issued, DateTime time, DateTime? now, TimeSpan? staleAfterIssue)
+    {
+        if (issued is not { } issue || staleAfterIssue is not { } limit)
+            return null;
+        var at = now is { } clock && clock < time ? clock : time;
+        var age = at - issue;
+        return age > limit ? TimeSpan.FromHours(Math.Round(age.TotalHours, MidpointRounding.AwayFromZero)) : null;
+    }
+
     private static int Rank(TimeStepKind kind) => kind == TimeStepKind.Forecast ? 0 : 1;
 }
