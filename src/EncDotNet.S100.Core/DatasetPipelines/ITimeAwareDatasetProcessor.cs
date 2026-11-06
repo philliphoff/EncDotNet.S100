@@ -36,6 +36,20 @@ public interface ITimeAwareDatasetProcessor
     DateTime? NextIssueTime => null;
 
     /// <summary>
+    /// A short name for the dataset on a host's timeline, such as a storm's
+    /// name (<c>IAN</c>); <see langword="null"/> (the default) for the host's
+    /// own label from the dataset's name or run.
+    /// </summary>
+    string? TimelineLabel => null;
+
+    /// <summary>
+    /// A few words a host's timeline shows after <see cref="TimelineLabel"/>,
+    /// such as a storm's advisory (<c>adv 20</c>); <see langword="null"/> (the
+    /// default) for none.
+    /// </summary>
+    string? TimelineDetail => null;
+
+    /// <summary>
     /// What the time steps are, which one is drawn between steps, and how long
     /// a step stays valid. Defaults to <see cref="TimeSemantics.Default"/>:
     /// forecast steps, nearest within the typical step.

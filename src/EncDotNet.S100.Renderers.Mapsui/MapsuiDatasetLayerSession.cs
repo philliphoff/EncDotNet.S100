@@ -237,6 +237,8 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         var adjustsDepths = false;
         DateTime? issueTime = null;
         DateTime? nextIssueTime = null;
+        string? timelineLabel = null;
+        string? timelineDetail = null;
         DatasetForecastRun? forecastRun = null;
         if (_processorOwner.TryAcquire(dataset.Id, out var processorLease))
         {
@@ -250,6 +252,8 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                         timeAware.AvailableTimes);
                     issueTime = timeAware.IssueTime;
                     nextIssueTime = timeAware.NextIssueTime;
+                    timelineLabel = timeAware.TimelineLabel;
+                    timelineDetail = timeAware.TimelineDetail;
                     forecastRun = timeAware.ForecastRun;
                 }
             }
@@ -282,6 +286,8 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             entry.AdjustsDepths = adjustsDepths;
             entry.IssueTime = issueTime;
             entry.NextIssueTime = nextIssueTime;
+            entry.TimelineLabel = timelineLabel;
+            entry.TimelineDetail = timelineDetail;
             entry.ForecastRun = forecastRun;
             if (timePolicy is not null)
             {
@@ -2010,6 +2016,8 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 DatasetId = entry.Dataset.Id.Value,
                 IssueTime = entry.IssueTime,
                 NextIssueTime = entry.NextIssueTime,
+                TimelineLabel = entry.TimelineLabel,
+                TimelineDetail = entry.TimelineDetail,
                 ForecastRun = entry.ForecastRun,
                 Selection = entry.TimePolicy.Selection,
                 Tolerance = entry.TimePolicy.Tolerance,
@@ -2538,6 +2546,12 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
         /// <summary>When a newer dataset is next expected (<see cref="ITimeAwareDatasetProcessor.NextIssueTime"/>).</summary>
         public DateTime? NextIssueTime { get; set; }
+
+        /// <summary>The dataset's short name on a timeline (<see cref="ITimeAwareDatasetProcessor.TimelineLabel"/>).</summary>
+        public string? TimelineLabel { get; set; }
+
+        /// <summary>The words after it (<see cref="ITimeAwareDatasetProcessor.TimelineDetail"/>).</summary>
+        public string? TimelineDetail { get; set; }
 
         /// <summary>The model run the dataset belongs to, from its processor, or null.</summary>
         public DatasetForecastRun? ForecastRun { get; set; }

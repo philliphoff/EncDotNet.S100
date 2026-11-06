@@ -281,6 +281,24 @@
                                                    BandCornerRadius="3"
                                                    Bands="{Binding Bands}"
                                                    Gaps="{Binding Gaps}" />
+                        <!-- Before the first step (a storm's past track), faded (V14). -->
+                        <views:CoverageBandControl Height="12"
+                                                   VerticalAlignment="Center"
+                                                   Opacity="0.45"
+                                                   Fill="{Binding Swatch}"
+                                                   TickRise="0"
+                                                   TickThickness="0.5"
+                                                   BandCornerRadius="3"
+                                                   Bands="{Binding PastBands}" />
+                        <!-- Step ticks and the issue / next-issue diamonds (V14). -->
+                        <views:LaneMarksControl Height="26"
+                                                VerticalAlignment="Center"
+                                                IsVisible="{Binding HasMarks}"
+                                                IsHitTestVisible="False"
+                                                AutomationProperties.AutomationId="Timeline.Lane.Marks"
+                                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimelineLaneMarks}"
+                                                MarkBrush="{DynamicResource ForegroundColor}"
+                                                Marks="{Binding Marks}" />
                     </Panel>
                 </Button>
             </Grid>

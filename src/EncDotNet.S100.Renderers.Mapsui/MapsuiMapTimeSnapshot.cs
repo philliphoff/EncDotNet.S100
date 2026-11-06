@@ -98,6 +98,18 @@ public sealed record MapsuiMapTimedDataset(string Name, DateTime First, DateTime
     public DateTime? NextIssueTime { get; init; }
 
     /// <summary>
+    /// The dataset's short name on a timeline, such as a storm's name
+    /// (<c>ITimeAwareDatasetProcessor.TimelineLabel</c>), or <see langword="null"/>.
+    /// </summary>
+    public string? TimelineLabel { get; init; }
+
+    /// <summary>
+    /// The words a timeline shows after <see cref="TimelineLabel"/>, such as
+    /// <c>adv 20</c> (<c>ITimeAwareDatasetProcessor.TimelineDetail</c>), or <see langword="null"/>.
+    /// </summary>
+    public string? TimelineDetail { get; init; }
+
+    /// <summary>
     /// The model run the dataset belongs to, as its processor reports it
     /// (<c>ITimeAwareDatasetProcessor.ForecastRun</c>), or <see langword="null"/>
     /// when it is not a forecast run.
@@ -203,6 +215,8 @@ public sealed record MapsuiMapTimedDataset(string Name, DateTime First, DateTime
         && DatasetId == other.DatasetId
         && IssueTime == other.IssueTime
         && NextIssueTime == other.NextIssueTime
+        && TimelineLabel == other.TimelineLabel
+        && TimelineDetail == other.TimelineDetail
         && ForecastRun == other.ForecastRun
         && Selection == other.Selection
         && Tolerance == other.Tolerance

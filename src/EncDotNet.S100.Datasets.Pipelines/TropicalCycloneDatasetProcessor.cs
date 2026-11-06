@@ -187,6 +187,9 @@ public sealed class TropicalCycloneDatasetProcessor :
         };
     }
 
+    /// <summary>How often NHC issues a regular advisory: every 6 hours (03, 09, 15 and 21 UTC).</summary>
+    public static TimeSpan AdvisoryInterval { get; } = TimeSpan.FromHours(6);
+
     /// <summary>The storm's id, and the <see cref="FeatureInfo.FeatureRef"/> of every pick on it: the ATCF id.</summary>
     public string StormId => Advisory.Storm.AtcfId;
 
@@ -200,6 +203,14 @@ public sealed class TropicalCycloneDatasetProcessor :
     /// <inheritdoc />
     /// <remarks>NHC's next regular advisory (<see cref="NextAdvisoryDue"/>).</remarks>
     public DateTime? NextIssueTime => NextAdvisoryDue(Advisory.IssueTime).UtcDateTime;
+
+    /// <inheritdoc />
+    /// <remarks>The storm's name in capitals, such as <c>IAN</c>, or its ATCF id when it has none.</remarks>
+    public string? TimelineLabel => Advisory.Storm.Name.Trim() is { Length: > 0 } name ? name.ToUpperInvariant() : StormId;
+
+    /// <inheritdoc />
+    /// <remarks>The advisory, such as <c>adv 20</c>.</remarks>
+    public string? TimelineDetail => $"adv {Advisory.Advisory}";
 
     /// <inheritdoc />
     /// <remarks>

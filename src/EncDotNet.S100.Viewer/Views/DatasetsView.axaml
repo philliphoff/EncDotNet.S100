@@ -515,8 +515,10 @@
                                                 <TextBlock Text="{Binding LayerTimeText}" TextTrimming="CharacterEllipsis" />
                                             </Button>
                                             <Panel Grid.Column="1">
-                                                <Border Classes="HiddenTag" IsVisible="{Binding IsLayerHidden}">
-                                                    <TextBlock Text="{x:Static loc:Strings.LayerTime_Hidden}"
+                                                <Border Classes="HiddenTag" IsVisible="{Binding IsLayerHidden}"
+                                                        AutomationProperties.AutomationId="Datasets.Source.Dataset.HiddenTag"
+                                                        AutomationProperties.Name="{Binding LayerHiddenTagText}">
+                                                    <TextBlock Text="{Binding LayerHiddenTagText}"
                                                                FontSize="10"
                                                                FontWeight="SemiBold"
                                                                Foreground="{DynamicResource WarningColor}" />
@@ -701,8 +703,10 @@
                                             <TextBlock Text="{Binding LayerTimeText}" TextTrimming="CharacterEllipsis" />
                                         </Button>
                                         <Panel Grid.Column="1">
-                                            <Border Classes="HiddenTag" IsVisible="{Binding IsLayerHidden}">
-                                                <TextBlock Text="{x:Static loc:Strings.LayerTime_Hidden}"
+                                            <Border Classes="HiddenTag" IsVisible="{Binding IsLayerHidden}"
+                                                    AutomationProperties.AutomationId="Datasets.Row.HiddenTag"
+                                                    AutomationProperties.Name="{Binding LayerHiddenTagText}">
+                                                <TextBlock Text="{Binding LayerHiddenTagText}"
                                                            FontSize="10"
                                                            FontWeight="SemiBold"
                                                            Foreground="{DynamicResource WarningColor}" />

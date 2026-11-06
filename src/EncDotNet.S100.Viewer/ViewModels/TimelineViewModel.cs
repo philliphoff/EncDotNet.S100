@@ -790,3 +790,19 @@ internal sealed partial class TimelineViewModel : ViewModelBase, EncDotNet.S100.
 /// <see cref="TimelineViewModel.SliderMinimum"/>..<see cref="TimelineViewModel.SliderMaximum"/>.
 /// </summary>
 internal readonly record struct NormalizedCoverageBand(double Start, double Width);
+
+/// <summary>What a mark on a lane's track is (V14).</summary>
+internal enum TimelineLaneMarkKind
+{
+    /// <summary>A step of the dataset, such as a storm's forecast point: a tall tick.</summary>
+    Step,
+
+    /// <summary>When the dataset was issued: a solid diamond.</summary>
+    Issued,
+
+    /// <summary>When a newer dataset is next expected: a hollow diamond.</summary>
+    NextIssue,
+}
+
+/// <summary>A mark on a lane's track at <see cref="Position"/>, a fraction of the axis in <c>[0,1]</c>.</summary>
+internal readonly record struct TimelineLaneMark(double Position, TimelineLaneMarkKind Kind);

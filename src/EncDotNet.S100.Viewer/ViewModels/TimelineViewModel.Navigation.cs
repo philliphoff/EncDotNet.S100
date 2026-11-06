@@ -366,7 +366,8 @@ internal sealed partial class TimelineViewModel
 
     /// <summary>"cbofs" for a model's run or tile, else the dataset name.</summary>
     private static string DriverLabel(MapsuiMapTimedDataset dataset) =>
-        LayerTimes.IsSurfaceAnalysis(dataset) ? Strings.TimelinePanel_LaneWpc
+        dataset.TimelineLabel is { Length: > 0 } label ? label
+        : LayerTimes.IsSurfaceAnalysis(dataset) ? Strings.TimelinePanel_LaneWpc
         : ForecastRunNames.ModelAndTile(dataset.Name)?.Model
         ?? (ForecastRunNames.Describe(dataset.Name) is { } run ? run.Split(' ')[0] : dataset.Name);
 

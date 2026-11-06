@@ -45,7 +45,8 @@ internal sealed record TimelineLayerDto(
     [property: Description("The layer time as its row in the Datasets list shows it: '08:00Z · T+20 h', '20:06Z (−24 min)', 'no data · last 18:00Z, 6 h earlier', 'drawing…'; null for none.")] string? Time,
     [property: Description("True when the layer has no data within its tolerance of the view time and hides (its row's Hidden tag).")] bool Hidden,
     [property: Description("True while the layer is drawing the view time.")] bool Drawing,
-    [property: Description("For a layer drawing stale data at the view time (its row's Stale tag), such as a surface analysis over 6 hours old, the data's age to the nearest hour; null otherwise.")] int? StaleHours = null);
+    [property: Description("For a layer drawing stale data at the view time (its row's Stale tag), such as a surface analysis over 6 hours old, the data's age to the nearest hour; null otherwise.")] int? StaleHours = null,
+    [property: Description("For a hidden layer, its row's tag: 'Hidden', or why, such as 'Beyond forecast' or 'Before track' for a tropical cyclone outside its track and forecast; null when not hidden.")] string? HiddenTag = null);
 
 /// <summary>The Timeline as the user sees it.</summary>
 [Description("The viewer's Timeline: mode, now, view time, loaded range and what each time-aware layer draws.")]
@@ -119,7 +120,11 @@ internal sealed record TimelineLaneDto(
     [property: Description("The layer time as the lane shows it (a Library lane: its run).")] string Time,
     [property: Description("True for a lane of Library data that is not loaded (its id is 'library:<spec>/<model>').")] bool Library,
     [property: Description("True when a newer run is online ('New run' tag).")] bool NewRun,
-    [property: Description("The Library's windows for the lane: the loaded copy, a newer run online, data on disk.")] IReadOnlyList<TimelineLibraryWindowDto> Windows);
+    [property: Description("The Library's windows for the lane: the loaded copy, a newer run online, data on disk.")] IReadOnlyList<TimelineLibraryWindowDto> Windows,
+    [property: Description("The lane's sub line under its label, e.g. 'adv 20 · 6 h' for a tropical cyclone or 'analysis · 3 h'.")] string Sub = "",
+    [property: Description("UTC time of the lane's solid diamond, when the dataset was issued (a cyclone advisory); null when not marked.")] DateTime? Issued = null,
+    [property: Description("UTC time of the lane's hollow diamond, when the next is expected (NHC's next advisory); null when not marked.")] DateTime? NextIssue = null,
+    [property: Description("How many step ticks the lane draws, one per forecast point of a tropical cyclone; 0 for none.")] int StepTicks = 0);
 
 /// <summary>A loaded dataset's display state before and after set_dataset_state.</summary>
 [Description("A loaded dataset's display state before and after a change.")]
@@ -254,12 +259,13 @@ internal sealed class GetTimelineStateTool(IViewerTimelineController timeline)
         state.StepDriver,
         [.. state.Gaps.Select(g => new TimelineGapDto(g.From, g.To, TimelineAxisLabels.GapLength(g.Length, CultureInfo.InvariantCulture)))],
         [.. state.Layers.Select(layer => new TimelineLayerDto(
-            layer.Id, layer.Spec, layer.Visible, layer.DrawnTime, layer.PreviousSample, layer.NextSample, layer.SampleCount, layer.Time, layer.Hidden, layer.Drawing, layer.StaleHours))],
+            layer.Id, layer.Spec, layer.Visible, layer.DrawnTime, layer.PreviousSample, layer.NextSample, layer.SampleCount, layer.Time, layer.Hidden, layer.Drawing, layer.StaleHours, layer.HiddenTag))],
         state.InMapView,
         state.CollapsedToStrip ? "strip" : "lanes",
         [.. state.Lanes.Select(lane => new TimelineLaneDto(
             lane.Id, lane.Label, lane.Group, lane.Listed, lane.InMapView, lane.Expired, lane.Time, lane.Library, lane.NewRun,
-            [.. lane.Windows.Select(w => new TimelineLibraryWindowDto(w.ItemId, WindowState(w.State), w.Start, w.End, w.Run, w.NewRun, w.Expired))]))],
+            [.. lane.Windows.Select(w => new TimelineLibraryWindowDto(w.ItemId, WindowState(w.State), w.Start, w.End, w.Run, w.NewRun, w.Expired))],
+            lane.Sub, lane.Issued, lane.NextIssue, lane.StepTicks))],
         state.ShowOnline,
         state.Passage is { } passage
             ? new TimelinePassageDto(

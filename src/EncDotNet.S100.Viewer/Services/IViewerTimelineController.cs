@@ -185,6 +185,18 @@ internal sealed record TimelineLaneState(string Id, string Label, string Group, 
 
     /// <summary>The Library's windows for the lane.</summary>
     public IReadOnlyList<TimelineLibraryWindow> Windows { get; init; } = [];
+
+    /// <summary>The lane's sub line, e.g. "adv 20 · 6 h".</summary>
+    public string Sub { get; init; } = string.Empty;
+
+    /// <summary>When the dataset was issued, the lane's solid diamond (V14); null when not marked.</summary>
+    public DateTime? Issued { get; init; }
+
+    /// <summary>When the next is expected, the lane's hollow diamond (V14); null when not marked.</summary>
+    public DateTime? NextIssue { get; init; }
+
+    /// <summary>How many step ticks the lane draws (a storm's forecast points, V14).</summary>
+    public int StepTicks { get; init; }
 }
 
 /// <summary>A window of data the Library knows for a lane (#711).</summary>
@@ -225,6 +237,9 @@ internal sealed record TimelineLayerState(
 
     /// <summary>For a layer drawing stale data (its row's Stale tag), the data's age to the nearest hour; otherwise null.</summary>
     public int? StaleHours { get; init; }
+
+    /// <summary>For a hidden layer, its row's tag: "Hidden", or why, such as "Beyond forecast"; otherwise null.</summary>
+    public string? HiddenTag { get; init; }
 }
 
 /// <summary>The outcome of <see cref="IViewerTimelineController.SetViewTimeAsync"/>.</summary>

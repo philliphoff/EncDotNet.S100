@@ -4690,6 +4690,43 @@
     <value>No analysis at view time</value>
     <comment>A surface analysis layer with no analysis or forecast within 12 hours before the view time</comment>
   </data>
+  <data name="LayerTime_EstimatedFormat" xml:space="preserve">
+    <value>est. {0}</value>
+    <comment>A tropical cyclone's layer time between forecast points; {0} is the time and forecast hour, such as "5:00 PM · T+2 h"</comment>
+  </data>
+  <data name="LayerTime_BestTrackFormat" xml:space="preserve">
+    <value>{0} · best track</value>
+    <comment>A tropical cyclone's layer time before its advisory, on the observed best track; {0} is the time</comment>
+  </data>
+  <data name="LayerTime_BeyondForecastFormat" xml:space="preserve">
+    <value>last forecast point {0}, {1} earlier</value>
+    <comment>A tropical cyclone's layer time after its last forecast point; {0} is that point's time, {1} how long before the view time</comment>
+  </data>
+  <data name="LayerTime_BeforeTrackFormat" xml:space="preserve">
+    <value>track starts {0}, {1} later</value>
+    <comment>A tropical cyclone's layer time before its first best-track point; {0} is that time, {1} how long after the view time</comment>
+  </data>
+  <data name="LayerTime_BeyondForecast" xml:space="preserve">
+    <value>Beyond forecast</value>
+    <comment>Tag on a tropical cyclone's Datasets row when the view time is after its last forecast point</comment>
+  </data>
+  <data name="LayerTime_BeforeTrack" xml:space="preserve">
+    <value>Before track</value>
+    <comment>Tag on a tropical cyclone's Datasets row when the view time is before its first best-track point</comment>
+  </data>
+  <data name="TimelinePanel_GroupTropicalCyclones" xml:space="preserve">
+    <value>Tropical cyclones</value>
+    <comment>Timeline lane group of NHC tropical cyclone advisories</comment>
+  </data>
+  <data name="TimelinePanel_LaneCycloneTooltipFormat" xml:space="preserve">
+    <value>{0}: {1} forecast points from {2} to {3}
+◆ issued {4} · ◇ next advisory due {5}</value>
+    <comment>Tooltip of a tropical cyclone's Timeline lane; {0} storm, {1} count, {2}/{3} first and last forecast times, {4} issue time, {5} next advisory time</comment>
+  </data>
+  <data name="Tooltip_TimelineLaneMarks" xml:space="preserve">
+    <value>Forecast points (ticks), the advisory's issue time (◆) and the next advisory due (◇)</value>
+    <comment>Tooltip of a tropical cyclone lane's marks</comment>
+  </data>
   <data name="LayerTime_Superseded" xml:space="preserve">
     <value>newer analysis drawn</value>
     <comment>A surface analysis layer hidden because a newer analysis or forecast of the same kind is drawn instead</comment>

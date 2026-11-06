@@ -215,6 +215,10 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
                 Library = lane.IsKnown,
                 NewRun = lane.IsNewRun,
                 Windows = [.. lane.Entries.Select(e => new TimelineLibraryWindow(e.ItemId, e.State, e.Start, e.End, e.Run, e.IsNewRun, e.IsExpired))],
+                Sub = lane.Sub,
+                Issued = lane.Marks.Any(m => m.Kind == TimelineLaneMarkKind.Issued) ? lane.Dataset?.IssueTime : null,
+                NextIssue = lane.Marks.Any(m => m.Kind == TimelineLaneMarkKind.NextIssue) ? lane.Dataset?.NextIssueTime : null,
+                StepTicks = lane.Marks.Count(m => m.Kind == TimelineLaneMarkKind.Step),
             };
         var listed = _timeline.LaneGroups.SelectMany(g => g.Lanes.Select(lane => State(lane, g.Title, true)));
         var folded = _timeline.HasOutsideLanes
@@ -251,6 +255,7 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
             Hidden = entry.IsLayerHidden,
             Drawing = entry.IsLayerDrawing,
             StaleHours = entry.LayerTime?.StaleAge is { } age ? (int)age.TotalHours : null,
+            HiddenTag = entry.IsLayerHidden ? entry.LayerHiddenTagText : null,
         };
     }
 }
