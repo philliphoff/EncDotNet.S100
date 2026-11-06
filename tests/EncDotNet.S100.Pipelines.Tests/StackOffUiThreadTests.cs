@@ -128,7 +128,7 @@ public sealed class StackOffUiThreadTests
         // Composed, not applied: the map and the stack still wait for the post.
         Assert.False(render.IsCompleted);
         Assert.Empty(session.GetStackedLayers());
-        Assert.Empty(map.Layers);
+        Assert.Empty(map.DatasetLayers());
         Assert.Equal(0, changes);
 
         // The post runs on this thread; read its id before awaiting, since the
@@ -136,7 +136,7 @@ public sealed class StackOffUiThreadTests
         var postThread = Environment.CurrentManagedThreadId;
         Assert.Equal(1, marshal.RunPending());
         Assert.NotNull(await render);
-        Assert.Single(map.Layers);
+        Assert.Single(map.DatasetLayers());
         Assert.Single(session.GetStackedLayers());
         Assert.Equal(1, changes);
         Assert.Equal(postThread, changedOn);
@@ -230,21 +230,21 @@ public sealed class StackOffUiThreadTests
         Assert.True(owner.TryRegister(id, processor));
         session.SetDataset(Dataset(id));
         await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
-        var original = Assert.Single(map.Layers);
+        var original = Assert.Single(map.DatasetLayers());
 
         authority.Throw = true;
         processor.Version = 2;
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken));
 
-        Assert.Same(original, Assert.Single(map.Layers));
+        Assert.Same(original, Assert.Single(map.DatasetLayers()));
         Assert.Same(original, Assert.Single(session.GetDataset(id)!.Layers));
 
         // The next landing composes again once the cause is gone.
         authority.Throw = false;
         processor.Version = 3;
         await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
-        Assert.NotSame(original, Assert.Single(map.Layers));
+        Assert.NotSame(original, Assert.Single(map.DatasetLayers()));
     }
 
     [Fact]

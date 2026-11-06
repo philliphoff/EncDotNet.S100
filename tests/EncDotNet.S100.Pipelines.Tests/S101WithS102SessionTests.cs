@@ -9,10 +9,10 @@ using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Rendering.Engine;
+using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Specifications;
 using EncDotNet.S100.TestSupport;
 using Mapsui;
-using Mapsui.Layers;
 using Mapsui.Projections;
 
 namespace EncDotNet.S100.Pipelines.Tests;
@@ -117,22 +117,26 @@ public sealed class S101WithS102SessionTests
     private static Dictionary<string, int> SceneOpCounts(MapsuiDatasetLayerSession session)
     {
         var counts = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var layer in S101Layers(session))
+        foreach (var entry in S101Entries(session))
         {
+            var layer = entry.Layer;
             Assert.Equal(S100VectorTileRenderer.RendererName, layer.CustomLayerRendererName);
             Assert.True(
                 S100VectorTileRenderer.TryGetPartitionedScene(layer, out var baseScene, out var overlayScene),
                 $"No scene is bound to '{layer.Name}'.");
-            counts[layer.Name] = baseScene.Ops.Count + overlayScene.Ops.Count;
+            counts[layer.Name] = Drawn(entry, baseScene).Count + Drawn(entry, overlayScene).Count;
         }
         Assert.NotEmpty(counts);
         return counts;
     }
 
-    private static IEnumerable<ILayer> S101Layers(MapsuiDatasetLayerSession session) =>
+    private static IEnumerable<LayerStackEntry> S101Entries(MapsuiDatasetLayerSession session) =>
         session.GetLayerStackEntries()
-            .Where(entry => entry.SourceDatasetId == S101Id.Value)
-            .Select(entry => entry.Layer);
+            .Where(entry => entry.SourceDatasetId == S101Id.Value);
+
+    /// <summary>The ops of <paramref name="scene"/> the chart draws: those of features the stack entry doesn't suppress.</summary>
+    private static List<PaintOp> Drawn(LayerStackEntry entry, VectorScene scene) =>
+        [.. scene.Ops.Where(op => entry.SuppressedFeatures?.Contains(op.FeatureReference) != true)];
 
     /// <summary>
     /// Rasterises the base-plane tiles over the cell at an in-band scale, as the
@@ -154,17 +158,19 @@ public sealed class S101WithS102SessionTests
             band);
 
         long painted = 0;
-        foreach (var layer in S101Layers(session))
+        foreach (var entry in S101Entries(session))
         {
+            var layer = entry.Layer;
             if (!layer.Enabled || layer.MinVisible > resolution || resolution > layer.MaxVisible
                 || !S100VectorTileRenderer.TryGetPartitionedScene(layer, out var baseScene, out _))
             {
                 continue;
             }
 
+            var drawn = new VectorScene(Drawn(entry, baseScene)) { ScaleMinimumCap = baseScene.ScaleMinimumCap };
             foreach (var key in tiles)
             {
-                using var bitmap = S100VectorTileRenderer.RasterizeTile(baseScene, baseIndex: null, key, deviceScale: 1f);
+                using var bitmap = S100VectorTileRenderer.RasterizeTile(drawn, baseIndex: null, key, deviceScale: 1f);
                 painted += bitmap.Pixels.Count(static p => p.Alpha != 0);
             }
         }

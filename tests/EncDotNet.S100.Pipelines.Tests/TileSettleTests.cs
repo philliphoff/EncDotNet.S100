@@ -73,21 +73,24 @@ public sealed class TileSettleTests : IDisposable
     }
 
     [Fact]
-    public void EvaluateSettle_ReplacementShowingPredecessorTiles_IsNotSettled()
+    public void EvaluateSettle_ChartLayerShowingItsPreviousTiles_IsNotSettled()
     {
         var viewport = MakeViewport();
         var source = BindLayer();
-        RenderUntilSettled(source, viewport);
+        var session = new ChartSession(new ChartSessionOptions { TileDiskCacheEnabled = false });
+        var chart = new MemoryLayer { Name = "chart" };
+        session.Publish(chart, new ChartStack(1, [new ChartStackEntry(source)]));
+        RenderUntilSettled(chart, viewport);
 
-        var replacement = new MemoryLayer { Name = "filtered" };
-        Assert.True(S100VectorTileRenderer.TryBindFilteredScene(source, replacement, _ => true, replaces: source));
+        // A new stack changes the slot's content: its first frame shows the
+        // slot's previous tile in its place, which isn't the target yet.
+        var other = BindLayer();
+        session.Publish(chart, new ChartStack(2, [new ChartStackEntry(source), new ChartStackEntry(other) { Opacity = 0.5 }]));
+        RenderFrame(chart, viewport);
+        Assert.False(MapsuiChartLayers.EvaluateSettle([chart]).IsSettled);
 
-        // The first frame draws the replaced layer's tiles in its place.
-        RenderFrame(replacement, viewport);
-        Assert.False(MapsuiChartLayers.EvaluateSettle([replacement]).IsSettled);
-
-        RenderUntilSettled(replacement, viewport);
-        Assert.True(MapsuiChartLayers.EvaluateSettle([replacement]).IsSettled);
+        RenderUntilSettled(chart, viewport);
+        Assert.True(MapsuiChartLayers.EvaluateSettle([chart]).IsSettled);
     }
 
     [Fact]

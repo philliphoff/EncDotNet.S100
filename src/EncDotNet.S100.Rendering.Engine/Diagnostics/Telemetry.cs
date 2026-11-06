@@ -370,6 +370,28 @@ internal static class Telemetry
             description: "Speculatively-rasterised tiles that later became visible while cached (prediction hits) in the tiled TiledScene render subsystem.");
 
     /// <summary>
+    /// Reveal trace: a tile slot first showing content in a view (see
+    /// <c>RevealTrace</c>). Counted only while settle tracking is on.
+    /// </summary>
+    public static readonly Counter<long> RevealFirst =
+        Meter.CreateCounter<long>(
+            name: "s100.render.reveal.first",
+            unit: "{slot}",
+            description: "Tile slots that first showed content in a view.");
+
+    /// <summary>
+    /// Reveal trace: a tile slot that already showed content in a view
+    /// changing again in a later frame, e.g. another layer's tile landing on
+    /// top of it (see <c>RevealTrace</c>). Counted only while settle tracking
+    /// is on.
+    /// </summary>
+    public static readonly Counter<long> RevealIncremental =
+        Meter.CreateCounter<long>(
+            name: "s100.render.reveal.incremental",
+            unit: "{slot}",
+            description: "Changes of a tile slot that already showed content in the same view.");
+
+    /// <summary>
     /// Count of visible tiles skipped per frame because finer, currently-drawing
     /// coverage hides them entirely, so the coverage clip would erase them
     /// (issue #691). Counted each frame a tile is skipped, not once per tile.

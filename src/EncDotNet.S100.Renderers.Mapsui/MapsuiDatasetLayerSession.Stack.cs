@@ -113,6 +113,7 @@ public sealed partial class MapsuiDatasetLayerSession
         Interlocked.Increment(ref _stackComputes);
         var (projected, stackEntries, stackedLayers) = ProjectLayerStack(input);
         ValidateProjection(projected, input.Snapshots);
+        PrepareChartSuppression(projected);
         var suppression = ComputeOverlapSuppression(input, projected);
         return new StackPlan(input, projected, stackEntries, stackedLayers, suppression);
     }

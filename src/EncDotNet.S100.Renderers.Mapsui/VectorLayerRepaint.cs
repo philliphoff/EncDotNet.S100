@@ -25,6 +25,12 @@ internal static class VectorLayerRepaint
             return;
         }
 
+        if (layer is ChartLayer chart)
+        {
+            chart.RequestRepaint();
+            return;
+        }
+
         (layer as BaseLayer)?.DataHasChanged();
     }
 }

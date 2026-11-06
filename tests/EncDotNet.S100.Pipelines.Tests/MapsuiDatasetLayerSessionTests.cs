@@ -35,16 +35,16 @@ public sealed class MapsuiDatasetLayerSessionTests
 
         var first = await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
         var firstLayer = Assert.Single(first!.Layers);
-        Assert.Same(firstLayer, Assert.Single(map.Layers));
+        Assert.Same(firstLayer, Assert.Single(map.DatasetLayers()));
 
         processor.Version = 2;
         var second = await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
         var secondLayer = Assert.Single(second!.Layers);
         Assert.NotSame(firstLayer, secondLayer);
-        Assert.Same(secondLayer, Assert.Single(map.Layers));
+        Assert.Same(secondLayer, Assert.Single(map.DatasetLayers()));
 
         Assert.True(session.RemoveDataset(id));
-        Assert.Empty(map.Layers);
+        Assert.Empty(map.DatasetLayers());
         Assert.Empty(session.GetLayerStackEntries());
         Assert.Empty(session.GetStackedLayers());
         Assert.Equal(1, processor.DisposeCount);
@@ -125,17 +125,47 @@ public sealed class MapsuiDatasetLayerSessionTests
         session.SetOrder([secondId, firstId]);
         Assert.Equal(
             ["second-v1", "first-v1"],
-            map.Layers.Select(layer => layer.Name));
+            map.DatasetLayers().Select(layer => layer.Name));
 
         session.SetDataset(Dataset(firstId, isVisible: false, isActive: true));
-        Assert.Equal(2, map.Layers.Count);
-        Assert.False(map.Layers.ElementAt(1).Enabled);
+        Assert.Equal(2, map.DatasetLayers().Count);
+        Assert.False(map.DatasetLayers().ElementAt(1).Enabled);
 
         session.SetDataset(Dataset(firstId, isVisible: true, isActive: false));
-        Assert.Single(map.Layers);
-        Assert.Equal("second-v1", map.Layers.First().Name);
+        Assert.Single(map.DatasetLayers());
+        Assert.Equal("second-v1", map.DatasetLayers().First().Name);
         Assert.True(session.GetDataset(firstId)!.Dataset.IsVisible);
         Assert.False(session.GetDataset(firstId)!.Dataset.IsActive);
+    }
+
+    [Fact]
+    public async Task TiledLayersOfEveryDatasetShareOneChartLayer()
+    {
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var firstId = new MapDatasetId("first");
+        var secondId = new MapDatasetId("second");
+        Assert.True(owner.TryRegister(firstId, new StubProcessor(firstId.Value)));
+        Assert.True(owner.TryRegister(secondId, new StubProcessor(secondId.Value)));
+        session.SetDataset(Dataset(firstId));
+        session.SetDataset(Dataset(secondId));
+        await session.RenderAsync(firstId, MapPresentationState.Default, TestContext.Current.CancellationToken);
+        await session.RenderAsync(secondId, MapPresentationState.Default, TestContext.Current.CancellationToken);
+
+        var chart = Assert.IsType<ChartLayer>(Assert.Single(map.Layers));
+        Assert.Equal(
+            session.GetStackedLayers().Cast<object>(),
+            chart.Stack.Entries.Select(entry => entry.Source));
+
+        // A hidden dataset keeps its place in the stack, as a stack setting.
+        session.SetDataset(Dataset(firstId, isVisible: false, isActive: true));
+        chart = Assert.IsType<ChartLayer>(Assert.Single(map.Layers));
+        Assert.Equal([false, true], chart.Stack.Entries.Select(entry => entry.Visible));
+
+        session.RemoveDataset(firstId);
+        session.RemoveDataset(secondId);
+        Assert.Empty(map.Layers);
     }
 
     [Fact]
@@ -216,7 +246,7 @@ public sealed class MapsuiDatasetLayerSessionTests
         // that drives the live map redraw — happens exactly once for the batch,
         // not once per cell. See MapsuiDatasetLayerSession.RenderCoreAsync(compose).
         Assert.Equal(1, layersChanged);
-        Assert.Equal(3, map.Layers.Count);
+        Assert.Equal(3, map.DatasetLayers().Count);
     }
 
     [Fact]
@@ -264,7 +294,7 @@ public sealed class MapsuiDatasetLayerSessionTests
             processor.ReleaseDelayedRender.TrySetResult();
 
         Assert.True(await refresh);
-        Assert.Equal(2, map.Layers.Count);
+        Assert.Equal(2, map.DatasetLayers().Count);
         Assert.All(processors, p => Assert.Equal(2, p.RenderCount));
     }
 
@@ -301,7 +331,7 @@ public sealed class MapsuiDatasetLayerSessionTests
             processor.ReleaseDelayedRender.TrySetResult();
 
         Assert.All(await Task.WhenAll(renders), Assert.NotNull);
-        Assert.Equal(2, map.Layers.Count);
+        Assert.Equal(2, map.DatasetLayers().Count);
     }
 
     [Fact]
@@ -373,7 +403,7 @@ public sealed class MapsuiDatasetLayerSessionTests
             lateId, productSpec: "S-111", availableTimes: lateTimes, currentTime: t0.AddHours(2)));
         await session.RenderAsync(earlyId, MapPresentationState.Default, TestContext.Current.CancellationToken);
         await session.RenderAsync(lateId, MapPresentationState.Default, TestContext.Current.CancellationToken);
-        Assert.Equal(2, map.Layers.Count);
+        Assert.Equal(2, map.DatasetLayers().Count);
 
         session.SetCurrentTime(t0.AddHours(2));
 
@@ -385,7 +415,7 @@ public sealed class MapsuiDatasetLayerSessionTests
         Assert.True(await session.RefreshAsync(MapPresentationState.Default, cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal(1, layersChanged);
-        Assert.Single(map.Layers);
+        Assert.Single(map.DatasetLayers());
     }
 
     [Fact]
@@ -413,7 +443,7 @@ public sealed class MapsuiDatasetLayerSessionTests
         await session.RenderAsync(farId, MapPresentationState.Default, TestContext.Current.CancellationToken);
         Assert.Equal(1, near.RenderCount);
         Assert.Equal(1, far.RenderCount);
-        Assert.Equal(2, map.Layers.Count);
+        Assert.Equal(2, map.DatasetLayers().Count);
 
         // Viewport-gated refresh covering only the near cell: the far cell is
         // deferred, not re-portrayed.
@@ -421,13 +451,13 @@ public sealed class MapsuiDatasetLayerSessionTests
             MapPresentationState.Default, MercatorViewport(-1, -1, 1, 1), TestContext.Current.CancellationToken));
         Assert.Equal(2, near.RenderCount);
         Assert.Equal(1, far.RenderCount);
-        Assert.Equal(2, map.Layers.Count);
+        Assert.Equal(2, map.DatasetLayers().Count);
 
         // A reveal pass over the far cell's area re-portrays it (and only it).
         Assert.True(await session.RefreshRevealedAsync(MercatorViewport(99, -1, 101, 1), TestContext.Current.CancellationToken));
         Assert.Equal(2, far.RenderCount);
         Assert.Equal(2, near.RenderCount);
-        Assert.Equal(2, map.Layers.Count);
+        Assert.Equal(2, map.DatasetLayers().Count);
 
         // A second reveal is a no-op — nothing is stale any more.
         Assert.True(await session.RefreshRevealedAsync(MercatorViewport(99, -1, 101, 1), TestContext.Current.CancellationToken));
@@ -447,7 +477,7 @@ public sealed class MapsuiDatasetLayerSessionTests
         await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
         session.SetDataset(Dataset(id, isActive: false));
 
-        Assert.Empty(map.Layers);
+        Assert.Empty(map.DatasetLayers());
         Assert.Single(session.GetLayerStackEntries());
         Assert.Empty(session.GetStackedLayers());
         Assert.False(session.GetDataset(id)!.IsDrawing);
@@ -481,14 +511,16 @@ public sealed class MapsuiDatasetLayerSessionTests
 
         Assert.Equal(
             ["s101-v1", "s102-v1"],
-            map.Layers.Select(layer => layer.Name));
-        Assert.Empty(((MemoryLayer)map.Layers.First()).Features);
+            map.DatasetLayers().Select(layer => layer.Name));
+        // The S-101 depth area is suppressed under the visible S-102: a filter
+        // on the layer's scene ops, carried by its stack entry.
+        Assert.NotEmpty(Assert.IsType<HashSet<string>>(session.GetLayerStackEntries()[0].SuppressedFeatures));
         Assert.Equal(2, session.GetLayerStackEntries().Count);
 
         session.SetDataset(Dataset(s102Id, isVisible: false, productSpec: "S-102"));
 
-        Assert.Single(((MemoryLayer)map.Layers.First()).Features);
-        Assert.False(map.Layers.ElementAt(1).Enabled);
+        Assert.Null(session.GetLayerStackEntries()[0].SuppressedFeatures);
+        Assert.False(map.DatasetLayers().ElementAt(1).Enabled);
     }
 
     [Fact]
@@ -519,14 +551,14 @@ public sealed class MapsuiDatasetLayerSessionTests
         await session.RenderAsync(underId, MapPresentationState.Default, TestContext.Current.CancellationToken);
         Assert.Equal(
             ["under-v1", "over-v1"],
-            map.Layers.Select(layer => layer.Name));
+            map.DatasetLayers().Select(layer => layer.Name));
 
         provider.Set(new LoadOrderInteroperabilityAuthority(
             new InteroperabilityAuthority()));
 
         Assert.Equal(
             ["over-v1", "under-v1"],
-            map.Layers.Select(layer => layer.Name));
+            map.DatasetLayers().Select(layer => layer.Name));
     }
 
     [Fact]
@@ -547,7 +579,7 @@ public sealed class MapsuiDatasetLayerSessionTests
         session.SetDataset(Dataset(id));
         Assert.NotNull(await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken));
 
-        Assert.Single(map.Layers);
+        Assert.Single(map.DatasetLayers());
         Assert.Equal(1, provider.ReadCount);
     }
 
@@ -624,7 +656,7 @@ public sealed class MapsuiDatasetLayerSessionTests
         Assert.True(owner.TryRegister(id, processor));
         session.SetDataset(Dataset(id));
         await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
-        var original = Assert.Single(map.Layers);
+        var original = Assert.Single(map.DatasetLayers());
 
         processor.Delay = TimeSpan.FromSeconds(10);
         using var cancellation = new CancellationTokenSource(
@@ -635,7 +667,7 @@ public sealed class MapsuiDatasetLayerSessionTests
                 MapPresentationState.Default,
                 cancellation.Token));
 
-        Assert.Same(original, Assert.Single(map.Layers));
+        Assert.Same(original, Assert.Single(map.DatasetLayers()));
         Assert.Same(
             original,
             Assert.Single(session.GetDataset(id)!.Layers));
@@ -656,13 +688,13 @@ public sealed class MapsuiDatasetLayerSessionTests
         Assert.True(owner.TryRegister(id, processor));
         session.SetDataset(Dataset(id));
         await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
-        var original = Assert.Single(map.Layers);
+        var original = Assert.Single(map.DatasetLayers());
         authority.Throw = true;
         processor.Version = 2;
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken));
 
-        Assert.Same(original, Assert.Single(map.Layers));
+        Assert.Same(original, Assert.Single(map.DatasetLayers()));
         Assert.Same(
             original,
             Assert.Single(session.GetDataset(id)!.Layers));
@@ -684,7 +716,7 @@ public sealed class MapsuiDatasetLayerSessionTests
             new StubProcessor(existingId.Value)));
         session.SetDataset(Dataset(existingId));
         await session.RenderAsync(existingId, MapPresentationState.Default, TestContext.Current.CancellationToken);
-        var existingLayer = Assert.Single(map.Layers);
+        var existingLayer = Assert.Single(map.DatasetLayers());
         authority.Throw = true;
         Assert.Throws<InvalidOperationException>(() =>
             session.SetDataset(Dataset(
@@ -698,7 +730,7 @@ public sealed class MapsuiDatasetLayerSessionTests
         var newId = new MapDatasetId("new");
         session.SetDataset(Dataset(newId));
         Assert.NotNull(session.GetDataset(newId));
-        Assert.Same(existingLayer, Assert.Single(map.Layers));
+        Assert.Same(existingLayer, Assert.Single(map.DatasetLayers()));
     }
 
     [Fact]
@@ -716,11 +748,11 @@ public sealed class MapsuiDatasetLayerSessionTests
         Assert.True(owner.TryRegister(id, processor));
         session.SetDataset(Dataset(id), minimumDisplayScale: 50_000);
         await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
-        var original = Assert.Single(map.Layers);
+        var original = Assert.Single(map.DatasetLayers());
         var capped = ((BaseLayer)original).MaxVisible;
         authority.Throw = true;
         Assert.Throws<InvalidOperationException>(() => session.ClearLayers(id));
-        Assert.Same(original, Assert.Single(map.Layers));
+        Assert.Same(original, Assert.Single(map.DatasetLayers()));
         Assert.Same(original, Assert.Single(session.GetDataset(id)!.Layers));
 
         Assert.Throws<InvalidOperationException>(() => session.RemoveDataset(id));
@@ -757,7 +789,7 @@ public sealed class MapsuiDatasetLayerSessionTests
 
         Assert.Equal(2, removed);
         Assert.Equal(1, changes);
-        Assert.Equal("b-v1", Assert.Single(map.Layers).Name);
+        Assert.Equal("b-v1", Assert.Single(map.DatasetLayers()).Name);
         // Preserved for a lazy reload, without layers or processors.
         Assert.Empty(session.GetDataset(ids[0])!.Layers);
         Assert.Empty(session.GetDataset(ids[2])!.Layers);
@@ -786,12 +818,12 @@ public sealed class MapsuiDatasetLayerSessionTests
             session.SetDataset(Dataset(id));
             await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
         }
-        var before = map.Layers.ToArray();
+        var before = map.DatasetLayers().ToArray();
 
         authority.Throw = true;
         Assert.Throws<InvalidOperationException>(() => session.RemoveDatasets(ids));
 
-        Assert.Equal(before, map.Layers.ToArray());
+        Assert.Equal(before, map.DatasetLayers().ToArray());
         Assert.All(ids, id => Assert.Single(session.GetDataset(id)!.Layers));
         Assert.All(processors, p => Assert.Equal(0, p.DisposeCount));
     }
@@ -807,7 +839,7 @@ public sealed class MapsuiDatasetLayerSessionTests
         Assert.True(owner.TryRegister(id, new StubProcessor(id.Value)));
         session.SetDataset(Dataset(id));
         await session.RenderAsync(id, MapPresentationState.Default, TestContext.Current.CancellationToken);
-        var layer = Assert.Single(map.Layers);
+        var layer = Assert.Single(map.DatasetLayers());
         var changes = 0;
         session.LayersChanged += (_, _) => changes++;
 
@@ -815,12 +847,12 @@ public sealed class MapsuiDatasetLayerSessionTests
         session.SetDataset(Dataset(id));
         Assert.Equal(composes, provider.Reads);
         Assert.Equal(1, changes);
-        Assert.Same(layer, Assert.Single(map.Layers));
+        Assert.Same(layer, Assert.Single(map.DatasetLayers()));
 
         // A change composition reads still recomposes.
         session.SetDataset(Dataset(id, isVisible: false));
         Assert.True(provider.Reads > composes);
-        Assert.False(Assert.Single(map.Layers).Enabled);
+        Assert.False(Assert.Single(map.DatasetLayers()).Enabled);
     }
 
     [Fact]
@@ -860,7 +892,7 @@ public sealed class MapsuiDatasetLayerSessionTests
         session.SetDataset(Dataset(id));
 
         Assert.Equal(2, changeCount);
-        Assert.False(Assert.Single(map.Layers).Enabled);
+        Assert.False(Assert.Single(map.DatasetLayers()).Enabled);
         Assert.False(session.GetDataset(id)!.Dataset.IsVisible);
     }
 
@@ -892,7 +924,7 @@ public sealed class MapsuiDatasetLayerSessionTests
 
         Assert.NotNull(current);
         Assert.Null(stale);
-        Assert.Equal("dataset-v3", Assert.Single(map.Layers).Name);
+        Assert.Equal("dataset-v3", Assert.Single(map.DatasetLayers()).Name);
         Assert.Equal(
             "dataset-v3",
             Assert.Single(session.GetStackedLayers()).Name);
@@ -921,7 +953,7 @@ public sealed class MapsuiDatasetLayerSessionTests
         processor.ReleaseDelayedRender.TrySetResult();
 
         Assert.Null(await render);
-        Assert.Empty(map.Layers);
+        Assert.Empty(map.DatasetLayers());
         Assert.Empty(session.GetLayerStackEntries());
         Assert.Empty(session.GetStackedLayers());
     }
@@ -955,7 +987,7 @@ public sealed class MapsuiDatasetLayerSessionTests
 
         Assert.NotNull(current);
         Assert.Null(await staleRender);
-        Assert.Equal("dataset-v3", Assert.Single(map.Layers).Name);
+        Assert.Equal("dataset-v3", Assert.Single(map.DatasetLayers()).Name);
         Assert.Equal(
             "dataset-v3",
             Assert.Single(session.GetStackedLayers()).Name);

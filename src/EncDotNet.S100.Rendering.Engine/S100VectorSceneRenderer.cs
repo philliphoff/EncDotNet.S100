@@ -118,6 +118,8 @@ public static class S100VectorSceneRenderer
         lock (state.Sync)
         {
             state.Scene = scene;
+            state.SourceScene = null;
+            state.Suppressed = null;
             state.Generation++;
             state.Image?.Dispose();
             state.Image = null;
@@ -126,36 +128,48 @@ public static class S100VectorSceneRenderer
     }
 
     /// <summary>
-    /// Binds to <paramref name="target"/> a copy of the scene bound to
-    /// <paramref name="source"/> that keeps only the ops <paramref name="keep"/>
-    /// accepts — the single-surface counterpart of
-    /// <see cref="S100VectorTileRenderer.TryBindFilteredScene(object, object, Func{PaintOp, bool})"/>.
+    /// Leaves out of <paramref name="layer"/>'s scene the ops of the
+    /// <paramref name="suppressed"/> features (an S-98 rule's op filter, for
+    /// example S-101 depth areas under a loaded S-102), or restores them all
+    /// when <paramref name="suppressed"/> is null or empty. The scene bound
+    /// with <see cref="BindScene"/> is kept, so a later change of the set
+    /// filters it again.
     /// </summary>
-    /// <param name="source">A layer a scene was bound to.</param>
-    /// <param name="target">The layer to bind the filtered scene to.</param>
-    /// <param name="keep">Returns <see langword="true"/> for each op to keep.</param>
-    /// <returns><see langword="true"/> when <paramref name="source"/> had a scene to copy.</returns>
-    public static bool TryBindFilteredScene(object source, object target, Func<PaintOp, bool> keep)
+    /// <param name="layer">A layer a scene was bound to.</param>
+    /// <param name="suppressed">The feature references to leave out, or null.</param>
+    internal static void SetSuppressedFeatures(object layer, IReadOnlySet<string>? suppressed)
     {
-        ArgumentNullException.ThrowIfNull(source);
-        ArgumentNullException.ThrowIfNull(target);
-        ArgumentNullException.ThrowIfNull(keep);
-
-        VectorScene? scene = null;
-        if (States.TryGetValue(source, out var state))
+        ArgumentNullException.ThrowIfNull(layer);
+        if (!States.TryGetValue(layer, out var state))
         {
-            lock (state.Sync)
+            return;
+        }
+
+        lock (state.Sync)
+        {
+            var current = state.Suppressed;
+            var none = suppressed is null || suppressed.Count == 0;
+            if ((none && current is null) || (!none && current is not null && current.SetEquals(suppressed!)))
             {
-                scene = state.Scene;
+                return;
             }
-        }
-        if (scene is null)
-        {
-            return false;
-        }
 
-        BindScene(target, new VectorScene(scene.Ops.Where(keep).ToList()));
-        return true;
+            state.Suppressed = none ? null : new HashSet<string>(suppressed!, StringComparer.Ordinal);
+            var source = state.SourceScene ?? state.Scene;
+            if (source is null)
+            {
+                return;
+            }
+
+            state.SourceScene = source;
+            state.Scene = state.Suppressed is { } dropped
+                ? new VectorScene([.. source.Ops.Where(op => !dropped.Contains(op.FeatureReference))])
+                : source;
+            state.Generation++;
+            state.Image?.Dispose();
+            state.Image = null;
+            state.HasImage = false;
+        }
     }
 
     /// <summary>
@@ -545,6 +559,11 @@ public static class S100VectorSceneRenderer
         public readonly object Sync = new();
 
         public VectorScene? Scene;
+
+        // The scene as bound, when Scene is a suppression-filtered copy of it,
+        // and the features left out (see SetSuppressedFeatures).
+        public VectorScene? SourceScene;
+        public HashSet<string>? Suppressed;
         public long Generation;
 
         public SKImage? Image;
