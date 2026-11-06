@@ -2,11 +2,13 @@ using System.Globalization;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.TropicalCyclones;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Renderers.Skia;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.TestSupport;
 using SkiaSharp;
 
@@ -36,9 +38,9 @@ public sealed class TropicalCycloneRenderingTests
             var storm = new TropicalCycloneDatasetProcessor(TropicalCycloneFixtures.IanForecast);
             var vector = await storm.BuildVectorPortrayalAsync(new RenderContext { Palette = palette }, Ct);
 
-            using var bitmap = new HeadlessCompositor(new ProjNetCrsTransformFactory()).Render(
-                [HeadlessCompositeInput.ForVector(vector)],
-                new HeadlessCompositeOptions
+            using var bitmap = new ChartCompositor(new ProjNetCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes)).Render(
+                [ChartCompositeInput.ForVector(vector)],
+                new ChartCompositeOptions
                 {
                     Viewport = Viewport(-90, -72, 20, 37, 900, 760, 8_000_000),
                     Background = Background(palette),
@@ -94,16 +96,16 @@ public sealed class TropicalCycloneRenderingTests
         var south = new TropicalCycloneDatasetProcessor(Row(-3), "south.zip");
         // Drawn three times their size, so the arms can be checked by eye.
         var sheet = new RenderContext { SymbolScale = 3 };
-        var options = new HeadlessCompositeOptions
+        var options = new ChartCompositeOptions
         {
             Viewport = Viewport(-82, -54, -6, 6, 800, 340, 12_000_000),
             Background = RgbaColor.FromHex("#FFFFFF"),
         };
 
-        using var bitmap = new HeadlessCompositor(new ProjNetCrsTransformFactory()).Render(
+        using var bitmap = new ChartCompositor(new ProjNetCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes)).Render(
             [
-                HeadlessCompositeInput.ForVector(WithoutText(await north.BuildVectorPortrayalAsync(sheet, Ct))),
-                HeadlessCompositeInput.ForVector(WithoutText(await south.BuildVectorPortrayalAsync(sheet, Ct))),
+                ChartCompositeInput.ForVector(WithoutText(await north.BuildVectorPortrayalAsync(sheet, Ct))),
+                ChartCompositeInput.ForVector(WithoutText(await south.BuildVectorPortrayalAsync(sheet, Ct))),
             ],
             options);
 

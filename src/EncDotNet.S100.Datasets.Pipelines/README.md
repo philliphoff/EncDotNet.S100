@@ -70,8 +70,6 @@ more detail.
 - **`MapPresentationState`** and **`MapDataset`**: renderer-neutral snapshots
   of a map's display settings and of each dataset on it. See
   [Map presentation](#map-presentation).
-- **`HeadlessCompositor`**: draws several datasets into one image with the
-  S-98 rules. See [S-98 interoperability](#s-98-interoperability).
 - **`ValidationRunner`**: runs any processor's validation for a host. See
   [Validation](#validation).
 - The pick services in the `.Query` namespace and the dataset catalog in
@@ -235,8 +233,8 @@ from it and only open the file. It implements:
   `wind.speed.kn` in `kn`, directions in `deg`), and the catalog payload
   (`WeatherGridDatasetData`) does the same, so `sample_coverage` and
   `sample_coverage_along` work with no MCP change.
-- **Headless rendering.** `IHeadlessImageRenderer`, through the
-  `HeadlessCompositor`, framed on the grid.
+- **Headless rendering.** `IHeadlessImageRenderer`, framed on the grid,
+  with the sub-layers in S-98 order.
 - **Metadata.** The cells' WGS-84 extent, EPSG:4326 and the time coverage.
 - **Contents.** `Contents` lists what the file holds for `s100 info`: each
   parameter with its level and step count, whether it's used, and if not, why
@@ -687,8 +685,9 @@ features, so the same decision drives both renderers:
 - **SoundCharts**: `DatasetLoaderService` orders and suppresses
   `SubLayerStackItem`s, then maps the result back to the Mapsui layers it has
   built.
-- **`HeadlessCompositor`**: runs the same engine and turns each ordered vector
-  or coverage sub-layer into a Skia `CompositeLayer`. It paints all datasets in
+- **`ChartCompositor`** (in `EncDotNet.S100.Rendering.Engine`): runs the same
+  engine and turns each ordered vector or coverage sub-layer into a Skia
+  `CompositeLayer`. It paints all datasets in
   one shared viewport without Mapsui, with the same order and depth suppression
   as SoundCharts, such as drawing S-101 under S-102 (S-98 Annex A §A-6.9.1).
   The public entry point is the `EncDotNet.S100` facade's

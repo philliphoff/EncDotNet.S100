@@ -117,7 +117,7 @@ public sealed class CoverageBandTests
         var s = new GlobalTimeService();
         s.Register(NewEntry(), new Stub(new[] { T0 })); // single sample => min==max
 
-        var vm = new TimelineViewModel(s);
+        var vm = new TimelineViewModel(s, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider());
         Assert.Empty(vm.CoverageBands);
     }
 
@@ -125,7 +125,7 @@ public sealed class CoverageBandTests
     public void CoverageBands_property_changes_when_range_changes()
     {
         var s = new GlobalTimeService();
-        var vm = new TimelineViewModel(s);
+        var vm = new TimelineViewModel(s, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider());
         var raised = new List<string?>();
         ((INotifyPropertyChanged)vm).PropertyChanged += (_, e) => raised.Add(e.PropertyName);
 

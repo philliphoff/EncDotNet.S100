@@ -6,6 +6,23 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Faster multi-cell `s100 render` and `s100 tiles`, and HiDPI captures.**
+  The CLI and `s100 mcp serve` now render through the chart engine
+  (`EncDotNet.S100.Rendering.Engine`): cells parse, portray and build their
+  scenes in parallel, so a 17-cell composite renders in about 10 s instead of
+  14 s, and tile blocks render as scheduled jobs in the order they're written.
+  `render_to_image`'s `pixelDensity` now applies in `mcp serve`, as in
+  SoundCharts. Finer cells hide coarser ones by their coverage footprint, not
+  its bounding box, so composites where a coarse cell's coverage isn't
+  rectangular can change slightly. Breaking changes: `HeadlessCompositor`,
+  `HeadlessCompositeScene`, `HeadlessCompositeInput`, `HeadlessCompositeOptions`,
+  `HeadlessTileRenderer`, `HeadlessTileOptions`, `HeadlessTile` and `TileBlock`
+  leave `EncDotNet.S100.Datasets.Pipelines`; use `ChartCompositor`,
+  `ChartComposition`, `ChartCompositeInput`, `ChartCompositeOptions`,
+  `ChartTileRenderer`, `ChartTileOptions`, `ChartTile` and `TileBlock` in
+  `EncDotNet.S100.Rendering.Engine`, where `ChartCompositor` now takes its S-98
+  authority explicitly. `S100CompositeOptions.PixelDensity` is new. See the
+  [Rendering.Engine README](../src/EncDotNet.S100.Rendering.Engine/README.md#render-images-and-tile-sets).
 - **Tropical cyclones on a route.** With an NHC advisory loaded, Check
   route, `check_route` and `s100 route check` test the route against the
   storm at each ETA: stretches inside its 34, 50 or 64 kt wind radius (in the
