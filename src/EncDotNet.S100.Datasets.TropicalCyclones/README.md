@@ -10,7 +10,8 @@ It depends on [`EncDotNet.S100.Core`](../EncDotNet.S100.Core/README.md) and
 NetTopologySuite. The pipeline processor that loads it,
 `TropicalCycloneDatasetProcessor`, is in
 [`EncDotNet.S100.Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md),
-under the format name `TC`.
+under the format name `TC`. The portrayal, `TropicalCycloneStyle`, is in
+[`EncDotNet.S100.Datasets.Weather`](../EncDotNet.S100.Datasets.Weather/README.md#tropical-cyclones).
 
 > **Not for navigation.** NHC advisories aren't S-100 products or official
 > navigational warnings. Hosts label them so wherever they appear.
@@ -75,6 +76,8 @@ The last two can be `null`.
 - **Wind radii.** Each forecast point's 34, 50 and 64 kt radii, as nautical
   miles in each quadrant (NE, SE, SW, NW) and NHC's polygon. A radius whose
   quadrants are all 0 is left out, so a tropical depression has none.
+  `QuadrantSurface(centre, pointsPerQuadrant)` builds the area from the four
+  quadrants, a quarter circle each, for a radius that has no polygon of NHC's.
 - **Cone.** `TropicalCycloneCone` holds NHC's polygon unchanged, and the same
   area split at 72 hours into `DaysOneToThree` and `DaysFourToFive`. It is
   `null` when the advisory has no cone, as some final advisories don't.

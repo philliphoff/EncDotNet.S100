@@ -223,6 +223,7 @@ public class WindBarbTests
                 SurfaceAnalysisStyle.CentreWithRuleSymbol,
                 SurfaceAnalysisStyle.CentreLegendSymbol,
             ])
+            .Concat(TropicalCycloneStyle.AllSymbols)
             .Order(StringComparer.Ordinal);
         Assert.Equal(expected, WeatherCoverageStyle.Symbols.Names.Order(StringComparer.Ordinal));
 
