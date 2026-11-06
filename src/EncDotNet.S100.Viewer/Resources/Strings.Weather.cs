@@ -4,6 +4,7 @@ namespace EncDotNet.S100.Viewer.Resources;
 internal static partial class Strings
 {
     public static string Library_StaleRunFormat => Get(nameof(Library_StaleRunFormat));
+    public static string Library_StaleAnalysisFormat => Get(nameof(Library_StaleAnalysisFormat));
 
     public static string Library_LoadLatestRun => Get(nameof(Library_LoadLatestRun));
 

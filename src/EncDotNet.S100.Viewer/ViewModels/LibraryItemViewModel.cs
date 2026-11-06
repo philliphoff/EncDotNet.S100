@@ -296,9 +296,19 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// <summary>True when the row's downloaded run can be pinned (a weather run, downloaded, not already a pin).</summary>
     public bool CanPinRun => CanLoadLatestRun && LocalRun is not null;
 
-    /// <summary>"Run 2026-10-25 00Z is over 12 hours old" for a stale weather run; otherwise null.</summary>
+    /// <summary>
+    /// "Run 2026-10-25 00Z is over 12 hours old" for a stale weather run (or
+    /// "Analysis … is over 6 hours old" for a surface analysis, with the
+    /// source's own limit); otherwise null.
+    /// </summary>
     public string? StaleRunText => IsStaleRun && ShownRun is { } run
-        ? string.Format(CultureInfo.CurrentCulture, Strings.Library_StaleRunFormat, FormatRun(run))
+        ? string.Format(
+            CultureInfo.CurrentCulture,
+            Item.Properties.GetValueOrDefault(EncDotNet.S100.Collections.Weather.WeatherFeedIndexer.BulletinKindProperty) == "analysis"
+                ? Strings.Library_StaleAnalysisFormat
+                : Strings.Library_StaleRunFormat,
+            FormatRun(run),
+            (int)Math.Round(EncDotNet.S100.Collections.Weather.WeatherRuns.StaleAfterOf(Item).TotalHours))
         : null;
 
     /// <summary>
@@ -416,6 +426,10 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             if (IsModelHeader)
                 parts.Add(string.Format(c, Strings.Library_Forecast_TilesFormat, _members.Count));
         }
+
+        // Where the data covers, when narrower than its area (WPC's domain, V36).
+        if (EncDotNet.S100.Collections.Weather.WeatherRuns.CoverageOf(Item) is { } coverage)
+            parts.Add(coverage);
 
         var bytes = IsModelHeader
             ? _members.Sum(m => (m.Item.Location as RemoteItemLocation)?.SizeBytes ?? 0)

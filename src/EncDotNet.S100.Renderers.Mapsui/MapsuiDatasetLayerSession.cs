@@ -310,7 +310,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                         entry.Dataset.SubLayers,
                         entry.TimePolicy.AvailableTimes,
                         _time.Current is { } clock
-                            ? entry.TimePolicy.SnapTo(clock)
+                            ? SelectTime(entry, clock)
                             : entry.TimePolicy.AvailableTimes.FirstOrDefault());
                 }
 
@@ -844,10 +844,11 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             }
 
             selectedTime = policy is not null && _time.Current is { } clock
-                ? policy.SnapTo(clock)
+                ? SelectTime(entry, clock)
                 : null;
             alreadyCurrent = policy is not null
                 && entry.RenderedTime == selectedTime
+                && entry.RenderedAge == StaleAgeOf(entry, selectedTime)
                 && (selectedTime is null || entry.Layers.Count > 0);
         }
 
@@ -920,6 +921,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         ViewingGroupFilter? viewingGroups;
         IReadOnlySet<string>? hiddenFeatures;
         PortrayalTime? portrayalTime;
+        TimeSpan? staleAge;
         lock (_sync)
         {
             ThrowIfDisposed();
@@ -930,6 +932,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             viewingGroups = entry.Dataset.ViewingGroups;
             hiddenFeatures = entry.Dataset.HiddenFeatures;
             portrayalTime = entry.Dataset.PortrayalTime;
+            staleAge = StaleAgeOf(entry, selectedTime);
         }
 
         if (!_processorOwner.TryAcquire(datasetId, out var lease))
@@ -954,6 +957,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 ViewingGroups = viewingGroups,
                 HiddenFeatures = hiddenFeatures,
                 PortrayalTime = portrayalTime,
+                TimeStepAge = staleAge,
             };
             result = await Task.Run(
                 () => _renderer.RenderAsync(
@@ -979,6 +983,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             var previous = entry.CaptureRendering();
             entry.Apply(result);
             entry.RenderedTime = entry.TimePolicy is null ? null : selectedTime;
+            entry.RenderedAge = entry.TimePolicy is null ? null : staleAge;
             CaptureBaseStates(entry.Layers);
             entry.Dataset = ReconcileDatasetState(
                 entry.Dataset,
@@ -1997,6 +2002,9 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                 ForecastRun = entry.ForecastRun,
                 Selection = entry.TimePolicy.Selection,
                 Tolerance = entry.TimePolicy.Tolerance,
+                StepKind = entry.TimePolicy.StepKind,
+                StaleAfter = entry.TimePolicy.StaleAfter,
+                Supersession = entry.TimePolicy.Supersession,
                 Coverage = entry.TimePolicy.CoverageSegments,
                 Samples = entry.TimePolicy.AvailableTimes,
             })
@@ -2338,13 +2346,26 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         private TimePolicy(
             TimePolicyKind kind,
             DateTime[] times,
-            TimeSpan tolerance)
+            TimeSpan tolerance,
+            TimeSemantics semantics)
         {
             _kind = kind;
             _times = times;
             _tolerance = tolerance;
+            StepKind = semantics.Kind;
+            StaleAfter = semantics.StaleAfter;
+            Supersession = semantics.Supersession;
             CoverageSegments = ComputeSegments();
         }
+
+        /// <summary>What the steps are.</summary>
+        public TimeStepKind StepKind { get; }
+
+        /// <summary>How long after its step the data is stale (<see cref="TimeSemantics.StaleAfter"/>).</summary>
+        public TimeSpan? StaleAfter { get; }
+
+        /// <summary>The key of the datasets of which only one draws at a time (<see cref="TimeSemantics.Supersession"/>).</summary>
+        public string? Supersession { get; }
 
         public IReadOnlyList<DateTime> AvailableTimes => _times;
 
@@ -2370,7 +2391,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             var kind = semantics.Selection == TimeStepSelection.AtOrBefore
                 ? TimePolicyKind.AtOrBefore
                 : TimePolicyKind.Nearest;
-            return new TimePolicy(kind, times, semantics.Validity ?? TypicalStep(times));
+            return new TimePolicy(kind, times, semantics.Validity ?? TypicalStep(times), semantics);
         }
 
         /// <summary>
@@ -2438,6 +2459,31 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         }
     }
 
+    /// <summary>
+    /// The step <paramref name="entry"/> draws at <paramref name="clock"/>: its
+    /// policy's, unless another dataset with the same
+    /// <see cref="TimeSemantics.Supersession"/> takes over (V30). Call under <c>_sync</c>.
+    /// </summary>
+    private DateTime? SelectTime(Entry entry, DateTime clock)
+    {
+        if (entry.TimePolicy is not { } policy)
+            return null;
+        var sample = policy.SnapTo(clock);
+        if (policy.Supersession is null || sample is null)
+            return sample;
+        var candidate = new MapsuiTimeCandidate(entry.Dataset.Id.Value, policy.Supersession, policy.StepKind, sample);
+        var rivals = _entries.Values
+            .Where(e => e.TimePolicy?.Supersession is not null)
+            .Select(e => new MapsuiTimeCandidate(e.Dataset.Id.Value, e.TimePolicy!.Supersession, e.TimePolicy.StepKind, e.TimePolicy.SnapTo(clock)));
+        return MapsuiTimeSupersession.IsSuperseded(candidate, rivals) ? null : sample;
+    }
+
+    /// <summary>The age of <paramref name="selectedTime"/> at the clock once stale, for <see cref="RenderContext.TimeStepAge"/>. Call under <c>_sync</c>.</summary>
+    private TimeSpan? StaleAgeOf(Entry entry, DateTime? selectedTime) =>
+        entry.TimePolicy is { StaleAfter: { } limit } && _time.Current is { } clock
+            ? MapsuiTimeSupersession.StaleAge(selectedTime, clock, limit)
+            : null;
+
     private enum TimePolicyKind
     {
         /// <summary>The nearest sample, within the tolerance either side (<see cref="TimeStepSelection.Nearest"/>).</summary>
@@ -2463,6 +2509,9 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         public DatasetForecastRun? ForecastRun { get; set; }
 
         public DateTime? RenderedTime { get; set; }
+
+        /// <summary>The <see cref="RenderContext.TimeStepAge"/> the current layers were rendered with.</summary>
+        public TimeSpan? RenderedAge { get; set; }
 
         public CancellationTokenSource? RenderCts { get; set; }
 

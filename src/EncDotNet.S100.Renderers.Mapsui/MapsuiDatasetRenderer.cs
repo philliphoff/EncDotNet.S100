@@ -235,6 +235,8 @@ public sealed class MapsuiDatasetRenderer
             };
 
             var layer = renderer.Render(sub.Instructions, result.GeometryProvider);
+            if (sub.Opacity < 1.0)
+                layer.Opacity = Math.Clamp(sub.Opacity, 0.0, 1.0);
 
             TagFeatures(layer, result.FeatureTags);
 

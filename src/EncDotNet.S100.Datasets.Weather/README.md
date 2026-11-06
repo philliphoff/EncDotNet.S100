@@ -287,8 +287,11 @@ Center's (WPC) coded surface bulletins (issue
 (issue [#1300](https://github.com/philliphoff/EncDotNet.S100/issues/1300)).
 `SurfaceAnalysisDatasetProcessor` in
 [`Datasets.Pipelines`](../EncDotNet.S100.Datasets.Pipelines/README.md)
-registers the format as `CODSUS` and draws the bulletin's first analysis,
-and `s100 info` describes a bulletin.
+registers the format as `CODSUS` and draws the analysis at the view time:
+each analysis or forecast from its valid time for 12 hours, at half opacity
+with its age on the highs and lows after 6 (issue
+[#1301](https://github.com/philliphoff/EncDotNet.S100/issues/1301)). `s100
+info` describes a bulletin.
 
 ```csharp
 using EncDotNet.S100.Datasets.Weather;
