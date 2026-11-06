@@ -66,6 +66,40 @@ tile job is still in native Skia code when `libSkiaSharp` unloads. To measure ho
 long a view takes to settle, turn on `S100VectorTileRenderer.SettleTrackingEnabled`
 and call `EvaluateSettle` with a `SettleLayer` per host layer.
 
+## Render images and tile sets
+
+Hosts that draw a whole image or a tile set, rather than a live map, use
+`ChartRenderer`. The `s100 render`, `s100 tiles` and `s100 mcp serve` commands
+and the library's `PngS100DatasetRenderer` all go through it.
+
+- `ChartRenderer.PortrayAsync` portrays each dataset as its own `Portray` job
+  on the work scheduler, in the `Visible` class, so several cells portray in
+  parallel.
+- `ChartCompositor.Prepare` puts the portrayed datasets in S-98 order, applies
+  the inter-product rules, and lowers them to a `ChartComposition`. A finer
+  chart cell hides an overlapping coarser one with the viewer's NTS coverage
+  model: each cell's footprint is its coverage areas unioned and normalised,
+  and a finer cell takes part only where its footprint meets the coarser one.
+- `ChartComposition.Render(viewport, deviceScale)` draws one view.
+  `ChartCompositeOptions.DeviceScale` (or the `deviceScale` argument) makes a
+  HiDPI image of the same device-independent view.
+- `ChartRenderer.RenderTilesAsync` renders XYZ tile blocks with a
+  `ChartTileRenderer`, as `Raster` jobs in the `Visible` class, queued in the
+  order they're written. Per-tile work such as encoding runs on the job, and the
+  results reach the writer in order. A layer that one finer cell's coverage
+  hides across a whole tile isn't drawn for that tile.
+
+```csharp
+var compositor = new ChartCompositor(
+    new ProjNetCrsTransformFactory(),
+    new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes));
+
+using SKBitmap image = await ChartRenderer.RenderAsync(
+    [new ChartPortrayalRequest(processorA, contextA), new ChartPortrayalRequest(processorB, contextB)],
+    compositor,
+    new ChartCompositeOptions { Width = 1024, Height = 768, DeviceScale = 2f });
+```
+
 ## Options
 
 `ChartSessionOptions` holds the rendering options. The engine reads the

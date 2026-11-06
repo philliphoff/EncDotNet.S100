@@ -1,8 +1,8 @@
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Renderers.Skia.Scene;
 using SkiaSharp;
 
-namespace EncDotNet.S100.Datasets.Pipelines.Portrayal;
+namespace EncDotNet.S100.Renderers.Skia.Scene;
 
 internal static class IsolineHeadlessAdapter
 {
