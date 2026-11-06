@@ -612,6 +612,9 @@ internal static partial class Strings
     public static string LayerTime_NoDataLastFormat => Get(nameof(LayerTime_NoDataLastFormat));
     public static string LayerTime_NoDataNextFormat => Get(nameof(LayerTime_NoDataNextFormat));
     public static string LayerTime_Hidden => Get(nameof(LayerTime_Hidden));
+    public static string LayerTime_NoAnalysis => Get(nameof(LayerTime_NoAnalysis));
+    public static string LayerTime_Superseded => Get(nameof(LayerTime_Superseded));
+    public static string LayerTime_Stale => Get(nameof(LayerTime_Stale));
     public static string Pick_NotS100Notice => Get(nameof(Pick_NotS100Notice));
     public static string Tooltip_LayerTimeJump => Get(nameof(Tooltip_LayerTimeJump));
     public static string TimelinePanel_DrawingFormat => Get(nameof(TimelinePanel_DrawingFormat));
@@ -684,6 +687,10 @@ internal static partial class Strings
     public static string TimelinePanel_ProductS411 => Get(nameof(TimelinePanel_ProductS411));
     public static string TimelinePanel_ProductS412 => Get(nameof(TimelinePanel_ProductS412));
     public static string TimelinePanel_ProductS413 => Get(nameof(TimelinePanel_ProductS413));
+    public static string TimelinePanel_GroupSurfaceAnalysis => Get(nameof(TimelinePanel_GroupSurfaceAnalysis));
+    public static string TimelinePanel_LaneWpc => Get(nameof(TimelinePanel_LaneWpc));
+    public static string TimelinePanel_LaneAnalysis => Get(nameof(TimelinePanel_LaneAnalysis));
+    public static string TimelinePanel_LaneForecast => Get(nameof(TimelinePanel_LaneForecast));
     public static string Tooltip_TimelineInMapView => Get(nameof(Tooltip_TimelineInMapView));
     public static string Tooltip_TimelineCollapseToStrip => Get(nameof(Tooltip_TimelineCollapseToStrip));
     public static string Tooltip_TimelineOutsideMapView => Get(nameof(Tooltip_TimelineOutsideMapView));

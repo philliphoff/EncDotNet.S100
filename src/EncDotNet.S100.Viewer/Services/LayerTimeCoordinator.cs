@@ -53,7 +53,8 @@ internal sealed class LayerTimeCoordinator
     internal void Update()
     {
         var view = _time.CurrentTime;
-        var timed = _time.TimedDatasets
+        var all = _time.TimedDatasets;
+        var timed = all
             .Where(d => d.DatasetId is not null)
             .GroupBy(d => d.DatasetId!, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
@@ -66,7 +67,7 @@ internal sealed class LayerTimeCoordinator
                 // The Library knows the run of a tile it loaded (#720); resolved
                 // only once a layer needs it, so startup stays as it was.
                 var run = ForecastRunNames.RunOf(dataset, _library?.Invoke()?.Entries);
-                var layerTime = LayerTimes.Describe(dataset, at, _progress.IsDatasetDrawing(entry.Id.Value), format, zone, run);
+                var layerTime = LayerTimes.Describe(dataset, at, _progress.IsDatasetDrawing(entry.Id.Value), format, zone, run, all);
                 entry.SetLayerTime(layerTime, _time.SetCurrentTime);
             }
             else

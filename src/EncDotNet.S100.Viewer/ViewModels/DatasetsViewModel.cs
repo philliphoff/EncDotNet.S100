@@ -633,6 +633,9 @@ internal sealed class DatasetEntry : ViewModelBase
     /// <summary>True when the layer has no data near the view time and hides (the amber Hidden tag).</summary>
     public bool IsLayerHidden => _layerTime?.IsHidden == true;
 
+    /// <summary>True when the layer draws stale data at the view time: the Stale tag (a surface analysis over 6 hours old, §7).</summary>
+    public bool IsLayerStale => _layerTime?.IsStale == true;
+
     /// <summary>True while the layer is drawing the view time.</summary>
     public bool IsLayerDrawing => _layerTime?.State == EncDotNet.S100.Viewer.Services.LayerTimeState.Drawing;
 
@@ -651,6 +654,7 @@ internal sealed class DatasetEntry : ViewModelBase
         OnPropertyChanged(nameof(LayerTimeText));
         OnPropertyChanged(nameof(IsLayerHidden));
         OnPropertyChanged(nameof(IsLayerDrawing));
+        OnPropertyChanged(nameof(IsLayerStale));
     }
 
     /// <summary>

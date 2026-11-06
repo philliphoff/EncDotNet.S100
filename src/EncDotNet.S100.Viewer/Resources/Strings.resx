@@ -4628,6 +4628,22 @@
   <data name="TimelinePanel_ProductS413" xml:space="preserve">
     <value>Weather and wave</value>
   </data>
+  <data name="TimelinePanel_GroupSurfaceAnalysis" xml:space="preserve">
+    <value>Surface analysis</value>
+    <comment>Timeline lane group of WPC surface analyses and forecast fronts</comment>
+  </data>
+  <data name="TimelinePanel_LaneWpc" xml:space="preserve">
+    <value>WPC</value>
+    <comment>Lane label of a surface analysis: the issuing centre, NOAA's Weather Prediction Center</comment>
+  </data>
+  <data name="TimelinePanel_LaneAnalysis" xml:space="preserve">
+    <value>analysis</value>
+    <comment>Lane sub line of a surface analysis, before its cadence ("analysis · 3 h")</comment>
+  </data>
+  <data name="TimelinePanel_LaneForecast" xml:space="preserve">
+    <value>forecast</value>
+    <comment>Lane sub line of WPC's forecast fronts</comment>
+  </data>
   <data name="Tooltip_TimelineInMapView" xml:space="preserve">
     <value>Only list the layers in the map view; they set the axis</value>
   </data>
@@ -4663,6 +4679,18 @@
   </data>
   <data name="LayerTime_NoData" xml:space="preserve">
     <value>no data</value>
+  </data>
+  <data name="LayerTime_NoAnalysis" xml:space="preserve">
+    <value>No analysis at view time</value>
+    <comment>A surface analysis layer with no analysis or forecast within 12 hours before the view time</comment>
+  </data>
+  <data name="LayerTime_Superseded" xml:space="preserve">
+    <value>newer analysis drawn</value>
+    <comment>A surface analysis layer hidden because a newer analysis or forecast of the same kind is drawn instead</comment>
+  </data>
+  <data name="LayerTime_Stale" xml:space="preserve">
+    <value>Stale</value>
+    <comment>Tag on a layer whose data drawn is old for its kind, e.g. a surface analysis over 6 hours old</comment>
   </data>
   <data name="LayerTime_NoDataLastFormat" xml:space="preserve">
     <value>no data · last {0}, {1} earlier</value>
@@ -7158,8 +7186,12 @@
     <comment>Tooltip on the Warning card's route row (#959).</comment>
   </data>
   <data name="Library_StaleRunFormat" xml:space="preserve">
-    <value>Run {0} is over 12 hours old</value>
-    <comment>{0}: a weather model run, e.g. 2026-10-25 00Z</comment>
+    <value>Run {0} is over {1} hours old</value>
+    <comment>{0}: a weather model run, e.g. 2026-10-25 00Z; {1}: hours after which a run is stale, e.g. 12</comment>
+  </data>
+  <data name="Library_StaleAnalysisFormat" xml:space="preserve">
+    <value>Analysis {0} is over {1} hours old</value>
+    <comment>{0}: a surface analysis's time, e.g. 2026-11-04 12Z; {1}: hours after which it is stale, e.g. 6</comment>
   </data>
   <data name="Library_LoadLatestRun" xml:space="preserve">
     <value>Load latest run</value>

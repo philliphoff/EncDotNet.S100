@@ -222,6 +222,9 @@ internal sealed record TimelineLayerState(
 
     /// <summary>True while the layer is drawing the view time.</summary>
     public bool Drawing { get; init; }
+
+    /// <summary>For a layer drawing stale data (its row's Stale tag), the data's age to the nearest hour; otherwise null.</summary>
+    public int? StaleHours { get; init; }
 }
 
 /// <summary>The outcome of <see cref="IViewerTimelineController.SetViewTimeAsync"/>.</summary>

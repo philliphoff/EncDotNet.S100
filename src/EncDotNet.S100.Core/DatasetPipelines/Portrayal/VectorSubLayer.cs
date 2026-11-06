@@ -69,4 +69,12 @@ public sealed class VectorSubLayer
     /// <see langword="null"/> (the default) for no legend. Renderers ignore it.
     /// </summary>
     public IReadOnlyList<LegendEntry>? Legend { get; init; }
+
+    /// <summary>
+    /// The opacity the sub-layer is drawn at, 0 (invisible) to 1 (opaque, the
+    /// default), on top of the dataset's own: for data a processor draws as
+    /// old, such as a stale surface analysis at half opacity
+    /// (<c>vector-weather.md</c> §7).
+    /// </summary>
+    public double Opacity { get; init; } = 1.0;
 }

@@ -107,6 +107,39 @@ public sealed class PickAttribute
     }
 
     /// <summary>
+    /// The <see cref="Code"/> of a stale-data line (<see cref="StaleNotice"/>):
+    /// <c>"stale"</c>.
+    /// </summary>
+    public const string StaleNoticeCode = "stale";
+
+    /// <summary>
+    /// <c>true</c> when this row says the data picked is old, e.g. "This
+    /// analysis is 9 h old. A newer one is likely." on a stale
+    /// surface analysis. Non-viewer callers show it as an ordinary row; the
+    /// viewer shows it as a warning line under the notice.
+    /// </summary>
+    public bool IsStaleNotice { get; init; }
+
+    /// <summary>
+    /// A stale-data row: <see cref="StaleNoticeCode"/>, named "Stale", with
+    /// <paramref name="text"/> as its value and <see cref="IsStaleNotice"/> set.
+    /// </summary>
+    /// <param name="text">What is old and how old.</param>
+    /// <returns>The row.</returns>
+    public static PickAttribute StaleNotice(string text)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        return new PickAttribute
+        {
+            Code = StaleNoticeCode,
+            Name = "Stale",
+            RawValue = text,
+            DisplayValue = text,
+            IsStaleNotice = true,
+        };
+    }
+
+    /// <summary>
     /// The resolved textual content of the external text file named by a
     /// <c>fileReference</c> attribute (S-100 Edition 5.2.1 Part 5; S-101
     /// Feature Catalogue simple attribute <c>fileReference</c>, aliases

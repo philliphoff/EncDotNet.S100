@@ -712,4 +712,12 @@
     <value>Stale</value>
     <comment>A weather model run more than 12 hours old</comment>
   </data>
+  <data name="Weather_WpcDomain" xml:space="preserve">
+    <value>North America and adjacent waters</value>
+    <comment>The area WPC's surface analysis covers (WPC's domain)</comment>
+  </data>
+  <data name="Weather_BulletinsTitle" xml:space="preserve">
+    <value>Bulletins</value>
+    <comment>Heading over the WPC bulletins to include: the analysis and the forecast fronts</comment>
+  </data>
 </root>
