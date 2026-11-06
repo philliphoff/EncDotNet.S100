@@ -154,7 +154,7 @@
       "coverage": "boundingBoxes",
       "editions": false,
       "sizes": false,
-      "note": "GFS 10 m wind, gusts, mean sea level pressure, visibility and air temperature at 0.25°, cut to the map view. The model runs every 6 hours; each refresh lists its latest run, downloaded as one GRIB2 file. Choose parameters and forecast days next.",
+      "note": "GFS 10 m wind, gusts, mean sea level pressure, visibility, air temperature, precipitation, thunderstorm risk and cloud cover at 0.25°, cut to the map view. The model runs every 6 hours; each refresh lists its latest run, downloaded as one GRIB2 file. Choose parameters and forecast days next.",
       "product": "GRIB2",
       "notForNavigation": true,
       "licence": "Public domain",
@@ -178,7 +178,10 @@
           { "id": "VIS", "name": "Visibility", "level": "surface" },
           { "id": "TMP", "name": "2 m air temperature", "level": "2 m above ground" },
           { "id": "TMP", "name": "Surface temperature, for freezing spray", "level": "surface" },
-          { "id": "LAND", "name": "Land mask, for freezing spray", "level": "surface" }
+          { "id": "LAND", "name": "Land mask, for freezing spray", "level": "surface" },
+          { "id": "PRATE", "name": "Precipitation rate", "level": "surface" },
+          { "id": "CAPE", "name": "Thunderstorm risk (CAPE)", "level": "surface" },
+          { "id": "TCDC", "name": "Total cloud cover", "level": "entire atmosphere" }
         ]
       }
     },
@@ -254,7 +257,10 @@
           { "id": "VIS", "name": "Visibility", "level": "surface" },
           { "id": "TMP", "name": "2 m air temperature", "level": "2 m above ground" },
           { "id": "TMP", "name": "Surface temperature, for freezing spray", "level": "surface" },
-          { "id": "LAND", "name": "Land mask, for freezing spray", "level": "surface" }
+          { "id": "LAND", "name": "Land mask, for freezing spray", "level": "surface" },
+          { "id": "PRATE", "name": "Precipitation rate", "level": "surface" },
+          { "id": "CAPE", "name": "Thunderstorm risk (CAPE)", "level": "surface" },
+          { "id": "TCDC", "name": "Total cloud cover", "level": "entire atmosphere" }
         ]
       }
     },

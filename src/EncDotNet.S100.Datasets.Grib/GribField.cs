@@ -142,7 +142,8 @@ public sealed class GribField
 
     /// <summary>
     /// The field's level as a <see cref="WeatherLevel"/>: the surface (fixed
-    /// surface type 1), mean sea level (101), a height above ground (103), or
+    /// surface type 1), the entire atmosphere (10), mean sea level (101), a
+    /// height above ground (103), or
     /// <see cref="WeatherLevel.Other"/> describing anything else, such as a
     /// layer or NCEP's "1 in sequence" swell partitions (type 241).
     /// </summary>
@@ -158,6 +159,7 @@ public sealed class GribField
         return surface.Type switch
         {
             GribFixedSurface.GroundOrWater => WeatherLevel.Surface,
+            GribFixedSurface.EntireAtmosphere => WeatherLevel.EntireAtmosphere,
             GribFixedSurface.MeanSeaLevel => WeatherLevel.MeanSeaLevel,
             GribFixedSurface.HeightAboveGround when surface.Value is { } metres => WeatherLevel.AboveGround(Length.FromMetres(metres)),
             GribFixedSurface.Isobaric when surface.Value is { } pascals =>

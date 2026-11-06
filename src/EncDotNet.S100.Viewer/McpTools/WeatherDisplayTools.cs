@@ -16,6 +16,9 @@ internal sealed record WeatherDisplayDto(
     [property: Description("Isotherms: sea surface temperature isotherms. Off by default.")] bool Isotherms,
     [property: Description("Currents: surface current arrows on every weather dataset with currents. On by default.")] bool Currents,
     [property: Description("Air temperature: dashed 2 m air temperature isotherms. Off by default.")] bool AirTemperature,
+    [property: Description("Precipitation: the precipitation rate fill in rain radar colours. Off by default.")] bool Precipitation,
+    [property: Description("Thunderstorm risk: the CAPE fill from 1000 J/kg. Off by default.")] bool ThunderstormRisk,
+    [property: Description("Cloud cover: the total cloud cover veil from 25 %. Off by default.")] bool CloudCover,
     [property: Description("Wind radii: the 34, 50 and 64 kt wind radii of every tropical cyclone. On by default. The cone and forecast track have no switch.")] bool WindRadii,
     [property: Description("Past track: every tropical cyclone's best-track line and points. On by default.")] bool PastTrack,
     [property: Description("Forecast times: the time and intensity beside each tropical cyclone's forecast points. On by default.")] bool ForecastTimes);
@@ -55,6 +58,9 @@ internal sealed class WeatherDisplayTools
         bool? isotherms = null,
         bool? currents = null,
         bool? airTemperature = null,
+        bool? precipitation = null,
+        bool? thunderstormRisk = null,
+        bool? cloudCover = null,
         bool? windRadii = null,
         bool? pastTrack = null,
         bool? forecastTimes = null,
@@ -69,6 +75,9 @@ internal sealed class WeatherDisplayTools
             if (isotherms is { } d) _panel.IsIsothermsVisible = d;
             if (currents is { } e) _panel.IsCurrentArrowsVisible = e;
             if (airTemperature is { } f) _panel.IsAirTemperatureVisible = f;
+            if (precipitation is { } j) _panel.IsPrecipitationVisible = j;
+            if (thunderstormRisk is { } k) _panel.IsThunderstormRiskVisible = k;
+            if (cloudCover is { } l) _panel.IsCloudCoverVisible = l;
             if (windRadii is { } g) _panel.IsWindRadiiVisible = g;
             if (pastTrack is { } h) _panel.IsPastTrackVisible = h;
             if (forecastTimes is { } i) _panel.IsForecastTimesVisible = i;
@@ -85,6 +94,9 @@ internal sealed class WeatherDisplayTools
         panel.IsIsothermsVisible,
         panel.IsCurrentArrowsVisible,
         panel.IsAirTemperatureVisible,
+        panel.IsPrecipitationVisible,
+        panel.IsThunderstormRiskVisible,
+        panel.IsCloudCoverVisible,
         panel.IsWindRadiiVisible,
         panel.IsPastTrackVisible,
         panel.IsForecastTimesVisible);
@@ -102,7 +114,7 @@ internal static class WeatherDisplayMcpAdapters
             Name = WeatherDisplayTools.GetName,
             Description =
                 "Returns the Display controls Weather section's switches: isobars, wind speed fill, wave arrows, " +
-                "isotherms, currents and air temperature for weather grids, and wind radii, past track and forecast " +
+                "isotherms, currents, air temperature, precipitation, thunderstorm risk and cloud cover for weather grids, and wind radii, past track and forecast " +
                 "times for tropical cyclones, with whether the section and the cyclone switches show. Change them with " +
                 "set_weather_display.",
             SerializerOptions = McpAdapterShared.Options,
@@ -119,12 +131,15 @@ internal static class WeatherDisplayMcpAdapters
             [Description("Sea temperature isotherms on or off; omit to leave it.")] bool? isotherms = null,
             [Description("Current arrows on or off; omit to leave it.")] bool? currents = null,
             [Description("Air temperature isotherms on or off; omit to leave it.")] bool? airTemperature = null,
+            [Description("Precipitation rate fill on or off; omit to leave it.")] bool? precipitation = null,
+            [Description("Thunderstorm risk (CAPE) fill on or off; omit to leave it.")] bool? thunderstormRisk = null,
+            [Description("Cloud cover veil on or off; omit to leave it.")] bool? cloudCover = null,
             [Description("Tropical cyclone wind radii (34, 50 and 64 kt) on or off; omit to leave it.")] bool? windRadii = null,
             [Description("Tropical cyclone past track on or off; omit to leave it.")] bool? pastTrack = null,
             [Description("Tropical cyclone forecast time labels on or off; omit to leave it.")] bool? forecastTimes = null,
             CancellationToken ct = default) =>
             McpAdapterShared.DispatchAsync(() => inner.SetAsync(
-                isobars, windSpeedFill, waveArrows, isotherms, currents, airTemperature, windRadii, pastTrack, forecastTimes, ct));
+                isobars, windSpeedFill, waveArrows, isotherms, currents, airTemperature, precipitation, thunderstormRisk, cloudCover, windRadii, pastTrack, forecastTimes, ct));
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
             Name = WeatherDisplayTools.SetName,

@@ -83,7 +83,7 @@ foreach (var source in WeatherCoverageSource.CreateForGroups(set))
 | `WeatherCoverageSource` | An `ICoverageSource` over one parameter group. |
 | `WindComponents` | Wind speed and "from" direction from U and V. |
 | `CurrentComponents` | Current speed and "to" direction from U and V. |
-| `WeatherCoverageStyle` | The base of the eleven styles: `SeaTemperatureStyle`, `WaveHeightStyle`, `WindSpeedStyle`, `VisibilityStyle`, `FreezingSprayStyle`, `SeaTemperatureIsothermStyle`, `AirTemperatureIsothermStyle`, `PressureIsobarStyle`, `CurrentArrowStyle`, `WindBarbStyle` and `WaveDirectionStyle`. Each is an `ICoverageStyle` with its S-98 plane, priority, opacity and default visibility. |
+| `WeatherCoverageStyle` | The base of the fourteen grid styles: `SeaTemperatureStyle`, `WaveHeightStyle`, `WindSpeedStyle`, `CloudCoverStyle`, `VisibilityStyle`, `ThunderstormRiskStyle`, `PrecipitationStyle`, `FreezingSprayStyle`, `SeaTemperatureIsothermStyle`, `AirTemperatureIsothermStyle`, `PressureIsobarStyle`, `CurrentArrowStyle`, `WindBarbStyle` and `WaveDirectionStyle`. Each is an `ICoverageStyle` with its S-98 plane, priority, opacity and default visibility. |
 | `WeatherPalette` | The styles' Day, Dusk and Night colours, as an `ApplicationPalette`. |
 | `WindBarb` | The pennants, full barbs and half barbs of a wind speed, rounded to 5 kn. |
 | `WeatherPortrayal` | Builds the coverage sub-layers of a source and its styles. |
@@ -118,6 +118,9 @@ lists several codes or names, they're alternatives in order of preference.
 | `air.temperature` | `air.temperature` | 2 m above ground | 0,0,0 (TMP) | `air_temperature` | K |
 | `surface.temperature` | `surface.temperature` | surface | 0,0,0 (TMP) | `surface_temperature` | K |
 | `land.cover` | `land.cover` | surface | 2,0,0 (LAND) | `land_binary_mask` | proportion |
+| `precipitation.rate` | `precipitation` | surface | 0,1,7 (PRATE) | `precipitation_flux` | kg m⁻² s⁻¹ (mm/s) |
+| `cape` | `cape` | surface | 0,7,6 (CAPE) | `atmosphere_convective_available_potential_energy`, `atmosphere_convective_available_potential_energy_wrt_surface` | J/kg |
+| `cloud.cover` | `cloud` | entire atmosphere | 0,6,1 (TCDC) | `cloud_area_fraction` | percent |
 
 Wind and wave directions are "from", and current directions "to" (the
 oceanographic convention, as in S-111), in degrees clockwise from true north.
@@ -196,6 +199,9 @@ so the coverage pipeline and both renderers draw them with no weather code.
 | `VisibilityStyle` | Grey fill in the marine forecast's three restricted bands: under 1000 m, to 2 nm and to 5 nm; good visibility isn't drawn | `visibility` | — | On |
 | `FreezingSprayStyle` | Plum fill in Overland's icing classes: light, moderate (22.4), heavy (53.3) and extreme (83.0); no icing isn't drawn | `spray.predictor` (derived) | — | On |
 | `AirTemperatureIsothermStyle` | Dashed isotherms every 5 °C, labelled in °C (`-5°`) | `air.temperature` | — | Off |
+| `PrecipitationStyle` | Rain radar fill in six bands: light from 0.1 mm/h, 0.5, moderate 2.5, heavy 7.5, very heavy 15 and violent 50 mm/h; drier isn't drawn | `precipitation.rate` | — | Off |
+| `ThunderstormRiskStyle` | Ochre fill in three CAPE classes: moderate from 1000 J/kg, high 2500, extreme 4000; under 1000 J/kg isn't drawn | `cape` | — | Off |
+| `CloudCoverStyle` | Grey veil at `VeilOpacity` (0.3) in three bands: 25, 50 and 75 % and more | `cloud.cover` | — | Off |
 
 - **Default and switches.** The Default column is `IsVisibleByDefault`.
   `IsDrawnWith(display)` applies the map-wide switches in

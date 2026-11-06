@@ -12,7 +12,9 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// GRIB2 codes are (discipline, category, number) from WMO code table 4.2:
 /// discipline 0 category 2 is momentum, discipline 0 category 3 is mass and
 /// discipline 0 category 0 is temperature, discipline 0 category 19 is
-/// physical atmospheric properties (visibility), discipline 2 category 0 is
+/// physical atmospheric properties (visibility), discipline 0 category 1 is
+/// moisture (precipitation rate), discipline 0 category 6 is cloud,
+/// discipline 0 category 7 is thermodynamic stability (CAPE), discipline 2 category 0 is
 /// land surface vegetation (the land cover mask),
 /// discipline 10 category 0 is oceanographic waves and discipline 10
 /// category 3 is surface properties (water temperature); discipline 10
@@ -53,6 +55,15 @@ namespace EncDotNet.S100.Datasets.Weather;
 /// <para>
 /// The visibility row has no level either: GFS, HRRR and the NBM give it
 /// only at the surface.
+/// </para>
+/// <para>
+/// Precipitation rate and CAPE are read at the surface, and cloud cover for
+/// the entire atmosphere: GFS also gives CAPE for layers above the ground
+/// (180–0 hPa and others) and cloud cover for each pressure level and cloud
+/// layer, which the levels keep out. GFS gives the precipitation rate and
+/// cloud cover twice at each valid time, as the value at that time and as an
+/// average over the hours before it; a reader keeps the first message, the
+/// value at that time, which GFS writes first.
 /// </para>
 /// </remarks>
 public static class WeatherParameters
@@ -120,6 +131,15 @@ public static class WeatherParameters
     /// <summary>Canonical id of the land cover mask: 1 over land, 0 over water.</summary>
     public const string LandCover = "land.cover";
 
+    /// <summary>Canonical id of the precipitation rate at the surface, in kg m⁻² s⁻¹ (millimetres of water a second).</summary>
+    public const string PrecipitationRate = "precipitation.rate";
+
+    /// <summary>Canonical id of the convective available potential energy (CAPE) of a parcel from the surface, in J/kg.</summary>
+    public const string Cape = "cape";
+
+    /// <summary>Canonical id of the total cloud cover of the entire atmosphere, in percent.</summary>
+    public const string CloudCover = "cloud.cover";
+
     /// <summary>
     /// Id of the freezing spray predictor, a field derived from the wind,
     /// air temperature and sea temperature (<see cref="FreezingSpray"/>), not
@@ -163,6 +183,15 @@ public static class WeatherParameters
     /// <summary>Group id of the land cover mask.</summary>
     public const string LandCoverGroup = "land.cover";
 
+    /// <summary>Group id of the precipitation rate.</summary>
+    public const string PrecipitationGroup = "precipitation";
+
+    /// <summary>Group id of the CAPE.</summary>
+    public const string CapeGroup = "cape";
+
+    /// <summary>Group id of the total cloud cover.</summary>
+    public const string CloudGroup = "cloud";
+
     /// <summary>
     /// Name of the source that combines the wind, air temperature and sea
     /// temperature to derive <see cref="FreezingSprayPredictor"/>
@@ -179,7 +208,8 @@ public static class WeatherParameters
     /// wind-sea direction (NCEP's WVDIR, issue #1074) after the wind-sea height,
     /// then the sea surface temperature (issue #1227), the surface current
     /// (issue #1228), the visibility (issue #1229), and the air and skin
-    /// temperatures and land cover the freezing spray risk reads (issue #1231).
+    /// temperatures and land cover the freezing spray risk reads (issue #1231),
+    /// and the precipitation rate, CAPE and total cloud cover (issue #1230).
     /// </summary>
     public static IReadOnlyList<WeatherParameterDefinition> All { get; } =
     [
@@ -228,6 +258,12 @@ public static class WeatherParameters
             [new(0, 0, 0)], ["surface_temperature"]),
         new(LandCover, "Land cover", WeatherUnit.Proportion, LandCoverGroup, WeatherLevel.Surface,
             [new(2, 0, 0)], ["land_binary_mask"]),
+        new(PrecipitationRate, "Precipitation rate", WeatherUnit.KilogramsPerSquareMetrePerSecond, PrecipitationGroup, WeatherLevel.Surface,
+            [new(0, 1, 7)], ["precipitation_flux"]),
+        new(Cape, "Convective available potential energy", WeatherUnit.JoulesPerKilogram, CapeGroup, WeatherLevel.Surface,
+            [new(0, 7, 6)], ["atmosphere_convective_available_potential_energy", "atmosphere_convective_available_potential_energy_wrt_surface"]),
+        new(CloudCover, "Total cloud cover", WeatherUnit.Percent, CloudGroup, WeatherLevel.EntireAtmosphere,
+            [new(0, 6, 1)], ["cloud_area_fraction"]),
     ];
 
     /// <summary>Finds the row with canonical id <paramref name="id"/>.</summary>
