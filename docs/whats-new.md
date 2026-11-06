@@ -32,26 +32,6 @@ month. For package versions and release assets, see
   `TimeSemantics` has a new last positional parameter. See
   [Get active storms from the Library](weather.md#get-active-storms-from-the-library).
 
-- **Tropical cyclones on the chart.** SoundCharts and `s100 render` now draw
-  an NHC advisory in one plum-grey storm ink: the cone, tinted and stippled
-  beyond 72 hours, the 34, 50 and 64 kt wind radii, the forecast and past
-  tracks, a WMO weather-map symbol at each forecast point (mirrored south of
-  the equator), and the storm with its name, wind, pressure, advisory and
-  motion. Times on the chart follow the Local or UTC setting. In the Layer
-  stack a storm has two entries, one for its lines and symbols and one for
-  its cone and radii, each with a legend. Picking any part shows one storm in
-  Object information, with the advisory, the next advisory due, the
-  intensity, the part picked and the radii by quadrant. Not for navigation.
-  New in the libraries: `TropicalCycloneStyle` and the `WXTC*` tokens in
-  `EncDotNet.S100.Datasets.Weather`, `RenderContext.DisplayTimeZone`,
-  `MapPresentationState.DisplayTimeZone`, `InstructionBuilder.Point`'s
-  `symbolScale` and `TropicalCycloneWindRadii.QuadrantSurface`. Breaking
-  changes: `EncDotNet.S100.Datasets.Weather` now depends on
-  `EncDotNet.S100.Datasets.TropicalCyclones`, and
-  `TropicalCycloneDatasetProcessor.NotForNavigationNotice` reads "Tropical
-  cyclone forecast, not for navigation. Follow official NHC advisories." See
-  [Show tropical cyclones](weather.md#show-tropical-cyclones).
-
 - **Surface analyses follow the Timeline, from the Library.** A WPC
   bulletin's analysis or forecast is now drawn from its valid time for 12
   hours: after 6 it's stale, at half opacity with its age on each **H** and
@@ -72,6 +52,27 @@ month. For package versions and release assets, see
   `SurfaceAnalysisDatasetProcessor.DrawnAnalysisOf` takes a time step, and
   `SurfaceAnalysisStyle.BuildCentre` takes the analysis's stale age. See
   [Show a surface analysis](weather.md#show-a-surface-analysis).
+
+- **Tropical cyclones on the chart.** SoundCharts and `s100 render` now draw
+  an NHC advisory in one plum-grey storm ink: the cone, tinted and stippled
+  beyond 72 hours, the 34, 50 and 64 kt wind radii, the forecast and past
+  tracks, a WMO weather-map symbol at each forecast point (mirrored south of
+  the equator), and the storm with its name, wind, pressure, advisory and
+  motion. Times on the chart follow the Local or UTC setting. In the Layer
+  stack a storm has two entries, one for its lines and symbols and one for
+  its cone and radii, each with a legend. Picking any part shows one storm in
+  Object information, with the advisory, the next advisory due, the
+  intensity, the part picked and the radii by quadrant. Not for navigation.
+  New in the libraries: `TropicalCycloneStyle` and the `WXTC*` tokens in
+  `EncDotNet.S100.Datasets.Weather`, `RenderContext.DisplayTimeZone`,
+  `MapPresentationState.DisplayTimeZone`, `InstructionBuilder.Point`'s
+  `symbolScale` and `TropicalCycloneWindRadii.QuadrantSurface`. Breaking
+  changes: `EncDotNet.S100.Datasets.Weather` now depends on
+  `EncDotNet.S100.Datasets.TropicalCyclones`, and
+  `TropicalCycloneDatasetProcessor.NotForNavigationNotice` reads "Tropical
+  cyclone forecast, not for navigation. Follow official NHC advisories." See
+  [Show tropical cyclones](weather.md#show-tropical-cyclones).
+
 - **Fronts and pressure centres on the chart.** A WPC coded surface
   bulletin now draws its cold, warm, occluded and stationary fronts and its
   troughs with the triangles and semicircles of a printed weather map, on

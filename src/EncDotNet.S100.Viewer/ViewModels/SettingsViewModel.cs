@@ -797,31 +797,6 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
     /// <summary>Whether the GPU-budget knob is user-editable (not env-pinned).</summary>
     public bool TileGpuBudgetMbEditable => !RenderingOptimizations.TileGpuBudgetMbEnvExplicit;
 
-    private int _tileWorkerCount;
-    /// <summary>
-    /// Concurrent tile-rasterisation workers per layer. More workers drain a cold
-    /// pan's visible-miss queue in parallel; sized by the profile (one on low-end
-    /// hosts). Applies on the next dataset reload. Disabled when pinned by
-    /// <c>S100_VECTOR_TILE_WORKERS</c>.
-    /// </summary>
-    public int TileWorkerCount
-    {
-        get => _tileWorkerCount;
-        set
-        {
-            RenderingOptimizations.TileWorkerCount = value;
-            var effective = RenderingOptimizations.TileWorkerCount;
-            if (SetProperty(ref _tileWorkerCount, effective))
-            {
-                _settings.TileWorkerCount = effective;
-                RaiseMarinerChanged();
-            }
-        }
-    }
-
-    /// <summary>Whether the worker-count knob is user-editable (not env-pinned).</summary>
-    public bool TileWorkerCountEditable => !RenderingOptimizations.TileWorkerCountEnvExplicit;
-
     /// <summary>Selectable performance profiles for the profile dropdown.</summary>
     public IReadOnlyList<PerformanceProfile> PerformanceProfiles { get; } =
         new[] { PerformanceProfile.Auto, PerformanceProfile.HighEnd, PerformanceProfile.Balanced, PerformanceProfile.LowEnd };
@@ -845,7 +820,6 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
                 _tileBudgetMb = RenderingOptimizations.TileBudgetMb;
                 _tileGpuBudgetMb = RenderingOptimizations.TileGpuBudgetMb;
                 _tileDiskMb = RenderingOptimizations.TileDiskMb;
-                _tileWorkerCount = RenderingOptimizations.TileWorkerCount;
                 // ApplyProfile re-derives the cross-band pre-warm default from the
                 // new tier (off on LowEnd), so mirror it back or the toggle would
                 // drift from the renderer after a profile switch (issue #428).
@@ -853,7 +827,6 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
                 OnPropertyChanged(nameof(TileBudgetMb));
                 OnPropertyChanged(nameof(TileGpuBudgetMb));
                 OnPropertyChanged(nameof(TileDiskMb));
-                OnPropertyChanged(nameof(TileWorkerCount));
                 OnPropertyChanged(nameof(TileCrossBandPrewarmEnabled));
                 OnPropertyChanged(nameof(ResolvedProfileLabel));
                 RaiseMarinerChanged();
@@ -1181,13 +1154,6 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
         }
 
         _tileGpuBudgetMb = RenderingOptimizations.TileGpuBudgetMb;
-
-        if (settings.TileWorkerCount is { } tileWorkers)
-        {
-            RenderingOptimizations.TileWorkerCount = tileWorkers;
-        }
-
-        _tileWorkerCount = RenderingOptimizations.TileWorkerCount;
 
         _basemapMode = settings.BasemapMode;
         _showOutOfScaleExtentIndicators = settings.ShowOutOfScaleExtentIndicators;

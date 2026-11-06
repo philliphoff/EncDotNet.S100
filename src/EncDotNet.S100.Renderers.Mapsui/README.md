@@ -861,15 +861,14 @@ once other layers have drawn for 2 seconds without this one, so a layer that
 stops drawing can't hold its tiles. GPU textures have a second pool
 (`S100_VECTOR_TILE_GPU_MB`). All cache access goes through
 the layer lock, so a worker can't dispose an image the compositor is drawing.
-Each layer has a pool of coalescing workers that drains the visible misses,
-which are replaced every frame. `S100_VECTOR_TILE_WORKERS` sets the pool's
-minimum size (default set by the performance profile). A process-wide cap, the
-logical core count, stops many layers from oversubscribing the CPU and starving
-the UI thread. A layer with visible work waiting can borrow idle capacity up to
-that cap, but only for visible work: prediction never borrows, and a borrowed
-worker stops when the visible work is done. Each other layer with visible work
-keeps its own minimum, so a dense layer low in the stack can't starve the layers
-above it. On a `LowEnd` host, with one worker, there's nothing to borrow.
+Each pending tile is a job on the process-wide work scheduler
+(`EncDotNet.S100.Core.Scheduling.WorkScheduler.Shared`): visible tiles run
+before predicted ones, and those before cross-band pre-warm, and within a class
+the tiles nearest the view centre run first, whichever layer they belong to.
+The scheduler owns one worker thread per logical core but one
+(`S100_WORK_THREADS` pins the count), so the UI thread keeps a core, and no
+layer has workers of its own. The pending sets are rebuilt every frame, and a
+tile that leaves them drops its job before it starts.
 `TileRasterizeDuration` (worker) and `TileCompositeDuration` (UI) measure the
 two halves; `TileColdLatency` measures how long a cold tile takes to appear,
 queue wait included.
@@ -937,11 +936,10 @@ still override each budget.
 | GPU tile cache, all layers (`S100_VECTOR_TILE_GPU_MB`) | 256 MB | 512 MB | 768 MB |
 | Disk tile cache (`S100_VECTOR_TILE_DISK_MB`) | 256 MB | 384 MB | 512 MB |
 | Skia GPU resource cache (`S100_SKIA_GPU_RESOURCE_MB`) | 128 MB | 256 MB | 512 MB |
-| Tile workers per layer (`S100_VECTOR_TILE_WORKERS`) | 1 | 2 | One per 4 cores, 3 to 8 |
 | Cross-band pre-warm (`S100_VECTOR_TILE_XBAND`) | Off | On | On |
 
-SoundCharts shows the profile, the detected tier and the worker count under
-**Settings** > **Advanced**.
+SoundCharts shows the profile and the detected tier under **Settings** >
+**Advanced**.
 
 Skia keeps an uploaded texture for every raster tile it blits in the host GPU
 context's resource cache (`RenderingOptimizations.SkiaGpuResourceMb`). That
