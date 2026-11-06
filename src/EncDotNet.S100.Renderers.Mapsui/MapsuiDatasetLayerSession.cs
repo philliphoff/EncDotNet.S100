@@ -236,6 +236,9 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         TimePolicy? timePolicy = null;
         var adjustsDepths = false;
         DateTime? issueTime = null;
+        DateTime? nextIssueTime = null;
+        string? timelineLabel = null;
+        string? timelineDetail = null;
         DatasetForecastRun? forecastRun = null;
         if (_processorOwner.TryAcquire(dataset.Id, out var processorLease))
         {
@@ -248,6 +251,9 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
                         timeAware.TimeSemantics,
                         timeAware.AvailableTimes);
                     issueTime = timeAware.IssueTime;
+                    nextIssueTime = timeAware.NextIssueTime;
+                    timelineLabel = timeAware.TimelineLabel;
+                    timelineDetail = timeAware.TimelineDetail;
                     forecastRun = timeAware.ForecastRun;
                 }
             }
@@ -279,6 +285,9 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             entry.TimePolicy = timePolicy;
             entry.AdjustsDepths = adjustsDepths;
             entry.IssueTime = issueTime;
+            entry.NextIssueTime = nextIssueTime;
+            entry.TimelineLabel = timelineLabel;
+            entry.TimelineDetail = timelineDetail;
             entry.ForecastRun = forecastRun;
             if (timePolicy is not null)
             {
@@ -1983,6 +1992,13 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             .OrderBy(time => time)
             .ToArray();
         var minimum = samples.Length > 0 ? samples[0] : (DateTime?)null;
+        // A continuous dataset draws before its first step (a storm's past
+        // track), so the range starts where it does.
+        foreach (var policy in _entries.Values.Select(entry => entry.TimePolicy))
+        {
+            if (policy is { Selection: MapsuiTimeSelectionKind.Continuous } && minimum is { } lowest && policy.First < lowest)
+                minimum = policy.First;
+        }
         var maximum = samples.Length > 0 ? samples[^1] : (DateTime?)null;
         // The clock starts at the first sample and is kept as datasets come
         // and go, even outside the new range (#713).
@@ -1993,12 +2009,15 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             .Where(entry => entry.TimePolicy is { AvailableTimes.Count: > 0 })
             .Select(entry => new MapsuiMapTimedDataset(
                 entry.Dataset.Name,
-                entry.TimePolicy!.AvailableTimes.Min(),
+                entry.TimePolicy!.First,
                 entry.TimePolicy.AvailableTimes.Max())
             {
                 ProductSpec = entry.Dataset.Metadata.Spec.Name,
                 DatasetId = entry.Dataset.Id.Value,
                 IssueTime = entry.IssueTime,
+                NextIssueTime = entry.NextIssueTime,
+                TimelineLabel = entry.TimelineLabel,
+                TimelineDetail = entry.TimelineDetail,
                 ForecastRun = entry.ForecastRun,
                 Selection = entry.TimePolicy.Selection,
                 Tolerance = entry.TimePolicy.Tolerance,
@@ -2393,10 +2412,16 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             if (times.Length == 0)
                 return null;
 
-            var kind = semantics.Selection == TimeStepSelection.AtOrBefore
-                ? TimePolicyKind.AtOrBefore
-                : TimePolicyKind.Nearest;
-            return new TimePolicy(kind, times, semantics.Validity ?? TypicalStep(times), semantics);
+            var kind = semantics.Selection switch
+            {
+                TimeStepSelection.AtOrBefore => TimePolicyKind.AtOrBefore,
+                TimeStepSelection.Continuous => TimePolicyKind.Continuous,
+                _ => TimePolicyKind.Nearest,
+            };
+            var tolerance = kind == TimePolicyKind.Continuous
+                ? semantics.Validity is { } lead && lead > TimeSpan.Zero ? lead : TimeSpan.Zero
+                : semantics.Validity ?? TypicalStep(times);
+            return new TimePolicy(kind, times, tolerance, semantics);
         }
 
         /// <summary>
@@ -2406,14 +2431,25 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
         public DateTime? SnapTo(DateTime time) => MapsuiTimeSelection.Select(_times, Selection, _tolerance, time);
 
         /// <summary>How this policy picks a sample.</summary>
-        public MapsuiTimeSelectionKind Selection =>
-            _kind == TimePolicyKind.AtOrBefore ? MapsuiTimeSelectionKind.AtOrBefore : MapsuiTimeSelectionKind.Nearest;
+        public MapsuiTimeSelectionKind Selection => _kind switch
+        {
+            TimePolicyKind.AtOrBefore => MapsuiTimeSelectionKind.AtOrBefore,
+            TimePolicyKind.Continuous => MapsuiTimeSelectionKind.Continuous,
+            _ => MapsuiTimeSelectionKind.Nearest,
+        };
+
+        /// <summary>The first time the dataset draws: its first sample, or before it for a continuous dataset.</summary>
+        public DateTime First => CoverageSegments[0].Start < _times[0] ? CoverageSegments[0].Start : _times[0];
 
         /// <summary>How far from the clock a sample may be.</summary>
         public TimeSpan Tolerance => _tolerance;
 
         private IReadOnlyList<MapsuiMapTimeSegment> ComputeSegments()
         {
+            // A continuous dataset draws every time in its range: one window.
+            if (_kind == TimePolicyKind.Continuous)
+                return [new MapsuiMapTimeSegment(AddClamped(_times[0], -_tolerance), _times[^1])];
+
             var before = _kind == TimePolicyKind.Nearest ? _tolerance : TimeSpan.Zero;
             var segments = new List<MapsuiMapTimeSegment>();
             var start = AddClamped(_times[0], -before);
@@ -2515,6 +2551,9 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
         /// <summary>The latest sample at or before the clock, held for the tolerance (<see cref="TimeStepSelection.AtOrBefore"/>).</summary>
         AtOrBefore,
+
+        /// <summary>The clock itself, within the range (<see cref="TimeStepSelection.Continuous"/>).</summary>
+        Continuous,
     }
 
     private sealed class Entry(MapDataset dataset)
@@ -2528,6 +2567,15 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
 
         /// <summary>When the dataset was issued, from its data (#720).</summary>
         public DateTime? IssueTime { get; set; }
+
+        /// <summary>When a newer dataset is next expected (<see cref="ITimeAwareDatasetProcessor.NextIssueTime"/>).</summary>
+        public DateTime? NextIssueTime { get; set; }
+
+        /// <summary>The dataset's short name on a timeline (<see cref="ITimeAwareDatasetProcessor.TimelineLabel"/>).</summary>
+        public string? TimelineLabel { get; set; }
+
+        /// <summary>The words after it (<see cref="ITimeAwareDatasetProcessor.TimelineDetail"/>).</summary>
+        public string? TimelineDetail { get; set; }
 
         /// <summary>The model run the dataset belongs to, from its processor, or null.</summary>
         public DatasetForecastRun? ForecastRun { get; set; }

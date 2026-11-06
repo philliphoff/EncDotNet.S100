@@ -633,6 +633,12 @@ internal sealed class DatasetEntry : ViewModelBase
     /// <summary>True when the layer has no data near the view time and hides (the amber Hidden tag).</summary>
     public bool IsLayerHidden => _layerTime?.IsHidden == true;
 
+    /// <summary>True when the layer time is a warning with a tag: hidden, or out of range such as a storm beyond its forecast (V11).</summary>
+    public bool IsLayerWarning => _layerTime?.IsWarning == true;
+
+    /// <summary>The warning tag: "Hidden", or why, such as "Beyond forecast" for a tropical cyclone (V11).</summary>
+    public string LayerTagText => _layerTime?.TagText ?? Strings.LayerTime_Hidden;
+
     /// <summary>True when the layer draws stale data at the view time: the Stale tag (a surface analysis over 6 hours old, §7).</summary>
     public bool IsLayerStale => _layerTime?.IsStale == true;
 
@@ -653,6 +659,8 @@ internal sealed class DatasetEntry : ViewModelBase
         OnPropertyChanged(nameof(HasLayerTime));
         OnPropertyChanged(nameof(LayerTimeText));
         OnPropertyChanged(nameof(IsLayerHidden));
+        OnPropertyChanged(nameof(IsLayerWarning));
+        OnPropertyChanged(nameof(LayerTagText));
         OnPropertyChanged(nameof(IsLayerDrawing));
         OnPropertyChanged(nameof(IsLayerStale));
     }

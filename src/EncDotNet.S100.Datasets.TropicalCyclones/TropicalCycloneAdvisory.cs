@@ -79,6 +79,15 @@ public sealed record TropicalCycloneAdvisory
     /// <summary>The current point: the forecast at tau 0, or <see langword="null"/> when there's no forecast.</summary>
     public TropicalCycloneForecastPoint? Current => Forecast.Count > 0 ? Forecast[0] : null;
 
+    /// <summary>
+    /// The storm at <paramref name="time"/> (V11): on a forecast point,
+    /// estimated between two, or on the best track before the advisory; or
+    /// <see langword="null"/> before the track and after the forecast. See
+    /// <see cref="TropicalCycloneStormAt"/>.
+    /// </summary>
+    /// <param name="time">The time, in UTC.</param>
+    public TropicalCycloneStormAt? StormAt(DateTime time) => TropicalCycloneStormAt.Of(this, time);
+
     /// <summary>The highest maximum wind of the forecast, in knots, or <see langword="null"/>.</summary>
     public int? PeakForecastWindKnots => Forecast.Select(p => p.MaxWindKnots).Max();
 

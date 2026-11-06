@@ -147,6 +147,17 @@ public sealed class TropicalCycloneDisplayTests : IDisposable
     }
 
     [Fact]
+    public void An_advisory_is_stale_7_hours_after_its_issue_and_a_final_one_never()
+    {
+        Assert.Equal(TimeSpan.FromHours(7), Ian().TimeSemantics.StaleAfterIssue);
+        Assert.Null(Ian().TimeSemantics.StaleAfter);
+
+        var forecast = TropicalCycloneFixtures.CopyIan(_folder);
+        File.WriteAllText(Path.Combine(_folder, NhcAdvisoryFiles.FinalMarkerName("AL092022")), "final");
+        Assert.Null(new TropicalCycloneDatasetProcessor(forecast).TimeSemantics.StaleAfterIssue);
+    }
+
+    [Fact]
     public void Without_the_marker_an_advisory_isnt_final()
     {
         var forecast = TropicalCycloneFixtures.CopyIan(_folder);
