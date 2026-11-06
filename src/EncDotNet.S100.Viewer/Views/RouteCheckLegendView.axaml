@@ -174,6 +174,20 @@
                                IsVisible="{Binding IsNoDraft}"
                                Text="{x:Static loc:Strings.Map_LegendNoDraft}" />
                 </StackPanel>
+
+                <!-- WEATHER (#1299): the storm at the ETA of the closest approach,
+                     its class letter in a dashed ring, as the map draws it. -->
+                <StackPanel Spacing="2" IsVisible="{Binding HasStormAtEta}"
+                            AutomationProperties.AutomationId="Map.RouteCheckLegend.Weather">
+                    <TextBlock Classes="sectionTitle" Margin="0,6,0,2" Text="{x:Static loc:Strings.Legend_Weather}" />
+                    <StackPanel Classes="row">
+                        <Panel Width="22" Height="18">
+                            <Ellipse Width="16" Height="16" Stroke="{Binding InkBrush}" StrokeThickness="1.4" StrokeDashArray="2,1.5" />
+                            <TextBlock Classes="glyph" Text="H" Foreground="{Binding InkBrush}" />
+                        </Panel>
+                        <TextBlock Classes="row" Text="{x:Static loc:Strings.Legend_StormAtEta}" />
+                    </StackPanel>
+                </StackPanel>
             </StackPanel>
         </StackPanel>
     </Border>
