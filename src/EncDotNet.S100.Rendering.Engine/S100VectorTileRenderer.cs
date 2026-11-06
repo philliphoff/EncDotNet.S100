@@ -253,6 +253,9 @@ public static partial class S100VectorTileRenderer
 
     private static long _lastViewChangeTicks;
 
+    /// <summary>The <see cref="Stopwatch"/> timestamp of the last live frame at a new viewport, or 0.</summary>
+    internal static long LastViewChangeTicks => Volatile.Read(ref _lastViewChangeTicks);
+
     /// <summary>
     /// How long ago any live frame drew a tiled layer at a new viewport (a pan,
     /// zoom, rotation, resize or a layer's first frame), or
@@ -3327,6 +3330,20 @@ public static partial class S100VectorTileRenderer
                                     Stopwatch.GetElapsedTime(enqueuedAt).TotalMilliseconds);
                             }
                         }
+                    }
+                    else if (image is not null
+                        && relevance == TileRelevance.Irrelevant
+                        && state.Chart is not null
+                        && IsWantedStandIn(state, key)
+                        && !SupersededByLiveScale(state, key, image))
+                    {
+                        // A chart tile of a stack the slot has since moved
+                        // past: still better than nothing while the slot's
+                        // current tile rasterises, so it stands in for it.
+                        state.Cache.Put(key, image);
+                        state.ShownBySlot[key.Slot] = key;
+                        published++;
+                        publishedVisible = true;
                     }
                     else if (image is not null
                         || discardedBeforeRaster.Contains(key))

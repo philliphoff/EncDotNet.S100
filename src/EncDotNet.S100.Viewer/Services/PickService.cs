@@ -5,7 +5,6 @@ using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services.Notifications;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui;
-using Mapsui.Layers;
 using Mapsui.Projections;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -18,11 +17,12 @@ namespace EncDotNet.S100.Viewer.Services;
 /// surfaced as a transient notification.
 /// </summary>
 /// <remarks>
-/// Mapsui's <c>MapInfo</c> exposes every overlapping feature at the click
-/// location through <see cref="MapInfo.MapInfoRecords"/>; this service
-/// resolves each record into a <see cref="PickHit"/>, deduplicates by
-/// (processor, feature ref) so a feature drawn into multiple style layers
-/// only appears once, and presents the deduped list to the panel.
+/// A click is picked through the map session's engine pick
+/// (<see cref="IDatasetLoaderService.PickAsync"/>): each drawn dataset's own
+/// spatial index, ranked topmost-first by the S-98 stack, not one Mapsui
+/// feature per drawn op (map rendering slice&#160;8). This service resolves
+/// each pick into a <see cref="PickHit"/>, deduplicates by (processor,
+/// feature ref), and presents the list to the panel.
 ///
 /// Depends only on small, leaf-level singletons — never on the root
 /// <c>MainViewModel</c> — so the dependency graph stays acyclic.
@@ -112,17 +112,16 @@ internal sealed class PickService : IPickService
         };
     }
 
-    public void HandlePick(MapInfo? mapInfo, IReadOnlyList<DynamicPickHit>? dynamicHits = null)
+    public async Task HandlePickAsync(MPoint? worldPosition, double resolution, IReadOnlyList<DynamicPickHit>? dynamicHits = null)
     {
         using var __cmd = ViewerObservability.BeginCommand("pick");
 
         var dynamic = dynamicHits ?? Array.Empty<DynamicPickHit>();
 
-        if (mapInfo is null)
+        if (worldPosition is null)
         {
-            // Even with no MapInfo a pick may still carry dynamic hits
-            // (e.g. a future code path that pre-computes them); honour
-            // them if present, otherwise clear.
+            // Even without a position a pick may still carry dynamic hits;
+            // honour them if present, otherwise clear.
             if (dynamic.Count > 0)
             {
                 _pickReport.SetPicks(Array.Empty<PickHit>(), dynamic);
@@ -132,36 +131,49 @@ internal sealed class PickService : IPickService
             return;
         }
 
-        var hits = ResolveHits(mapInfo);
+        // SphericalMercator → WGS84. Mapsui returns (lon, lat).
+        var (lon, lat) = SphericalMercator.ToLonLat(worldPosition.X, worldPosition.Y);
+        var location = new PickLocation(lat, lon);
+        double? pickResolution = double.IsFinite(resolution) && resolution > 0 ? resolution : null;
+        var picks = await _loader.PickAsync(new GeographicPickQuery
+        {
+            Latitude = lat,
+            Longitude = lon,
+            // The click tolerance on screen, as ground metres at the pick.
+            RadiusMeters = pickResolution is { } r
+                ? PickTolerancePx * r * Math.Cos(lat * Math.PI / 180.0)
+                : EncDotNet.S100.Renderers.Mapsui.Avalonia.AvaloniaMapsuiMapAdapter.DefaultPickRadiusMeters,
+            Resolution = pickResolution,
+        }).ConfigureAwait(true);
+
+        var hits = ResolveHits(picks, out var coverageHit);
         if (hits.Count == 0 && dynamic.Count == 0)
         {
-            // No vector hit. Try a coverage fallback before clearing —
-            // S-102/S-104/S-111 processors expose
-            // GetCoverageInfo(lat, lon) which samples the underlying
-            // grid and returns a synthesised feature.
-            if (TryCoveragePick(mapInfo, out var coverageHit))
+            // No vector hit. Try a coverage pick before clearing — S-102,
+            // S-104 and S-111 processors sample their grid at the point
+            // (GetCoverageInfo) and return a synthesised feature.
+            if (coverageHit is null && TryCoveragePick(lat, lon, out var sampled))
+                coverageHit = sampled;
+
+            if (coverageHit is not null)
             {
-                var coverageLocation = TryGetLocation(mapInfo);
-                var coverageDepth = coverageLocation is { } cloc
-                    ? BuildLocationDepth(new[] { coverageHit }, cloc.Latitude, cloc.Longitude)
-                    : null;
-                _pickReport.SetPicks(new[] { coverageHit }, Array.Empty<DynamicPickHit>(), coverageLocation, coverageDepth);
+                var coverageDepth = BuildLocationDepth(new[] { coverageHit }, lat, lon);
+                _pickReport.SetPicks(new[] { coverageHit }, Array.Empty<DynamicPickHit>(), location, coverageDepth);
                 return;
             }
 
-            // Either an empty-map tap or a hit on a feature whose layer
-            // isn't owned by any loaded dataset entry. Either way, hide
-            // the panel so it doesn't keep showing stale state.
+            // An empty-map tap, or a hit on a dataset no loaded entry owns.
+            // Either way, hide the panel so it doesn't keep showing stale state.
             _pickReport.Clear();
             return;
         }
 
-        var vectorLocation = TryGetLocation(mapInfo);
-        var vectorDepth = vectorLocation is { } vloc
-            ? BuildLocationDepth(hits, vloc.Latitude, vloc.Longitude)
-            : null;
-        _pickReport.SetPicks(hits, dynamic, vectorLocation, vectorDepth);
+        var vectorDepth = BuildLocationDepth(hits, lat, lon);
+        _pickReport.SetPicks(hits, dynamic, location, vectorDepth);
     }
+
+    /// <summary>The on-screen pick tolerance, in DIP, around the click.</summary>
+    internal const double PickTolerancePx = 6.0;
 
     /// <summary>
     /// Publishes a pre-resolved geographic pick (the MCP <c>pick_features</c>
@@ -228,73 +240,36 @@ internal sealed class PickService : IPickService
         return false;
     }
 
-    private List<PickHit> ResolveHits(MapInfo mapInfo)
+    /// <summary>
+    /// Resolves the engine's picks, topmost-first by the S-98 stack, into
+    /// pick hits for the loaded entries that own them, deduplicated by
+    /// (processor, feature ref) and ordered by drawing priority within each
+    /// dataset. The first coverage pick, if any, comes back separately: it
+    /// shows only when nothing else is hit.
+    /// </summary>
+    private List<PickHit> ResolveHits(IReadOnlyList<S100Pick> picks, out PickHit? coverageHit)
     {
+        coverageHit = null;
         var hits = new List<PickHit>();
         var seen = new HashSet<(IDatasetProcessor processor, string featureRef)>();
         using var processors = _loader.AcquireProcessors();
 
-        // PR-L1 (S-98): rank multi-hit picks by the current S-98 layer
-        // stack so the user sees the topmost-painted feature first.
-        // Mapsui's MapInfoRecords arrive in scene-graph order which
-        // does not necessarily match the cross-dataset paint order
-        // computed by InteroperabilityAuthority.Sort. Re-sort here.
-        //
-        // S-98 Main §10.12 and Annex A §A-6.12 designate interrogation
-        // as "under development" — there is no normative pick-order
-        // rule yet. Top-of-stack-first matches user expectation that
-        // the visually frontmost feature gets reported first.
-        var stack = _loader.CurrentStackedLayers;
-        int StackIndex(ILayer? layer)
+        foreach (var pick in picks)
         {
-            if (layer is null) return -1;
-            for (int i = 0; i < stack.Count; i++)
-                if (ReferenceEquals(stack[i], layer)) return i;
-            return -1;
-        }
-
-        // Higher stack index = drawn later = on top. Descending order
-        // means top-of-stack records are walked first; the dedup
-        // HashSet then locks in the topmost hit for each (processor,
-        // featureRef) key. A stable order-preserving sort keeps
-        // intra-layer ordering as Mapsui returned it.
-        var records = mapInfo.MapInfoRecords.ToList();
-        records.Sort((a, b) => StackIndex(b.Layer).CompareTo(StackIndex(a.Layer)));
-
-        foreach (var record in records)
-        {
-            if (record.Feature is not { } feature || record.Layer is not { } layer)
+            if (!TryResolveOwner(processors, pick.DatasetId, out var owningEntry, out var processor))
                 continue;
 
-            if (feature[MapsuiDisplayListRenderer.FeatureRefKey] is not string featureRef)
+            if (pick.IsCoverage)
+            {
+                coverageHit ??= BuildHit(pick.Info, owningEntry, processor);
+                continue;
+            }
+
+            var featureRef = pick.Info.FeatureRef;
+            if (string.IsNullOrEmpty(featureRef) || !seen.Add((processor, featureRef)))
                 continue;
 
-            if (!TryResolveOwner(
-                    processors,
-                    layer,
-                    out var owningEntry,
-                    out var processor))
-                continue;
-
-            // A single feature can appear in multiple style sublayers (line
-            // + label + symbol). Deduplicate so the panel doesn't show
-            // duplicate rows for the same logical feature.
-            var key = (processor, featureRef);
-            if (!seen.Add(key))
-                continue;
-
-            var info = processor.GetFeatureInfo(featureRef);
-            if (info is null)
-                continue;
-
-            // Parts drawn as separate features can report one feature (a
-            // tropical cyclone's cone, track and points all report the
-            // storm, #1296): keep the topmost.
-            if (!string.Equals(info.FeatureRef, featureRef, StringComparison.Ordinal)
-                && !seen.Add((processor, info.FeatureRef)))
-                continue;
-
-            hits.Add(BuildHit(info, owningEntry, processor));
+            hits.Add(BuildHit(pick.Info, owningEntry, processor));
         }
 
         return OrderByDrawingPriority(hits);
@@ -441,18 +416,15 @@ internal sealed class PickService : IPickService
         return true;
     }
 
-    private bool TryResolveOwner(
+    private static bool TryResolveOwner(
         IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> processors,
-        ILayer hitLayer,
+        MapDatasetId datasetId,
         out DatasetEntry owningEntry,
         out IDatasetProcessor processor)
     {
-        foreach (var (entry, layers) in _loader.EntryLayers)
+        foreach (var (entry, proc) in processors)
         {
-            if (!Contains(layers, hitLayer))
-                continue;
-
-            if (processors.TryGetValue(entry, out var proc))
+            if (entry.Id == datasetId)
             {
                 owningEntry = entry;
                 processor = proc;
@@ -465,30 +437,9 @@ internal sealed class PickService : IPickService
         return false;
     }
 
-    /// <summary>
-    /// Projects the pick's world position to WGS84 and wraps it as a
-    /// <see cref="PickLocation"/>. Returns <c>null</c> when the
-    /// <see cref="MapInfo"/> carries no world position (e.g. a pick that
-    /// originated outside the map surface).
-    /// </summary>
-    private static PickLocation? TryGetLocation(MapInfo mapInfo)
-    {
-        if (mapInfo.WorldPosition is not { } world)
-            return null;
-
-        // SphericalMercator → WGS84. Mapsui returns (lon, lat).
-        var (lon, lat) = SphericalMercator.ToLonLat(world.X, world.Y);
-        return new PickLocation(lat, lon);
-    }
-
-    private bool TryCoveragePick(MapInfo mapInfo, out PickHit hit)
+    private bool TryCoveragePick(double lat, double lon, out PickHit hit)
     {
         hit = null!;
-        if (mapInfo.WorldPosition is not { } world)
-            return false;
-
-        // SphericalMercator → WGS84. Mapsui returns (lon, lat).
-        var (lon, lat) = SphericalMercator.ToLonLat(world.X, world.Y);
         var time = _globalTime?.CurrentTime;
 
         using var processors = _loader.AcquireProcessors();

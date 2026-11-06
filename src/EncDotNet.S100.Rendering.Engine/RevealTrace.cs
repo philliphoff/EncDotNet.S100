@@ -11,7 +11,10 @@ namespace EncDotNet.S100.Rendering.Engine;
 /// slot that showed nothing yet is a <i>first</i> reveal; a change at a slot
 /// that already showed something from the same view (another layer's tile
 /// landing on top, or a chart tile replacing its stand-in) is an
-/// <i>incremental</i> reveal: the slot flashes in another step. Changes in
+/// <i>incremental</i> reveal: the slot changes in another step, tagged
+/// <c>flash</c> when it comes within 150&#160;ms of the slot's last change
+/// (pieces landing one after another) and <c>refine</c> when later (the next
+/// wave of cells, such as harbour cells replacing a coarser one). Changes in
 /// the same frame (within <see cref="FrameTicks"/>) count once. Counted only
 /// while <see cref="S100VectorTileRenderer.SettleTrackingEnabled"/>, so a
 /// viewer without the perf harness does no extra work.
@@ -20,6 +23,7 @@ internal static class RevealTrace
 {
     private static readonly long FrameTicks = Stopwatch.Frequency * 8 / 1000;
     private static readonly long ViewTicks = Stopwatch.Frequency / 2;
+    private static readonly long FlashTicks = Stopwatch.Frequency * 150 / 1000;
     private static readonly Lock Sync = new();
     private static readonly Dictionary<(int Band, int X, int Y), Slot> Slots = new();
 
@@ -59,9 +63,24 @@ internal static class RevealTrace
             }
 
             var first = !state.AnyShown;
+            var gap = now - state.LastChange;
             state.AnyShown = true;
             state.LastChange = now;
-            (first ? S100Diag.Telemetry.RevealFirst : S100Diag.Telemetry.RevealIncremental).Add(1);
+            if (first)
+            {
+                S100Diag.Telemetry.RevealFirst.Add(1);
+            }
+            else
+            {
+                // Pieces landing in quick succession read as flashing; a
+                // change long after the last reads as the next refinement.
+                S100Diag.Telemetry.RevealIncremental.Add(1, new KeyValuePair<string, object?>(
+                    "s100.render.reveal.gap", gap <= FlashTicks ? "flash" : "refine"));
+            }
+            if (first && S100VectorTileRenderer.LastViewChangeTicks is var viewChanged and > 0)
+            {
+                S100Diag.Telemetry.RevealFirstDelay.Record(Stopwatch.GetElapsedTime(viewChanged, now).TotalMilliseconds);
+            }
         }
     }
 

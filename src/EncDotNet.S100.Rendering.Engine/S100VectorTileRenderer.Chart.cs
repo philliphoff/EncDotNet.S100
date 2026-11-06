@@ -588,6 +588,34 @@ public static partial class S100VectorTileRenderer
     }
 
     /// <summary>
+    /// Whether a chart tile rastered for <paramref name="key"/>, whose stack
+    /// has since changed, should stand in for its slot: the slot is in view
+    /// at the key's band and scale class, and shows neither its current
+    /// tile nor a stand-in yet. A slot whose cells land one after another
+    /// would otherwise lose each raster to the next arrival and stay blank
+    /// until they stop. Call under <c>state.Sync</c>.
+    /// </summary>
+    private static bool IsWantedStandIn(TileState state, TileKey key)
+    {
+        foreach (var target in state.CurrentVisible)
+        {
+            if (target.Slot != key.Slot || target.ScaleClass != key.ScaleClass)
+            {
+                continue;
+            }
+
+            if (state.Cache.Contains(target))
+            {
+                return false;
+            }
+
+            return !(state.ShownBySlot.TryGetValue(key.Slot, out var shown) && state.Cache.Contains(shown));
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Remembers the tile each slot shows exactly this frame, so a later stack
     /// change can keep showing it. Call under <c>state.Sync</c>.
     /// </summary>

@@ -89,6 +89,15 @@ public sealed class ChartSessionOptions
     /// <inheritdoc cref="MinSceneMarginPx"/>
     public const double MaxSceneMarginPx = 4096.0;
 
+    /// <summary>Default chart stack hold, in milliseconds (<c>S100_STACK_HOLD_MS</c>).</summary>
+    public const double DefaultStackHoldMs = 0.0;
+
+    /// <summary>Minimum / maximum accepted chart stack hold, in milliseconds.</summary>
+    public const double MinStackHoldMs = 0.0;
+
+    /// <inheritdoc cref="MinStackHoldMs"/>
+    public const double MaxStackHoldMs = 2000.0;
+
     private PerformanceProfile _resolvedProfile;
     private VectorSceneMode _sceneMode;
     private double _tileGutterDip;
@@ -104,6 +113,7 @@ public sealed class ChartSessionOptions
     private PerformanceProfile _profile;
     private bool _liveBaseEnabled;
     private double _sceneMarginPx;
+    private double _stackHoldMs;
 
     /// <summary>
     /// Creates options with the defaults for this machine's tier, reading no
@@ -161,6 +171,8 @@ public sealed class ChartSessionOptions
             SeedOffSwitch(environment, "S100_VECTOR_TILE_LIVE_BASE", defaultValue: true);
         (_sceneMarginPx, SceneMarginPxEnvExplicit) =
             SeedDouble(environment, "S100_VECTOR_SCENE_MARGIN", DefaultSceneMarginPx, MinSceneMarginPx, MaxSceneMarginPx);
+        (_stackHoldMs, StackHoldMsEnvExplicit) =
+            SeedDouble(environment, "S100_STACK_HOLD_MS", DefaultStackHoldMs, MinStackHoldMs, MaxStackHoldMs);
     }
 
     /// <summary>
@@ -395,6 +407,28 @@ public sealed class ChartSessionOptions
 
     /// <summary>True when <see cref="SceneMarginPx"/> is pinned by an explicit environment variable.</summary>
     public bool SceneMarginPxEnvExplicit { get; }
+
+    /// <summary>
+    /// The longest, in milliseconds, a chart stack compose waits for the
+    /// other cells the view is still rendering (map rendering slice&#160;8).
+    /// Each compose changes every chart tile slot its new cells touch, so
+    /// composing per arrival reveals a slot once per cell; holding lets cells
+    /// that land one after another reveal in one change, at the cost of
+    /// showing the first of them later. 0 turns the hold off. Seeded from
+    /// <c>S100_STACK_HOLD_MS</c> (default <see cref="DefaultStackHoldMs"/>,
+    /// off: on Washington a 250&#160;ms hold cut incremental reveals by about
+    /// a tenth but added quick-succession ones and slowed a cold pan, see
+    /// <c>docs/design/map-render-architecture.md</c>, slice&#160;8). Read by
+    /// each compose.
+    /// </summary>
+    public double StackHoldMs
+    {
+        get => _stackHoldMs;
+        set { if (!StackHoldMsEnvExplicit) _stackHoldMs = Clamp(value, MinStackHoldMs, MaxStackHoldMs); }
+    }
+
+    /// <summary>True when <see cref="StackHoldMs"/> is pinned by an explicit environment variable.</summary>
+    public bool StackHoldMsEnvExplicit { get; }
 
     /// <summary>
     /// The selected performance profile. <see cref="PerformanceProfile.Auto"/>

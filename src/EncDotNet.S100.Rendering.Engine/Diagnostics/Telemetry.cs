@@ -380,6 +380,17 @@ internal static class Telemetry
             description: "Tile slots that first showed content in a view.");
 
     /// <summary>
+    /// Reveal trace: the time from the last view change to a tile slot's
+    /// first content in the view, a per-slot time to first paint (see
+    /// <c>RevealTrace</c>). Recorded only while settle tracking is on.
+    /// </summary>
+    public static readonly Histogram<double> RevealFirstDelay =
+        Meter.CreateHistogram<double>(
+            name: "s100.render.reveal.first_delay",
+            unit: "ms",
+            description: "Time from the last view change to a tile slot's first content in the view: time to first paint, per slot.");
+
+    /// <summary>
     /// Reveal trace: a tile slot that already showed content in a view
     /// changing again in a later frame, e.g. another layer's tile landing on
     /// top of it (see <c>RevealTrace</c>). Counted only while settle tracking
