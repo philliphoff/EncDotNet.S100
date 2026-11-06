@@ -261,7 +261,7 @@ one plum-grey storm ink, so it doesn't look like a chart colour or a warning:
 - **Cone.** NHC's cone, tinted. The part beyond 72 hours (days 4 and 5) is
   also stippled. The outline is dashed. The storm's centre stays inside the
   cone only about two-thirds of the time, and its winds reach well outside it.
-- **Wind radii.** The 34, 50 and 64 knot areas at the advisory, nested, with
+- **Wind radii.** The 34, 50 and 64 knot areas at the view time, nested, with
   the 64 knot core the strongest. Their outlines are dashed, solid and heavy.
 - **Tracks.** The forecast track is a solid line, the past track a dotted
   line with a dot at each best-track position.
@@ -271,9 +271,9 @@ one plum-grey storm ink, so it doesn't look like a chart colour or a warning:
   and above). A square centre is subtropical, and a circled × is
   post-tropical, a remnant low or a disturbance. South of the equator the
   symbols are mirrored, because storms there turn the other way.
-- **Labels.** The storm at the advisory is drawn larger, in a ring, with its
-  class, name, wind and pressure, and under that the advisory number, its
-  issue time and how the storm is moving. Forecast points at 12 hours, every
+- **Labels.** The storm is drawn larger, in a ring, with its class, name,
+  wind and pressure, and under that the advisory number, its issue time and
+  how the storm is moving. Forecast points at 12 hours, every
   24 hours and the last show their time and wind. Times follow the Local or
   UTC setting.
 
@@ -284,9 +284,43 @@ information**: the advisory, its issue time and when the next is due, the
 position, wind, pressure and movement, the part you picked, and the radii in
 each quadrant.
 
-The storm is drawn where the advisory puts it now. Moving it along the track
-with the Timeline, NHC's feed in the Library and switches to hide the radii,
-past track and forecast times are still to come.
+### Storm at the view time
+
+The cone, the tracks and the forecast points are always drawn, whatever the
+view time. The storm and its wind radii are drawn at the view time, so
+scrubbing the Timeline moves them along the track:
+
+| View time | Storm | Radii | Datasets row |
+|---|---|---|---|
+| On a forecast point | The forecast point, drawn large in a solid ring | The point's forecast radii | `18:00Z · T+24 h` |
+| Between two forecast points | An estimate, in a dashed ring, labelled `est. Wed 9:00 PM · Adv 17 · NW 9 kt` | Each quadrant between the two points' | `est. 20:00Z · T+2 h` |
+| Before the advisory, on the past track | The best-track position, in a solid ring, labelled `best track …` | The observed radii, where the best track has them | `12:00Z · best track` |
+| After the last forecast point | None; the cone and tracks stay | None | A **Beyond forecast** tag |
+| Before the first best-track point | None; the cone and tracks stay | None | A **Before track** tag |
+
+Between two points the position follows the great circle, and the wind,
+pressure and each radius change evenly with time. A radius that's zero at
+one end shrinks to nothing; NHC forecasts no radii beyond 72 hours, so none
+are drawn there. The estimate keeps the class of the earlier point. NHC
+doesn't forecast these in-between positions, and Object information says so:
+its **At view time** row gives the time, and **Basis** reads "Estimated
+between forecast points; NHC doesn't forecast this position." Click a tagged
+row's time to jump to the nearest end of the storm's track.
+
+In Live mode the view time follows the clock, so the storm creeps along the
+track between advisories.
+
+The Timeline lists storms under **Tropical cyclones**, in a lane named for
+the storm, such as **IAN**, with "adv 20 · 6 h" under it. Its band runs from
+the first best-track point, faded, to the last forecast point. A tick marks
+each forecast point, a solid diamond the advisory's issue time and a hollow
+diamond when NHC's next regular advisory is due (03, 09, 15 and 21 UTC;
+intermediate advisories can come sooner). Choose the storm in the step menu
+and ‹ › step through its forecast points. The lane is grey with the
+**Expired** tag once the last forecast point has passed.
+
+NHC's feed in the Library, and switches to hide the radii, past track and
+forecast times, are still to come.
 
 ## Show a surface analysis
 

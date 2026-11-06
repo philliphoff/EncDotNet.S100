@@ -426,7 +426,10 @@ weather design note (`docs/design/vector-weather.md`, §3).
 - **Labels.** `StormLabel` (`HURRICANE IAN · 105 kt · 952 hPa`),
   `AdvisoryLabel` (`Adv 20 · issued Wed 03:00 · NNE 9 kt`) and
   `ForecastLabel` (`Thu 00:00 · 110 kt`) take the zone and culture to write
-  times in. Forecast times are drawn at 1:20,000,000 and larger, and the
+  times in. `StormDetailLabel` is the storm's second line at a time
+  (`TropicalCycloneAdvisory.StormAt`): `AdvisoryLabel` at the advisory,
+  `est. Wed 06:00 · Adv 20 · NNE 9 kt` between forecast points, and
+  `best track Tue 15:00` before the advisory. Forecast times are drawn at 1:20,000,000 and larger, and the
   storm's second line at 1:40,000,000 and larger.
 - **Legends.** `BuildTrackLegend` has a symbol per class, the southern mirror
   and both tracks; `BuildAreasLegend` has the cone's two parts and the three

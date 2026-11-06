@@ -1146,6 +1146,66 @@ public sealed class MapsuiDatasetLayerSessionTests
     }
 
     [Fact]
+    public async Task ContinuousSelectionDrawsEveryMinuteOfItsRangeFromBeforeTheFirstStep()
+    {
+        // A tropical cyclone (#1297): forecast points every 12 h, drawn from
+        // its past track 18 h before the first, at the clock itself.
+        using var map = new Map();
+        using var owner = new DatasetProcessorOwner();
+        using var session = CreateSession(map, owner);
+        var first = new DateTime(2026, 11, 4, 18, 0, 0, DateTimeKind.Utc);
+        var id = new MapDatasetId("storm");
+        var processor = new StubProcessor(id.Value)
+        {
+            AvailableTimes = [first, first.AddHours(12), first.AddHours(24)],
+            TimeSemantics = new TimeSemantics(TimeStepKind.Forecast, TimeStepSelection.Continuous, TimeSpan.FromHours(18)),
+            IssueTime = first.AddHours(3),
+            NextIssueTime = first.AddHours(9),
+        };
+        Assert.True(owner.TryRegister(id, processor));
+
+        session.SetDataset(Dataset(id));
+
+        var time = session.GetTimeSnapshot();
+        var timed = Assert.Single(time.Datasets);
+        Assert.Equal(MapsuiTimeSelectionKind.Continuous, timed.Selection);
+        Assert.Equal(first.AddHours(-18), timed.First);
+        Assert.Equal(first.AddHours(-18), time.Minimum);
+        Assert.Equal(first.AddHours(24), time.Maximum);
+        Assert.Equal(first.AddHours(9), timed.NextIssueTime);
+        Assert.Equal([new MapsuiMapTimeSegment(first.AddHours(-18), first.AddHours(24))], timed.Coverage);
+        Assert.Equal(processor.AvailableTimes, timed.Samples);
+
+        // Any time is drawn, to the minute; outside its range the processor
+        // draws only what doesn't move (a storm's cone), so it never hides.
+        Assert.Equal(first.AddHours(5).AddMinutes(7), timed.SampleAt(first.AddHours(5).AddMinutes(7).AddSeconds(42)));
+        Assert.Equal(first.AddHours(-18), timed.SampleAt(first.AddHours(-18)));
+        Assert.Equal(first.AddHours(30), timed.SampleAt(first.AddHours(30)));
+        Assert.True(timed.Covers(first.AddHours(24)));
+        Assert.False(timed.Covers(first.AddHours(24).AddMinutes(1)));
+
+        // The processor gets the clock, not a forecast point, so the storm moves.
+        session.SetCurrentTime(first.AddHours(5).AddMinutes(7));
+        await session.RefreshTimeAsync(MapPresentationState.Default, TestContext.Current.CancellationToken);
+        Assert.Equal(first.AddHours(5).AddMinutes(7), processor.LastContext!.TimeStep);
+        var renders = processor.RenderCount;
+
+        session.SetCurrentTime(first.AddHours(5).AddMinutes(7).AddSeconds(30));
+        await session.RefreshTimeAsync(MapPresentationState.Default, TestContext.Current.CancellationToken);
+        Assert.Equal(renders, processor.RenderCount);
+
+        session.SetCurrentTime(first.AddHours(6));
+        await session.RefreshTimeAsync(MapPresentationState.Default, TestContext.Current.CancellationToken);
+        Assert.Equal(first.AddHours(6), processor.LastContext!.TimeStep);
+
+        // Beyond the range it still draws, with the time it's at.
+        session.SetCurrentTime(first.AddHours(30));
+        await session.RefreshTimeAsync(MapPresentationState.Default, TestContext.Current.CancellationToken);
+        Assert.Equal(first.AddHours(30), processor.LastContext!.TimeStep);
+        Assert.NotEmpty(session.GetDataset(id)!.Layers);
+    }
+
+    [Fact]
     public void DefaultTimeSemanticsSnapToTheNearestStepWithinTheTypicalStep()
     {
         using var map = new Map();

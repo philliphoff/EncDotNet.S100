@@ -34,12 +34,14 @@ internal sealed partial class TimelineViewModel
         // Vector weather (vector-weather.md §6.5): the "other" lane colour, as
         // weather lanes have, under a group named for the product rather than
         // the spec (GroupTitles). Tropical cyclones (#1297) go beside it.
+        [LayerTimes.TropicalCycloneSpec] = (string.Empty, OtherProductColor, 19),
         [LayerTimes.SurfaceAnalysisSpec] = (string.Empty, OtherProductColor, 20),
     };
 
     /// <summary>Groups titled in full, not "spec title": the vector weather products.</summary>
     private static readonly Dictionary<string, string> GroupTitles = new(StringComparer.OrdinalIgnoreCase)
     {
+        [LayerTimes.TropicalCycloneSpec] = Strings.TimelinePanel_GroupTropicalCyclones,
         [LayerTimes.SurfaceAnalysisSpec] = Strings.TimelinePanel_GroupSurfaceAnalysis,
     };
 
@@ -298,7 +300,10 @@ internal sealed partial class TimelineViewModel
             }
             lane.Dataset = dataset;
             lane.IsInMapView = _scope is not null && dataset.DatasetId is { } id ? _scope.IsInMapView(id) : null;
-            lane.Bands = axis is null ? [] : axis.BandsFor(Segments(dataset));
+            var (bands, pastBands) = LaneBands(axis, dataset);
+            lane.Bands = bands;
+            lane.PastBands = pastBands;
+            lane.Marks = axis is null ? [] : LaneMarks(axis, dataset);
             lane.Gaps = _gaps;
             lanes.Add((lane, !filtering || IsInView(dataset)));
         }
@@ -374,25 +379,29 @@ internal sealed partial class TimelineViewModel
             var tiled = ForecastRunNames.ModelAndTile(dataset.Name);
             lane.Code = DriverLabel(dataset);
             var parts = new List<string>(3);
+            if (dataset.TimelineDetail is { Length: > 0 } detail)
+                parts.Add(detail);
             if (LayerTimes.IsSurfaceAnalysis(dataset))
                 parts.Add(dataset.StepKind == TimeStepKind.Forecast ? Strings.TimelinePanel_LaneForecast : Strings.TimelinePanel_LaneAnalysis);
             if (tiled is { } tile)
                 parts.Add(tile.Tile);
             if (run is { FromIssueTime: false } known)
                 parts.Add(string.Format(CultureInfo.CurrentCulture, Strings.TimelinePanel_LaneRunFormat, ForecastRunNames.FormatRun(known.Time, format, zone, now)));
-            if (TimelineStepper.Cadence(dataset.Samples) is { } cadence && cadence > TimeSpan.Zero)
+            if (LayerTimes.IsTropicalCyclone(dataset))
+                parts.Add(Duration(TropicalCycloneDatasetProcessor.AdvisoryInterval));
+            else if (TimelineStepper.Cadence(dataset.Samples) is { } cadence && cadence > TimeSpan.Zero)
                 parts.Add(Duration(cadence));
             else if (LayerTimes.IsSurfaceAnalysis(dataset) && dataset.StepKind != TimeStepKind.Forecast)
                 parts.Add(Duration(SurfaceAnalysisDatasetProcessor.AnalysisInterval));
             lane.Sub = string.Join(" · ", parts);
-            lane.IsExpired = IsForecastDataset(dataset) && now > dataset.Last;
+            lane.IsExpired = (IsForecastDataset(dataset) || LayerTimes.IsTropicalCyclone(dataset)) && now > dataset.Last;
 
             var time = view is { } at
                 ? LayerTimes.Describe(dataset, at, dataset.DatasetId is { } id && _progress?.IsDatasetDrawing(id) == true, format, zone, run, _service.TimedDatasets)
                 : null;
             lane.LayerTime = time?.Text ?? string.Empty;
-            lane.IsHidden = time?.IsHidden == true;
-            lane.Nearest = time?.IsHidden == true ? time.Nearest : null;
+            lane.IsHidden = time?.IsWarning == true;
+            lane.Nearest = time?.IsWarning == true ? time.Nearest : null;
             lane.Tooltip = string.Format(
                 CultureInfo.CurrentCulture,
                 Strings.TimelinePanel_LaneTooltipFormat,
@@ -401,7 +410,67 @@ internal sealed partial class TimelineViewModel
                 TimeFormatting.Format(dataset.First, format),
                 TimeFormatting.Format(dataset.Last, format))
                 + (lane.LayerTime.Length > 0 ? "\n" + lane.LayerTime : string.Empty);
+            if (LayerTimes.IsTropicalCyclone(dataset) && dataset.Samples.Count > 0)
+            {
+                lane.Tooltip = string.Format(
+                    CultureInfo.CurrentCulture,
+                    Strings.TimelinePanel_LaneCycloneTooltipFormat,
+                    lane.Code,
+                    dataset.Samples.Count,
+                    TimeFormatting.Format(dataset.Samples[0], format),
+                    TimeFormatting.Format(dataset.Samples[^1], format),
+                    dataset.IssueTime is { } issued ? TimeFormatting.Format(issued, format) : string.Empty,
+                    dataset.NextIssueTime is { } next ? TimeFormatting.Format(next, format) : string.Empty)
+                    + (lane.LayerTime.Length > 0 ? "\n" + lane.LayerTime : string.Empty);
+            }
         }
+    }
+
+    /// <summary>
+    /// A lane's bands: its data, and for a dataset drawn before its first step
+    /// (a storm's past track, V14) that part apart, to draw faded.
+    /// </summary>
+    private static (IReadOnlyList<NormalizedCoverageBand> Bands, IReadOnlyList<NormalizedCoverageBand> Past) LaneBands(TimelineAxisMap? axis, MapsuiMapTimedDataset dataset)
+    {
+        if (axis is null)
+            return ([], []);
+        if (dataset.Selection != MapsuiTimeSelectionKind.Continuous || dataset.Samples.Count == 0 || dataset.First >= dataset.Samples[0])
+            return (axis.BandsFor(Segments(dataset)), []);
+        var first = dataset.Samples[0];
+        return (
+            axis.BandsFor([new CoverageSegment(first, dataset.Last)]),
+            axis.BandsFor([new CoverageSegment(dataset.First, first)]));
+    }
+
+    /// <summary>
+    /// A lane's marks (V14): for a dataset drawn between its steps, a tick at
+    /// each step (a storm's forecast points); and, when the producer says
+    /// when the next is due, a solid diamond at the issue time and a hollow
+    /// one at the next.
+    /// </summary>
+    internal static IReadOnlyList<TimelineLaneMark> LaneMarks(TimelineAxisMap axis, MapsuiMapTimedDataset dataset)
+    {
+        var marks = new List<TimelineLaneMark>();
+        void Add(DateTime time, TimelineLaneMarkKind kind)
+        {
+            if (!axis.IsDegenerate && time >= axis.Start && time <= axis.End)
+                marks.Add(new TimelineLaneMark(axis.ToPosition(time), kind));
+        }
+
+        if (dataset.Selection == MapsuiTimeSelectionKind.Continuous)
+        {
+            foreach (var step in dataset.Samples)
+                Add(step, TimelineLaneMarkKind.Step);
+        }
+
+        if (dataset.NextIssueTime is { } next)
+        {
+            if (dataset.IssueTime is { } issued)
+                Add(issued, TimelineLaneMarkKind.Issued);
+            Add(next, TimelineLaneMarkKind.NextIssue);
+        }
+
+        return marks;
     }
 
     private static (string Title, Color Color, int Order) Product(string? spec) =>

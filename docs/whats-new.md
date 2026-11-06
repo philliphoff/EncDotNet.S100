@@ -6,6 +6,29 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Tropical cyclones follow the Timeline.** The cone and forecast always
+  draw; the storm and its wind radii are drawn at the view time, so
+  scrubbing moves them smoothly along the track. Between forecast points the
+  storm is an estimate, in a dashed ring labelled "est.", with its position
+  on the great circle and its wind and radii in between; before the advisory
+  it follows the best track; beyond the forecast the cone stays and the
+  Datasets row has a **Beyond forecast** tag. Object information gives the storm at the view
+  time and says when it's an estimate. The Timeline groups storms under
+  **Tropical cyclones**, in a lane named for the storm with a tick at each
+  forecast point and diamonds at the issue time and the next advisory due;
+  the step menu lists the storm, so ‹ › step its forecast points. In Live
+  mode the storm follows the clock. In the libraries:
+  `TropicalCycloneAdvisory.StormAt` and `TropicalCycloneStormAt`,
+  `TimeStepSelection.Continuous` (and `MapsuiTimeSelectionKind.Continuous`),
+  `ITimeAwareDatasetProcessor.NextIssueTime`, `TimelineLabel` and
+  `TimelineDetail` (on `MapsuiMapTimedDataset` too), and
+  `TropicalCycloneStyle.StormDetailLabel`; `TropicalCycloneDatasetProcessor`
+  is time-aware. `get_timeline_state` reports a lane's `sub`, `issued`,
+  `nextIssue` and `stepTicks` and a layer's warning `tag`. Breaking
+  change: a storm's own parts (the storm and its radii) now come after the
+  advisory's other parts in `EnumerateFeatures`. See
+  [Show tropical cyclones](weather.md#storm-at-the-view-time).
+
 - **Surface analyses follow the Timeline, from the Library.** A WPC
   bulletin's analysis or forecast is now drawn from its valid time for 12
   hours: after 6 it's stale, at half opacity with its age on each **H** and
