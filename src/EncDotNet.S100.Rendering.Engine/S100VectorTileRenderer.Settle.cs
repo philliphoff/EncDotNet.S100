@@ -1,8 +1,6 @@
 using System.Diagnostics;
-using Mapsui;
-using Mapsui.Layers;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// What the tiled layers showed in their most recent live frames, for a host
@@ -55,6 +53,17 @@ public readonly record struct TileCacheMemory(long RasterBytes, long GpuBytes, i
     public long TotalBytes => RasterBytes + GpuBytes;
 }
 
+/// <summary>
+/// One host layer as <see cref="S100VectorTileRenderer.EvaluateSettle"/> sees
+/// it: its owner token and whether the host draws it at the latest frame's
+/// resolution.
+/// </summary>
+/// <param name="Owner">The layer's owner token (see <see cref="LayerFrame.Owner"/>).</param>
+/// <param name="Enabled">Whether the host draws the layer at all.</param>
+/// <param name="MinVisible">The smallest resolution (EPSG:3857 m/px) the layer draws at.</param>
+/// <param name="MaxVisible">The largest resolution (EPSG:3857 m/px) the layer draws at.</param>
+public readonly record struct SettleLayer(object Owner, bool Enabled, double MinVisible, double MaxVisible);
+
 public static partial class S100VectorTileRenderer
 {
     private static volatile bool _settleTracking;
@@ -81,17 +90,17 @@ public static partial class S100VectorTileRenderer
     /// any frame was recorded, every layer with tile state counts as not
     /// painted. Safe to call from any thread.
     /// </summary>
-    /// <param name="layers">The map's layers, for example a snapshot of <c>Map.Layers</c>.</param>
+    /// <param name="layers">The host's layers, for example a snapshot of the map's layers.</param>
     /// <returns>The settle state.</returns>
-    public static TileSettleState EvaluateSettle(IEnumerable<ILayer> layers)
+    public static TileSettleState EvaluateSettle(IEnumerable<SettleLayer> layers)
     {
         ArgumentNullException.ThrowIfNull(layers);
 
-        var stamped = new List<(ILayer Layer, SettleStamp? Stamp, int Pending)>();
+        var stamped = new List<(SettleLayer Layer, SettleStamp? Stamp, int Pending)>();
         SettleStamp? latest = null;
         foreach (var layer in layers)
         {
-            if (layer is null || !layer.Enabled || !States.TryGetValue(layer, out var state))
+            if (layer.Owner is null || !layer.Enabled || !States.TryGetValue(layer.Owner, out var state))
             {
                 continue;
             }
@@ -210,7 +219,7 @@ public static partial class S100VectorTileRenderer
     /// scale cap, hidden by finer cells, or drawn live from its scene. Nothing
     /// is waiting on tiles, so it counts as exact.
     /// </summary>
-    private static void RecordSettleCulled(TileState state, Viewport viewport, double resolution, bool offscreen)
+    private static void RecordSettleCulled(TileState state, ViewState viewport, double resolution, bool offscreen)
     {
         if (offscreen || !_settleTracking)
         {
@@ -230,7 +239,7 @@ public static partial class S100VectorTileRenderer
     /// tile is resident at the frame's pixel size with none queued.
     /// </summary>
     private static void RecordSettleComposite(
-        TileState state, Viewport viewport, double resolution, IReadOnlyList<TileKey> visible, bool targetExact, int tilePx)
+        TileState state, ViewState viewport, double resolution, IReadOnlyList<TileKey> visible, bool targetExact, int tilePx)
     {
         var missing = 0;
         foreach (var key in visible)

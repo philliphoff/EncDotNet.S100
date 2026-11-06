@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 

@@ -211,15 +211,15 @@ internal sealed partial class ViewerSettings
     /// <summary>
     /// The base-plane scene mode (issue #331).
     /// One of "Tiled" (Phase-2 default) or "Single" (Phase-1 single surface),
-    /// matching <see cref="Renderers.Mapsui.VectorSceneMode"/>.
+    /// matching <see cref="Rendering.Engine.VectorSceneMode"/>.
     /// <see langword="null"/> → best default ("Tiled"). Mirrors
-    /// <c>RenderingOptimizations.SceneMode</c> / <c>S100_VECTOR_SCENE_MODE</c>.
+    /// <c>ChartEngine.Options.SceneMode</c> / <c>S100_VECTOR_SCENE_MODE</c>.
     /// </summary>
     public string? VectorSceneMode { get; set; }
 
     /// <summary>
     /// Tiled-base-plane gutter, in DIP (issue #331). <see langword="null"/> →
-    /// best default. Mirrors <c>RenderingOptimizations.TileGutterDip</c> /
+    /// best default. Mirrors <c>ChartEngine.Options.TileGutterDip</c> /
     /// <c>S100_VECTOR_TILE_GUTTER</c>.
     /// </summary>
     public double? TileGutterDip { get; set; }
@@ -227,7 +227,7 @@ internal sealed partial class ViewerSettings
     /// <summary>
     /// Process-wide hot-cache native budget, in MB (issue #331, map rendering slice 4).
     /// <see langword="null"/> → best default. Mirrors
-    /// <c>RenderingOptimizations.TileBudgetMb</c> /
+    /// <c>ChartEngine.Options.TileBudgetMb</c> /
     /// <c>S100_VECTOR_TILE_BUDGET_MB</c>.
     /// </summary>
     public double? TileBudgetMb { get; set; }
@@ -235,7 +235,7 @@ internal sealed partial class ViewerSettings
     /// <summary>
     /// Whether tiled-base-plane speculative prediction / pre-warm is enabled
     /// (issue #331). <see langword="null"/> → best default (on). Mirrors
-    /// <c>RenderingOptimizations.TilePredictionEnabled</c> /
+    /// <c>ChartEngine.Options.TilePredictionEnabled</c> /
     /// <c>S100_VECTOR_TILE_PREDICT</c>.
     /// </summary>
     public bool? TilePredictionEnabled { get; set; }
@@ -244,7 +244,7 @@ internal sealed partial class ViewerSettings
     /// Whether idle cross-band (±1) pre-warm is enabled (issue&#160;#428).
     /// <see langword="null"/> → best default (on, except off by default on the
     /// LowEnd tier; an explicit opt-in is still honoured there). Mirrors
-    /// <c>RenderingOptimizations.TileCrossBandPrewarmEnabled</c> /
+    /// <c>ChartEngine.Options.TileCrossBandPrewarmEnabled</c> /
     /// <c>S100_VECTOR_TILE_XBAND</c>.
     /// </summary>
     public bool? TileCrossBandPrewarmEnabled { get; set; }
@@ -253,7 +253,7 @@ internal sealed partial class ViewerSettings
     /// Whether adjacent cold tile misses may be rasterised as a 2&#215;2
     /// metatile and sliced into tile-granular cache entries (issue&#160;#427).
     /// <see langword="null"/> → conservative default (off). Mirrors
-    /// <c>RenderingOptimizations.TileMetatileEnabled</c> /
+    /// <c>ChartEngine.Options.TileMetatileEnabled</c> /
     /// <c>S100_VECTOR_TILE_METATILE</c>.
     /// </summary>
     public bool? TileMetatileEnabled { get; set; }
@@ -261,14 +261,14 @@ internal sealed partial class ViewerSettings
     /// <summary>
     /// Whether the warm disk tile cache is enabled (issue #331).
     /// <see langword="null"/> → best default (on). Mirrors
-    /// <c>RenderingOptimizations.TileDiskCacheEnabled</c> /
+    /// <c>ChartEngine.Options.TileDiskCacheEnabled</c> /
     /// <c>S100_VECTOR_TILE_DISK</c>.
     /// </summary>
     public bool? TileDiskCacheEnabled { get; set; }
 
     /// <summary>
     /// Warm disk tile-cache budget, in MB (issue #331). <see langword="null"/> →
-    /// best default. Mirrors <c>RenderingOptimizations.TileDiskMb</c> /
+    /// best default. Mirrors <c>ChartEngine.Options.TileDiskMb</c> /
     /// <c>S100_VECTOR_TILE_DISK_MB</c>.
     /// </summary>
     public double? TileDiskMb { get; set; }
@@ -276,7 +276,7 @@ internal sealed partial class ViewerSettings
     /// <summary>
     /// Whether tiled-base-plane GPU texture residency is enabled (issue #331).
     /// <see langword="null"/> → best default (on). Mirrors
-    /// <c>RenderingOptimizations.TileGpuResidencyEnabled</c> /
+    /// <c>ChartEngine.Options.TileGpuResidencyEnabled</c> /
     /// <c>S100_VECTOR_TILE_GPU</c>.
     /// </summary>
     public bool? TileGpuResidencyEnabled { get; set; }
@@ -284,7 +284,7 @@ internal sealed partial class ViewerSettings
     /// <summary>
     /// Process-wide GPU-residency budget, in MB (issue #331, map rendering slice 4).
     /// <see langword="null"/> → best default. Mirrors
-    /// <c>RenderingOptimizations.TileGpuBudgetMb</c> /
+    /// <c>ChartEngine.Options.TileGpuBudgetMb</c> /
     /// <c>S100_VECTOR_TILE_GPU_MB</c>.
     /// </summary>
     public double? TileGpuBudgetMb { get; set; }
@@ -293,7 +293,7 @@ internal sealed partial class ViewerSettings
     /// Overall performance profile that sets the default tile budgets + worker
     /// cap. One of <c>Auto</c> / <c>HighEnd</c> / <c>Balanced</c> / <c>LowEnd</c>;
     /// <see langword="null"/> → Auto (derive from cores + RAM). Mirrors
-    /// <c>RenderingOptimizations.Profile</c> / <c>S100_PERF_PROFILE</c>.
+    /// <c>ChartEngine.Options.Profile</c> / <c>S100_PERF_PROFILE</c>.
     /// </summary>
     public string? PerformanceProfile { get; set; }
 

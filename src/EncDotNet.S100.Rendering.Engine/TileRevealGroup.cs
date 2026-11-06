@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// Makes the tiled layers of one dataset reveal each tile position together,

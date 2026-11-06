@@ -6,6 +6,7 @@ using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Renderers.Skia.Scene;
+using EncDotNet.S100.Rendering.Engine;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
@@ -162,12 +163,12 @@ public sealed class MapsuiDatasetRenderer
                 // portrayal-cache read) and scene build (which includes the
                 // pattern clip), for the warm-load breakdown.
                 VectorPortrayalResult result;
-                using (Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.portray"))
+                using (Rendering.Engine.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.portray"))
                 {
                     result = await vectorSource.BuildVectorPortrayalAsync(context, cancellationToken).ConfigureAwait(false);
                 }
 
-                using (Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.scene_build"))
+                using (Rendering.Engine.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.scene_build"))
                 {
                     return ConvertVector(processor, result);
                 }
@@ -195,7 +196,7 @@ public sealed class MapsuiDatasetRenderer
 
         var layers = new List<ILayer>(result.SubLayers.Count);
         var stackEntries = new List<LayerStackEntry>(result.SubLayers.Count);
-        var revealMembers = new List<(ILayer Layer, string Member)>(result.SubLayers.Count);
+        var revealMembers = new List<(object Layer, string Member)>(result.SubLayers.Count);
         MRect? union = null;
 
         foreach (var sub in result.SubLayers)

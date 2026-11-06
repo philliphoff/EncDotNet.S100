@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using Mapsui.Layers;
 using Mapsui.Rendering;
@@ -13,7 +14,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// map (an S-98 filtered copy whose dropped features changed) shows the
 /// replaced layer's tiles until its own land, rather than blanking.
 /// </summary>
-[Collection(RenderingOptimizationsCollection.Name)]
+[Collection(ChartSessionOptionsCollection.Name)]
 public sealed class TileRevealRenderTests
 {
     private const int Band = 10;
@@ -113,7 +114,7 @@ public sealed class TileRevealRenderTests
     private static SKSurface RenderFrame(ILayer layer, Mapsui.Viewport viewport)
     {
         var surface = CreateSurface();
-        S100VectorTileRenderer.Render(surface.Canvas, viewport, layer, new RenderService());
+        MapsuiChartLayers.RenderTiles(surface.Canvas, viewport, layer, new RenderService());
         return surface;
     }
 

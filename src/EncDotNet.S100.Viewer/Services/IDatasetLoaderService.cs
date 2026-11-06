@@ -206,7 +206,7 @@ internal interface IDatasetLoaderService
     /// many test doubles need not override it; the production
     /// <c>DatasetLoaderService</c> backs it with real state.
     /// </remarks>
-    IReadOnlyList<EncDotNet.S100.Renderers.Mapsui.OverscaleCellInput> GetOverscaleCells() => [];
+    IReadOnlyList<EncDotNet.S100.Rendering.Engine.OverscaleCellInput> GetOverscaleCells() => [];
 
     /// <summary>
     /// Snapshot of the current S-98-ordered layer stack across all

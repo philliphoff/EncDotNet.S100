@@ -4,11 +4,11 @@ using EncDotNet.S100.Core.Caching;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// Disk-backed <see cref="IPatternClipCache"/>: persists each computed S-101
-/// pattern-fill priority clip result (see <see cref="MapsuiDisplayListRenderer"/>'s
+/// pattern-fill priority clip result (see <c>MapsuiDisplayListRenderer</c>'s
 /// <see cref="EncDotNet.S100.Rendering.Scene.PatternPriorityClipper"/>) as a WKB sidecar file so that the
 /// <em>cold</em> first open of a previously-seen cell — including after a
 /// process restart — skips the multi-second NetTopologySuite overlay.

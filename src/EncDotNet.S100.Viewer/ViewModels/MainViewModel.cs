@@ -900,7 +900,7 @@ internal sealed class MainViewModel : ViewModelBase
     /// status-bar indicator state. Called on every viewport change.
     /// </summary>
     /// <param name="report">The overscale report (never <see langword="null"/>).</param>
-    public void UpdateOverscale(Renderers.Mapsui.OverscaleReport report)
+    public void UpdateOverscale(Rendering.Engine.OverscaleReport report)
     {
         ArgumentNullException.ThrowIfNull(report);
 

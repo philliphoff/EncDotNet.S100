@@ -1,6 +1,6 @@
 using EncDotNet.S100.Rendering.Scene;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// Identifies one base-plane tile in the <see cref="TileGrid"/>: a

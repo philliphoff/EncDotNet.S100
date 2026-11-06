@@ -1,10 +1,7 @@
-using Mapsui;
-using Mapsui.Extensions;
-using Mapsui.Layers;
 using NetTopologySuite.Geometries;
 using SkiaSharp;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// One finer, overlapping cell's contribution to a coarser cell's cross-cell
@@ -28,7 +25,7 @@ internal readonly record struct FinerCoverage(Geometry Coverage, double CutoffRe
 /// <summary>
 /// Screen-space clip regions for cross-cell scale-band overlap suppression
 /// ("larger-scale-in", issue #438 Phase 2). Each entry maps a base-chart
-/// <see cref="ILayer"/> to the set of finer, overlapping in-band cells
+/// layer owner token to the set of finer, overlapping in-band cells
 /// (<see cref="FinerCoverage"/>) whose coverage it must not over-draw. The custom
 /// layer renderer (<see cref="S100VectorTileRenderer"/>) looks the set up per
 /// frame, projects the finer coverages that are still visible at the live
@@ -50,7 +47,7 @@ internal readonly record struct FinerCoverage(Geometry Coverage, double CutoffRe
 /// </remarks>
 internal static class CoverageClip
 {
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ILayer, FinerCoverage[]> Regions = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<object, FinerCoverage[]> Regions = new();
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<FinerCoverage[], HiddenCoverageCache> HiddenCaches = new();
 
@@ -59,7 +56,7 @@ internal static class CoverageClip
     /// <paramref name="layer"/>. Passing <see langword="null"/> or an empty set
     /// removes any attachment so the layer paints unclipped.
     /// </summary>
-    public static void Set(ILayer layer, IReadOnlyList<FinerCoverage>? finerCoverages)
+    public static void Set(object layer, IReadOnlyList<FinerCoverage>? finerCoverages)
     {
         ArgumentNullException.ThrowIfNull(layer);
 
@@ -72,7 +69,7 @@ internal static class CoverageClip
     /// Gets the finer overlapping coverages attached to <paramref name="layer"/>,
     /// or <see langword="null"/> when the layer paints unclipped.
     /// </summary>
-    public static FinerCoverage[]? Get(ILayer layer)
+    public static FinerCoverage[]? Get(object layer)
     {
         ArgumentNullException.ThrowIfNull(layer);
         return Regions.TryGetValue(layer, out var regions) ? regions : null;
@@ -86,7 +83,7 @@ internal static class CoverageClip
     /// renderer can skip that work. The instance stays the same while the set of
     /// active finer coverages does, so callers can memoise answers against it.
     /// </summary>
-    public static HiddenCoverage? GetHiddenCoverage(ILayer layer, double resolution)
+    public static HiddenCoverage? GetHiddenCoverage(object layer, double resolution)
     {
         ArgumentNullException.ThrowIfNull(layer);
 
@@ -110,7 +107,7 @@ internal static class CoverageClip
     /// rule so a finer cell's interior no-coverage rings punch holes — the coarser
     /// cell still shows through a finer cell's gaps.
     /// </summary>
-    public static IReadOnlyList<SKPath> BuildActiveDifferencePaths(ILayer layer, Viewport viewport, double resolution)
+    public static IReadOnlyList<SKPath> BuildActiveDifferencePaths(object layer, ViewState viewport, double resolution)
     {
         var regions = Get(layer);
         if (regions is null || regions.Length == 0)
@@ -158,7 +155,7 @@ internal static class CoverageClip
         return (IReadOnlyList<SKPath>?)paths ?? [];
     }
 
-    private static void AddGeometry(SKPath path, Geometry geometry, Viewport viewport)
+    private static void AddGeometry(SKPath path, Geometry geometry, ViewState viewport)
     {
         switch (geometry)
         {
@@ -176,14 +173,14 @@ internal static class CoverageClip
         }
     }
 
-    private static void AddPolygon(SKPath path, Polygon polygon, Viewport viewport)
+    private static void AddPolygon(SKPath path, Polygon polygon, ViewState viewport)
     {
         AddRing(path, polygon.ExteriorRing, viewport);
         foreach (var hole in polygon.InteriorRings)
             AddRing(path, hole, viewport);
     }
 
-    private static void AddRing(SKPath path, LineString ring, Viewport viewport)
+    private static void AddRing(SKPath path, LineString ring, ViewState viewport)
     {
         var coordinates = ring.Coordinates;
         if (coordinates.Length < 3)

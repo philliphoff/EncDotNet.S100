@@ -1,6 +1,6 @@
 using NetTopologySuite.Geometries;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// In-memory, single-slot <see cref="IPatternClipCache"/>: it remembers only

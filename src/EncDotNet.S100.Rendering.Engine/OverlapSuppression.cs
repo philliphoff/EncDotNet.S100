@@ -1,8 +1,7 @@
 using EncDotNet.S100.DataModel;
-using Mapsui.Layers;
 using NetTopologySuite.Geometries;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// One loaded chart cell's contribution to cross-cell scale-band overlap
@@ -15,12 +14,15 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// </summary>
 public sealed class OverlapSuppressionCell
 {
-    /// <summary>The cell's layers whose drawing is clipped when a finer cell overlaps.</summary>
-    public required IReadOnlyList<ILayer> Layers { get; init; }
+    /// <summary>
+    /// Owner tokens of the cell's layers whose drawing is clipped when a finer
+    /// cell overlaps (the objects their scenes were bound with).
+    /// </summary>
+    public required IReadOnlyList<object> Layers { get; init; }
 
     /// <summary>
     /// The cell's data-coverage footprint in EPSG:3857 (from
-    /// <see cref="MapsuiDatasetResult.CoverageGeometry"/>), or <see langword="null"/>
+    /// <c>MapsuiDatasetResult.CoverageGeometry</c>), or <see langword="null"/>
     /// when the cell declares no usable coverage (never suppresses or is
     /// suppressed).
     /// </summary>
@@ -160,8 +162,8 @@ public static class OverlapSuppression
     private static double ContentCutoffResolution(int denominator, Geometry coverage)
     {
         var envelope = coverage.EnvelopeInternal;
-        var latitudeRadians = MapsuiDisplayListRenderer.WebMercatorYToLatitudeRadians(
+        var latitudeRadians = ScaleResolution.WebMercatorYToLatitudeRadians(
             (envelope.MinY + envelope.MaxY) / 2.0);
-        return MapsuiDisplayListRenderer.DenominatorToResolution(denominator, latitudeRadians);
+        return ScaleResolution.DenominatorToResolution(denominator, latitudeRadians);
     }
 }

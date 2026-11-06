@@ -1,4 +1,5 @@
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using Mapsui.Extensions;
 using Mapsui.Layers;
 using NetTopologySuite.Geometries;
@@ -138,12 +139,12 @@ public class HiddenCoverageTests
     {
         var hidden = Hidden([new FinerCoverage(Rect(-1000, -1000, 1000, 1000), CutoffResolution: 10)], resolution: 1)!;
 
-        Assert.True(S100VectorTileRenderer.IsViewportHidden(hidden, new Mapsui.Viewport(0, 0, 1, 0, 400, 300), 1));
-        Assert.False(S100VectorTileRenderer.IsViewportHidden(hidden, new Mapsui.Viewport(900, 0, 1, 0, 400, 300), 1));
+        Assert.True(S100VectorTileRenderer.IsViewportHidden(hidden, MapsuiChartLayers.ToViewState(new Mapsui.Viewport(0, 0, 1, 0, 400, 300)), 1));
+        Assert.False(S100VectorTileRenderer.IsViewportHidden(hidden, MapsuiChartLayers.ToViewState(new Mapsui.Viewport(900, 0, 1, 0, 400, 300)), 1));
         // Rotation enlarges the footprint: a 1600 x 1600 DIP view fits unrotated
         // but not at 45 degrees.
-        Assert.True(S100VectorTileRenderer.IsViewportHidden(hidden, new Mapsui.Viewport(0, 0, 1, 0, 1600, 1600), 1));
-        Assert.False(S100VectorTileRenderer.IsViewportHidden(hidden, new Mapsui.Viewport(0, 0, 1, 45, 1600, 1600), 1));
+        Assert.True(S100VectorTileRenderer.IsViewportHidden(hidden, MapsuiChartLayers.ToViewState(new Mapsui.Viewport(0, 0, 1, 0, 1600, 1600)), 1));
+        Assert.False(S100VectorTileRenderer.IsViewportHidden(hidden, MapsuiChartLayers.ToViewState(new Mapsui.Viewport(0, 0, 1, 45, 1600, 1600)), 1));
     }
 
     public static TheoryData<double, double> ResolutionAndRotation()
@@ -242,7 +243,7 @@ public class HiddenCoverageTests
         canvas.Clear(SKColors.Transparent);
         canvas.Scale(deviceScale);
 
-        var clipPaths = CoverageClip.BuildActiveDifferencePaths(layer, viewport, resolution);
+        var clipPaths = CoverageClip.BuildActiveDifferencePaths(layer, MapsuiChartLayers.ToViewState(viewport), resolution);
         foreach (var path in clipPaths)
             canvas.ClipPath(path, SKClipOperation.Difference, antialias: true);
 

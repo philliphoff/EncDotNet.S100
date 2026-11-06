@@ -1,10 +1,10 @@
 using NetTopologySuite.Geometries;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// Caches the result of the S-101 pattern-fill priority clip
-/// (<see cref="MapsuiDisplayListRenderer"/>'s
+/// (<c>MapsuiDisplayListRenderer</c>'s
 /// <see cref="EncDotNet.S100.Rendering.Scene.PatternPriorityClipper"/>) so that re-renders which do not change the
 /// clip inputs — most importantly Day/Dusk/Night palette switches — skip the
 /// expensive NetTopologySuite overlay work.
@@ -20,7 +20,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// </para>
 /// <para>
 /// Crucially the clip runs once per <em>layer build</em>
-/// (<see cref="MapsuiDisplayListRenderer.Render"/>), not per frame; pan/zoom
+/// (<c>MapsuiDisplayListRenderer.Render</c>), not per frame; pan/zoom
 /// reuses the baked Mapsui features. <c>Render</c> re-fires on dataset load,
 /// palette switch (the dominant trigger), and ECDIS display-setting changes.
 /// Because the clipped boundary geometry is fully determined by the mariner +
@@ -35,7 +35,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// shared <see cref="EncDotNet.S100.Rendering.Scene.VectorSceneBuilder"/> when
 /// lowering the <see cref="EncDotNet.S100.Rendering.Scene.VectorScene"/> IR —
 /// reaches it through a <see cref="EncDotNet.S100.Rendering.Scene.PatternClipMemoizer"/>
-/// adapter (<see cref="MapsuiDisplayListRenderer"/>). Because both arms produce
+/// adapter (<c>MapsuiDisplayListRenderer</c>). Because both arms produce
 /// identical clip topology and share this key, the expensive overlay is computed
 /// at most once per build regardless of which arm is active.
 /// </para>

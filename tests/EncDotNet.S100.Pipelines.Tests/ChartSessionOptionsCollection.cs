@@ -2,7 +2,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 
 /// <summary>
 /// xUnit collection for tests that read or write the process-global
-/// <see cref="EncDotNet.S100.Renderers.Mapsui.RenderingOptimizations"/>
+/// <see cref="EncDotNet.S100.Rendering.Engine.ChartEngine.Options"/>
 /// configuration; a test class opts in with <c>[Collection(Name)]</c>. xUnit
 /// runs distinct test classes in parallel by default, so without this a writer
 /// flipping a shared static (e.g. <c>SceneMode</c> or a tile knob) can mutate it
@@ -14,7 +14,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// <c>DisableParallelization</c> is set so the collection also never runs
 /// alongside <em>non-member</em> classes that touch the same statics — e.g.
 /// <c>TileMetatileTests</c> exercises the tiled renderer while
-/// <see cref="RenderingOptimizationsTests"/> reads and asserts on the same
+/// <see cref="ChartSessionOptionsTests"/> reads and asserts on the same
 /// config. Serializing only the members against each other would leave that
 /// cross-class race open, and it would silently reopen whenever a new test starts
 /// touching these statics; disabling parallelization for the collection closes
@@ -26,7 +26,7 @@ namespace EncDotNet.S100.Pipelines.Tests;
 /// </para>
 /// </remarks>
 [CollectionDefinition(Name, DisableParallelization = true)]
-public sealed class RenderingOptimizationsCollection
+public sealed class ChartSessionOptionsCollection
 {
-    public const string Name = "RenderingOptimizations serial";
+    public const string Name = "ChartSessionOptions serial";
 }

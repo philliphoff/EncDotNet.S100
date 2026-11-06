@@ -1,6 +1,6 @@
 using NetTopologySuite.Geometries;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// A memoising <see cref="OverscaleCurtain.ComputeRegions"/> for a caller that

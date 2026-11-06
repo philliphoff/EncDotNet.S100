@@ -1,4 +1,4 @@
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// A one-way drain gate used to stop background tile-rasterisation workers and

@@ -1,8 +1,9 @@
 using System.Diagnostics;
+using EncDotNet.S100.Rendering.Engine;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Styles;
-using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
+using S100Diag = EncDotNet.S100.Rendering.Engine.Diagnostics;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
 

@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using EncDotNet.S100.Diagnostics;
 
-namespace EncDotNet.S100.Renderers.Mapsui.Diagnostics;
+namespace EncDotNet.S100.Rendering.Engine.Diagnostics;
 
 /// <summary>Per-assembly <see cref="ActivitySource"/> and <see cref="Meter"/> for <c>EncDotNet.S100.Renderers.Mapsui</c>.</summary>
 internal static class Telemetry
@@ -17,7 +17,7 @@ internal static class Telemetry
     /// <summary>
     /// Per-product (or untagged) call-rate state used to derive
     /// <c>s100.layer.getfeatures.fps</c> as an <see cref="ObservableGauge{T}"/>.
-    /// Each <see cref="InstrumentedMemoryLayer.GetFeatures"/> invocation
+    /// Each <c>InstrumentedMemoryLayer.GetFeatures</c> invocation
     /// calls <see cref="RecordGetFeaturesCall"/>, which atomically bumps
     /// <see cref="CallStats.Count"/> for the matching product key. The
     /// gauge callback (registered below) computes <c>delta-count /
@@ -103,7 +103,7 @@ internal static class Telemetry
 
     /// <summary>
     /// Wall-clock duration of a single Mapsui <c>GetFeatures(rect,resolution)</c>
-    /// call on an <see cref="InstrumentedMemoryLayer"/>. Mapsui invokes this
+    /// call on an <c>InstrumentedMemoryLayer</c>. Mapsui invokes this
     /// once per visible layer per rendered frame, so the histogram reflects
     /// the per-frame extent-filter cost. Tagged with <c>s100.product</c>
     /// when the renderer is configured by a dataset processor.

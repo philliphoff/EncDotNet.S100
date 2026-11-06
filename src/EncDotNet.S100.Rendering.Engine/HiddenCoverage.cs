@@ -1,7 +1,7 @@
 using NetTopologySuite.Geometries;
 using NetTopologySuite.Geometries.Prepared;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// The part of a coarser cell that finer, currently-drawing cells hide, as

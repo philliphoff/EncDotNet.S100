@@ -1,4 +1,5 @@
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Nts;
@@ -61,7 +62,7 @@ public sealed class LayerExtentCullingTests
         var layer = new MemoryLayer { Features = System.Array.Empty<IFeature>() };
         Assert.Null(layer.Extent);
 
-        Assert.True(LayerExtentCulling.ShouldRender(layer, MapViewport(), resolution: 10, marginPx: 256));
+        Assert.True(LayerExtentCulling.ShouldRender(MapsuiChartLayers.ToFrame(layer).Extent, MapsuiChartLayers.ToViewState(MapViewport()), resolution: 10, marginPx: 256));
     }
 
     [Fact]
@@ -71,7 +72,7 @@ public sealed class LayerExtentCullingTests
         var layer = LayerAt(minX: 100_000, minY: 0, maxX: 101_000, maxY: 1_000);
 
         Assert.False(LayerExtentCulling.ShouldRender(
-            layer, MapViewport(centerX: 0, centerY: 0, widthDip: 800, heightDip: 600),
+            MapsuiChartLayers.ToFrame(layer).Extent, MapsuiChartLayers.ToViewState(MapViewport(centerX: 0, centerY: 0, widthDip: 800, heightDip: 600)),
             resolution: 10, marginPx: 256));
     }
 
@@ -81,7 +82,7 @@ public sealed class LayerExtentCullingTests
         var layer = LayerAt(minX: -500, minY: -500, maxX: 500, maxY: 500);
 
         Assert.True(LayerExtentCulling.ShouldRender(
-            layer, MapViewport(centerX: 0, centerY: 0, widthDip: 800, heightDip: 600),
+            MapsuiChartLayers.ToFrame(layer).Extent, MapsuiChartLayers.ToViewState(MapViewport(centerX: 0, centerY: 0, widthDip: 800, heightDip: 600)),
             resolution: 10, marginPx: 256));
     }
 

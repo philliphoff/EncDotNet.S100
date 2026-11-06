@@ -5,6 +5,7 @@ using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Rendering.Engine;
 using Mapsui;
 using Mapsui.Layers;
 
@@ -1011,7 +1012,7 @@ public sealed class MapsuiDatasetLayerSession : IDisposable
             }
             if (compose)
             {
-                using var composeActivity = Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.compose");
+                using var composeActivity = Rendering.Engine.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.compose");
                 try
                 {
                     ComposeLayers();

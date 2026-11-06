@@ -1,6 +1,6 @@
 using NetTopologySuite.Geometries;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// One overscaled cell's on-chart overscale "curtain" region (issue #441,
@@ -139,10 +139,10 @@ public static class OverscaleCurtain
         }
 
         var envelope = usable.EnvelopeInternal;
-        var latitudeRadians = MapsuiDisplayListRenderer.WebMercatorYToLatitudeRadians(
+        var latitudeRadians = ScaleResolution.WebMercatorYToLatitudeRadians(
             (envelope.MinY + envelope.MaxY) / 2.0);
         coverage = usable;
-        compilationResolution = MapsuiDisplayListRenderer.DenominatorToResolution(
+        compilationResolution = ScaleResolution.DenominatorToResolution(
             cell.CompilationScaleDenominator, latitudeRadians);
         return true;
     }

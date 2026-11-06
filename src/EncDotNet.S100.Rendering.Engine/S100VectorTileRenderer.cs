@@ -3,17 +3,12 @@ using System.Runtime.CompilerServices;
 using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Rendering.Scene;
-using Mapsui;
-using Mapsui.Extensions;
-using Mapsui.Layers;
-using Mapsui.Rendering;
-using Mapsui.Rendering.Skia;
 using SkiaSharp;
 using CoreViewport = EncDotNet.S100.Pipelines.Viewport;
-using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
+using S100Diag = EncDotNet.S100.Rendering.Engine.Diagnostics;
 using SceneRgbaColor = EncDotNet.S100.Pipelines.RgbaColor;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// The <b>TiledScene ("B") render subsystem, Phase&#160;2</b>: a Mapsui
@@ -60,7 +55,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 public static partial class S100VectorTileRenderer
 {
     /// <summary>
-    /// The <see cref="ILayer.CustomLayerRendererName"/> value that routes a
+    /// The Mapsui <c>ILayer.CustomLayerRendererName</c> value that routes a
     /// layer through this renderer.
     /// </summary>
     public const string RendererName = "s100.vector.tile";
@@ -69,11 +64,11 @@ public static partial class S100VectorTileRenderer
     /// Gutter, in DIP, rasterised beyond each tile's bounds on every edge and
     /// hard-clipped away on composite, so strokes crossing a tile seam keep
     /// their joins/caps. Sourced from
-    /// <see cref="RenderingOptimizations.TileGutterDip"/> (seeded from
+    /// <see cref="ChartSessionOptions.TileGutterDip"/> (seeded from
     /// <c>S100_VECTOR_TILE_GUTTER</c>, default 64); only newly-rasterised tiles
     /// pick up a live change.
     /// </summary>
-    public static double GutterDip => RenderingOptimizations.TileGutterDip;
+    public static double GutterDip => ChartEngine.Options.TileGutterDip;
 
     /// <summary>
     /// The apron, in device pixels, a stored tile keeps beyond its core on every
@@ -170,11 +165,11 @@ public static partial class S100VectorTileRenderer
     /// <summary>
     /// Process-wide hot-cache native-byte budget, shared by every layer's tiles
     /// through <see cref="TileMemoryPool.Raster"/> (map rendering slice&#160;4).
-    /// Sourced from <see cref="RenderingOptimizations.TileBudgetMb"/> (seeded
+    /// Sourced from <see cref="ChartSessionOptions.TileBudgetMb"/> (seeded
     /// from <c>S100_VECTOR_TILE_BUDGET_MB</c>, default by machine tier); read on
     /// every insert, so a change applies at once.
     /// </summary>
-    public static long BudgetBytes => (long)(RenderingOptimizations.TileBudgetMb * 1024 * 1024);
+    public static long BudgetBytes => (long)(ChartEngine.Options.TileBudgetMb * 1024 * 1024);
 
     /// <summary>Hard cap on either tile-image dimension, in device pixels.</summary>
     private const int MaxImageDimension = 4096;
@@ -216,11 +211,11 @@ public static partial class S100VectorTileRenderer
     /// Whether speculative <b>prediction / pre-warm</b> (Phase&#160;3) is enabled.
     /// When on, each frame also rasterises a velocity-aimed warm set so
     /// newly-exposed perimeter tiles are cached before a pan/zoom reveals them.
-    /// Sourced from <see cref="RenderingOptimizations.TilePredictionEnabled"/>
+    /// Sourced from <see cref="ChartSessionOptions.TilePredictionEnabled"/>
     /// (seeded from <c>S100_VECTOR_TILE_PREDICT</c>, default on); read every frame
     /// so a change takes effect live.
     /// </summary>
-    public static bool PredictionEnabled => RenderingOptimizations.TilePredictionEnabled;
+    public static bool PredictionEnabled => ChartEngine.Options.TilePredictionEnabled;
 
     /// <summary>
     /// Whether any layer had visible tiles waiting to be drawn within the last
@@ -282,21 +277,21 @@ public static partial class S100VectorTileRenderer
     /// viewport at the <em>lowest</em> worker priority (behind visible and
     /// same-band predicted work), so a subsequent zoom-in or zoom-out starts warm
     /// instead of paying full cold-tile latency at the new band. Sourced from
-    /// <see cref="RenderingOptimizations.TileCrossBandPrewarmEnabled"/> (seeded
+    /// <see cref="ChartSessionOptions.TileCrossBandPrewarmEnabled"/> (seeded
     /// from <c>S100_VECTOR_TILE_XBAND</c>, default on except off by default on the
     /// LowEnd tier — an explicit opt-in is still honoured there); read every frame
     /// so a change takes effect live. Like the same-band prediction warm set, its
     /// tiles never trigger a redraw and are cancelled (rebuilt) every frame.
     /// </summary>
-    public static bool CrossBandPrewarmEnabled => RenderingOptimizations.TileCrossBandPrewarmEnabled;
+    public static bool CrossBandPrewarmEnabled => ChartEngine.Options.TileCrossBandPrewarmEnabled;
 
     /// <summary>
     /// Whether adjacent misses may be rasterised as a 2&#215;2 metatile and
     /// sliced into tile-granular cache entries (issue&#160;#427). Sourced from
-    /// <see cref="RenderingOptimizations.TileMetatileEnabled"/> and seeded by
+    /// <see cref="ChartSessionOptions.TileMetatileEnabled"/> and seeded by
     /// <c>S100_VECTOR_TILE_METATILE</c>; default off pending the real-data gate.
     /// </summary>
-    public static bool MetatileEnabled => RenderingOptimizations.TileMetatileEnabled;
+    public static bool MetatileEnabled => ChartEngine.Options.TileMetatileEnabled;
 
     /// <summary>
     /// The maximum number of adjacent-band tiles enqueued per frame for idle
@@ -325,13 +320,13 @@ public static partial class S100VectorTileRenderer
     /// When on, a tile missing from the in-memory cache is looked up on disk
     /// before being re-rasterised, and freshly rasterised tiles are persisted —
     /// so a palette flip-back or a process restart re-uses warm tiles. Sourced
-    /// from <see cref="RenderingOptimizations.TileDiskCacheEnabled"/> (seeded from
+    /// from <see cref="ChartSessionOptions.TileDiskCacheEnabled"/> (seeded from
     /// <c>S100_VECTOR_TILE_DISK</c>, default on); the shared cache is created once
     /// per process, so a change applies on restart. The on-disk key folds a
     /// <c>styleStateHash</c> so a tile is never served for a different
     /// mariner/palette state (design §3.4).
     /// </summary>
-    public static bool DiskCacheEnabled => RenderingOptimizations.TileDiskCacheEnabled;
+    public static bool DiskCacheEnabled => ChartEngine.Options.TileDiskCacheEnabled;
 
     /// <summary>
     /// Whether <b>GPU texture residency</b> (Phase&#160;5) is enabled. When on,
@@ -341,12 +336,12 @@ public static partial class S100VectorTileRenderer
     /// (<see cref="SKImage.ToTextureImage(GRContext)"/>) and reused on every
     /// subsequent frame, instead of re-uploading the same pixels each paint —
     /// the dominant per-frame cost identified in Appendix&#160;F. Sourced from
-    /// <see cref="RenderingOptimizations.TileGpuResidencyEnabled"/> (seeded from
+    /// <see cref="ChartSessionOptions.TileGpuResidencyEnabled"/> (seeded from
     /// <c>S100_VECTOR_TILE_GPU</c>, default off); read every frame so a change
     /// takes effect live. On a software/CPU surface this is inert and the
     /// renderer blits the raster tile directly (universal fallback, no regression).
     /// </summary>
-    public static bool GpuResidencyEnabled => RenderingOptimizations.TileGpuResidencyEnabled;
+    public static bool GpuResidencyEnabled => ChartEngine.Options.TileGpuResidencyEnabled;
 
     /// <summary>
     /// Process-wide GPU-texture residency budget, in native bytes, shared by
@@ -354,13 +349,13 @@ public static partial class S100VectorTileRenderer
     /// rendering slice&#160;4). The resident GPU texture set is bounded
     /// independently of the CPU hot cache (it holds only tiles actually blitted,
     /// so it tracks the viewport working set). Sourced from
-    /// <see cref="RenderingOptimizations.TileGpuBudgetMb"/> (seeded from
+    /// <see cref="ChartSessionOptions.TileGpuBudgetMb"/> (seeded from
     /// <c>S100_VECTOR_TILE_GPU_MB</c>, default by machine tier); read on every
     /// upload, so a change applies at once. Must comfortably exceed the visible
     /// + fallback working set of all layers or promotion thrashes (re-upload each
     /// frame).
     /// </summary>
-    public static long GpuBudgetBytes => (long)(RenderingOptimizations.TileGpuBudgetMb * 1024 * 1024);
+    public static long GpuBudgetBytes => (long)(ChartEngine.Options.TileGpuBudgetMb * 1024 * 1024);
 
     /// <summary>
     /// When set (<c>S100_VECTOR_TILE_DIAG=1</c>), the compositor logs a
@@ -384,9 +379,9 @@ public static partial class S100VectorTileRenderer
     /// Whether a scene whose product hints live drawing
     /// (<see cref="VectorScene.PreferLiveDrawing"/>) is drawn directly each
     /// frame instead of tiled (see <see cref="DrawsLive"/>). Seeded from
-    /// <c>S100_VECTOR_TILE_LIVE_BASE</c> (default on); off tiles every scene.
+    /// <see cref="ChartSessionOptions.LiveBaseEnabled"/> (default on); off tiles every scene.
     /// </summary>
-    internal static bool LiveBaseEnabled { get; } = ReadBool("S100_VECTOR_TILE_LIVE_BASE", true);
+    internal static bool LiveBaseEnabled => ChartEngine.Options.LiveBaseEnabled;
 
     /// <summary>
     /// The most base-plane vertices a hinted scene may carry and still be drawn
@@ -408,7 +403,7 @@ public static partial class S100VectorTileRenderer
     /// direction of world-north is measured and compared against north-up's
     /// straight-up (-90&#176;). Returns 0 for an unrotated viewport.
     /// </summary>
-    private static double ScreenRotationDegrees(Viewport viewport)
+    private static double ScreenRotationDegrees(ViewState viewport)
     {
         if (viewport.Rotation == 0)
         {
@@ -482,11 +477,11 @@ public static partial class S100VectorTileRenderer
     public static bool ShutdownAndDrain(TimeSpan timeout) =>
         DrainGate.DrainAndWait(timeout);
 
-    private static readonly ConditionalWeakTable<ILayer, TileState> States = new();
+    private static readonly ConditionalWeakTable<object, TileState> States = new();
 
     /// <summary>
     /// Process-wide registry of every live GPU-texture residency cache, keyed
-    /// weakly by its owning <see cref="ILayer"/> (Phase&#160;5). Each entry holds
+    /// weakly by its owning owner token (Phase&#160;5). Each entry holds
     /// a <em>strong</em> reference to that layer's <see cref="TileCache"/> of
     /// GPU-backed <see cref="SKImage"/> tiles <em>and</em> to its current
     /// GPU-backed rotation composite (<see cref="GpuRegistryEntry.RotationSurface"/>
@@ -518,7 +513,7 @@ public static partial class S100VectorTileRenderer
     /// </summary>
     internal sealed class GpuRegistryEntry
     {
-        public required WeakReference<ILayer> Layer;
+        public required WeakReference<object> Layer;
         public required TileCache Cache;
 
         // The owning GRContext (typed as object so the teardown lifecycle can be
@@ -572,14 +567,14 @@ public static partial class S100VectorTileRenderer
 
     /// <summary>
     /// The effective warm-tile disk-cache root directory for this process:
-    /// the <see cref="RenderingOptimizations.TileDiskDirectory"/> override
+    /// the <see cref="ChartSessionOptions.TileDiskDirectory"/> override
     /// (env var or host-assigned), or an OS-temp subdirectory when unset.
     /// Exposed so the host can locate the cache for a "clear caches" sweep.
     /// </summary>
     public static string ResolveTileDiskDirectory() =>
-        string.IsNullOrEmpty(RenderingOptimizations.TileDiskDirectory)
+        string.IsNullOrEmpty(ChartEngine.Options.TileDiskDirectory)
             ? Path.Combine(Path.GetTempPath(), "encdotnet-s100", "tiles")
-            : RenderingOptimizations.TileDiskDirectory!;
+            : ChartEngine.Options.TileDiskDirectory!;
 
     private static TileDiskCache? CreateSharedDiskCache()
     {
@@ -591,7 +586,7 @@ public static partial class S100VectorTileRenderer
         try
         {
             var root = ResolveTileDiskDirectory();
-            var budgetMb = RenderingOptimizations.TileDiskMb;
+            var budgetMb = ChartEngine.Options.TileDiskMb;
             var cache = new TileDiskCache(root, (long)budgetMb * 1024 * 1024);
             AppDomain.CurrentDomain.ProcessExit += (_, _) => cache.Dispose();
             return cache;
@@ -618,20 +613,14 @@ public static partial class S100VectorTileRenderer
             || raw.Equals("no", StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>Registers this renderer under <see cref="RendererName"/>. Idempotent.</summary>
-    internal static void Register()
-    {
-        MapRenderer.RegisterLayerRenderer(RendererName, Render);
-    }
-
     /// <summary>
     /// Binds the fully-resolved <see cref="VectorScene"/> for a layer and
     /// invalidates its tile cache (a new generation), so the next frame
     /// re-rasterises from the new scene. Equivalent to calling
-    /// <see cref="BindScene(ILayer, VectorScene, string?, string?)"/> without a
+    /// <see cref="BindScene(object, VectorScene, string?, string?)"/> without a
     /// disk-cache key (the warm disk cache is bypassed for this layer).
     /// </summary>
-    public static void BindScene(ILayer layer, VectorScene scene) =>
+    public static void BindScene(object layer, VectorScene scene) =>
         BindScene(layer, scene, productLayerSet: null, styleStateHash: null);
 
     /// <summary>
@@ -639,7 +628,7 @@ public static partial class S100VectorTileRenderer
     /// invalidates its tile cache (a new generation), so the next frame
     /// re-rasterises from the new scene.
     /// </summary>
-    /// <param name="layer">The Mapsui layer this scene portrays.</param>
+    /// <param name="layer">The owner token of the layer this scene portrays (see <see cref="LayerFrame.Owner"/>).</param>
     /// <param name="scene">The resolved paint operations to rasterise into tiles.</param>
     /// <param name="productLayerSet">
     /// Stable identity of the dataset/cell + product, used (with
@@ -653,7 +642,7 @@ public static partial class S100VectorTileRenderer
     /// display category, safety settings, symbol/text scale, …) so a tile is
     /// never served from disk for a different style state (design §3.4).
     /// </param>
-    public static void BindScene(ILayer layer, VectorScene scene, string? productLayerSet, string? styleStateHash)
+    public static void BindScene(object layer, VectorScene scene, string? productLayerSet, string? styleStateHash)
     {
         ArgumentNullException.ThrowIfNull(layer);
         ArgumentNullException.ThrowIfNull(scene);
@@ -712,13 +701,13 @@ public static partial class S100VectorTileRenderer
     /// <param name="target">The layer to bind the filtered scene to.</param>
     /// <param name="keep">Returns <see langword="true"/> for each op to keep.</param>
     /// <returns><see langword="true"/> when <paramref name="source"/> had a scene to copy.</returns>
-    public static bool TryBindFilteredScene(ILayer source, ILayer target, Func<PaintOp, bool> keep) =>
+    public static bool TryBindFilteredScene(object source, object target, Func<PaintOp, bool> keep) =>
         TryBindFilteredScene(source, target, keep, replaces: null);
 
     /// <summary>
     /// Binds to <paramref name="target"/> a filtered copy of the scene bound to
     /// <paramref name="source"/>, as
-    /// <see cref="TryBindFilteredScene(ILayer, ILayer, Func{PaintOp, bool})"/>,
+    /// <see cref="TryBindFilteredScene(object, object, Func{PaintOp, bool})"/>,
     /// for a layer that takes the place of <paramref name="replaces"/> on the
     /// map. Until its own tiles land, <paramref name="target"/> shows the
     /// tiles <paramref name="replaces"/> already has, so the swap never blanks
@@ -732,7 +721,7 @@ public static partial class S100VectorTileRenderer
     /// filtered copy of <paramref name="source"/>), or <see langword="null"/>.
     /// </param>
     /// <returns><see langword="true"/> when <paramref name="source"/> had a scene to copy.</returns>
-    public static bool TryBindFilteredScene(ILayer source, ILayer target, Func<PaintOp, bool> keep, ILayer? replaces)
+    public static bool TryBindFilteredScene(object source, object target, Func<PaintOp, bool> keep, object? replaces)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(target);
@@ -829,7 +818,7 @@ public static partial class S100VectorTileRenderer
     /// renderer are ignored; fewer than two tiled layers need no group.
     /// </summary>
     /// <param name="members">Each layer with its stable key within the dataset (its sub-layer key).</param>
-    internal static void JoinRevealGroup(IReadOnlyList<(ILayer Layer, string Member)> members)
+    internal static void JoinRevealGroup(IReadOnlyList<(object Layer, string Member)> members)
     {
         ArgumentNullException.ThrowIfNull(members);
 
@@ -861,7 +850,7 @@ public static partial class S100VectorTileRenderer
     /// <summary>
     /// Attempts to retrieve the partitioned <i>base</i> and <i>overlay</i>
     /// <see cref="VectorScene"/>s most recently bound to <paramref name="layer"/>
-    /// via <see cref="BindScene(ILayer, VectorScene, string?, string?)"/>.
+    /// via <see cref="BindScene(object, VectorScene, string?, string?)"/>.
     /// </summary>
     /// <remarks>
     /// A fidelity-verification / diagnostics accessor (no frame is rendered): it
@@ -876,7 +865,7 @@ public static partial class S100VectorTileRenderer
     /// <param name="overlayScene">The live overlay plane (point symbols and point-anchored text).</param>
     /// <returns><see langword="true"/> when a scene is bound; otherwise <see langword="false"/>.</returns>
     public static bool TryGetPartitionedScene(
-        ILayer layer, out VectorScene baseScene, out VectorScene overlayScene)
+        object layer, out VectorScene baseScene, out VectorScene overlayScene)
     {
         ArgumentNullException.ThrowIfNull(layer);
 
@@ -936,19 +925,19 @@ public static partial class S100VectorTileRenderer
     /// <summary>
     /// The render handler Mapsui invokes for tagged layers. Composites the best
     /// available tiles for the live viewport and enqueues missing visible tiles.
-    /// A layer whose <see cref="ILayer.Opacity"/> is below 1 (a stale surface
+    /// A layer whose <see cref="LayerFrame.Opacity"/> is below 1 (a stale surface
     /// analysis, drawn at half opacity) is drawn through one alpha layer, so
     /// its overlapping tiles, lines and labels fade together.
     /// </summary>
-    public static void Render(SKCanvas canvas, Viewport viewport, ILayer layer, RenderService renderService)
+    public static void Render(SKCanvas canvas, ViewState viewport, LayerFrame layer)
     {
         ArgumentNullException.ThrowIfNull(canvas);
-        ArgumentNullException.ThrowIfNull(layer);
+        ArgumentNullException.ThrowIfNull(layer.Owner);
 
         var opacity = layer.Opacity;
         if (opacity >= 1.0)
         {
-            RenderCore(canvas, viewport, layer, renderService);
+            RenderCore(canvas, viewport, layer.Owner, layer.Extent, layer.Name);
             return;
         }
 
@@ -961,7 +950,7 @@ public static partial class S100VectorTileRenderer
         canvas.SaveLayer(paint);
         try
         {
-            RenderCore(canvas, viewport, layer, renderService);
+            RenderCore(canvas, viewport, layer.Owner, layer.Extent, layer.Name);
         }
         finally
         {
@@ -969,10 +958,10 @@ public static partial class S100VectorTileRenderer
         }
     }
 
-    private static void RenderCore(SKCanvas canvas, Viewport viewport, ILayer layer, RenderService renderService)
+    private static void RenderCore(SKCanvas canvas, ViewState viewport, object layer, WorldRect? layerExtent, string? layerName)
     {
         var offscreen = IsOffscreenRender;
-        if (!viewport.HasSize())
+        if (!viewport.HasSize)
         {
             if (!offscreen)
             {
@@ -1025,12 +1014,12 @@ public static partial class S100VectorTileRenderer
         // same data-space tiles blitted at a shifted centre, so a copy costs a
         // blit, not a raster.
         var state = States.GetValue(layer, static l => new TileState(l));
-        var copies = LayerExtentCulling.VisibleWorldCopies(layer, viewport, resolution, CullMarginPx);
+        var copies = LayerExtentCulling.VisibleWorldCopies(layerExtent, viewport, resolution, CullMarginPx);
         if (copies.Count == 0)
         {
             if (!offscreen && InvalidateViewport(state))
             {
-                VectorLayerRepaint.Request(layer);
+                LayerRepaint.Request(layer);
             }
 
             RecordSettleCulled(state, viewport, resolution, offscreen);
@@ -1044,7 +1033,7 @@ public static partial class S100VectorTileRenderer
         {
             if (!offscreen && InvalidateViewport(state))
             {
-                VectorLayerRepaint.Request(layer);
+                LayerRepaint.Request(layer);
             }
 
             RecordSettleCulled(state, viewport, resolution, offscreen);
@@ -1061,7 +1050,7 @@ public static partial class S100VectorTileRenderer
             S100Diag.Telemetry.TileLayerHiddenSkipped.Add(1);
             if (!offscreen && InvalidateViewport(state))
             {
-                VectorLayerRepaint.Request(layer);
+                LayerRepaint.Request(layer);
             }
 
             RecordSettleCulled(state, viewport, resolution, offscreen);
@@ -1107,10 +1096,9 @@ public static partial class S100VectorTileRenderer
         }
 
         // The copy whose data lies nearest the view centre orders the tile queue.
-        var layerExtent = layer.Extent;
-        var primaryOffset = copies.Count == 1 || layerExtent is null
+        var primaryOffset = copies.Count == 1 || layerExtent is not { } extent
             ? copies[0]
-            : WorldCopies.Nearest(copies, layerExtent.MinX, layerExtent.MaxX, centerX);
+            : WorldCopies.Nearest(copies, extent.MinX, extent.MaxX, centerX);
 
         var repaintForHold = false;
         var coldExposure = 0;
@@ -1158,8 +1146,8 @@ public static partial class S100VectorTileRenderer
                     bandRatio);
                 copyTiles[i] = new CopyTiles(
                     copies[i],
-                    copies.Count > 1 && layerExtent is not null
-                        ? WithCoreInExtent(tiles, layerExtent.MinX, layerExtent.MaxX, TileGrid.ResolutionForBand(band))
+                    copies.Count > 1 && layerExtent is { } dataExtent
+                        ? WithCoreInExtent(tiles, dataExtent.MinX, dataExtent.MaxX, TileGrid.ResolutionForBand(band))
                         : tiles);
             }
 
@@ -1478,7 +1466,7 @@ public static partial class S100VectorTileRenderer
                 ActivityKind.Internal,
                 default(ActivityContext),
                 startTime: capturedAtUtc - TimeSpan.FromMilliseconds(compositeDuration));
-            activity?.SetTag("s100.render.layer", layer.Name);
+            activity?.SetTag("s100.render.layer", layerName);
             activity?.SetTag("s100.render.tile.composite.duration_ms", compositeDuration);
             activity?.SetTag(
                 "s100.render.tile.composite.lock_wait_ms",
@@ -1551,7 +1539,7 @@ public static partial class S100VectorTileRenderer
         }
         if (repaintForHold)
         {
-            VectorLayerRepaint.Request(layer);
+            LayerRepaint.Request(layer);
         }
     }
 
@@ -1632,7 +1620,7 @@ public static partial class S100VectorTileRenderer
     /// </summary>
     /// <returns><see langword="false"/> when the layer is tiled instead.</returns>
     private static bool TryRenderLive(
-        SKCanvas canvas, Viewport viewport, ILayer layer, TileState state, IReadOnlyList<double> copies,
+        SKCanvas canvas, ViewState viewport, object layer, TileState state, IReadOnlyList<double> copies,
         double centerX, double centerY, double widthDip, double heightDip,
         double coverWidth, double coverHeight, double resolution, double rotationDeg, float deviceScale)
     {
@@ -1751,12 +1739,12 @@ public static partial class S100VectorTileRenderer
                     : TileRelevance.Irrelevant
             : TileRelevance.Irrelevant;
 
-    private static void InvalidateViewport(ILayer layer)
+    private static void InvalidateViewport(object layer)
     {
         if (States.TryGetValue(layer, out var state)
             && InvalidateViewport(state))
         {
-            VectorLayerRepaint.Request(layer);
+            LayerRepaint.Request(layer);
         }
     }
 
@@ -1769,7 +1757,7 @@ public static partial class S100VectorTileRenderer
     {
         if (state.Owner.TryGetTarget(out var layer))
         {
-            VectorLayerRepaint.Request(layer);
+            LayerRepaint.Request(layer);
         }
     }
 
@@ -1845,7 +1833,7 @@ public static partial class S100VectorTileRenderer
     /// Whether the whole (rotation-aware) viewport, padded by
     /// <see cref="HiddenMarginDip"/>, lies inside <paramref name="hidden"/>.
     /// </summary>
-    internal static bool IsViewportHidden(HiddenCoverage hidden, Viewport viewport, double resolution)
+    internal static bool IsViewportHidden(HiddenCoverage hidden, ViewState viewport, double resolution)
     {
         var extent = viewport.ToExtent();
         var margin = HiddenMarginDip * resolution;
@@ -1861,7 +1849,7 @@ public static partial class S100VectorTileRenderer
     /// shifted back into it.
     /// </summary>
     internal static bool AreAllCopiesHidden(
-        HiddenCoverage hidden, Viewport viewport, double resolution, IReadOnlyList<double> copies)
+        HiddenCoverage hidden, ViewState viewport, double resolution, IReadOnlyList<double> copies)
     {
         foreach (var offset in copies)
         {
@@ -1881,7 +1869,7 @@ public static partial class S100VectorTileRenderer
     /// this cell lies beneath it on screen; coverages off-view are culled by
     /// <see cref="CoverageClip.BuildActiveDifferencePaths"/>.
     /// </summary>
-    private static List<SKPath> BuildCopyClipPaths(ILayer layer, Viewport viewport, double resolution)
+    private static List<SKPath> BuildCopyClipPaths(object layer, ViewState viewport, double resolution)
     {
         var paths = new List<SKPath>();
         if (CoverageClip.Get(layer) is null)
@@ -2727,12 +2715,12 @@ public static partial class S100VectorTileRenderer
     /// <item>context changed (first paint, or a device reset handed us a new
     /// <see cref="GRContext"/>) → rebuild the cache, since textures are bound to
     /// the context that created them;</item>
-    /// <item>scene/style generation advanced (a <see cref="BindScene(ILayer, VectorScene)"/>
+    /// <item>scene/style generation advanced (a <see cref="BindScene(object, VectorScene)"/>
     /// invalidation) → discard the now-stale textures so the re-rasterised
     /// tiles are re-promoted.</item>
     /// </list>
     /// </summary>
-    private static void ManageGpuResidency(TileState state, GRContext? grContext, ILayer layer)
+    private static void ManageGpuResidency(TileState state, GRContext? grContext, object layer)
     {
         if (grContext is null)
         {
@@ -2775,11 +2763,11 @@ public static partial class S100VectorTileRenderer
     /// collected (Phase&#160;5). Returns the entry so the caller can mirror its
     /// rotation resources into it. See <see cref="GpuRegistry"/>.
     /// </summary>
-    private static GpuRegistryEntry RegisterGpuCache(ILayer layer, TileCache cache, object context)
+    private static GpuRegistryEntry RegisterGpuCache(object layer, TileCache cache, object context)
     {
         var entry = new GpuRegistryEntry
         {
-            Layer = new WeakReference<ILayer>(layer),
+            Layer = new WeakReference<object>(layer),
             Cache = cache,
             Context = context,
         };
@@ -2865,7 +2853,7 @@ public static partial class S100VectorTileRenderer
     /// and GPU-backed resources. Not for production use.
     /// </summary>
     internal static GpuRegistryEntry RegisterGpuEntryForTest(
-        ILayer layer, TileCache cache, object context, SKSurface? rotationSurface, SKImage? rotationImage)
+        object layer, TileCache cache, object context, SKSurface? rotationSurface, SKImage? rotationImage)
     {
         var entry = RegisterGpuCache(layer, cache, context);
         entry.RotationSurface = rotationSurface;
@@ -2884,7 +2872,7 @@ public static partial class S100VectorTileRenderer
     /// <paramref name="layer"/>'s hot cache, keyed by tile, so a test can assert
     /// which raster scale is being blitted. Empty when the layer has no state.
     /// </summary>
-    internal static IReadOnlyDictionary<TileKey, int> CachedTilePixelSizesForTest(ILayer layer)
+    internal static IReadOnlyDictionary<TileKey, int> CachedTilePixelSizesForTest(object layer)
     {
         var sizes = new Dictionary<TileKey, int>();
         if (States.TryGetValue(layer, out var state))
@@ -2907,7 +2895,7 @@ public static partial class S100VectorTileRenderer
     /// published yet" apart from "nothing left to publish". Speculative
     /// (prediction / cross-band) work is ignored: it never requests a redraw.
     /// </summary>
-    internal static bool HasVisibleTileWorkForTest(ILayer layer)
+    internal static bool HasVisibleTileWorkForTest(object layer)
     {
         if (!States.TryGetValue(layer, out var state))
         {
@@ -2940,7 +2928,7 @@ public static partial class S100VectorTileRenderer
     /// so the next frame composites a settled picture. False until the layer has
     /// painted a frame with visible tiles.
     /// </summary>
-    internal static bool IsVisibleSettledForTest(ILayer layer, int pixelSize)
+    internal static bool IsVisibleSettledForTest(object layer, int pixelSize)
     {
         if (!States.TryGetValue(layer, out var state))
         {
@@ -2961,7 +2949,7 @@ public static partial class S100VectorTileRenderer
     /// scheduling state and the process-wide worker pool, for a settle loop to
     /// report when it times out.
     /// </summary>
-    internal static string DescribeTileWorkForTest(ILayer layer)
+    internal static string DescribeTileWorkForTest(object layer)
     {
         var stats = Scheduler.GetStats();
         var pool = $"scheduler busy={stats.BusyWorkers}/{stats.Workers} queued={string.Join('/', stats.QueuedByClass)}";
@@ -2998,7 +2986,7 @@ public static partial class S100VectorTileRenderer
     /// production use.
     /// </summary>
     /// <summary>Test-only: the reveal group a layer belongs to, or null.</summary>
-    internal static TileRevealGroup? RevealGroupForTest(ILayer layer)
+    internal static TileRevealGroup? RevealGroupForTest(object layer)
     {
         if (!States.TryGetValue(layer, out var state))
         {
@@ -4440,9 +4428,9 @@ public static partial class S100VectorTileRenderer
     /// <summary>Per-layer tiling state, held in a weak table keyed by layer.</summary>
     private sealed class TileState
     {
-        public TileState(ILayer layer)
+        public TileState(object layer)
         {
-            Owner = new WeakReference<ILayer>(layer);
+            Owner = new WeakReference<object>(layer);
 
             // Charged to the process-wide pool; once this state is collected the
             // pool releases the tiles itself (the pool, not the state, holds them).
@@ -4454,7 +4442,7 @@ public static partial class S100VectorTileRenderer
         /// so a worker-thread publish can reach the layer's redraw sink without a
         /// strong reference that would pin the entry.
         /// </summary>
-        public readonly WeakReference<ILayer> Owner;
+        public readonly WeakReference<object> Owner;
 
         public readonly object Sync = new();
 

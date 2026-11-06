@@ -1,8 +1,4 @@
-using Mapsui;
-using Mapsui.Extensions;
-using Mapsui.Layers;
-
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// Viewport-extent culling for the TiledScene ("B") custom layer renderers.
@@ -51,14 +47,14 @@ internal static class LayerExtentCulling
     }
 
     /// <summary>
-    /// Decides whether <paramref name="layer"/> may contribute to the current
-    /// frame and therefore warrants the renderer's per-frame work. A layer with
-    /// no known extent (<see cref="ILayer.Extent"/> <see langword="null"/>, e.g.
+    /// Decides whether a layer whose data extent is <paramref name="layerExtent"/>
+    /// may contribute to the current frame and therefore warrants the renderer's
+    /// per-frame work. A layer with no known extent (<see langword="null"/>, e.g.
     /// a geometry-less container) is never culled. Both the layer extent and the
     /// viewport are in EPSG:3857 (the viewer's map CRS), so no projection is
     /// needed.
     /// </summary>
-    /// <param name="layer">The Mapsui layer being rendered.</param>
+    /// <param name="layerExtent">The layer's data extent (EPSG:3857), or <see langword="null"/> when unknown.</param>
     /// <param name="viewport">The live viewport.</param>
     /// <param name="resolution">The viewport resolution (metres / DIP).</param>
     /// <param name="marginPx">
@@ -70,19 +66,14 @@ internal static class LayerExtentCulling
     /// <see langword="true"/> when the layer should be rendered this frame;
     /// <see langword="false"/> when it can be skipped entirely.
     /// </returns>
-    internal static bool ShouldRender(ILayer layer, Viewport viewport, double resolution, double marginPx)
+    internal static bool ShouldRender(WorldRect? layerExtent, ViewState viewport, double resolution, double marginPx)
     {
-        var extent = layer.Extent;
-        if (extent is null)
+        if (layerExtent is not { } extent)
         {
             return true;
         }
 
         var vp = viewport.ToExtent();
-        if (vp is null)
-        {
-            return true;
-        }
 
         var marginWorld = marginPx * resolution;
         return Intersects(
@@ -92,25 +83,25 @@ internal static class LayerExtentCulling
     }
 
     /// <summary>
-    /// The world copies (<see cref="WorldCopies"/>) of <paramref name="layer"/>
-    /// that overlap the current viewport grown by <paramref name="marginPx"/>,
+    /// The world copies (<see cref="WorldCopies"/>) of a layer whose data extent
+    /// is <paramref name="layerExtent"/> that overlap the current viewport grown by <paramref name="marginPx"/>,
     /// as EPSG:3857 X offsets west to east. Empty when no copy is in view, so
     /// the layer can be skipped. A layer with no known extent draws its own
     /// frame only.
     /// </summary>
-    /// <param name="layer">The Mapsui layer being rendered.</param>
+    /// <param name="layerExtent">The layer's data extent (EPSG:3857), or <see langword="null"/> when unknown.</param>
     /// <param name="viewport">The live viewport.</param>
     /// <param name="resolution">The viewport resolution (metres / DIP).</param>
     /// <param name="marginPx">Over-render halo, in screen pixels.</param>
     internal static IReadOnlyList<double> VisibleWorldCopies(
-        ILayer layer, Viewport viewport, double resolution, double marginPx)
+        WorldRect? layerExtent, ViewState viewport, double resolution, double marginPx)
     {
-        var extent = layer.Extent;
-        var vp = viewport.ToExtent();
-        if (extent is null || vp is null)
+        if (layerExtent is not { } extent)
         {
             return WorldCopies.OwnFrame;
         }
+
+        var vp = viewport.ToExtent();
 
         var marginWorld = marginPx * resolution;
         if (extent.MaxY + marginWorld < vp.MinY || extent.MinY - marginWorld > vp.MaxY)

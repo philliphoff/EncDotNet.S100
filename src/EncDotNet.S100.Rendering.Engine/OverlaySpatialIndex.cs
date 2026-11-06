@@ -1,6 +1,6 @@
 using EncDotNet.S100.Rendering.Scene;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// A uniform-grid spatial index over a live overlay scene's point/text anchors

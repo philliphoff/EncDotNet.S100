@@ -4,9 +4,9 @@ using System.Security.Cryptography;
 using System.Text;
 using EncDotNet.S100.Core.Caching;
 using SkiaSharp;
-using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics.Telemetry;
+using S100Diag = EncDotNet.S100.Rendering.Engine.Diagnostics.Telemetry;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// A persistent, on-disk <b>warm</b> cache of rasterised base-plane tiles

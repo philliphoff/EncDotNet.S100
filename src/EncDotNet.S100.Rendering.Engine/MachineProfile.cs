@@ -1,4 +1,4 @@
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// Selects how the tiled render subsystem's resource budgets (in-memory / GPU /
@@ -43,7 +43,7 @@ public static class MachineProfile
     {
         PerformanceProfile.LowEnd => 512.0,
         PerformanceProfile.Balanced => 1024.0,
-        _ => RenderingOptimizations.DefaultTileBudgetMb,
+        _ => ChartSessionOptions.DefaultTileBudgetMb,
     };
 
     /// <summary>Process-wide GPU-residency budget, MB, for each resolved tier.</summary>
@@ -51,12 +51,12 @@ public static class MachineProfile
     {
         PerformanceProfile.LowEnd => 256.0,
         PerformanceProfile.Balanced => 512.0,
-        _ => RenderingOptimizations.DefaultTileGpuBudgetMb,
+        _ => ChartSessionOptions.DefaultTileGpuBudgetMb,
     };
 
     /// <summary>
     /// Host GPU resource-cache budget, MB, for each resolved tier (see
-    /// <see cref="RenderingOptimizations.SkiaGpuResourceMb"/>).
+    /// <see cref="ChartSessionOptions.SkiaGpuResourceMb"/>).
     /// </summary>
     public static double SkiaGpuResourceMb(PerformanceProfile tier) => tier switch
     {
@@ -70,7 +70,7 @@ public static class MachineProfile
     {
         PerformanceProfile.LowEnd => 256.0,
         PerformanceProfile.Balanced => 384.0,
-        _ => RenderingOptimizations.DefaultTileDiskMb,
+        _ => ChartSessionOptions.DefaultTileDiskMb,
     };
 
     /// <summary>

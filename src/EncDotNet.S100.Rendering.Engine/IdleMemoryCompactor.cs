@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Runtime;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// Gives committed GC memory back to the OS after bursts of work (map rendering

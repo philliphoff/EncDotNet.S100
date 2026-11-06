@@ -4,7 +4,7 @@ using Avalonia.Media;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Quantities;
-using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using ShadUI;
@@ -573,7 +573,7 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
             if (SetProperty(ref _sceneMode, value))
             {
                 _settings.VectorSceneMode = value.ToString();
-                RenderingOptimizations.SceneMode = value;
+                ChartEngine.Options.SceneMode = value;
                 OnPropertyChanged(nameof(TiledModeActive));
                 RaiseMarinerChanged();
             }
@@ -581,7 +581,7 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
     }
 
     /// <summary>Whether the scene-mode selector is user-editable (not env-pinned).</summary>
-    public bool SceneModeEditable => !RenderingOptimizations.SceneModeEnvExplicit;
+    public bool SceneModeEditable => !ChartEngine.Options.SceneModeEnvExplicit;
 
     private double _tileGutterDip;
     /// <summary>
@@ -594,8 +594,8 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
         get => _tileGutterDip;
         set
         {
-            RenderingOptimizations.TileGutterDip = value;
-            var effective = RenderingOptimizations.TileGutterDip;
+            ChartEngine.Options.TileGutterDip = value;
+            var effective = ChartEngine.Options.TileGutterDip;
             if (SetProperty(ref _tileGutterDip, effective))
             {
                 _settings.TileGutterDip = effective;
@@ -605,7 +605,7 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
     }
 
     /// <summary>Whether the gutter knob is user-editable (not env-pinned).</summary>
-    public bool TileGutterDipEditable => !RenderingOptimizations.TileGutterDipEnvExplicit;
+    public bool TileGutterDipEditable => !ChartEngine.Options.TileGutterDipEnvExplicit;
 
     private double _tileBudgetMb;
     /// <summary>
@@ -618,8 +618,8 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
         get => _tileBudgetMb;
         set
         {
-            RenderingOptimizations.TileBudgetMb = value;
-            var effective = RenderingOptimizations.TileBudgetMb;
+            ChartEngine.Options.TileBudgetMb = value;
+            var effective = ChartEngine.Options.TileBudgetMb;
             if (SetProperty(ref _tileBudgetMb, effective))
             {
                 _settings.TileBudgetMb = effective;
@@ -629,7 +629,7 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
     }
 
     /// <summary>Whether the in-memory budget knob is user-editable (not env-pinned).</summary>
-    public bool TileBudgetMbEditable => !RenderingOptimizations.TileBudgetMbEnvExplicit;
+    public bool TileBudgetMbEditable => !ChartEngine.Options.TileBudgetMbEnvExplicit;
 
     private bool _tilePredictionEnabled;
     /// <summary>
@@ -644,7 +644,7 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
         {
             if (SetProperty(ref _tilePredictionEnabled, value))
             {
-                RenderingOptimizations.TilePredictionEnabled = value;
+                ChartEngine.Options.TilePredictionEnabled = value;
                 _settings.TilePredictionEnabled = value;
                 RaiseMarinerChanged();
             }
@@ -652,7 +652,7 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
     }
 
     /// <summary>Whether the prediction knob is user-editable (not env-pinned).</summary>
-    public bool TilePredictionEditable => !RenderingOptimizations.TilePredictionEnvExplicit;
+    public bool TilePredictionEditable => !ChartEngine.Options.TilePredictionEnvExplicit;
 
     private bool _tileCrossBandPrewarmEnabled;
     /// <summary>
@@ -666,8 +666,8 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
         get => _tileCrossBandPrewarmEnabled;
         set
         {
-            RenderingOptimizations.TileCrossBandPrewarmEnabled = value;
-            var effective = RenderingOptimizations.TileCrossBandPrewarmEnabled;
+            ChartEngine.Options.TileCrossBandPrewarmEnabled = value;
+            var effective = ChartEngine.Options.TileCrossBandPrewarmEnabled;
             if (SetProperty(ref _tileCrossBandPrewarmEnabled, effective))
             {
                 _settings.TileCrossBandPrewarmEnabled = effective;
@@ -677,7 +677,7 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
     }
 
     /// <summary>Whether the cross-band pre-warm knob is user-editable (not env-pinned).</summary>
-    public bool TileCrossBandPrewarmEditable => !RenderingOptimizations.TileCrossBandPrewarmEnvExplicit;
+    public bool TileCrossBandPrewarmEditable => !ChartEngine.Options.TileCrossBandPrewarmEnvExplicit;
 
     private bool _tileMetatileEnabled;
     /// <summary>
@@ -690,8 +690,8 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
         get => _tileMetatileEnabled;
         set
         {
-            RenderingOptimizations.TileMetatileEnabled = value;
-            var effective = RenderingOptimizations.TileMetatileEnabled;
+            ChartEngine.Options.TileMetatileEnabled = value;
+            var effective = ChartEngine.Options.TileMetatileEnabled;
             if (SetProperty(ref _tileMetatileEnabled, effective))
             {
                 _settings.TileMetatileEnabled = effective;
@@ -701,7 +701,7 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
     }
 
     /// <summary>Whether the metatile knob is user-editable (not env-pinned).</summary>
-    public bool TileMetatileEditable => !RenderingOptimizations.TileMetatileEnvExplicit;
+    public bool TileMetatileEditable => !ChartEngine.Options.TileMetatileEnvExplicit;
 
     private bool _tileDiskCacheEnabled;
     /// <summary>
@@ -716,7 +716,7 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
         {
             if (SetProperty(ref _tileDiskCacheEnabled, value))
             {
-                RenderingOptimizations.TileDiskCacheEnabled = value;
+                ChartEngine.Options.TileDiskCacheEnabled = value;
                 _settings.TileDiskCacheEnabled = value;
                 RaiseMarinerChanged();
             }
@@ -724,7 +724,7 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
     }
 
     /// <summary>Whether the disk-cache knob is user-editable (not env-pinned).</summary>
-    public bool TileDiskCacheEditable => !RenderingOptimizations.TileDiskCacheEnvExplicit;
+    public bool TileDiskCacheEditable => !ChartEngine.Options.TileDiskCacheEnvExplicit;
 
     private double _tileDiskMb;
     /// <summary>
@@ -737,8 +737,8 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
         get => _tileDiskMb;
         set
         {
-            RenderingOptimizations.TileDiskMb = value;
-            var effective = RenderingOptimizations.TileDiskMb;
+            ChartEngine.Options.TileDiskMb = value;
+            var effective = ChartEngine.Options.TileDiskMb;
             if (SetProperty(ref _tileDiskMb, effective))
             {
                 _settings.TileDiskMb = effective;
@@ -748,7 +748,7 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
     }
 
     /// <summary>Whether the disk-budget knob is user-editable (not env-pinned).</summary>
-    public bool TileDiskMbEditable => !RenderingOptimizations.TileDiskMbEnvExplicit;
+    public bool TileDiskMbEditable => !ChartEngine.Options.TileDiskMbEnvExplicit;
 
     private bool _tileGpuResidencyEnabled;
     /// <summary>
@@ -763,7 +763,7 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
         {
             if (SetProperty(ref _tileGpuResidencyEnabled, value))
             {
-                RenderingOptimizations.TileGpuResidencyEnabled = value;
+                ChartEngine.Options.TileGpuResidencyEnabled = value;
                 _settings.TileGpuResidencyEnabled = value;
                 RaiseMarinerChanged();
             }
@@ -771,7 +771,7 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
     }
 
     /// <summary>Whether the GPU-residency knob is user-editable (not env-pinned).</summary>
-    public bool TileGpuResidencyEditable => !RenderingOptimizations.TileGpuResidencyEnvExplicit;
+    public bool TileGpuResidencyEditable => !ChartEngine.Options.TileGpuResidencyEnvExplicit;
 
     private double _tileGpuBudgetMb;
     /// <summary>
@@ -784,8 +784,8 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
         get => _tileGpuBudgetMb;
         set
         {
-            RenderingOptimizations.TileGpuBudgetMb = value;
-            var effective = RenderingOptimizations.TileGpuBudgetMb;
+            ChartEngine.Options.TileGpuBudgetMb = value;
+            var effective = ChartEngine.Options.TileGpuBudgetMb;
             if (SetProperty(ref _tileGpuBudgetMb, effective))
             {
                 _settings.TileGpuBudgetMb = effective;
@@ -795,7 +795,7 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
     }
 
     /// <summary>Whether the GPU-budget knob is user-editable (not env-pinned).</summary>
-    public bool TileGpuBudgetMbEditable => !RenderingOptimizations.TileGpuBudgetMbEnvExplicit;
+    public bool TileGpuBudgetMbEditable => !ChartEngine.Options.TileGpuBudgetMbEnvExplicit;
 
     /// <summary>Selectable performance profiles for the profile dropdown.</summary>
     public IReadOnlyList<PerformanceProfile> PerformanceProfiles { get; } =
@@ -813,17 +813,17 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
         get => _performanceProfile;
         set
         {
-            RenderingOptimizations.Profile = value;
+            ChartEngine.Options.Profile = value;
             if (SetProperty(ref _performanceProfile, value))
             {
                 _settings.PerformanceProfile = value.ToString();
-                _tileBudgetMb = RenderingOptimizations.TileBudgetMb;
-                _tileGpuBudgetMb = RenderingOptimizations.TileGpuBudgetMb;
-                _tileDiskMb = RenderingOptimizations.TileDiskMb;
+                _tileBudgetMb = ChartEngine.Options.TileBudgetMb;
+                _tileGpuBudgetMb = ChartEngine.Options.TileGpuBudgetMb;
+                _tileDiskMb = ChartEngine.Options.TileDiskMb;
                 // ApplyProfile re-derives the cross-band pre-warm default from the
                 // new tier (off on LowEnd), so mirror it back or the toggle would
                 // drift from the renderer after a profile switch (issue #428).
-                _tileCrossBandPrewarmEnabled = RenderingOptimizations.TileCrossBandPrewarmEnabled;
+                _tileCrossBandPrewarmEnabled = ChartEngine.Options.TileCrossBandPrewarmEnabled;
                 OnPropertyChanged(nameof(TileBudgetMb));
                 OnPropertyChanged(nameof(TileGpuBudgetMb));
                 OnPropertyChanged(nameof(TileDiskMb));
@@ -835,10 +835,10 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
     }
 
     /// <summary>Whether the profile dropdown is user-editable (not env-pinned).</summary>
-    public bool PerformanceProfileEditable => !RenderingOptimizations.ProfileEnvExplicit;
+    public bool PerformanceProfileEditable => !ChartEngine.Options.ProfileEnvExplicit;
 
     /// <summary>The concrete tier Auto resolves to on this host, for display.</summary>
-    public string ResolvedProfileLabel => RenderingOptimizations.ResolvedProfile.ToString();
+    public string ResolvedProfileLabel => ChartEngine.Options.ResolvedProfile.ToString();
 
 
 
@@ -1078,82 +1078,82 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
         // effective (env) value.
         if (Enum.TryParse<VectorSceneMode>(settings.VectorSceneMode, ignoreCase: true, out var sceneMode))
         {
-            RenderingOptimizations.SceneMode = sceneMode;
+            ChartEngine.Options.SceneMode = sceneMode;
         }
 
-        _sceneMode = RenderingOptimizations.SceneMode;
+        _sceneMode = ChartEngine.Options.SceneMode;
 
         // Apply the performance profile first so its derived budgets become the
         // baseline; an explicitly persisted budget/worker value below overrides.
         if (Enum.TryParse<PerformanceProfile>(settings.PerformanceProfile, ignoreCase: true, out var profile))
         {
-            RenderingOptimizations.Profile = profile;
+            ChartEngine.Options.Profile = profile;
         }
 
-        _performanceProfile = RenderingOptimizations.Profile;
+        _performanceProfile = ChartEngine.Options.Profile;
 
         if (settings.TileGutterDip is { } tileGutter)
         {
-            RenderingOptimizations.TileGutterDip = tileGutter;
+            ChartEngine.Options.TileGutterDip = tileGutter;
         }
 
-        _tileGutterDip = RenderingOptimizations.TileGutterDip;
+        _tileGutterDip = ChartEngine.Options.TileGutterDip;
 
         if (settings.TileBudgetMb is { } tileBudget)
         {
-            RenderingOptimizations.TileBudgetMb = tileBudget;
+            ChartEngine.Options.TileBudgetMb = tileBudget;
         }
 
-        _tileBudgetMb = RenderingOptimizations.TileBudgetMb;
+        _tileBudgetMb = ChartEngine.Options.TileBudgetMb;
 
         if (settings.TilePredictionEnabled is { } tilePredict)
         {
-            RenderingOptimizations.TilePredictionEnabled = tilePredict;
+            ChartEngine.Options.TilePredictionEnabled = tilePredict;
         }
 
-        _tilePredictionEnabled = RenderingOptimizations.TilePredictionEnabled;
+        _tilePredictionEnabled = ChartEngine.Options.TilePredictionEnabled;
 
         if (settings.TileCrossBandPrewarmEnabled is { } tileXBand)
         {
-            RenderingOptimizations.TileCrossBandPrewarmEnabled = tileXBand;
+            ChartEngine.Options.TileCrossBandPrewarmEnabled = tileXBand;
         }
 
-        _tileCrossBandPrewarmEnabled = RenderingOptimizations.TileCrossBandPrewarmEnabled;
+        _tileCrossBandPrewarmEnabled = ChartEngine.Options.TileCrossBandPrewarmEnabled;
 
         if (settings.TileMetatileEnabled is { } tileMetatile)
         {
-            RenderingOptimizations.TileMetatileEnabled = tileMetatile;
+            ChartEngine.Options.TileMetatileEnabled = tileMetatile;
         }
 
-        _tileMetatileEnabled = RenderingOptimizations.TileMetatileEnabled;
+        _tileMetatileEnabled = ChartEngine.Options.TileMetatileEnabled;
 
         if (settings.TileDiskCacheEnabled is { } tileDisk)
         {
-            RenderingOptimizations.TileDiskCacheEnabled = tileDisk;
+            ChartEngine.Options.TileDiskCacheEnabled = tileDisk;
         }
 
-        _tileDiskCacheEnabled = RenderingOptimizations.TileDiskCacheEnabled;
+        _tileDiskCacheEnabled = ChartEngine.Options.TileDiskCacheEnabled;
 
         if (settings.TileDiskMb is { } tileDiskMb)
         {
-            RenderingOptimizations.TileDiskMb = tileDiskMb;
+            ChartEngine.Options.TileDiskMb = tileDiskMb;
         }
 
-        _tileDiskMb = RenderingOptimizations.TileDiskMb;
+        _tileDiskMb = ChartEngine.Options.TileDiskMb;
 
         if (settings.TileGpuResidencyEnabled is { } tileGpu)
         {
-            RenderingOptimizations.TileGpuResidencyEnabled = tileGpu;
+            ChartEngine.Options.TileGpuResidencyEnabled = tileGpu;
         }
 
-        _tileGpuResidencyEnabled = RenderingOptimizations.TileGpuResidencyEnabled;
+        _tileGpuResidencyEnabled = ChartEngine.Options.TileGpuResidencyEnabled;
 
         if (settings.TileGpuBudgetMb is { } tileGpuMb)
         {
-            RenderingOptimizations.TileGpuBudgetMb = tileGpuMb;
+            ChartEngine.Options.TileGpuBudgetMb = tileGpuMb;
         }
 
-        _tileGpuBudgetMb = RenderingOptimizations.TileGpuBudgetMb;
+        _tileGpuBudgetMb = ChartEngine.Options.TileGpuBudgetMb;
 
         _basemapMode = settings.BasemapMode;
         _showOutOfScaleExtentIndicators = settings.ShowOutOfScaleExtentIndicators;

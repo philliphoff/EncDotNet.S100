@@ -1,6 +1,6 @@
 using SkiaSharp;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// A thread-safe cache of rasterised base-plane tiles for one layer, whose

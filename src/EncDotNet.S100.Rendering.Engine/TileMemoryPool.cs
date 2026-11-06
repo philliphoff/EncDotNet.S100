@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using SkiaSharp;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// One least-recently-used native-byte account shared by many
@@ -15,7 +15,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <para>
 /// The process has two pools: <see cref="Raster"/> for the CPU tile images and
 /// <see cref="Gpu"/> for the GPU-resident textures uploaded from them. Each
-/// takes its limit from <see cref="RenderingOptimizations"/>, read on every
+/// takes its limit from <see cref="ChartSessionOptions.TileBudgetMb"/>, read on every
 /// insert, so a settings change applies at once.
 /// </para>
 /// <para>

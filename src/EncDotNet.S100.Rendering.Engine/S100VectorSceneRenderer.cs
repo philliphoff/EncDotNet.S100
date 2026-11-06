@@ -1,19 +1,13 @@
 using System.Diagnostics;
-using System.Globalization;
 using System.Runtime.CompilerServices;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Rendering.Scene;
-using Mapsui;
-using Mapsui.Extensions;
-using Mapsui.Layers;
-using Mapsui.Rendering;
-using Mapsui.Rendering.Skia;
 using SkiaSharp;
 using CoreViewport = EncDotNet.S100.Pipelines.Viewport;
-using S100Diag = EncDotNet.S100.Renderers.Mapsui.Diagnostics;
+using S100Diag = EncDotNet.S100.Rendering.Engine.Diagnostics;
 using SceneRgbaColor = EncDotNet.S100.Pipelines.RgbaColor;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// The <b>TiledScene ("B") render subsystem, Phase&#160;1</b>: a Mapsui
@@ -56,7 +50,7 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// </para>
 /// <para>
 /// <b>Fidelity.</b> The scene bound to the layer via <see cref="BindScene"/> is
-/// built by <see cref="MapsuiDisplayListRenderer"/> with the pattern resolver
+/// built by <c>MapsuiDisplayListRenderer</c> with the pattern resolver
 /// set, so area pattern fills are present in the IR (unlike the Mapsui arm,
 /// which lowers patterns through a separate post-IR phase). Scale-visibility
 /// (S-100 Part 9 §11.1, the per-op SCAMIN carried in the IR) is honoured against
@@ -65,18 +59,18 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// </para>
 /// <para>
 /// <b>Selection.</b> A fresh vector layer is tagged with
-/// <see cref="RendererName"/> when <see cref="RenderingOptimizations.SceneMode"/>
+/// <see cref="RendererName"/> when <see cref="ChartSessionOptions.SceneMode"/>
 /// selects the single-surface arm (<see cref="VectorSceneMode.Single"/>); the
-/// tagging is done by <see cref="MapsuiDisplayListRenderer"/>. <see cref="Register"/>
+/// tagging is done by <c>MapsuiDisplayListRenderer</c>. <c>Register</c>
 /// wires the renderer into Mapsui once at startup.
 /// </para>
 /// </remarks>
 public static class S100VectorSceneRenderer
 {
     /// <summary>
-    /// The <see cref="ILayer.CustomLayerRendererName"/> value that routes a layer
+    /// The Mapsui <c>ILayer.CustomLayerRendererName</c> value that routes a layer
     /// through this renderer. Set on the vector layer by
-    /// <see cref="MapsuiDisplayListRenderer"/> when the <c>TiledScene</c>
+    /// <c>MapsuiDisplayListRenderer</c> when the <c>TiledScene</c>
     /// subsystem is active.
     /// </summary>
     public const string RendererName = "s100.vector.scene";
@@ -84,10 +78,10 @@ public static class S100VectorSceneRenderer
     /// <summary>
     /// Margin, in screen pixels, rasterised around the viewport on every edge so
     /// a pan reveals already-rendered content out to the margin before a
-    /// re-raster is needed. Read once from <c>S100_VECTOR_SCENE_MARGIN</c>
+    /// re-raster is needed. From <see cref="ChartSessionOptions.SceneMarginPx"/>
     /// (default 256).
     /// </summary>
-    public static double MarginPx { get; } = ReadMargin();
+    public static double MarginPx => ChartEngine.Options.SceneMarginPx;
 
     /// <summary>
     /// Hard cap on either dimension of a worker-rasterised image, in device
@@ -98,8 +92,7 @@ public static class S100VectorSceneRenderer
     /// </summary>
     private const int MaxImageDimension = 8192;
 
-
-    private static readonly ConditionalWeakTable<ILayer, SceneState> States = new();
+    private static readonly ConditionalWeakTable<object, SceneState> States = new();
 
     private static readonly SKSamplingOptions Sampling = new(SKFilterMode.Linear, SKMipmapMode.None);
 
@@ -107,39 +100,16 @@ public static class S100VectorSceneRenderer
         (Environment.GetEnvironmentVariable("S100_VECTOR_SCENE_DIAG") ?? string.Empty)
             is "1" or "true" or "TRUE" or "True";
 
-    private static double ReadMargin()
-    {
-        var raw = Environment.GetEnvironmentVariable("S100_VECTOR_SCENE_MARGIN");
-        if (!string.IsNullOrEmpty(raw)
-            && double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var v)
-            && v >= 0)
-        {
-            return v;
-        }
-
-        return 256.0;
-    }
-
-    /// <summary>
-    /// Registers this renderer under <see cref="RendererName"/> with Mapsui's
-    /// <c>MapRenderer</c>. Idempotent; call once at startup (after the style
-    /// renderers are registered).
-    /// </summary>
-    internal static void Register()
-    {
-        MapRenderer.RegisterLayerRenderer(RendererName, Render);
-    }
-
     /// <summary>
     /// Binds the fully-resolved <see cref="VectorScene"/> that this renderer
     /// rasterises for <paramref name="layer"/>. Called by
-    /// <see cref="MapsuiDisplayListRenderer"/> when it produces a layer for the
+    /// <c>MapsuiDisplayListRenderer</c> when it produces a layer for the
     /// active <c>TiledScene</c> subsystem. Binding a new scene invalidates any
     /// cached image so the next frame re-rasterises.
     /// </summary>
     /// <param name="layer">The Mapsui layer the scene belongs to.</param>
     /// <param name="scene">The resolved scene IR (with pattern fills).</param>
-    public static void BindScene(ILayer layer, VectorScene scene)
+    public static void BindScene(object layer, VectorScene scene)
     {
         ArgumentNullException.ThrowIfNull(layer);
         ArgumentNullException.ThrowIfNull(scene);
@@ -159,13 +129,13 @@ public static class S100VectorSceneRenderer
     /// Binds to <paramref name="target"/> a copy of the scene bound to
     /// <paramref name="source"/> that keeps only the ops <paramref name="keep"/>
     /// accepts — the single-surface counterpart of
-    /// <see cref="S100VectorTileRenderer.TryBindFilteredScene(ILayer, ILayer, Func{PaintOp, bool})"/>.
+    /// <see cref="S100VectorTileRenderer.TryBindFilteredScene(object, object, Func{PaintOp, bool})"/>.
     /// </summary>
     /// <param name="source">A layer a scene was bound to.</param>
     /// <param name="target">The layer to bind the filtered scene to.</param>
     /// <param name="keep">Returns <see langword="true"/> for each op to keep.</param>
     /// <returns><see langword="true"/> when <paramref name="source"/> had a scene to copy.</returns>
-    public static bool TryBindFilteredScene(ILayer source, ILayer target, Func<PaintOp, bool> keep)
+    public static bool TryBindFilteredScene(object source, object target, Func<PaintOp, bool> keep)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(target);
@@ -194,12 +164,13 @@ public static class S100VectorSceneRenderer
     /// translation and schedules an off-thread re-raster when the image no longer
     /// covers the viewport.
     /// </summary>
-    public static void Render(SKCanvas canvas, Viewport viewport, ILayer layer, RenderService renderService)
+    public static void Render(SKCanvas canvas, ViewState viewport, LayerFrame frame)
     {
         ArgumentNullException.ThrowIfNull(canvas);
-        ArgumentNullException.ThrowIfNull(layer);
+        ArgumentNullException.ThrowIfNull(frame.Owner);
 
-        if (!viewport.HasSize())
+        var layer = frame.Owner;
+        if (!viewport.HasSize)
         {
             return;
         }
@@ -223,7 +194,7 @@ public static class S100VectorSceneRenderer
         // whole-viewport image for every off-view cell. Culling here makes
         // off-view cells cost nothing; the MarginPx halo (the same over-render
         // recorded around the viewport) keeps edge cells rendering.
-        if (!LayerExtentCulling.ShouldRender(layer, viewport, resolution, MarginPx))
+        if (!LayerExtentCulling.ShouldRender(frame.Extent, viewport, resolution, MarginPx))
         {
             return;
         }
@@ -294,7 +265,7 @@ public static class S100VectorSceneRenderer
     /// <summary>
     /// Derives the S-100 true-scale denominator for the live viewport from its
     /// EPSG:3857 resolution and centre latitude — the inverse of
-    /// <see cref="MapsuiDisplayListRenderer.DenominatorToResolution"/>. The
+    /// <see cref="ScaleResolution.DenominatorToResolution"/>. The
     /// denominator drives the IR's per-op scale-visibility (SCAMIN) culling, so
     /// the B arm shows/hides the same detail as the live Mapsui frame.
     /// </summary>
@@ -307,7 +278,7 @@ public static class S100VectorSceneRenderer
             cos = 1e-6;
         }
 
-        return resolution * cos / MapsuiDisplayListRenderer.DenomToResolutionMetres;
+        return resolution * cos / ScaleResolution.DenomToResolutionMetres;
     }
 
     private static void Schedule(SceneState state, RasterRequest request)
@@ -554,7 +525,7 @@ public static class S100VectorSceneRenderer
     {
         if (state.Owner.TryGetTarget(out var layer))
         {
-            VectorLayerRepaint.Request(layer);
+            LayerRepaint.Request(layer);
         }
     }
 
@@ -567,9 +538,9 @@ public static class S100VectorSceneRenderer
     /// </summary>
     private sealed class SceneState
     {
-        public SceneState(ILayer layer) => Owner = new WeakReference<ILayer>(layer);
+        public SceneState(object layer) => Owner = new WeakReference<object>(layer);
 
-        public readonly WeakReference<ILayer> Owner;
+        public readonly WeakReference<object> Owner;
 
         public readonly object Sync = new();
 

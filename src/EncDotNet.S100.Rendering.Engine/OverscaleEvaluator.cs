@@ -1,6 +1,6 @@
 using NetTopologySuite.Geometries;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// One loaded, drawing chart cell's contribution to overscale evaluation
@@ -136,9 +136,9 @@ public static class OverscaleEvaluator
 
             inView++;
 
-            var latitudeRadians = MapsuiDisplayListRenderer.WebMercatorYToLatitudeRadians(
+            var latitudeRadians = ScaleResolution.WebMercatorYToLatitudeRadians(
                 (envelope.MinY + envelope.MaxY) / 2.0);
-            var compilationResolution = MapsuiDisplayListRenderer.DenominatorToResolution(
+            var compilationResolution = ScaleResolution.DenominatorToResolution(
                 cell.CompilationScaleDenominator, latitudeRadians);
             var factor = compilationResolution / viewportResolution;
             if (factor <= OverscaleThreshold)

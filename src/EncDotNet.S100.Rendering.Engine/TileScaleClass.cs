@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using EncDotNet.S100.Rendering.Scene;
 
-namespace EncDotNet.S100.Renderers.Mapsui;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
 /// SCAMIN "scale classes" for base-plane tiles (issue #774). The live map shows
