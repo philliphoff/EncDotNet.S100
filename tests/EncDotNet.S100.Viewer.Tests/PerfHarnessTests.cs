@@ -357,9 +357,11 @@ public sealed class PerfHarnessTests
         var tool = new PortrayalPrewarmTool(
             () => new PortrayalWarmStatus(PortrayalWarmState.CacheFull, 12, 298),
             holder,
-            () => true);
+            () => true,
+            () => 6);
 
         Assert.True(tool.Invoke(null).TryGetValue(out var read));
+        Assert.Equal(6, read!.ConcurrencyLimit);
         Assert.Equal("cache_full", read!.State);
         Assert.Equal((12, 298), (read.Warm, read.Total));
         Assert.True(read.Enabled);
