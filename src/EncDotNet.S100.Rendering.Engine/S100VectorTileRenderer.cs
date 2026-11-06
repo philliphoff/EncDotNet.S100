@@ -2208,6 +2208,19 @@ public static partial class S100VectorTileRenderer
             anyBackdrop |= blit.Fallback.Count > 0;
         }
 
+        if (pinVisible && _settleTracking && state.Owner.TryGetTarget(out var owner))
+        {
+            for (var i = 0; i < copies.Count; i++)
+            {
+                var targets = copies[i].Tiles;
+                for (var j = 0; j < targets.Count; j++)
+                {
+                    var shown = copyTargets[i][j];
+                    RevealTrace.Report(owner, targets[j].Slot, state.Cache.Contains(shown) ? shown : null);
+                }
+            }
+        }
+
         HashSet<ChartLayerState>? unrevealed = null;
         if (chart)
         {
