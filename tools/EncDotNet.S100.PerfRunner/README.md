@@ -545,7 +545,8 @@ With `--trace` (and `--launch`), each viewer writes its spans to
 | `s100.portrayal.cache.read` | The portrayal-cache read alone, tagged `s100.cache.result` = `hit` or `miss`. |
 | `s100.cell.scene_build` | Building the Mapsui layers and scene, including the pattern clip. |
 | `s100.cell.pattern_clip` | The pattern clip, tagged `s100.cache.result` = `hit` or `miss`. |
-| `s100.cell.compose` | Composing the layer stack. |
+| `s100.cell.compose` | Composing the layer stack. A landing cell's compose runs as a background job, outside the load's trace. |
+| `s100.cell.stack_wait` | Waiting for a layer stack with the landed cell to reach the map. |
 
 Summarize them with `dotnet run --project tools/EncDotNet.S100.PerfReport --
 summarise <stem>.jsonl`.

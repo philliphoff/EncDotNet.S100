@@ -1038,7 +1038,6 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             }
             else if (compose)
             {
-                using var composeActivity = Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.compose");
                 try
                 {
                     ComposeLayers();
@@ -1054,6 +1053,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
         if (stackVersion is { } version)
         {
             // The stack job raises LayersChanged when it applies.
+            using var stackWait = Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.stack_wait");
             await AwaitStackAsync(datasetId, renderEntry, generation, version, restore!).ConfigureAwait(true);
         }
         else if (compose)
