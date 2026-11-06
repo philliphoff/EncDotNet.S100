@@ -2,27 +2,29 @@ using EncDotNet.S100.Core;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
 
 namespace EncDotNet.S100.Pipelines.Tests;
 
 /// <summary>
-/// Exercises the Mapsui-free <see cref="HeadlessCompositor"/> end-to-end: the
+/// Exercises the Mapsui-free <see cref="ChartCompositor"/> end-to-end: the
 /// renderer-neutral S-98 ordering engine drives the cross-dataset paint order,
 /// the shared viewport is honoured (explicit) or fitted to the union extent
 /// (default), and inactive datasets are excluded from painting. Ordering is
 /// pinned via pixel inspection of overlapping solid area fills on different
 /// S-98 display planes (S-98 Annex A §A-6.9.1).
 /// </summary>
-public class HeadlessCompositorTests
+public class ChartCompositorTests
 {
-    private static HeadlessCompositor NewCompositor()
-        => new(new ProjNetCrsTransformFactory());
+    private static ChartCompositor NewCompositor()
+        => new(new ProjNetCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes));
 
     [Fact]
     public void Render_honors_explicit_viewport_dimensions()
@@ -47,7 +49,7 @@ public class HeadlessCompositorTests
 
         using var bitmap = compositor.Render(
             new[] { dataset },
-            new HeadlessCompositeOptions { Viewport = viewport });
+            new ChartCompositeOptions { Viewport = viewport });
 
         Assert.Equal(200, bitmap.Width);
         Assert.Equal(150, bitmap.Height);
@@ -65,7 +67,7 @@ public class HeadlessCompositorTests
 
         using var bitmap = compositor.Render(
             new[] { dataset },
-            new HeadlessCompositeOptions { Width = 256, Height = 256 });
+            new ChartCompositeOptions { Width = 256, Height = 256 });
 
         Assert.Equal(256, bitmap.Width);
         Assert.Equal(256, bitmap.Height);
@@ -97,7 +99,7 @@ public class HeadlessCompositorTests
 
         using var bitmap = compositor.Render(
             new[] { over, under },
-            new HeadlessCompositeOptions { Viewport = viewport });
+            new ChartCompositeOptions { Viewport = viewport });
 
         // BaseChartOver (blue) draws after BaseChartUnder (red).
         var center = bitmap.GetPixel(64, 64);
@@ -119,7 +121,7 @@ public class HeadlessCompositorTests
 
         using var bitmap = compositor.Render(
             new[] { dataset },
-            new HeadlessCompositeOptions
+            new ChartCompositeOptions
             {
                 Viewport = viewport,
                 Background = new RgbaColor(255, 255, 255, 255),
@@ -151,7 +153,7 @@ public class HeadlessCompositorTests
 
         using var bitmap = compositor.Render(
             new[] { east, west },
-            new HeadlessCompositeOptions
+            new ChartCompositeOptions
             {
                 Width = 400,
                 Height = 400,
@@ -183,7 +185,7 @@ public class HeadlessCompositorTests
     {
         using var bitmap = NewCompositor().Render(
             [SmallGrid(10.05, 0.05, 0.1, 2)],
-            new HeadlessCompositeOptions { Width = 200, Height = 200, Background = new RgbaColor(255, 255, 255, 255) });
+            new ChartCompositeOptions { Width = 200, Height = 200, Background = new RgbaColor(255, 255, 255, 255) });
 
         // A 10 % margin each side leaves the square grid ~167 px across, centred.
         var red = new SKColor(0xFF, 0x00, 0x00);
@@ -238,7 +240,7 @@ public class HeadlessCompositorTests
         AssertBounds(scene, west: 179.9, east: 180.1, south: 60.0, north: 60.2);
     }
 
-    private static void AssertBounds(HeadlessCompositeScene scene, double west, double east, double south, double north)
+    private static void AssertBounds(ChartComposition scene, double west, double east, double south, double north)
     {
         Assert.True(scene.TryGetWorldBounds(out double minX, out double minY, out double maxX, out double maxY));
         var (expectedMinX, expectedMinY) = WebMercator.FromLonLat(west, south);
@@ -254,13 +256,13 @@ public class HeadlessCompositorTests
     [Fact]
     public void Render_places_projected_coverage_from_sampled_native_bounds()
     {
-        var compositor = new HeadlessCompositor(new ScaledCrsTransformFactory());
+        var compositor = new ChartCompositor(new ScaledCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes));
         var coverage = ProjectedCoverageSubset();
         var viewport = SquareViewport(0, 2, 0, 2, 200);
 
         using var bitmap = compositor.Render(
             [coverage],
-            new HeadlessCompositeOptions
+            new ChartCompositeOptions
             {
                 Viewport = viewport,
                 Background = new RgbaColor(255, 255, 255, 255),
@@ -287,7 +289,7 @@ public class HeadlessCompositorTests
 
         using var composite = compositor.Render(
             new[] { S104Surface(opacity: 0.8) },
-            new HeadlessCompositeOptions
+            new ChartCompositeOptions
             {
                 Viewport = viewport,
                 Background = new RgbaColor(255, 255, 255, 255),
@@ -331,7 +333,7 @@ public class HeadlessCompositorTests
 
         using var composite = compositor.Render(
             new[] { land, surface },
-            new HeadlessCompositeOptions
+            new ChartCompositeOptions
             {
                 Viewport = viewport,
                 Background = new RgbaColor(255, 255, 255, 255),
@@ -351,7 +353,7 @@ public class HeadlessCompositorTests
         // it above.
         using var surfaceOnly = compositor.Render(
             new[] { S104Surface() },
-            new HeadlessCompositeOptions
+            new ChartCompositeOptions
             {
                 Viewport = viewport,
                 Background = new RgbaColor(255, 255, 255, 255),
@@ -391,7 +393,7 @@ public class HeadlessCompositorTests
     /// Builds a single-sub-layer vector composite input whose one feature is a
     /// solid-filled rectangle spanning the given WGS84 box.
     /// </summary>
-    private static HeadlessCompositeInput VectorLayer(
+    private static ChartCompositeInput VectorLayer(
         string datasetId,
         S98DisplayPlane plane,
         string fillHex,
@@ -429,7 +431,7 @@ public class HeadlessCompositorTests
             Info = "test",
         };
 
-        return HeadlessCompositeInput.ForVector(result, active);
+        return ChartCompositeInput.ForVector(result, active);
     }
 
     private sealed class SingleSurfaceGeometryProvider : IFeatureGeometryProvider
@@ -466,7 +468,7 @@ public class HeadlessCompositorTests
     /// (native lon 0..7, lat 0..3) whose every cell holds the same value, styled
     /// with a single red band so the whole surface paints solid red.
     /// </summary>
-    private static HeadlessCompositeInput S104Surface(double opacity = 1.0)
+    private static ChartCompositeInput S104Surface(double opacity = 1.0)
     {
         var metadata = new GridMetadata
         {
@@ -524,7 +526,7 @@ public class HeadlessCompositorTests
             SourceDatasetId = "s104.h5",
             Info = "test",
         };
-        return HeadlessCompositeInput.ForCoverage(result);
+        return ChartCompositeInput.ForCoverage(result);
     }
 
     /// <summary>
@@ -533,7 +535,7 @@ public class HeadlessCompositorTests
     /// (<paramref name="originLongitude"/>, <paramref name="originLatitude"/>),
     /// styled solid red.
     /// </summary>
-    private static HeadlessCompositeInput SmallGrid(
+    private static ChartCompositeInput SmallGrid(
         double originLongitude, double originLatitude, double spacing, int size)
     {
         var metadata = new GridMetadata
@@ -574,7 +576,7 @@ public class HeadlessCompositorTests
                 originLongitude - half, originLongitude + (size - 0.5) * spacing,
                 originLatitude - half, originLatitude + (size - 0.5) * spacing, size),
         };
-        return HeadlessCompositeInput.ForCoverage(
+        return ChartCompositeInput.ForCoverage(
             new CoveragePortrayalResult
             {
                 SubLayers = [grid],
@@ -584,7 +586,7 @@ public class HeadlessCompositorTests
             });
     }
 
-    private static HeadlessCompositeInput ProjectedCoverageSubset()
+    private static ChartCompositeInput ProjectedCoverageSubset()
     {
         var metadata = new GridMetadata
         {
@@ -628,7 +630,7 @@ public class HeadlessCompositorTests
             // use the sampled georeferencer metadata for spatial placement.
             Viewport = SquareViewport(-50, 50, -50, 50, 100),
         };
-        return HeadlessCompositeInput.ForCoverage(
+        return ChartCompositeInput.ForCoverage(
             new CoveragePortrayalResult
             {
                 SubLayers = [grid],
@@ -644,7 +646,7 @@ public class HeadlessCompositorTests
     /// tag + geometry provider are what R-101-104-B reads to derive the land
     /// mask; the fill lets the test see the land beneath the clipped surface.
     /// </summary>
-    private static HeadlessCompositeInput S101Land(
+    private static ChartCompositeInput S101Land(
         string fillHex, double west, double east, double south, double north)
     {
         const string token = "LNDFILL";
@@ -674,7 +676,7 @@ public class HeadlessCompositorTests
             FeatureTags = new Dictionary<long, VectorFeatureTag> { [1] = new VectorFeatureTag("LandArea", null) },
         };
 
-        return HeadlessCompositeInput.ForVector(result);
+        return ChartCompositeInput.ForVector(result);
     }
 
     private sealed class ScaledCrsTransformFactory : ICrsTransformFactory

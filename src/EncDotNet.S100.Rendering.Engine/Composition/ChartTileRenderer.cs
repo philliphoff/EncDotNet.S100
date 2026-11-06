@@ -2,12 +2,12 @@ using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
 
-namespace EncDotNet.S100.Datasets.Pipelines;
+namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
-/// Options for <see cref="HeadlessTileRenderer"/>.
+/// Options for <see cref="ChartTileRenderer"/>.
 /// </summary>
-public sealed class HeadlessTileOptions
+public sealed class ChartTileOptions
 {
     /// <summary>
     /// Image pixels per logical tile pixel: 1 for 256-pixel tiles, 2 for
@@ -17,7 +17,7 @@ public sealed class HeadlessTileOptions
 
     /// <summary>
     /// The latitude, in degrees, at which each zoom level's display scale is
-    /// measured for scale-visibility culling (see <see cref="HeadlessTileRenderer.ScaleDenominator"/>).
+    /// measured for scale-visibility culling (see <see cref="ChartTileRenderer.ScaleDenominator"/>).
     /// Defaults to 0 (the equator).
     /// </summary>
     public double ReferenceLatitude { get; init; }
@@ -44,9 +44,9 @@ public readonly record struct TileBlock(int Zoom, int X, int Y, int Columns, int
 /// <summary>
 /// One rendered XYZ tile.
 /// </summary>
-public sealed class HeadlessTile : IDisposable
+public sealed class ChartTile : IDisposable
 {
-    internal HeadlessTile(int zoom, int x, int y, SKBitmap bitmap, bool isEmpty)
+    internal ChartTile(int zoom, int x, int y, SKBitmap bitmap, bool isEmpty)
     {
         Zoom = zoom;
         X = x;
@@ -75,16 +75,16 @@ public sealed class HeadlessTile : IDisposable
 }
 
 /// <summary>
-/// Renders a prepared <see cref="HeadlessCompositeScene"/> as XYZ Web-Mercator
-/// raster tiles (see <see cref="XyzTileGrid"/>).
+/// Renders a prepared <see cref="ChartComposition"/> as XYZ Web-Mercator
+/// raster tiles; <see cref="ChartRenderer.RenderTilesAsync"/> runs it on the work scheduler (see <see cref="XyzTileGrid"/>).
 /// </summary>
 /// <remarks>
 /// <para>
-/// Prepare the scene with <see cref="HeadlessCompositeOptions.HonorScaleVisibility"/>
+/// Prepare the scene with <see cref="ChartCompositeOptions.HonorScaleVisibility"/>
 /// on, so each zoom level shows only what is visible at its scale, and
-/// <see cref="HeadlessCompositeOptions.EnableSeamWrap"/> off, because this
+/// <see cref="ChartCompositeOptions.EnableSeamWrap"/> off, because this
 /// renderer draws the data on either side of the antimeridian itself, and
-/// <see cref="HeadlessCompositeOptions.KeepAreaSymbolsInView"/> off, so a
+/// <see cref="ChartCompositeOptions.KeepAreaSymbolsInView"/> off, so a
 /// surface across several tiles keeps one symbol rather than one per tile.
 /// </para>
 /// <para>
@@ -97,7 +97,7 @@ public sealed class HeadlessTile : IDisposable
 /// </para>
 /// <para>
 /// Each zoom level is evaluated at one scale denominator, measured at
-/// <see cref="HeadlessTileOptions.ReferenceLatitude"/>, rather than at each
+/// <see cref="ChartTileOptions.ReferenceLatitude"/>, rather than at each
 /// tile's own latitude. Measuring per tile would switch SCAMIN at row
 /// boundaries and cut features off along tile edges.
 /// </para>
@@ -105,22 +105,22 @@ public sealed class HeadlessTile : IDisposable
 /// The renderer is immutable; <see cref="Render"/> may be called concurrently.
 /// </para>
 /// </remarks>
-public sealed class HeadlessTileRenderer
+public sealed class ChartTileRenderer
 {
     private static readonly IReadOnlyList<double> NoWorldCopies = [];
     private static readonly IReadOnlyList<double> AdjacentWorldCopies = [-360.0, 360.0];
 
-    private readonly HeadlessCompositeScene _scene;
-    private readonly HeadlessTileOptions _options;
+    private readonly ChartComposition _scene;
+    private readonly ChartTileOptions _options;
     private readonly IReadOnlyList<double> _worldCopies;
 
     /// <summary>Creates a tile renderer over a prepared scene.</summary>
     /// <param name="scene">The prepared scene.</param>
     /// <param name="options">Tile options; defaults when <see langword="null"/>.</param>
-    public HeadlessTileRenderer(HeadlessCompositeScene scene, HeadlessTileOptions? options = null)
+    public ChartTileRenderer(ChartComposition scene, ChartTileOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(scene);
-        options ??= new HeadlessTileOptions();
+        options ??= new ChartTileOptions();
         if (options.PixelRatio is < 1 or > 4)
             throw new ArgumentOutOfRangeException(nameof(options), options.PixelRatio, "PixelRatio must be between 1 and 4.");
 
@@ -200,7 +200,7 @@ public sealed class HeadlessTileRenderer
     /// </summary>
     /// <param name="block">The block to render. It must lie inside the grid.</param>
     /// <returns>The tiles, row-major. The caller disposes them.</returns>
-    public IReadOnlyList<HeadlessTile> Render(TileBlock block)
+    public IReadOnlyList<ChartTile> Render(TileBlock block)
     {
         int n = XyzTileGrid.TilesPerAxis(block.Zoom);
         if (block.Columns <= 0 || block.Rows <= 0
@@ -241,7 +241,7 @@ public sealed class HeadlessTileRenderer
         }
 
         uint background = BackgroundPixel(_options.Background);
-        var tiles = new List<HeadlessTile>(block.TileCount);
+        var tiles = new List<ChartTile>(block.TileCount);
         for (int row = 0; row < block.Rows; row++)
         {
             for (int column = 0; column < block.Columns; column++)
@@ -256,7 +256,7 @@ public sealed class HeadlessTileRenderer
                     throw new InvalidOperationException("Could not cut a tile out of its block.");
                 var owned = subset.Copy()
                     ?? throw new InvalidOperationException("Could not copy a tile out of its block.");
-                tiles.Add(new HeadlessTile(block.Zoom, block.X + column, block.Y + row, owned, isEmpty));
+                tiles.Add(new ChartTile(block.Zoom, block.X + column, block.Y + row, owned, isEmpty));
             }
         }
 

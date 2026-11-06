@@ -1,13 +1,16 @@
 using System.Globalization;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Datasets.Pipelines.Sampling;
 using EncDotNet.S100.Datasets.Weather;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Quantities;
+using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Rendering.Scene;
 using SkiaSharp;
 
@@ -52,8 +55,8 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <see cref="NotForNavigationNotice"/>.
 /// </description></item>
 /// <item><description>
-/// <b>Headless rendering</b> (<see cref="IHeadlessImageRenderer"/>) through the
-/// <see cref="HeadlessCompositor"/>, and the catalog payload
+/// <b>Headless rendering</b> (<see cref="IHeadlessImageRenderer"/>) in S-98
+/// order through the shared coverage lowering, and the catalog payload
 /// (<see cref="WeatherGridDatasetData"/>) through
 /// <see cref="ILoadedDatasetProjection"/>.
 /// </description></item>
@@ -62,8 +65,7 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// It lives in <c>EncDotNet.S100.Datasets.Pipelines</c> rather than
 /// <c>EncDotNet.S100.Datasets.Weather</c> because the capabilities it
 /// implements (<see cref="IHeadlessImageRenderer"/>,
-/// <see cref="ILoadedDatasetProjection"/>, <see cref="HeadlessCompositor"/>)
-/// are defined here, and this project already references every dataset
+/// <see cref="ILoadedDatasetProjection"/>) are defined here, and this project already references every dataset
 /// project; the format readers don't reference it, or each other.
 /// </para>
 /// </remarks>
@@ -314,17 +316,55 @@ public abstract class WeatherGridProcessorBase :
                 new MercatorBounds(minX, minY, maxX, maxY), widthPixels, heightPixels, padding: 0.05);
         }
 
-        return new HeadlessCompositor(_crsTransformFactory).Render(
-            [HeadlessCompositeInput.ForCoverage(portrayal)],
-            new HeadlessCompositeOptions
+        return RenderOrdered(
+            portrayal,
+            viewport,
+            background ?? new RgbaColor(255, 255, 255, 255),
+            context?.Mariner,
+            context?.Basemap ?? BasemapKind.None);
+    }
+
+    /// <summary>
+    /// Paints the coverage's sub-layers in S-98 order, after the inter-product
+    /// rules, over an optional land basemap.
+    /// </summary>
+    private SKBitmap RenderOrdered(
+        CoveragePortrayalResult portrayal,
+        Viewport viewport,
+        RgbaColor background,
+        MarinerSettings? mariner,
+        BasemapKind basemap)
+    {
+        var items = portrayal.SubLayers
+            .Select(sub => new SubLayerStackItem(
+                new CoverageStackPayload(portrayal, sub),
+                sub.Plane,
+                sub.WithinPlanePriority,
+                portrayal.SourceDatasetId,
+                sub.SourceFeatureType))
+            .ToList();
+        var authority = new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes);
+        var ruled = authority.ApplyRules(
+            LayerStackBuilder.Build(authority, [items]),
+            [new LoadedDatasetInfo(portrayal.SourceDatasetId, portrayal.Spec.Name, Active: true)],
+            mariner);
+
+        var layers = new List<CompositeLayer>(ruled.Count + 1);
+        if (basemap == BasemapKind.Offline)
+            layers.Add(new VectorCompositeLayer(NaturalEarthBasemap.GetLandScene(viewport), honorScaleVisibility: false));
+
+        var settings = new CoverageLayerLowering.Settings(
+            DrawingInstructionCategory.None, HonorScaleVisibility: false, EnableSeamWrap: true, KeepAreaSymbolsInView: true);
+        foreach (var item in ruled)
+        {
+            if (item.Payload is CoverageStackPayload coverage
+                && CoverageLayerLowering.TryLower(coverage.SubLayer, _crsTransformFactory, settings, out var layer, out _, out _, out _, out _))
             {
-                Width = widthPixels,
-                Height = heightPixels,
-                Background = background ?? new RgbaColor(255, 255, 255, 255),
-                Viewport = viewport,
-                Mariner = context?.Mariner,
-                Basemap = context?.Basemap ?? BasemapKind.None,
-            });
+                layers.Add(layer);
+            }
+        }
+
+        return new HeadlessCompositeRenderer { Background = background }.Render(viewport, layers);
     }
 
     /// <summary>Always <see langword="null"/>: a weather grid has no discrete features; see <see cref="GetCoverageInfo"/>.</summary>

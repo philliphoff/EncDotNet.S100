@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using EncDotNet.S100.Cli.Infrastructure;
 using EncDotNet.S100.Cli.Infrastructure.Tiles;
-using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -17,8 +17,9 @@ namespace EncDotNet.S100.Cli.Commands;
 /// OpenLayers.
 /// </summary>
 /// <remarks>
-/// The datasets are opened and portrayed once; every tile is then painted from
-/// the same prepared composite (<see cref="HeadlessTileRenderer"/>), with each
+/// The datasets are opened and portrayed once, in parallel; every tile is then
+/// painted from the same prepared composite (<see cref="ChartTileRenderer"/>,
+/// as Visible jobs on the work scheduler in write order), with each
 /// zoom level drawing only what is visible at its scale. Coverage products
 /// (S-102, S-104, S-111) are portrayed again for each zoom level so their
 /// sampling and arrow density suit its resolution. The input grammar matches
@@ -109,7 +110,7 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
         {
             var columns = XyzTileGrid.Columns(zoom, area.MinX, area.MaxX);
             var (firstRow, lastRow) = XyzTileGrid.Rows(zoom, area.MinY, area.MaxY);
-            var blocks = HeadlessTileRenderer.PlanBlocks(zoom, columns, firstRow, lastRow, settings.Metatile);
+            var blocks = ChartTileRenderer.PlanBlocks(zoom, columns, firstRow, lastRow, settings.Metatile);
             plans.Add((zoom, blocks));
             totalTiles += blocks.Sum(b => (long)b.TileCount);
         }
@@ -134,39 +135,40 @@ internal sealed class TilesExportCommand : Command<TilesExportCommand.Settings>
 
         long written = 0;
         long skipped = 0;
-        var parallelOptions = new ParallelOptions
-        {
-            MaxDegreeOfParallelism = settings.Parallel ?? Environment.ProcessorCount,
-        };
+        var jobOptions = new ChartTileJobOptions { MaxInFlight = settings.Parallel };
+        double urgency = 0;
 
         foreach (var (zoom, blocks) in plans)
         {
             var renderer = scene.RendererFor(zoom, layout);
             long zoomWritten = 0;
 
-            System.Threading.Tasks.Parallel.ForEach(blocks, parallelOptions, block =>
-            {
-                var tiles = renderer.Render(block);
-                try
+            // Each block renders and encodes as a Visible job on the work
+            // scheduler, queued in the order the blocks are written.
+            ChartRenderer.RenderTilesAsync(
+                renderer,
+                blocks,
+                tiles => tiles
+                    .Select(tile => (tile.Zoom, tile.X, tile.Y, Data: settings.SkipEmpty && tile.IsEmpty ? null : session.Encode(tile)))
+                    .ToList(),
+                encoded =>
                 {
-                    foreach (var tile in tiles)
+                    foreach (var (z, x, y, data) in encoded)
                     {
-                        if (settings.SkipEmpty && tile.IsEmpty)
+                        if (data is null)
                         {
-                            Interlocked.Increment(ref skipped);
+                            skipped++;
                             continue;
                         }
 
-                        sink.Write(tile.Zoom, tile.X, tile.Y, session.Encode(tile));
-                        Interlocked.Increment(ref zoomWritten);
+                        sink.Write(z, x, y, data);
+                        zoomWritten++;
                     }
-                }
-                finally
-                {
-                    foreach (var tile in tiles)
-                        tile.Dispose();
-                }
-            });
+
+                    return ValueTask.CompletedTask;
+                },
+                jobOptions with { UrgencyOffset = urgency }).GetAwaiter().GetResult();
+            urgency += blocks.Count;
 
             written += zoomWritten;
             // Same culture as the summary line written through AnsiConsole.
