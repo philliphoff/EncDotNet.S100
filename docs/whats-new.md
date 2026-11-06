@@ -6,6 +6,28 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Tropical cyclones on a route.** With an NHC advisory loaded, Check
+  route, `check_route` and `s100 route check` test the route against the
+  storm at each ETA: stretches inside its 34, 50 or 64 kt wind radius (in the
+  quadrant the vessel is in) and inside the forecast cone, the closest
+  approach to its centre, and stretches reached after the forecast ends (not
+  checked). By default the 34 kt radius is tested, the 50 and 64 kt radii are
+  Must review, and the 34 kt radius and the cone are Check; SoundCharts sets
+  these in **Settings** > **Chart display** > **Mariner Settings** >
+  **Tropical cyclones on a route**, MCP with `set_route_weather_settings` and
+  `check_route`'s `cyclone*` arguments, and the CLI with `--cyclone-radius`,
+  `--cyclone-must-review` and `--no-cyclone-cpa`. The verdict card's
+  **Weather** row counts the storm's findings and gives the closest approach,
+  and the map draws the storm at that ETA. In the libraries,
+  `RouteCheckSources.Cyclones` (`IRouteCyclone`),
+  `RouteCheckSettings.TropicalCyclones` (`TropicalCycloneCheckSettings`),
+  `WeatherCheckResult.Cyclones`, `TropicalCycloneDetails` and the
+  `weather.tc_*` codes are new. Breaking changes: `WeatherVerdict` gains
+  `InsideCycloneRadius` as its first value, `CycloneCheckStorm` and
+  `WeatherSample.Cyclones` are new, and the weather check runs, rather than
+  being skipped, when only an advisory is loaded. See
+  [Tropical cyclones](route-checks.md#tropical-cyclones).
+
 - **Weather along a route.** Check route, `check_route` and
   `s100 route check` gain a weather check: with a GRIB2 or NetCDF forecast
   loaded, they sample the route every nautical mile at the ETA and compare

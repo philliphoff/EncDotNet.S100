@@ -153,11 +153,15 @@ public sealed class RouteCycloneCheckTests : IDisposable
         Assert.Equal("M", ghost.ClassLetter); // Ian was a major hurricane.
         Assert.StartsWith("at ETA ", ghost.Label, StringComparison.Ordinal);
         Assert.EndsWith(" NM", ghost.Label, StringComparison.Ordinal);
+        using (var legend = new RouteCheckLegendViewModel(s.Routes, s.Check, null, new RouteCheckLegendState()))
+            Assert.True(legend.HasStormAtEta);
 
         // Without the closest approach there's no ghost.
         s.Limits.Cyclones = TropicalCycloneCheckSettings.Default with { ReportClosestApproach = false };
         report = await Settled(s.Check);
         Assert.Empty(RouteCheckMap.Build(route, report.Findings, null, RouteCheckColors.For(PaletteType.Day), SKColors.Blue, PaletteType.Day, Synoptic, TimeFormat.Utc, 50).Storms);
+        using (var legend = new RouteCheckLegendViewModel(s.Routes, s.Check, null, new RouteCheckLegendState()))
+            Assert.False(legend.HasStormAtEta);
     }
 
     [Fact]
