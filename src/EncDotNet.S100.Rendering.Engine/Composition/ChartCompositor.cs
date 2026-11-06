@@ -1,3 +1,4 @@
+using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
@@ -179,7 +180,8 @@ public sealed class ChartCompositor
 
     /// <summary>
     /// Orders, rules and lowers the datasets once, returning a composition that
-    /// can be painted against many viewports.
+    /// can be painted against many viewports. Each sub-layer is lowered in turn
+    /// on the calling thread; <see cref="PrepareAsync"/> lowers them in parallel.
     /// </summary>
     /// <param name="datasets">The datasets, in draw order (bottom-most first).</param>
     /// <param name="options">
@@ -190,8 +192,61 @@ public sealed class ChartCompositor
     /// <returns>The prepared composition.</returns>
     public ChartComposition Prepare(IReadOnlyList<ChartCompositeInput> datasets, ChartCompositeOptions? options = null)
     {
-        ArgumentNullException.ThrowIfNull(datasets);
         options ??= new ChartCompositeOptions();
+        var plan = Plan(datasets, options);
+        var lowered = new LoweredLayer?[plan.Count];
+        for (int i = 0; i < plan.Count; i++)
+            lowered[i] = plan[i]();
+        return Assemble(lowered, options);
+    }
+
+    /// <summary>
+    /// Orders, rules and lowers the datasets once, as <see cref="Prepare"/> does,
+    /// lowering each sub-layer to its scene as its own <see cref="WorkStage.Scene"/>
+    /// job in the <see cref="WorkClass.Visible"/> class, so they lower in parallel.
+    /// Don't call it from a job on the same scheduler and block on the result.
+    /// </summary>
+    /// <param name="datasets">The datasets, in draw order (bottom-most first).</param>
+    /// <param name="options">Composite options, as for <see cref="Prepare"/>.</param>
+    /// <param name="scheduler">The scheduler to run on; <see langword="null"/> for <see cref="WorkScheduler.Shared"/>.</param>
+    /// <param name="cancellationToken">Cancels the lowering still queued.</param>
+    /// <returns>The prepared composition, the same as <see cref="Prepare"/> makes.</returns>
+    public async Task<ChartComposition> PrepareAsync(
+        IReadOnlyList<ChartCompositeInput> datasets,
+        ChartCompositeOptions? options = null,
+        IWorkScheduler? scheduler = null,
+        CancellationToken cancellationToken = default)
+    {
+        options ??= new ChartCompositeOptions();
+        scheduler ??= WorkScheduler.Shared;
+        var plan = Plan(datasets, options);
+        using var cancel = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var jobs = new Task<LoweredLayer?>[plan.Count];
+        for (int i = 0; i < plan.Count; i++)
+        {
+            var lower = plan[i];
+            jobs[i] = scheduler.RunAsync(WorkStage.Scene, _ => lower(), cancel.Token, WorkPriority.Visible(i));
+        }
+
+        try
+        {
+            return Assemble(await Task.WhenAll(jobs).ConfigureAwait(false), options);
+        }
+        catch
+        {
+            await cancel.CancelAsync().ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Orders and rules the datasets and returns one lowering step per active
+    /// sub-layer, bottom first; a step returns <see langword="null"/> for a
+    /// sub-layer with nothing to draw.
+    /// </summary>
+    private List<Func<LoweredLayer?>> Plan(IReadOnlyList<ChartCompositeInput> datasets, ChartCompositeOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(datasets);
 
         // 1. Each dataset's renderer-neutral stack items, in paint order top
         //    first (the order LayerStackBuilder expects); the input is bottom first.
@@ -212,13 +267,11 @@ public sealed class ChartCompositor
         var sorted = LayerStackBuilder.Build(_authority, perDataset);
         var ruled = _authority.ApplyRules(sorted, loaded, options.Mariner);
 
-        // 3. Lower each active item, bottom first, accumulating the union extent.
+        // 3. One lowering step per active item, bottom first.
         var activeIds = new HashSet<string>(
             loaded.Where(l => l.Active).Select(l => l.DatasetId),
             StringComparer.Ordinal);
 
-        var lowered = new List<ChartComposition.Entry>(ruled.Count);
-        var bounds = new SeamAwareBoundsAccumulator();
         bool ignoreScaleMinimum = options.Mariner?.IgnoreScaleMinimum ?? false;
         var finerByDataset = ignoreScaleMinimum
             ? new Dictionary<string, CellOverlap[]>(StringComparer.Ordinal)
@@ -226,6 +279,7 @@ public sealed class ChartCompositor
         var coverageSettings = new CoverageLayerLowering.Settings(
             options.HiddenCategories, options.HonorScaleVisibility, options.EnableSeamWrap, options.KeepAreaSymbolsInView);
 
+        var steps = new List<Func<LoweredLayer?>>(ruled.Count);
         foreach (var item in ruled)
         {
             if (!activeIds.Contains(item.SourceDatasetId))
@@ -235,38 +289,53 @@ public sealed class ChartCompositor
             {
                 case VectorStackPayload vector:
                     {
-                        var scene = LowerVector(vector, options.HiddenCategories);
                         var finer = finerByDataset.GetValueOrDefault(item.SourceDatasetId) ?? [];
-                        var layer = new VectorCompositeLayer(scene, options.HonorScaleVisibility)
+                        steps.Add(() =>
                         {
-                            EnableSeamWrap = options.EnableSeamWrap,
-                            KeepAreaSymbolsInView = options.KeepAreaSymbolsInView,
-                            // The whole cell stops at its minimum display scale
-                            // unless the mariner asks to ignore it (S-101 FC §3.1.1).
-                            MinimumDisplayScale = ignoreScaleMinimum ? null : vector.Result.CellMinimumDisplayScale,
-                            FinerCoverages = [.. finer.Select(f => f.Clip)],
-                        };
-                        lowered.Add(new ChartComposition.Entry(layer, finer));
-                        bounds.AddScene(scene);
+                            var scene = LowerVector(vector, options.HiddenCategories);
+                            var layer = new VectorCompositeLayer(scene, options.HonorScaleVisibility)
+                            {
+                                EnableSeamWrap = options.EnableSeamWrap,
+                                KeepAreaSymbolsInView = options.KeepAreaSymbolsInView,
+                                // The whole cell stops at its minimum display scale
+                                // unless the mariner asks to ignore it (S-101 FC §3.1.1).
+                                MinimumDisplayScale = ignoreScaleMinimum ? null : vector.Result.CellMinimumDisplayScale,
+                                FinerCoverages = [.. finer.Select(f => f.Clip)],
+                            };
+                            return new LoweredLayer(new ChartComposition.Entry(layer, finer), bounds => bounds.AddScene(scene));
+                        });
                         break;
                     }
 
                 case CoverageStackPayload coverage:
                     {
-                        if (CoverageLayerLowering.TryLower(
+                        steps.Add(() => CoverageLayerLowering.TryLower(
                                 coverage.SubLayer, _crsTransformFactory, coverageSettings,
-                                out var layer, out var west, out var east, out var south, out var north))
-                        {
-                            lowered.Add(new ChartComposition.Entry(layer, []));
-                            bounds.AddLonLatBox(west, east, south, north);
-                        }
-
+                                out var layer, out var west, out var east, out var south, out var north)
+                            ? new LoweredLayer(new ChartComposition.Entry(layer, []), bounds => bounds.AddLonLatBox(west, east, south, north))
+                            : null);
                         break;
                     }
             }
         }
 
-        return new ChartComposition(lowered, bounds, options);
+        return steps;
+    }
+
+    /// <summary>Gathers the lowered layers, bottom first, and their union extent.</summary>
+    private static ChartComposition Assemble(IReadOnlyList<LoweredLayer?> lowered, ChartCompositeOptions options)
+    {
+        var entries = new List<ChartComposition.Entry>(lowered.Count);
+        var bounds = new SeamAwareBoundsAccumulator();
+        foreach (var layer in lowered)
+        {
+            if (layer is null)
+                continue;
+            entries.Add(layer.Entry);
+            layer.AddBounds(bounds);
+        }
+
+        return new ChartComposition(entries, bounds, options);
     }
 
     /// <summary>
@@ -398,3 +467,8 @@ public sealed class ChartCompositor
 /// <param name="Clip">The difference clip drawn by the coarser layer.</param>
 /// <param name="Footprint">The finer cell's normalised footprint, for skip tests.</param>
 internal sealed record CellOverlap(SkiaFinerCoverage Clip, HiddenCoverageCache.Item Footprint);
+
+/// <summary>A lowered sub-layer and how it adds to the composition's extent.</summary>
+/// <param name="Entry">The lowered layer.</param>
+/// <param name="AddBounds">Adds the layer's extent to the union.</param>
+internal sealed record LoweredLayer(ChartComposition.Entry Entry, Action<SeamAwareBoundsAccumulator> AddBounds);

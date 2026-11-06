@@ -102,6 +102,39 @@ public sealed class ChartRendererTests : IDisposable
     }
 
     [Fact]
+    public async Task Parallel_lowering_prepares_the_same_composition()
+    {
+        ChartCompositeInput[] inputs =
+        [
+            Cell("a.000", Box(-2, 0, -2, 0)),
+            Cell("b.000", Box(-1, 1, -1, 1)),
+            Cell("c.000", Box(0, 2, 0, 2)),
+        ];
+        var compositor = NewCompositor();
+        var viewport = new Viewport
+        {
+            MinLongitude = -3,
+            MaxLongitude = 3,
+            MinLatitude = -3,
+            MaxLatitude = 3,
+            WidthPixels = 120,
+            HeightPixels = 120,
+            ScaleDenominator = 5_000,
+        };
+
+        var sequential = compositor.Prepare(inputs);
+        var parallel = await compositor.PrepareAsync(inputs, scheduler: _scheduler, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(sequential.Layers.Count, parallel.Layers.Count);
+        Assert.True(sequential.TryGetWorldBounds(out var aMinX, out var aMinY, out var aMaxX, out var aMaxY));
+        Assert.True(parallel.TryGetWorldBounds(out var bMinX, out var bMinY, out var bMaxX, out var bMaxY));
+        Assert.Equal((aMinX, aMinY, aMaxX, aMaxY), (bMinX, bMinY, bMaxX, bMaxY));
+        using var expected = sequential.Render(viewport);
+        using var actual = parallel.Render(viewport);
+        Assert.True(expected.GetPixelSpan().SequenceEqual(actual.GetPixelSpan()));
+    }
+
+    [Fact]
     public void Device_scale_renders_the_same_view_with_more_pixels()
     {
         var viewport = new Viewport

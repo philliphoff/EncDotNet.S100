@@ -106,7 +106,7 @@ public static class ChartRenderer
 
     /// <summary>
     /// Portrays the datasets in parallel (<see cref="PortrayAsync"/>), composites
-    /// them, and renders the explicit or fitted viewport at
+    /// them, lowering their sub-layers in parallel (<see cref="ChartCompositor.PrepareAsync"/>), and renders the explicit or fitted viewport at
     /// <see cref="ChartCompositeOptions.DeviceScale"/>.
     /// </summary>
     /// <param name="requests">The datasets, bottom-most first.</param>
@@ -126,12 +126,12 @@ public static class ChartRenderer
         ArgumentNullException.ThrowIfNull(options);
 
         var inputs = await PortrayAsync(requests, scheduler, cancellationToken).ConfigureAwait(false);
-        cancellationToken.ThrowIfCancellationRequested();
+        var composition = await compositor.PrepareAsync(inputs, options, scheduler, cancellationToken).ConfigureAwait(false);
 
-        // Composite and raster on the scheduler too, behind nothing visible.
+        // The raster runs on the scheduler too, in the Visible class.
         return await (scheduler ?? WorkScheduler.Shared).RunAsync(
             WorkStage.Raster,
-            _ => compositor.Render(inputs, options),
+            _ => composition.Render(options.Viewport ?? composition.FitViewport(options.Width, options.Height), options.DeviceScale),
             cancellationToken,
             WorkPriority.Visible()).ConfigureAwait(false);
     }

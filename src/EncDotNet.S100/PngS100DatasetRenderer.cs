@@ -1,3 +1,4 @@
+using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
@@ -171,29 +172,43 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
         // path, then hand the processors to the shared compositing core. The
         // processors and override hosts are disposed once compositing completes;
         // the portrayal results the core captures are immutable snapshots.
-        var processors = new List<IDatasetProcessor>(layers.Count);
-        var toDispose = new List<IDisposable>(layers.Count * 2);
+        var hosts = new S100PipelineHost[layers.Count];
+        var toDispose = new List<IDisposable>(layers.Count);
+        var parses = new Task<IDatasetProcessor>[layers.Count];
         try
         {
-            foreach (var layer in layers)
+            // Hosts resolve in order (the bundled host is created once); the
+            // cells then parse in parallel, each a Visible job on the scheduler.
+            for (int i = 0; i < layers.Count; i++)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var host = ResolveHost(layer, out bool disposeHost);
+                hosts[i] = ResolveHost(layers[i], out bool disposeHost);
                 if (disposeHost)
-                    toDispose.Add(host);
-
-                var processor = layer.Dataset.CreateProcessor(host);
-                if (processor is IDisposable disposableProcessor)
-                    toDispose.Add(disposableProcessor);
-
-                processors.Add(processor);
+                    toDispose.Add(hosts[i]);
             }
 
+            for (int i = 0; i < layers.Count; i++)
+            {
+                var (dataset, host) = (layers[i].Dataset, hosts[i]);
+                parses[i] = WorkScheduler.Shared.RunAsync(
+                    WorkStage.Parse,
+                    _ => dataset.CreateProcessor(host),
+                    cancellationToken,
+                    WorkPriority.Visible(i));
+            }
+
+            var processors = await Task.WhenAll(parses).ConfigureAwait(false);
             return await CompositeAsync(processors, options, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
+            // Every parse has finished, failed or been cancelled before this
+            // runs, unless an earlier step threw; dispose the processors made.
+            foreach (var parse in parses)
+            {
+                if (parse is { IsCompletedSuccessfully: true, Result: IDisposable processor })
+                    processor.Dispose();
+            }
+
             for (int i = toDispose.Count - 1; i >= 0; i--)
                 toDispose[i].Dispose();
         }

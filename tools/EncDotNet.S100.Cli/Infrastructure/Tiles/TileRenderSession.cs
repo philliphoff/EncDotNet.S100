@@ -549,7 +549,7 @@ internal sealed class TileScene
         _options = options;
         _contextFor = contextFor;
         _portrayGate = portrayGate;
-        Scene = compositor.Prepare(inputs, options);
+        Scene = compositor.PrepareAsync(inputs, options).GetAwaiter().GetResult();
     }
 
     /// <summary>The composite of the datasets' full-extent portrayal.</summary>
@@ -565,7 +565,7 @@ internal sealed class TileScene
     /// </summary>
     public ChartTileRenderer RendererFor(int zoom, TileLayout layout) =>
         _renderers.GetOrAdd(zoom, z => new Lazy<ChartTileRenderer>(() => new ChartTileRenderer(
-            _hasCoverage ? _compositor.Prepare(PortrayCoverageForZoom(layout, z), _options) : Scene,
+            _hasCoverage ? _compositor.PrepareAsync(PortrayCoverageForZoom(layout, z), _options).GetAwaiter().GetResult() : Scene,
             layout.TileOptions))).Value;
 
     /// <summary>
