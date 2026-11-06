@@ -91,10 +91,19 @@ internal static class CoverageClip
         if (regions is null || regions.Length == 0)
             return null;
 
-        return HiddenCaches
-            .GetValue(regions, static r => new HiddenCoverageCache(r))
-            .Get(resolution);
+        return HiddenFor(regions, resolution);
     }
+
+    /// <summary>
+    /// The region <paramref name="regions"/> hide at <paramref name="resolution"/>
+    /// (see <see cref="GetHiddenCoverage"/>), prepared once per array.
+    /// </summary>
+    internal static HiddenCoverage? HiddenFor(FinerCoverage[] regions, double resolution) =>
+        regions.Length == 0
+            ? null
+            : HiddenCaches
+                .GetValue(regions, static r => new HiddenCoverageCache(r))
+                .Get(resolution);
 
     /// <summary>
     /// Builds the screen-space (DIP) difference-clip <see cref="SKPath"/>s for the
@@ -112,6 +121,17 @@ internal static class CoverageClip
         var regions = Get(layer);
         if (regions is null || regions.Length == 0)
             return [];
+
+        return BuildActiveDifferencePaths(regions, viewport, resolution);
+    }
+
+    /// <summary>
+    /// The screen-space difference paths of the <paramref name="regions"/>
+    /// active at <paramref name="resolution"/> that meet the viewport (see
+    /// <see cref="BuildActiveDifferencePaths(object, ViewState, double)"/>).
+    /// </summary>
+    internal static IReadOnlyList<SKPath> BuildActiveDifferencePaths(FinerCoverage[] regions, ViewState viewport, double resolution)
+    {
 
         // A finer coverage wholly outside the (rotation-aware) viewport removes
         // nothing on screen, so it is skipped rather than projected and pushed
@@ -155,7 +175,7 @@ internal static class CoverageClip
         return (IReadOnlyList<SKPath>?)paths ?? [];
     }
 
-    private static void AddGeometry(SKPath path, Geometry geometry, ViewState viewport)
+    internal static void AddGeometry(SKPath path, Geometry geometry, ViewState viewport)
     {
         switch (geometry)
         {
