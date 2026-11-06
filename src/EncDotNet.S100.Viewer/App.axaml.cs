@@ -1390,7 +1390,9 @@ public partial class App : Application
         });
         services.AddSingleton(_ => new EncDotNet.S100.Viewer.Diagnostics.ProcessMetricsSampler(
             new EncDotNet.S100.Viewer.Diagnostics.RuntimeProcessMetricsSource(
-                () => EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.GetTileCacheMemory().TotalBytes)));
+                () => EncDotNet.S100.Renderers.Mapsui.S100VectorTileRenderer.GetTileCacheMemory().TotalBytes),
+            uiStalls: new EncDotNet.S100.Viewer.Diagnostics.UiThreadStallMonitor(
+                action => Avalonia.Threading.Dispatcher.UIThread.Post(action, Avalonia.Threading.DispatcherPriority.Send))));
         services.AddSingleton<McpTools.PortrayalPrewarmOverride>();
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),

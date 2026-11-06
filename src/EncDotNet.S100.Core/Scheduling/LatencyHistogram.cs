@@ -119,6 +119,21 @@ public sealed class LatencySnapshot
         return LatencyHistogram.UpperEdgeMs(_counts.Length - 1);
     }
 
+    /// <summary>
+    /// The number of durations in buckets that lie wholly above
+    /// <paramref name="milliseconds"/>: those longer than it, give or take one
+    /// bucket.
+    /// </summary>
+    /// <param name="milliseconds">The threshold.</param>
+    /// <returns>The count.</returns>
+    public long CountAbove(double milliseconds)
+    {
+        long count = 0;
+        for (var i = LatencyHistogram.BucketFor(milliseconds) + 1; i < _counts.Length; i++)
+            count += _counts[i];
+        return count;
+    }
+
     /// <summary>The upper edge of the highest bucket that holds a duration, or 0.</summary>
     public double MaxMs
     {
