@@ -1,10 +1,10 @@
 using System.Collections.Concurrent;
 using EncDotNet.S100.Cli.Commands;
-using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Scripting;
 using SkiaSharp;
@@ -19,7 +19,7 @@ internal readonly record struct TileArea(double MinX, double MinY, double MaxX, 
 /// Where and how a tile set is rendered: the area, the zoom range, and the
 /// latitude each zoom level's scale is measured at.
 /// </summary>
-internal sealed record TileLayout(TileArea Area, double ReferenceLatitude, int MinZoom, int MaxZoom, HeadlessTileOptions TileOptions)
+internal sealed record TileLayout(TileArea Area, double ReferenceLatitude, int MinZoom, int MaxZoom, ChartTileOptions TileOptions)
 {
     /// <summary>The WGS-84 bounds of the area, the full longitude range when it wraps the antimeridian.</summary>
     public (double West, double South, double East, double North) Bounds
@@ -233,40 +233,37 @@ internal sealed class TileRenderSession : IDisposable
 
         // Vector products portray once, independent of the viewport; coverage
         // products portray here without a viewport (the full grid) to find the
-        // extent, and again for each zoom level (TileScene.RendererFor).
-        var inputs = new HeadlessCompositeInput[_processors.Count];
-        var vectorResults = new List<VectorPortrayalResult>();
+        // extent, and again for each zoom level (TileScene.RendererFor). The
+        // datasets still to portray run in parallel on the work scheduler.
+        var inputs = new ChartCompositeInput[_processors.Count];
+        var pending = new List<(int Index, ChartPortrayalRequest Request)>();
         bool hasCoverage = false;
         for (int i = 0; i < _processors.Count; i++)
         {
             var processor = _processors[i];
-            if (processor is IVectorPortrayalSource vectorSource)
+            if (processor is IVectorPortrayalSource
+                && !VariesWithTime(processor)
+                && _timelessPortrayals.TryGetValue((parsedPalette, i), out var cached))
             {
-                VectorPortrayalResult result;
-                if (VariesWithTime(processor))
-                {
-                    result = vectorSource.BuildVectorPortrayalAsync(ContextFor(processor, null)).GetAwaiter().GetResult();
-                }
-                else if (!_timelessPortrayals.TryGetValue((parsedPalette, i), out result!))
-                {
-                    result = vectorSource.BuildVectorPortrayalAsync(ContextFor(processor, null)).GetAwaiter().GetResult();
-                    _timelessPortrayals[(parsedPalette, i)] = result;
-                }
+                inputs[i] = ChartCompositeInput.ForVector(cached);
+                continue;
+            }
 
-                vectorResults.Add(result);
-                inputs[i] = HeadlessCompositeInput.ForVector(result);
-            }
-            else
-            {
-                var coverageSource = (ICoveragePortrayalSource)processor;
-                var result = coverageSource.BuildCoveragePortrayalAsync(ContextFor(processor, null)).GetAwaiter().GetResult();
-                inputs[i] = HeadlessCompositeInput.ForCoverage(result);
-                hasCoverage = true;
-            }
+            hasCoverage |= processor is not IVectorPortrayalSource;
+            pending.Add((i, new ChartPortrayalRequest(processor, ContextFor(processor, null))));
         }
 
-        var compositor = new HeadlessCompositor(new ProjNetCrsTransformFactory());
-        var options = new HeadlessCompositeOptions
+        var portrayed = ChartRenderer.PortrayAsync([.. pending.Select(p => p.Request)]).GetAwaiter().GetResult();
+        for (int p = 0; p < pending.Count; p++)
+        {
+            int i = pending[p].Index;
+            inputs[i] = portrayed[p];
+            if (portrayed[p].Vector is { } vector && !VariesWithTime(_processors[i]))
+                _timelessPortrayals[(parsedPalette, i)] = vector;
+        }
+
+        var vectorResults = inputs.Select(input => input.Vector).OfType<VectorPortrayalResult>().ToList();
+        var options = new ChartCompositeOptions
         {
             Background = Background(_settings),
             Mariner = MarinerSettings.Default,
@@ -277,7 +274,7 @@ internal sealed class TileRenderSession : IDisposable
             KeepAreaSymbolsInView = false,
         };
 
-        return new TileScene(_processors, inputs, vectorResults, hasCoverage, compositor, options, ContextFor, _portrayGate);
+        return new TileScene(_processors, inputs, vectorResults, hasCoverage, ChartCompositorFactory.Create(), options, ContextFor, _portrayGate);
     }
 
     /// <summary>
@@ -292,7 +289,7 @@ internal sealed class TileRenderSession : IDisposable
 
         double referenceLatitude = WebMercator.ToLonLat(0, (area.MinY + area.MaxY) / 2.0).Latitude;
         var (minZoom, maxZoom) = ResolveZoomRange(_settings, scene.VectorResults, area, referenceLatitude);
-        var tileOptions = new HeadlessTileOptions
+        var tileOptions = new ChartTileOptions
         {
             PixelRatio = _settings.TileSize / XyzTileGrid.TileSize,
             ReferenceLatitude = referenceLatitude,
@@ -302,7 +299,7 @@ internal sealed class TileRenderSession : IDisposable
     }
 
     /// <summary>Encodes a rendered tile in the session's format and quality.</summary>
-    public byte[] Encode(HeadlessTile tile)
+    public byte[] Encode(ChartTile tile)
     {
         var encodeFormat = Format switch
         {
@@ -470,7 +467,7 @@ internal sealed class TileRenderSession : IDisposable
         return (min, Math.Max(min, max));
     }
 
-    private static bool TryResolveArea(TilesRenderSettings settings, HeadlessCompositeScene scene, out TileArea area)
+    private static bool TryResolveArea(TilesRenderSettings settings, ChartComposition scene, out TileArea area)
     {
         if (settings.BoundingBox is not null
             && CompositeViewportBuilder.TryParseDoubles(settings.BoundingBox, 4, out var bb))
@@ -516,7 +513,7 @@ internal sealed class TileRenderSession : IDisposable
 
 /// <summary>
 /// The datasets portrayed in one palette, prepared as a composite. Hands out a
-/// <see cref="HeadlessTileRenderer"/> per zoom level, portraying coverage
+/// <see cref="ChartTileRenderer"/> per zoom level, portraying coverage
 /// products again for each so grid sampling and arrow density suit it.
 /// <see cref="RendererFor"/> may be called concurrently.
 /// </summary>
@@ -526,21 +523,21 @@ internal sealed class TileScene
     private const int MaxCoverageViewportPixels = 1 << 20;
 
     private readonly IReadOnlyList<IDatasetProcessor> _processors;
-    private readonly HeadlessCompositeInput[] _inputs;
+    private readonly ChartCompositeInput[] _inputs;
     private readonly bool _hasCoverage;
-    private readonly HeadlessCompositor _compositor;
-    private readonly HeadlessCompositeOptions _options;
+    private readonly ChartCompositor _compositor;
+    private readonly ChartCompositeOptions _options;
     private readonly Func<IDatasetProcessor, Viewport?, RenderContext> _contextFor;
     private readonly Lock _portrayGate;
-    private readonly ConcurrentDictionary<int, Lazy<HeadlessTileRenderer>> _renderers = new();
+    private readonly ConcurrentDictionary<int, Lazy<ChartTileRenderer>> _renderers = new();
 
     internal TileScene(
         IReadOnlyList<IDatasetProcessor> processors,
-        HeadlessCompositeInput[] inputs,
+        ChartCompositeInput[] inputs,
         IReadOnlyList<VectorPortrayalResult> vectorResults,
         bool hasCoverage,
-        HeadlessCompositor compositor,
-        HeadlessCompositeOptions options,
+        ChartCompositor compositor,
+        ChartCompositeOptions options,
         Func<IDatasetProcessor, Viewport?, RenderContext> contextFor,
         Lock portrayGate)
     {
@@ -556,14 +553,18 @@ internal sealed class TileScene
     }
 
     /// <summary>The composite of the datasets' full-extent portrayal.</summary>
-    public HeadlessCompositeScene Scene { get; }
+    public ChartComposition Scene { get; }
 
     /// <summary>The vector datasets' portrayal results (for their display scales).</summary>
     public IReadOnlyList<VectorPortrayalResult> VectorResults { get; }
 
-    /// <summary>The renderer for <paramref name="zoom"/>, created once per zoom level.</summary>
-    public HeadlessTileRenderer RendererFor(int zoom, TileLayout layout) =>
-        _renderers.GetOrAdd(zoom, z => new Lazy<HeadlessTileRenderer>(() => new HeadlessTileRenderer(
+    /// <summary>
+    /// The renderer for <paramref name="zoom"/>, created once per zoom level.
+    /// Coverage portrayal for the level runs on the work scheduler, so call
+    /// this from outside a scheduler job.
+    /// </summary>
+    public ChartTileRenderer RendererFor(int zoom, TileLayout layout) =>
+        _renderers.GetOrAdd(zoom, z => new Lazy<ChartTileRenderer>(() => new ChartTileRenderer(
             _hasCoverage ? _compositor.Prepare(PortrayCoverageForZoom(layout, z), _options) : Scene,
             layout.TileOptions))).Value;
 
@@ -572,7 +573,7 @@ internal sealed class TileScene
     /// covering the whole tiled area at that zoom's resolution, so grid sampling
     /// and arrow density match the tiles. Vector inputs are reused.
     /// </summary>
-    private HeadlessCompositeInput[] PortrayCoverageForZoom(TileLayout layout, int zoom)
+    private ChartCompositeInput[] PortrayCoverageForZoom(TileLayout layout, int zoom)
     {
         var area = layout.Area;
         double resolution = XyzTileGrid.Resolution(zoom);
@@ -592,15 +593,14 @@ internal sealed class TileScene
         var zoomInputs = _inputs.ToArray();
         lock (_portrayGate)
         {
-            for (int i = 0; i < _processors.Count; i++)
-            {
-                if (_processors[i] is ICoveragePortrayalSource coverageSource)
-                {
-                    var result = coverageSource.BuildCoveragePortrayalAsync(_contextFor(_processors[i], viewport))
-                        .GetAwaiter().GetResult();
-                    zoomInputs[i] = HeadlessCompositeInput.ForCoverage(result);
-                }
-            }
+            var coverage = Enumerable.Range(0, _processors.Count)
+                .Where(i => _processors[i] is ICoveragePortrayalSource)
+                .ToArray();
+            var portrayed = ChartRenderer.PortrayAsync(
+                    [.. coverage.Select(i => new ChartPortrayalRequest(_processors[i], _contextFor(_processors[i], viewport)))])
+                .GetAwaiter().GetResult();
+            for (int c = 0; c < coverage.Length; c++)
+                zoomInputs[coverage[c]] = portrayed[c];
         }
 
         return zoomInputs;

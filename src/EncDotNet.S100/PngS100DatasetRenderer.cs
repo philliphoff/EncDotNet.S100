@@ -1,7 +1,8 @@
 using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines;
-using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Rendering.Engine;
 using EncDotNet.S100.Rendering.Scene;
 using EncDotNet.S100.Scripting;
 using SkiaSharp;
@@ -208,48 +209,25 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
         S100CompositeOptions options,
         CancellationToken cancellationToken)
     {
-        var mariner = options.Mariner ?? MarinerSettings.Default;
-
-        var inputs = new List<HeadlessCompositeInput>(processors.Count);
-        foreach (var processor in processors)
+        if (!double.IsFinite(options.PixelDensity) || options.PixelDensity <= 0)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var context = BuildCompositeContext(processor, options, mariner);
-
-            switch (processor)
-            {
-                case IVectorPortrayalSource vectorSource:
-                    {
-                        var result = await vectorSource
-                            .BuildVectorPortrayalAsync(context, cancellationToken)
-                            .ConfigureAwait(false);
-                        inputs.Add(HeadlessCompositeInput.ForVector(result));
-                        break;
-                    }
-
-                case ICoveragePortrayalSource coverageSource:
-                    {
-                        var result = await coverageSource
-                            .BuildCoveragePortrayalAsync(context, cancellationToken)
-                            .ConfigureAwait(false);
-                        inputs.Add(HeadlessCompositeInput.ForCoverage(result));
-                        break;
-                    }
-
-                default:
-                    throw new NotSupportedException(
-                        $"Headless compositing is not supported for {processor.Spec.Name}: "
-                        + "the processor implements neither IVectorPortrayalSource nor "
-                        + "ICoveragePortrayalSource.");
-            }
+            throw new ArgumentOutOfRangeException(
+                nameof(options), options.PixelDensity, "The pixel density must be positive and finite.");
         }
 
-        var compositor = new HeadlessCompositor(new ProjNetCrsTransformFactory());
-        var compositeOptions = new HeadlessCompositeOptions
+        var mariner = options.Mariner ?? MarinerSettings.Default;
+
+        // Each dataset portrays as its own job on the chart engine's scheduler,
+        // so several cells portray in parallel.
+        var requests = new List<ChartPortrayalRequest>(processors.Count);
+        foreach (var processor in processors)
+            requests.Add(new ChartPortrayalRequest(processor, BuildCompositeContext(processor, options, mariner)));
+
+        var compositeOptions = new ChartCompositeOptions
         {
             Width = options.Width,
             Height = options.Height,
+            DeviceScale = (float)options.PixelDensity,
             Background = options.Background ?? new RgbaColor(255, 255, 255, 255),
             Viewport = options.Viewport,
             Mariner = mariner,
@@ -257,9 +235,18 @@ public sealed class PngS100DatasetRenderer : IS100DatasetRenderer<byte[]>, IS100
             Basemap = options.Basemap,
         };
 
-        using var bitmap = compositor.Render(inputs, compositeOptions);
+        using var bitmap = await ChartRenderer
+            .RenderAsync(requests, CreateCompositor(), compositeOptions, scheduler: null, cancellationToken)
+            .ConfigureAwait(false);
         return EncodePng(bitmap);
     }
+
+    /// <summary>
+    /// A chart compositor over ProjNet reprojection and the S-98 authority of
+    /// the bundled product registry.
+    /// </summary>
+    internal static ChartCompositor CreateCompositor() =>
+        new(new ProjNetCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes));
 
     /// <summary>
     /// Resolves the pipeline host for a layer: a per-layer override host when the
