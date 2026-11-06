@@ -62,6 +62,10 @@ internal static class RevealTrace
             state.AnyShown = true;
             state.LastChange = now;
             (first ? S100Diag.Telemetry.RevealFirst : S100Diag.Telemetry.RevealIncremental).Add(1);
+            if (first && S100VectorTileRenderer.LastViewChangeTicks is var viewChanged and > 0)
+            {
+                S100Diag.Telemetry.RevealFirstDelay.Record(Stopwatch.GetElapsedTime(viewChanged, now).TotalMilliseconds);
+            }
         }
     }
 

@@ -253,6 +253,9 @@ public static partial class S100VectorTileRenderer
 
     private static long _lastViewChangeTicks;
 
+    /// <summary>The <see cref="Stopwatch"/> timestamp of the last live frame at a new viewport, or 0.</summary>
+    internal static long LastViewChangeTicks => Volatile.Read(ref _lastViewChangeTicks);
+
     /// <summary>
     /// How long ago any live frame drew a tiled layer at a new viewport (a pan,
     /// zoom, rotation, resize or a layer's first frame), or
