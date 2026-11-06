@@ -236,13 +236,22 @@ public sealed class NhcStormRefreshTests : IDisposable
     }
 
     /// <summary>
-    /// Refreshes what's due (the panel's minute clock may already be doing so
-    /// after the clock moved) and waits for <paramref name="condition"/>.
+    /// Refreshes what's due until <paramref name="condition"/> holds. The
+    /// panel's minute clock may be refreshing already after the clock moved,
+    /// and a refresh asked for while one runs returns at once, so it's asked
+    /// again; announcements are made once however often it runs.
     /// </summary>
     private async Task RefreshAsync(LibraryPanelViewModel panel, Func<bool> condition)
     {
-        await panel.RefreshDueWeatherAsync();
-        await WaitForAsync(condition);
+        for (var i = 0; i < 400 && !condition(); i++)
+        {
+            await panel.RefreshDueWeatherAsync();
+            await _library.WhenIdle();
+            if (!condition())
+                await Task.Delay(25, TestContext.Current.CancellationToken);
+        }
+
+        Assert.True(condition());
         await _library.WhenIdle();
     }
 
