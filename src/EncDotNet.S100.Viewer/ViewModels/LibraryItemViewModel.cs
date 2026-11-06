@@ -125,6 +125,9 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// <summary>True when <see cref="Name"/> is a code, shown in monospace (not a package's description).</summary>
     public bool IsNameMono => IsModelHeader || (!IsPackageEntry && !IsGroupHeader && !IsStorm);
 
+    /// <summary>True when the row shows the outline swatch: not for a group header or a storm, which shows its class symbol.</summary>
+    public bool ShowsOutlineSwatch => !IsGroupHeader && !IsStorm;
+
     /// <summary>True for an NHC storm (V27): named by the storm, with its class symbol as the swatch.</summary>
     public bool IsStorm => StormItemText.IsStorm(Item);
 

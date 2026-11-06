@@ -189,7 +189,11 @@ public sealed class NhcStormRefreshTests : IDisposable
         var item = Assert.Single(source.Index!.Items);
         var row = new LibraryItemViewModel(item, source, _loader.StateOf, _downloader, "Weather", time: _time);
 
+        // The source says how many storms are active (V27).
+        Assert.Equal("1 active", panel.Nodes.Single().StatusLine);
+
         Assert.True(row.IsStorm);
+        Assert.False(row.ShowsOutlineSwatch);
         Assert.False(row.IsNameMono);
         Assert.Equal("HURRICANE IAN · AL09", row.Name);
         // Advisory 20 is downloaded and NHC lists 21.

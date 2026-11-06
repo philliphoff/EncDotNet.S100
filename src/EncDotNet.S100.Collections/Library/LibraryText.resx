@@ -720,6 +720,10 @@
     <value>Atlantic, East and Central Pacific</value>
     <comment>The basins NHC's active-storm list covers</comment>
   </data>
+  <data name="Weather_NoActiveStorms" xml:space="preserve">
+    <value>No active storms</value>
+    <comment>NHC is issuing no advisories now</comment>
+  </data>
   <data name="Weather_ActiveStormsFormat" xml:space="preserve">
     <value>{0} active</value>
     <comment>How many storms NHC is issuing advisories for. {0} count</comment>

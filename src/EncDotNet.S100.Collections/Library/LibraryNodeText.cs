@@ -334,6 +334,15 @@ public static partial class LibraryNodeText
             return SyncStatus(attention, c);
         if (sources is [{ Definition: S100ForecastFeedSource forecast, Index: { } runs }] && problems == 0)
             return ForecastStatus(runs, input.Health?.Invoke(forecast), input.ForecastCounts, c, input.TimeFormat);
+        // NHC's storms say how many are active (V27), not the latest advisory.
+        if (sources is [{ Definition: WeatherFeedSource { Service.Kind: Weather.WeatherServiceKind.NhcStorms }, Index: { } storms }] && problems == 0)
+        {
+            var active = storms.Items.Count(i => !Weather.WeatherRuns.IsPinned(i));
+            return (active == 0
+                ? LibraryText.Get("Weather_NoActiveStorms")
+                : string.Format(c, LibraryText.Get("Weather_ActiveStormsFormat"), active), LibraryNodeStatusKind.Info);
+        }
+
         if (sources is [{ Definition: WeatherFeedSource, Index.PublishedAt: { } latestRun }] && problems == 0)
             return (string.Format(c, LibraryText.Get("Weather_LatestRunFormat"), Weather.WeatherRequests.FormatRun(latestRun)), LibraryNodeStatusKind.Info);
         if (sources is [{ Definition: S100CatalogueFeedSource catalogue, Index: { } catalogueIndex }] && problems == 0)
