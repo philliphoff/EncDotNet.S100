@@ -384,7 +384,7 @@ Each scenario runs in one of two modes:
 | Mode | Starts from |
 |---|---|
 | `cold` | Empty portrayal, pattern-clip and tile caches. The background portrayal pre-warm is switched off for the session, so it can't warm cells between jumps. |
-| `prewarm` | Warm caches: the harness switches the pre-warm on and waits until it reports `complete` (every load-as-you-pan cell is in the portrayal cache), then runs the route. |
+| `prewarm` | Warm caches: the harness switches the pre-warm on and waits until it reports `complete` (every load-as-you-pan cell is in the portrayal cache), then runs the route. The manifest's `prewarm` block records how long that took, the pre-warm's concurrency limit, and the CPU, GC and memory window over it (`metrics`). |
 
 ### Data you need
 
