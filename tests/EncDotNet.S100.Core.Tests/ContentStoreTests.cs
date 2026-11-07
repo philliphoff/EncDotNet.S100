@@ -34,9 +34,20 @@ public sealed class ContentStoreTests : IDisposable
 
     private ContentStore Store(IWorkScheduler? scheduler = null)
     {
+        // A scheduler of the test's own: on WorkScheduler.Shared the store's
+        // background jobs queue behind other tests' IO, which can take longer
+        // than a test waits for them on a slow runner.
+        scheduler ??= OwnScheduler();
         var store = new ContentStore(_root, new ContentStoreOptions { Scheduler = scheduler });
         _owned.Add(store);
         return store;
+    }
+
+    private WorkScheduler OwnScheduler()
+    {
+        var scheduler = new WorkScheduler(new WorkSchedulerOptions { WorkerCount = 2 });
+        _owned.Add(scheduler);
+        return scheduler;
     }
 
     private WorkScheduler OneWorker()

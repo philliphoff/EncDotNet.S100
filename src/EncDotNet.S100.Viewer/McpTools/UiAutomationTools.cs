@@ -79,8 +79,17 @@ internal sealed class UiTreeTool(IViewerUiAutomation automation)
     /// <summary>The MCP tool name.</summary>
     public const string Name = "ui_tree";
 
+    /// <summary>
+    /// The most levels a request may list. Each level nests two JSON levels
+    /// (the element and its <c>children</c> array), and System.Text.Json and
+    /// most MCP clients stop at 64, so a deeper tree fails to serialize or to
+    /// read (#1225). 25 levels nest 55 deep in the result, which leaves room
+    /// for the JSON-RPC envelope. List a deeper subtree with <c>root</c>.
+    /// </summary>
+    public const int MaxDepth = 25;
+
     /// <summary>Levels listed when the request does not say.</summary>
-    public const int DefaultDepth = 30;
+    public const int DefaultDepth = MaxDepth;
 
     /// <summary>Elements listed when the request does not say.</summary>
     public const int DefaultMaxNodes = 400;
@@ -92,8 +101,9 @@ internal sealed class UiTreeTool(IViewerUiAutomation automation)
     {
         ArgumentNullException.ThrowIfNull(request);
         var depth = request.Depth ?? DefaultDepth;
-        if (depth is < 0 or > 100)
-            return ToolResult<UiTreeSnapshot>.Err(new InvalidArgument("depth", "expected 0–100"));
+        if (depth is < 0 or > MaxDepth)
+            return ToolResult<UiTreeSnapshot>.Err(new InvalidArgument("depth",
+                $"expected 0–{MaxDepth}; to see deeper, list from a nearer root (an id or a ref from this listing)"));
         var maxNodes = request.MaxNodes ?? DefaultMaxNodes;
         if (maxNodes is < 1 or > 5000)
             return ToolResult<UiTreeSnapshot>.Err(new InvalidArgument("maxNodes", "expected 1–5000"));

@@ -38,7 +38,6 @@ internal sealed record RoundTripDifference(
     public string? Issue => Class != RoundTripClass.Unexplained ? null : (ObjectClass, Attribute) switch
     {
         ("BRIDGE" or "PILPNT", "(pointers)") or ("TOPMAR", "(geometry)") => "#1290",
-        ("NEWOBJ", "(feature)") => "#1289",
         (_, "(pointers)") => "#1220",
         ("SOUNDG", _) => "#1219",
         (_, "CONRAD" or "CATDIS" or "CATTRK" or "CATTSS") => "#1218",
@@ -531,6 +530,18 @@ internal sealed class S57RoundTripComparer
                 return D(RoundTripClass.ExpectedRestructure, "Annex C §2.1.1 / §27.131 (MLTYLT → INFORM)");
             return D(RoundTripClass.Unexplained, "value appeared");
         }
+
+        // §27.199: a virtual AIS aid comes back with the Annex C class name,
+        // definition and symbol instruction for its type, which can differ
+        // from the producer's own text (NOAA's "Wreck Marking", #1289).
+        if (name == "NEWOBJ" && acronym is "CLSNAM" or "CLSDEF" or "SYMINS" && resultValue is not null
+            && S101ToS57Rules.VirtualAisTypes.Any(t => resultValue == acronym switch
+            {
+                "CLSNAM" => $"Virtual AtoN, {t.Name}",
+                "CLSDEF" => t.Definition,
+                _ => $"SY(BRTHNO01);SY({t.Symbol});TX('V-AIS',3,2,2,'15110',2,0,CHMGD,11)",
+            }))
+            return D(RoundTripClass.ExpectedRestructure, "Annex C §21.3 / §27.199 (virtual AIS text for the type)");
 
         // The clearances of a BRIDGE travel on its SpanFixed / SpanOpening.
         if (name == "BRIDGE" && BridgeSpanAttributes.Contains(acronym) && resultValue is null)

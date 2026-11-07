@@ -194,6 +194,63 @@ public sealed class ViewerUiAutomationTests
         Assert.Equal(5, tree.NodeCount);
     }
 
+    // #1225: an element whose children depth left out is marked, and listing
+    // it as a root reaches them.
+    [AvaloniaFact]
+    public async Task Depth_cut_marks_elements_with_more_and_their_ref_lists_the_rest()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        datasets.Add("/data/US5SEAFL.000", "S-57");
+        using var host = ViewHost.Show(new DatasetsView { DataContext = datasets }, width: 420, height: 900);
+        var automation = Automation(host);
+
+        var full = await automation.GetTreeAsync(new UiTreeQuery(null, Depth: 100, InteractiveOnly: false, MaxNodes: 5000));
+        var shallow = await automation.GetTreeAsync(new UiTreeQuery(null, Depth: 2, InteractiveOnly: false, MaxNodes: 5000));
+
+        Assert.False(full.Truncated);
+        Assert.DoesNotContain(full.Roots.SelectMany(r => Flatten(r.Element)), e => e.More is not null);
+        Assert.True(shallow.Truncated);
+        var cut = shallow.Roots.SelectMany(r => Flatten(r.Element)).Where(e => e.More == true).ToList();
+        Assert.NotEmpty(cut);
+        Assert.All(cut, e => Assert.Null(e.Children));
+
+        // Every element is reachable from the marked refs.
+        var reached = new HashSet<string>(shallow.Roots.SelectMany(r => Flatten(r.Element)).Select(e => e.Ref));
+        var pending = new Queue<string>(cut.Select(e => e.Ref));
+        while (pending.TryDequeue(out var reference))
+        {
+            var next = await automation.GetTreeAsync(new UiTreeQuery(new UiTarget(null, reference), Depth: 2, InteractiveOnly: false, MaxNodes: 5000));
+            foreach (var element in next.Roots.SelectMany(r => Flatten(r.Element)))
+            {
+                reached.Add(element.Ref);
+                if (element.More == true)
+                    pending.Enqueue(element.Ref);
+            }
+        }
+        Assert.Equal(full.Roots.SelectMany(r => Flatten(r.Element)).Select(e => e.Ref).ToHashSet(), reached);
+    }
+
+    // In the interactive view an element is marked only when a listable
+    // element (one with an id or an action) lies below it.
+    [AvaloniaFact]
+    public async Task Interactive_view_marks_only_elements_with_listable_descendants()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        datasets.Add("/data/US5SEAFL.000", "S-57");
+        using var host = ViewHost.Show(new DatasetsView { DataContext = datasets }, width: 420, height: 900);
+        var automation = Automation(host);
+
+        var tree = await automation.GetTreeAsync(new UiTreeQuery(null, Depth: 1, InteractiveOnly: true, MaxNodes: 5000));
+
+        var marked = tree.Roots.SelectMany(r => Flatten(r.Element)).Where(e => e.More == true).ToList();
+        Assert.NotEmpty(marked);
+        foreach (var element in marked)
+        {
+            var below = await automation.GetTreeAsync(new UiTreeQuery(new UiTarget(null, element.Ref), Depth: 1, InteractiveOnly: true, MaxNodes: 5000));
+            Assert.NotNull(Assert.Single(below.Roots).Element.Children);
+        }
+    }
+
     private static ViewerUiAutomation Automation(ViewHost host) => new(() => [host.Window]);
 
     private static IEnumerable<UiElementSnapshot> Flatten(UiElementSnapshot element)

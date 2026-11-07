@@ -43,9 +43,20 @@ public sealed class TileDiskCacheTests : IDisposable
 
     private TileDiskCache Cache(long budget = 64L * 1024 * 1024, IWorkScheduler? scheduler = null, int queue = 64)
     {
+        // A scheduler of the test's own: on WorkScheduler.Shared the store's
+        // background jobs queue behind other tests' IO, which can take longer
+        // than a test waits for them on a slow runner.
+        scheduler ??= OwnScheduler();
         var store = new ContentStore(_root, new ContentStoreOptions { Scheduler = scheduler, MaxQueuedWritesPerKind = queue });
         _owned.Add(store);
         return new TileDiskCache(store.Open(TileDiskCache.KindName, budget, TileDiskCache.KindOptions));
+    }
+
+    private WorkScheduler OwnScheduler()
+    {
+        var scheduler = new WorkScheduler(new WorkSchedulerOptions { WorkerCount = 2 });
+        _owned.Add(scheduler);
+        return scheduler;
     }
 
     private WorkScheduler OneWorker()
