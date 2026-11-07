@@ -1860,7 +1860,7 @@ a run, stop the process from the operating system; SoundCharts ignores
 | `--secom-identity <PATH>` | Present this MCP client certificate (PKCS#12, or PEM with its key) to SECOM services for this run, instead of the identity chosen in **Settings** > **Keys & certificates**. The password, if any, comes from `SOUNDCHARTS_SECOM_IDENTITY_PASSWORD`. |
 | `--settings <PATH>` | Use this settings file instead of the per-user one. |
 | `--data-dir <PATH>` | Put the settings file and all caches under this folder. You can also set `S100_DATA_DIR`. |
-| `--cache-dir <PATH>` | Put only the render caches (portrayal instructions, pattern clips and tiles) under this folder, leaving settings and the Library where they are. You can also set `S100_CACHE_DIR`. `S100_VECTOR_TILE_DISK_DIR` still overrides the tile cache's folder. Performance runs use it to start from empty caches. |
+| `--cache-dir <PATH>` | Put only the render caches (portrayal instructions, pattern clips and tiles) under this folder, leaving settings and the Library where they are. You can also set `S100_CACHE_DIR`. `S100_VECTOR_TILE_DISK_DIR` still gives the tile cache a folder of its own (tiles go in its `tiles` subfolder). Performance runs use it to start from empty caches. |
 | `--ephemeral` | Use throwaway settings that are never saved. Can't be combined with `--settings`. |
 | `--center <LAT,LON>` | Center the map on this position. Needs `--zoom`. |
 | `--zoom <LEVEL>` | Web Mercator zoom level, 0 to 24, for `--center`. |

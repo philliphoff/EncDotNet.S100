@@ -179,7 +179,7 @@ public sealed class TilesServeTimeTests
         var root = Path.Combine(Path.GetTempPath(), "tiles-time-cache-" + Guid.NewGuid().ToString("N"));
         try
         {
-            var cache = new DiskTileCache(root, "0123456789abcdef0123456789abcdef", TileImageFormat.Png, 1 << 20);
+            using var cache = new DiskTileCache(root, "0123456789abcdef0123456789abcdef", TileImageFormat.Png, 1 << 20);
             cache.Add(new TileKey("day", 3, 1, 1), [1]);
             cache.Add(new TileKey("day", 3, 1, 1, Hours(12)), [2]);
 
@@ -187,11 +187,23 @@ public sealed class TilesServeTimeTests
             Assert.True(cache.TryGet(new TileKey("day", 3, 1, 1, Hours(12)), out var timed));
             Assert.Equal([1], plain);
             Assert.Equal([2], timed);
-            Assert.True(File.Exists(Path.Combine(root, "0123456789abcdef0123456789abcdef", "day-20260321T070000Z", "3", "1", "1.png")));
+            Assert.True(cache.WaitForWrites(TimeSpan.FromSeconds(10)));
+            Assert.True(File.Exists(Path.Combine(root, DiskTileCache.KindName, "0123456789abcdef0123456789abcdef", "day-20260321T070000Z", "3", "1", "1.png")));
         }
         finally
         {
-            Directory.Delete(root, recursive: true);
+            // Best-effort: Windows can briefly hold a folder whose files were
+            // just written by the cache's background job.
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
         }
     }
 }

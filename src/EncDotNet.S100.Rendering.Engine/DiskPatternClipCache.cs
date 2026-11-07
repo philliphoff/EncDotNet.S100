@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using EncDotNet.S100.Core.Caching;
 using NetTopologySuite.Geometries;
@@ -41,10 +40,12 @@ namespace EncDotNet.S100.Rendering.Engine;
 /// entry that later deserializes incorrectly.
 /// </para>
 /// <para>
-/// The cache is bounded by a total-bytes cap enforced with a least-recently-used
-/// eviction policy (see <see cref="DiskCacheBudget"/>). The cache directory is
-/// shared across every S-101 processor, so all instance methods are
-/// thread-safe; hits read and deserialize without a lock.
+/// Entries live in a <see cref="ContentKind"/> of the host's
+/// <see cref="ContentStore"/>, which bounds them by its byte budget with
+/// least-recently-used eviction. A miss serializes the clip on the caller and
+/// queues the file write as a background job. The kind is shared across every
+/// S-101 processor, so all instance methods are thread-safe; hits read and
+/// deserialize without a lock.
 /// </para>
 /// </remarks>
 public sealed class DiskPatternClipCache : IPatternClipCache
@@ -59,42 +60,27 @@ public sealed class DiskPatternClipCache : IPatternClipCache
     /// </summary>
     public const int FormatVersion = 1;
 
-    /// <summary>File extension for persisted clip sidecar files.</summary>
-    private const string FileExtension = ".clip";
+    /// <summary>The kind name hosts open for this cache (also its folder name).</summary>
+    public const string KindName = "PatternClipCache";
 
-    private readonly string _cacheDirectory;
-    private readonly DiskCacheBudget _budget;
+    /// <summary>The options hosts open this cache's kind with.</summary>
+    public static ContentKindOptions KindOptions { get; } = new() { Extension = ".clip" };
+
+    private readonly ContentKind _kind;
 
     private long _hits;
     private long _misses;
 
     /// <summary>
-    /// Creates a disk-backed pattern-clip cache rooted at
-    /// <paramref name="cacheDirectory"/>.
+    /// Creates a disk-backed pattern-clip cache over <paramref name="kind"/>,
+    /// normally opened as <see cref="KindName"/> with <see cref="KindOptions"/>.
     /// </summary>
-    /// <param name="cacheDirectory">
-    /// Directory under which clip sidecar files are stored. Created on first
-    /// write if it does not exist. The directory is assumed to be private to
-    /// this cache (the LRU sweep enumerates every <c>*.clip</c> file in it).
-    /// </param>
-    /// <param name="maxBytes">
-    /// Soft upper bound, in bytes, on the total size of all persisted clip
-    /// files. After a write that exceeds it, the least-recently-used files are
-    /// evicted until the total is at or below this cap. Must be positive.
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="cacheDirectory"/> is null or empty.
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="maxBytes"/> is not positive.
-    /// </exception>
-    public DiskPatternClipCache(string cacheDirectory, long maxBytes)
+    /// <param name="kind">The store kind the entries live in.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="kind"/> is null.</exception>
+    public DiskPatternClipCache(ContentKind kind)
     {
-        ArgumentException.ThrowIfNullOrEmpty(cacheDirectory);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
-
-        _cacheDirectory = cacheDirectory;
-        _budget = new DiskCacheBudget(cacheDirectory, FileExtension, maxBytes);
+        ArgumentNullException.ThrowIfNull(kind);
+        _kind = kind;
     }
 
     /// <inheritdoc />
@@ -103,8 +89,8 @@ public sealed class DiskPatternClipCache : IPatternClipCache
     /// <inheritdoc />
     public long Misses => Interlocked.Read(ref _misses);
 
-    /// <summary>Soft upper bound, in bytes, on the total size of the persisted entries.</summary>
-    public long MaxBytes => _budget.MaxBytes;
+    /// <summary>The store kind the entries live in.</summary>
+    public ContentKind Kind => _kind;
 
     /// <summary>
     /// The total size, in bytes, of the persisted entries. The first call reads
@@ -114,8 +100,8 @@ public sealed class DiskPatternClipCache : IPatternClipCache
     {
         get
         {
-            _budget.EnsureIndexed();
-            return _budget.TotalBytes;
+            _kind.EnsureIndexed();
+            return _kind.TotalBytes;
         }
     }
 
@@ -129,14 +115,7 @@ public sealed class DiskPatternClipCache : IPatternClipCache
     public bool Contains(string key)
     {
         ArgumentNullException.ThrowIfNull(key);
-        try
-        {
-            return File.Exists(GetEntryPath(key));
-        }
-        catch
-        {
-            return false;
-        }
+        return _kind.Contains(ContentKind.HashKey(key));
     }
 
     /// <inheritdoc />
@@ -147,9 +126,9 @@ public sealed class DiskPatternClipCache : IPatternClipCache
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(factory);
 
-        var path = GetEntryPath(key);
+        var entryKey = ContentKind.HashKey(key);
 
-        var cached = TryRead(path);
+        var cached = TryRead(entryKey);
         if (cached is not null)
         {
             Interlocked.Increment(ref _hits);
@@ -164,20 +143,9 @@ public sealed class DiskPatternClipCache : IPatternClipCache
         // (rare) and the last writer wins; the result is identical either way.
         var produced = factory();
 
-        TryWrite(path, produced);
+        TryWrite(entryKey, produced);
 
         return produced;
-    }
-
-    /// <summary>
-    /// Maps a cache key to its sidecar file path. The filename is the lowercase
-    /// hex SHA-256 of the UTF-8 key, so arbitrary key content (including path
-    /// separators) maps to a single safe filename.
-    /// </summary>
-    private string GetEntryPath(string key)
-    {
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
-        return Path.Combine(_cacheDirectory, Convert.ToHexString(hash).ToLowerInvariant() + FileExtension);
     }
 
     /// <summary>
@@ -185,10 +153,9 @@ public sealed class DiskPatternClipCache : IPatternClipCache
     /// <see langword="null"/> (a miss) when the file is absent, unreadable, has a
     /// mismatched <see cref="FormatVersion"/>, or is otherwise corrupt/truncated.
     /// </summary>
-    private IReadOnlyList<(string PatternRef, int Priority, Geometry Geometry)>? TryRead(string path)
+    private IReadOnlyList<(string PatternRef, int Priority, Geometry Geometry)>? TryRead(string entryKey)
     {
-        var bytes = _budget.TryRead(path);
-        if (bytes is null)
+        if (_kind.Read(entryKey).Bytes is not { } bytes)
             return null;
 
         try
@@ -203,13 +170,12 @@ public sealed class DiskPatternClipCache : IPatternClipCache
     }
 
     /// <summary>
-    /// Serializes and atomically writes a clip entry, evicting
-    /// least-recently-used entries if the cap is exceeded. All failures are
+    /// Serializes a clip entry and queues its write. All failures are
     /// swallowed: an unwritable cache must never break a render (the freshly
     /// computed value is still returned to the caller).
     /// </summary>
     private void TryWrite(
-        string path,
+        string entryKey,
         IReadOnlyList<(string PatternRef, int Priority, Geometry Geometry)> entries)
     {
         byte[] bytes;
@@ -222,7 +188,10 @@ public sealed class DiskPatternClipCache : IPatternClipCache
             return;
         }
 
-        _budget.TryWrite(path, bytes);
+        // A dropped entry costs a multi-second clip later, so a full queue (or
+        // a store shutting down) writes it here instead.
+        if (_kind.QueueWrite(entryKey, bytes) is ContentWriteResult.Full or ContentWriteResult.Stopped)
+            _kind.Write(entryKey, bytes);
     }
 
     /// <summary>

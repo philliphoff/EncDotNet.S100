@@ -41,12 +41,14 @@ public sealed class TilesServeDiskCacheTests : IDisposable
     [Fact]
     public void Tiles_are_kept_across_runs()
     {
-        var first = new DiskTileCache(CacheRoot, FingerprintA, TileImageFormat.Png, 1 << 20);
-        first.Add(Key(0), Tile(100));
-        first.Add(Key(1), []);
-        first.Add(Key(0, "night"), Tile(50, 9));
+        using (var first = new DiskTileCache(CacheRoot, FingerprintA, TileImageFormat.Png, 1 << 20))
+        {
+            first.Add(Key(0), Tile(100));
+            first.Add(Key(1), []);
+            first.Add(Key(0, "night"), Tile(50, 9));
+        }
 
-        Assert.True(File.Exists(Path.Combine(CacheRoot, FingerprintA, "day", "3", "0", "1.png")));
+        Assert.True(File.Exists(Path.Combine(CacheRoot, DiskTileCache.KindName, FingerprintA, "day", "3", "0", "1.png")));
 
         var second = new DiskTileCache(CacheRoot, FingerprintA, TileImageFormat.Png, 1 << 20);
         Assert.True(second.TryGet(Key(0), out var tile));
@@ -68,41 +70,43 @@ public sealed class TilesServeDiskCacheTests : IDisposable
     {
         // Room for three 1000-byte tiles (each counted with its overhead).
         long budget = 3 * (1000 + 512);
-        var stale = new DiskTileCache(CacheRoot, FingerprintB, TileImageFormat.Png, budget);
-        stale.Add(Key(0), Tile(1000));
-        var staleFile = Path.Combine(CacheRoot, FingerprintB, "day", "3", "0", "1.png");
-        File.SetLastWriteTimeUtc(staleFile, DateTime.UtcNow.AddHours(-1));
+        using (var stale = new DiskTileCache(CacheRoot, FingerprintB, TileImageFormat.Png, budget))
+            stale.Add(Key(0), Tile(1000));
+        var staleFile = Path.Combine(CacheRoot, DiskTileCache.KindName, FingerprintB, "day", "3", "0", "1.png");
+        File.SetLastAccessTimeUtc(staleFile, DateTime.UtcNow.AddHours(-1));
 
-        var cache = new DiskTileCache(CacheRoot, FingerprintA, TileImageFormat.Png, budget);
-        cache.Add(Key(0), Tile(1000));
-        cache.Add(Key(1), Tile(1000));
+        using var cache = new DiskTileCache(CacheRoot, FingerprintA, TileImageFormat.Png, budget);
+        Add(cache, Key(0), Tile(1000));
+        Add(cache, Key(1), Tile(1000));
         Assert.True(cache.TryGet(Key(0), out _)); // now more recent than Key(1)
 
-        cache.Add(Key(2), Tile(1000));
+        Add(cache, Key(2), Tile(1000));
 
-        // The stale fingerprint's tile went first.
+        // Over budget, the store frees down to 95% of it: the stale
+        // fingerprint's tile first, then this fingerprint's least recently used.
         Assert.False(File.Exists(staleFile));
-        Assert.True(cache.TryGet(Key(1), out _));
-
-        cache.Add(Key(3), Tile(1000));
-
-        // Then the least recently used of this fingerprint's own.
-        Assert.False(cache.TryGet(Key(0), out _));
-        Assert.True(cache.TryGet(Key(1), out _));
+        Assert.False(cache.TryGet(Key(1), out _));
+        Assert.True(cache.TryGet(Key(0), out _));
         Assert.True(cache.TryGet(Key(2), out _));
-        Assert.True(cache.TryGet(Key(3), out _));
         Assert.True(cache.Size <= budget);
 
         // A tile larger than the whole budget isn't kept.
-        cache.Add(Key(4), Tile(10_000));
+        Add(cache, Key(4), Tile(10_000));
         Assert.False(cache.TryGet(Key(4), out _));
+    }
+
+    /// <summary>Adds a tile and lets its background write land.</summary>
+    private static void Add(DiskTileCache cache, TileKey key, byte[] data)
+    {
+        cache.Add(key, data);
+        Assert.True(cache.WaitForWrites(TimeSpan.FromSeconds(10)));
     }
 
     [Fact]
     public void Clearing_deletes_only_the_cache_folders()
     {
-        var cache = new DiskTileCache(CacheRoot, FingerprintA, TileImageFormat.Png, 1 << 20);
-        cache.Add(Key(0), Tile(10));
+        using (var cache = new DiskTileCache(CacheRoot, FingerprintA, TileImageFormat.Png, 1 << 20))
+            cache.Add(Key(0), Tile(10));
         var unrelatedFile = Path.Combine(CacheRoot, "notes.txt");
         var unrelatedFolder = Path.Combine(CacheRoot, "photos");
         File.WriteAllText(unrelatedFile, "keep me");
@@ -110,7 +114,7 @@ public sealed class TilesServeDiskCacheTests : IDisposable
 
         DiskTileCache.Clear(CacheRoot);
 
-        Assert.False(Directory.Exists(Path.Combine(CacheRoot, FingerprintA)));
+        Assert.False(Directory.Exists(Path.Combine(CacheRoot, DiskTileCache.KindName)));
         Assert.True(File.Exists(unrelatedFile));
         Assert.True(Directory.Exists(unrelatedFolder));
         Assert.Throws<ArgumentException>(() => new DiskTileCache(CacheRoot, "photos", TileImageFormat.Png, 1 << 20));
@@ -220,7 +224,7 @@ public sealed class TilesServeDiskCacheTests : IDisposable
             Assert.Equal(1, third.BlocksRendered);
         }
 
-        Assert.Equal(2, Directory.EnumerateDirectories(CacheRoot).Count(d => DiskTileCache.IsFingerprint(Path.GetFileName(d))));
+        Assert.Equal(2, DiskTileCache.FingerprintFolders(CacheRoot).Count());
 
         // --clear-cache starts from nothing.
         var cleared = new TilesServeCommand.Settings

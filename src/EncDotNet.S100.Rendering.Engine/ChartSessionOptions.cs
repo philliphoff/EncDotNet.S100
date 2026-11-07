@@ -317,12 +317,13 @@ public sealed class ChartSessionOptions
     public bool TileDiskMbEnvExplicit { get; }
 
     /// <summary>
-    /// Optional override directory for the warm disk tile cache, seeded from
-    /// <c>S100_VECTOR_TILE_DISK_DIR</c>. <see langword="null"/> uses an OS-temp
-    /// subdirectory. Read once when the disk cache is created (restart-only);
-    /// not surfaced as an interactive control. The host may assign it at
-    /// startup (e.g. to re-root the cache under a <c>--data-dir</c> folder);
-    /// an explicit environment variable always wins.
+    /// Optional root of the content store the engine creates for its warm
+    /// tiles when the host gives it none (<see cref="ChartEngine.ContentStore"/>),
+    /// seeded from <c>S100_VECTOR_TILE_DISK_DIR</c>. Tiles go in its
+    /// <c>tiles</c> kind folder. <see langword="null"/> uses an OS-temp folder.
+    /// Read once when the disk cache is created (restart-only); not surfaced as
+    /// an interactive control. The host may assign it at startup; an explicit
+    /// environment variable always wins.
     /// </summary>
     public string? TileDiskDirectory
     {

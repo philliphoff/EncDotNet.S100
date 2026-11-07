@@ -272,6 +272,8 @@ public sealed class WorkSchedulerTests
         var raster = scheduler.Schedule(new WorkKey("raster"), WorkStage.Raster, WorkPriority.Background(), _ => ValueTask.FromResult(true));
 
         await Task.WhenAll(visible.Result, raster.Result).WaitAsync(Timeout, TestContext.Current.CancellationToken);
+        // The admitted heavy job may start just after the quick ones finish.
+        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref running) == 1, Timeout));
         Assert.Equal(1, Volatile.Read(ref running));
         Assert.Equal(1, scheduler.GetStats().AllocationHeavyRunning);
 

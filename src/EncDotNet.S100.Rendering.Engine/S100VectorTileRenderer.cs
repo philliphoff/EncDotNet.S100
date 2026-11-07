@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using EncDotNet.S100.Core.Caching;
 using EncDotNet.S100.Core.Scheduling;
 using EncDotNet.S100.Renderers.Skia.Scene;
 using EncDotNet.S100.Rendering.Scene;
@@ -562,14 +563,15 @@ public static partial class S100VectorTileRenderer
     private static TileDiskCache? SharedDiskCache => DiskCache.Value;
 
     /// <summary>
-    /// The effective warm-tile disk-cache root directory for this process:
+    /// The root of the content store the engine creates for its warm tiles
+    /// when the host gives it none (<see cref="ChartEngine.ContentStore"/>):
     /// the <see cref="ChartSessionOptions.TileDiskDirectory"/> override
-    /// (env var or host-assigned), or an OS-temp subdirectory when unset.
-    /// Exposed so the host can locate the cache for a "clear caches" sweep.
+    /// (env var or host-assigned), or an OS-temp folder when unset. Tiles go in
+    /// its <c>tiles</c> kind folder.
     /// </summary>
     public static string ResolveTileDiskDirectory() =>
         string.IsNullOrEmpty(ChartEngine.Options.TileDiskDirectory)
-            ? Path.Combine(Path.GetTempPath(), "encdotnet-s100", "tiles")
+            ? Path.Combine(Path.GetTempPath(), "encdotnet-s100")
             : ChartEngine.Options.TileDiskDirectory!;
 
     private static TileDiskCache? CreateSharedDiskCache()
@@ -581,11 +583,20 @@ public static partial class S100VectorTileRenderer
 
         try
         {
-            var root = ResolveTileDiskDirectory();
-            var budgetMb = ChartEngine.Options.TileDiskMb;
-            var cache = new TileDiskCache(root, (long)budgetMb * 1024 * 1024);
-            AppDomain.CurrentDomain.ProcessExit += (_, _) => cache.Dispose();
-            return cache;
+            var store = ChartEngine.ContentStore;
+            if (store is null)
+            {
+                var own = new ContentStore(ResolveTileDiskDirectory());
+                AppDomain.CurrentDomain.ProcessExit += (_, _) => own.Dispose();
+                store = own;
+            }
+
+            var kind = store.Kinds.FirstOrDefault(k => k.Name == TileDiskCache.KindName)
+                ?? store.Open(
+                    TileDiskCache.KindName,
+                    (long)(ChartEngine.Options.TileDiskMb * 1024 * 1024),
+                    TileDiskCache.KindOptions);
+            return new TileDiskCache(kind);
         }
         catch
         {
@@ -2966,7 +2977,7 @@ public static partial class S100VectorTileRenderer
                 new WorkKey(state, tileKey),
                 WorkStage.Raster,
                 priority,
-                _ => ValueTask.FromResult(RunTileJob(state, tileKey)));
+                _ => RunTileJobAsync(state, tileKey));
         }
     }
 
@@ -2994,7 +3005,7 @@ public static partial class S100VectorTileRenderer
     /// has left the pending sets since the job was queued is skipped.
     /// </summary>
     /// <returns>Whether the job did any work.</returns>
-    private static bool RunTileJob(TileState state, TileKey key)
+    private static async ValueTask<bool> RunTileJobAsync(TileState state, TileKey key)
     {
         if (!DrainGate.TryRegister())
         {
@@ -3099,7 +3110,7 @@ public static partial class S100VectorTileRenderer
                     queueWaitMs);
             }
 
-            ProcessTileJob(state, job);
+            await ProcessTileJobAsync(state, job);
             return true;
         }
         catch (Exception ex)
@@ -3113,7 +3124,7 @@ public static partial class S100VectorTileRenderer
         }
     }
 
-    private static void ProcessTileJob(TileState state, TileJob job)
+    private static async Task ProcessTileJobAsync(TileState state, TileJob job)
     {
         var disk = SharedDiskCache;
         var images = new Dictionary<TileKey, SKImage>();
@@ -3155,29 +3166,27 @@ public static partial class S100VectorTileRenderer
                 using var diskReadActivity = S100Diag.Telemetry.ActivitySource.StartActivity(
                     "s100.render.tile.stage.disk_read", ActivityKind.Internal);
                 var tilePx = TilePixelSize(job.DeviceScale);
+
+                // Every read starts before the first is awaited, and an awaited
+                // read gives the worker back to the scheduler; decoding resumes
+                // on a worker. The namespace is per pixel size, and a tile of
+                // another size (a corrupt or foreign file) is a miss.
+                var reads = new List<(TileKey Key, ValueTask<SKImage?> Read)>(activeKeys.Count);
                 foreach (var key in activeKeys)
                 {
-                    if (!IsPersistable(job, key))
+                    if (IsPersistable(job, key))
                     {
-                        continue;
+                        reads.Add((key, disk.TryReadAsync(job.DiskNamespace, key, tilePx)));
                     }
+                }
 
-                    var image = disk.TryRead(job.DiskNamespace, key);
-                    if (image is null)
+                foreach (var (key, read) in reads)
+                {
+                    if (await read is { } image)
                     {
-                        continue;
+                        images.Add(key, image);
+                        S100Diag.Telemetry.TileDiskHits.Add(1);
                     }
-
-                    // The namespace is per pixel size; a tile of another size
-                    // (a corrupt or foreign file) is a miss, never blitted soft.
-                    if (image.Width != tilePx || image.Height != tilePx)
-                    {
-                        image.Dispose();
-                        continue;
-                    }
-
-                    images.Add(key, image);
-                    S100Diag.Telemetry.TileDiskHits.Add(1);
                 }
                 diskReadActivity?.SetTag("s100.render.tile.disk.hits", images.Count);
                 diskReadActivity?.SetTag(

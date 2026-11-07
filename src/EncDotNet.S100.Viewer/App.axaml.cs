@@ -182,9 +182,10 @@ public partial class App : Application
         // S100_VECTOR_TILE_DISK_DIR env var still wins (the setter is a
         // no-op when env-pinned). Must run before the tile renderer creates
         // its shared disk cache below.
-        if (_services.GetRequiredService<ViewerDataPaths>().TileDiskCacheDirectory is { } tileDir)
+        if (!EncDotNet.S100.Rendering.Engine.ChartEngine.Options.TileDiskDirectoryEnvExplicit)
         {
-            EncDotNet.S100.Rendering.Engine.ChartEngine.Options.TileDiskDirectory = tileDir;
+            EncDotNet.S100.Rendering.Engine.ChartEngine.ContentStore =
+                _services.GetRequiredService<Services.Caching.ViewerContentStores>().Render;
         }
 
         // Detect an unclean shutdown from the previous run (native crash,
@@ -485,13 +486,8 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Cap on the disk portrayal cache. Sized so a state's NOAA ENC collection
-    /// fits alongside what interactive loads have cached (#1266).
-    /// </summary>
-    private const long PortrayalCacheMaxBytes = 1024L * 1024 * 1024;
-
-    /// <summary>
-    /// The share of <see cref="PortrayalCacheMaxBytes"/> background pre-warming
+    /// The share of the portrayal and pattern-clip kinds' budget shares
+    /// (<see cref="Services.Caching.ViewerContentStores"/>) background pre-warming
     /// may fill. The rest is left to interactive loads, so pre-warming never
     /// makes the cache evict entries in use (#1266).
     /// </summary>
@@ -507,6 +503,21 @@ public partial class App : Application
         // file, the disk caches, the logs, and the crash-marker directory.
         var dataPaths = ViewerDataPaths.Resolve(StartupOptions);
         services.AddSingleton(dataPaths);
+
+        // The content stores every disk cache lives in, under one byte budget
+        // (map rendering slice 11). The tile kind's share is the tile-cache
+        // size setting (an environment variable wins), read once: a change
+        // applies on the next start, as before.
+        services.AddSingleton(sp =>
+        {
+            var options = EncDotNet.S100.Rendering.Engine.ChartEngine.Options;
+            if (sp.GetRequiredService<ViewerSettings>().TileDiskMb is { } tileDiskMb)
+            {
+                options.TileDiskMb = tileDiskMb;
+            }
+
+            return new Services.Caching.ViewerContentStores(dataPaths, (long)(options.TileDiskMb * 1024 * 1024));
+        });
 
         // OpenTelemetry tracing/metrics/logging — opt-in via OTEL_* env vars.
         // CLI --log-file / --verbose add a file sink and lower the log
@@ -851,9 +862,8 @@ public partial class App : Application
             // NetTopologySuite pattern-fill clip, even across restarts. The clip
             // geometry is palette-independent and the cache key is content-hash +
             // FormatVersion stamped, so persisted entries auto-invalidate.
-            var cacheDir = sp.GetRequiredService<ViewerDataPaths>().PatternClipCacheDirectory;
-            const long maxBytes = 256L * 1024 * 1024;
-            return new EncDotNet.S100.Rendering.Engine.DiskPatternClipCache(cacheDir, maxBytes);
+            return new EncDotNet.S100.Rendering.Engine.DiskPatternClipCache(
+                sp.GetRequiredService<Services.Caching.ViewerContentStores>().PatternClips);
         });
         services.AddSingleton<EncDotNet.S100.Rendering.Engine.IPatternClipCache>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Rendering.Engine.DiskPatternClipCache>());
@@ -865,8 +875,8 @@ public partial class App : Application
             // the portrayal-content hash (dataset bytes + FC/PC content +
             // pipeline / Lua engine assemblies) so persisted entries auto-invalidate
             // when anything affecting the instruction list changes.
-            var cacheDir = sp.GetRequiredService<ViewerDataPaths>().PortrayalInstructionCacheDirectory;
-            return new EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache(cacheDir, PortrayalCacheMaxBytes);
+            return new EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache(
+                sp.GetRequiredService<Services.Caching.ViewerContentStores>().Portrayal);
         });
         services.AddSingleton<EncDotNet.S100.Pipelines.Vector.Caching.IPortrayalInstructionCache>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache>());
@@ -876,9 +886,8 @@ public partial class App : Application
             // previously-probed dataset (e.g. framing a loose-cell folder) costs
             // zero parse on a later session. Entries key on the source file's
             // mtime + size, so editing or replacing a dataset auto-invalidates.
-            var cacheDir = sp.GetRequiredService<ViewerDataPaths>().DatasetMetadataCacheDirectory;
-            const long maxBytes = 16L * 1024 * 1024;
-            return new EncDotNet.S100.Core.Metadata.DiskDatasetMetadataCache(cacheDir, maxBytes);
+            return new EncDotNet.S100.Core.Metadata.DiskDatasetMetadataCache(
+                sp.GetRequiredService<Services.Caching.ViewerContentStores>().Metadata);
         });
         services.AddSingleton<IDatasetMetadataReader>(sp =>
             new CachingDatasetMetadataReader(
@@ -890,9 +899,8 @@ public partial class App : Application
             // so a large set re-opens (and feeds lazy registration) without
             // re-parsing the binary ISO 8211 catalogue. Descriptors are tiny,
             // so a modest cap holds many sets.
-            var cacheDir = sp.GetRequiredService<ViewerDataPaths>().S57CatalogCacheDirectory;
-            const long maxBytes = 16L * 1024 * 1024;
-            return new Services.Caching.DiskS57CatalogCache(cacheDir, maxBytes);
+            return new Services.Caching.DiskS57CatalogCache(
+                sp.GetRequiredService<Services.Caching.ViewerContentStores>().S57Catalogs);
         });
         services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory>(sp =>
             new EncDotNet.S100.Datasets.Pipelines.DatasetPipelineFactory(
@@ -956,8 +964,8 @@ public partial class App : Application
                 isEnabled: () => prewarmOverride.Enabled ?? settings.PortrayalPrewarmEnabled,
                 // Pre-warming stops short of the cap, so it never makes the cache
                 // evict entries the map is using.
-                hasCacheRoom: () => cache.TotalBytes < cache.MaxBytes * PortrayalPrewarmCacheShare
-                    && clips.TotalBytes < clips.MaxBytes * PortrayalPrewarmCacheShare,
+                hasCacheRoom: () => cache.TotalBytes < cache.Kind.ShareBytes * PortrayalPrewarmCacheShare
+                    && clips.TotalBytes < clips.Kind.ShareBytes * PortrayalPrewarmCacheShare,
                 isCached: recorder.IsCached,
                 signature: () => EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalWarmSignature.Of(
                     projection.CreateSnapshot(), settings),

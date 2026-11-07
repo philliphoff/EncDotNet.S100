@@ -10,6 +10,7 @@
   <ItemGroup>
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="NetTopologySuite" />
+    <PackageReference Include="ZstdSharp.Port" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 

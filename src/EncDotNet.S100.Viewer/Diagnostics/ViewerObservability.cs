@@ -139,7 +139,13 @@ internal static class ViewerObservability
             .ConfigureResource(r => r.AddService(serviceName: serviceName, serviceVersion: serviceVersion))
             .WithTracing(tracing =>
             {
+                // Record every span of the viewer's own sources, even under a
+                // parent nobody records: work an MCP request starts (a lazy
+                // cell load after set_viewport) runs under ASP.NET Core's
+                // request activity, which isn't sampled, so the default
+                // parent-based sampler dropped the warm-load breakdown's spans.
                 tracing
+                    .SetSampler(new AlwaysOnSampler())
                     .AddSource(SourceWildcard)
                     .AddSource(ServiceName)
                     .AddFileExporterIfConfigured(out _);

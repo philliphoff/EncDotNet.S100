@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <Compile Include="..\_shared\MapsuiDependencyClosure.cs" Link="TestSupport\MapsuiDependencyClosure.cs" />
+    <Compile Include="..\_shared\TestContentKinds.cs" Link="TestSupport\TestContentKinds.cs" />
     <Compile Include="..\_shared\TestLuaEngine.cs" Link="TestSupport\TestLuaEngine.cs" />
     <Compile Include="..\_shared\ReferenceLuaSort.cs" Link="TestSupport\ReferenceLuaSort.cs" />
     <Compile Include="..\_shared\SyntheticS57Cell.cs" Link="TestSupport\SyntheticS57Cell.cs" />
