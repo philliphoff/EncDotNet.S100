@@ -31,13 +31,13 @@ public class S57PortrayalInstructionCacheProcessorTests
         Directory.CreateDirectory(cacheDir);
         try
         {
-            var first = CreateProcessor(fixturePath, new DiskPortrayalInstructionCache(cacheDir, maxBytes: 256L * 1024 * 1024));
+            var first = CreateProcessor(fixturePath, new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(cacheDir, maxBytes: 256L * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions)));
             var firstResult = await first.BuildVectorPortrayalAsync(cancellationToken: ct);
             Assert.Equal(1, first.RuleRunCount);
             Assert.Equal(0, first.SharedInstructionCacheHits);
 
             // A new cache over the same folder stands in for a restart.
-            var second = CreateProcessor(fixturePath, new DiskPortrayalInstructionCache(cacheDir, maxBytes: 256L * 1024 * 1024));
+            var second = CreateProcessor(fixturePath, new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(cacheDir, maxBytes: 256L * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions)));
             var secondResult = await second.BuildVectorPortrayalAsync(cancellationToken: ct);
             Assert.Equal(0, second.RuleRunCount);
             Assert.Equal(1, second.SharedInstructionCacheHits);

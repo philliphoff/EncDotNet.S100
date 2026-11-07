@@ -140,8 +140,9 @@ taking several seconds.
 - `InMemoryPortrayalInstructionCache` is a bounded LRU cache that holds list
   references.
 - `DiskPortrayalInstructionCache` writes each list to a `.dlist` file with
-  `DrawingInstructionSerializer`. Writes go to a temporary file and are then
-  moved into place, and an LRU byte cap bounds the cache. A corrupt file or a
+  `DrawingInstructionSerializer`, in a kind of a `ContentStore` (see
+  [Content store](#content-store)). A miss queues the write as a background job,
+  and reads see it before it lands. A corrupt file or a
   `FormatVersion` mismatch counts as a miss, so a stale or partial file never
   breaks a render.
 - You supply a key that captures every portrayal input. `S101DatasetProcessor`
@@ -174,8 +175,34 @@ The `EncDotNet.S100.Core.Metadata` namespace caches metadata between sessions:
 - `IDatasetMetadataCache` and `DiskDatasetMetadataCache` store one `.dmeta`
   file per dataset, keyed by the source file's last-write time and length.
   Any mismatch, or an unwritable or corrupt entry, is a miss and never breaks
-  loading. Writes are atomic and an LRU byte cap bounds the cache, as for the
-  portrayal-instruction cache.
+  loading. Writes are atomic and the content store's budget bounds the cache,
+  as for the portrayal-instruction cache.
+
+### Content store
+
+`ContentStore` (`EncDotNet.S100.Core.Caching`) is one disk store for every
+cached asset kind: tiles, portrayal display lists, pattern clips, dataset
+metadata and the like.
+
+- **A folder per kind, a file per key.** `Open(name, shareBytes, options)`
+  opens a kind under the store's root. A kind with a `FormatVersion` keeps its
+  files in a `v<n>` folder and deletes the folders of other versions in the
+  background, so a format change ignores every older entry at once.
+- **One budget.** Each kind has a share of the store's budget, and the budget is
+  their sum. A kind may grow past its share while the store is within budget.
+  Over budget, the kinds furthest over their share give back their least
+  recently used entries, down to 95% of the budget.
+- **A running size index.** Each kind's folder is scanned once; after that,
+  reads and writes keep an in-memory index of sizes and recency, so a write
+  never lists the folder. It's rescanned when an eviction finds a file already
+  gone, and at most every ten minutes.
+- **IO.** `Write` writes through a temporary file and an atomic move.
+  `QueueWrite` runs the write (and, given a producer, the encoding) as a
+  background job on the work scheduler; until it lands, `Read` and `Contains`
+  see the queued bytes. `ReadAsync` awaits the file read, so a scheduler job
+  gives its worker back while it waits.
+- **Empty markers.** A zero-byte entry means the producer had nothing to store;
+  it reads back as `ContentState.Empty` without anything to decode.
 
 ### Validation
 

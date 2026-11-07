@@ -198,7 +198,7 @@ public sealed class TilesServeRefreshTests : IDisposable
 
         // The old tiles weren't reused; both fingerprints' tiles are on disk.
         Assert.Equal(1, source.Current.BlocksRendered);
-        Assert.Equal(2, Directory.EnumerateDirectories(cache).Count(d => DiskTileCache.IsFingerprint(Path.GetFileName(d))));
+        Assert.Equal(2, DiskTileCache.FingerprintFolders(cache).Count());
     }
 
     // Counts the loop's checks rather than waiting on the clock: a reopen

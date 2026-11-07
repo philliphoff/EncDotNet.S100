@@ -663,7 +663,7 @@ code does the job. Delete: no longer needed.
 | `TileDiskCache` | reshape | content store, tile kind; running size index; faster codec |
 | `DiskPortrayalInstructionCache` | keep | content store, portrayal kind; add single-flight |
 | `DiskPatternClipCache`, `InMemoryPatternClipCache` | keep | content store, clip kind |
-| `DiskCacheBudget` | reshape | one global disk budget with per-kind shares |
+| `DiskCacheBudget` | delete | `ContentStore`: one disk budget with per-kind shares (slice 11) |
 | `S100VectorTileRenderer`: `Render`, `Composite`, `BlitCopies`, `BlitTile`, `CompositeRotated`, `DrawOverlay` | reshape | frame compositor in the Mapsui adapter, reading `FrameSnapshot` |
 | `S100VectorTileRenderer`: `RasterizeTile`, `RasterizeMetatile`, `DrawAdjacentWorldOps` | keep | engine raster job; input becomes several scenes |
 | `S100VectorTileRenderer`: `TileState`, pending sets, `Worker`, `ComputeWorkersToStart`, `ShouldWorkerExit`, fairness registry, `HasVisibleTileWork` | replace | work scheduler |
@@ -1240,6 +1240,112 @@ index ([#691](https://github.com/philliphoff/EncDotNet.S100/issues/691) item 4),
 the faster tile codec, and cell scenes on disk if slice 1's warm-load breakdown
 shows parsing and scene building dominate.
 
+*Result (slice 11).* One store, one budget, a faster tile codec. Cell scenes
+are not on disk yet: the breakdown supports them, but they need a two-phase
+load, which is its own change.
+
+- **The store.** `ContentStore` and `ContentKind` (`EncDotNet.S100.Core.Caching`)
+  keep a folder per kind and a file per key. A write goes through a temporary
+  file and an atomic move. Each kind has a share of one byte budget, and the
+  budget is the sum of the shares. A kind may borrow while the store is within
+  budget; over it, the kinds furthest over their share give back their least
+  recently used entries, down to 95% of the budget, so the index is sorted once
+  per few percent written, not on every write.
+- **Index.** Each kind's folder is scanned once. After that, reads and writes
+  keep an in-memory index of sizes and recency, so a write never lists the
+  folder. A kind is rescanned when an eviction finds a file already gone, and
+  at most every ten minutes
+  ([#691](https://github.com/philliphoff/EncDotNet.S100/issues/691) item 4).
+- **IO.** A queued write is a `Background` job in the `Io` stage. For tiles,
+  the job takes the pixel snapshot and encodes it too, and the tile cache's
+  writer thread is gone. A read sees a queued entry before it lands.
+  `ReadAsync` awaits the file read, and the tile raster job is now async, so a
+  job waiting on disk gives its worker back.
+- **Kinds.** Warm tiles, portrayal display lists, pattern clips, dataset
+  metadata and S-57 catalogues are all kinds, and `DiskCacheBudget` is gone. The
+  viewer opens one store, or two when `--cache-dir` moves the render caches away
+  from the profile's caches, and hands it to the engine
+  (`ChartEngine.ContentStore`). A portrayal or clip entry is never dropped: when
+  the write queue is full, the caller writes it inline. The CLI's `tiles serve
+  --cache-dir` keeps its tiles in a `served` kind of its own store; its tiles are
+  encoded output, so they keep their own format.
+- **Empty markers.** A zero-byte entry is an empty marker. A fully transparent
+  chart tile is stored as one and reads back as an image over a shared zeroed
+  buffer, with no decode or pixel allocation. The spatial-index content check
+  still runs first, so markers are rare: none of 95 Washington chart tiles was
+  empty, against 23% of 304 older per-layer tiles.
+- **Tile codec.** `TileCodec` stores Zstandard level 3 over premultiplied RGBA
+  (ZstdSharp.Port, MIT; Zstandard is BSD). It's used for the cache only;
+  exports keep PNG. The tile kind is versioned (`tiles/v8`), so on first start
+  the v7 PNG folder is ignored and then deleted in the background. Open
+  question 6 is still the owner's to answer.
+
+  One core, best of 3, 95 Washington chart tiles at 516&#160;px (2×):
+
+  | Codec | Encode p50 / p95 | Decode p50 / p95 | Size per tile |
+  |---|---|---|---|
+  | PNG, quality 100 (before) | 5.1 / 6.4 ms | 0.62 / 1.31 ms | 27.9 KB |
+  | WebP lossless | 2.7 / 4.0 ms | 1.28 / 1.73 ms | 40.7 KB |
+  | LZ4 fast | 0.16 / 0.42 ms | 0.23 / 0.42 ms | 29.7 KB |
+  | LZ4 HC 3 | 1.58 / 2.75 ms | 0.13 / 0.21 ms | 24.7 KB |
+  | **Zstandard 3** | **0.51 / 1.42 ms** | **0.17 / 0.36 ms** | **20.2 KB** |
+  | Zstandard 6 | 0.65 / 2.38 ms | 0.15 / 0.25 ms | 19.2 KB |
+
+  Zstandard 3 encodes 10× faster than PNG, decodes 3.6× faster, and is 28%
+  smaller. LZ4 fast encodes faster still, but decodes slower and is larger, and
+  the write is a background job anyway.
+
+*Warm-load breakdown.* The cell spans had been missing from harness traces:
+a load an MCP request starts runs under ASP.NET Core's request activity, which
+isn't sampled, so the parent-based sampler dropped them. The viewer now samples
+every span of its own sources. Measured on main with that fix, the 25 visible
+cells of the three jumps in a second session over a warm cache:
+
+| Stage | Total | p50 | p90 | max |
+|---|---|---|---|---|
+| Parse | 3.36 s | 47 ms | 267 ms | 1174 ms |
+| Scene build (pattern clip from cache) | 1.21 s | 26 ms | 86 ms | 326 ms |
+| Portray (display list from cache) | 0.37 s | 7 ms | 25 ms | 108 ms |
+
+Parsing and scene building are 92% of a warm load, so storing the scene is
+worth doing. It needs a scene serializer (five op types; symbols, line styles
+and patterns re-resolved by name against the catalogue) and a two-phase load:
+draw the stored scene first, then parse in the background for picks,
+validation and the dataset's info. That restructures `DatasetLoaderService`,
+so it is left to its own change.
+
+*Measured (slice 11).* Washington, Lua-CSharp, App Nap off, main against this
+slice interleaved, medians of 3 runs per mode. Every run took a shared lock, so
+no other harness ran beside it (slice 9 was measuring on the same machine), and
+started with the machine at least 80% idle. *Second session* is a new viewer over the cache the prewarm run left
+(`--cache-dir`), so its tiles can come from disk.
+
+| | main | slice 11 |
+|---|---|---|
+| Cold jumps: settle | 5.72 s | 5.70 s |
+| Prewarm jumps: settle | 1.22 s | 1.29 s |
+| Second session jumps: settle | 1.81 s | 1.85 s |
+| Second session: tiles read from disk / rastered | 82 / 528 | 89 / 510 |
+| Tile encode in the viewer, p50 | 5.6–6.1 ms (PNG) | 3.2–4.6 ms |
+| Disk: tiles after a cold run | 4.76 MB | 3.72 MB |
+| Disk: per tile, after a prewarm run | 31.1 KB | 22.6 KB |
+
+- **Settle doesn't change.** Encoding was already off the critical path, on
+  the writer thread before and in a background job now. A second session gains
+  little from disk tiles: only about 14% of the chart tiles it needs are on
+  disk. A slot's `StackSlice` changes with every stack version while cells
+  land, so only the final stack's tiles match. Most of a second session's
+  settle is parsing and scene building, which is the case for cell scenes on
+  disk.
+- **Disk bytes fall 22–27%,** and an encode costs about a third less in the
+  viewer. The gap is far smaller than the codec benchmark's 10×, because in the
+  viewer an encode competes with raster jobs for cores and includes reading
+  the pixel snapshot. The first build copied each tile's pixels twice on the
+  way to the encoder, costing 6–14% more allocation over a run. The snapshot
+  and the encoder now share the pixels: two more runs of that build allocated
+  the same as main cold, and 5–9% more warm, with settle and disk bytes as
+  above.
+
 ### How the plan absorbs the open epics
 
 - **[#1275](https://github.com/philliphoff/EncDotNet.S100/issues/1275) and
@@ -1325,8 +1431,10 @@ shows parsing and scene building dominate.
    adapter feeds its own tracker the same pointer events and predicts the
    resting viewport. Mouse-wheel zoom targets stay internal to Mapsui; the
    zoom-rate estimate covers them.
-6. **Disk format change.** Moving the tile cache from PNG to a raw compressed
-   format invalidates every user's tile cache once. Acceptable?
+6. **Disk format change.** Decided: slice 11 moves the tile cache from PNG to
+   Zstandard in a versioned `tiles/v8` folder that deletes `v7`, which
+   invalidates every user's tile cache once; the owner accepted that when
+   #1337 merged.
 7. **CLI parity.** Decided: moving the CLI to the engine changes its coverage
    handling from bounding boxes to NTS, so some exports differ; the owner
    accepted the one-time change in CLI output when #1332 merged.

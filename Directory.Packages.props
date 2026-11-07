@@ -66,6 +66,8 @@
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.4" />
     <PackageVersion Include="Spectre.Console.Cli" Version="0.57.2" />
     <PackageVersion Include="Svg.Skia" Version="3.2.1" />
+    <!-- Zstandard for the warm tile cache codec (map rendering slice 11). MIT. -->
+    <PackageVersion Include="ZstdSharp.Port" Version="0.8.8" />
     <!-- Test -->
     <PackageVersion Include="coverlet.collector" Version="10.1.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />

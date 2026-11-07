@@ -173,6 +173,7 @@ internal sealed class RenderedTileSource : ITileSource, IDisposable
     public void Dispose()
     {
         _renderSlots.Dispose();
+        _diskCache?.Dispose();
         _session.Dispose();
     }
 

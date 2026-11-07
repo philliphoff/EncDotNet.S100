@@ -460,6 +460,7 @@ public sealed class PerfHarnessTests
         Assert.Equal(Path.Combine(cacheDir, "PatternClipCache"), paths.PatternClipCacheDirectory);
         Assert.Equal(Path.Combine(cacheDir, "tiles"), paths.TileDiskCacheDirectory);
         Assert.Equal(cacheDir, paths.RenderCacheDirectory);
+        Assert.Equal(cacheDir, paths.RenderStoreDirectory);
         // Settings, the Library index and the other caches stay put.
         Assert.StartsWith(baseDir, paths.SettingsFilePath, StringComparison.Ordinal);
         Assert.StartsWith(baseDir, paths.CollectionIndexCacheDirectory, StringComparison.Ordinal);
@@ -471,7 +472,7 @@ public sealed class PerfHarnessTests
     {
         var paths = new ViewerDataPaths();
         Assert.Null(paths.RenderCacheDirectory);
-        Assert.Null(paths.TileDiskCacheDirectory);
+        Assert.Equal(paths.CacheStoreDirectory, paths.RenderStoreDirectory);
     }
 
     [Fact]

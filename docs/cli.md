@@ -515,7 +515,8 @@ can't be opened, the old data keeps serving until the files change again.
 `--refresh 0` turns the checks off. A built tile set needs none: it's read at
 each request.
 
-With `--cache-dir`, rendered tiles are also kept in that folder, so they come
+With `--cache-dir`, rendered tiles are also kept in that folder (in its
+`served` subfolder), so they come
 back without rendering after a restart. They're stored under a fingerprint of
 the data and settings: each input file's path, size and write time (S-101
 update files and the whole of an exchange set included), the display and
@@ -523,8 +524,8 @@ format options, and the `s100` version. Change any of them and new tiles are
 rendered, so a kept tile is never stale. The folder holds up to
 `--cache-dir-mb`, least recently used tiles going first, including those of
 data or settings you no longer serve. `--clear-cache` empties it before
-serving. Only the cache's own fingerprint folders are read or deleted, so other
-files in the folder are left alone, and several servers can share one folder. The zoom levels and the area served are
+serving. Only the `served` subfolder is read or deleted, so other files in the
+folder are left alone, and several servers can share one folder. The zoom levels and the area served are
 worked out as for `tiles export`, and `--min-zoom`, `--max-zoom` and `--bbox`
 narrow them. `--palette` sets the palette of the plain tile URLs; the other
 palettes are served too, under their own URLs.

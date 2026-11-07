@@ -71,8 +71,8 @@ public sealed class ExchangeSetCellPortrayerTests : IDisposable
         var instructionDir = Path.Combine(_cacheDir, "dlist");
         var clipDir = Path.Combine(_cacheDir, "clip");
         var recorder = new PortrayalWarmRecorder(
-            new DiskPortrayalInstructionCache(instructionDir, maxBytes: 64L * 1024 * 1024),
-            new DiskPatternClipCache(clipDir, maxBytes: 64L * 1024 * 1024));
+            new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(instructionDir, maxBytes: 64L * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions)),
+            new DiskPatternClipCache(EncDotNet.S100.Testing.TestContentKinds.Open(clipDir, maxBytes: 64L * 1024 * 1024, DiskPatternClipCache.KindOptions)));
         var portrayer = new ExchangeSetCellPortrayer(
             Factory(recorder.InstructionCache),
             new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory(), recorder.PatternClipCache),
@@ -89,8 +89,8 @@ public sealed class ExchangeSetCellPortrayerTests : IDisposable
         // The map's load: the loader's own processor path, its own factory,
         // Lua engine and renderer, over the same disk caches (fresh instances,
         // as after a restart).
-        var mapInstructions = new DiskPortrayalInstructionCache(instructionDir, maxBytes: 64L * 1024 * 1024);
-        var mapClips = new DiskPatternClipCache(clipDir, maxBytes: 64L * 1024 * 1024);
+        var mapInstructions = new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(instructionDir, maxBytes: 64L * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions));
+        var mapClips = new DiskPatternClipCache(EncDotNet.S100.Testing.TestContentKinds.Open(clipDir, maxBytes: 64L * 1024 * 1024, DiskPatternClipCache.KindOptions));
         var processor = DatasetLoaderService.CreateExchangeSetCellProcessor(
             Factory(mapInstructions), source, "US5MA1BO.000", [], "S-57");
         await new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory(), mapClips).RenderAsync(
@@ -108,8 +108,8 @@ public sealed class ExchangeSetCellPortrayerTests : IDisposable
     public async Task Recorder_NotesOnlyTheKeysOfItsOwnScope()
     {
         var recorder = new PortrayalWarmRecorder(
-            new DiskPortrayalInstructionCache(Path.Combine(_cacheDir, "dlist"), maxBytes: 1024 * 1024),
-            new DiskPatternClipCache(Path.Combine(_cacheDir, "clip"), maxBytes: 1024 * 1024));
+            new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(Path.Combine(_cacheDir, "dlist"), maxBytes: 1024 * 1024, DiskPortrayalInstructionCache.KindOptions)),
+            new DiskPatternClipCache(EncDotNet.S100.Testing.TestContentKinds.Open(Path.Combine(_cacheDir, "clip"), maxBytes: 1024 * 1024, DiskPatternClipCache.KindOptions)));
         var cache = recorder.InstructionCache;
         IReadOnlyList<DrawingInstruction> empty = [];
 

@@ -122,7 +122,7 @@ public class ExchangeSetServiceLoaderTests
         Directory.CreateDirectory(cacheDir);
         try
         {
-            var cache = new Services.Caching.DiskS57CatalogCache(cacheDir, 1_000_000);
+            var cache = new Services.Caching.DiskS57CatalogCache(EncDotNet.S100.Testing.TestContentKinds.Open(cacheDir, 1_000_000, Services.Caching.DiskS57CatalogCache.KindOptions));
 
             var datasets1 = new DatasetsViewModel(new NoopLoader());
             using (var service1 = new ExchangeSetService(

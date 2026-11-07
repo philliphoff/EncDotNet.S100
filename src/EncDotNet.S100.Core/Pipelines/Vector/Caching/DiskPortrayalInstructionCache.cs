@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using EncDotNet.S100.Core.Caching;
 using EncDotNet.S100.Diagnostics;
 
@@ -26,51 +24,37 @@ namespace EncDotNet.S100.Pipelines.Vector.Caching;
 /// Robustness mirrors <c>DiskPatternClipCache</c>: any IO error, truncated /
 /// corrupt file, or <see cref="DrawingInstructionSerializer.FormatVersion"/>
 /// mismatch is treated as a miss (the factory runs and overwrites); failures
-/// never propagate. Writes are atomic (temp file + move). The cache is bounded
-/// by a total-bytes cap with least-recently-used eviction (see
-/// <see cref="DiskCacheBudget"/>), and the directory is shared across every
-/// processor, so all members are thread-safe. Hits read and deserialize
-/// without a lock, so concurrent loads do not serialize on the cache.
+/// never propagate. Entries live in a <see cref="ContentKind"/> of the host's
+/// <see cref="ContentStore"/>, which bounds them by its byte budget with
+/// least-recently-used eviction. A miss serializes the fresh list on the
+/// caller and queues the file write as a background job; until it lands,
+/// reads see the queued bytes. The kind is shared across every processor, so
+/// all members are thread-safe, and hits read and deserialize without a lock.
 /// </para>
 /// </remarks>
 public sealed class DiskPortrayalInstructionCache : IPortrayalInstructionCache
 {
-    /// <summary>File extension for persisted display-list sidecar files.</summary>
-    private const string FileExtension = ".dlist";
+    /// <summary>The kind name hosts open for this cache (also its folder name).</summary>
+    public const string KindName = "PortrayalInstructionCache";
 
-    private readonly string _cacheDirectory;
-    private readonly DiskCacheBudget _budget;
+    /// <summary>The options hosts open this cache's kind with.</summary>
+    public static ContentKindOptions KindOptions { get; } = new() { Extension = ".dlist" };
+
+    private readonly ContentKind _kind;
 
     private long _hits;
     private long _misses;
 
     /// <summary>
-    /// Creates a disk-backed display-list cache rooted at
-    /// <paramref name="cacheDirectory"/>.
+    /// Creates a disk-backed display-list cache over <paramref name="kind"/>,
+    /// normally opened as <see cref="KindName"/> with <see cref="KindOptions"/>.
     /// </summary>
-    /// <param name="cacheDirectory">
-    /// Directory under which sidecar files are stored. Created on first write if
-    /// absent. Assumed private to this cache (the LRU sweep enumerates every
-    /// <c>*.dlist</c> file in it).
-    /// </param>
-    /// <param name="maxBytes">
-    /// Soft upper bound, in bytes, on the total size of all persisted files.
-    /// After a write that exceeds it, the least-recently-used files are evicted
-    /// until the total is at or below this cap. Must be positive.
-    /// </param>
-    /// <exception cref="ArgumentException">
-    /// <paramref name="cacheDirectory"/> is null or empty.
-    /// </exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="maxBytes"/> is not positive.
-    /// </exception>
-    public DiskPortrayalInstructionCache(string cacheDirectory, long maxBytes)
+    /// <param name="kind">The store kind the entries live in.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="kind"/> is null.</exception>
+    public DiskPortrayalInstructionCache(ContentKind kind)
     {
-        ArgumentException.ThrowIfNullOrEmpty(cacheDirectory);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
-
-        _cacheDirectory = cacheDirectory;
-        _budget = new DiskCacheBudget(cacheDirectory, FileExtension, maxBytes);
+        ArgumentNullException.ThrowIfNull(kind);
+        _kind = kind;
     }
 
     /// <inheritdoc />
@@ -79,40 +63,33 @@ public sealed class DiskPortrayalInstructionCache : IPortrayalInstructionCache
     /// <inheritdoc />
     public long Misses => Interlocked.Read(ref _misses);
 
-    /// <summary>Soft upper bound, in bytes, on the total size of the persisted entries.</summary>
-    public long MaxBytes => _budget.MaxBytes;
+    /// <summary>The store kind the entries live in.</summary>
+    public ContentKind Kind => _kind;
 
     /// <summary>
     /// The total size, in bytes, of the persisted entries. The first call reads
-    /// the cache directory if no write has done so yet.
+    /// the kind's folder if nothing has indexed it yet.
     /// </summary>
     public long TotalBytes
     {
         get
         {
-            _budget.EnsureIndexed();
-            return _budget.TotalBytes;
+            _kind.EnsureIndexed();
+            return _kind.TotalBytes;
         }
     }
 
     /// <summary>
-    /// Whether an entry is persisted for <paramref name="key"/>. Checks only
-    /// that the file exists: it neither reads nor validates the entry, and does
-    /// not mark it used.
+    /// Whether an entry is persisted (or queued) for <paramref name="key"/>.
+    /// Checks only that it exists: it neither reads nor validates the entry,
+    /// and does not mark it used.
     /// </summary>
     /// <param name="key">A key as passed to <see cref="GetOrCompute"/>.</param>
-    /// <returns><see langword="true"/> when the entry's file exists.</returns>
+    /// <returns><see langword="true"/> when the entry exists.</returns>
     public bool Contains(string key)
     {
         ArgumentNullException.ThrowIfNull(key);
-        try
-        {
-            return File.Exists(GetEntryPath(key));
-        }
-        catch
-        {
-            return false;
-        }
+        return _kind.Contains(ContentKind.HashKey(key));
     }
 
     /// <inheritdoc />
@@ -123,9 +100,14 @@ public sealed class DiskPortrayalInstructionCache : IPortrayalInstructionCache
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(factory);
 
-        var path = GetEntryPath(key);
+        var entryKey = ContentKind.HashKey(key);
+        IReadOnlyList<DrawingInstruction>? cached;
+        using (var activity = Telemetry.ActivitySource.StartActivity("s100.portrayal.cache.read"))
+        {
+            cached = Deserialize(_kind.Read(entryKey));
+            activity?.SetTag(TelemetryTags.CacheResult, cached is null ? "miss" : "hit");
+        }
 
-        var cached = ReadTraced(path);
         if (cached is not null)
         {
             Interlocked.Increment(ref _hits);
@@ -133,11 +115,8 @@ public sealed class DiskPortrayalInstructionCache : IPortrayalInstructionCache
         }
 
         Interlocked.Increment(ref _misses);
-
         var produced = factory();
-
-        TryWrite(path, produced);
-
+        QueueWrite(entryKey, produced);
         return produced;
     }
 
@@ -150,9 +129,16 @@ public sealed class DiskPortrayalInstructionCache : IPortrayalInstructionCache
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(factory);
 
-        var path = GetEntryPath(key);
+        var entryKey = ContentKind.HashKey(key);
+        IReadOnlyList<DrawingInstruction>? cached;
+        using (var activity = Telemetry.ActivitySource.StartActivity("s100.portrayal.cache.read"))
+        {
+            // The file read is awaited, so a scheduler job gives its worker
+            // back while it waits.
+            cached = Deserialize(await _kind.ReadAsync(entryKey, cancellationToken).ConfigureAwait(false));
+            activity?.SetTag(TelemetryTags.CacheResult, cached is null ? "miss" : "hit");
+        }
 
-        var cached = ReadTraced(path);
         if (cached is not null)
         {
             Interlocked.Increment(ref _hits);
@@ -160,47 +146,19 @@ public sealed class DiskPortrayalInstructionCache : IPortrayalInstructionCache
         }
 
         Interlocked.Increment(ref _misses);
-
         var produced = await factory(cancellationToken).ConfigureAwait(false);
-
-        TryWrite(path, produced);
-
+        QueueWrite(entryKey, produced);
         return produced;
     }
 
     /// <summary>
-    /// Maps a cache key to its sidecar file path. The filename is the lowercase
-    /// hex SHA-256 of the UTF-8 key, so arbitrary key content maps to a single
-    /// safe filename.
+    /// Deserializes a read entry, or returns <see langword="null"/> (a miss)
+    /// when it is absent, an empty marker, of another format version, or
+    /// corrupt.
     /// </summary>
-    private string GetEntryPath(string key)
+    private static IReadOnlyList<DrawingInstruction>? Deserialize(ContentEntry entry)
     {
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
-        return Path.Combine(_cacheDirectory, Convert.ToHexString(hash).ToLowerInvariant() + FileExtension);
-    }
-
-    /// <summary>
-    /// <see cref="TryRead"/> inside an <c>s100.portrayal.cache.read</c> span
-    /// tagged with <c>s100.cache.result</c> (<c>hit</c> or <c>miss</c>), so a
-    /// warm cell load's trace shows the time spent reading the cache.
-    /// </summary>
-    private IReadOnlyList<DrawingInstruction>? ReadTraced(string path)
-    {
-        using var activity = Telemetry.ActivitySource.StartActivity("s100.portrayal.cache.read");
-        var cached = TryRead(path);
-        activity?.SetTag(TelemetryTags.CacheResult, cached is null ? "miss" : "hit");
-        return cached;
-    }
-
-    /// <summary>
-    /// Attempts to read and deserialize a persisted entry. Returns
-    /// <see langword="null"/> (a miss) when the file is absent, unreadable, has a
-    /// mismatched format version, or is otherwise corrupt / truncated.
-    /// </summary>
-    private IReadOnlyList<DrawingInstruction>? TryRead(string path)
-    {
-        var bytes = _budget.TryRead(path);
-        if (bytes is null)
+        if (entry.Bytes is not { } bytes)
             return null;
 
         try
@@ -214,12 +172,11 @@ public sealed class DiskPortrayalInstructionCache : IPortrayalInstructionCache
     }
 
     /// <summary>
-    /// Serializes and atomically writes an entry, evicting least-recently-used
-    /// entries if the cap is exceeded. All failures are swallowed: an
-    /// unwritable cache must never break a render (the freshly computed value
-    /// is still returned to the caller).
+    /// Serializes an entry and queues its write. All failures are swallowed:
+    /// an unwritable cache must never break a render (the freshly computed
+    /// value is still returned to the caller).
     /// </summary>
-    private void TryWrite(string path, IReadOnlyList<DrawingInstruction> instructions)
+    private void QueueWrite(string entryKey, IReadOnlyList<DrawingInstruction> instructions)
     {
         byte[] bytes;
         try
@@ -231,6 +188,9 @@ public sealed class DiskPortrayalInstructionCache : IPortrayalInstructionCache
             return;
         }
 
-        _budget.TryWrite(path, bytes);
+        // A dropped entry costs a portrayal run later, so a full queue (or a
+        // store shutting down) writes it here instead.
+        if (_kind.QueueWrite(entryKey, bytes) is ContentWriteResult.Full or ContentWriteResult.Stopped)
+            _kind.Write(entryKey, bytes);
     }
 }

@@ -46,7 +46,7 @@ public class S101DiskPatternClipCacheProcessorTests
         Directory.CreateDirectory(cacheDir);
         try
         {
-            var sharedCache = new DiskPatternClipCache(cacheDir, maxBytes: 256L * 1024 * 1024);
+            var sharedCache = new DiskPatternClipCache(EncDotNet.S100.Testing.TestContentKinds.Open(cacheDir, maxBytes: 256L * 1024 * 1024, DiskPatternClipCache.KindOptions));
 
             var catalogueManager = CreateCatalogueManager();
             var fcManager = new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue);

@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using EncDotNet.S100.Core.Caching;
 using EncDotNet.S100.Datasets.S57;
@@ -17,15 +16,18 @@ namespace EncDotNet.S100.Viewer.Services.Caching;
 /// both still match, so regenerating the catalogue invalidates the entry. Any
 /// IO error, truncated / corrupt file, envelope-version mismatch, or
 /// <see cref="S57CatalogCacheSerializer.FormatVersion"/> mismatch is a miss and
-/// never propagates. Writes are atomic (temp file + move), the store is bounded
-/// by a total-bytes cap with least-recently-used eviction (see
-/// <see cref="DiskCacheBudget"/>), and all members are thread-safe; hits are
+/// never propagates. Writes are atomic (temp file + move), entries live in a
+/// <see cref="ContentKind"/> of the host's <see cref="ContentStore"/>, which
+/// bounds them by its byte budget, and all members are thread-safe; hits are
 /// served without a lock.
 /// </remarks>
 internal sealed class DiskS57CatalogCache : IS57CatalogCache
 {
-    /// <summary>File extension for persisted catalogue-descriptor sidecar files.</summary>
-    private const string FileExtension = ".s57cat";
+    /// <summary>The kind name hosts open for this cache (also its folder name).</summary>
+    public const string KindName = "S57CatalogCache";
+
+    /// <summary>The options hosts open this cache's kind with.</summary>
+    public static ContentKindOptions KindOptions { get; } = new() { Extension = ".s57cat" };
 
     /// <summary>
     /// Envelope schema version for the sidecar header (source identity +
@@ -35,35 +37,21 @@ internal sealed class DiskS57CatalogCache : IS57CatalogCache
     /// </summary>
     private const int EnvelopeVersion = 1;
 
-    private readonly string _cacheDirectory;
-    private readonly DiskCacheBudget _budget;
+    private readonly ContentKind _kind;
 
     private long _hits;
     private long _misses;
 
     /// <summary>
-    /// Creates a disk-backed catalogue cache rooted at
-    /// <paramref name="cacheDirectory"/>.
+    /// Creates a disk-backed catalogue cache over <paramref name="kind"/>,
+    /// normally opened as <see cref="KindName"/> with <see cref="KindOptions"/>.
     /// </summary>
-    /// <param name="cacheDirectory">
-    /// Directory under which sidecar files are stored. Created on first write
-    /// if absent. Assumed private to this cache (the LRU sweep enumerates
-    /// every <c>*.s57cat</c> file in it).
-    /// </param>
-    /// <param name="maxBytes">
-    /// Soft upper bound, in bytes, on the total size of all persisted files.
-    /// After a write that exceeds it, the least-recently-used files are
-    /// evicted until the total is at or below this cap. Must be positive.
-    /// </param>
-    /// <exception cref="ArgumentException"><paramref name="cacheDirectory"/> is null or empty.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxBytes"/> is not positive.</exception>
-    public DiskS57CatalogCache(string cacheDirectory, long maxBytes)
+    /// <param name="kind">The store kind the entries live in.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="kind"/> is null.</exception>
+    public DiskS57CatalogCache(ContentKind kind)
     {
-        ArgumentException.ThrowIfNullOrEmpty(cacheDirectory);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
-
-        _cacheDirectory = cacheDirectory;
-        _budget = new DiskCacheBudget(cacheDirectory, FileExtension, maxBytes);
+        ArgumentNullException.ThrowIfNull(kind);
+        _kind = kind;
     }
 
     /// <inheritdoc />
@@ -129,11 +117,7 @@ internal sealed class DiskS57CatalogCache : IS57CatalogCache
     /// lowercase hex SHA-256 of the UTF-8 path, so arbitrary path content maps
     /// to a single safe filename.
     /// </summary>
-    private string GetEntryPath(string sourcePath)
-    {
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(sourcePath));
-        return Path.Combine(_cacheDirectory, Convert.ToHexString(hash).ToLowerInvariant() + FileExtension);
-    }
+    private static string GetEntryPath(string sourcePath) => ContentKind.HashKey(sourcePath);
 
     /// <summary>
     /// Attempts to read a persisted entry and validate it against the current
@@ -143,7 +127,7 @@ internal sealed class DiskS57CatalogCache : IS57CatalogCache
     /// </summary>
     private IReadOnlyList<S57ExchangeSetCell>? TryRead(string path, SourceIdentity current)
     {
-        var bytes = _budget.TryRead(path);
+        var bytes = _kind.Read(path).Bytes;
         if (bytes is null)
             return null;
 
@@ -204,7 +188,7 @@ internal sealed class DiskS57CatalogCache : IS57CatalogCache
             return;
         }
 
-        _budget.TryWrite(path, bytes);
+        _kind.Write(path, bytes);
     }
 
     /// <summary>

@@ -64,7 +64,7 @@ public class S101PortrayalInstructionCacheProcessorTests
         Directory.CreateDirectory(cacheDir);
         try
         {
-            var sharedCache = new DiskPortrayalInstructionCache(cacheDir, maxBytes: 256L * 1024 * 1024);
+            var sharedCache = new DiskPortrayalInstructionCache(EncDotNet.S100.Testing.TestContentKinds.Open(cacheDir, maxBytes: 256L * 1024 * 1024, DiskPortrayalInstructionCache.KindOptions));
 
             // First cold open: the cache is empty, so the Lua pipeline runs (a
             // miss) and the prepared list is persisted. This fresh processor sees
