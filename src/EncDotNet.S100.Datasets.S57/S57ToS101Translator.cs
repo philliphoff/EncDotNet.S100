@@ -525,9 +525,12 @@ public sealed partial class S57ToS101Translator
     // §27.199 write exactly that from a VirtualAISAidToNavigation and its
     // virtualAISAidToNavigationType, so the translator reads it back by the
     // same table (S101ToS57Rules.VirtualAisTypes). Port and starboard
-    // lateral each have two types, told apart by the SYMINS symbol. Any
-    // other NEWOBJ still becomes an S57UnknownObject.
+    // lateral each have two types, told apart by the SYMINS symbol. A type
+    // name the table doesn't know (NOAA writes "Virtual AtoN, Wreck Marking"
+    // for "Emergency Wreck Marking", #1289) is matched by its CLSDEF, which
+    // follows the table. Any other NEWOBJ still becomes an S57UnknownObject.
     private const ushort NewobjObjl = 163;         // NEWOBJ (S-57 object class)
+    private const ushort S57AttrClsdef = 190;      // CLSDEF — object class definition
     private const ushort S57AttrClsnam = 191;      // CLSNAM — object class name
     private const ushort S57AttrSymins = 192;      // SYMINS — symbol instruction
     private const string VirtualAisClassPrefix = "Virtual AtoN, ";
@@ -1888,6 +1891,15 @@ public sealed partial class S57ToS101Translator
             var types = S101ToS57Rules.VirtualAisTypes
                 .Where(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase))
                 .ToList();
+            if (types.Count == 0)
+            {
+                // An unknown type name: fall back to the class definition.
+                var clsdef = feat.Attributes.Where(a => a.AttributeCode == S57AttrClsdef).Select(a => a.Value?.Trim()).FirstOrDefault();
+                if (!string.IsNullOrEmpty(clsdef))
+                    types = S101ToS57Rules.VirtualAisTypes
+                        .Where(t => string.Equals(t.Definition, clsdef, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+            }
             if (types.Count == 0) return null;
             var symins = feat.Attributes.Where(a => a.AttributeCode == S57AttrSymins).Select(a => a.Value).FirstOrDefault() ?? string.Empty;
             return (types.FirstOrDefault(t => symins.Contains(t.Symbol, StringComparison.OrdinalIgnoreCase)) is { Value: not null } bySymbol
