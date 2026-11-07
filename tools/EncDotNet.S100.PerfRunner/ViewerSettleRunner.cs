@@ -33,11 +33,20 @@ internal sealed record SettleRunOptions
 
     public int PanStepDelayMs { get; init; } = 16;
 
+    /// <summary>How long each animated jump of the glide route takes.</summary>
+    public int GlideMs { get; init; } = 800;
+
+    /// <summary>The fling route's release velocities, screen pixels per second.</summary>
+    public IReadOnlyList<(double VelocityX, double VelocityY)> Flings { get; init; } = SettleRoute.DefaultFlings;
+
     public double ScaleDenominator { get; init; } = SettleRoute.DefaultScaleDenominator;
 
     public string? LibrarySource { get; init; } = "Washington";
 
     public int SettleTimeoutMs { get; init; } = 120_000;
+
+    /// <summary>The longest wait for the view the viewer starts at to settle.</summary>
+    public int StartSettleTimeoutMs { get; init; } = 120_000;
 
     public int ConfirmMs { get; init; } = 250;
 
@@ -109,7 +118,7 @@ internal static class ViewerSettleRunner
 
         // Settle the starting view, so the first jump doesn't also wait for
         // whatever the viewer was doing.
-        await CallJsonAsync(client, "await_settled", new() { ["timeoutMs"] = options.SettleTimeoutMs, ["confirmMs"] = options.ConfirmMs }, ct);
+        await CallJsonAsync(client, "await_settled", new() { ["timeoutMs"] = options.StartSettleTimeoutMs, ["confirmMs"] = options.ConfirmMs }, ct);
 
         var steps = new JsonArray();
         await CallJsonAsync(client, "get_process_metrics", new() { ["window"] = "start" }, ct);
@@ -117,11 +126,20 @@ internal static class ViewerSettleRunner
         {
             steps.Add((JsonNode)await PanAsync(client, options, ct));
         }
+        else if (string.Equals(options.Route, "fling", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var step in await FlingsAsync(client, options, ct))
+            {
+                steps.Add((JsonNode)step);
+            }
+        }
         else
         {
+            // A glide is the same jumps, animated as a "go to" is.
+            var durationMs = string.Equals(options.Route, "glide", StringComparison.OrdinalIgnoreCase) ? options.GlideMs : 0;
             foreach (var jump in options.Jumps)
             {
-                steps.Add((JsonNode)await JumpAsync(client, options, jump, ct));
+                steps.Add((JsonNode)await JumpAsync(client, options, jump, durationMs, ct));
             }
         }
 
@@ -151,6 +169,22 @@ internal static class ViewerSettleRunner
             ["steps"] = steps,
             ["totals"] = SettleReport.Totals(steps),
         };
+        if (string.Equals(options.Route, "glide", StringComparison.OrdinalIgnoreCase))
+        {
+            manifest["glideMs"] = options.GlideMs;
+        }
+
+        if (string.Equals(options.Route, "fling", StringComparison.OrdinalIgnoreCase))
+        {
+            var flings = new JsonArray();
+            foreach (var (vx, vy) in options.Flings)
+            {
+                flings.Add((JsonNode)new JsonObject { ["velocityX"] = vx, ["velocityY"] = vy });
+            }
+
+            manifest["flings"] = flings;
+        }
+
         if (string.Equals(options.Route, "pan", StringComparison.OrdinalIgnoreCase))
         {
             manifest["pan"] = new JsonObject
@@ -165,10 +199,10 @@ internal static class ViewerSettleRunner
         return manifest;
     }
 
-    private static async Task<JsonObject> JumpAsync(McpClient client, SettleRunOptions options, SettleWaypoint jump, CancellationToken ct)
+    private static async Task<JsonObject> JumpAsync(McpClient client, SettleRunOptions options, SettleWaypoint jump, int durationMs, CancellationToken ct)
     {
         await CallJsonAsync(client, "get_render_stats", new() { ["resetWindow"] = true }, ct);
-        await SetViewportAsync(client, jump, options.ScaleDenominator, ct);
+        await SetViewportAsync(client, jump, options.ScaleDenominator, ct, durationMs);
         var settle = await CallJsonAsync(client, "await_settled", new() { ["timeoutMs"] = options.SettleTimeoutMs, ["confirmMs"] = options.ConfirmMs }, ct);
         var metrics = await CallJsonAsync(client, "get_process_metrics", new() { ["window"] = "restart" }, ct);
         var frames = await CallJsonAsync(client, "get_render_stats", new(), ct);
@@ -206,13 +240,57 @@ internal static class ViewerSettleRunner
         return result;
     }
 
-    private static Task<JsonNode> SetViewportAsync(McpClient client, SettleWaypoint at, double scale, CancellationToken ct) =>
-        CallJsonAsync(client, "set_viewport", new()
+    /// <summary>
+    /// The fling route (map rendering slice&#160;9): settles at the first jump
+    /// stop (not recorded), then flings at each velocity in turn, waiting for
+    /// the view to settle where the fling came to rest.
+    /// </summary>
+    private static async Task<List<JsonObject>> FlingsAsync(McpClient client, SettleRunOptions options, CancellationToken ct)
+    {
+        var start = options.Jumps[0];
+        await SetViewportAsync(client, start, options.ScaleDenominator, ct);
+        await CallJsonAsync(client, "await_settled", new() { ["timeoutMs"] = options.SettleTimeoutMs, ["confirmMs"] = options.ConfirmMs }, ct);
+        await CallJsonAsync(client, "get_process_metrics", new() { ["window"] = "restart" }, ct);
+
+        var results = new List<JsonObject>();
+        var index = 0;
+        foreach (var (vx, vy) in options.Flings)
+        {
+            index++;
+            await CallJsonAsync(client, "get_render_stats", new() { ["resetWindow"] = true }, ct);
+            var fling = await CallJsonAsync(client, "fling", new() { ["velocityX"] = vx, ["velocityY"] = vy }, ct);
+            var settle = await CallJsonAsync(client, "await_settled", new() { ["timeoutMs"] = options.SettleTimeoutMs, ["confirmMs"] = options.ConfirmMs }, ct);
+            var metrics = await CallJsonAsync(client, "get_process_metrics", new() { ["window"] = "restart" }, ct);
+            var frames = await CallJsonAsync(client, "get_render_stats", new(), ct);
+            var step = SettleReport.Flatten(
+                FormattableString.Invariant($"fling {index} ({vx:F0},{vy:F0})"),
+                fling["targetLat"]?.GetValue<double>() ?? start.Latitude,
+                fling["targetLon"]?.GetValue<double>() ?? start.Longitude,
+                settle,
+                metrics,
+                frames);
+            Report(step);
+            results.Add(step);
+        }
+
+        return results;
+    }
+
+    private static Task<JsonNode> SetViewportAsync(McpClient client, SettleWaypoint at, double scale, CancellationToken ct, int durationMs = 0)
+    {
+        var arguments = new Dictionary<string, object?>
         {
             ["centerLat"] = at.Latitude,
             ["centerLon"] = at.Longitude,
             ["scaleDenominator"] = scale,
-        }, ct);
+        };
+        if (durationMs > 0)
+        {
+            arguments["durationMs"] = durationMs;
+        }
+
+        return CallJsonAsync(client, "set_viewport", arguments, ct);
+    }
 
     private static void Report(JsonObject step)
     {

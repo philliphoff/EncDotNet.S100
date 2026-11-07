@@ -77,9 +77,14 @@ internal static class ViewerSettleCommand
                 : SettleRoute.DefaultPan,
             PanSteps = settings.PanSteps,
             PanStepDelayMs = settings.PanStepDelayMs,
+            GlideMs = settings.GlideMs,
+            Flings = settings.Flings is not null && SettleRoute.TryParseFlings(settings.Flings, out var flings)
+                ? flings
+                : SettleRoute.DefaultFlings,
             ScaleDenominator = settings.ScaleDenominator,
             LibrarySource = string.IsNullOrWhiteSpace(settings.LibrarySource) ? null : settings.LibrarySource,
             SettleTimeoutMs = settings.SettleTimeoutMs,
+            StartSettleTimeoutMs = settings.StartSettleTimeoutMs ?? settings.SettleTimeoutMs,
             ConfirmMs = settings.ConfirmMs,
             PrewarmTimeoutMs = settings.PrewarmTimeoutMs,
             Repeat = settings.Repeat,
