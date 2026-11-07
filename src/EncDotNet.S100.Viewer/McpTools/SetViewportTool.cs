@@ -32,7 +32,8 @@ internal sealed record SetViewportRequest(
     [property: Description("Centre longitude in decimal degrees (WGS-84), in [-540, 540]; past ±180 frames the adjacent world copy (e.g. 205 = 155°W, east of the antimeridian). Must be paired with centerLat and one of zoom or scaleDenominator; mutually exclusive with the bbox form.")] double? CenterLon = null,
     [property: Description("Web-mercator zoom level in [0, 24]. Must be paired with centerLat/centerLon; mutually exclusive with scaleDenominator and the bbox form.")] double? Zoom = null,
     [property: Description("Optional clockwise viewport rotation in degrees (0 = north-up). Applied on top of the bbox or centre+zoom frame, so it exercises the rotated-viewport render path (e.g. upright-label verification). Any finite value is accepted and normalised to [0, 360); must accompany a frame form.")] double? Rotation = null,
-    [property: Description("Map scale denominator (e.g. 50000 for 1:50 000); positive and finite. Must be paired with centerLat/centerLon; mutually exclusive with zoom and the bbox form. Converted at the centre latitude with the 0.28 mm pixel the status bar uses, so the status bar reads back this scale.")] double? ScaleDenominator = null);
+    [property: Description("Map scale denominator (e.g. 50000 for 1:50 000); positive and finite. Must be paired with centerLat/centerLon; mutually exclusive with zoom and the bbox form. Converted at the centre latitude with the 0.28 mm pixel the status bar uses, so the status bar reads back this scale.")] double? ScaleDenominator = null,
+    [property: Description("Optional animation duration in milliseconds for the centre forms: the map animates to the view, as a 'go to' in the viewer does, instead of jumping. 0 or absent jumps. The echo then reports the target and the scale requested, since the live map is still on its way.")] long? DurationMs = null);
 
 /// <summary>Result of <see cref="SetViewportTool"/>.</summary>
 [Description("Result of set_viewport: the request mode that was applied (bbox or center) plus an echo of the resolved WGS-84 viewport and its map scale. The echo is the precise frame the navigator was set to and is suitable for verification in scripted runs. Longitudes are in the continuous frame that was framed: west < east, and past ±180 for a frame on or across the antimeridian.")]
@@ -88,6 +89,7 @@ internal sealed class SetViewportTool
     internal const double MinZoom = 0.0;
     internal const double MaxZoom = 24.0;
     internal const double FullCircleDegrees = 360.0;
+    internal const long MaxDurationMs = 10_000;
 
     // Standard web-mercator resolution (metres / pixel) at zoom 0 with a
     // 256-pixel tile, used to convert a zoom level to the resolution the
@@ -160,6 +162,15 @@ internal sealed class SetViewportTool
         double rotation = request.Rotation is { } r
             ? ((r % FullCircleDegrees) + FullCircleDegrees) % FullCircleDegrees
             : 0.0;
+
+        if (request.DurationMs is { } duration && (duration < 0 || duration > MaxDurationMs))
+        {
+            return Err(new InvalidArgument("durationMs", $"value {duration} is outside the supported range [0, {MaxDurationMs}]"));
+        }
+        if (hasBboxAny && request.DurationMs is > 0)
+        {
+            return Err(new InvalidArgument("durationMs", "an animation needs a centre form (centerLat/centerLon with zoom or scaleDenominator)"));
+        }
 
         var result = hasBboxAny
             ? ApplyBbox(request, host, rotation)
@@ -268,6 +279,18 @@ internal sealed class SetViewportTool
         }
 
         var (cx, cy) = SphericalMercator.FromLonLat(lon, lat);
+        if (request.DurationMs is > 0 and var duration)
+        {
+            // Rotate first: a rotation is applied at once, which would stop
+            // the animation.
+            host.SetRotation(rotation);
+            host.AnimateToCenterAndResolution(new MPoint(cx, cy), resolution, duration);
+            var (aSouth, aWest, aNorth, aEast) = ResolveCenterFrame(cx, cy, resolution);
+            return Ok(new SetViewportResult(
+                "center", aSouth, aWest, aNorth, aEast, rotation,
+                MapScaleFormatter.ResolutionToScaleDenominator(resolution, lat), lat, lon));
+        }
+
         host.SetViewportToCenterAndResolution(new MPoint(cx, cy), resolution);
         host.SetRotation(rotation);
 

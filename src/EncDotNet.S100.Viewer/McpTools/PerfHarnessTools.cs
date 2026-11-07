@@ -427,6 +427,49 @@ internal sealed class PortrayalPrewarmTool(
     };
 }
 
+/// <summary>Result of <see cref="FlingTool"/>.</summary>
+[Description("The fling started, and where the viewer predicts it comes to rest.")]
+internal sealed record FlingDto(
+    [property: Description("Whether a fling started and was predicted; a release under 100 px/s doesn't fling.")] bool Started,
+    [property: Description("Predicted resting centre latitude, or null when nothing predicts it.")] double? TargetLat,
+    [property: Description("Predicted resting centre longitude, or null.")] double? TargetLon);
+
+/// <summary>
+/// Flings the map as releasing a drag at a velocity does (MCP <c>fling</c>,
+/// map rendering slice 9): the harness's fling scenario.
+/// </summary>
+internal sealed class FlingTool(ICapabilityAccessor<IMapViewportController> accessor, Action? onApplied = null)
+{
+    /// <summary>The MCP tool name.</summary>
+    public const string Name = "fling";
+
+    /// <summary>Largest accepted velocity component, screen pixels per second.</summary>
+    internal const double MaxVelocity = 20_000;
+
+    private readonly ICapabilityAccessor<IMapViewportController> _accessor = accessor ?? throw new ArgumentNullException(nameof(accessor));
+
+    /// <summary>Starts the fling.</summary>
+    public ToolResult<FlingDto> Invoke(double velocityX, double velocityY)
+    {
+        if (!double.IsFinite(velocityX) || Math.Abs(velocityX) > MaxVelocity)
+            return ToolResult<FlingDto>.Err(new InvalidArgument("velocityX", $"must be finite and within ±{MaxVelocity}"));
+        if (!double.IsFinite(velocityY) || Math.Abs(velocityY) > MaxVelocity)
+            return ToolResult<FlingDto>.Err(new InvalidArgument("velocityY", $"must be finite and within ±{MaxVelocity}"));
+        if (_accessor.Current is not { } host)
+            return ToolResult<FlingDto>.Err(new MapNotReady("the viewer's map control has not been initialised yet"));
+
+        var target = host.Fling(velocityX, velocityY);
+        onApplied?.Invoke();
+        if (target is { } t)
+        {
+            var (lon, lat) = Mapsui.Projections.SphericalMercator.ToLonLat(t.CenterX, t.CenterY);
+            return ToolResult<FlingDto>.Ok(new FlingDto(true, lat, lon));
+        }
+
+        return ToolResult<FlingDto>.Ok(new FlingDto(false, null, null));
+    }
+}
+
 /// <summary>What the viewer hands the MCP host for the perf-harness tools.</summary>
 /// <param name="Settle">The settled signal.</param>
 /// <param name="Metrics">The process metrics sampler.</param>
@@ -508,6 +551,32 @@ internal static class PerfHarnessMcpAdapters
                 + "native bytes. Also map paint p50/p95/max over get_render_stats' window, and the run environment (Lua "
                 + "engine, GC mode, processors, OS, render cache folder). Sampling runs only while a window is open. "
                 + "Viewer-injected tool.",
+            SerializerOptions = McpAdapterShared.Options,
+        });
+    }
+
+    /// <summary>Creates <c>fling</c>.</summary>
+    public static McpServerTool Create(FlingTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [Description("Release velocity, screen pixels per second, positive to the right: the map moves with the finger, so the view travels the other way.")] double velocityX,
+            [Description("Release velocity, screen pixels per second, positive downwards.")] double velocityY,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() =>
+            {
+                ct.ThrowIfCancellationRequested();
+                Attach();
+                return Task.FromResult(inner.Invoke(velocityX, velocityY));
+            });
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = FlingTool.Name,
+            Description =
+                "Flings the map as releasing a drag at this velocity does: the view coasts and decelerates to a stop, "
+                + "over up to a second. Returns where the viewer predicts it comes to rest. Marks the settle trigger, so "
+                + "await_settled measures from the release. Viewer-injected tool.",
             SerializerOptions = McpAdapterShared.Options,
         });
     }

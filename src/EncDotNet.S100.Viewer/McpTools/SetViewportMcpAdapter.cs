@@ -50,9 +50,10 @@ internal static class SetViewportMcpAdapter
             [Description("Web-mercator zoom level in [0, 24]. Must be paired with centerLat/centerLon; mutually exclusive with scaleDenominator and the bbox form.")] double? zoom = null,
             [Description("Optional clockwise viewport rotation in degrees (0 = north-up), applied on top of the bbox or centre+zoom frame. Any finite value is accepted and normalised to [0, 360); must accompany a frame form.")] double? rotation = null,
             [Description("Map scale denominator (e.g. 50000 for 1:50 000); positive and finite. Must be paired with centerLat/centerLon; mutually exclusive with zoom and the bbox form.")] double? scaleDenominator = null,
+            [Description("Optional animation duration in milliseconds (0 to 10000) for the centre forms: the map animates to the view instead of jumping. The echo then reports the target.")] long? durationMs = null,
             CancellationToken ct = default) =>
             DispatchAsync(() => inner.InvokeAsync(
-                new SetViewportRequest(south, west, north, east, centerLat, centerLon, zoom, rotation, scaleDenominator),
+                new SetViewportRequest(south, west, north, east, centerLat, centerLon, zoom, rotation, scaleDenominator, durationMs),
                 ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions
