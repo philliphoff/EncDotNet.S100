@@ -192,7 +192,18 @@ public sealed class TilesServeTimeTests
         }
         finally
         {
-            Directory.Delete(root, recursive: true);
+            // Best-effort: Windows can briefly hold a folder whose files were
+            // just written by the cache's background job.
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
         }
     }
 }
