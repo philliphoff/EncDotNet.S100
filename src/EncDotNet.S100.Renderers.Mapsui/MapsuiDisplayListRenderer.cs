@@ -253,6 +253,7 @@ public sealed class MapsuiDisplayListRenderer
 
             var (productLayerSet, styleStateHash) = DiskCacheKey(instructions);
             S100VectorTileRenderer.BindScene(layer, scene, productLayerSet, styleStateHash);
+            LastTiledScene = (scene, productLayerSet, styleStateHash);
         }
         else
         {
@@ -381,6 +382,14 @@ public sealed class MapsuiDisplayListRenderer
 
         return minX <= maxX ? new MRect(minX, minY, maxX, maxY) : null;
     }
+
+    /// <summary>
+    /// The scene the last <see cref="Render"/> bound to a tiled layer, with the
+    /// pair that keys its tile disk namespace, or <see langword="null"/> when
+    /// it drew single-surface. Read by <see cref="MapsuiDatasetRenderer"/> to
+    /// store the cell's scene.
+    /// </summary>
+    internal (Scene.VectorScene Scene, string? ProductLayerSet, string? StyleStateHash)? LastTiledScene { get; private set; }
 
     /// <summary>
     /// The <c>(productLayerSet, styleStateHash)</c> pair that keys this layer's
