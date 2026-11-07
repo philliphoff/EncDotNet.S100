@@ -388,11 +388,12 @@ public sealed class StackOffUiThreadTests
             _ => Square(random.Next(0, 60), random.Next(0, 60), random.Next(3, 30)),
         };
         int? scale = random.NextDouble() < 0.08 ? null : new[] { 8_000, 22_000, 22_000, 90_000, 350_000 }[random.Next(5)];
+        int? tieBreak = random.NextDouble() < 0.5 ? null : new[] { 3_500, 4_000, 12_000 }[random.Next(3)];
         return new OverlapSuppressionCell
         {
             Layers = [new MemoryLayer()],
             Coverage = coverage,
-            ScaleDenominator = scale,
+            Rank = scale is int s ? new CellRank(s, tieBreak) : null,
             CutoffScaleDenominator = random.NextDouble() < 0.5 ? null : random.Next(10_000, 2_000_000),
         };
     }
@@ -401,7 +402,7 @@ public sealed class StackOffUiThreadTests
     {
         Layers = [new MemoryLayer()],
         Coverage = coverage,
-        ScaleDenominator = scale,
+        Rank = new CellRank(scale),
     };
 
     private static Polygon Square(double minX, double minY, double size) =>

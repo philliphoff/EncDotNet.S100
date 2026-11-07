@@ -578,7 +578,7 @@ S-57 records.
 
 | Test | Reference | v2.0.0 data | Status | Evidence | Note |
 |---|---|---|---|---|---|
-| Dataset Selection | S-98 Appendix E | — | Partial | `src/EncDotNet.S100.Rendering.Engine/OverlapSuppression.cs` | Cells ranked by minimum display scale, finer clip coarser; not the S-98 Appendix E selection. The S-164 test is still TODO. |
+| Dataset Selection | S-98 Appendix E | — | Partial | `src/EncDotNet.S100.Rendering.Engine/OverlapSuppression.cs` | Cells ranked by minimum display scale (ties broken by maximum display scale), finer clip coarser; not the S-98 Appendix E selection. The S-164 test is still TODO. |
 | DatasetRendering | S-98 Appendix E | — | Partial | `src/EncDotNet.S100.Rendering.Engine/CoverageClip.cs` | Coarser cells clipped to finer coverage; not the Appendix E algorithm. The S-164 test is still TODO. |
 | DisplayBase | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayBase | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | No rule fails, the dangers are Display Base at the test settings, and the safety contour follows its edges ([#1126](https://github.com/philliphoff/EncDotNet.S100/issues/1126)). Dock and lock areas leave holes in Display Base (§6.2). |
 | DisplayStandard | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayStandard | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Every feature draws in Standard Display, with symbolised boundaries ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141)). |

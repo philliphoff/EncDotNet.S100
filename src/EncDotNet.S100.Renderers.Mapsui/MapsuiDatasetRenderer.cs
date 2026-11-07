@@ -293,7 +293,7 @@ public sealed class MapsuiDatasetRenderer
                         WithinPlanePriority = sub.WithinPlanePriority,
                         SourceDatasetId = result.SourceDatasetId,
                         SourceFeatureType = sub.SourceFeatureType,
-                        SourceScaleDenominator = CellScaleRanking.RankingScale(result.CellCompilationScale, result.CellMinimumDisplayScale),
+                        SourceScaleDenominator = CellScaleRanking.Rank(result.CellCompilationScale, result.CellMinimumDisplayScale)?.Scale,
                         ProductLayerSet = productLayerSet,
                         StyleStateHash = styleStateHash,
                         Scene = tiled.Scene,
@@ -334,7 +334,7 @@ public sealed class MapsuiDatasetRenderer
                     result.SourceDatasetId,
                     sub.SourceFeatureType)
                 {
-                    SourceScaleDenominator = CellScaleRanking.RankingScale(result.CellCompilationScale, result.CellMinimumDisplayScale),
+                    SourceScaleDenominator = CellScaleRanking.Rank(result.CellCompilationScale, result.CellMinimumDisplayScale)?.Scale,
                 }));
 
             union = Union(union, layer.Extent);
@@ -361,6 +361,7 @@ public sealed class MapsuiDatasetRenderer
             StackEntries = stackEntries,
             CellMinimumDisplayScale = result.CellMinimumDisplayScale,
             CellCompilationScale = result.CellCompilationScale,
+            CellMaximumDisplayScale = result.CellMaximumDisplayScale,
             CoverageGeometry = ToMercatorCoverage(result.CoverageAreas),
             SceneLayers = sceneLayers is { Count: > 0 } && sceneLayers.Count == layers.Count ? sceneLayers : null,
             ReusedStoredLayers = reused,
@@ -446,6 +447,7 @@ public sealed class MapsuiDatasetRenderer
             StackEntries = stackEntries,
             CellMinimumDisplayScale = stored.CellMinimumDisplayScale,
             CellCompilationScale = stored.CellCompilationScale,
+            CellMaximumDisplayScale = stored.CellMaximumDisplayScale,
             CoverageGeometry = stored.CoverageGeometry,
         };
     }

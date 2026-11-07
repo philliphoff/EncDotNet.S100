@@ -288,7 +288,7 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
                 StringComparer.Ordinal);
         }
 
-        public override int? RankingScale => _built.Value.RankingScale;
+        public override CellRank? Rank => _built.Value.Rank;
 
         public IVectorSpatialIndex Index => _built.Value.Index;
 
@@ -406,7 +406,7 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
             var features = source.GetFeatures();
             var index = source.TryGetIndex() ?? IVectorSpatialIndex.Build(features, "S-101");
             return new Built(
-                CellScaleRanking.RankingScale(_compilationScale, S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features)),
+                S101DatasetProcessor.ResolveCellRank(features, _compilationScale),
                 CoverageAreaResolver.Resolve(features),
                 index,
                 ReadSoundings(_dataset.Document));
@@ -481,7 +481,7 @@ internal sealed class CatalogRouteChartSource : IRouteChartSource
             return inside;
         }
 
-        private sealed record Built(int? RankingScale, IReadOnlyList<CoverageArea> Coverage, IVectorSpatialIndex Index, List<Sounding> Soundings);
+        private sealed record Built(CellRank? Rank, IReadOnlyList<CoverageArea> Coverage, IVectorSpatialIndex Index, List<Sounding> Soundings);
 
         private readonly record struct Sounding(double Lat, double Lon, double Depth, string FeatureId);
     }

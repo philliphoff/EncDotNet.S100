@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Rendering.Engine;
 using Mapsui.Layers;
@@ -34,7 +35,7 @@ public class OverlapSuppressionTests
     {
         Layers = [new MemoryLayer()],
         Coverage = coverage,
-        ScaleDenominator = denom,
+        Rank = denom is int scale ? new CellRank(scale) : null,
     };
 
     [Fact]
@@ -76,7 +77,7 @@ public class OverlapSuppressionTests
         {
             Layers = [new MemoryLayer()],
             Coverage = Square(0, 0, 5),
-            ScaleDenominator = 10000,
+            Rank = new CellRank(10000),
             CutoffScaleDenominator = 40000,
         };
 
@@ -90,13 +91,13 @@ public class OverlapSuppressionTests
     public void CollectFinerCoverages_RanksByScaleDenominator_NotCutoff()
     {
         // The coarse cell's cutoff (5000) is smaller than the finer cell's rank,
-        // but ranking uses ScaleDenominator only, so the coarse cell is not
+        // but ranking uses the rank only, so the coarse cell is not
         // treated as finer.
         var coarse = new OverlapSuppressionCell
         {
             Layers = [new MemoryLayer()],
             Coverage = Square(0, 0, 10),
-            ScaleDenominator = 90000,
+            Rank = new CellRank(90000),
             CutoffScaleDenominator = 5000,
         };
         var finerCell = Cell(Square(0, 0, 5), 10000);
@@ -125,6 +126,22 @@ public class OverlapSuppressionTests
         var b = Cell(Square(5, 0, 10), 90000);
 
         Assert.Null(OverlapSuppression.CollectFinerCoverages(a, [a, b]));
+    }
+
+    [Fact]
+    public void CollectFinerCoverages_SameMinimumFinerMaximum_Clips()
+    {
+        // IC-ENC Cowes: harbour 101GB00502038 (1:22 000 to 1:12 000) under
+        // berthing 101GB00602793 (1:22 000 to 1:3 500). As peers both drew,
+        // doubling every label; the finer maximum now suppresses the harbour
+        // cell, out to the shared 1:22 000 window.
+        var harbour = new OverlapSuppressionCell { Layers = [new MemoryLayer()], Coverage = Square(0, 0, 10), Rank = new CellRank(22000, 12000) };
+        var berthing = new OverlapSuppressionCell { Layers = [new MemoryLayer()], Coverage = Square(0, 0, 5), Rank = new CellRank(22000, 3500) };
+
+        var contribution = Assert.Single(OverlapSuppression.CollectFinerCoverages(harbour, [harbour, berthing])!);
+        Assert.Same(berthing.Coverage, contribution.Coverage);
+        Assert.Equal(22000 * MapsuiDisplayListRenderer.DenomToResolutionMetres, contribution.CutoffResolution, 6);
+        Assert.Null(OverlapSuppression.CollectFinerCoverages(berthing, [harbour, berthing]));
     }
 
     [Fact]

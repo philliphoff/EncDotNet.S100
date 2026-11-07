@@ -1907,7 +1907,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             {
                 Layers = layers,
                 Coverage = drawing ? info.Snapshot.CoverageGeometry : null,
-                ScaleDenominator = drawing ? info.RankingScale : null,
+                Rank = drawing ? info.Rank : null,
                 CutoffScaleDenominator = drawing ? info.Snapshot.MinimumDisplayScale : null,
             });
         }
@@ -2608,9 +2608,13 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
         entry.CatalogueMinimumDisplayScale ?? entry.CellMinimumDisplayScale;
 
     // Overlap ranking prefers the cell's compilation scale (S-57 CSCL) over its
-    // zoom-out window, which for S-57 extends to the largest SCAMIN.
-    private static int? RankingScale(Entry entry) =>
-        CellScaleRanking.RankingScale(entry.CellCompilationScale, EffectiveMinimumDisplayScale(entry));
+    // zoom-out window, which for S-57 extends to the largest SCAMIN. Cells of
+    // the same window are told apart by their finest display scale.
+    private static CellRank? Rank(Entry entry) =>
+        CellScaleRanking.Rank(
+            entry.CellCompilationScale,
+            EffectiveMinimumDisplayScale(entry),
+            entry.MaximumDisplayScale ?? entry.CellMaximumDisplayScale);
 
     private void OnAuthorityChanged()
     {
@@ -2903,6 +2907,8 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
 
         public int? CellCompilationScale { get; set; }
 
+        public int? CellMaximumDisplayScale { get; set; }
+
         public int? MaximumDisplayScale { get; set; }
 
         public double? ContentMaxVisibleResolution { get; set; }
@@ -2932,6 +2938,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             CoverageGeometry = result.CoverageGeometry;
             CellMinimumDisplayScale = result.CellMinimumDisplayScale;
             CellCompilationScale = result.CellCompilationScale;
+            CellMaximumDisplayScale = result.CellMaximumDisplayScale;
         }
 
         /// <summary>
@@ -2958,6 +2965,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             CoverageGeometry = null;
             CellMinimumDisplayScale = null;
             CellCompilationScale = null;
+            CellMaximumDisplayScale = null;
             ContentMaxVisibleResolution = null;
         }
 
@@ -2971,6 +2979,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             CoverageGeometry,
             CellMinimumDisplayScale,
             CellCompilationScale,
+            CellMaximumDisplayScale,
             ContentMaxVisibleResolution,
             RenderedTime);
 
@@ -2985,6 +2994,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             CoverageGeometry = state.CoverageGeometry;
             CellMinimumDisplayScale = state.CellMinimumDisplayScale;
             CellCompilationScale = state.CellCompilationScale;
+            CellMaximumDisplayScale = state.CellMaximumDisplayScale;
             ContentMaxVisibleResolution = state.ContentMaxVisibleResolution;
             RenderedTime = state.RenderedTime;
         }
@@ -3000,6 +3010,7 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
         NetTopologySuite.Geometries.Geometry? CoverageGeometry,
         int? CellMinimumDisplayScale,
         int? CellCompilationScale,
+        int? CellMaximumDisplayScale,
         double? ContentMaxVisibleResolution,
         DateTime? RenderedTime);
 

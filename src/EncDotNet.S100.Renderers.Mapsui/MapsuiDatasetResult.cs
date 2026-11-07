@@ -72,6 +72,14 @@ public sealed class MapsuiDatasetResult
     public int? CellCompilationScale { get; init; }
 
     /// <summary>
+    /// The rendered cell's finest intended display scale denominator (S-101
+    /// <c>DataCoverage.maximumDisplayScale</c>), the tie-break between
+    /// overlapping cells of the same minimum display scale. Mirrors
+    /// <c>VectorPortrayalResult.CellMaximumDisplayScale</c>.
+    /// </summary>
+    public int? CellMaximumDisplayScale { get; init; }
+
+    /// <summary>
     /// The rendered cell's declared data-coverage footprint in EPSG:3857
     /// (Web Mercator), projected from the processor's EPSG:4326
     /// <c>DataCoverage</c> polygons (S-101 FC §3.1.1; S-57 <c>M_COVR</c>). The

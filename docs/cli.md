@@ -267,7 +267,9 @@ With an explicit viewport:
   data coverage is the union of its coverage areas, and a finer cell takes part
   only where its coverage meets the coarser cell's, not just its bounding box.
   Cells are ranked by compilation scale, or by minimum display scale when a
-  cell has none. Cells of the same scale don't hide each other.
+  cell has none. Between cells of the same minimum display scale, the one with
+  the finer maximum display scale ranks finer. Cells of the same rank don't hide
+  each other.
 - **No S-101 updates.** The composite and exchange-set forms don't apply S-101
   update files. To render a cell with its updates, render it on its own.
 - **Skipped datasets.** In an exchange set, datasets with an unsupported

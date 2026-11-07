@@ -78,6 +78,7 @@ public sealed class CellSceneStoreTests
             LayerNames = ["layer-0"],
             CellMinimumDisplayScale = 90000,
             CellCompilationScale = null,
+            CellMaximumDisplayScale = 12000,
             CoverageGeometry = new GeometryFactory().CreatePolygon(
                 [new Coordinate(0, 0), new Coordinate(0, 1), new Coordinate(1, 1), new Coordinate(0, 0)]),
             Layers =
@@ -109,6 +110,7 @@ public sealed class CellSceneStoreTests
         Assert.Equal(["layer-0"], read.LayerNames);
         Assert.Equal(90000, read.CellMinimumDisplayScale);
         Assert.Null(read.CellCompilationScale);
+        Assert.Equal(12000, read.CellMaximumDisplayScale);
         Assert.True(stored.CoverageGeometry.EqualsExact(read.CoverageGeometry));
         var layer = Assert.Single(read.Layers);
         Assert.Equal(0.5, layer.Opacity);

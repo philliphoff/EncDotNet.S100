@@ -356,7 +356,7 @@ public sealed class ChartCompositor
         {
             if (input.Vector is not { } vector
                 || !activeIds.Contains(vector.SourceDatasetId)
-                || CellScaleRanking.RankingScale(vector.CellCompilationScale, vector.CellMinimumDisplayScale) is not int rank
+                || CellScaleRanking.Rank(vector.CellCompilationScale, vector.CellMinimumDisplayScale, vector.CellMaximumDisplayScale) is not CellRank rank
                 || CoverageFootprint.FromAreas(vector.CoverageAreas) is not { } footprint)
             {
                 continue;
@@ -364,8 +364,8 @@ public sealed class ChartCompositor
 
             cells.Add((
                 vector.SourceDatasetId,
-                new OverlapSuppressionCell { Layers = [], Coverage = footprint, ScaleDenominator = rank },
-                vector.CellMinimumDisplayScale ?? rank));
+                new OverlapSuppressionCell { Layers = [], Coverage = footprint, Rank = rank },
+                vector.CellMinimumDisplayScale ?? rank.Scale));
         }
 
         var byCoverage = new Dictionary<Geometry, (OverlapSuppressionCell Cell, double Cutoff)>(ReferenceEqualityComparer.Instance);
@@ -415,7 +415,7 @@ public sealed class ChartCompositor
                     vector.SourceDatasetId,
                     sub.SourceFeatureType)
                 {
-                    SourceScaleDenominator = CellScaleRanking.RankingScale(vector.CellCompilationScale, vector.CellMinimumDisplayScale),
+                    SourceScaleDenominator = CellScaleRanking.Rank(vector.CellCompilationScale, vector.CellMinimumDisplayScale)?.Scale,
                 });
             }
 

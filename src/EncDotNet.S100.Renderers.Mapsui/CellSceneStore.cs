@@ -82,6 +82,9 @@ public sealed class StoredCellScene
     /// <summary>The cell's compilation scale denominator, or null.</summary>
     public int? CellCompilationScale { get; init; }
 
+    /// <summary>The cell's maximum display scale denominator, or null.</summary>
+    public int? CellMaximumDisplayScale { get; init; }
+
     /// <summary>The cell's data coverage in EPSG:3857, or null.</summary>
     public NetTopologySuite.Geometries.Geometry? CoverageGeometry { get; init; }
 
@@ -114,6 +117,7 @@ public sealed class StoredCellScene
             LayerNames = result.LayerNames,
             CellMinimumDisplayScale = result.CellMinimumDisplayScale,
             CellCompilationScale = result.CellCompilationScale,
+            CellMaximumDisplayScale = result.CellMaximumDisplayScale,
             CoverageGeometry = result.CoverageGeometry,
             Layers = layers,
         };
@@ -139,7 +143,7 @@ public sealed class CellSceneStore
     public const string KindName = "scenes";
 
     /// <summary>The envelope format version. Bump when the layout below changes.</summary>
-    public const int FormatVersion = 1;
+    public const int FormatVersion = 2;
 
     /// <summary>The options hosts open this store's kind with.</summary>
     public static ContentKindOptions KindOptions { get; } = new()
@@ -244,6 +248,7 @@ public sealed class CellSceneStore
 
             WriteNullable(w, scene.CellMinimumDisplayScale);
             WriteNullable(w, scene.CellCompilationScale);
+            WriteNullable(w, scene.CellMaximumDisplayScale);
             var coverage = scene.CoverageGeometry is { } geometry ? new WKBWriter().Write(geometry) : [];
             w.Write7BitEncodedInt(coverage.Length);
             w.Write(coverage);
@@ -303,6 +308,7 @@ public sealed class CellSceneStore
 
             var minimum = ReadNullableInt(r);
             var compilation = ReadNullableInt(r);
+            var maximum = ReadNullableInt(r);
             var coverageBytes = r.ReadBytes(r.Read7BitEncodedInt());
             var coverage = coverageBytes.Length == 0 ? null : new WKBReader().Read(coverageBytes);
 
@@ -335,6 +341,7 @@ public sealed class CellSceneStore
                 LayerNames = names,
                 CellMinimumDisplayScale = minimum,
                 CellCompilationScale = compilation,
+                CellMaximumDisplayScale = maximum,
                 CoverageGeometry = coverage,
                 Layers = layers,
             };

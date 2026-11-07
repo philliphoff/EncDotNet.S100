@@ -580,7 +580,7 @@ public sealed partial class ChartCheck : IRouteCheck<ChartCheckResult>
                 }
             }
 
-            return covering is null ? [] : CellScaleRanking.FinestBand(covering, i => _cells[i].RankingScale);
+            return covering is null ? [] : CellScaleRanking.FinestBand(covering, i => _cells[i].Rank);
         }
 
         private List<(GeoPosition A, GeoPosition B)> AreaEdges(RouteChartFeature feature)

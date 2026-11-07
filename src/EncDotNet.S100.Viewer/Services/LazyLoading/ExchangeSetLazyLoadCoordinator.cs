@@ -597,13 +597,13 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         List<DatasetEntry> inView, LoadWindow window, double resolution, LoadTier inViewTier)
     {
         // Covering cells: finer coverage that is, or soon will be, on the map.
-        var coverers = new List<(int? Rank, NetTopologySuite.Geometries.Geometry Coverage)>();
+        var coverers = new List<(DataModel.CellRank? Rank, NetTopologySuite.Geometries.Geometry Coverage)>();
         foreach (var loaded in _loadedEntries)
         {
             if (loaded.CatalogueCoverage is { } coverage && DrawsNow(loaded, resolution)
                 && LazyCellGate.IntersectsViewport(loaded.GeographicBounds, window.South, window.West, window.North, window.East))
             {
-                coverers.Add((RankingScale(loaded), coverage));
+                coverers.Add((Rank(loaded), coverage));
             }
         }
         foreach (var (running, load) in _running)
@@ -614,7 +614,7 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
                 && running.CatalogueCoverage is { } coverage && IsShown(running)
                 && LazyCellGate.IntersectsViewport(running.GeographicBounds, window.South, window.West, window.North, window.East))
             {
-                coverers.Add((RankingScale(running), coverage));
+                coverers.Add((Rank(running), coverage));
             }
         }
 
@@ -623,10 +623,10 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
 
         // Finest first, so a cell's own tier is settled before coarser cells
         // decide whether it covers them.
-        inView.Sort((a, b) => DataModel.CellScaleRanking.Compare(RankingScale(a), RankingScale(b)));
+        inView.Sort((a, b) => DataModel.CellScaleRanking.Compare(Rank(a), Rank(b)));
         foreach (var entry in inView)
         {
-            var rank = RankingScale(entry);
+            var rank = Rank(entry);
             var finer = coverers
                 .Where(c => DataModel.CellScaleRanking.IsFiner(c.Rank, rank))
                 .Select(c => c.Coverage)
@@ -644,8 +644,8 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         }
     }
 
-    private static int? RankingScale(DatasetEntry entry) =>
-        DataModel.CellScaleRanking.RankingScale(entry.CompilationScale, entry.MinimumDisplayScale);
+    private static DataModel.CellRank? Rank(DatasetEntry entry) =>
+        DataModel.CellScaleRanking.Rank(entry.CompilationScale, entry.MinimumDisplayScale, entry.MaximumDisplayScale);
 
     /// <summary>
     /// Whether a loaded cell draws, fully opaque, at <paramref name="resolution"/>:

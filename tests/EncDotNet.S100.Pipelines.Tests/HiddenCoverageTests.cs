@@ -1,3 +1,4 @@
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Rendering.Engine;
 using Mapsui.Extensions;
@@ -126,8 +127,8 @@ public class HiddenCoverageTests
         var coarseB = new MemoryLayer();
         OverlapSuppression.Apply(
         [
-            new OverlapSuppressionCell { Layers = [coarseA, coarseB], Coverage = Rect(0, 0, 1000, 1000), ScaleDenominator = 90000 },
-            new OverlapSuppressionCell { Layers = [new MemoryLayer()], Coverage = Rect(0, 0, 100, 100), ScaleDenominator = 12000 },
+            new OverlapSuppressionCell { Layers = [coarseA, coarseB], Coverage = Rect(0, 0, 1000, 1000), Rank = new CellRank(90000) },
+            new OverlapSuppressionCell { Layers = [new MemoryLayer()], Coverage = Rect(0, 0, 100, 100), Rank = new CellRank(12000) },
         ]);
 
         Assert.NotNull(CoverageClip.Get(coarseA));
