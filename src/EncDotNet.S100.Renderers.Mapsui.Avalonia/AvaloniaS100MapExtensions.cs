@@ -75,6 +75,7 @@ public static class AvaloniaS100MapExtensions
 
         var session = map.AddS100(options);
         var adapter = AvaloniaMapsuiMapAdapter.Attach(mapControl);
+        adapter.ForecastFlings(session.Navigator);
         return (session, adapter);
     }
 }

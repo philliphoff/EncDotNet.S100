@@ -1005,18 +1005,10 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             // work (map rendering slice 5).
             var processor = lease.Processor;
             var layout = renderEntry.CoverageLayout;
-            var rendering = BeginRendering();
-            try
-            {
-                result = await WorkScheduler.Shared.RunAsync(
-                    WorkStage.Portray,
-                    token => _renderer.RenderAsync(processor, context, layout, token),
-                    cancellationToken).ConfigureAwait(true);
-            }
-            finally
-            {
-                EndRendering(rendering);
-            }
+            result = await WorkScheduler.Shared.RunAsync(
+                WorkStage.Portray,
+                token => _renderer.RenderAsync(processor, context, layout, token),
+                cancellationToken).ConfigureAwait(true);
         }
 
         cancellationToken.ThrowIfCancellationRequested();

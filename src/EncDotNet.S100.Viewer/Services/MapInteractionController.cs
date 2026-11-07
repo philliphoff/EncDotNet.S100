@@ -64,6 +64,13 @@ internal sealed class MapInteractionController
     /// </summary>
     public Depth.DepthBasisService? DepthBasis { get; init; }
 
+    /// <summary>
+    /// The map's viewport, for the zoom buttons: animating through it reports
+    /// the zoom's target to the demand planner (map rendering slice&#160;9), so
+    /// the target's cells and tiles start before the zoom ends.
+    /// </summary>
+    public IMapViewportController? Viewport { get; init; }
+
     private MapControl? _mapControl;
     private MapsuiMapNavigator? _mapNavigator;
 
@@ -201,16 +208,23 @@ internal sealed class MapInteractionController
 
     private void OnZoomInClick(object? sender, RoutedEventArgs e)
     {
-        if (_mapControl?.Map?.Navigator is not { } navigator)
-            return;
-        navigator.ZoomTo(navigator.Viewport.Resolution / 2, 250);
+        ZoomBy(0.5);
     }
 
     private void OnZoomOutClick(object? sender, RoutedEventArgs e)
     {
+        ZoomBy(2.0);
+    }
+
+    private void ZoomBy(double factor)
+    {
         if (_mapControl?.Map?.Navigator is not { } navigator)
             return;
-        navigator.ZoomTo(navigator.Viewport.Resolution * 2, 250);
+        var viewport = navigator.Viewport;
+        if (Viewport is { } host)
+            host.AnimateToCenterAndResolution(new MPoint(viewport.CenterX, viewport.CenterY), viewport.Resolution * factor, 250);
+        else
+            navigator.ZoomTo(viewport.Resolution * factor, 250);
     }
 
     /// <summary>

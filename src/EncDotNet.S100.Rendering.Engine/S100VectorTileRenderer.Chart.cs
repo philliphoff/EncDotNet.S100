@@ -37,7 +37,8 @@ public static partial class S100VectorTileRenderer
     /// <param name="owner">The chart layer's owner token.</param>
     /// <param name="stack">The stack to draw.</param>
     /// <param name="options">The options of the session the owner belongs to.</param>
-    internal static void BindStack(object owner, ChartStack stack, ChartSessionOptions options)
+    /// <param name="planner">The demand planner of the session the owner belongs to.</param>
+    internal static void BindStack(object owner, ChartStack stack, ChartSessionOptions options, Prediction.DemandPlanner? planner = null)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(stack);
@@ -48,6 +49,7 @@ public static partial class S100VectorTileRenderer
         lock (state.Sync)
         {
             state.Options = options;
+            state.Planner = planner;
             state.Chart = resolved;
             state.DiskNamespace = options.TileDiskCacheEnabled ? ChartDiskNamespace : null;
             state.SlotContents.Clear();

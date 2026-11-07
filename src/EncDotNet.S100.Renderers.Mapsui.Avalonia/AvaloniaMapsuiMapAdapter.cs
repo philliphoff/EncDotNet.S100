@@ -333,6 +333,22 @@ public sealed class AvaloniaMapsuiMapAdapter : IDisposable
     public void Dispose()
     {
         _disposed = true;
+        _flingForecaster?.Dispose();
+        _flingForecaster = null;
+    }
+
+    private AvaloniaFlingForecaster? _flingForecaster;
+
+    /// <summary>
+    /// Reports the control's flings to <paramref name="navigator"/>'s demand
+    /// planner until the adapter is disposed (map rendering slice&#160;9).
+    /// </summary>
+    internal void ForecastFlings(MapsuiMapNavigator navigator)
+    {
+        if (navigator.Planner is null || _disposed)
+            return;
+        _flingForecaster?.Dispose();
+        _flingForecaster = new AvaloniaFlingForecaster(_mapControl, navigator);
     }
 
     /// <summary>
