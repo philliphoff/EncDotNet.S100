@@ -1806,11 +1806,34 @@ sealed class AgentClipBuilder(bool transcript = true)
         var listFile = Path.Combine(work, "frames.txt");
         await File.WriteAllTextAsync(listFile, list.ToString());
 
+        if (!FfmpegAvailable())
+        {
+            // Keep the frames and their durations so they can be encoded elsewhere.
+            var kept = Path.Combine(directory, name + "-frames");
+            if (Directory.Exists(kept)) Directory.Delete(kept, recursive: true);
+            Directory.Move(work, kept);
+            Console.WriteLine($"  ffmpeg not found: frames kept in {kept} (frames.txt has the durations)");
+            return;
+        }
         await Ffmpeg("-y", "-f", "concat", "-safe", "0", "-i", listFile, "-vf", "fps=30,format=yuv420p",
             "-c:v", "libx264", "-crf", "23", "-preset", "slow", "-movflags", "+faststart", "-an", Path.Combine(directory, name + ".mp4"));
         await Ffmpeg("-y", "-f", "concat", "-safe", "0", "-i", listFile, "-vf", "fps=30,format=yuv420p",
             "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "36", "-an", Path.Combine(directory, name + ".webm"));
         Directory.Delete(work, recursive: true);
+    }
+
+    private static bool FfmpegAvailable()
+    {
+        try
+        {
+            using var probe = Process.Start(new ProcessStartInfo("ffmpeg", "-version") { RedirectStandardOutput = true, RedirectStandardError = true });
+            probe?.WaitForExit();
+            return probe is { ExitCode: 0 };
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return false;
+        }
     }
 
     private static async Task Ffmpeg(params string[] arguments)
