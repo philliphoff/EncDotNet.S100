@@ -33,4 +33,21 @@ internal interface IMapViewportController
     /// available (the default for hosts without a live navigator).
     /// </summary>
     double? TryGetViewportResolution() => null;
+
+    /// <summary>
+    /// Animates to a centre and resolution over <paramref name="durationMs"/>,
+    /// as a "go to" does. Hosts without animation apply the view at once.
+    /// </summary>
+    void AnimateToCenterAndResolution(MPoint mercatorCenter, double resolution, long durationMs) =>
+        SetViewportToCenterAndResolution(mercatorCenter, resolution);
+
+    /// <summary>
+    /// Starts a fling, as releasing a drag at this velocity does, and returns
+    /// the predicted resting centre and resolution (EPSG:3857), or
+    /// <see langword="null"/> when no fling starts or nothing predicts it.
+    /// Hosts without flings return <see langword="null"/>.
+    /// </summary>
+    /// <param name="velocityX">Release velocity, screen pixels per second.</param>
+    /// <param name="velocityY">Release velocity, screen pixels per second.</param>
+    (double CenterX, double CenterY, double Resolution)? Fling(double velocityX, double velocityY) => null;
 }
