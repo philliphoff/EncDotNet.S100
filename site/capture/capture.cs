@@ -157,6 +157,15 @@ var eastCoastBox = new Box(29.5, -82.5, 46.5, -59.5);
 ];
 var erinRoute = (Departure: new DateTimeOffset(2025, 8, 20, 12, 0, 0, TimeSpan.Zero), Advisory: 36);
 var carolinasBox = new Box(31.4, -81.4, 38.0, -71.4);
+// D4: the outer Banks stretch of the W6 passage, Cape Lookout to the Chesapeake
+// Bay entrance, with Erin's track offshore. The departure is scrubbed through a
+// day and a half from the 12Z run, so the vessel meets Erin's wind field off
+// Hatteras or passes ahead of or behind it.
+(double Lat, double Lon)[] lookoutToChesapeake =
+[
+    (34.55, -76.40), (35.20, -75.30), (36.40, -75.50), (36.95, -75.95),
+];
+var erinClipBox = new Box(32.4, -77.1, 37.7, -70.6);
 // W8: sea fog off eastern Maine and in the Bay of Fundy on a June morning. The minis are map renders
 // at 1280 × 720 logical pixels, so the band 3 charts still draw at their scale.
 var gulfOfMaineBox = new Box(43.4, -69.6, 45.0, -66.4);
@@ -418,6 +427,14 @@ var shots = new List<Shot>
     // The check also tests the route against Erin's advisory (#1299). The findings
     // list is on its Weather filter, with the strongest radius finding selected.
     new("W6", v => WeatherRoute(v), Themed: true, TimeZone: "UTC"),
+
+    // D4: weather on a route, as a clip. Cape Lookout to the Chesapeake Bay
+    // entrance at 12 kn with Erin offshore (W6's data: the GFS and GFS-Wave run at
+    // 12Z on 20 Aug 2025 and NHC advisory 36), Check route on with Follow passage,
+    // and the departure scrubbed so the storm, drawn at the vessel's ETA, moves up
+    // its track while the verdict follows. Encoded to site/public/clips/D4.{mp4,webm}
+    // (or kept as frames without ffmpeg); returns the poster.
+    new("D4", v => ErinClip(v), TimeZone: "UTC"),
 
     // W7: the Library's weather sources: GFS on AWS, SST from ERDDAP, NHC's
     // active storms and WPC's surface analysis. Live sources, like F5: the runs
@@ -949,6 +966,61 @@ async Task<byte[]> WeatherRoute(Viewer v)
     await v.Call("set_map_legend", new() { ["open"] = false });
     await v.Frame(carolinasBox);
     return await v.Window();
+}
+
+// D4: see the shot list.
+async Task<byte[]> ErinClip(Viewer v)
+{
+    await v.Reset(category: "DisplayBase");
+    // Bands 1–3, so the open ocean east of the coastal cells has chart too.
+    await CoastalCharts(v, ["NC", "VA"], erinClipBox, bands: "123");
+    var run = erinRoute.Departure.UtcDateTime;
+    int[] hours = [.. Enumerable.Range(0, 17).Select(i => i * 3)];
+    await v.OpenAll([await data.GfsWaveHours(run, "atlocn.0p16", hours, ["HTSGW:surface", "PERPW:surface", "DIRPW:surface"])]);
+    await v.OpenAll([await data.GfsHours(run, hours, ["UGRD:10 m above ground", "VGRD:10 m above ground", "PRMSL:mean sea level"])]);
+    await v.OpenAll([await data.NhcAdvisory(erin.Storm, erinRoute.Advisory)]);
+    await v.Call("set_test_clock", new() { ["now"] = erinRoute.Departure.ToString("O"), ["freeze"] = true });
+    await v.Call("set_route_weather_settings", new()
+    {
+        ["maxWindKnots"] = 25.0, ["maxWaveHeightMeters"] = 3.5,
+        // Inside the 34 kt radius is Must review here, so it leads the verdict.
+        ["cycloneCheckAgainstKnots"] = 34, ["cycloneReportClosestApproach"] = true, ["cycloneMustReviewInsideKnots"] = 34,
+    });
+    await v.Call("create_route", new() { ["name"] = "Cape Lookout to the Chesapeake" });
+    foreach (var (lat, lon) in lookoutToChesapeake)
+        await v.Call("append_waypoint", new() { ["lat"] = lat, ["lon"] = lon });
+    var first = erinRoute.Departure;
+    await v.Call("set_passage", new() { ["draftMeters"] = 9.0, ["speedKnots"] = 12.0, ["departure"] = first.ToString("O") });
+
+    // Departures every 30 min for 30 h from the run (arrivals stay inside its 48 h).
+    var scrub = Enumerable.Range(0, 61).Select(i => first.AddMinutes(30 * i)).ToList();
+
+    await v.Panel("Routes");
+    await v.Call("set_map_legend", new() { ["open"] = false });
+    await v.Frame(erinClipBox);
+
+    var clip = new AgentClipBuilder(transcript: false);
+    await clip.Frame(v, 1.5);                                      // the route and the storm
+    await v.Call("set_check_mode", new() { ["on"] = true });
+    await v.Call("set_panel", new() { ["panel"] = "Clearance", ["visible"] = false });
+    await v.Call("set_map_legend", new() { ["open"] = false });
+    await v.Call("set_follow_passage", new() { ["on"] = true });  // weather and storm at the vessel's ETA
+    await clip.Frame(v, 2.0);
+    string? lastTitle = null;
+    foreach (var departure in scrub)
+    {
+        var state = await v.Call("set_departure", new() { ["departure"] = departure.ToString("O") });
+        var title = state?["verdictTitle"]?.ToString();
+        if (title != lastTitle) Console.WriteLine($"  {departure:u}: {title} · {state?["verdictSubtitle"]}");
+        lastTitle = title;
+        await clip.Frame(v, 0.15);
+    }
+    var poster = await clip.Frame(v, 3.0);
+    foreach (var f in (await v.Call("get_findings"))?["findings"]?.AsArray() ?? [])
+        Console.WriteLine($"    {f!["group"]} {f!["code"]} {f!["title"]}");
+
+    if (!manifestOnly) await clip.EncodeAsync(Path.Combine(repoRoot, "site", "public", "clips"), "D4");
+    return poster;
 }
 
 static IEnumerable<string> Grid(string prefix, string rows, string cols) =>
@@ -1606,9 +1678,12 @@ sealed class Viewer : IAsyncDisposable
 }
 
 /// <summary>Builds the D2 clip: a transcript panel beside window captures, encoded with ffmpeg.</summary>
-sealed class AgentClipBuilder
+sealed class AgentClipBuilder(bool transcript = true)
 {
-    private const int Width = 1920, Height = 1080, PanelWidth = 560, Margin = 40;
+    private const int Width = 1920, PanelWidth = 560, Margin = 40;
+    private readonly bool _transcript = transcript;
+    // With a transcript, 1920 × 1080; without, the window alone at its 16:10.
+    private readonly int Height = transcript ? 1080 : 1200;
     private readonly List<(string Kind, string Text, string? Detail)> _entries = [];
     private readonly List<(byte[] Png, double Seconds)> _frames = [];
     private static readonly SKTypeface Sans = SKTypeface.FromFile("/System/Library/Fonts/SFNS.ttf") ?? SKTypeface.Default;
@@ -1627,13 +1702,15 @@ sealed class AgentClipBuilder
         canvas.Clear(new SKColor(0x0b, 0x12, 0x1b));
 
         // Viewer on the right, scaled to fit.
-        var right = new SKRect(PanelWidth + Margin * 2, Margin, Width - Margin, Height - Margin);
+        var right = _transcript
+            ? new SKRect(PanelWidth + Margin * 2, Margin, Width - Margin, Height - Margin)
+            : new SKRect(0, 0, Width, Height);
         var scale = Math.Min(right.Width / window.Width, right.Height / window.Height);
         var dest = SKRect.Create(right.Left, right.MidY - window.Height * scale / 2, window.Width * scale, window.Height * scale);
         using (var image = SKImage.FromBitmap(window))
             canvas.DrawImage(image, dest, new SKSamplingOptions(SKCubicResampler.Mitchell));
 
-        DrawTranscript(canvas, new SKRect(Margin, dest.Top, Margin + PanelWidth, dest.Bottom));
+        if (_transcript) DrawTranscript(canvas, new SKRect(Margin, dest.Top, Margin + PanelWidth, dest.Bottom));
 
         using var snapshot = surface.Snapshot();
         var png = snapshot.Encode(SKEncodedImageFormat.Png, 100).ToArray();
