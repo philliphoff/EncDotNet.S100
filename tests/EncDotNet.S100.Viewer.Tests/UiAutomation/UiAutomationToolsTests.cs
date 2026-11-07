@@ -81,6 +81,7 @@ public sealed class UiAutomationToolsTests
 
     [Theory]
     [InlineData(null, -1, null)]
+    [InlineData(null, UiTreeTool.MaxDepth + 1, null)]
     [InlineData(null, null, 0)]
     [InlineData("everything", null, null)]
     public async Task Tree_arguments_are_checked(string? filter, int? depth, int? maxNodes)
@@ -89,6 +90,25 @@ public sealed class UiAutomationToolsTests
 
         Assert.True(result.TryGetError(out var error));
         Assert.Equal("invalid_argument", error!.Code);
+    }
+
+    // #1225: the deepest tree a request can ask for serializes, and an MCP
+    // client that reads JSON nested no deeper than 64 (System.Text.Json's
+    // default) can read it inside the JSON-RPC envelope.
+    [Fact]
+    public void The_deepest_tree_stays_within_the_json_nesting_limit()
+    {
+        UiElementSnapshot? element = null;
+        for (var level = UiTreeTool.MaxDepth; level >= 0; level--)
+            element = new UiElementSnapshot($"e{level}", null, "pane", "Panel", null, null, null, null, true, false,
+                ["invoke"], null, null, null, null, new UiBounds(0, 0, 10, 10), element is null ? null : [element]);
+        var snapshot = new UiTreeSnapshot([new UiRootSnapshot("window", "Viewer", element!)], UiTreeTool.MaxDepth + 1, false);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(snapshot, McpAdapterShared.Options);
+
+        using var document = System.Text.Json.JsonDocument.Parse(
+            """{"jsonrpc":"2.0","id":1,"result":{"content":[],"structuredContent":""" + json + "}}");
+        Assert.Equal(System.Text.Json.JsonValueKind.Object, document.RootElement.ValueKind);
     }
 
     [Fact]

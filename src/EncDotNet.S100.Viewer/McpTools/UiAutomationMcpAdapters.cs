@@ -24,7 +24,7 @@ internal static class UiAutomationMcpAdapters
         ArgumentNullException.ThrowIfNull(inner);
         var del = (
             [Description("List from this element: an automation id or a ref. Omit for every window and open popup.")] string? root = null,
-            [Description("Levels to list below each root, 0–100 (default 30).")] int? depth = null,
+            [Description("Levels to list below each root, 0–25 (default 25). For deeper elements, list from a nearer root.")] int? depth = null,
             [Description("'interactive' (default) lists elements that have an automation id or can be acted on; the rest are skipped and their children shown in their place. 'all' lists every element.")] string? filter = null,
             [Description("Most elements to return, 1–5000 (default 400); 'truncated' says when the listing was cut.")] int? maxNodes = null,
             CancellationToken ct = default) =>
