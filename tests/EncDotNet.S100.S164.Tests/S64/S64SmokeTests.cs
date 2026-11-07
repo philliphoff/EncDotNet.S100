@@ -58,7 +58,6 @@ public sealed partial class S64SmokeTests
         // Classes without a rule yet.
         ["3.1 ENC Display/Other/ENC_ROOT/AA5OTHER.000"] =
         [
-            "Unknown S-57 object CUSZNE (37)",
             "Unknown S-57 object FRPARE (60)",
             TidalStreamPanel,
             "Unknown S-57 object TS_PNH (137)",
