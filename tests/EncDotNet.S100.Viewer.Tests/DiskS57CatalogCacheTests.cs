@@ -51,7 +51,7 @@ public class DiskS57CatalogCacheTests : IDisposable
     [Fact]
     public void Second_read_is_a_hit_and_skips_the_producer()
     {
-        var cache = new DiskS57CatalogCache(_cacheDir, 1_000_000);
+        var cache = new DiskS57CatalogCache(EncDotNet.S100.Testing.TestContentKinds.Open(_cacheDir, 1_000_000, DiskS57CatalogCache.KindOptions));
         var calls = 0;
 
         IReadOnlyList<S57ExchangeSetCell> Produce(string _)
@@ -75,7 +75,7 @@ public class DiskS57CatalogCacheTests : IDisposable
     [Fact]
     public void Catalogue_change_invalidates_the_entry()
     {
-        var cache = new DiskS57CatalogCache(_cacheDir, 1_000_000);
+        var cache = new DiskS57CatalogCache(EncDotNet.S100.Testing.TestContentKinds.Open(_cacheDir, 1_000_000, DiskS57CatalogCache.KindOptions));
         var calls = 0;
 
         IReadOnlyList<S57ExchangeSetCell> Produce(string _)
@@ -100,7 +100,7 @@ public class DiskS57CatalogCacheTests : IDisposable
     [Fact]
     public void Corrupt_sidecar_is_treated_as_a_miss()
     {
-        var cache = new DiskS57CatalogCache(_cacheDir, 1_000_000);
+        var cache = new DiskS57CatalogCache(EncDotNet.S100.Testing.TestContentKinds.Open(_cacheDir, 1_000_000, DiskS57CatalogCache.KindOptions));
         cache.GetOrRead(_cataloguePath, _ => SampleCells());
 
         foreach (var sidecar in Directory.EnumerateFiles(_cacheDir, "*.s57cat"))
@@ -120,7 +120,7 @@ public class DiskS57CatalogCacheTests : IDisposable
     [Fact]
     public void Missing_catalogue_runs_producer_without_persisting()
     {
-        var cache = new DiskS57CatalogCache(_cacheDir, 1_000_000);
+        var cache = new DiskS57CatalogCache(EncDotNet.S100.Testing.TestContentKinds.Open(_cacheDir, 1_000_000, DiskS57CatalogCache.KindOptions));
         var missing = System.IO.Path.Combine(_cacheDir, "GONE.031");
 
         var result = cache.GetOrRead(missing, _ => SampleCells());

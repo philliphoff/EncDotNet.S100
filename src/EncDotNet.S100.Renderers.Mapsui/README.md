@@ -623,8 +623,10 @@ identifies the clip inputs:
 // One cache per processor:
 private readonly InMemoryPatternClipCache _patternClipCache = new();
 
-// Or one disk cache for the whole process:
-var sharedClipCache = new DiskPatternClipCache(cacheDir, maxBytes: 256L * 1024 * 1024);
+// Or one disk cache for the whole process, in a content store:
+var store = new ContentStore(cacheRoot);
+var sharedClipCache = new DiskPatternClipCache(store.Open(
+    DiskPatternClipCache.KindName, 256L * 1024 * 1024, DiskPatternClipCache.KindOptions));
 
 var renderer = new MapsuiDisplayListRenderer
 {
@@ -641,11 +643,12 @@ test cell, a first Day render took about 6 s and the following Night switch abou
 - **`InMemoryPatternClipCache`** holds one entry, so its memory is bounded to one
   cell. It only helps re-renders of a dataset that's already open, and it's lost
   when the dataset closes.
-- **`DiskPatternClipCache`** (`cacheDirectory`, `maxBytes`) is shared by the
-  process and stored on disk, so even the first open of a cell seen before skips
-  the clip, after a restart too. It stores each clip as WKB in a file named after
-  the SHA-256 of the key. Writes are atomic, and the least recently used entries
-  are removed above `maxBytes`. Any read error or `FormatVersion` mismatch counts
+- **`DiskPatternClipCache`** (a `ContentKind` of a `ContentStore`, from
+  `EncDotNet.S100.Core.Caching`) is shared by the process and stored on disk, so
+  even the first open of a cell seen before skips the clip, after a restart too.
+  It stores each clip as WKB in a file named after the SHA-256 of the key. A miss
+  queues the file write as a background job; writes are atomic, and the store
+  removes the least recently used entries when it's over its budget. Any read error or `FormatVersion` mismatch counts
   as a miss and never throws. Because the cache is shared, the key must be fully
   qualified. The S-101 processor uses `{datasetScope}|{portrayalKey}`, where
   `datasetScope` includes the dataset content hash, the clip parameters

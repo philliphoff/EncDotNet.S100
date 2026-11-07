@@ -92,7 +92,7 @@ public sealed class GribViewerLoadPathTests : IDisposable
     {
         var path = GribFixtures.CopyFixture(GribFixtures.Wind10m, Path.Combine(_dir, "gfs.t00z.pgrb2.0p25"));
         var reader = new CachingDatasetMetadataReader(
-            new DiskDatasetMetadataCache(Path.Combine(_dir, "cache"), 1_000_000));
+            new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(Path.Combine(_dir, "cache"), 1_000_000, DiskDatasetMetadataCache.KindOptions)));
 
         var metadata = reader.TryRead(path);
 

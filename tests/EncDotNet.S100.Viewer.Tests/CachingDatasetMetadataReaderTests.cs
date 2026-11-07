@@ -46,7 +46,7 @@ public class CachingDatasetMetadataReaderTests : IDisposable
     public void Returns_null_for_empty_path()
     {
         var reader = new CachingDatasetMetadataReader(
-            new DiskDatasetMetadataCache(_cacheDir, 1_000_000));
+            new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(_cacheDir, 1_000_000, DiskDatasetMetadataCache.KindOptions)));
 
         Assert.Null(reader.TryRead(string.Empty));
     }
@@ -57,7 +57,7 @@ public class CachingDatasetMetadataReaderTests : IDisposable
         var file = System.IO.Path.Combine(_cacheDir, "not-a-dataset.txt");
         File.WriteAllText(file, "hello");
         var reader = new CachingDatasetMetadataReader(
-            new DiskDatasetMetadataCache(_cacheDir, 1_000_000));
+            new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(_cacheDir, 1_000_000, DiskDatasetMetadataCache.KindOptions)));
 
         Assert.Null(reader.TryRead(file));
     }
@@ -68,7 +68,7 @@ public class CachingDatasetMetadataReaderTests : IDisposable
         var cell = S101Cell();
         Assert.SkipUnless(File.Exists(cell), $"S-101 test cell not present: {cell}");
 
-        var cache = new DiskDatasetMetadataCache(_cacheDir, 1_000_000);
+        var cache = new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(_cacheDir, 1_000_000, DiskDatasetMetadataCache.KindOptions));
         var reader = new CachingDatasetMetadataReader(cache);
 
         var first = reader.TryRead(cell);
@@ -90,7 +90,7 @@ public class CachingDatasetMetadataReaderTests : IDisposable
         var cell = S57Cell();
         Assert.SkipUnless(File.Exists(cell), $"S-57 test cell not present: {cell}");
 
-        var cache = new DiskDatasetMetadataCache(_cacheDir, 1_000_000);
+        var cache = new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(_cacheDir, 1_000_000, DiskDatasetMetadataCache.KindOptions));
         var reader = new CachingDatasetMetadataReader(cache);
 
         var first = reader.TryRead(cell);
@@ -111,7 +111,7 @@ public class CachingDatasetMetadataReaderTests : IDisposable
     {
         // An S-124 Ed 2.0 warning as downloaded from the Canadian Coast Guard's SECOM service (#809).
         var warning = System.IO.Path.Combine("TestData", "S124", "navwarn_ccg_ed2.gml");
-        var reader = new CachingDatasetMetadataReader(new DiskDatasetMetadataCache(_cacheDir, 1_000_000));
+        var reader = new CachingDatasetMetadataReader(new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(_cacheDir, 1_000_000, DiskDatasetMetadataCache.KindOptions)));
 
         var metadata = reader.TryRead(warning);
 
