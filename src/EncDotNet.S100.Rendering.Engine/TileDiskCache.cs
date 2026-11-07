@@ -333,12 +333,15 @@ internal sealed class TileDiskCache
         return bitmap;
     }
 
+    /// <summary>
+    /// An image over <paramref name="bitmap"/>'s pixels without copying them:
+    /// the bitmap is made immutable and the image shares its pixel memory, so
+    /// the caller may dispose the bitmap afterwards.
+    /// </summary>
     internal static SKImage CreateSnapshot(SKBitmap bitmap)
     {
-        return SKImage.FromPixelCopy(
-            bitmap.Info,
-            bitmap.GetPixels(),
-            bitmap.RowBytes);
+        bitmap.SetImmutable();
+        return SKImage.FromBitmap(bitmap);
     }
 
     internal bool WaitForWriteQueueIdle(TimeSpan timeout) => _kind.WaitForWritesIdle(timeout);

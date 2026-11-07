@@ -59,6 +59,20 @@ internal static class TileCodec
         }
 
         var info = new SKImageInfo(image.Width, image.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
+
+        // A raster snapshot (the write queue's) already holds the pixels in
+        // this layout: compress them in place rather than copying 1 MB first.
+        using (var pixmap = image.PeekPixels())
+        {
+            if (pixmap is not null
+                && pixmap.ColorType == SKColorType.Rgba8888
+                && pixmap.AlphaType == SKAlphaType.Premul
+                && pixmap.RowBytes == info.RowBytes)
+            {
+                return EncodePixels(pixmap.GetPixelSpan(), image.Width, image.Height);
+            }
+        }
+
         var raw = new byte[info.BytesSize];
         unsafe
         {
