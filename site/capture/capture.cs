@@ -163,7 +163,7 @@ var carolinasBox = new Box(31.4, -81.4, 38.0, -71.4);
 // Hatteras or passes ahead of or behind it.
 (double Lat, double Lon)[] lookoutToChesapeake =
 [
-    (34.55, -76.40), (35.20, -75.30), (36.40, -75.50), (36.95, -75.95),
+    (34.55, -76.40), (35.20, -75.30), (36.40, -75.50), (36.92, -75.72),
 ];
 var erinClipBox = new Box(32.4, -77.1, 37.7, -70.6);
 // W8: sea fog off eastern Maine and in the Bay of Fundy on a June morning. The minis are map renders
@@ -1000,12 +1000,20 @@ async Task<byte[]> ErinClip(Viewer v)
     await v.Frame(erinClipBox);
 
     var clip = new AgentClipBuilder(transcript: false);
+    var clipWatch = Stopwatch.StartNew();
+    void Step(string what) => Console.WriteLine($"    [{clipWatch.Elapsed:mm\\:ss}] {what}");
     await clip.Frame(v, 1.5);                                      // the route and the storm
+    Step("first frame");
     await v.Call("set_check_mode", new() { ["on"] = true });
+    Step("check on");
+    foreach (var f in (await v.Call("get_findings"))?["findings"]?.AsArray() ?? [])
+        Console.WriteLine($"      {f!["group"]} {f!["code"]} {f!["title"]}");
     await v.Call("set_panel", new() { ["panel"] = "Clearance", ["visible"] = false });
     await v.Call("set_map_legend", new() { ["open"] = false });
     await v.Call("set_follow_passage", new() { ["on"] = true });  // weather and storm at the vessel's ETA
+    Step("follow on");
     await clip.Frame(v, 2.0);
+    Step("checked frame");
     string? lastTitle = null;
     foreach (var departure in scrub)
     {
@@ -1013,6 +1021,7 @@ async Task<byte[]> ErinClip(Viewer v)
         var title = state?["verdictTitle"]?.ToString();
         if (title != lastTitle) Console.WriteLine($"  {departure:u}: {title} · {state?["verdictSubtitle"]}");
         lastTitle = title;
+        Step($"departure {departure:dd HH:mm}");
         await clip.Frame(v, 0.15);
     }
     var poster = await clip.Frame(v, 3.0);
