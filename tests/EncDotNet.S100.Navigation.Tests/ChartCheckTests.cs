@@ -375,7 +375,7 @@ public class ChartCheckTests
 /// <summary>A chart cell with a fixed rank and a coverage test (everywhere by default).</summary>
 internal sealed class FakeCell(string datasetId, int? rankingScale, Func<GeoPosition, bool>? covers = null) : RouteChartCell(datasetId)
 {
-    public override int? RankingScale { get; } = rankingScale;
+    public override CellRank? Rank { get; } = CellScaleRanking.Rank(null, rankingScale);
 
     public override bool Covers(GeoPosition position) => covers?.Invoke(position) ?? true;
 }

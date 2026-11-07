@@ -126,7 +126,7 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
         ChartedDepth? dredged = null;
         ChartedDepth? area = null;
         ChartedDepth? sounding = null;
-        foreach (var cell in CellScaleRanking.FinestBand(covering, c => c.RankingScale))
+        foreach (var cell in CellScaleRanking.FinestBand(covering, c => c.Rank))
         {
             var datum = cell.SoundingDatumAt(latitude, longitude);
             dredged = ChartedDepthResolver.Shoaler(dredged, cell.DredgedAreaAt(latitude, longitude, datum));
@@ -257,7 +257,7 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
         public BoundingBox Bounds { get; }
 
         /// <summary>The cell's <see cref="CellScaleRanking"/> scale; smaller is finer.</summary>
-        public int? RankingScale => Index.RankingScale;
+        public CellRank? Rank => Index.Rank;
 
         /// <summary>
         /// Whether the cell's <c>DataCoverage</c> contains the point. A cell
@@ -395,9 +395,9 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
 
             // Ranked like the display ranks cells: by a translated S-57 cell's
             // compilation scale, else (S-101 carries none) by the DataCoverage
-            // minimum display scale.
+            // minimum display scale, ties broken by the maximum display scale.
             return new Built(
-                CellScaleRanking.RankingScale(_compilationScale, S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features)),
+                S101DatasetProcessor.ResolveCellRank(features, _compilationScale),
                 CoverageAreaResolver.Resolve(features),
                 new AreaIndex(dredged, Bounds),
                 new AreaIndex(depth, Bounds),
@@ -468,7 +468,7 @@ internal sealed class CatalogChartedDepthSource : IChartedDepthSource
             return lo;
         }
 
-        private sealed record Built(int? RankingScale, IReadOnlyList<CoverageArea> Coverage, AreaIndex DredgedAreas, AreaIndex DepthAreas, AreaIndex SoundingDatums, List<Sounding> Soundings);
+        private sealed record Built(CellRank? Rank, IReadOnlyList<CoverageArea> Coverage, AreaIndex DredgedAreas, AreaIndex DepthAreas, AreaIndex SoundingDatums, List<Sounding> Soundings);
 
         private readonly record struct Sounding(double Lat, double Lon, double Depth, string FeatureId);
 

@@ -60,7 +60,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// </summary>
     private readonly S57TranslationTarget _target;
     private Dictionary<long, EncDotNet.S100.Pipelines.Vector.Feature>? _featureIndex;
-    private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage)? _cellExtent;
+    private (CellRank? Rank, IReadOnlyList<CoverageArea> Coverage)? _cellExtent;
     private IReadOnlyList<SoundingDatumArea>? _soundingDatums;
     private EncDotNet.S100.Features.FeatureCatalogueDecoder? _decoder;
     private bool _decoderLoaded;
@@ -612,10 +612,11 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// The cell's scale rank against overlapping cells (see
     /// <see cref="CellScaleRanking"/>): its compilation
     /// scale (DSPM CSCL), else the translated <c>DataCoverage</c> minimum
-    /// display scale, the same rank the display and the route check use.
-    /// Smaller is finer; <see langword="null"/> when the cell declares none.
+    /// display scale with its maximum display scale as the tie-break, the same
+    /// rank the display and the route check use; <see langword="null"/> when
+    /// the cell declares none.
     /// </summary>
-    public int? CellRankingScale => CellExtent.RankingScale;
+    public CellRank? CellRank => CellExtent.Rank;
 
     /// <summary>
     /// Whether the cell's translated <c>DataCoverage</c> (from <c>M_COVR</c>
@@ -672,7 +673,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         }
     }
 
-    private (int? RankingScale, IReadOnlyList<CoverageArea> Coverage) CellExtent
+    private (CellRank? Rank, IReadOnlyList<CoverageArea> Coverage) CellExtent
     {
         get
         {
@@ -681,9 +682,9 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
 
             _featureIndex ??= BuildFeatureIndex();
             extent = (
-                CellScaleRanking.RankingScale(
-                    S57Dataset.ResolveCompilationScale(_rawS57Document),
-                    S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(_featureIndex.Values)),
+                S101DatasetProcessor.ResolveCellRank(
+                    _featureIndex.Values,
+                    S57Dataset.ResolveCompilationScale(_rawS57Document)),
                 CoverageAreaResolver.Resolve(_featureIndex.Values));
             _cellExtent = extent;
             return extent;

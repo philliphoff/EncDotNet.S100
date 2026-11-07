@@ -1,4 +1,5 @@
 using EncDotNet.S100.Core.Scheduling;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Pipelines;
@@ -105,7 +106,7 @@ public sealed partial class MapsuiDatasetLayerSession
         Entry Entry,
         MapsuiMapDatasetSnapshot Snapshot,
         CoverageLayoutCache CoverageLayout,
-        int? RankingScale);
+        CellRank? Rank);
 
     /// <summary>Everything a compose reads, captured under <c>_sync</c>.</summary>
     private sealed record StackInput(
@@ -133,7 +134,7 @@ public sealed partial class MapsuiDatasetLayerSession
         foreach (var snapshot in snapshots)
         {
             var entry = _entries[snapshot.Dataset.Id];
-            entries[snapshot.Dataset.Id] = new StackEntryInfo(entry, snapshot, entry.CoverageLayout, RankingScale(entry));
+            entries[snapshot.Dataset.Id] = new StackEntryInfo(entry, snapshot, entry.CoverageLayout, Rank(entry));
         }
 
         return new StackInput(

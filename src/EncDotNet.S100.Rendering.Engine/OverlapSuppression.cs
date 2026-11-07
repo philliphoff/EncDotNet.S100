@@ -29,13 +29,15 @@ public sealed class OverlapSuppressionCell
     public Geometry? Coverage { get; init; }
 
     /// <summary>
-    /// The cell's ranking scale denominator (S-101 <c>DataCoverage.minimum
-    /// DisplayScale</c>, FC §3.1.1; S-57 DSPM compilation scale). A cell with a
-    /// strictly smaller denominator is "finer" and suppresses coarser overlaps.
-    /// <see langword="null"/> when unknown (excluded from suppression).
+    /// The cell's rank (see <see cref="CellScaleRanking"/>): S-57 DSPM
+    /// compilation scale, else S-101 <c>DataCoverage.minimumDisplayScale</c>
+    /// (FC §3.1.1) with <c>maximumDisplayScale</c> as the tie-break. A strictly
+    /// finer cell suppresses coarser overlaps. <see langword="null"/> when
+    /// unknown (excluded from suppression).
     /// </summary>
     /// <remarks>
-    /// Unless <see cref="CutoffScaleDenominator"/> is set, this is also the
+    /// Unless <see cref="CutoffScaleDenominator"/> is set, the rank's
+    /// <see cref="CellRank.Scale"/> is also the
     /// denominator the renderer clamps the cell's layers to
     /// (<c>MapsuiDatasetRenderer.ApplyCellScaleWindow</c> / the per-feature
     /// out-of-scale-band cap), so converting it to a resolution yields exactly
@@ -44,15 +46,15 @@ public sealed class OverlapSuppressionCell
     /// <see cref="OverlapSuppression.CollectFinerCoverages"/>) rather than from a
     /// separately-recorded window that can be absent for standalone-loaded cells.
     /// </remarks>
-    public int? ScaleDenominator { get; init; }
+    public CellRank? Rank { get; init; }
 
     /// <summary>
     /// The whole-cell zoom-out window denominator the cell's layers are clamped
-    /// to, when it differs from <see cref="ScaleDenominator"/> — e.g. an S-57
+    /// to, when it differs from the <see cref="Rank"/>'s scale — e.g. an S-57
     /// cell ranked by its compilation scale but drawn out to its largest
     /// <c>SCAMIN</c>. A finer cell keeps suppressing coarser overlaps until the
     /// viewport zooms out past this denominator. <see langword="null"/> falls
-    /// back to <see cref="ScaleDenominator"/>.
+    /// back to the <see cref="Rank"/>'s <see cref="CellRank.Scale"/>.
     /// </summary>
     public int? CutoffScaleDenominator { get; init; }
 }
@@ -118,7 +120,7 @@ public static class OverlapSuppression
         OverlapSuppressionCell cell,
         IReadOnlyList<OverlapSuppressionCell> cells)
     {
-        if (cell.Coverage is not { IsEmpty: false } coverage || cell.ScaleDenominator is not int denom)
+        if (cell.Coverage is not { IsEmpty: false } coverage || cell.Rank is not CellRank rank)
             return null;
 
         List<FinerCoverage>? finer = null;
@@ -128,18 +130,18 @@ public static class OverlapSuppression
                 continue;
             if (other.Coverage is not { IsEmpty: false } otherCoverage)
                 continue;
-            if (other.ScaleDenominator is not int otherDenom)
+            if (other.Rank is not CellRank otherRank)
                 continue;
-            // Strictly finer band only, so equal-band siblings never mutually
+            // Strictly finer rank only, so equal-rank siblings never mutually
             // clip (which would erase their shared border from both).
-            if (!CellScaleRanking.IsFiner(otherDenom, denom))
+            if (!CellScaleRanking.IsFiner(otherRank, rank))
                 continue;
             if (!coverage.EnvelopeInternal.Intersects(otherCoverage.EnvelopeInternal))
                 continue;
             if (!coverage.Intersects(otherCoverage))
                 continue;
 
-            var cutoffDenom = other.CutoffScaleDenominator ?? otherDenom;
+            var cutoffDenom = other.CutoffScaleDenominator ?? otherRank.Scale;
             (finer ??= []).Add(new FinerCoverage(otherCoverage, ContentCutoffResolution(cutoffDenom, otherCoverage)));
         }
 

@@ -128,14 +128,14 @@ internal sealed class LocationDepthProbe
     internal static HashSet<IChartDepthCell>? FinestCoveringCells(
         IEnumerable<IChartDepthCell> cells, double latitude, double longitude)
     {
-        var covering = new List<(IChartDepthCell Cell, int? Rank)>();
+        var covering = new List<(IChartDepthCell Cell, CellRank? Rank)>();
         foreach (var cell in cells)
         {
             try
             {
                 if (cell.CoversPoint(latitude, longitude))
                 {
-                    covering.Add((cell, cell.CellRankingScale));
+                    covering.Add((cell, cell.CellRank));
                 }
             }
             catch

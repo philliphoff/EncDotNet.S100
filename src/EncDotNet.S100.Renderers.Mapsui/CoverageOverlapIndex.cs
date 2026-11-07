@@ -50,7 +50,7 @@ internal sealed class CoverageOverlapIndex
         var byCoverage = new Dictionary<Geometry, List<int>>(ReferenceEqualityComparer.Instance);
         for (var i = 0; i < cells.Count; i++)
         {
-            if (cells[i].Coverage is not { IsEmpty: false } coverage || cells[i].ScaleDenominator is null)
+            if (cells[i].Coverage is not { IsEmpty: false } coverage || cells[i].Rank is null)
                 continue;
             Add(coverage);
             if (!byCoverage.TryGetValue(coverage, out var list))
@@ -129,18 +129,18 @@ internal sealed class CoverageOverlapIndex
     private static FinerCoverage[]? FinerOf(int index, List<int> overlapping, IReadOnlyList<OverlapSuppressionCell> cells)
     {
         var cell = cells[index];
-        var denominator = cell.ScaleDenominator!.Value;
+        var rank = cell.Rank!.Value;
         List<FinerCoverage>? list = null;
         foreach (var j in overlapping)
         {
             if (j == index)
                 continue;
             var other = cells[j];
-            var otherDenominator = other.ScaleDenominator!.Value;
-            if (!CellScaleRanking.IsFiner(otherDenominator, denominator))
+            var otherRank = other.Rank!.Value;
+            if (!CellScaleRanking.IsFiner(otherRank, rank))
                 continue;
             var otherCoverage = other.Coverage!;
-            var cutoff = other.CutoffScaleDenominator ?? otherDenominator;
+            var cutoff = other.CutoffScaleDenominator ?? otherRank.Scale;
             (list ??= []).Add(new FinerCoverage(
                 otherCoverage,
                 OverlapSuppression.ContentCutoffResolution(cutoff, otherCoverage)));

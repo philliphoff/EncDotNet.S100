@@ -561,7 +561,7 @@ namespace EncDotNet.S100.Navigation
     {
         protected RouteChartCell(string datasetId) { }
         public string DatasetId { get; }
-        public abstract int? RankingScale { get; }
+        public abstract EncDotNet.S100.DataModel.CellRank? Rank { get; }
         public abstract bool Covers(EncDotNet.S100.DataModel.GeoPosition position);
     }
     public sealed class RouteChartFeature : System.IEquatable<EncDotNet.S100.Navigation.RouteChartFeature>

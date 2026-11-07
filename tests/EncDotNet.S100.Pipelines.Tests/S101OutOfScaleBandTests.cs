@@ -141,6 +141,45 @@ public class S101OutOfScaleBandTests
         Assert.Null(S101DatasetProcessor.ResolveOutOfBandMinDisplayScale(features));
     }
 
+    [Fact]
+    public void ResolveMaximum_UsesFinestDenominatorAcrossCoverages()
+    {
+        var features = new[]
+        {
+            Feature("DataCoverage", 1, ("minimumDisplayScale", "22000"), ("maximumDisplayScale", "12000")),
+            Feature("DataCoverage", 2, ("minimumDisplayScale", "22000"), ("maximumDisplayScale", "3500")),
+            Feature("DepthArea", 3, ("maximumDisplayScale", "1000")),
+        };
+
+        Assert.Equal(3500, S101DatasetProcessor.ResolveCellMaximumDisplayScale(features));
+    }
+
+    [Fact]
+    public void ResolveMaximum_InvertedPair_UsesFinerDenominator()
+    {
+        // IC-ENC 101GB0040242C declares minimumDisplayScale 22000 with
+        // maximumDisplayScale 45000.
+        var features = new[]
+        {
+            Feature("DataCoverage", 1, ("minimumDisplayScale", "22000"), ("maximumDisplayScale", "45000")),
+        };
+
+        Assert.Equal(22000, S101DatasetProcessor.ResolveCellMaximumDisplayScale(features));
+    }
+
+    [Fact]
+    public void ResolveCellRank_BreaksEqualMinimumsByMaximum()
+    {
+        // IC-ENC Cowes: berthing 101GB00602793 over harbour 101GB00502038.
+        var berthing = S101DatasetProcessor.ResolveCellRank(
+            [Feature("DataCoverage", 1, ("minimumDisplayScale", "22000"), ("maximumDisplayScale", "3500"))]);
+        var harbour = S101DatasetProcessor.ResolveCellRank(
+            [Feature("DataCoverage", 1, ("minimumDisplayScale", "22000"), ("maximumDisplayScale", "12000"))]);
+
+        Assert.Equal(new CellRank(22000, 3500), berthing);
+        Assert.True(CellScaleRanking.IsFiner(berthing, harbour));
+    }
+
     private sealed class PointGeometry : IFeatureGeometryProvider
     {
         public FeatureGeometry? GetGeometry(string featureReference) => new()
