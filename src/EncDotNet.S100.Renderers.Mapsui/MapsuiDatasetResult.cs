@@ -82,4 +82,19 @@ public sealed class MapsuiDatasetResult
     /// coverage geometry.
     /// </summary>
     public NetTopologySuite.Geometries.Geometry? CoverageGeometry { get; init; }
+
+    /// <summary>
+    /// For a vector cell drawn through tiled layers, each layer's scene and
+    /// tile disk namespace, in <see cref="Layers"/> order, so the host can
+    /// store the cell's scene (map rendering slice 11; see
+    /// <see cref="StoredCellScene.TryCreate"/>). Null when a layer can't be
+    /// stored, or when every layer was reused from a stored scene.
+    /// </summary>
+    public IReadOnlyList<StoredSceneLayer>? SceneLayers { get; init; }
+
+    /// <summary>
+    /// The number of <see cref="Layers"/> reused from layers a stored scene
+    /// put on the map, rather than built from the portrayal.
+    /// </summary>
+    public int ReusedStoredLayers { get; init; }
 }

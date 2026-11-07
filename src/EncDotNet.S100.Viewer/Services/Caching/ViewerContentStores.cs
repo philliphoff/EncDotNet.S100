@@ -20,6 +20,9 @@ internal sealed class ViewerContentStores : IDisposable
     /// <summary>The pattern-clip kind's share of the budget.</summary>
     internal const long PatternClipShareBytes = 256L * 1024 * 1024;
 
+    /// <summary>The cell-scene kind's share of the budget.</summary>
+    internal const long SceneShareBytes = 512L * 1024 * 1024;
+
     /// <summary>The dataset-metadata kind's share of the budget.</summary>
     internal const long MetadataShareBytes = 16L * 1024 * 1024;
 
@@ -42,6 +45,10 @@ internal sealed class ViewerContentStores : IDisposable
             DiskPortrayalInstructionCache.KindName, PortrayalShareBytes, DiskPortrayalInstructionCache.KindOptions);
         PatternClips = Render.Open(
             DiskPatternClipCache.KindName, PatternClipShareBytes, DiskPatternClipCache.KindOptions);
+        Scenes = Render.Open(
+            EncDotNet.S100.Renderers.Mapsui.CellSceneStore.KindName,
+            SceneShareBytes,
+            EncDotNet.S100.Renderers.Mapsui.CellSceneStore.KindOptions);
         Metadata = Data.Open(
             DiskDatasetMetadataCache.KindName, MetadataShareBytes, DiskDatasetMetadataCache.KindOptions);
         S57Catalogs = Data.Open(DiskS57CatalogCache.KindName, S57CatalogShareBytes, DiskS57CatalogCache.KindOptions);
@@ -61,6 +68,9 @@ internal sealed class ViewerContentStores : IDisposable
 
     /// <summary>The pattern-clip kind.</summary>
     public ContentKind PatternClips { get; }
+
+    /// <summary>The cell-scene kind (map rendering slice 11).</summary>
+    public ContentKind Scenes { get; }
 
     /// <summary>The dataset-metadata kind.</summary>
     public ContentKind Metadata { get; }

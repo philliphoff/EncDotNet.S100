@@ -1005,9 +1005,15 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             // work (map rendering slice 5).
             var processor = lease.Processor;
             var layout = renderEntry.CoverageLayout;
+            // Layers a stored scene put on the map before the cell was parsed
+            // are reused when the fresh portrayal keys them the same, so the
+            // swap to the parsed cell re-renders nothing (slice 11).
+            IReadOnlyList<ILayer> reusable;
+            lock (_sync)
+                reusable = renderEntry.Layers;
             result = await WorkScheduler.Shared.RunAsync(
                 WorkStage.Portray,
-                token => _renderer.RenderAsync(processor, context, layout, token),
+                token => _renderer.RenderAsync(processor, context, layout, reusable, token),
                 cancellationToken).ConfigureAwait(true);
         }
 
@@ -1074,6 +1080,92 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             this,
             new MapSessionDatasetRenderEventArgs(datasetId, kind));
         return result;
+    }
+
+    /// <summary>
+    /// Puts a registered dataset's stored rendering on the map without a
+    /// processor: the layers <see cref="MapsuiDatasetRenderer.FromStoredScene"/>
+    /// built from a cell scene stored by an earlier session. The dataset draws
+    /// and joins the chart stack, but isn't picked until a processor is
+    /// registered and rendered, which then reuses these layers when its keys
+    /// match (map rendering slice 11).
+    /// </summary>
+    /// <param name="datasetId">The registered dataset.</param>
+    /// <param name="result">The stored rendering.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>
+    /// <see langword="true"/> once the stack holding the rendering is on the
+    /// map; <see langword="false"/> when the dataset isn't registered, already
+    /// has a processor, or rendered again meanwhile.
+    /// </returns>
+    public async Task<bool> PublishStoredAsync(
+        MapDatasetId datasetId,
+        MapsuiDatasetResult result,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        Entry publishEntry;
+        long generation;
+        long? stackVersion = null;
+        RenderingState? restore = null;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            if (!_entries.TryGetValue(datasetId, out var entry)
+                || _processorOwner.TryAcquire(datasetId, out var lease) && DisposeLease(lease))
+            {
+                return false;
+            }
+
+            publishEntry = entry;
+            generation = ++entry.Generation;
+            var previous = entry.CaptureRendering();
+            entry.Apply(result);
+            entry.RenderedTime = null;
+            entry.RenderedAge = null;
+            CaptureBaseStates(entry.Layers);
+            entry.Dataset = ReconcileDatasetState(
+                entry.Dataset,
+                entry.LayerKeys,
+                entry.Dataset.SubLayers);
+            if (_stackMarshal is not null)
+            {
+                stackVersion = RequestStackCompose();
+                restore = previous;
+            }
+            else
+            {
+                try
+                {
+                    ComposeLayers();
+                }
+                catch
+                {
+                    entry.RestoreRendering(previous);
+                    throw;
+                }
+            }
+        }
+
+        if (stackVersion is { } version)
+        {
+            using var stackWait = Rendering.Engine.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.stack_wait");
+            await AwaitStackAsync(datasetId, publishEntry, generation, version, restore!).ConfigureAwait(true);
+        }
+        else
+        {
+            LayersChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        return true;
+
+        static bool DisposeLease(DatasetProcessorLease lease)
+        {
+            lease.Dispose();
+            return true;
+        }
     }
 
     /// <summary>Removes a registered dataset's rendered layers from the map.</summary>

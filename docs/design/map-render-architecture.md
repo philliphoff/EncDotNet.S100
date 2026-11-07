@@ -524,8 +524,8 @@ One content-addressed disk store serves every asset kind.
   63% of empty PNGs stays as the first check. [M]
 - **New: cell scenes on disk.** A warm load today still parses the cell and
   rebuilds its scene from cached Lua output. Storing the scene (ops and index)
-  lets a warm slot render without parsing at all. [H: measure the warm load
-  breakdown of 8–360 ms first]
+  lets a warm slot render without parsing at all. [M: done after slice 11; a
+  second session settles 23% sooner]
 
 ### Threading model
 
@@ -1345,6 +1345,73 @@ started with the machine at least 80% idle. *Second session* is a new viewer ove
   and the encoder now share the pixels: two more runs of that build allocated
   the same as main cold, and 5–9% more warm, with settle and disk bytes as
   above.
+
+*Result (cell scenes on disk).* A warm cell now draws from the scene an earlier
+session stored, before it is parsed.
+
+- **Serializer.** `VectorSceneSerializer` (`Rendering.Scene`) writes the five
+  op types, `ScaleMinimumCap` and `PreferLiveDrawing`, and reads them back
+  exactly. Feature references, texts, pattern names, processed symbol SVG and
+  pattern tiles are stored once per scene, and ops refer to them by index.
+  Placement areas are stored as WKB. The spatial index isn't stored; binding
+  the read scene builds it.
+  Symbols and patterns are stored as resolved content under their names, not
+  re-resolved through the catalogue providers. Those providers belong to the
+  processor's palette-switched catalogue, which exists only after the parse. The
+  key covers the catalogue overrides and the palette, so stored content stays
+  valid as long as the tile cache's does.
+- **Store.** `CellSceneStore` (`Renderers.Mapsui`) is a `scenes` kind of the
+  content store, with a 512 MB share. It keeps Zstandard-compressed records:
+  each sub-layer's scene with the tile disk namespace it was drawn under, plus
+  the cell's metadata, info, extent, scales and coverage. A cell drawn from its
+  stored scene therefore has the same `StackSlice` as when it is drawn from a
+  parse. The viewer keys a record on the cell's files, the product, the
+  portrayal warm signature, the rest of the presentation and the builds that
+  lower and store scenes (`CellSceneKey`). Washington's cells take about
+  620 KB each.
+- **Two-phase load.** For an exchange-set cell with a stored scene,
+  `DatasetLoaderService` registers the dataset with the stored metadata, and
+  `MapsuiDatasetLayerSession.PublishStoredAsync` puts the stored layers in the
+  chart stack without a processor. Their stack items carry synthetic payloads,
+  so S-98 rules skip them for now. Then `LoadAsync` returns, so the lazy-load
+  coordinator counts the cell as loaded. The parse, the portrayal (from cache)
+  and validation then run in the `Background` class. When the fresh
+  portrayal keys a sub-layer's tile namespace the same way,
+  `MapsuiDatasetRenderer` keeps the stored layer, so the swap builds no scene
+  and changes no tile key; otherwise it builds the layer as before. Until the
+  swap, the cell draws but isn't picked. A newer load or an unload cancels the
+  background half. `S100_CELL_SCENES=0` turns all of this off.
+
+*Measured (cell scenes on disk).* Washington, Lua-CSharp, App Nap off,
+medians of 3 interleaved rounds. *Main* is main plus the sampler fix. *Off* is
+this branch with `S100_CELL_SCENES=0`. Each round ran a prewarm session on a
+new `--cache-dir`, then a second session on that cache. Each session took the
+shared perf lock and waited for the machine to be at least 70% idle.
+
+| Second session | main | off | cell scenes |
+|---|---|---|---|
+| Jumps: settle (sum of 3) | 1.84 s | 1.87 s | **1.41 s** |
+| Seattle / Tacoma / Port Townsend | 620 / 692 / 544 ms | 623 / 691 / 553 ms | 653 / 413 / 320 ms |
+| Cells drawn from a stored scene | 0 | 0 | 29 |
+| Scene build (total, all cells) | 1.29 s | 1.29 s | 0.17 s |
+| Stored-scene read, decode and bind (total) | — | — | 0.62 s |
+| Parse (total, now in the background) | 2.52 s | 2.60 s | 2.52 s |
+| Chart tiles read from disk / rastered | 39 / 322 | 41 / 326 | 47 / 216 |
+| Viewer CPU over the jumps | 7.3 s | 7.8 s | 6.9 s |
+
+- **A second session settles 23% sooner.** Tacoma and Port Townsend, where
+  cells land as the view arrives, settle 40% sooner. Seattle doesn't change;
+  its settle is spent rastering tiles, not loading cells.
+- **A third fewer tiles are rastered.** The stored scenes all land at once, so
+  far fewer intermediate stack versions are rastered. Tiles read from disk
+  barely change (39 to 47): most of the tiles a prewarm session stores belong to
+  the stacks it passed through.
+- **The swap reuses every stored layer.** Scene build falls from 1.29 s to
+  0.17 s, which is what remains for cells without a stored scene. Reading,
+  decoding and binding a stored scene averages about 21 ms per cell.
+- **The prewarm session doesn't change:** settle 1.18 s on main, 1.21 s here.
+  It allocates about 13% more, encoding the scenes it stores, in background
+  jobs.
 
 ### How the plan absorbs the open epics
 

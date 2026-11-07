@@ -671,6 +671,44 @@ The cache belongs to the renderer instance and holds one entry, so keep the
 instance between renders to benefit. A different geometry rebuilds the entry. It
 caches only the node-to-pixel index array, about 4 MB per megapixel grid.
 
+### Draw a cell from a stored scene
+
+A warm cell spends most of its load parsing and building its scene. A
+`CellSceneStore` (a `ContentKind` of a `ContentStore`) keeps each vector
+cell's rendering from an earlier session, so the cell can draw before it is
+parsed:
+
+```csharp
+var scenes = new CellSceneStore(store.Open(
+    CellSceneStore.KindName, 512L * 1024 * 1024, CellSceneStore.KindOptions));
+
+// After a render: store the cell's scenes under a key you choose.
+if (StoredCellScene.TryCreate(result, processor.Metadata) is { } stored)
+    scenes.Write(key, stored);
+
+// In a later session, before parsing: draw the stored scene.
+if (await scenes.TryReadAsync(key) is { } scene)
+{
+    session.SetDataset(dataset);
+    await session.PublishStoredAsync(dataset.Id, MapsuiDatasetRenderer.FromStoredScene(scene));
+}
+
+// Then register the parsed processor and render as usual.
+```
+
+- **The key is yours.** It must cover every input of the rendering you know
+  before the parse: the cell's bytes, the catalogues, the presentation and the
+  code. The viewer's `CellSceneKey` is an example.
+- **Tiles match.** Each stored layer keeps the tile disk namespace it was drawn
+  under, so the cell's chart tiles have the same keys as when it was drawn from
+  a parse.
+- **The swap re-renders nothing when nothing changed.** `RenderAsync` reuses a
+  stored layer whose fresh portrayal keys the same namespace, and builds a new
+  one otherwise. Until then, the dataset draws but isn't picked, and S-98 rules
+  leave its layers alone.
+- `StoredCellScene.TryCreate` returns null for coverage products, the
+  single-surface scene mode and depth-adjusted portrayals.
+
 ## Performance instrumentation
 
 SoundCharts records OpenTelemetry instruments that break paint time down by
