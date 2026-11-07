@@ -14,6 +14,7 @@
     <PackageReference Include="Mapsui.Rendering.Skia" />
     <PackageReference Include="Mapsui.Tiling" />
     <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="ZstdSharp.Port" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>

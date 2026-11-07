@@ -880,6 +880,11 @@ public partial class App : Application
         });
         services.AddSingleton<EncDotNet.S100.Pipelines.Vector.Caching.IPortrayalInstructionCache>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Pipelines.Vector.Caching.DiskPortrayalInstructionCache>());
+        services.AddSingleton(sp =>
+            // Cell scenes on disk (map rendering slice 11): a warm cell draws
+            // from the scene an earlier session stored before it is parsed.
+            new EncDotNet.S100.Renderers.Mapsui.CellSceneStore(
+                sp.GetRequiredService<Services.Caching.ViewerContentStores>().Scenes));
         services.AddSingleton<EncDotNet.S100.Core.Metadata.IDatasetMetadataCache>(sp =>
         {
             // One process-wide disk cache of per-dataset "peek" metadata so a

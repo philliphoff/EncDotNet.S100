@@ -144,12 +144,33 @@ public sealed class MapsuiDatasetRenderer
     /// The dataset's layout cache, or <see langword="null"/> for a throwaway one.
     /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    internal Task<MapsuiDatasetResult> RenderAsync(
+        IDatasetProcessor processor,
+        RenderContext? context,
+        CoverageLayoutCache? coverageLayoutCache,
+        CancellationToken cancellationToken) =>
+        RenderAsync(processor, context, coverageLayoutCache, reusableLayers: [], cancellationToken);
+
+    /// <summary>
+    /// Renders the processor's portrayal, reusing any of
+    /// <paramref name="reusableLayers"/> that <see cref="FromStoredScene"/>
+    /// built for a sub-layer whose fresh portrayal keys the same tile disk
+    /// namespace: such a layer already holds the scene the portrayal would
+    /// build, so it isn't built again and its tiles stay valid.
+    /// </summary>
+    /// <param name="processor">The dataset processor.</param>
+    /// <param name="context">Optional render context.</param>
+    /// <param name="coverageLayoutCache">The dataset's layout cache, or null.</param>
+    /// <param name="reusableLayers">The dataset's layers on the map now.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     internal async Task<MapsuiDatasetResult> RenderAsync(
         IDatasetProcessor processor,
         RenderContext? context,
         CoverageLayoutCache? coverageLayoutCache,
+        IReadOnlyList<ILayer> reusableLayers,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(reusableLayers);
         ArgumentNullException.ThrowIfNull(processor);
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -170,7 +191,7 @@ public sealed class MapsuiDatasetRenderer
 
                 using (Rendering.Engine.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.scene_build"))
                 {
-                    return ConvertVector(processor, result);
+                    return ConvertVector(processor, result, reusableLayers);
                 }
             }
 
@@ -190,13 +211,28 @@ public sealed class MapsuiDatasetRenderer
         }
     }
 
-    private MapsuiDatasetResult ConvertVector(IDatasetProcessor processor, VectorPortrayalResult result)
+    private MapsuiDatasetResult ConvertVector(
+        IDatasetProcessor processor,
+        VectorPortrayalResult result,
+        IReadOnlyList<ILayer> reusableLayers)
     {
         var assetCache = AssetCaches.GetValue(processor, static _ => new MapsuiRenderAssetCache());
 
         var layers = new List<ILayer>(result.SubLayers.Count);
         var stackEntries = new List<LayerStackEntry>(result.SubLayers.Count);
+        List<StoredSceneLayer>? sceneLayers = [];
+        var reused = 0;
         MRect? union = null;
+
+        Dictionary<string, (ILayer Layer, StoredSceneLayer Stored)>? storedByKey = null;
+        foreach (var candidate in reusableLayers)
+        {
+            if (StoredLayers.TryGetValue(candidate, out var stored))
+            {
+                storedByKey ??= new(StringComparer.Ordinal);
+                storedByKey[stored.LayerKey] = (candidate, stored);
+            }
+        }
 
         foreach (var sub in result.SubLayers)
         {
@@ -230,9 +266,47 @@ public sealed class MapsuiDatasetRenderer
                 PreferLiveDrawing = result.PreferLiveDrawing,
             };
 
-            var layer = renderer.Render(sub.Instructions, result.GeometryProvider);
-            if (sub.Opacity < 1.0)
-                layer.Opacity = Math.Clamp(sub.Opacity, 0.0, 1.0);
+            ILayer layer;
+            if (storedByKey is not null
+                && storedByKey.TryGetValue(sub.LayerKey, out var candidate)
+                && MatchesStored(renderer, sub, candidate.Stored))
+            {
+                // The stored scene is the one this portrayal builds: keep the
+                // layer (and its bound scene and tile keys) as it is.
+                layer = candidate.Layer;
+                reused++;
+                sceneLayers = null;
+            }
+            else
+            {
+                layer = renderer.Render(sub.Instructions, result.GeometryProvider);
+                if (sceneLayers is not null
+                    && renderer.LastTiledScene is { ProductLayerSet: { } productLayerSet, StyleStateHash: { } styleStateHash } tiled)
+                {
+                    sceneLayers.Add(new StoredSceneLayer
+                    {
+                        LayerKey = sub.LayerKey,
+                        LayerName = sub.LayerName,
+                        Product = result.Product,
+                        Opacity = sub.Opacity,
+                        Plane = sub.Plane,
+                        WithinPlanePriority = sub.WithinPlanePriority,
+                        SourceDatasetId = result.SourceDatasetId,
+                        SourceFeatureType = sub.SourceFeatureType,
+                        SourceScaleDenominator = CellScaleRanking.RankingScale(result.CellCompilationScale, result.CellMinimumDisplayScale),
+                        ProductLayerSet = productLayerSet,
+                        StyleStateHash = styleStateHash,
+                        Scene = tiled.Scene,
+                    });
+                }
+                else
+                {
+                    sceneLayers = null;
+                }
+
+                if (sub.Opacity < 1.0)
+                    layer.Opacity = Math.Clamp(sub.Opacity, 0.0, 1.0);
+            }
 
             if (sub.ApplyOutOfBandCap
                 && result.OutOfBandMinDisplayScale is int denom
@@ -288,6 +362,91 @@ public sealed class MapsuiDatasetRenderer
             CellMinimumDisplayScale = result.CellMinimumDisplayScale,
             CellCompilationScale = result.CellCompilationScale,
             CoverageGeometry = ToMercatorCoverage(result.CoverageAreas),
+            SceneLayers = sceneLayers is { Count: > 0 } && sceneLayers.Count == layers.Count ? sceneLayers : null,
+            ReusedStoredLayers = reused,
+        };
+    }
+
+    // Layers FromStoredScene built, with what they were built from, so a
+    // render after the parse can reuse them.
+    private static readonly ConditionalWeakTable<ILayer, StoredSceneLayer> StoredLayers = new();
+
+    /// <summary>
+    /// Whether <paramref name="stored"/> is the scene <paramref name="renderer"/>
+    /// would build for <paramref name="sub"/>: the same layer, the same tile
+    /// disk namespace (which hashes the portrayal, palette and scales), the
+    /// same out-of-band cap and drawing hint, and a tiled rendering.
+    /// </summary>
+    private static bool MatchesStored(MapsuiDisplayListRenderer renderer, VectorSubLayer sub, StoredSceneLayer stored)
+    {
+        if (!string.Equals(sub.LayerName, stored.LayerName, StringComparison.Ordinal)
+            || (renderer.Options?.SceneMode ?? ChartEngine.Options.SceneMode) != VectorSceneMode.Tiled
+            || stored.Scene.PreferLiveDrawing != renderer.PreferLiveDrawing
+            || stored.Scene.ScaleMinimumCap != renderer.OutOfBandMinDisplayScale)
+        {
+            return false;
+        }
+
+        var (productLayerSet, styleStateHash) = renderer.DiskCacheKey(sub.Instructions);
+        return string.Equals(productLayerSet, stored.ProductLayerSet, StringComparison.Ordinal)
+            && string.Equals(styleStateHash, stored.StyleStateHash, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Builds a cell's rendering from its stored scene, without its processor:
+    /// one tiled layer per stored sub-layer, bound to its scene under the
+    /// tile disk namespace it was stored with, and its chart-stack entries
+    /// (map rendering slice 11). The stack items carry a
+    /// <see cref="SyntheticStackPayload"/>, so S-98 rules leave them alone until
+    /// the parsed cell renders.
+    /// </summary>
+    /// <param name="stored">The stored scene.</param>
+    /// <returns>The rendering, for <see cref="MapsuiDatasetLayerSession.PublishStoredAsync"/>.</returns>
+    public static MapsuiDatasetResult FromStoredScene(StoredCellScene stored)
+    {
+        ArgumentNullException.ThrowIfNull(stored);
+
+        var layers = new List<ILayer>(stored.Layers.Count);
+        var stackEntries = new List<LayerStackEntry>(stored.Layers.Count);
+        foreach (var sub in stored.Layers)
+        {
+            var layer = new InstrumentedMemoryLayer(sub.Product)
+            {
+                Name = sub.LayerName,
+                Style = null,
+                CustomLayerRendererName = S100VectorTileRenderer.RendererName,
+                SceneExtent = MapsuiDisplayListRenderer.SceneExtent(sub.Scene),
+            };
+            S100VectorTileRenderer.BindScene(layer, sub.Scene, sub.ProductLayerSet, sub.StyleStateHash);
+            if (sub.Opacity < 1.0)
+                layer.Opacity = Math.Clamp(sub.Opacity, 0.0, 1.0);
+
+            StoredLayers.AddOrUpdate(layer, sub);
+            layers.Add(layer);
+            stackEntries.Add(new LayerStackEntry(
+                layer,
+                new SubLayerStackItem(
+                    new SyntheticStackPayload(sub.LayerKey),
+                    sub.Plane,
+                    sub.WithinPlanePriority,
+                    sub.SourceDatasetId,
+                    sub.SourceFeatureType)
+                {
+                    SourceScaleDenominator = sub.SourceScaleDenominator,
+                }));
+        }
+
+        return new MapsuiDatasetResult
+        {
+            Layers = layers,
+            Extent = stored.Extent,
+            Info = stored.Info,
+            Spec = stored.Spec,
+            LayerNames = stored.LayerNames,
+            StackEntries = stackEntries,
+            CellMinimumDisplayScale = stored.CellMinimumDisplayScale,
+            CellCompilationScale = stored.CellCompilationScale,
+            CoverageGeometry = stored.CoverageGeometry,
         };
     }
 

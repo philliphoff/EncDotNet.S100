@@ -138,6 +138,9 @@ internal class StubProcessor :
 
     public string? FeatureType { get; set; }
 
+    /// <summary>The portrayal result's content scope, which keys its tile disk namespace; null for none.</summary>
+    public string? ContentScope { get; set; }
+
     public S98DisplayPlane Plane { get; set; } = S98DisplayPlane.BaseChartUnder;
 
     public int DisposeCount => Volatile.Read(ref _disposeCount);
@@ -257,6 +260,7 @@ internal class StubProcessor :
             CellCompilationScale = CellCompilationScale,
             CoverageAreas = CoverageAreas,
             GeographicExtent = GeographicExtent,
+            ContentScope = ContentScope,
         };
     }
 
