@@ -18,8 +18,8 @@ yourself. Reference it directly when you write an adapter for another host.
 
 The engine is the first step of the staged migration in the
 [map rendering architecture](../../docs/design/map-render-architecture.md)
-design note (slice&#160;7). Its entry points are still process-wide static
-classes; a per-map `ChartSession` comes in a later slice.
+design note (slice&#160;7). A host creates a `ChartSession` per map (slice&#160;8);
+the tile compositor's entry points are still process-wide static classes.
 
 ## Install
 
@@ -65,6 +65,35 @@ Call `S100VectorTileRenderer.ShutdownAndDrain` before the process exits, so no
 tile job is still in native Skia code when `libSkiaSharp` unloads. To measure how
 long a view takes to settle, turn on `S100VectorTileRenderer.SettleTrackingEnabled`
 and call `EvaluateSettle` with a `SettleLayer` per host layer.
+
+## Predict what the view needs next
+
+Each `ChartSession` has a `DemandPlanner` (map rendering slice&#160;9). A host
+reports every view with `Observe`, and, when it starts one, a fling or an
+animation with `BeginFling` or `BeginAnimation`. The planner's
+`PredictionModel` weighs a known destination first, then the pan velocity and
+zoom rate, the route ahead of own ship (`SetInputs`), and the places the view
+rested at. Chart layers add the views a second ahead to their predicted tiles.
+A host's cell loader reads `Plan()`: its `CellViews` reach a few seconds ahead.
+It reports the cells the view waits for to `Arrivals`, so the chart stack can
+hold a compose until they land (`ChartSessionOptions.StackHoldMs`). `Stats`
+counts slot and cell hits, and predicted tiles and cells used or wasted.
+
+```csharp
+using EncDotNet.S100.Rendering.Engine.Prediction;
+
+var planner = session.Planner;
+planner.Observe(view, Stopwatch.GetTimestamp());
+planner.BeginAnimation(target, TimeSpan.FromMilliseconds(600), Stopwatch.GetTimestamp());
+
+foreach (var predicted in planner.Plan().CellViews)
+{
+    // Load the cells under predicted.View, likeliest and soonest first.
+}
+```
+
+The Mapsui adapter does all of this for a map: `MapsuiMapNavigator` reports
+views and the animations it starts, and the Avalonia adapter reports flings.
 
 ## Render images and tile sets
 

@@ -1064,6 +1064,108 @@ Add a zoom-rate estimate. Add route and history inputs. Drive cell demand and
 release hints from the model. Report hit and waste rates. With faster
 portrayal, the cell horizon can be shorter than it would be on MoonSharp.
 
+*Result (slice 9).* Each `ChartSession` has a `DemandPlanner`
+(`EncDotNet.S100.Rendering.Engine.Prediction`):
+
+- **Known destinations (open question 5).** A host reports views with
+  `Observe` and, as it starts one, an animation with `BeginAnimation` or a
+  fling with `BeginFling`; `ViewState` itself stays motion-free. Mapsui 5.1
+  keeps its animations private, but the app starts every animation it
+  reports, so `MapsuiMapNavigator` reports the target (set_viewport's new
+  `durationMs`, the zoom buttons, the route-check cluster zoom). Flings come
+  from Mapsui's map control, which computes the release velocity with a
+  private `FlingTracker`; the Avalonia adapter feeds a public one the same
+  pointer events, and `MapsuiFlingForecast` repeats `FlingAnimation`'s
+  arithmetic for the resting viewport. That travel assumes 60 frames a
+  second, so the planner scales it by where earlier flings came to rest.
+  Mouse-wheel zoom targets stay internal to Mapsui; the zoom-rate estimate
+  covers them.
+- **Model.** `PredictionModel` weighs, in order: a destination (0.95 for an
+  animation, 0.8 for a fling), the motion extrapolated 0.5 to 4&#160;s along
+  the EMA velocity with the new zoom-rate estimate, the route ahead
+  (`PredictionInputs.RouteAhead`; the viewer has no follow-own-ship mode yet,
+  so nothing fills it), and the places the view rested at plus the start
+  view, at 0.1.
+- **Tile demand** (`DemandPlan.TileViews`, 1&#160;s): a chart layer adds a
+  destination's and the motion's visible slots to its predicted tiles, ranked
+  by distance from that view's centre, but not while the view still waits for
+  cells, since each landing would re-plan them.
+- **Cell demand** (`DemandPlan.CellViews`, 4&#160;s): the lazy-load
+  coordinator ranks cells against the predicted views as well as the
+  viewport. A destination's cells load the moment the gesture starts, in the
+  new `Destination` tier: predicted work on the scheduler, but allowed every
+  load slot as visible cells are. Motion and route views rank as `Ahead`,
+  rested places as the new `History` tier (background). Nothing speculative
+  starts while the view travels to a known destination. #1265's covered-cell
+  deferral applies at the destination against its own view and scale, and a
+  cell loading for a destination covers coarser cells when the view arrives.
+- **Release hints.** Loaded cells outside the ahead window and every predicted
+  window are released: evicted first when the retention budget is exceeded.
+  Chart tiles are per slot across cells, so tiles get no hint of their own;
+  the tile pool's LRU still decides.
+- **Hit and waste.** `PredictionStats` counts slot hits (a slot whose tile was
+  resident when it became visible), predicted tiles used or wasted (left the
+  cache, or unshown after 30&#160;s), cell hits (loaded when it came into
+  view), predicted cells used or wasted (evicted, or not in view after
+  60&#160;s), released cells, flings and their resting error, and stack holds.
+  `get_process_metrics` reports them over its window as `prediction`, and the
+  settle manifests carry them per step. `PredictedInCache` is now this
+  bookkeeping.
+- **Stack batching didn't work.** `ArrivalForecast` tracks the cells the view
+  has queued or is loading, and the stack hold
+  (`ChartSessionOptions.StackHoldMs`) now waits for those already loading,
+  never holding the first compose after a quiet spell. It cut flash reveals
+  on cold jumps by about a third but didn't speed them, and slowed a cold
+  glide by 2.7&#160;s: a cell's load holds its load slot until its compose is
+  applied, so holding composes holds loads. Waiting for queued cells as well
+  was worse still (composes 500&#160;ms apart). The default stays 0, and the
+  slice 8 cold-jump cost is not recovered here. Releasing the load slot when
+  a cell's render is done, before its compose, would let the hold work; that
+  belongs with the stack, not prediction.
+- **Harness.** viewer-stress gains the `glide` route (the jumps, animated
+  over 800&#160;ms with `set_viewport durationMs`) and the `fling` route (four
+  4000&#160;px/s flings from Seattle, through the new `fling` tool), and
+  `--start-settle-timeout-ms`, since the start view never settles and cost
+  2&#160;minutes a run.
+
+*Measured (slice 9).* Washington, Lua-CSharp, main (35633d19 plus the harness
+routes) against this slice, interleaved, medians of 3; App Nap off. Other
+sessions' work and background apps kept the machine at about 70% idle, so the
+idle gate was 65% and one harness ran at a time (a lock shared with slice 11);
+absolute figures are higher than slice 8's for both builds.
+
+| | main | slice 9 |
+|---|---|---|
+| Cold jumps: settle | 5.23 s | 5.75 s |
+| Cold jumps: CPU | 25.9 s | 26.9 s |
+| Prewarm jumps: settle | 1.87 s | 1.74 s |
+| Cold pan: settle | 0.85 s | 0.71 s |
+| Cold glide: settle | 7.24 s | 5.47 s |
+| Cold glide: CPU | 34.4 s | 31.4 s |
+| Cold fling: settle (4 flings) | 3.57 s | 2.28 s |
+| Cold fling: CPU | 11.9 s | 9.8 s |
+| Peak working set: glide / fling | 5.58 / 3.81 GB | 4.88 / 3.37 GB |
+| Peak tile native: jumps / glide / fling | 595 / 1108 / 639 MB | 610 / 882 / 504 MB |
+| Incremental reveals, flash: jumps / glide / fling | 40–63 / 47–49 / 27–58 | 46–67 / 29–35 / 23–40 |
+| Slot hit rate: glide / fling / pan | – | 78% / 95% / 100% |
+| Cell hit rate: glide / fling | – | 63% / 85% |
+| Tile and cell waste | – | 0% |
+
+- **A known destination is the gain.** A glide's later stops settle in about
+  1.0 against 1.9&#160;s (Port Townsend) because their cells loaded during
+  the animation; flings settle about a third faster. Both spend less CPU and
+  memory: the destination's cells load once, not after a debounce behind the
+  view's transit.
+- **Jumps have nothing to predict.** An instant jump is all miss, and cold
+  jumps came out 0.1–0.5&#160;s slower than main in every round; the
+  rested-place and start-view (`History`) loads and the extra bookkeeping are
+  the likely cost. Prewarm jumps and pan are a little faster.
+- **Waste is nil on these routes.** Every predicted tile and cell was shown
+  within its expiry; routes that turn back would show waste.
+- **Time to first paint** is longer for glide (about 1.0 against 0.46&#160;s
+  per slot) because a slot's first tile now waits for the destination's cells
+  rather than drawing coarser ones first; settle, the whole view, is sooner.
+
 **10. CLI and MCP on the engine.** Move `render`, `tiles export`, `tiles serve`
 and `mcp serve` to `ChartSession`. Delete `HeadlessCompositor` and
 `HeadlessTileRenderer`. Captures honour density.
@@ -1129,8 +1231,9 @@ library's `PngS100DatasetRenderer` all go through it, and
     its coverage show there, and the different clip stack shifts its
     anti-aliasing across the whole layer at small scale. In the Solent set,
     0062022A against 0040242B is the one such pair.
-  Whether this one-time change in CLI output is acceptable is the owner's call
-  (open question 7); it has not been treated as accepted.
+  The owner accepted this one-time change in CLI output (open question 7)
+  when [#1332](https://github.com/philliphoff/EncDotNet.S100/pull/1332)
+  merged.
 
 **11. Content store.** One store and budget for every kind, a running size
 index ([#691](https://github.com/philliphoff/EncDotNet.S100/issues/691) item 4),
@@ -1386,16 +1489,22 @@ shared perf lock and waited for the machine to be at least 70% idle.
 4. **Background CPU.** Pre-warm on every idle core is fast but costs battery
    and heat on laptops. Should there be a setting, or a lower default on
    battery power?
-5. **Navigator destinations.** Can the Mapsui adapter read a fling's resting
-   viewport and an animation's target, or does the app need its own gesture
-   handling to know them?
-6. **Disk format change.** Moving the tile cache from PNG to a raw compressed
-   format invalidates every user's tile cache once. Acceptable? Slice 11 does
-   it (Zstandard, a versioned `tiles/v8` folder that deletes `v7`), pending
-   this answer.
-7. **CLI parity.** Moving the CLI to the engine changes its coverage handling
-   from bounding boxes to NTS, so some exports will differ. Is a one-time
-   change in CLI output acceptable?
+5. **Navigator destinations.** Answered in slice&#160;9: the Mapsui adapter
+   can know both without its own gesture handling, though Mapsui 5.1 keeps
+   its animations private. The app starts every animation it reports, so
+   `MapsuiMapNavigator` reports the target as it starts one. Mapsui's map
+   control starts a fling from a private `FlingTracker`, but `FlingTracker`
+   and `FlingAnimation` are public and deterministic, so the Avalonia
+   adapter feeds its own tracker the same pointer events and predicts the
+   resting viewport. Mouse-wheel zoom targets stay internal to Mapsui; the
+   zoom-rate estimate covers them.
+6. **Disk format change.** Decided: slice 11 moves the tile cache from PNG to
+   Zstandard in a versioned `tiles/v8` folder that deletes `v7`, which
+   invalidates every user's tile cache once; the owner accepted that when
+   #1337 merged.
+7. **CLI parity.** Decided: moving the CLI to the engine changes its coverage
+   handling from bounding boxes to NTS, so some exports differ; the owner
+   accepted the one-time change in CLI output when #1332 merged.
 8. **S-102 in chart tiles.** Should gridded products join chart tiles (phase 2
    of the coverage plane), or stay a separate layer drawn above them?
 9. **Settle targets.** The targets below are proposals. Which do you want as

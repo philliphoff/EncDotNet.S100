@@ -1,5 +1,6 @@
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine.Prediction;
 using Mapsui;
 using Mapsui.Extensions;
 using Mapsui.Projections;
@@ -206,6 +207,80 @@ public sealed class MapsuiMapNavigatorTests
         navigation.ZoomToExtent(new MRect(-50, top - 100, 50, top + 1e7), durationMilliseconds: 0);
 
         AssertExtent(new MRect(-60, top - 110, 60, top + 10), map.Navigator.Viewport.ToExtent());
+    }
+
+    [Fact]
+    public void Planner_SeesTheMapsViews()
+    {
+        using var map = SizedMap();
+        var planner = new DemandPlanner();
+        var navigation = new MapsuiMapNavigator(map, planner);
+
+        navigation.SetViewportToCenterAndResolution(new MPoint(125, -75), 4);
+
+        var current = planner.Plan().Current!.Value;
+        Assert.Equal(125, current.CenterX, 6);
+        Assert.Equal(-75, current.CenterY, 6);
+        Assert.Equal(4, current.Resolution, 6);
+        Assert.Equal(ViewMotionKind.Idle, planner.Motion.Kind);
+    }
+
+    [Fact]
+    public void Planner_KnowsAnAnimationsTarget()
+    {
+        using var map = SizedMap();
+        var planner = new DemandPlanner();
+        var navigation = new MapsuiMapNavigator(map, planner);
+        navigation.SetViewportToCenterAndResolution(new MPoint(0, 0), 10);
+
+        navigation.CenterOnAndZoomTo(new MPoint(5_000, 2_000), 5, 500);
+
+        var motion = planner.Motion;
+        Assert.Equal(ViewMotionKind.Animated, motion.Kind);
+        Assert.Equal(5_000, motion.Target!.Value.CenterX, 6);
+        Assert.Equal(2_000, motion.Target.Value.CenterY, 6);
+        Assert.Equal(5, motion.Target.Value.Resolution, 6);
+    }
+
+    [Fact]
+    public void Planner_KnowsAFlingsRestingViewport()
+    {
+        using var map = SizedMap();
+        var planner = new DemandPlanner();
+        var navigation = new MapsuiMapNavigator(map, planner);
+        navigation.SetViewportToCenterAndResolution(new MPoint(0, 0), 10);
+
+        // Dragging right moves the map right, so the view travels west.
+        var target = navigation.Fling(4000, 0);
+
+        Assert.NotNull(target);
+        Assert.True(target.Value.CenterX < -1000, $"centre {target.Value.CenterX}");
+        Assert.Equal(0, target.Value.CenterY, 6);
+        Assert.Equal(ViewMotionKind.Fling, planner.Motion.Kind);
+        Assert.Null(navigation.Fling(50, 0));
+    }
+
+    [Fact]
+    public void FlingForecast_FollowsMapsuisRules()
+    {
+        using var map = SizedMap();
+        map.Navigator.CenterOnAndZoomTo(new MPoint(0, 0), 10, 0);
+        var viewport = map.Navigator.Viewport;
+
+        // Too slow to fling, or no time to.
+        Assert.Null(MapsuiFlingForecast.Travel(viewport, 99, 0, 1000));
+        Assert.Null(MapsuiFlingForecast.Travel(viewport, 4000, 0, 10));
+
+        var fast = MapsuiFlingForecast.Travel(viewport, 4000, 0, 1000)!.Value;
+        var slow = MapsuiFlingForecast.Travel(viewport, 2000, 0, 1000)!.Value;
+        Assert.Equal(400, fast.Duration.TotalMilliseconds, 6);
+        Assert.Equal(200, slow.Duration.TotalMilliseconds, 6);
+        // Travel grows with the square of the speed (velocity × duration).
+        Assert.Equal(4, fast.TravelX / slow.TravelX, 0);
+        Assert.True(fast.TravelX < 0);
+        Assert.Equal(0, fast.TravelY, 6);
+        // Upward drags move the view south: screen y grows downwards.
+        Assert.True(MapsuiFlingForecast.Travel(viewport, 0, -4000, 1000)!.Value.TravelY < 0);
     }
 
     private static Map SizedMap()

@@ -1168,6 +1168,12 @@ public partial class App : Application
         services.AddSingleton<IFileDialogService, FileDialogService>();
         services.AddSingleton<IExchangeSetService, ExchangeSetService>();
 
+        // The map's demand planner (map rendering slice 9): the map session
+        // reports views, fling and animation targets to it, its chart tiles
+        // and stack read it, and the lazy-load coordinator takes cell demand
+        // from it.
+        services.AddSingleton(_ => new EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner());
+
         // Viewport-driven lazy loading of large exchange sets (issue #458):
         // registers cells without loading them and loads only what is in view.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetLazyLoadCoordinator>(sp =>
@@ -1189,7 +1195,8 @@ public partial class App : Application
                 },
                 hasVisibleTileWork: () =>
                     EncDotNet.S100.Rendering.Engine.S100VectorTileRenderer.HasVisibleTileWork,
-                unloadMany: loader.UnloadEntries);
+                unloadMany: loader.UnloadEntries,
+                planner: sp.GetRequiredService<EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner>());
         });
 
         // Own-ship dynamic source. The steerable driver dead-reckons a
@@ -1394,7 +1401,8 @@ public partial class App : Application
                 () => sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalCacheWarmer>().Status,
                 sp.GetRequiredService<McpTools.PortrayalPrewarmOverride>(),
                 () => sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalCacheWarmer>().ConcurrencyLimit,
-                sp.GetRequiredService<ViewerDataPaths>().RenderCacheDirectory),
+                sp.GetRequiredService<ViewerDataPaths>().RenderCacheDirectory,
+                sp.GetRequiredService<EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner>()),
         });
         // The settled signal and process metrics behind the perf harness's MCP
         // tools (map rendering slice 1). Both are inert until a tool uses them.

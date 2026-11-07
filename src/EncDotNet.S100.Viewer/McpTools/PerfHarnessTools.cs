@@ -145,7 +145,42 @@ internal sealed record ProcessMetricsDto(
     [property: Description("Memory now.")] MemoryDto Memory,
     [property: Description("Map paint times over the render-stats window.")] FrameTimesDto Frames,
     [property: Description("The run environment.")] PerfEnvironmentDto Environment,
-    [property: Description("The work scheduler over the window, or null when no window is open.")] SchedulerWindowDto? Scheduler = null);
+    [property: Description("The work scheduler over the window, or null when no window is open.")] SchedulerWindowDto? Scheduler = null,
+    [property: Description("How well the view prediction did over the window (map rendering slice 9), or null when no window is open.")] PredictionWindowDto? Prediction = null);
+
+/// <summary>The prediction's hit and waste counts over a window (map rendering slice 9).</summary>
+[Description("How well the view prediction did over a window. A slot hit is a chart tile slot already resident when it became visible. A predicted tile or cell is used when it is later shown or comes into view, and wasted when it leaves the cache, is evicted, or expires unshown. Rates are null when nothing was counted.")]
+internal sealed record PredictionWindowDto(
+    [property: Description("Tile slots already resident when they became visible.")] long SlotHits,
+    [property: Description("Tile slots drawn after they became visible.")] long SlotMisses,
+    [property: Description("slotHits ÷ (slotHits + slotMisses).")] double? SlotHitRate,
+    [property: Description("Predicted tiles rasterised (halo, fan and planned views).")] long TilesPredicted,
+    [property: Description("Predicted tiles later shown.")] long TilesUsed,
+    [property: Description("Predicted tiles that left the cache or expired unshown.")] long TilesWasted,
+    [property: Description("tilesWasted ÷ (tilesUsed + tilesWasted).")] double? TileWasteRate,
+    [property: Description("Cells already loaded when they came into view.")] long CellHits,
+    [property: Description("Cells not yet loaded when they came into view.")] long CellMisses,
+    [property: Description("cellHits ÷ (cellHits + cellMisses).")] double? CellHitRate,
+    [property: Description("Cells loaded for a prediction.")] long CellsPredicted,
+    [property: Description("Predicted cells that came into view.")] long CellsUsed,
+    [property: Description("Predicted cells evicted or expired before coming into view.")] long CellsWasted,
+    [property: Description("cellsWasted ÷ (cellsUsed + cellsWasted).")] double? CellWasteRate,
+    [property: Description("Cells the planner released from demand.")] long CellsReleased,
+    [property: Description("Fling and animation destinations reported.")] long Destinations,
+    [property: Description("Flings that came to rest.")] long Flings,
+    [property: Description("Mean distance of a fling's resting centre from the predicted one, as a fraction of the predicted travel.")] double? FlingError,
+    [property: Description("Chart stack composes held for expected arrivals.")] long Holds,
+    [property: Description("Total time composes were held, ms.")] double HoldMs)
+{
+    /// <summary>The DTO of a snapshot's counts.</summary>
+    public static PredictionWindowDto Of(EncDotNet.S100.Rendering.Engine.Prediction.PredictionStatsSnapshot s) => new(
+        s.SlotHits, s.SlotMisses, s.SlotHitRate,
+        s.TilesPredicted, s.TilesUsed, s.TilesWasted, s.TileWasteRate,
+        s.CellHits, s.CellMisses, s.CellHitRate,
+        s.CellsPredicted, s.CellsUsed, s.CellsWasted, s.CellWasteRate,
+        s.CellsReleased, s.Destinations, s.Flings, s.FlingError,
+        s.Holds, s.HoldTime.TotalMilliseconds);
+}
 
 /// <summary>Result of <see cref="PortrayalPrewarmTool"/>.</summary>
 [Description("The background portrayal pre-warm's progress.")]
@@ -220,7 +255,8 @@ internal sealed class GetProcessMetricsTool(
     IRenderActivityMonitor? renderMonitor,
     Func<PerfEnvironmentDto> environment,
     Func<int>? tileCount = null,
-    Func<WorkSchedulerStats>? schedulerStats = null)
+    Func<WorkSchedulerStats>? schedulerStats = null,
+    Func<EncDotNet.S100.Rendering.Engine.Prediction.PredictionStatsSnapshot>? predictionStats = null)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "get_process_metrics";
@@ -231,6 +267,8 @@ internal sealed class GetProcessMetricsTool(
     private readonly Func<int>? _tileCount = tileCount;
     private readonly Func<WorkSchedulerStats>? _schedulerStats = schedulerStats;
     private WorkSchedulerStats? _schedulerStart;
+    private readonly Func<EncDotNet.S100.Rendering.Engine.Prediction.PredictionStatsSnapshot>? _predictionStats = predictionStats;
+    private EncDotNet.S100.Rendering.Engine.Prediction.PredictionStatsSnapshot? _predictionStart;
 
     /// <summary>Reads, and optionally starts, restarts or stops the window.</summary>
     /// <param name="window">'read' (default), 'start', 'restart' (read, then start the next window here) or 'stop'.</param>
@@ -240,6 +278,8 @@ internal sealed class GetProcessMetricsTool(
         ProcessMetricsWindow? measured;
         var schedulerNow = _schedulerStats?.Invoke();
         var schedulerStart = _schedulerStart;
+        var predictionNow = _predictionStats?.Invoke();
+        var predictionStart = _predictionStart;
         switch (action)
         {
             case "read":
@@ -249,17 +289,20 @@ internal sealed class GetProcessMetricsTool(
                 _sampler.StartWindow();
                 measured = _sampler.ReadWindow(restart: false);
                 schedulerStart = _schedulerStart = schedulerNow;
+                predictionStart = _predictionStart = predictionNow;
                 break;
             case "restart":
                 measured = _sampler.ReadWindow(restart: true);
                 if (measured is null)
                     _sampler.StartWindow();
                 _schedulerStart = schedulerNow;
+                _predictionStart = predictionNow;
                 break;
             case "stop":
                 measured = _sampler.ReadWindow(restart: false);
                 _sampler.StopWindow();
                 _schedulerStart = null;
+                _predictionStart = null;
                 break;
             default:
                 return ToolResult<ProcessMetricsDto>.Err(new InvalidArgument("window", "one of 'read', 'start', 'restart' or 'stop'"));
@@ -274,6 +317,9 @@ internal sealed class GetProcessMetricsTool(
             _environment(),
             measured is not null && schedulerNow is not null && schedulerStart is not null
                 ? ToDto(schedulerStart, schedulerNow, measured.WallMs)
+                : null,
+            measured is not null && predictionNow is { } pNow && predictionStart is { } pStart
+                ? PredictionWindowDto.Of(pNow.Since(pStart))
                 : null));
     }
 
@@ -477,13 +523,15 @@ internal sealed class FlingTool(ICapabilityAccessor<IMapViewportController> acce
 /// <param name="PrewarmOverride">The session override of the pre-warm setting.</param>
 /// <param name="PrewarmConcurrency">Reads how many cells the pre-warm may portray at once.</param>
 /// <param name="RenderCacheDirectory">Where <c>--cache-dir</c> moved the render caches, or null.</param>
+/// <param name="Planner">The map's demand planner, whose prediction stats the metrics window reports, or null.</param>
 internal sealed record PerfHarnessServices(
     ViewSettleMonitor Settle,
     ProcessMetricsSampler Metrics,
     Func<PortrayalWarmStatus> PrewarmStatus,
     PortrayalPrewarmOverride PrewarmOverride,
     Func<int> PrewarmConcurrency,
-    string? RenderCacheDirectory);
+    string? RenderCacheDirectory,
+    EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner? Planner = null);
 
 /// <summary>MCP adapters for the perf-harness tools.</summary>
 internal static class PerfHarnessMcpAdapters

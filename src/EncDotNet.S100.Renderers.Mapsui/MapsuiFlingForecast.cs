@@ -11,7 +11,8 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// <see cref="FlingAnimation"/> is deterministic in the release velocity, so
 /// the same arithmetic gives the travel. It moves the view a fixed fraction of
 /// the velocity per animation tick, so the travel depends on the frame rate;
-/// this assumes 60&#160;frames a second.
+/// this assumes 60&#160;frames a second, and the demand planner scales it by
+/// what earlier flings did.
 /// </summary>
 public static class MapsuiFlingForecast
 {

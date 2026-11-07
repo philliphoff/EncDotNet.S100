@@ -1,3 +1,5 @@
+using EncDotNet.S100.Rendering.Engine.Prediction;
+
 namespace EncDotNet.S100.Rendering.Engine;
 
 /// <summary>
@@ -31,14 +33,23 @@ public sealed class ChartSession
     /// <see cref="ChartEngine.Options"/>, so its settings UI keeps one source
     /// of truth.
     /// </param>
-    public ChartSession(ChartSessionOptions options)
+    /// <param name="planner">
+    /// The map's demand planner (map rendering slice&#160;9): its predicted
+    /// views add tile demand, and its arrival forecast batches stack versions.
+    /// A new planner when null.
+    /// </param>
+    public ChartSession(ChartSessionOptions options, DemandPlanner? planner = null)
     {
         ArgumentNullException.ThrowIfNull(options);
         Options = options;
+        Planner = planner ?? new DemandPlanner();
     }
 
     /// <summary>The session's options.</summary>
     public ChartSessionOptions Options { get; }
+
+    /// <summary>The map's demand planner.</summary>
+    public DemandPlanner Planner { get; }
 
     /// <summary>
     /// Publishes <paramref name="stack"/> to the chart layer
@@ -62,7 +73,7 @@ public sealed class ChartSession
             _stacks[owner] = stack;
         }
 
-        S100VectorTileRenderer.BindStack(owner, stack, Options);
+        S100VectorTileRenderer.BindStack(owner, stack, Options, Planner);
     }
 
     /// <summary>Forgets <paramref name="owner"/>: it is no longer on the map.</summary>

@@ -26,43 +26,44 @@ public sealed partial class MapsuiDatasetLayerSession
 
     private static readonly TimeSpan StackHoldPoll = TimeSpan.FromMilliseconds(10);
 
-    // Renders running now, each with the demand it runs for (null: visible).
-    // Under _renderingSync.
-    private readonly Lock _renderingSync = new();
-    private readonly List<RenderInFlight> _rendering = [];
-
-    private sealed record RenderInFlight(WorkDemand? Demand);
-
-    private RenderInFlight BeginRendering()
-    {
-        var rendering = new RenderInFlight(WorkDemand.Current);
-        lock (_renderingSync)
-            _rendering.Add(rendering);
-        return rendering;
-    }
-
-    private void EndRendering(RenderInFlight rendering)
-    {
-        lock (_renderingSync)
-            _rendering.Remove(rendering);
-    }
+    // Stopwatch timestamp of the last stack applied to the map; 0 before the first.
+    private long _lastStackAppliedTicks;
 
     /// <summary>
-    /// Whether a render the view is waiting for is still running: one with
-    /// no demand, or whose demand is visible work now.
+    /// Holds a compose while the demand planner expects more of the view's
+    /// cells, up to <see cref="ChartSessionOptions.StackHoldMs"/> (map
+    /// rendering slice&#160;9), while any of them are already loading. Each compose re-rasters every chart tile slot
+    /// its new cells touch, so composing per landing reveals a slot once per
+    /// cell and spends the raster work again each time. The first compose
+    /// after a quiet spell (none applied within the hold limit) isn't held, so
+    /// a new view shows its first cells at once; the ones that land after it
+    /// batch.
     /// </summary>
-    private bool IsRenderingVisible()
+    private async Task HoldForArrivalsAsync()
     {
-        lock (_renderingSync)
+        var holdLimit = TimeSpan.FromMilliseconds(_chartSession.Options.StackHoldMs);
+        if (holdLimit <= TimeSpan.Zero)
+            return;
+
+        var lastApplied = Interlocked.Read(ref _lastStackAppliedTicks);
+        if (lastApplied == 0 || System.Diagnostics.Stopwatch.GetElapsedTime(lastApplied) >= holdLimit)
+            return;
+
+        // Only cells already loading are waited for: queued ones may not start
+        // for seconds, and waiting for them serialises composes at the hold
+        // limit while a wave keeps landing.
+        var arrivals = _chartSession.Planner.Arrivals;
+        if (arrivals.InFlight == 0)
+            return;
+
+        var holdStart = System.Diagnostics.Stopwatch.GetTimestamp();
+        while (arrivals.InFlight > 0
+            && System.Diagnostics.Stopwatch.GetElapsedTime(holdStart) < holdLimit)
         {
-            foreach (var rendering in _rendering)
-            {
-                if (rendering.Demand is null || rendering.Demand.Priority.Class == WorkClass.Visible)
-                    return true;
-            }
+            await Task.Delay(StackHoldPoll).ConfigureAwait(false);
         }
 
-        return false;
+        _chartSession.Planner.Stats.RecordHold(System.Diagnostics.Stopwatch.GetElapsedTime(holdStart));
     }
 
     private readonly Action<Action>? _stackMarshal;
@@ -165,6 +166,9 @@ public sealed partial class MapsuiDatasetLayerSession
     /// </summary>
     private long RequestStackCompose()
     {
+        // The cell whose render asked for this compose has arrived: the stack
+        // hold no longer waits for it (map rendering slice 9).
+        _chartSession.Planner.Arrivals.Resolve(WorkDemand.Current);
         var version = ++_stackRequested;
         if (!_stackJobRunning)
         {
@@ -187,21 +191,7 @@ public sealed partial class MapsuiDatasetLayerSession
             if (StackBatchWindow > TimeSpan.Zero)
                 await Task.Delay(StackBatchWindow).ConfigureAwait(false);
 
-            // Cells the view is still rendering join this compose, up to the
-            // hold limit: each compose changes every chart tile slot its new
-            // cells touch, so composing per arrival would reveal a slot once
-            // per cell.
-            // (ChartSessionOptions.StackHoldMs, map rendering slice 8).
-            var holdLimit = TimeSpan.FromMilliseconds(_chartSession.Options.StackHoldMs);
-            if (holdLimit > TimeSpan.Zero)
-            {
-                var holdStart = System.Diagnostics.Stopwatch.GetTimestamp();
-                while (IsRenderingVisible()
-                    && System.Diagnostics.Stopwatch.GetElapsedTime(holdStart) < holdLimit)
-                {
-                    await Task.Delay(StackHoldPoll).ConfigureAwait(false);
-                }
-            }
+            await HoldForArrivalsAsync().ConfigureAwait(false);
 
             StackInput input;
             lock (_sync)
@@ -289,7 +279,10 @@ public sealed partial class MapsuiDatasetLayerSession
         }
 
         if (changed)
+        {
+            Interlocked.Exchange(ref _lastStackAppliedTicks, System.Diagnostics.Stopwatch.GetTimestamp());
             LayersChanged?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     /// <summary>

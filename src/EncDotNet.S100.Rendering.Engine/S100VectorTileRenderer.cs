@@ -682,6 +682,7 @@ public static partial class S100VectorTileRenderer
             state.CurrentViewport = null;
             state.ViewportEpoch++;
             state.PredictedInCache.Clear();
+            state.PredictedCentres.Clear();
             state.VisibleEnqueueTicks.Clear();
             // A new scene is a teleport for prediction: drop the stale velocity
             // anchor so the first frame doesn't fling the fan in a random
@@ -948,6 +949,10 @@ public static partial class S100VectorTileRenderer
         var coldExposure = 0;
         var visibleQueueDepth = 0;
         var predictionHits = 0L;
+        var predictionWaste = 0L;
+        var slotHits = 0L;
+        var slotMisses = 0L;
+        Prediction.DemandPlanner? planner = null;
         List<(string Namespace, long Generation, TileKey Key)>? predictionHitsToPersist = null;
         var compositeStart = Stopwatch.GetTimestamp();
         var compositeLockAcquired = compositeStart;
@@ -1034,11 +1039,28 @@ public static partial class S100VectorTileRenderer
                 var frameTicks = Stopwatch.GetTimestamp();
                 var visibleSet = new HashSet<TileKey>(visible.Count);
                 state.CurrentVisible.Clear();
+                (state.ShownSlots, state.PreviousShownSlots) = (state.PreviousShownSlots, state.ShownSlots);
+                state.ShownSlots.Clear();
                 foreach (var key in visible)
                 {
                     visibleSet.Add(key);
                     state.CurrentVisible.Add(key);
-                    if (state.Cache.Contains(key, tilePx))
+                    var cached = state.Cache.Contains(key, tilePx);
+                    if (state.ShownSlots.Add(key.Slot) && !state.PreviousShownSlots.Contains(key.Slot))
+                    {
+                        // A slot that just became visible: a hit when its
+                        // tile is already resident (map rendering slice 9).
+                        if (cached)
+                        {
+                            slotHits++;
+                        }
+                        else
+                        {
+                            slotMisses++;
+                        }
+                    }
+
+                    if (cached)
                     {
                         // A tile we rasterised speculatively is now actually visible:
                         // a prediction hit. Count it once.
@@ -1133,6 +1155,18 @@ public static partial class S100VectorTileRenderer
                         {
                             state.PendingPredicted.Add(key);
                         }
+                    }
+
+                    // The planner's views a second ahead (map rendering
+                    // slice 9): a fling's resting viewport, an animation's
+                    // target, and the motion extrapolated with its zoom rate.
+                    state.PredictedCentres.Clear();
+                    // Not while the view still waits for cells: each one that
+                    // lands changes the planned slots, so their tiles would be
+                    // drawn again for every stack version.
+                    if (chart is not null && state.Planner is { } tilePlanner && tilePlanner.Arrivals.Pending == 0)
+                    {
+                        AddPlannedTiles(state, chart, tilePlanner.Plan(frameTicks), copies, visibleSet, tilePx);
                     }
                 }
 
@@ -1230,10 +1264,14 @@ public static partial class S100VectorTileRenderer
                 // evicted before it was ever shown would otherwise linger. When the
                 // set grows past the cache's own capacity, drop keys no longer
                 // resident (those can never score a hit).
-                if (state.PredictedInCache.Count > state.Cache.Count + 256)
+                if (state.PredictedInCache.Count > state.Cache.Count + 256
+                    || frameTicks - state.LastPredictionSweep > PredictionSweepTicks)
                 {
-                    state.PredictedInCache.RemoveWhere(k => !state.Cache.Contains(k));
+                    state.LastPredictionSweep = frameTicks;
+                    predictionWaste = SweepPredicted(state, frameTicks);
                 }
+
+                planner = state.Planner;
             }
 
             // Phase 5 GPU residency (render thread only): first dispose any
@@ -1414,6 +1452,20 @@ public static partial class S100VectorTileRenderer
         if (predictionHits > 0)
         {
             S100Diag.Telemetry.TilePredictionHits.Add(predictionHits);
+        }
+
+        if (planner is not null)
+        {
+            planner.Stats.RecordSlots(slotHits, slotMisses);
+            if (predictionHits > 0)
+            {
+                planner.Stats.RecordTilesUsed(predictionHits);
+            }
+
+            if (predictionWaste > 0)
+            {
+                planner.Stats.RecordTilesWasted(predictionWaste);
+            }
         }
     }
 
@@ -2958,7 +3010,9 @@ public static partial class S100VectorTileRenderer
         {
             var priority = new WorkPriority(
                 workClass,
-                TileUrgency(key, state.PendingCenterX, state.PendingCenterY, resolution));
+                state.PredictedCentres.TryGetValue(key, out var planned)
+                    ? TileUrgency(key, planned.X, planned.Y, planned.Resolution)
+                    : TileUrgency(key, state.PendingCenterX, state.PendingCenterY, resolution));
             if (state.Jobs.TryGetValue(key, out var interest))
             {
                 // A pan moves every tile's urgency a little each frame; only a
@@ -3326,9 +3380,10 @@ public static partial class S100VectorTileRenderer
                         {
                             (persistenceKeys ??= []).Add(key);
                         }
-                        if (relevance == TileRelevance.Speculative)
+                        if (relevance == TileRelevance.Speculative
+                            && state.PredictedInCache.TryAdd(key, Stopwatch.GetTimestamp()))
                         {
-                            state.PredictedInCache.Add(key);
+                            state.Planner?.Stats.RecordTilesPredicted(1);
                         }
                         else
                         {
@@ -4384,9 +4439,27 @@ public static partial class S100VectorTileRenderer
         // allocation (cannot mutate a dictionary while enumerating its keys).
         public readonly List<TileKey> EnqueuePruneScratch = new();
 
-        // Speculatively-rasterised tiles still resident and not yet shown; a
-        // later visible frame that finds one scores a prediction hit.
-        public readonly HashSet<TileKey> PredictedInCache = new();
+        // Speculatively-rasterised tiles still resident and not yet shown,
+        // with the Stopwatch timestamp each was published at; a later visible
+        // frame that finds one scores a prediction hit, and one that leaves
+        // the cache or expires unshown is wasted (map rendering slice 9).
+        public readonly Dictionary<TileKey, long> PredictedInCache = new();
+        public long LastPredictionSweep;
+
+        // The map's demand planner, for a chart layer (map rendering slice 9):
+        // its predicted views add tile demand, and it keeps the hit and waste
+        // counts. Null for a layer outside a chart session.
+        public Prediction.DemandPlanner? Planner;
+
+        // Slots drawn last frame and this frame, to find the slots that just
+        // became visible (map rendering slice 9's slot hit rate).
+        public HashSet<(int Band, int X, int Y)> ShownSlots = new();
+        public HashSet<(int Band, int X, int Y)> PreviousShownSlots = new();
+
+        // The view each planner-predicted pending tile was planned for, so its
+        // job ranks by distance from that view's centre rather than the
+        // current one (a destination is far from where the view is now).
+        public readonly Dictionary<TileKey, (double X, double Y, double Resolution)> PredictedCentres = new();
 
         // Viewport-centre velocity EMA (EPSG:3857 m/s) for the prediction fan.
         public double VelocityX;

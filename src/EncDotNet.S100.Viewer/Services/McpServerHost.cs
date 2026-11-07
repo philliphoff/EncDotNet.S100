@@ -435,7 +435,8 @@ internal sealed class McpServerHost : IAsyncDisposable
                 _renderActivityMonitor,
                 () => GetProcessMetricsTool.DescribeEnvironment(settings, harness.RenderCacheDirectory),
                 () => EncDotNet.S100.Rendering.Engine.S100VectorTileRenderer.GetTileCacheMemory().Tiles,
-                () => EncDotNet.S100.Core.Scheduling.WorkScheduler.Shared.GetStats())));
+                () => EncDotNet.S100.Core.Scheduling.WorkScheduler.Shared.GetStats(),
+                harness.Planner is { } planner ? planner.Stats.Snapshot : null)));
             if (_viewportAccessor is not null)
             {
                 tools.Add(PerfHarnessMcpAdapters.Create(new FlingTool(_viewportAccessor, harness.Settle.MarkTrigger)));

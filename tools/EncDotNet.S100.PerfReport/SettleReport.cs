@@ -129,6 +129,7 @@ internal static class SettleReport
             ["uiOver8Ms"] = Number(window?["uiThread"], "over8Ms"),
             ["uiOver50Ms"] = Number(window?["uiThread"], "over50Ms"),
             ["loadedCells"] = Number(settle?["loads"], "loaded"),
+            ["prediction"] = metrics?["prediction"]?.DeepClone(),
             ["raw"] = new JsonObject
             {
                 ["settle"] = settle?.DeepClone(),

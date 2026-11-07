@@ -411,15 +411,16 @@ public sealed class ChartSessionOptions
 
     /// <summary>
     /// The longest, in milliseconds, a chart stack compose waits for the
-    /// other cells the view is still rendering (map rendering slice&#160;8).
-    /// Each compose changes every chart tile slot its new cells touch, so
-    /// composing per arrival reveals a slot once per cell; holding lets cells
-    /// that land one after another reveal in one change, at the cost of
-    /// showing the first of them later. 0 turns the hold off. Seeded from
-    /// <c>S100_STACK_HOLD_MS</c> (default <see cref="DefaultStackHoldMs"/>,
-    /// off: on Washington a 250&#160;ms hold cut incremental reveals by about
-    /// a tenth but added quick-succession ones and slowed a cold pan, see
-    /// <c>docs/design/map-render-architecture.md</c>, slice&#160;8). Read by
+    /// other cells the view is still loading (map rendering slices&#160;8
+    /// and&#160;9). Each compose changes every chart tile slot its new cells
+    /// touch, so composing per arrival reveals a slot once per cell and
+    /// re-rasters it each time. The hold waits while the demand planner's
+    /// <see cref="Prediction.DemandPlanner.Arrivals"/> are pending (the cells
+    /// the view has queued or is loading), and never holds the first compose
+    /// after a quiet spell, so a new view still shows its first cells at once.
+    /// 0 turns the hold off. Seeded from <c>S100_STACK_HOLD_MS</c> (default
+    /// <see cref="DefaultStackHoldMs"/>; see
+    /// <c>docs/design/map-render-architecture.md</c>, slice&#160;9). Read by
     /// each compose.
     /// </summary>
     public double StackHoldMs

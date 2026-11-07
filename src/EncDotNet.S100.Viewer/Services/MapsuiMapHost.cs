@@ -4,6 +4,7 @@ using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Renderers.Mapsui;
 using EncDotNet.S100.Renderers.Mapsui.Avalonia;
 using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
+using EncDotNet.S100.Rendering.Engine.Prediction;
 using Mapsui;
 using Mapsui.Layers;
 
@@ -34,20 +35,19 @@ internal sealed class MapsuiMapHost :
 {
     private readonly IS100MapSession _session;
     private readonly AvaloniaMapsuiMapAdapter _adapter;
-    private readonly Map _map;
     private bool _disposed;
 
     public MapsuiMapHost(
         CaptureSynchronizedMapControl mapControl,
         DatasetProcessorOwner processorOwner,
         MapsuiDatasetRenderer datasetRenderer,
-        IInteroperabilityAuthorityProvider authorityProvider)
+        IInteroperabilityAuthorityProvider authorityProvider,
+        DemandPlanner? planner = null)
     {
         ArgumentNullException.ThrowIfNull(mapControl);
         ArgumentNullException.ThrowIfNull(processorOwner);
         ArgumentNullException.ThrowIfNull(datasetRenderer);
         ArgumentNullException.ThrowIfNull(authorityProvider);
-        _map = mapControl.Map ?? throw new ArgumentException("The map control has no map.", nameof(mapControl));
 
         // The public entry point: attach the S-100 session to the control's map
         // and the Avalonia adapter to the control in one call. The DI-shared
@@ -64,6 +64,7 @@ internal sealed class MapsuiMapHost :
                 ProcessorOwner = processorOwner,
                 DatasetRenderer = datasetRenderer,
                 InteroperabilityAuthorityProvider = authorityProvider,
+                DemandPlanner = planner,
             });
     }
 
@@ -98,16 +99,12 @@ internal sealed class MapsuiMapHost :
     public void SetRotation(double degrees) => _session.Navigator.SetRotation(degrees);
 
     public void AnimateToCenterAndResolution(MPoint mercatorCenter, double resolution, long durationMs) =>
-        _map.Navigator.CenterOnAndZoomTo(mercatorCenter, resolution, durationMs);
+        _session.Navigator.CenterOnAndZoomTo(mercatorCenter, resolution, durationMs);
 
-    public (double CenterX, double CenterY, double Resolution)? Fling(double velocityX, double velocityY)
-    {
-        var navigator = _map.Navigator;
-        var viewport = navigator.Viewport;
-        var travel = navigator.PanLock ? null : MapsuiFlingForecast.Travel(viewport, velocityX, velocityY, 1000);
-        navigator.Fling(velocityX, velocityY, 1000);
-        return travel is { } t ? (viewport.CenterX + t.TravelX, viewport.CenterY + t.TravelY, viewport.Resolution) : null;
-    }
+    public (double CenterX, double CenterY, double Resolution)? Fling(double velocityX, double velocityY) =>
+        _session.Navigator.Fling(velocityX, velocityY) is { } target
+            ? (target.CenterX, target.CenterY, target.Resolution)
+            : null;
 
     public void CenterOn(
         double latitudeWgs84,

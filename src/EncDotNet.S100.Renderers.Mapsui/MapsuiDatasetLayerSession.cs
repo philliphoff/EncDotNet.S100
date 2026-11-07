@@ -1011,18 +1011,10 @@ public sealed partial class MapsuiDatasetLayerSession : IDisposable
             IReadOnlyList<ILayer> reusable;
             lock (_sync)
                 reusable = renderEntry.Layers;
-            var rendering = BeginRendering();
-            try
-            {
-                result = await WorkScheduler.Shared.RunAsync(
-                    WorkStage.Portray,
-                    token => _renderer.RenderAsync(processor, context, layout, reusable, token),
-                    cancellationToken).ConfigureAwait(true);
-            }
-            finally
-            {
-                EndRendering(rendering);
-            }
+            result = await WorkScheduler.Shared.RunAsync(
+                WorkStage.Portray,
+                token => _renderer.RenderAsync(processor, context, layout, reusable, token),
+                cancellationToken).ConfigureAwait(true);
         }
 
         cancellationToken.ThrowIfCancellationRequested();

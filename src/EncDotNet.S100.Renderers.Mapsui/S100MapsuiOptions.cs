@@ -3,6 +3,7 @@ using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using EncDotNet.S100.Rendering.Engine;
+using EncDotNet.S100.Rendering.Engine.Prediction;
 
 namespace EncDotNet.S100.Renderers.Mapsui;
 
@@ -124,6 +125,17 @@ public sealed record S100MapsuiOptions
     /// <see cref="ChartEngine.Options"/>, which a host's settings write to.
     /// </summary>
     public ChartSessionOptions? ChartOptions { get; init; }
+
+    /// <summary>
+    /// The map's demand planner (map rendering slice&#160;9). The session
+    /// reports the map's views and the targets of the animations and flings
+    /// it starts to it, its chart tiles add the planner's predicted views to
+    /// their predicted tiles, and its chart stack holds a compose while the
+    /// planner's <see cref="DemandPlanner.Arrivals"/> are pending. A host's
+    /// cell loader reads cell demand from the same planner. A new planner when
+    /// <see langword="null"/>; read it back from <see cref="MapsuiMapNavigator.Planner"/>.
+    /// </summary>
+    public DemandPlanner? DemandPlanner { get; init; }
 
     /// <summary>
     /// Gets the resolver the session's dynamic-source host uses to find an

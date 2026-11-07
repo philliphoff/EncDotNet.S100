@@ -182,7 +182,8 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<
                 EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer>(),
             App.Services.GetRequiredService<
-                EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>());
+                EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>(),
+            App.Services.GetRequiredService<EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner>());
         App.Services.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>().Current = _mapHost;
         App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current = _mapHost;
         // The image renderer is the MCP readiness gate, so publish it only after
@@ -567,6 +568,7 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicSourcePickService>())
         {
             DepthBasis = App.Services.GetService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>(),
+            Viewport = _mapHost,
         };
         interactionController.Attach(MapControl, ZoomInButton, ZoomOutButton, ZoomToExtentButton, ScaleBar, CompassRose);
         interactionController.PlainTapped += (_, tap) => _libraryCoverageController?.HandleTap(tap);
@@ -1180,7 +1182,7 @@ public partial class MainWindow : ShadUI.Window
             // Two zoom steps on the cluster: its markers are within 24 px, so
             // at four times the scale they stand apart.
             var world = navigator.Viewport.ScreenToWorld(cluster.Center.X, cluster.Center.Y + EncDotNet.S100.Viewer.Tools.RouteCheckMapLayout.StemLength);
-            navigator.CenterOnAndZoomTo(world, navigator.Viewport.Resolution / 4, 250);
+            _mapHost.AnimateToCenterAndResolution(world, navigator.Viewport.Resolution / 4, 250);
         }
     }
 
