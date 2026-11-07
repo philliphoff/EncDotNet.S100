@@ -126,7 +126,8 @@ issue.
    slice 3 the update applicator rejects an update for another edition as
    well as a break in the sequence. Re-issues,
    cancellations and later update sets don't change what was loaded before.
-   Affects §2.2–2.5 and the S-128 status reports.
+   Affects §2.2–2.5 and the S-128 status reports. The proposed fix is in
+   [Installed-data store](installed-data-store.md).
 5. **Spherical geodesy.** ([#1130](https://github.com/philliphoff/EncDotNet.S100/issues/1130) and
    [#1189](https://github.com/philliphoff/EncDotNet.S100/issues/1189), fixed) The measure tool, route legs and
    `GeodesicHelper` used a sphere. This was rated as failing the accuracy
