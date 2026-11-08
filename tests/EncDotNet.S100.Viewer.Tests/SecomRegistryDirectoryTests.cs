@@ -23,7 +23,7 @@ public sealed class SecomRegistryDirectoryTests
     private static CatalogueDirectoryDialogViewModel Directory(
         Func<Uri, SecomProbeResult> probe, Func<SecomRegistryListing>? listing = null) =>
         new(KnownCatalogueSources.All,
-            loadSecomRegistry: _ => Task.FromResult((listing ?? Listing)()),
+            loadSecomRegistry: (_, _) => Task.FromResult((listing ?? Listing)()),
             probeSecom: (uri, _) => Task.FromResult(probe(uri)));
 
     private static async Task SettleAsync(Func<bool> done)
@@ -55,9 +55,49 @@ public sealed class SecomRegistryDirectoryTests
         Assert.Equal("5", directory.Categories.Single(c => c.Category == KnownCatalogueCategory.Secom).CountText);
         Assert.StartsWith("4 SECOM data services", directory.RegistryText);
 
+        // The registry row heads the registry services, after the curated ones (D10).
+        Assert.Equal(
+            ["NORTH AMERICA", "S-124", "SECOM SERVICE REGISTRY", "(registry row)"],
+            directory.Rows.Take(4).Select(r => r.IsRegistryRow ? "(registry row)" : r.IsGroupHeader ? r.HeaderText : r.Source.Product));
+        Assert.Equal(4, directory.Rows.Skip(4).Count(r => r.IsRegistry));
+
         // Provisional registrations show as pilots; released ones do not.
         Assert.False(registry.Single(e => e.Name.StartsWith("KHRA", StringComparison.Ordinal)).IsPilot);
         Assert.True(registry.Single(e => e.Source.CatalogUri.Host == "s124.ccg-gcc.gc.ca").IsPilot);
+    }
+
+    [Fact]
+    public async Task Secom_services_offer_the_registry_as_a_row_and_refresh_reads_past_the_cache()
+    {
+        var refreshes = new List<bool>();
+        var directory = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All,
+            loadSecomRegistry: (refresh, _) =>
+            {
+                refreshes.Add(refresh);
+                return Task.FromResult(Listing());
+            });
+
+        // Not in any other category.
+        Assert.DoesNotContain(directory.Rows, r => r.IsRegistryRow);
+        directory.SelectedCategory = KnownCatalogueCategory.Secom;
+        var row = directory.Rows[^1];
+        Assert.True(row.IsRegistryRow);
+        Assert.Same(directory, row.Directory);
+        Assert.False(directory.CanRefreshRegistry);
+
+        directory.ShowRegistryCommand.Execute(null);
+        await SettleAsync(() => directory.IsRegistryLoaded);
+        Assert.True(directory.CanRefreshRegistry);
+        directory.RefreshRegistryCommand.Execute(null);
+        await SettleAsync(() => refreshes.Count == 2 && !directory.IsLoadingRegistry);
+
+        Assert.Equal([false, true], refreshes);
+        Assert.Single(directory.Rows, r => r.IsRegistryRow);
+
+        // Choosing the row keeps the choice: it isn't a source.
+        var chosen = directory.SelectedEntry;
+        directory.SelectedEntry = directory.Rows.Single(r => r.IsRegistryRow);
+        Assert.Same(chosen, directory.SelectedEntry);
     }
 
     [Fact]

@@ -1,6 +1,6 @@
 namespace EncDotNet.S100.Viewer.Resources;
 
-/// <summary>Strings for the source step of "Add online source": categories and search (D6/D7), details and limitations (D8/D14).</summary>
+/// <summary>Strings for the source step of "Add online source": categories and search (D6/D7), details and limitations (D8/D14), links in their place (D10).</summary>
 internal static partial class Strings
 {
     public static string Library_Category_Charts => Get(nameof(Library_Category_Charts));
@@ -50,4 +50,14 @@ internal static partial class Strings
     public static string Label_SelectedSource => Get(nameof(Label_SelectedSource));
 
     public static string Library_DetailsNoSelection => Get(nameof(Library_DetailsNoSelection));
+
+    public static string Library_RegistryListTitle => Get(nameof(Library_RegistryListTitle));
+
+    public static string Label_RefreshRegistry => Get(nameof(Label_RefreshRegistry));
+
+    public static string Library_DirectoryNoMatchesFormat => Get(nameof(Library_DirectoryNoMatchesFormat));
+
+    public static string Library_DirectoryAddItByUrl => Get(nameof(Library_DirectoryAddItByUrl));
+
+    public static string Library_DirectoryNoSourcesAddHint => Get(nameof(Library_DirectoryNoSourcesAddHint));
 }

@@ -64,4 +64,38 @@ public sealed class CatalogueDirectoryDialogViewTests
 
         Assert.Equal(KnownCatalogueCategory.Weather, directory.SelectedCategory);
     }
+
+    [AvaloniaTheory]
+    [InlineData(920)]
+    [InlineData(640)]
+    public void Add_by_url_opens_my_sources_and_focuses_the_form(double width)
+    {
+        var directory = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
+            Task.FromResult(new CatalogueProbe(null, null, null)));
+        using var host = ViewHost.Show(new CatalogueDirectoryDialogView { DataContext = directory }, width: width, height: 560);
+        Assert.False(host.IsShown("Catalogues.Url"));
+
+        host.Click(host.Find<Button>("Catalogues.AddByUrl"));
+        host.Settle();
+
+        Assert.Equal(KnownCatalogueCategory.User, directory.SelectedCategory);
+        Assert.True(host.Find<TextBox>("Catalogues.Url").IsFocused);
+    }
+
+    [AvaloniaFact]
+    public void The_registry_action_is_a_row_in_secom_services_only()
+    {
+        var directory = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All,
+            loadSecomRegistry: (_, _) => Task.FromException<Collections.Secom.SecomRegistryListing>(new HttpRequestException("offline")));
+        using var host = ViewHost.Show(new CatalogueDirectoryDialogView { DataContext = directory }, width: 920, height: 560);
+        Assert.False(host.IsShown("Catalogues.ShowRegistry"));
+
+        directory.SelectedCategory = KnownCatalogueCategory.Secom;
+        host.Settle();
+        host.Click(host.Find<Button>("Catalogues.ShowRegistry"));
+        host.Settle();
+
+        Assert.True(directory.HasRegistryError);
+        Assert.Contains(host.All<TextBlock>(), t => t.IsEffectivelyVisible && t.Text?.Contains("offline", StringComparison.Ordinal) == true);
+    }
 }

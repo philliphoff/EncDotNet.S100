@@ -1499,9 +1499,7 @@ internal static partial class Strings
     public static string Wizard_Review_UpdatesForecast => Get(nameof(Wizard_Review_UpdatesForecast));
     public static string Wizard_ForecastEndedFormat => Get(nameof(Wizard_ForecastEndedFormat));
     public static string Library_DirectorySearchWatermark => Get(nameof(Library_DirectorySearchWatermark));
-    public static string Library_DirectoryNoMatches => Get(nameof(Library_DirectoryNoMatches));
     public static string Library_DirectoryAddByUrl => Get(nameof(Library_DirectoryAddByUrl));
-    public static string Library_DirectoryAddByUrlHint => Get(nameof(Library_DirectoryAddByUrlHint));
     public static string Library_DirectoryUrlHeading => Get(nameof(Library_DirectoryUrlHeading));
     public static string Library_DirectoryUrlHelp => Get(nameof(Library_DirectoryUrlHelp));
     public static string Library_DirectoryUrlRecognisedFormat => Get(nameof(Library_DirectoryUrlRecognisedFormat));

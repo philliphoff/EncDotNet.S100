@@ -3948,23 +3948,17 @@
   <data name="Library_DirectorySearchWatermark" xml:space="preserve">
     <value>Search sources by name, provider or country</value>
   </data>
-  <data name="Library_DirectoryNoMatches" xml:space="preserve">
-    <value>No source matches. Add one by URL below.</value>
-  </data>
   <data name="Library_DirectoryAddByUrl" xml:space="preserve">
-    <value>Add a catalogue by URL</value>
-  </data>
-  <data name="Library_DirectoryAddByUrlHint" xml:space="preserve">
-    <value>NOAA, USACE, chartcatalogs or S-100 feed</value>
+    <value>Add by URL</value>
   </data>
   <data name="Library_DirectoryUrlHeading" xml:space="preserve">
-    <value>Catalogue URL</value>
+    <value>Catalogue or feed URL</value>
   </data>
   <data name="Library_DirectoryUrlHelp" xml:space="preserve">
-    <value>The format is recognised from the document itself. Added sources are listed under My sources.</value>
+    <value>We recognise NOAA and USACE ENC catalogues, chartcatalogs lists and S-100 feeds.</value>
   </data>
   <data name="Library_DirectoryUrlRecognisedFormat" xml:space="preserve">
-    <value>Recognised as {0} and added to My sources.</value>
+    <value>Recognised as {0} and added below.</value>
   </data>
   <data name="Library_DirectoryAddedByUrl" xml:space="preserve">
     <value>added by URL</value>
@@ -4045,6 +4039,21 @@
   <data name="Label_SelectedSource" xml:space="preserve">
     <value>Selected source</value>
   </data>
+  <data name="Library_RegistryListTitle" xml:space="preserve">
+    <value>List services from the registry</value>
+  </data>
+  <data name="Label_RefreshRegistry" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Library_DirectoryNoMatchesFormat" xml:space="preserve">
+    <value>No source matches “{0}”.</value>
+  </data>
+  <data name="Library_DirectoryAddItByUrl" xml:space="preserve">
+    <value>Add it by URL</value>
+  </data>
+  <data name="Library_DirectoryNoSourcesAddHint" xml:space="preserve">
+    <value>Nothing added yet. Paste a catalogue or feed URL above.</value>
+  </data>
   <data name="Library_DetailsNoSelection" xml:space="preserve">
     <value>Select a source to see what it offers.</value>
   </data>
@@ -4082,7 +4091,7 @@
     <value>Show SECOM services</value>
   </data>
   <data name="Library_RegistryShow" xml:space="preserve">
-    <value>Show SECOM services from the MCP service registry</value>
+    <value>Reads the Maritime Connectivity Platform service registry for SECOM services you can add.</value>
   </data>
   <data name="Library_RegistryLoading" xml:space="preserve">
     <value>Reading the service registry…</value>

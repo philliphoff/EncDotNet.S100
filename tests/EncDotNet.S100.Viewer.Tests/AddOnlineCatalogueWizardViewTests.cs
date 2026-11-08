@@ -43,7 +43,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
         Layout(window);
 
         wizard.Directory.SearchText = "noaa";
-        wizard.Directory.IsUrlPanelOpen = true;
+        wizard.Directory.SelectedCategory = KnownCatalogueCategory.User;
         Layout(window);
 
         wizard.NextCommand.Execute(null);

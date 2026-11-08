@@ -789,7 +789,7 @@ public partial class App : Application
                 urls is null ? null : uri => urls.Open(uri.AbsoluteUri),
                 sp.GetRequiredService<Library.UserCatalogueStore>(),
                 sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(),
-                loadSecomRegistry: ct => registry.GetServicesAsync(cancellationToken: ct),
+                loadSecomRegistry: (refresh, ct) => registry.GetServicesAsync(refresh, ct),
                 probeSecom: (uri, ct) => registry.ProbeAsync(uri, cancellationToken: ct));
         });
         // SECOM services from the MCP service registry (#822), cached with the feeds.

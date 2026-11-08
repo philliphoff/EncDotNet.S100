@@ -218,6 +218,48 @@ public class CatalogueDirectoryDialogViewModelTests
     }
 
     [Fact]
+    public void Add_by_url_opens_my_sources_with_the_form_and_carries_a_searched_url()
+    {
+        var vm = new CatalogueDirectoryDialogViewModel([Source("a", "X")], null, null,
+            Probe(new CatalogueProbe(null, null, null)));
+        var focused = 0;
+        vm.UrlEntryRequested += (_, _) => focused++;
+        Assert.False(vm.ShowsUrlForm);
+
+        vm.SearchText = "https://example.test/lists/catalog.xml";
+        Assert.True(vm.HasNoMatches);
+        Assert.Equal("No source matches “https://example.test/lists/catalog.xml”.", vm.NoMatchesText);
+        vm.ShowAddByUrlCommand.Execute(null);
+
+        Assert.Equal(KnownCatalogueCategory.User, vm.SelectedCategory);
+        Assert.Equal(string.Empty, vm.SearchText);
+        Assert.True(vm.ShowsUrlForm);
+        Assert.Equal("https://example.test/lists/catalog.xml", vm.CatalogueUrl);
+        Assert.True(vm.IsCategoryEmpty);
+        Assert.Equal("Nothing added yet. Paste a catalogue or feed URL above.", vm.EmptyCategoryText);
+        Assert.Equal(1, focused);
+
+        // Search text that isn't a URL isn't carried; searching hides the form.
+        vm.CatalogueUrl = string.Empty;
+        vm.SearchText = "weather fax";
+        vm.ShowAddByUrlCommand.Execute(null);
+        Assert.Equal(string.Empty, vm.CatalogueUrl);
+        vm.SearchText = "a";
+        Assert.False(vm.ShowsUrlForm);
+    }
+
+    [Fact]
+    public void Without_a_probe_there_is_no_add_by_url()
+    {
+        var vm = new CatalogueDirectoryDialogViewModel([Source("a", "X")]);
+
+        Assert.False(vm.ShowAddByUrlCommand.CanExecute(null));
+        vm.SelectedCategory = KnownCatalogueCategory.User;
+        Assert.False(vm.ShowsUrlForm);
+        Assert.Equal("Nothing added yet.", vm.EmptyCategoryText);
+    }
+
+    [Fact]
     public void Limitations_state_only_what_the_source_cannot_tell_in_advance()
     {
         var vm = new CatalogueDirectoryDialogViewModel(
@@ -318,7 +360,7 @@ public class CatalogueDirectoryDialogViewModelTests
         Assert.Equal("example.test · added by URL", added.ProviderAndRegion);
         Assert.Equal("chartcatalogs", added.FormatText);
         Assert.Same(added, vm.Entries[^1]);
-        Assert.Equal("Recognised as chartcatalogs and added to My sources.", vm.UrlSuccess);
+        Assert.Equal("Recognised as chartcatalogs and added below.", vm.UrlSuccess);
         Assert.False(vm.ShowsUrlHelp);
         Assert.Equal(KnownCatalogueCategory.User, vm.SelectedCategory);
         Assert.Same(added, Assert.Single(vm.Rows));

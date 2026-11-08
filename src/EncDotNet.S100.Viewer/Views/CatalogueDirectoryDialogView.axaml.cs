@@ -11,7 +11,8 @@ namespace EncDotNet.S100.Viewer.Views;
 /// are not selectable, the chosen source is scrolled into view (for example
 /// after one is added by URL) with the list's own
 /// <see cref="ListBox.ScrollIntoView(object)"/>, the layout follows the
-/// body's width (D2), and a catalogue URL is copied to the clipboard.
+/// body's width (D2), a catalogue URL is copied to the clipboard, and the URL
+/// form takes focus when "Add by URL" opens My sources (D10).
 /// </summary>
 public partial class CatalogueDirectoryDialogView : UserControl
 {
@@ -27,7 +28,7 @@ public partial class CatalogueDirectoryDialogView : UserControl
     {
         InitializeComponent();
         CatalogueList.ContainerPrepared += (_, e) =>
-            e.Container.IsEnabled = CatalogueList.ItemFromContainer(e.Container) is not CatalogueEntryViewModel { IsGroupHeader: true };
+            e.Container.IsEnabled = CatalogueList.ItemFromContainer(e.Container) is not CatalogueEntryViewModel { IsHeaderText: true };
         ApplyLayout(0);
     }
 
@@ -58,6 +59,7 @@ public partial class CatalogueDirectoryDialogView : UserControl
         {
             _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
             _viewModel.CopyRequested -= OnCopyRequested;
+            _viewModel.UrlEntryRequested -= OnUrlEntryRequested;
         }
 
         _viewModel = DataContext as CatalogueDirectoryDialogViewModel;
@@ -65,8 +67,13 @@ public partial class CatalogueDirectoryDialogView : UserControl
         {
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
             _viewModel.CopyRequested += OnCopyRequested;
+            _viewModel.UrlEntryRequested += OnUrlEntryRequested;
         }
     }
+
+    // The form is shown by the category change; focus it once it is laid out.
+    private void OnUrlEntryRequested(object? sender, EventArgs e) =>
+        Dispatcher.UIThread.Post(() => UrlBox.Focus(), DispatcherPriority.Loaded);
 
     private void OnCopyRequested(object? sender, string text)
     {
