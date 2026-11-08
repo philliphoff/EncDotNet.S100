@@ -90,9 +90,37 @@ Values that don't parse, enumeration codes the feature catalogue doesn't list,
 and `dataProviderInformation` references that don't resolve become
 `ProjectionDiagnostic` entries; `From` doesn't throw for them. The upstream
 sample writes some dates and times outside the schema (`20250101` for a
-date-time, `0600` for a time of day): a date is read where one is given, and a
-time of day that isn't an S-100 time leaves `FixedDateRange.Start` or `End`
-`null`, with a diagnostic.
+date-time, `0600` for a time of day). A date given for a date-time is read as
+the start of that day. A time of day written as hours and minutes (`hhmm`)
+rather than the complete `hhmmss` the encoding guide asks for is read on the
+minute, with an `attribute.time.incomplete` diagnostic.
+
+## Time
+
+A warning is in force from the start of its `fixedDateRange` to its end, both
+included, and ended from its `cancellationDate`. This is the rule S-124
+navigational warnings and CAP weather warnings use (`WarningValidity` in
+`EncDotNet.S100.Core`), so all three start and end alike. A date with no time
+of day is midnight UTC at the start of that day.
+
+- **`S412WeatherWarning.StatusAt(time)`** gives a warning's status: not yet in
+  force, in force, or ended. `InForceUntil` is the earlier of the range end and
+  the cancellation date, and `IssuedAt` combines `issueDate` and `issueTime`.
+- **`S412MarineWeatherWarnings.DrawnAt(time)`** lists the warnings in force at
+  a time, or every warning when the time is `null`.
+- **`Changes`** lists the instants the set of warnings in force changes.
+  `TimeCoverage` runs from the earliest start to the latest end, and
+  `S412Dataset.ReadMetadata` reports it.
+
+The processor in `EncDotNet.S100.Datasets.Pipelines` (`S412DatasetProcessor`)
+is time-aware. Its time steps are `Changes`, each held until the next, and at a
+time step it draws and picks only the warnings in force. `s100 info` lists the
+steps, `s100 render --time-step` draws one, and a host's timeline steps through
+them. With no time step every warning is drawn.
+
+The upstream sample's `cancellationDate` (midnight on 1 January 2025) comes
+before its range starts (06:00 that day), so it's never in force at any time
+step. It's drawn only when no time step is given.
 
 ## Portrayal
 
@@ -112,5 +140,3 @@ correction and the other known gaps in the draft.
 
 - There's no validation rule pack. `s100 validate` reports only the shared
   checks, such as axis order.
-- The SoundCharts timeline doesn't yet hide warnings outside their
-  `fixedDateRange` or after their `cancellationDate`.
