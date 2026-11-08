@@ -20,7 +20,9 @@ month. For package versions and release assets, see
   attributes and listed values, times, references and geometry.
   Warnings follow the Timeline: each is drawn only from the start to the end
   of its date range and until its cancellation date, by the rule S-124 and
-  CAP warnings use, and `s100 render --time-step` draws a step. See the
+  CAP warnings use, and `s100 render --time-step` draws a step.
+  `describe_feature` decodes a warning's threshold, Beaufort force and
+  message in each language. See the
   [S-412 README](../src/EncDotNet.S100.Datasets.S412/README.md).
 - **Faster multi-cell `s100 render` and `s100 tiles`, and HiDPI captures.**
   The CLI and `s100 mcp serve` now render through the chart engine

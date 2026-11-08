@@ -136,6 +136,17 @@ without editing the bundled files. The catalogue's
 [README](../EncDotNet.S100.Specifications/content/S412/README.md) lists this
 correction and the other known gaps in the draft.
 
+## Query with MCP
+
+`identify_features` finds a warning inside its area, and `describe_feature`
+returns its encoded attributes, with every language of nested attributes such
+as `weatherWarningMessage`, plus a `warning` block: the kind, the threshold,
+Beaufort force, icing rate and source as a code with the feature catalogue's
+label (`gale force`, `gale`), the message and maximum wind speed in each
+language, the validity times and the data provider. `S412Labels` gives the
+same labels in code. See the
+[MCP server reference](../../docs/mcp-server.md).
+
 ## Validate
 
 `S412MarineWeatherWarningRules`, in the
