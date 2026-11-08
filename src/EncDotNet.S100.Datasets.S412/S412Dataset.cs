@@ -96,11 +96,16 @@ public sealed class S412Dataset
 
     /// <summary>
     /// Produces the lightweight <see cref="DatasetMetadata"/> for this parsed
-    /// dataset: declared specification and raw geographic extent.
+    /// dataset: declared specification, raw geographic extent, and the time
+    /// from the earliest warning start to the latest warning end
+    /// (<see cref="DataModel.S412MarineWeatherWarnings.TimeCoverage"/>).
     /// </summary>
     /// <returns>The dataset's metadata.</returns>
     public DatasetMetadata ReadMetadata() =>
-        GmlDatasetMetadata.Create("S-412", DeclaredEdition, Features);
+        GmlDatasetMetadata.Create("S-412", DeclaredEdition, Features) with
+        {
+            TimeCoverage = DataModel.S412MarineWeatherWarnings.From(this, out _).TimeCoverage,
+        };
 }
 
 /// <summary>

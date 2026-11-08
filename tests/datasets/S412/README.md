@@ -8,4 +8,10 @@
 The upstream sample is a draft and doesn't follow its own schema in places:
 `dateEnd`, `cancellationDate` and `nextUpdateDateTime` are `20250101` rather
 than a date or date-time, and the times of day are `0600` and `1800`. Readers
-keep these values as written.
+keep these values as written. Its `cancellationDate` (midnight on 1 January
+2025) is before its range starts, so it's never in force at a time step.
+
+In `synthetic_all_warnings.gml` each warning's `cancellationDate` falls on the
+end of its range. From 7 November 2026 the warnings in force change at 00:00,
+06:00 and 12:00, then at 00:00 and 18:00 on the 8th, and at 00:00 on the 9th
+and 10th.
