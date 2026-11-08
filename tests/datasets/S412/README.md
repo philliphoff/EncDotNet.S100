@@ -2,7 +2,7 @@
 
 | File | Source | Contents |
 |---|---|---|
-| `4122C00_TESTDS1.GML` | Upstream sample, [iho-ohi/S-412-Product-Specification](https://github.com/iho-ohi/S-412-Product-Specification) `Samples/` at commit `1e4fe55` (2026-04-02); unmodified | One `DataProvider` and one storm-force `WindWarning` area west of Ireland |
+| `4122C00_TESTDS1.GML` | Upstream sample, [iho-ohi/S-412-Product-Specification](https://github.com/iho-ohi/S-412-Product-Specification) `Samples/` at commit `1e4fe55` (2026-04-02); unmodified apart from LF line endings | One `DataProvider` and one storm-force `WindWarning` area west of Ireland |
 | `synthetic_all_warnings.gml` | Hand-written for issue #841 | One `DataProvider` and one feature of each warning type in Feature Catalogue 1.1.0 draft v009, with two-language messages |
 
 The upstream sample is a draft and doesn't follow its own schema in places:
