@@ -106,4 +106,15 @@ public class S412TimeStepTests
 
         Assert.All(bitmap.Pixels, p => Assert.Equal((byte)255, p.Red));
     }
+
+    [Fact]
+    public void Validate_RunsTheS412RulePack()
+    {
+        // The synthetic dataset is clean, so the report is empty rather than
+        // null (null would mean no rule pack).
+        var report = CreateProcessor().Validate();
+
+        Assert.NotNull(report);
+        Assert.Empty(report.Findings);
+    }
 }

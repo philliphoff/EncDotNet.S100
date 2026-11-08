@@ -14,10 +14,13 @@ month. For package versions and release assets, see
   `EncDotNet.S100.Specifications`. `s100 render` and the other
   hosts detect S-412 and draw it on the S-98 cautions and warnings plane, with
   S-124. `S412MarineWeatherWarnings` is the typed model. S-412 isn't
-  approved yet, so expect its catalogues to change; there's no validation
-  pack yet. Warnings follow the Timeline: each is drawn only from the start
-  to the end of its date range and until its cancellation date, by the rule
-  S-124 and CAP warnings use, and `s100 render --time-step` draws a step. See the
+  approved yet, so expect its catalogues to change. Its validation pack
+  (`S412MarineWeatherWarningRules`, 14 rules, all warnings while the
+  specification is a draft) checks the feature catalogue's mandatory
+  attributes and listed values, times, references and geometry.
+  Warnings follow the Timeline: each is drawn only from the start to the end
+  of its date range and until its cancellation date, by the rule S-124 and
+  CAP warnings use, and `s100 render --time-step` draws a step. See the
   [S-412 README](../src/EncDotNet.S100.Datasets.S412/README.md).
 - **Faster multi-cell `s100 render` and `s100 tiles`, and HiDPI captures.**
   The CLI and `s100 mcp serve` now render through the chart engine

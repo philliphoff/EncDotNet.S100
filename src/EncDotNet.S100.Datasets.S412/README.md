@@ -136,7 +136,52 @@ without editing the bundled files. The catalogue's
 [README](../EncDotNet.S100.Specifications/content/S412/README.md) lists this
 correction and the other known gaps in the draft.
 
-## Not yet supported
+## Validate
 
-- There's no validation rule pack. `s100 validate` reports only the shared
-  checks, such as axis order.
+`S412MarineWeatherWarningRules`, in the
+`EncDotNet.S100.Datasets.S412.Validation` namespace, is the default rule set
+for `S412MarineWeatherWarnings`. `s100 validate`, `S100Dataset.Validate()` and
+the SoundCharts Validation tab run it.
+
+```csharp
+using EncDotNet.S100.Datasets.S412;
+using EncDotNet.S100.Datasets.S412.DataModel;
+using EncDotNet.S100.Datasets.S412.Validation;
+
+var model = S412MarineWeatherWarnings.From(S412Dataset.Open("path/to/warnings.gml"), out _);
+var report = S412MarineWeatherWarningRules.Validate(model);
+
+foreach (var finding in report.Findings)
+    Console.WriteLine($"[{finding.Severity}] {finding.RuleId} {finding.RelatedFeatureId}: {finding.Message}");
+```
+
+The draft's validation annex (Annex B) doesn't list any S-412 checks yet. The
+rules check what the draft does make normative: the feature catalogue's
+bindings and listed values, which the GML schema repeats, the encoding guide's
+time rules (DCEG §2), and the S-100 Part 10b geometry rules. Rule IDs have the
+form `S412-R-{theme}.{n}`, numbered by the data quality themes in the draft's
+validation annex: 1 completeness, 2 logical consistency, 3 spatial
+consistency, 5 temporal accuracy and 6 thematic accuracy. The annex asks for
+every check to be a warning while S-412 is in development, so every rule is a
+warning. Each finding names its feature and is located on the warning area.
+
+| Rule ID | Checks |
+|---|---|
+| `S412-R-1.1` | A warning has the attributes bound `1..1`: `fixedDateRange`, `issueDate`, `weatherWarningNumber` and `cancellationDate`, plus `windWarningThreshold` and `maximumWindSpeed` (wind), `significantWaveHeightWarningThreshold` (wave height) and `iceAccretionRate` (ice accretion). |
+| `S412-R-1.2` | A `fixedDateRange` has its `dateStart`, `dateEnd`, `timeOfDayStart` and `timeOfDayEnd`. |
+| `S412-R-1.3` | A `DataProvider` has an `issuingService` with a `metareaName` and `issuingServiceName`, a `contactInformation` with an `agencyName`, and a `preparationService` with an `issuingServiceName`. |
+| `S412-R-1.4` | Each `information` in a message or maximum wind speed has a `text` or a `fileReference`. |
+| `S412-R-2.1` | `dataProviderInformation` refers to a `DataProvider` in the dataset. |
+| `S412-R-2.2` | Identifiers (`gml:id`) are unique. |
+| `S412-R-3.1` | A warning is a surface with a closed exterior ring of at least four positions. |
+| `S412-R-3.2` | Positions are within the WGS 84 latitude and longitude ranges. |
+| `S412-R-5.1` | Dates and times are readable as their schema types, a time of day has seconds (`hhmmss`), and a date-time has a time. |
+| `S412-R-5.2` | A `fixedDateRange` doesn't end before it starts. |
+| `S412-R-5.3` | A warning isn't cancelled at or before its date range starts, which would mean it's never in force. |
+| `S412-R-5.4` | `nextUpdateDateTime` isn't before the warning was issued. |
+| `S412-R-6.1` | Enumeration values are listed in the feature catalogue, including a `DataProvider`'s `metareaName` (1 to 14). |
+| `S412-R-6.2` | A wind warning's `beaufortForce` matches its `windWarningThreshold`: force 7 for near gale, 8 or 9 for gale, 10 or 11 for storm, and 12 for hurricane force. |
+
+The upstream sample gets seven warnings: no `maximumWindSpeed`, four
+incomplete dates and times, a cancellation before the warning starts, and
+Beaufort force 8 with a storm-force threshold.

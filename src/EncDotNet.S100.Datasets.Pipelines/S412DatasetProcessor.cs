@@ -3,9 +3,11 @@ using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.S412;
 using EncDotNet.S100.Datasets.S412.DataModel;
+using EncDotNet.S100.Datasets.S412.Validation;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Validation;
 
 namespace EncDotNet.S100.Datasets.Pipelines;
 
@@ -13,8 +15,8 @@ namespace EncDotNet.S100.Datasets.Pipelines;
 /// <see cref="IDatasetProcessor"/> for WMO S-412 Marine Weather Warnings GML
 /// datasets. Drives the standard S-100 Part 9 XSLT vector portrayal pipeline
 /// inherited from <see cref="GmlDatasetProcessorBase{TFeature}"/>.
-/// S-412 is a draft WMO product; there is no validation rule pack yet
-/// (issue #841).
+/// S-412 is a draft WMO product; its datasets are validated with
+/// <see cref="S412MarineWeatherWarningRules"/>, whose rules are all warnings.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -144,6 +146,11 @@ public sealed class S412DatasetProcessor : GmlDatasetProcessorBase<S412Feature>,
 
     /// <inheritdoc />
     protected override TimeCoverage? TimeCoverage => _warnings.TimeCoverage;
+
+    /// <inheritdoc />
+    /// <remarks>Runs <see cref="S412MarineWeatherWarningRules.Default"/> on the typed warnings.</remarks>
+    protected override ValidationReport? ValidateDataset() =>
+        S412MarineWeatherWarningRules.Validate(_warnings);
 
     /// <inheritdoc />
     protected override IFeatureXmlSource CreateFeatureXmlSource() =>
