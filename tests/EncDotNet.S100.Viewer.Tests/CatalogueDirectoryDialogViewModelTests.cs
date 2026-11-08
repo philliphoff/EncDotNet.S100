@@ -218,15 +218,56 @@ public class CatalogueDirectoryDialogViewModelTests
     }
 
     [Fact]
-    public void Chips_describe_what_the_catalogue_provides()
+    public void Limitations_state_only_what_the_source_cannot_tell_in_advance()
     {
-        var vm = new CatalogueDirectoryDialogViewModel([Source("a", "X", KnownCatalogueCoverage.None, editions: false)]);
-        var entry = vm.Entries[0];
+        var vm = new CatalogueDirectoryDialogViewModel(
+        [
+            Source("full", "X"),
+            Source("bare", "X", KnownCatalogueCoverage.None, editions: false),
+            Source("forecast", "X", KnownCatalogueCoverage.None, editions: false, format: KnownCatalogueFormat.S100ForecastModels) with { Pilot = true },
+        ]);
 
-        Assert.True(entry.IsCoverageLimited);
-        Assert.True(entry.IsEditionsLimited);
-        Assert.True(entry.IsSizesLimited);
-        Assert.Equal("No coverage until downloaded", entry.CoverageChip);
+        // Source() publishes no sizes; a full source would say nothing.
+        Assert.Equal(["Download sizes are not known in advance."], vm.Entries.Single(e => e.Source.Id == "full").Limitations);
+        Assert.Equal(
+            ["No coverage on the map until it is downloaded.", "New editions are not detected; refresh to check.", "Download sizes are not known in advance."],
+            vm.Entries.Single(e => e.Source.Id == "bare").Limitations);
+
+        // A forecast feed tracks runs, not editions; a pilot says so.
+        var forecast = vm.Entries.Single(e => e.Source.Id == "forecast");
+        Assert.DoesNotContain("New editions are not detected; refresh to check.", forecast.Limitations);
+        Assert.Contains("A pilot service: it may cover little and may stop.", forecast.Limitations);
+        Assert.StartsWith("No coverage on the map until it is downloaded · Download sizes", forecast.LimitationsLine, StringComparison.Ordinal);
+
+        var noaa = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All).SelectedEntry!;
+        Assert.False(noaa.HasLimitations);
+    }
+
+    [Fact]
+    public void Rows_name_the_country_only_when_the_header_does_not()
+    {
+        var vm = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All);
+
+        Assert.Equal("NOAA Office of Coast Survey", vm.SelectedEntry!.RowDetail);
+        Assert.Equal("NOAA Office of Coast Survey · United States", vm.SelectedEntry.ProviderAndPlace);
+        Assert.EndsWith(" · Austria", vm.Entries.Single(e => e.Source.Id == "chartcatalogs-at-ienc").RowDetail, StringComparison.Ordinal);
+
+        // Search results have no region header, so every row says where.
+        vm.SearchText = "NOAA ENC";
+        Assert.Equal("NOAA Office of Coast Survey · United States", vm.SelectedEntry.RowDetail);
+    }
+
+    [Fact]
+    public void Copying_a_catalogue_url_goes_through_the_view()
+    {
+        var vm = new CatalogueDirectoryDialogViewModel([Source("a", "X")]);
+        string? copied = null;
+        vm.CopyRequested += (_, text) => copied = text;
+
+        vm.SelectedEntry!.CopyUrlCommand.Execute(null);
+
+        Assert.Equal("https://a.test/catalog.xml", copied);
+        Assert.True(vm.HasSelection);
     }
 
     [Fact]

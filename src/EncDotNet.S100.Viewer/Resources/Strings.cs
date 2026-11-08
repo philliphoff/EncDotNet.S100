@@ -1252,13 +1252,6 @@ internal static partial class Strings
     public static string Library_AddUsaceTitle => Get(nameof(Library_AddUsaceTitle));
     public static string Library_UsaceFeed => Get(nameof(Library_UsaceFeed));
     public static string Menu_AddLibraryOnlineCatalogue => Get(nameof(Menu_AddLibraryOnlineCatalogue));
-    public static string Library_Chip_CoveragePolygons => Get(nameof(Library_Chip_CoveragePolygons));
-    public static string Library_Chip_CoverageBoxes => Get(nameof(Library_Chip_CoverageBoxes));
-    public static string Library_Chip_CoverageNone => Get(nameof(Library_Chip_CoverageNone));
-    public static string Library_Chip_Editions => Get(nameof(Library_Chip_Editions));
-    public static string Library_Chip_NoEditions => Get(nameof(Library_Chip_NoEditions));
-    public static string Library_Chip_Sizes => Get(nameof(Library_Chip_Sizes));
-    public static string Library_Chip_NoSizes => Get(nameof(Library_Chip_NoSizes));
     public static string Button_Next => Get(nameof(Button_Next));
     public static string Library_CatalogueDatedFormat => Get(nameof(Library_CatalogueDatedFormat));
     public static string Library_CommunityCharts => Get(nameof(Library_CommunityCharts));
@@ -1629,7 +1622,6 @@ internal static partial class Strings
     public static string Library_Host_Aws => Get(nameof(Library_Host_Aws));
     public static string Library_Host_Web => Get(nameof(Library_Host_Web));
     public static string Library_Format_S100Catalogue => Get(nameof(Library_Format_S100Catalogue));
-    public static string Library_Chip_NotForNavigation => Get(nameof(Library_Chip_NotForNavigation));
     public static string Library_EditionNewerOnlineFormat => Get(nameof(Library_EditionNewerOnlineFormat));
     public static string Library_EditionOnlineFormat => Get(nameof(Library_EditionOnlineFormat));
     public static string Library_BulkUpdatesFormat => Get(nameof(Library_BulkUpdatesFormat));
@@ -1675,9 +1667,6 @@ internal static partial class Strings
     public static string Library_BulkLastCheckedFormat => Get(nameof(Library_BulkLastCheckedFormat));
     public static string Library_BulkCheckForRuns => Get(nameof(Library_BulkCheckForRuns));
     public static string Library_Format_S100Forecast => Get(nameof(Library_Format_S100Forecast));
-    public static string Library_Chip_Forecast => Get(nameof(Library_Chip_Forecast));
-    public static string Library_Chip_LatestRunOnly => Get(nameof(Library_Chip_LatestRunOnly));
-    public static string Library_Chip_Pilot => Get(nameof(Library_Chip_Pilot));
     public static string Library_Pairing_Bathymetry => Get(nameof(Library_Pairing_Bathymetry));
     public static string Library_Pairing_SameCell => Get(nameof(Library_Pairing_SameCell));
     public static string Library_Pairing_Get => Get(nameof(Library_Pairing_Get));
