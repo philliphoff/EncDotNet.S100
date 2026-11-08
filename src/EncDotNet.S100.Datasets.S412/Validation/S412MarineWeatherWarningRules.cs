@@ -249,7 +249,7 @@ public static class S412MarineWeatherWarningRules
             model.Warnings.OfType<S412WindWarning>()
                 .Where(w => w.Threshold is { } t && w.BeaufortForce is { } force && !ForcesOf(t).Contains(force))
                 .Select(w => Finding("S412-R-6.2", w,
-                    $"{Name(w)}: Beaufort force {w.BeaufortForce} doesn't match windWarningThreshold {(int)w.Threshold!.Value} ({Label(w.Threshold.Value)}, force {string.Join(" or ", ForcesOf(w.Threshold.Value))}).")));
+                    $"{Name(w)}: Beaufort force {w.BeaufortForce} doesn't match windWarningThreshold {(int)w.Threshold!.Value} ({w.Threshold.Value.Label()}, force {string.Join(" or ", ForcesOf(w.Threshold.Value))}).")));
 
     /// <summary>The canonical default rule set for S-412 datasets.</summary>
     public static ValidationRuleSet<S412MarineWeatherWarnings> Default { get; } = new(
@@ -417,15 +417,6 @@ public static class S412MarineWeatherWarningRules
     private static bool InRange(string value, int low, int high) =>
         int.TryParse(value.Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n)
         && n >= low && n <= high;
-
-    private static string Label(S412WindWarningThreshold threshold) => threshold switch
-    {
-        S412WindWarningThreshold.NearGaleForce => "near gale force",
-        S412WindWarningThreshold.GaleForce => "gale force",
-        S412WindWarningThreshold.StormForce => "storm force",
-        S412WindWarningThreshold.HurricaneForce => "hurricane force",
-        _ => threshold.ToString(),
-    };
 
     private static int[] ForcesOf(S412WindWarningThreshold threshold) => threshold switch
     {
