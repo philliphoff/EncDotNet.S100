@@ -3458,27 +3458,6 @@
   <data name="Menu_AddLibraryOnlineCatalogue" xml:space="preserve">
     <value>Browse online sources…</value>
   </data>
-  <data name="Library_Chip_CoveragePolygons" xml:space="preserve">
-    <value>Coverage outlines</value>
-  </data>
-  <data name="Library_Chip_CoverageBoxes" xml:space="preserve">
-    <value>Bounding boxes</value>
-  </data>
-  <data name="Library_Chip_CoverageNone" xml:space="preserve">
-    <value>No coverage until downloaded</value>
-  </data>
-  <data name="Library_Chip_Editions" xml:space="preserve">
-    <value>Editions</value>
-  </data>
-  <data name="Library_Chip_NoEditions" xml:space="preserve">
-    <value>No editions</value>
-  </data>
-  <data name="Library_Chip_Sizes" xml:space="preserve">
-    <value>Sizes</value>
-  </data>
-  <data name="Library_Chip_NoSizes" xml:space="preserve">
-    <value>No sizes</value>
-  </data>
   <data name="Button_Next" xml:space="preserve">
     <value>Next</value>
   </data>
@@ -3969,23 +3948,17 @@
   <data name="Library_DirectorySearchWatermark" xml:space="preserve">
     <value>Search sources by name, provider or country</value>
   </data>
-  <data name="Library_DirectoryNoMatches" xml:space="preserve">
-    <value>No source matches. Add one by URL below.</value>
-  </data>
   <data name="Library_DirectoryAddByUrl" xml:space="preserve">
-    <value>Add a catalogue by URL</value>
-  </data>
-  <data name="Library_DirectoryAddByUrlHint" xml:space="preserve">
-    <value>NOAA, USACE, chartcatalogs or S-100 feed</value>
+    <value>Add by URL</value>
   </data>
   <data name="Library_DirectoryUrlHeading" xml:space="preserve">
-    <value>Catalogue URL</value>
+    <value>Catalogue or feed URL</value>
   </data>
   <data name="Library_DirectoryUrlHelp" xml:space="preserve">
-    <value>The format is recognised from the document itself. Added sources are listed under My sources.</value>
+    <value>We recognise NOAA and USACE ENC catalogues, chartcatalogs lists and S-100 feeds.</value>
   </data>
   <data name="Library_DirectoryUrlRecognisedFormat" xml:space="preserve">
-    <value>Recognised as {0} and added to My sources.</value>
+    <value>Recognised as {0} and added below.</value>
   </data>
   <data name="Library_DirectoryAddedByUrl" xml:space="preserve">
     <value>added by URL</value>
@@ -4024,6 +3997,66 @@
   <data name="Library_DirectoryNoSources" xml:space="preserve">
     <value>Nothing added yet.</value>
   </data>
+  <data name="Library_CategoryShort_Charts" xml:space="preserve">
+    <value>Charts</value>
+  </data>
+  <data name="Library_CategoryShort_Depth" xml:space="preserve">
+    <value>Depth &amp; tides</value>
+  </data>
+  <data name="Library_CategoryShort_Weather" xml:space="preserve">
+    <value>Weather</value>
+  </data>
+  <data name="Library_CategoryShort_Secom" xml:space="preserve">
+    <value>SECOM</value>
+  </data>
+  <data name="Library_CategoryShort_User" xml:space="preserve">
+    <value>Mine</value>
+  </data>
+  <data name="Library_Limit_NoCoverage" xml:space="preserve">
+    <value>No coverage on the map until it is downloaded.</value>
+  </data>
+  <data name="Library_Limit_NoEditions" xml:space="preserve">
+    <value>New editions are not detected; refresh to check.</value>
+  </data>
+  <data name="Library_Limit_NoSizes" xml:space="preserve">
+    <value>Download sizes are not known in advance.</value>
+  </data>
+  <data name="Library_Limit_Pilot" xml:space="preserve">
+    <value>A pilot service: it may cover little and may stop.</value>
+  </data>
+  <data name="Library_Limit_NotForNavigation" xml:space="preserve">
+    <value>The provider marks this data as not for navigation.</value>
+  </data>
+  <data name="Library_DetailsBeforeDownload" xml:space="preserve">
+    <value>Before you download</value>
+  </data>
+  <data name="Library_DetailsCatalogueUrl" xml:space="preserve">
+    <value>Catalogue URL</value>
+  </data>
+  <data name="Label_CopyCatalogueUrl" xml:space="preserve">
+    <value>Copy catalogue URL</value>
+  </data>
+  <data name="Label_SelectedSource" xml:space="preserve">
+    <value>Selected source</value>
+  </data>
+  <data name="Library_RegistryListTitle" xml:space="preserve">
+    <value>List services from the registry</value>
+  </data>
+  <data name="Label_RefreshRegistry" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Library_DirectoryNoMatchesFormat" xml:space="preserve">
+    <value>No source matches “{0}”.</value>
+  </data>
+  <data name="Library_DirectoryAddItByUrl" xml:space="preserve">
+    <value>Add it by URL</value>
+  </data>
+  <data name="Library_DirectoryNoSourcesAddHint" xml:space="preserve">
+    <value>Nothing added yet. Paste a catalogue or feed URL above.</value>
+  </data>
+  <data name="Library_DetailsNoSelection" xml:space="preserve">
+    <value>Select a source to see what it offers.</value>
+  </data>
   <data name="Library_Format_NoaaEnc" xml:space="preserve">
     <value>NOAA ENC</value>
   </data>
@@ -4058,7 +4091,7 @@
     <value>Show SECOM services</value>
   </data>
   <data name="Library_RegistryShow" xml:space="preserve">
-    <value>Show SECOM services from the MCP service registry</value>
+    <value>Reads the Maritime Connectivity Platform service registry for SECOM services you can add.</value>
   </data>
   <data name="Library_RegistryLoading" xml:space="preserve">
     <value>Reading the service registry…</value>
@@ -4260,9 +4293,6 @@
   <data name="Library_Format_S100Catalogue" xml:space="preserve">
     <value>S-100 catalogue</value>
   </data>
-  <data name="Library_Chip_NotForNavigation" xml:space="preserve">
-    <value>Not for navigation</value>
-  </data>
   <data name="Wizard_RegionsHeaderFormat" xml:space="preserve">
     <value>Regions · {0:N0}</value>
   </data>
@@ -4353,12 +4383,6 @@
   <data name="Library_Format_S100Forecast" xml:space="preserve">
     <value>S-100 forecast</value>
   </data>
-  <data name="Library_Chip_Forecast" xml:space="preserve">
-    <value>Forecast</value>
-  </data>
-  <data name="Library_Chip_LatestRunOnly" xml:space="preserve">
-    <value>Latest run only</value>
-  </data>
   <data name="TimelinePanel_Now" xml:space="preserve">
     <value>Now</value>
   </data>
@@ -4385,9 +4409,6 @@
   </data>
   <data name="TimelinePanel_EveryMinutesFormat" xml:space="preserve">
     <value>every {0:N0} min</value>
-  </data>
-  <data name="Library_Chip_Pilot" xml:space="preserve">
-    <value>Pilot</value>
   </data>
   <data name="Menu_LibraryAddCurrents" xml:space="preserve">
     <value>Add currents for this area</value>

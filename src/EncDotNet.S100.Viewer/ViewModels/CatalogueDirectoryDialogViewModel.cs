@@ -29,12 +29,12 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
     private CatalogueEntryViewModel? _selected;
     private string _searchText = string.Empty;
     private KnownCatalogueCategory _selectedCategory = KnownCatalogueCategory.Charts;
+    private bool _keepCategory;
     private string _catalogueUrl = string.Empty;
     private string? _urlError;
     private string? _urlSuccess;
     private bool _isChecking;
-    private bool _isUrlPanelOpen;
-    private readonly Func<CancellationToken, Task<SecomRegistryListing>>? _loadRegistry;
+    private readonly Func<bool, CancellationToken, Task<SecomRegistryListing>>? _loadRegistry;
     private readonly Func<Uri, CancellationToken, Task<SecomProbeResult>>? _probeSecom;
     private List<KnownCatalogueSource> _registry = [];
     private bool _registryLoaded;
@@ -47,12 +47,13 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
         Action<Uri>? openUrl = null,
         UserCatalogueStore? userCatalogues = null,
         Func<Uri, CancellationToken, Task<CatalogueProbe>>? probe = null,
-        Func<CancellationToken, Task<SecomRegistryListing>>? loadSecomRegistry = null,
+        Func<bool, CancellationToken, Task<SecomRegistryListing>>? loadSecomRegistry = null,
         Func<Uri, CancellationToken, Task<SecomProbeResult>>? probeSecom = null)
     {
         _loadRegistry = loadSecomRegistry;
         _probeSecom = probeSecom;
-        ShowRegistryCommand = new AsyncRelayCommand(ShowRegistryAsync, () => CanShowRegistry);
+        ShowRegistryCommand = new AsyncRelayCommand(() => LoadRegistryAsync(refresh: false), () => CanShowRegistry);
+        RefreshRegistryCommand = new AsyncRelayCommand(() => LoadRegistryAsync(refresh: true), () => CanRefreshRegistry);
         ArgumentNullException.ThrowIfNull(sources);
         _known = sources;
         _openUrl = openUrl;
@@ -62,8 +63,7 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
 
         Categories = [.. CategoryOrder.Select(c => new CatalogueCategoryViewModel(c, () => SelectCategory(c)))];
         AddUrlCommand = new AsyncRelayCommand(AddUrlAsync, () => CanAddUrl);
-        OpenUrlPanelCommand = new RelayCommand(() => IsUrlPanelOpen = true);
-        CloseUrlPanelCommand = new RelayCommand(() => IsUrlPanelOpen = false);
+        ShowAddByUrlCommand = new RelayCommand(ShowAddByUrl, () => CanAddByUrl);
         Rebuild(selectId: null);
     }
 
@@ -122,10 +122,11 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
             _selected.IsSelected = true;
             OnPropertyChanged();
             OnPropertyChanged(nameof(CanContinueWithSelection));
+            OnPropertyChanged(nameof(HasSelection));
 
             // The open category follows the choice, so clearing a search (or
             // coming back to the step) shows it in its own category.
-            if (value.Category != _selectedCategory)
+            if (value.Category != _selectedCategory && !_keepCategory)
             {
                 _selectedCategory = value.Category;
                 OnPropertyChanged(nameof(SelectedCategory));
@@ -149,6 +150,12 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
     /// <summary>Lists SECOM services from the MCP service registry (#822); the registry is only asked when this runs.</summary>
     public ICommand ShowRegistryCommand { get; }
 
+    /// <summary>Reads the registry again, past its cache, once it is listed.</summary>
+    public ICommand RefreshRegistryCommand { get; }
+
+    /// <summary>True when the listed registry can be read again.</summary>
+    public bool CanRefreshRegistry => _loadRegistry is not null && _registryLoaded && !_isLoadingRegistry;
+
     /// <summary>
     /// Raised when the user follows a registry service's fix link
     /// ("Set up an identity…"), with the Keys &amp; certificates tab to open (#880).
@@ -156,6 +163,14 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
     public event EventHandler<Keys.KeysTab>? KeysRequested;
 
     private void OnFixRequested(Keys.KeysTab tab) => KeysRequested?.Invoke(this, tab);
+
+    /// <summary>Raised with the text to put on the clipboard (a source's catalogue URL); the view copies it.</summary>
+    public event EventHandler<string>? CopyRequested;
+
+    private void OnCopyRequested(string text) => CopyRequested?.Invoke(this, text);
+
+    /// <summary>True when there is a chosen source to show in the details pane.</summary>
+    public bool HasSelection => _selected is not null;
 
     /// <summary>True when the registry can be listed and is not listed yet.</summary>
     public bool CanShowRegistry => _loadRegistry is not null && !_registryLoaded && !_isLoadingRegistry;
@@ -169,8 +184,10 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
             if (SetProperty(ref _isLoadingRegistry, value))
             {
                 OnPropertyChanged(nameof(CanShowRegistry));
+                OnPropertyChanged(nameof(CanRefreshRegistry));
                 UpdateCategories();
                 ((AsyncRelayCommand)ShowRegistryCommand).NotifyCanExecuteChanged();
+                ((AsyncRelayCommand)RefreshRegistryCommand).NotifyCanExecuteChanged();
             }
         }
     }
@@ -189,7 +206,10 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
         private set
         {
             if (SetProperty(ref _registryError, value))
+            {
                 OnPropertyChanged(nameof(HasRegistryError));
+                ShowMatches(); // the registry row shows it
+            }
         }
     }
 
@@ -199,7 +219,7 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
     /// <summary>True when the registry has been listed.</summary>
     public bool IsRegistryLoaded => _registryLoaded;
 
-    private async Task ShowRegistryAsync()
+    private async Task LoadRegistryAsync(bool refresh)
     {
         if (_loadRegistry is null)
             return;
@@ -208,7 +228,7 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
         RegistryError = null;
         try
         {
-            var listing = await _loadRegistry(CancellationToken.None).ConfigureAwait(true);
+            var listing = await _loadRegistry(refresh, CancellationToken.None).ConfigureAwait(true);
             // S-100 data services only: the registry also lists route exchange, ship
             // reporting and other services the Library has nothing to show for.
             var services = listing.Services.Where(s => s.IsS100Product).ToArray();
@@ -310,22 +330,39 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
     /// <summary>True when the search matches no source in any category.</summary>
     public bool HasNoMatches => IsSearching && _rows.Count == 0;
 
+    /// <summary>"No source matches “weather fax”."</summary>
+    public string NoMatchesText => string.Format(CultureInfo.CurrentCulture, Strings.Library_DirectoryNoMatchesFormat, _searchText.Trim());
+
     /// <summary>True when the open category lists nothing (My sources before anything is added).</summary>
     public bool IsCategoryEmpty => !IsSearching && _rows.Count == 0;
 
-    /// <summary>True while the "Add a catalogue by URL" panel is expanded.</summary>
-    public bool IsUrlPanelOpen
+    /// <summary>What an empty category says: My sources points at the URL form above it.</summary>
+    public string EmptyCategoryText => ShowsUrlForm ? Strings.Library_DirectoryNoSourcesAddHint : Strings.Library_DirectoryNoSources;
+
+    /// <summary>
+    /// Opens My sources, where the URL form is (D10), from the sidebar's "Add
+    /// by URL" link or the empty search ("Add it by URL"). A search that is a
+    /// URL is carried into the form.
+    /// </summary>
+    public ICommand ShowAddByUrlCommand { get; }
+
+    /// <summary>Raised when the URL form should take keyboard focus.</summary>
+    public event EventHandler? UrlEntryRequested;
+
+    private void ShowAddByUrl()
     {
-        get => _isUrlPanelOpen;
-        set => SetProperty(ref _isUrlPanelOpen, value);
+        var text = _searchText.Trim();
+        if (Uri.TryCreate(text, UriKind.Absolute, out var typed) && (typed.Scheme == Uri.UriSchemeHttps || typed.Scheme == Uri.UriSchemeHttp))
+            CatalogueUrl = text;
+        SelectCategory(KnownCatalogueCategory.User);
+        UrlEntryRequested?.Invoke(this, EventArgs.Empty);
     }
-
-    public ICommand OpenUrlPanelCommand { get; }
-
-    public ICommand CloseUrlPanelCommand { get; }
 
     /// <summary>True when catalogues can be added by URL.</summary>
     public bool CanAddByUrl => _probe is not null;
+
+    /// <summary>True when the URL form heads the list: My sources is open and nothing is searched.</summary>
+    public bool ShowsUrlForm => CanAddByUrl && !IsSearching && _selectedCategory == KnownCatalogueCategory.User;
 
     /// <summary>The URL of a catalogue to add.</summary>
     public string CatalogueUrl
@@ -484,24 +521,31 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
         Entries = _known
             .OrderBy(s => regionOrder.IndexOf(s.Region.FirstOrDefault() ?? string.Empty))
             .ThenBy(s => s.Name, StringComparer.CurrentCulture)
-            .Select(s => new CatalogueEntryViewModel(s, _openUrl))
+            .Select(s => new CatalogueEntryViewModel(s, _openUrl, copyText: OnCopyRequested))
             .Concat(_registry
                 .OrderBy(s => s.Pilot)
                 .ThenBy(s => s.Product, StringComparer.Ordinal)
                 .ThenBy(s => s.Name, StringComparer.CurrentCulture)
                 // Keep what was already found out about a service.
-                .Select(s => previous.TryGetValue(s.Id, out var kept) ? kept : new CatalogueEntryViewModel(s, _openUrl, isRegistry: true, openFix: OnFixRequested)))
-            .Concat(_user.Select(s => new CatalogueEntryViewModel(s, _openUrl, Remove)))
+                .Select(s => previous.TryGetValue(s.Id, out var kept) ? kept : new CatalogueEntryViewModel(s, _openUrl, isRegistry: true, openFix: OnFixRequested, copyText: OnCopyRequested)))
+            .Concat(_user.Select(s => new CatalogueEntryViewModel(s, _openUrl, Remove, copyText: OnCopyRequested)))
             .OrderBy(e => Array.IndexOf(CategoryOrder, e.Category)) // stable: keeps the order above within a category
             .ToArray();
 
         // Opens on the first category's first source (NOAA ENC in the built-in list).
+        // Keeping the same choice (listing the registry, say) keeps the open category too.
         var keep = _entries.FirstOrDefault(e => e.Source.Id == selectId) ?? _entries.FirstOrDefault();
+        _keepCategory = keep is not null && keep.Source.Id == _selected?.Source.Id;
         _selected = null;
         if (keep is not null)
             SelectedEntry = keep;
         else
+        {
             OnPropertyChanged(nameof(SelectedEntry));
+            OnPropertyChanged(nameof(HasSelection));
+        }
+
+        _keepCategory = false;
         ShowMatches();
     }
 
@@ -515,20 +559,42 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
             foreach (var group in _entries.Where(e => e.Matches(text)).GroupBy(e => e.Category))
             {
                 rows.Add(CatalogueEntryViewModel.Header(CatalogueCategoryViewModel.LabelOf(group.Key)));
+                foreach (var entry in group)
+                    entry.ShowsPlace = true; // no region header says where
                 rows.AddRange(group);
             }
         }
         else
         {
-            // The open category, by region; registry services under their own header.
-            // The user's own sources need no header: the category says whose they are.
-            foreach (var group in _entries.Where(e => e.Category == _selectedCategory)
-                .GroupBy(e => e.IsUser ? string.Empty : e.IsRegistry ? Strings.Library_RegistryRegion : e.Source.Region.FirstOrDefault() ?? string.Empty))
+            // The open category, by region; registry services under their own header,
+            // after the registry row (D10). The user's own sources need no header:
+            // the category says whose they are.
+            foreach (var group in _entries.Where(e => e.Category == _selectedCategory && !e.IsRegistry)
+                .GroupBy(e => e.IsUser ? string.Empty : e.Source.Region.FirstOrDefault() ?? string.Empty))
             {
                 var entries = group.ToArray();
+                var title = GroupTitle(group.Key, entries);
                 if (group.Key.Length > 0)
-                    rows.Add(CatalogueEntryViewModel.Header(GroupTitle(group.Key, entries)));
+                    rows.Add(CatalogueEntryViewModel.Header(title));
+
+                // The second line names the country unless the header already does (A8).
+                foreach (var entry in entries)
+                    entry.ShowsPlace = entry.Place is { } place && !title.Contains(place, StringComparison.CurrentCulture);
                 rows.AddRange(entries);
+            }
+
+            if (_selectedCategory == KnownCatalogueCategory.Secom && _loadRegistry is not null)
+            {
+                if (_registryLoaded)
+                {
+                    rows.Add(CatalogueEntryViewModel.Header(Strings.Library_RegistryRegion));
+                    rows.Add(CatalogueEntryViewModel.RegistryRow(this));
+                    rows.AddRange(_entries.Where(e => e.IsRegistry));
+                }
+                else
+                {
+                    rows.Add(CatalogueEntryViewModel.RegistryRow(this));
+                }
             }
         }
 
@@ -536,6 +602,9 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
         UpdateCategories();
         OnPropertyChanged(nameof(HasNoMatches));
         OnPropertyChanged(nameof(IsCategoryEmpty));
+        OnPropertyChanged(nameof(ShowsUrlForm));
+        OnPropertyChanged(nameof(NoMatchesText));
+        OnPropertyChanged(nameof(EmptyCategoryText));
 
         // Replacing the rows clears the list's highlight; restore it on the kept choice.
         OnPropertyChanged(nameof(SelectedEntry));
@@ -570,8 +639,8 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
 }
 
 /// <summary>
-/// One row in the directory: a catalogue, with display text for its quality
-/// chips, or a region header (<see cref="IsGroupHeader"/>) above a group.
+/// One row in the directory: a source, with the text its row and details
+/// show, or a region or category header (<see cref="IsGroupHeader"/>) above a group.
 /// </summary>
 internal sealed class CatalogueEntryViewModel : ViewModelBase
 {
@@ -589,10 +658,12 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
         Action<Uri>? openUrl,
         Action<KnownCatalogueSource>? remove = null,
         bool isRegistry = false,
-        Action<Keys.KeysTab>? openFix = null)
+        Action<Keys.KeysTab>? openFix = null,
+        Action<string>? copyText = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         Source = source;
+        CopyUrlCommand = new RelayCommand(() => copyText?.Invoke(CatalogUrl), () => copyText is not null);
         IsRegistry = isRegistry;
         IsUser = remove is not null;
         OpenFixCommand = new RelayCommand(
@@ -612,11 +683,27 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
         : this(HeaderSource, null)
     {
         IsGroupHeader = true;
-        GroupTitle = title;
+        GroupTitle = title.Length > 0 ? title : null;
     }
 
     /// <summary>A region header row.</summary>
     public static CatalogueEntryViewModel Header(string title) => new(title);
+
+    /// <summary>
+    /// The registry row in SECOM services (D10): "List services from the
+    /// registry" until it is listed, then its summary and Refresh. Not selectable.
+    /// </summary>
+    public static CatalogueEntryViewModel RegistryRow(CatalogueDirectoryDialogViewModel directory) =>
+        new(string.Empty) { Directory = directory, IsRegistryRow = true };
+
+    /// <summary>For the registry row, the directory whose registry it lists and refreshes.</summary>
+    public CatalogueDirectoryDialogViewModel? Directory { get; private init; }
+
+    /// <summary>True for the registry row (see <see cref="RegistryRow"/>).</summary>
+    public bool IsRegistryRow { get; private init; }
+
+    /// <summary>True for a source (not a header or the registry row): the rows that can be chosen.</summary>
+    public bool IsSourceRow => !IsGroupHeader;
 
     /// <summary>True for a SECOM service listed from the service registry (#822).</summary>
     public bool IsRegistry { get; }
@@ -646,7 +733,7 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
         }
     }
 
-    /// <summary>True when the row shows a reachability chip (a registry service).</summary>
+    /// <summary>True when the details show whether the service can be read (a registry service).</summary>
     public bool HasReachability => IsRegistry && (IsProbing || _reachability is not null);
 
     /// <summary>"Checking…", "Readable without a certificate", "Needs a certificate", …</summary>
@@ -664,7 +751,7 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
             _ => null,
         };
 
-    /// <summary>True when the service cannot be added as things stand (the chip is shown as limited).</summary>
+    /// <summary>True when the service cannot be added as things stand (shown in amber, not green).</summary>
     public bool IsReachabilityLimited => _reachability is { Reachability: not (SecomReachability.Open or SecomReachability.OpenWithCertificate) };
 
     /// <summary>
@@ -750,8 +837,11 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasFix));
     }
 
-    /// <summary>True for a region header (not selectable).</summary>
+    /// <summary>True for a header or the registry row: not selectable, not a source.</summary>
     public bool IsGroupHeader { get; }
+
+    /// <summary>True for a region or category header.</summary>
+    public bool IsHeaderText => IsGroupHeader && !IsRegistryRow;
 
     /// <summary>The region header's text.</summary>
     public string? GroupTitle { get; }
@@ -810,8 +900,8 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
 
     public string Name => Source.Name;
 
-    /// <summary>The row's accessible name: the region for a header, else the catalogue's name.</summary>
-    public string? AccessibleName => IsGroupHeader ? GroupTitle : Name;
+    /// <summary>The row's accessible name: the header's text, the registry row's action, else the source's name.</summary>
+    public string? AccessibleName => IsRegistryRow ? Strings.Label_ShowSecomServices : IsGroupHeader ? GroupTitle : Name;
 
     /// <summary>"U.S. Army Corps of Engineers · North America › United States", or "host · added by URL".</summary>
     public string ProviderAndRegion =>
@@ -819,42 +909,81 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
         : Source.Region.Count == 0 ? Source.Provider
         : $"{Source.Provider} · {string.Join(" › ", Source.Region)}";
 
+    /// <summary>
+    /// Where the source applies, in one word or two: the country ("United
+    /// States"), else the region ("Worldwide"); "added by URL" for the user's
+    /// own; <see langword="null"/> for a registry service (its region is the registry).
+    /// </summary>
+    public string? Place =>
+        IsUser ? Strings.Library_DirectoryAddedByUrl
+        : IsRegistry ? null
+        : Source.Region.Count > 1 ? Source.Region[1]
+        : Source.Region.FirstOrDefault();
+
+    /// <summary>"NOAA Office of Coast Survey · United States": the details pane's second line.</summary>
+    public string ProviderAndPlace => Place is { } place ? $"{Source.Provider} · {place}" : Source.Provider;
+
+    private bool _showsPlace = true;
+
+    /// <summary>True when the row's second line names <see cref="Place"/> (its region header doesn't already).</summary>
+    internal bool ShowsPlace
+    {
+        get => _showsPlace;
+        set
+        {
+            if (SetProperty(ref _showsPlace, value))
+                OnPropertyChanged(nameof(RowDetail));
+        }
+    }
+
+    /// <summary>The row's second line: the provider, and the country when the header doesn't say it.</summary>
+    public string RowDetail => ShowsPlace ? ProviderAndPlace : Source.Provider;
+
+    /// <summary>
+    /// What the source can't tell before anything is downloaded, one plain
+    /// sentence each (D14): no coverage, no editions (not for forecast feeds,
+    /// which track runs instead), no sizes; then pilot and not-for-navigation
+    /// warnings. Empty when there is nothing to say.
+    /// </summary>
+    public IReadOnlyList<string> Limitations
+    {
+        get
+        {
+            var limits = new List<string>();
+            if (Source.Coverage == KnownCatalogueCoverage.None)
+                limits.Add(Strings.Library_Limit_NoCoverage);
+            if (!Source.Editions && !IsForecast)
+                limits.Add(Strings.Library_Limit_NoEditions);
+            if (!Source.Sizes)
+                limits.Add(Strings.Library_Limit_NoSizes);
+            if (Source.Pilot)
+                limits.Add(Strings.Library_Limit_Pilot);
+            if (Source.NotForNavigation)
+                limits.Add(Strings.Library_Limit_NotForNavigation);
+            return limits;
+        }
+    }
+
+    /// <summary>True when <see cref="Limitations"/> has anything to say.</summary>
+    public bool HasLimitations => Limitations.Count > 0;
+
+    /// <summary>The limitations as one line, for the compact inline details (D9).</summary>
+    public string LimitationsLine => string.Join(" · ", Limitations.Select(l => l.TrimEnd('.')));
+
+    /// <summary>Copies the catalogue URL to the clipboard.</summary>
+    public ICommand CopyUrlCommand { get; }
+
     public string? Note => Source.Note;
 
     public bool HasNote => !string.IsNullOrWhiteSpace(Source.Note);
 
-    /// <summary>What the map can show before anything is downloaded.</summary>
-    public string CoverageChip => Source.Coverage switch
-    {
-        KnownCatalogueCoverage.Polygons => Strings.Library_Chip_CoveragePolygons,
-        KnownCatalogueCoverage.BoundingBoxes => Strings.Library_Chip_CoverageBoxes,
-        _ => Strings.Library_Chip_CoverageNone,
-    };
-
-    /// <summary>True when the coverage chip should read as a limitation.</summary>
-    public bool IsCoverageLimited => Source.Coverage == KnownCatalogueCoverage.None;
-
-    public string EditionsChip => Source.Editions ? Strings.Library_Chip_Editions : Strings.Library_Chip_NoEditions;
-
-    public bool IsEditionsLimited => !Source.Editions;
-
-    public string SizesChip => Source.Sizes ? Strings.Library_Chip_Sizes : Strings.Library_Chip_NoSizes;
-
-    public bool IsSizesLimited => !Source.Sizes;
-
-    /// <summary>
-    /// True for a forecast feed (#685): its chips say "Forecast" and "Latest run
-    /// only" in place of the edition and size chips.
-    /// </summary>
+    /// <summary>True for a forecast feed (#685): it tracks runs, not editions.</summary>
     public bool IsForecast => Source.Format is KnownCatalogueFormat.S100ForecastModels or KnownCatalogueFormat.Weather;
 
-    /// <summary>True when the edition and size chips apply (anything but a forecast feed).</summary>
-    public bool HasEditionChips => !IsForecast;
-
-    /// <summary>True for a pilot service (#685, NOAA's S-104): an amber "Pilot" chip.</summary>
+    /// <summary>True for a pilot service (#685, NOAA's S-104), which may cover little and lapse.</summary>
     public bool IsPilot => Source.Pilot;
 
-    /// <summary>True when the provider marks the catalogue's data as not for navigation (an amber chip).</summary>
+    /// <summary>True when the provider marks the catalogue's data as not for navigation.</summary>
     public bool IsNotForNavigation => Source.NotForNavigation;
 
     public string CatalogUrl => Source.CatalogUri.AbsoluteUri;
@@ -893,6 +1022,16 @@ internal sealed class CatalogueCategoryViewModel : ViewModelBase
         KnownCatalogueCategory.Secom => Strings.Library_Category_Secom,
         KnownCatalogueCategory.User => Strings.Library_Category_User,
         _ => Strings.Library_Category_Charts,
+    };
+
+    /// <summary>"Charts", "Depth &amp; tides", …: the label in the narrow segmented strip (D2).</summary>
+    public string ShortLabel => Category switch
+    {
+        KnownCatalogueCategory.Depth => Strings.Library_CategoryShort_Depth,
+        KnownCatalogueCategory.Weather => Strings.Library_CategoryShort_Weather,
+        KnownCatalogueCategory.Secom => Strings.Library_CategoryShort_Secom,
+        KnownCatalogueCategory.User => Strings.Library_CategoryShort_User,
+        _ => Strings.Library_CategoryShort_Charts,
     };
 
     /// <summary>How many sources the category lists (how many match while searching).</summary>
