@@ -400,6 +400,31 @@ public partial class S101ToS57TranslatorTests
     }
 
     [Fact]
+    public void Coverage_SliverAgainstItsBoundingBox_StaysUncovered()
+    {
+        // #1291: the coverage's southern edge drops one unit across its
+        // width, so the bounding box leaves a sliver one unit tall beneath
+        // it. The sliver has no grid point inside it; it must not be taken
+        // for covered, or M_COVR grows past the skin of the earth.
+        var b = new DocumentBuilder();
+        b.Point(1, 1, 0);
+        b.Point(2, 1000, 0);
+        b.Point(3, 1000, 1000);
+        b.Point(4, 0, 1000);
+        b.Curve(1, 1, 2);
+        b.Curve(2, 2, 3);
+        b.Curve(3, 3, 4);
+        b.Curve(4, 4, 1);
+        b.Feature("DataCoverage", (130, b.Surface(1, 1, 2, 3, 4)), []);
+        b.Feature("DepthArea", (130, b.Surface(2, 1, 2, 3, 4)), [R("depthRangeMinimumValue", "0"), R("depthRangeMaximumValue", "5")], fidn: 2);
+
+        var document = new S101ToS57Translator().Translate(b.Build());
+
+        Assert.Single(OfClass(document, (int)S57ObjectCode.M_COVR), f => Value(f, AttlCatcov) == "2");
+        Assert.Empty(S57TopologyCheck.Check(document));
+    }
+
+    [Fact]
     public void TopologyCheck_ReportsOverlapsAndOpenRings()
     {
         var b = new DocumentBuilder();

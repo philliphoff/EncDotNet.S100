@@ -93,7 +93,7 @@ public sealed partial class S57ToS101Translator
                     .Concat(scales.Where(s => overlapping.Any(o => o.Scale == s.Scale)).SelectMany(s => s.Record.SpatialPointers))
                     .Where(p => p.Name.RecordNameCode == S57RecordNameCodes.Edge && graph.Edges.ContainsKey((uint)p.Name.RecordId))
                     .Select(p => (uint)p.Name.RecordId);
-                var faces = graph.Faces(edges).Where(f => area.Contains(f.Polygon.InteriorPoint)).ToList();
+                var faces = graph.Faces(edges).Where(f => area.Contains(f.Probe)).ToList();
                 if (Math.Abs(faces.Sum(f => f.Polygon.Area) - area.Area) > area.Area * 1e-6)
                 {
                     _diagnostics?.RecordDataCoverageNotCut();
@@ -101,7 +101,7 @@ public sealed partial class S57ToS101Translator
                 }
 
                 var groups = faces
-                    .GroupBy(f => overlapping.Where(s => s.Area!.Contains(f.Polygon.InteriorPoint)).Select(s => (int?)s.Scale).Min() ?? cellScale)
+                    .GroupBy(f => overlapping.Where(s => s.Area!.Contains(f.Probe)).Select(s => (int?)s.Scale).Min() ?? cellScale)
                     .ToList();
                 if (groups.Count == 1)
                 {
