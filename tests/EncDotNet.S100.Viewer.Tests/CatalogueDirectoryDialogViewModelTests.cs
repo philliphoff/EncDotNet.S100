@@ -437,4 +437,54 @@ public class CatalogueDirectoryDialogViewModelTests
 
         Assert.Empty(new UserCatalogueStore(path).Sources);
     }
+
+    [Fact]
+    public void Reopening_in_the_same_session_returns_to_the_last_source_and_category()
+    {
+        KnownCatalogueSource[] sources =
+        [
+            Source("chart", "Europe", category: KnownCatalogueCategory.Charts),
+            Source("wx", "Worldwide", category: KnownCatalogueCategory.Weather),
+            Source("depth", "Worldwide", category: KnownCatalogueCategory.Depth),
+        ];
+        var session = new CatalogueDirectorySession();
+
+        var first = new CatalogueDirectoryDialogViewModel(sources, session: session);
+        Assert.Equal("chart", first.SelectedEntry!.Source.Id);
+        first.SelectedEntry = first.Entries.Single(e => e.Source.Id == "wx");
+        first.SelectedCategory = KnownCatalogueCategory.Depth;  // browsing on without choosing
+
+        var second = new CatalogueDirectoryDialogViewModel(sources, session: session);
+
+        Assert.Equal("wx", second.SelectedEntry!.Source.Id);
+        Assert.Equal(KnownCatalogueCategory.Depth, second.SelectedCategory);
+    }
+
+    [Fact]
+    public void Without_a_session_every_open_starts_on_the_first_source()
+    {
+        KnownCatalogueSource[] sources =
+        [
+            Source("chart", "Europe", category: KnownCatalogueCategory.Charts),
+            Source("wx", "Worldwide", category: KnownCatalogueCategory.Weather),
+        ];
+        var first = new CatalogueDirectoryDialogViewModel(sources);
+        first.SelectedEntry = first.Entries.Single(e => e.Source.Id == "wx");
+
+        var second = new CatalogueDirectoryDialogViewModel(sources);
+
+        Assert.Equal("chart", second.SelectedEntry!.Source.Id);
+        Assert.Equal(KnownCatalogueCategory.Charts, second.SelectedCategory);
+    }
+
+    [Fact]
+    public void A_remembered_source_that_is_gone_falls_back_to_the_first()
+    {
+        var session = new CatalogueDirectorySession { LastSourceId = "removed", LastCategory = KnownCatalogueCategory.Charts };
+
+        var vm = new CatalogueDirectoryDialogViewModel([Source("chart", "Europe", category: KnownCatalogueCategory.Charts)], session: session);
+
+        Assert.Equal("chart", vm.SelectedEntry!.Source.Id);
+        Assert.Equal("chart", session.LastSourceId);
+    }
 }

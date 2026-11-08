@@ -48,7 +48,8 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
         UserCatalogueStore? userCatalogues = null,
         Func<Uri, CancellationToken, Task<CatalogueProbe>>? probe = null,
         Func<bool, CancellationToken, Task<SecomRegistryListing>>? loadSecomRegistry = null,
-        Func<Uri, CancellationToken, Task<SecomProbeResult>>? probeSecom = null)
+        Func<Uri, CancellationToken, Task<SecomProbeResult>>? probeSecom = null,
+        CatalogueDirectorySession? session = null)
     {
         _loadRegistry = loadSecomRegistry;
         _probeSecom = probeSecom;
@@ -64,7 +65,27 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
         Categories = [.. CategoryOrder.Select(c => new CatalogueCategoryViewModel(c, () => SelectCategory(c)))];
         AddUrlCommand = new AsyncRelayCommand(AddUrlAsync, () => CanAddUrl);
         ShowAddByUrlCommand = new RelayCommand(ShowAddByUrl, () => CanAddByUrl);
-        Rebuild(selectId: null);
+
+        // Reopened in the same app session: back to the last source and category (Q5).
+        // Read both before Rebuild selects, which records the new choice.
+        var lastSourceId = session?.LastSourceId;
+        var lastCategory = session?.LastCategory;
+        Rebuild(selectId: lastSourceId);
+        if (lastCategory is { } category && category != _selectedCategory)
+            SelectCategory(category);
+        _session = session;
+        Remember();
+    }
+
+    private readonly CatalogueDirectorySession? _session;
+
+    /// <summary>Records the selection and open category for the next time the dialog opens.</summary>
+    private void Remember()
+    {
+        if (_session is null)
+            return;
+        _session.LastSourceId = _selected?.Source.Id;
+        _session.LastCategory = _selectedCategory;
     }
 
     /// <summary>The categories in the order the sidebar lists them.</summary>
@@ -137,6 +158,7 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
             }
             if (value.IsRegistry && value.Reachability is null && !value.IsProbing)
                 _ = ProbeAsync(value);
+            Remember();
         }
     }
 
@@ -313,6 +335,7 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
         _selectedCategory = category;
         if (changed)
             OnPropertyChanged(nameof(SelectedCategory));
+        Remember();
         if (_searchText.Length > 0)
         {
             _searchText = string.Empty;

@@ -237,7 +237,8 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
     /// so the footer confirms the choice when its row has scrolled away; otherwise null.
     /// </summary>
     public string? SelectionText =>
-        IsCatalogueStep && Directory.SelectedEntry is { } entry
+        _isReadingCatalogue ? Strings.Wizard_Loading
+        : IsCatalogueStep && Directory.SelectedEntry is { } entry
             ? string.Format(CultureInfo.CurrentCulture, Strings.Wizard_SelectionFormat, entry.Name, entry.FormatText)
             : null;
 
@@ -302,9 +303,26 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
         ? Directory.SelectedEntry?.Source is { Format: KnownCatalogueFormat.Secom } && _connectionFactory is not null
         : _connection is not null;
 
+    /// <summary>
+    /// True while Next on the Source step reads the chosen catalogue (D12); the
+    /// footer says so and Next waits.
+    /// </summary>
+    public bool IsReadingCatalogue
+    {
+        get => _isReadingCatalogue;
+        private set
+        {
+            if (!SetProperty(ref _isReadingCatalogue, value))
+                return;
+            Refresh();
+        }
+    }
+
+    private bool _isReadingCatalogue;
+
     private bool CanNext => _current switch
     {
-        WizardStepKind.Source => Directory.CanContinueWithSelection,
+        WizardStepKind.Source => Directory.CanContinueWithSelection && !_isReadingCatalogue,
         // Add and wait is always possible once the service has been asked (C5).
         WizardStepKind.Connection => _connection is { HasState: true },
         WizardStepKind.Include => _scope is { CanContinueFromScope: true },
@@ -322,7 +340,7 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
                 if (entry.Source.Format == KnownCatalogueFormat.Secom && ConnectionFor(entry.Source) is { } connection)
                     return EnterConnectionAsync(connection);
                 Connection = null;
-                return EnterIncludeAsync(entry.Source);
+                return ReadThenContinueAsync(entry.Source);
             case WizardStepKind.Connection when CanNext && _chosen is { } secom:
                 return EnterIncludeAsync(secom);
             case WizardStepKind.Include when CanNext:
@@ -373,19 +391,7 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
     /// </summary>
     private Task EnterIncludeAsync(KnownCatalogueSource source)
     {
-        if (!_scopes.TryGetValue(source.Id, out var scope))
-        {
-            scope = _scopeFactory();
-            scope.Initialize(source, _targetCollectionId);
-            scope.PropertyChanged += OnScopeChanged;
-            scope.Closed += (_, confirmed) =>
-            {
-                if (confirmed)
-                    Closed?.Invoke(this, true);
-            };
-            _scopes[source.Id] = scope;
-        }
-
+        var scope = ScopeFor(source);
         Scope = scope;
         CurrentKind = WizardStepKind.Include;
         Refresh();
@@ -399,6 +405,81 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
         }
 
         return scope.IsLoaded || scope.IsLoading ? Task.CompletedTask : scope.LoadCatalogAsync();
+    }
+
+    /// <summary>
+    /// From the Source step (not SECOM): reads the catalogue while Next shows
+    /// that it is reading, then goes to What to include, or, when the catalogue
+    /// lists one download, straight to Add to with What to include done (D12).
+    /// A failed read shows What to include with the error and Try again.
+    /// </summary>
+    private async Task ReadThenContinueAsync(KnownCatalogueSource source)
+    {
+        var scope = ScopeFor(source);
+        Scope = scope;
+        if (!scope.IsLoaded && !scope.HasLoadError)
+        {
+            IsReadingCatalogue = true;
+            try
+            {
+                await (scope.IsLoading ? WaitForLoadAsync(scope) : scope.LoadCatalogAsync());
+            }
+            finally
+            {
+                IsReadingCatalogue = false;
+            }
+        }
+
+        // The user may have gone elsewhere (closed, or chosen another source) meanwhile.
+        if (_current != WizardStepKind.Source || Directory.SelectedEntry?.Source.Id != source.Id)
+            return;
+
+        CurrentKind = scope is { IsLoaded: true, IsSingleEntry: true, HasLoadError: false }
+            ? WizardStepKind.AddTo
+            : WizardStepKind.Include;
+        Refresh();
+    }
+
+    /// <summary>Completes when a read already under way ends.</summary>
+    private static Task WaitForLoadAsync(AddToLibraryDialogViewModel scope)
+    {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (!scope.IsLoading)
+            {
+                scope.PropertyChanged -= OnChanged;
+                done.TrySetResult();
+            }
+        }
+
+        scope.PropertyChanged += OnChanged;
+        if (!scope.IsLoading)
+        {
+            scope.PropertyChanged -= OnChanged;
+            done.TrySetResult();
+        }
+
+        return done.Task;
+    }
+
+    /// <summary>The scope kept for <paramref name="source"/>, created the first time it is chosen.</summary>
+    private AddToLibraryDialogViewModel ScopeFor(KnownCatalogueSource source)
+    {
+        if (!_scopes.TryGetValue(source.Id, out var scope))
+        {
+            scope = _scopeFactory();
+            scope.Initialize(source, _targetCollectionId);
+            scope.PropertyChanged += OnScopeChanged;
+            scope.Closed += (_, confirmed) =>
+            {
+                if (confirmed)
+                    Closed?.Invoke(this, true);
+            };
+            _scopes[source.Id] = scope;
+        }
+
+        return scope;
     }
 
     /// <summary>Goes to the step at position <paramref name="step"/> (1-based) in the current path.</summary>

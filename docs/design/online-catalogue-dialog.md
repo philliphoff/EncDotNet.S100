@@ -1,7 +1,7 @@
 # Add online catalogue: design pass
 
 > Status: **Accepted** (2026-11-07, after the canvas mock). Built in the
-> slices of §7; Q4 and Q5 are still open. Follows the wizard as it grew from
+> slices of §7: A1 #1348, B1 #1346, B2 #1349, B3 #1350, and C1 (D12 + Q5). Follows the wizard as it grew from
 > [#670](https://github.com/philliphoff/EncDotNet.S100/issues/670) (curated
 > catalogues, add by URL) through #685 (NOAA S-1xx on AWS), #822/#883 (SECOM
 > registry and the Connection step) and #1075/#1226 (weather sources).
@@ -407,7 +407,15 @@ Two tracks that touch different files and can run in parallel:
   (can run alongside B2 only if it avoids the list/details markup).
 
 Both tracks add strings to `Strings.resx`; expect a trivial merge there.
-Later, after Q4: **C1** — D12 (skip the single-download step).
+**C1 — skip the single-download step and remember the category** (decided
+2026-11-08: Q4 yes, Q5 within the session). Next on the Source step reads the
+catalogue while the footer says "Reading the catalogue…"; a catalogue with one
+download goes straight to Add to, with What to include done and still reachable
+by Back. A failed read lands on What to include with the error and Try again.
+SECOM sources and the entry points that start at What to include are
+unchanged. An ended forecast's warning also shows on Add to, since its step is
+skipped. The directory remembers the last source and category for the app's
+lifetime (`CatalogueDirectorySession`, not persisted).
 
 **Mock (2026-11-07).** The restructure is mocked on the "Add Online Source ·
 restructure" board on the Library & data page of the design canvas
