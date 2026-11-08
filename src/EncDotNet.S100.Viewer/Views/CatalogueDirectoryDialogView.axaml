@@ -6,11 +6,17 @@
              x:Class="EncDotNet.S100.Viewer.Views.CatalogueDirectoryDialogView"
              x:DataType="vm:CatalogueDirectoryDialogViewModel">
 
+    <!--
+      Layout follows the body's width (D2), set as a class by the code-behind:
+      wide (≥ 840): categories, list, details pane;
+      compact (720–840): categories, list with the chosen row's details inline (D9);
+      narrow (< 720): a segmented category strip above the list, details inline.
+    -->
     <UserControl.Styles>
-        <!-- Rows draw their own selection (a tinted card), so the container is bare. -->
+        <!-- Rows draw their own selection (a tinted row), so the container is bare. -->
         <Style Selector="ListBox#CatalogueList ListBoxItem">
             <Setter Property="Padding" Value="0" />
-            <Setter Property="Margin" Value="0,1" />
+            <Setter Property="Margin" Value="0,0,0,2" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Template">
                 <ControlTemplate>
@@ -28,7 +34,7 @@
             <Setter Property="Background" Value="{DynamicResource WizardSelectedBrush}" />
         </Style>
         <Style Selector="Border.catalogueRow">
-            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Padding" Value="10,7" />
             <Setter Property="CornerRadius" Value="6" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="BorderBrush" Value="Transparent" />
@@ -39,49 +45,47 @@
             <Setter Property="Background" Value="{DynamicResource WizardSelectedBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource WizardSelectedBorderBrush}" />
         </Style>
-        <!-- The 16 px radio mark. -->
-        <Style Selector="Ellipse.radioRing">
-            <Setter Property="Stroke" Value="{DynamicResource BorderColor}" />
-            <Setter Property="StrokeThickness" Value="1.5" />
+
+        <!-- Breakpoints: what each width shows. -->
+        <Style Selector="StackPanel.inlineDetails">
+            <Setter Property="IsVisible" Value="False" />
         </Style>
-        <Style Selector="Ellipse.radioRing.chosen">
-            <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+        <Style Selector=":is(UserControl).compact StackPanel.inlineDetails.chosen, :is(UserControl).narrow StackPanel.inlineDetails.chosen">
+            <Setter Property="IsVisible" Value="True" />
         </Style>
-        <!-- Quality chips: a neutral pill, dimmed when it states a limitation. -->
-        <Style Selector="Border.chip">
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Padding" Value="7,1" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+        <Style Selector=":is(UserControl).compact Border#DetailsPane, :is(UserControl).narrow Border#DetailsPane">
+            <Setter Property="IsVisible" Value="False" />
         </Style>
-        <Style Selector="Border.chip.limited">
-            <Setter Property="Opacity" Value="0.55" />
+        <Style Selector="Border#CategoryStrip">
+            <Setter Property="IsVisible" Value="False" />
         </Style>
-        <Style Selector="Border.chip TextBlock">
-            <Setter Property="FontSize" Value="11" />
+        <Style Selector=":is(UserControl).narrow Border#CategoryStrip">
+            <Setter Property="IsVisible" Value="True" />
         </Style>
-        <!-- The collapsed "Add a catalogue by URL" row. -->
-        <Style Selector="Button.addByUrl">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Padding" Value="12,0" />
-            <Setter Property="Height" Value="36" />
-            <Setter Property="HorizontalAlignment" Value="Stretch" />
-            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <Panel Background="Transparent">
-                        <Rectangle Name="PART_Dash" Stroke="{DynamicResource BorderColor}" StrokeThickness="1"
-                                   StrokeDashArray="4,3" RadiusX="6" RadiusY="6" />
-                        <ContentPresenter Content="{TemplateBinding Content}" Padding="{TemplateBinding Padding}"
-                                          VerticalContentAlignment="Center" HorizontalContentAlignment="Stretch" />
-                    </Panel>
-                </ControlTemplate>
-            </Setter>
+        <Style Selector=":is(UserControl).narrow Border#Sidebar">
+            <Setter Property="IsVisible" Value="False" />
         </Style>
-        <Style Selector="Button.addByUrl:pointerover /template/ Rectangle#PART_Dash">
-            <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+
+        <!-- Status boxes: a tint of the status colour behind the text. -->
+        <Style Selector="Border.tint">
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Opacity" Value="0.12" />
+            <Setter Property="Background" Value="{DynamicResource WarningColor}" />
         </Style>
+        <Style Selector="Border.tint.ok">
+            <Setter Property="Background" Value="{DynamicResource SuccessColor}" />
+        </Style>
+        <Style Selector="Ellipse.statusDot">
+            <Setter Property="Fill" Value="{DynamicResource WarningColor}" />
+        </Style>
+        <Style Selector="Ellipse.statusDot.ok">
+            <Setter Property="Fill" Value="{DynamicResource SuccessColor}" />
+        </Style>
+        <Style Selector="TextBlock.sectionLabel">
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
         <!-- Sidebar categories: a quiet row, tinted when open, dimmed when a search finds nothing in it. -->
         <Style Selector="Button.categoryRow">
             <Setter Property="Background" Value="Transparent" />
@@ -119,6 +123,52 @@
         <Style Selector="Button.categoryRow.dimmed">
             <Setter Property="Opacity" Value="0.45" />
         </Style>
+        <!-- The narrow segmented strip, like the facet tabs in step 3. -->
+        <Style Selector="Button.stripItem">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="PART_Strip" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}" VerticalContentAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.stripItem.open">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundColor}" />
+        </Style>
+        <Style Selector="Button.stripItem.open /template/ Border#PART_Strip">
+            <Setter Property="BoxShadow" Value="0 1 2 0 #22000000" />
+        </Style>
+        <!-- The collapsed "Add a catalogue by URL" row. -->
+        <Style Selector="Button.addByUrl">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Panel Background="Transparent">
+                        <Rectangle Name="PART_Dash" Stroke="{DynamicResource BorderColor}" StrokeThickness="1"
+                                   StrokeDashArray="4,3" RadiusX="6" RadiusY="6" />
+                        <ContentPresenter Content="{TemplateBinding Content}" Padding="{TemplateBinding Padding}"
+                                          VerticalContentAlignment="Center" HorizontalContentAlignment="Stretch" />
+                    </Panel>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.addByUrl:pointerover /template/ Rectangle#PART_Dash">
+            <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+        </Style>
         <Style Selector="TextBox.error">
             <Setter Property="BorderBrush" Value="{DynamicResource DestructiveColor}" />
         </Style>
@@ -127,7 +177,7 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid RowDefinitions="Auto,*,Auto">
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
 
         <!-- Search across every category (D7); the counts are in the sidebar. -->
         <TextBox Grid.Row="0" Margin="0,0,0,10" Text="{Binding SearchText}"
@@ -136,9 +186,36 @@
                  AutomationProperties.AutomationId="Catalogues.Search"
                  PlaceholderText="{x:Static loc:Strings.Library_DirectorySearchWatermark}" />
 
-        <Grid Grid.Row="1" ColumnDefinitions="Auto,*">
+        <!-- Narrow: the categories as a segmented strip (D2). -->
+        <Border Grid.Row="1" Name="CategoryStrip" Background="{DynamicResource MutedBackgroundColor}" CornerRadius="6"
+                Padding="3" Margin="0,0,0,10" HorizontalAlignment="Left">
+            <ItemsControl ItemsSource="{Binding Categories}"
+                          AutomationProperties.Name="{x:Static loc:Strings.Label_SourceCategories}"
+                          AutomationProperties.AutomationId="Catalogues.CategoryStrip">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:CatalogueCategoryViewModel">
+                        <Button Classes="stripItem" Classes.open="{Binding IsOpen}" Classes.dimmed="{Binding IsDimmed}"
+                                Command="{Binding SelectCommand}" Margin="0,0,2,0"
+                                AutomationProperties.Name="{Binding AccessibleName}"
+                                AutomationProperties.AutomationId="Catalogues.StripCategory">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="{Binding ShortLabel}" FontWeight="Medium" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding CountText}" Classes="muted" FontSize="12" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Border>
+
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto">
             <!-- Categories first, each with its count (D6); match counts while searching. -->
-            <Border Grid.Column="0" Width="176" Padding="0,0,12,0" Margin="0,0,12,0"
+            <Border Grid.Column="0" Name="Sidebar" Width="176" Padding="0,0,12,0" Margin="0,0,12,0"
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,1,0">
                 <ItemsControl ItemsSource="{Binding Categories}"
                               AutomationProperties.Name="{x:Static loc:Strings.Label_SourceCategories}"
@@ -165,117 +242,174 @@
                 </ItemsControl>
             </Border>
 
-        <Panel Grid.Column="1">
-            <ListBox Name="CatalogueList"
-                     AutomationProperties.AutomationId="Catalogues.List"
-                     ItemsSource="{Binding Rows}"
-                     SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
-                     Background="Transparent"
-                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                <ListBox.Styles>
-                    <!-- Rows are named after their catalogue or region, not their view model (#784). -->
-                    <!-- ShadUI's ListBoxItem theme sets FontWeight Medium; rows are body text (#1171). -->
-                    <Style Selector="ListBoxItem" x:DataType="vm:CatalogueEntryViewModel">
-                        <Setter Property="AutomationProperties.Name" Value="{Binding AccessibleName}" />
-                        <Setter Property="FontWeight" Value="Normal" />
-                    </Style>
-                </ListBox.Styles>
-                <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="vm:CatalogueEntryViewModel">
-                        <Panel>
-                            <!-- Region header (not selectable). -->
-                            <TextBlock IsVisible="{Binding IsGroupHeader}" Text="{Binding HeaderText}"
-                                       Classes="muted" FontSize="11.5" FontWeight="SemiBold" LetterSpacing="0.7"
-                                       Padding="4,10,4,4" />
+            <Panel Grid.Column="1">
+                <ListBox Name="CatalogueList"
+                         AutomationProperties.AutomationId="Catalogues.List"
+                         ItemsSource="{Binding Rows}"
+                         SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
+                         Background="Transparent" BorderThickness="0" Padding="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.Styles>
+                        <!-- Rows are named after their source or header, not their view model (#784). -->
+                        <!-- ShadUI's ListBoxItem theme sets FontWeight Medium; rows are body text (#1171). -->
+                        <Style Selector="ListBoxItem" x:DataType="vm:CatalogueEntryViewModel">
+                            <Setter Property="AutomationProperties.Name" Value="{Binding AccessibleName}" />
+                            <Setter Property="FontWeight" Value="Normal" />
+                        </Style>
+                    </ListBox.Styles>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CatalogueEntryViewModel">
+                            <Panel>
+                                <!-- Region or category header (not selectable). -->
+                                <TextBlock IsVisible="{Binding IsGroupHeader}" Text="{Binding HeaderText}"
+                                           Classes="muted" FontSize="11.5" FontWeight="SemiBold" LetterSpacing="0.7"
+                                           Padding="4,10,4,4" />
 
-                            <Border IsVisible="{Binding !IsGroupHeader}" Classes="catalogueRow"
-                                    Classes.chosen="{Binding IsSelected}">
-                                <Grid ColumnDefinitions="16,*" ColumnSpacing="10">
-                                    <Panel Width="16" Height="16" VerticalAlignment="Top" Margin="0,2,0,0">
-                                        <Ellipse Classes="radioRing" Classes.chosen="{Binding IsSelected}" />
-                                        <Ellipse Width="8" Height="8" Fill="{DynamicResource AccentBrush}"
-                                                 IsVisible="{Binding IsSelected}" />
-                                    </Panel>
-                                    <StackPanel Grid.Column="1" Spacing="2">
-                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <!-- Two lines; the tint is the selection, no radio mark (D8). -->
+                                <Border IsVisible="{Binding !IsGroupHeader}" Classes="catalogueRow"
+                                        Classes.chosen="{Binding IsSelected}">
+                                    <StackPanel Spacing="1">
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                                             <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                                             <TextBlock Grid.Column="1" Text="{Binding FormatText}" Classes="muted" FontSize="12"
                                                        VerticalAlignment="Center" />
                                         </Grid>
-                                        <TextBlock Text="{Binding ProviderAndRegion}" Classes="muted" FontSize="12"
+                                        <TextBlock Text="{Binding RowDetail}" Classes="muted" FontSize="12.5"
                                                    TextTrimming="CharacterEllipsis" />
 
-                                        <!-- Details of the chosen catalogue only. -->
-                                        <StackPanel IsVisible="{Binding IsSelected}" Spacing="6" Margin="0,6,0,0">
-                                            <WrapPanel Orientation="Horizontal">
-                                                <!-- A registry service: whether it can be read now (#822). -->
-                                                <Border Classes="chip" Classes.limited="{Binding IsReachabilityLimited}" Margin="0,0,4,0"
-                                                        IsVisible="{Binding HasReachability}"
-                                                        AutomationProperties.AutomationId="Catalogues.Row.Reachability">
-                                                    <TextBlock Text="{Binding ReachabilityText}" />
-                                                </Border>
-                                                <Border Classes="chip" Classes.limited="{Binding IsCoverageLimited}" Margin="0,0,4,0">
-                                                    <TextBlock Text="{Binding CoverageChip}" />
-                                                </Border>
-                                                <Border Classes="chip" Classes.limited="{Binding IsEditionsLimited}" Margin="0,0,4,0"
-                                                        IsVisible="{Binding HasEditionChips}">
-                                                    <TextBlock Text="{Binding EditionsChip}" />
-                                                </Border>
-                                                <Border Classes="chip" Classes.limited="{Binding IsSizesLimited}" Margin="0,0,4,0"
-                                                        IsVisible="{Binding HasEditionChips}">
-                                                    <TextBlock Text="{Binding SizesChip}" />
-                                                </Border>
-                                                <Border Classes="chip limited" Margin="0,0,4,0" IsVisible="{Binding IsPilot}">
-                                                    <TextBlock Text="{x:Static loc:Strings.Library_Chip_Pilot}" />
-                                                </Border>
-                                                <Border Classes="chip" Margin="0,0,4,0" IsVisible="{Binding IsForecast}">
-                                                    <TextBlock Text="{x:Static loc:Strings.Library_Chip_Forecast}" />
-                                                </Border>
-                                                <Border Classes="chip" Margin="0,0,4,0" IsVisible="{Binding IsForecast}">
-                                                    <TextBlock Text="{x:Static loc:Strings.Library_Chip_LatestRunOnly}" />
-                                                </Border>
-                                                <Border Classes="chip limited" IsVisible="{Binding IsNotForNavigation}">
-                                                    <TextBlock Text="{x:Static loc:Strings.Library_Chip_NotForNavigation}" />
-                                                </Border>
-                                            </WrapPanel>
-                                            <TextBlock Text="{Binding ReachabilityExplanation}" IsVisible="{Binding HasReachabilityExplanation}"
-                                                       FontSize="12.5" TextWrapping="Wrap" Classes="muted" />
+                                        <!-- Compact details of the chosen source, when there is no pane (D9). -->
+                                        <StackPanel Classes="inlineDetails" Classes.chosen="{Binding IsSelected}"
+                                                    Spacing="2" Margin="0,4,0,0">
+                                            <TextBlock Text="{Binding ReachabilityText}" IsVisible="{Binding HasReachability}"
+                                                       Classes="muted" Classes.warning="{Binding IsReachabilityLimited}"
+                                                       FontSize="12.5" TextTrimming="CharacterEllipsis"
+                                                       ToolTip.Tip="{Binding ReachabilityExplanation}"
+                                                       AutomationProperties.AutomationId="Catalogues.Row.Reachability" />
                                             <TextBlock Text="{Binding Note}" IsVisible="{Binding HasNote}" FontSize="12.5"
-                                                       TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding CatalogUrl}" Classes="muted" FontSize="11.5"
-                                                       FontFamily="{StaticResource MonoFontFamily}"
-                                                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding CatalogUrl}" />
-                                            <StackPanel Orientation="Horizontal" Spacing="14">
-                                                <Button Classes="link" Content="{Binding FixText}"
+                                                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Note}" />
+                                            <TextBlock Text="{Binding LimitationsLine}" IsVisible="{Binding HasLimitations}"
+                                                       Classes="warning" FontSize="12.5" TextTrimming="CharacterEllipsis"
+                                                       ToolTip.Tip="{Binding LimitationsLine}" />
+                                            <WrapPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                <Button Classes="link" Content="{Binding FixText}" Margin="0,0,14,0"
                                                         AutomationProperties.AutomationId="Catalogues.Row.Fix"
                                                         AutomationProperties.Name="{Binding FixText}"
                                                         AutomationProperties.HelpText="{x:Static loc:Strings.Keys_Fix_Help}"
                                                         ToolTip.Tip="{x:Static loc:Strings.Keys_Fix_Help}"
                                                         IsVisible="{Binding HasFix}" Command="{Binding OpenFixCommand}" />
-                                                <Button Classes="link" Content="{x:Static loc:Strings.Library_DirectoryTerms}"
+                                                <Button Classes="link" Content="{x:Static loc:Strings.Label_CopyCatalogueUrl}" Margin="0,0,14,0"
+                                                        AutomationProperties.AutomationId="Catalogues.Row.CopyUrl"
+                                                        AutomationProperties.Name="{x:Static loc:Strings.Label_CopyCatalogueUrl}"
+                                                        ToolTip.Tip="{Binding CatalogUrl}" Command="{Binding CopyUrlCommand}" />
+                                                <Button Classes="link" Content="{x:Static loc:Strings.Library_DirectoryTerms}" Margin="0,0,14,0"
                                                         AutomationProperties.AutomationId="Catalogues.Row.Terms"
                                                         IsVisible="{Binding HasHomepage}" Command="{Binding OpenHomepageCommand}" />
                                                 <Button Classes="link danger" Content="{x:Static loc:Strings.Library_DirectoryRemove}"
                                                         AutomationProperties.AutomationId="Catalogues.Row.Remove"
                                                         IsVisible="{Binding IsUser}" Command="{Binding RemoveCommand}" />
-                                            </StackPanel>
+                                            </WrapPanel>
                                         </StackPanel>
                                     </StackPanel>
+                                </Border>
+                            </Panel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock Text="{x:Static loc:Strings.Library_DirectoryNoMatches}" IsVisible="{Binding HasNoMatches}"
+                           Classes="muted" FontSize="13" HorizontalAlignment="Center" Margin="0,24,0,0" />
+                <TextBlock Text="{x:Static loc:Strings.Library_DirectoryNoSources}" IsVisible="{Binding IsCategoryEmpty}"
+                           Classes="muted" FontSize="13" HorizontalAlignment="Center" Margin="0,24,0,0" />
+            </Panel>
+
+            <!-- Wide: the chosen source's details on the side, so selecting never moves the list (D8, D14). -->
+            <Border Grid.Column="2" Name="DetailsPane" Width="300" Margin="12,0,0,0" Padding="16,4,0,4"
+                    BorderBrush="{DynamicResource BorderColor}" BorderThickness="1,0,0,0"
+                    AutomationProperties.Name="{x:Static loc:Strings.Label_SelectedSource}"
+                    AutomationProperties.AutomationId="Catalogues.Details">
+                <Panel>
+                    <ScrollViewer IsVisible="{Binding HasSelection}" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel DataContext="{Binding SelectedEntry}" x:DataType="vm:CatalogueEntryViewModel" Spacing="10" Margin="0,0,12,0">
+                            <StackPanel Spacing="3">
+                                <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap"
+                                           AutomationProperties.AutomationId="Catalogues.Details.Name" />
+                                <TextBlock Text="{Binding ProviderAndPlace}" Classes="muted" FontSize="12.5" TextWrapping="Wrap" />
+                            </StackPanel>
+
+                            <!-- A registry service: whether it can be read now, and the fix (#822, #880). -->
+                            <Panel IsVisible="{Binding HasReachability}">
+                                <Border Classes="tint" Classes.ok="{Binding !IsReachabilityLimited}" />
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="10,8">
+                                    <Ellipse Classes="statusDot" Classes.ok="{Binding !IsReachabilityLimited}"
+                                             Width="8" Height="8" VerticalAlignment="Top" Margin="0,5,0,0" />
+                                    <StackPanel Grid.Column="1" Spacing="3">
+                                        <TextBlock Text="{Binding ReachabilityText}" FontSize="12.5" TextWrapping="Wrap"
+                                                   AutomationProperties.AutomationId="Catalogues.Details.Reachability" />
+                                        <TextBlock Text="{Binding ReachabilityExplanation}" IsVisible="{Binding HasReachabilityExplanation}"
+                                                   Classes="muted" FontSize="12" TextWrapping="Wrap" />
+                                        <Button Classes="link" Content="{Binding FixText}" HorizontalAlignment="Left"
+                                                AutomationProperties.AutomationId="Catalogues.Details.Fix"
+                                                AutomationProperties.Name="{Binding FixText}"
+                                                AutomationProperties.HelpText="{x:Static loc:Strings.Keys_Fix_Help}"
+                                                ToolTip.Tip="{x:Static loc:Strings.Keys_Fix_Help}"
+                                                IsVisible="{Binding HasFix}" Command="{Binding OpenFixCommand}" />
+                                    </StackPanel>
                                 </Grid>
+                            </Panel>
+
+                            <TextBlock Text="{Binding Note}" IsVisible="{Binding HasNote}" FontSize="13" TextWrapping="Wrap" />
+
+                            <!-- Only what the source can't tell in advance (D14); nothing when it has it all. -->
+                            <Panel IsVisible="{Binding HasLimitations}">
+                                <Border Classes="tint" />
+                                <StackPanel Spacing="4" Margin="10,8" AutomationProperties.AutomationId="Catalogues.Details.Limitations">
+                                    <TextBlock Text="{x:Static loc:Strings.Library_DetailsBeforeDownload}" Classes="sectionLabel warning" />
+                                    <ItemsControl ItemsSource="{Binding Limitations}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="x:String">
+                                                <TextBlock Text="{Binding}" FontSize="12.5" TextWrapping="Wrap" Margin="0,0,0,3" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Panel>
+
+                            <Border BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0" Padding="0,8,0,0">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="{x:Static loc:Strings.Library_DetailsCatalogueUrl}" Classes="sectionLabel muted" />
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                        <TextBlock Text="{Binding CatalogUrl}" Classes="muted" FontSize="11.5"
+                                                   FontFamily="{StaticResource MonoFontFamily}" VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding CatalogUrl}" />
+                                        <Button Grid.Column="1" Classes="Outline" Width="26" Height="26" Padding="0" MinHeight="0"
+                                                Command="{Binding CopyUrlCommand}"
+                                                ToolTip.Tip="{x:Static loc:Strings.Label_CopyCatalogueUrl}"
+                                                AutomationProperties.Name="{x:Static loc:Strings.Label_CopyCatalogueUrl}"
+                                                AutomationProperties.AutomationId="Catalogues.Details.CopyUrl">
+                                            <ic:FluentIcon Icon="Copy" FontSize="13" />
+                                        </Button>
+                                    </Grid>
+                                </StackPanel>
                             </Border>
-                        </Panel>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
-            <TextBlock Text="{x:Static loc:Strings.Library_DirectoryNoMatches}" IsVisible="{Binding HasNoMatches}"
-                       Classes="muted" FontSize="13" HorizontalAlignment="Center" Margin="0,24,0,0" />
-            <TextBlock Text="{x:Static loc:Strings.Library_DirectoryNoSources}" IsVisible="{Binding IsCategoryEmpty}"
-                       Classes="muted" FontSize="13" HorizontalAlignment="Center" Margin="0,24,0,0" />
-        </Panel>
+
+                            <StackPanel Orientation="Horizontal" Spacing="14">
+                                <Button Classes="link" Content="{x:Static loc:Strings.Library_DirectoryTerms}" FontSize="13"
+                                        AutomationProperties.AutomationId="Catalogues.Details.Terms"
+                                        IsVisible="{Binding HasHomepage}" Command="{Binding OpenHomepageCommand}" />
+                                <Button Classes="link danger" Content="{x:Static loc:Strings.Library_DirectoryRemove}" FontSize="13"
+                                        AutomationProperties.AutomationId="Catalogues.Details.Remove"
+                                        IsVisible="{Binding IsUser}" Command="{Binding RemoveCommand}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                    <TextBlock Text="{x:Static loc:Strings.Library_DetailsNoSelection}" IsVisible="{Binding !HasSelection}"
+                               Classes="muted" FontSize="13" TextWrapping="Wrap" TextAlignment="Center"
+                               VerticalAlignment="Center" />
+                </Panel>
+            </Border>
         </Grid>
 
         <!-- Add a catalogue by URL: collapsed to one dashed row until asked for. -->
-        <StackPanel Grid.Row="2" Margin="0,10,0,0" Spacing="6">
+        <StackPanel Grid.Row="3" Margin="0,10,0,0" Spacing="6">
             <!-- SECOM services from the MCP service registry (#822): read only when asked. -->
             <Button Classes="addByUrl" IsVisible="{Binding CanShowRegistry}" Command="{Binding ShowRegistryCommand}"
                     AutomationProperties.Name="{x:Static loc:Strings.Label_ShowSecomServices}"
