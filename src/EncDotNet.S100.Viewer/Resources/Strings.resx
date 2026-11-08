@@ -3456,7 +3456,7 @@
     <value>{0:N0} downloaded, {1:N0} failed.</value>
   </data>
   <data name="Menu_AddLibraryOnlineCatalogue" xml:space="preserve">
-    <value>Browse online catalogues…</value>
+    <value>Browse online sources…</value>
   </data>
   <data name="Library_Chip_CoveragePolygons" xml:space="preserve">
     <value>Coverage outlines</value>
@@ -3834,7 +3834,7 @@
     <value>Scanned recursively, referenced in place</value>
   </data>
   <data name="Library_Quick_Online" xml:space="preserve">
-    <value>Browse online catalogues…</value>
+    <value>Browse online sources…</value>
   </data>
   <data name="Library_Quick_OnlineSub" xml:space="preserve">
     <value>NOAA, USACE, European inland lists</value>
@@ -3855,10 +3855,10 @@
     <value>Download ({0})</value>
   </data>
   <data name="Wizard_Title" xml:space="preserve">
-    <value>Add online catalogue</value>
+    <value>Add online source</value>
   </data>
   <data name="Wizard_StepCatalogue" xml:space="preserve">
-    <value>Catalogue</value>
+    <value>Source</value>
   </data>
   <data name="Wizard_StepInclude" xml:space="preserve">
     <value>What to include</value>
@@ -3869,11 +3869,9 @@
   <data name="Wizard_StepOfFormat" xml:space="preserve">
     <value>Step {0} of {1}</value>
   </data>
-  <data name="Wizard_ChooseCatalogueFirst" xml:space="preserve">
-    <value>Choose a catalogue first</value>
-  </data>
-  <data name="Wizard_Collection" xml:space="preserve">
-    <value>Collection</value>
+  <data name="Wizard_SelectionFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>Footer on the first step: the selected source's name and its kind ("NOAA ENC — all U.S. waters · NOAA ENC").</comment>
   </data>
   <data name="Wizard_Everything" xml:space="preserve">
     <value>Everything</value>
@@ -5237,12 +5235,6 @@
   </data>
   <data name="Wizard_StepConnection" xml:space="preserve">
     <value>Connection</value>
-  </data>
-  <data name="Wizard_ConnectionNotNeeded" xml:space="preserve">
-    <value>Not needed</value>
-  </data>
-  <data name="Wizard_ConnectionForSecom" xml:space="preserve">
-    <value>SECOM services</value>
   </data>
   <data name="Secom_Identity_None" xml:space="preserve">
     <value>None</value>
