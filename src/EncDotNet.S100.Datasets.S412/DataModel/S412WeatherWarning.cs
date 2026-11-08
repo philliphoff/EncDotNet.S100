@@ -1,4 +1,5 @@
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.S412.DataModel;
@@ -55,6 +56,59 @@ public abstract class S412WeatherWarning
 
     /// <summary>The data provider the warning refers to (<c>dataProviderInformation</c>), or <c>null</c>.</summary>
     public S412DataProvider? DataProvider => Common.DataProvider;
+
+    /// <summary>
+    /// When the warning was issued (UTC): <see cref="IssueDate"/> at
+    /// <see cref="IssueTime"/>, or at the start of that day when the time is
+    /// absent or unreadable; <c>null</c> without an issue date.
+    /// </summary>
+    public DateTimeOffset? IssuedAt => IssueDate is not { } date
+        ? null
+        : S100DateTimes.Combine(date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), IssueTime)
+            ?? new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+
+    /// <summary>
+    /// The warning's validity ranges for <see cref="WarningValidity"/>: its
+    /// <see cref="FixedDateRange"/> when either end is known, else none (in
+    /// force until cancelled).
+    /// </summary>
+    public IReadOnlyList<NavigationalWarningValidity> Validity =>
+        FixedDateRange is { } range && (range.Start is not null || range.End is not null)
+            ? [new NavigationalWarningValidity(range.Start, range.End)]
+            : [];
+
+    /// <summary>
+    /// The warning's status at <paramref name="time"/>, by the in-force rule
+    /// S-124 navigational warnings and CAP weather warnings share
+    /// (<see cref="WarningValidity.StatusAt"/>): in force within its
+    /// <see cref="FixedDateRange"/>, both ends included, and ended from its
+    /// <see cref="CancellationDate"/>.
+    /// </summary>
+    /// <param name="time">The time to judge, usually the view time.</param>
+    /// <returns>The status.</returns>
+    public NavigationalWarningStatus StatusAt(DateTimeOffset time) =>
+        WarningValidity.StatusAt(Validity, CancellationDate, time);
+
+    /// <summary>
+    /// The instants at which <see cref="StatusAt"/> can change: the start of
+    /// the date range, the tick after its end, and the cancellation date
+    /// (<see cref="WarningValidity.Changes"/>).
+    /// </summary>
+    /// <returns>The instants, in no particular order.</returns>
+    public IEnumerable<DateTimeOffset> StatusChanges() => WarningValidity.Changes(Validity, CancellationDate);
+
+    /// <summary>
+    /// When the warning stops applying: the earlier of the end of its
+    /// <see cref="FixedDateRange"/> and its <see cref="CancellationDate"/>, or
+    /// <c>null</c> when neither is known.
+    /// </summary>
+    public DateTimeOffset? InForceUntil => (FixedDateRange?.End, CancellationDate) switch
+    {
+        ({ } end, { } cancelled) => end < cancelled ? end : cancelled,
+        ({ } end, null) => end,
+        (null, { } cancelled) => cancelled,
+        _ => null,
+    };
 }
 
 /// <summary>A wind warning (<c>WindWarning</c>).</summary>

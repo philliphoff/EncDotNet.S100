@@ -1,5 +1,7 @@
 using System.Globalization;
+using EncDotNet.S100.Core;
 using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines;
 
 namespace EncDotNet.S100.Datasets.S412.DataModel;
 
@@ -29,6 +31,82 @@ public sealed class S412MarineWeatherWarnings
 
     /// <summary>The originating feature-bag dataset.</summary>
     public required S412Dataset Source { get; init; }
+
+    /// <summary>
+    /// The instants (UTC, ascending) at which the set of warnings in force
+    /// changes: of each warning's start, the tick after its end, and its
+    /// cancellation date, those where a warning starts or stops being in force.
+    /// A range end that falls on or after the cancellation adds none.
+    /// </summary>
+    public IReadOnlyList<DateTime> Changes => _changes ??= EffectiveChanges();
+
+    private IReadOnlyList<DateTime>? _changes;
+
+    private List<DateTime> EffectiveChanges()
+    {
+        var candidates = Warnings
+            .SelectMany(w => w.StatusChanges())
+            .Distinct()
+            .Order()
+            .ToList();
+        var changes = new List<DateTime>();
+        HashSet<string>? previous = null;
+        foreach (var time in candidates)
+        {
+            var inForce = DrawnAt(time).Select(w => w.Id).ToHashSet(StringComparer.Ordinal);
+            if (previous is null || !inForce.SetEquals(previous))
+                changes.Add(time.UtcDateTime);
+            previous = inForce;
+        }
+
+        return changes;
+    }
+
+    /// <summary>
+    /// The warnings drawn at <paramref name="time"/>: those in force then, or,
+    /// with no time (a host with no clock, or a render with no time step),
+    /// every warning.
+    /// </summary>
+    /// <param name="time">The view time, or <c>null</c>.</param>
+    /// <returns>The warnings, in document order.</returns>
+    public IEnumerable<S412WeatherWarning> DrawnAt(DateTimeOffset? time) =>
+        time is { } t
+            ? Warnings.Where(w => w.StatusAt(t) == NavigationalWarningStatus.InForce)
+            : Warnings;
+
+    /// <summary>
+    /// From the earliest start to the latest end (<see cref="S412WeatherWarning.InForceUntil"/>)
+    /// of the warnings, or <c>null</c> when no warning has a known start or end.
+    /// With only starts known it ends at the latest start, and with only ends
+    /// it starts at the earliest end.
+    /// </summary>
+    public TimeCoverage? TimeCoverage
+    {
+        get
+        {
+            var starts = Warnings.Select(w => w.FixedDateRange?.Start).OfType<DateTimeOffset>().ToArray();
+            var ends = Warnings.Select(w => w.InForceUntil).OfType<DateTimeOffset>().ToArray();
+            if (starts.Length == 0 && ends.Length == 0)
+                return null;
+            return new TimeCoverage(
+                (starts.Length > 0 ? starts.Min() : ends.Min()).UtcDateTime,
+                (ends.Length > 0 ? ends.Max() : starts.Max()).UtcDateTime);
+        }
+    }
+
+    /// <summary>
+    /// When the dataset was issued: the latest <see cref="S412WeatherWarning.IssuedAt"/>
+    /// of its warnings, or <c>null</c> when none says.
+    /// </summary>
+    public DateTimeOffset? IssuedAt =>
+        Warnings.Select(w => w.IssuedAt).OfType<DateTimeOffset>().ToArray() is { Length: > 0 } issued ? issued.Max() : null;
+
+    /// <summary>
+    /// When the producer next expects to update the warnings: the earliest
+    /// <see cref="S412WeatherWarning.NextUpdateDateTime"/>, or <c>null</c>.
+    /// </summary>
+    public DateTimeOffset? NextUpdateDateTime =>
+        Warnings.Select(w => w.NextUpdateDateTime).OfType<DateTimeOffset>().ToArray() is { Length: > 0 } next ? next.Min() : null;
 
     /// <summary>
     /// Projects a feature-bag <see cref="S412Dataset"/> into the typed model.
@@ -197,9 +275,32 @@ public sealed class S412MarineWeatherWarnings
         if (string.IsNullOrWhiteSpace(date))
             return null;
         var moment = S100DateTimes.Combine(date, time);
+        if (moment is null && HoursAndMinutes(time) is { } completed && S100DateTimes.Combine(date, completed) is { } read)
+        {
+            // The S-412 encoding guide (DCEG §2) asks for a complete time
+            // (hhmmss); the upstream sample writes hhmm ("0600"). Read it as
+            // that time on the hour and minute, and say so.
+            ctx.Warn(
+                $"Time of day '{time}' isn't a complete time (hhmmss); read as {completed[..2]}:{completed[2..4]}:00.",
+                "attribute.time.incomplete",
+                id,
+                attribute);
+            return read;
+        }
+
         if (moment is null)
             ctx.Warn($"Can't read '{date}' with time of day '{time}' as a date and time.", "attribute.parse.date", id, attribute);
         return moment;
+    }
+
+    // "0600" or "0600Z" as "060000Z"; null for anything else.
+    private static string? HoursAndMinutes(string? time)
+    {
+        if (time is null)
+            return null;
+        var t = time.Trim();
+        var digits = t.EndsWith('Z') ? t[..^1] : t;
+        return digits.Length == 4 && digits.All(char.IsAsciiDigit) ? digits + "00Z" : null;
     }
 
     private static DateTimeOffset? ParseMoment(string? value, string id, string attribute, ProjectionContext ctx) =>
