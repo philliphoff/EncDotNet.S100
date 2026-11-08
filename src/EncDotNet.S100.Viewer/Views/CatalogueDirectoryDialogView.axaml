@@ -147,27 +147,34 @@
         <Style Selector="Button.stripItem.open /template/ Border#PART_Strip">
             <Setter Property="BoxShadow" Value="0 1 2 0 #22000000" />
         </Style>
-        <!-- The collapsed "Add a catalogue by URL" row. -->
-        <Style Selector="Button.addByUrl">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Padding" Value="12,0" />
-            <Setter Property="Height" Value="36" />
+        <!-- The registry row's action: a quiet card that reads as part of the list. -->
+        <Style Selector="Button.registryAction">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="10" />
             <Setter Property="HorizontalAlignment" Value="Stretch" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <ControlTemplate>
-                    <Panel Background="Transparent">
-                        <Rectangle Name="PART_Dash" Stroke="{DynamicResource BorderColor}" StrokeThickness="1"
-                                   StrokeDashArray="4,3" RadiusX="6" RadiusY="6" />
-                        <ContentPresenter Content="{TemplateBinding Content}" Padding="{TemplateBinding Padding}"
-                                          VerticalContentAlignment="Center" HorizontalContentAlignment="Stretch" />
-                    </Panel>
+                    <Border Name="PART_Card" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}" HorizontalContentAlignment="Stretch" />
+                    </Border>
                 </ControlTemplate>
             </Setter>
         </Style>
-        <Style Selector="Button.addByUrl:pointerover /template/ Rectangle#PART_Dash">
-            <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+        <Style Selector="Button.registryAction:pointerover /template/ Border#PART_Card">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Button#StripAddByUrl">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector=":is(UserControl).narrow Button#StripAddByUrl">
+            <Setter Property="IsVisible" Value="True" />
         </Style>
         <Style Selector="TextBox.error">
             <Setter Property="BorderBrush" Value="{DynamicResource DestructiveColor}" />
@@ -177,7 +184,7 @@
         </Style>
     </UserControl.Styles>
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <Grid RowDefinitions="Auto,Auto,*">
 
         <!-- Search across every category (D7); the counts are in the sidebar. -->
         <TextBox Grid.Row="0" Margin="0,0,0,10" Text="{Binding SearchText}"
@@ -186,7 +193,16 @@
                  AutomationProperties.AutomationId="Catalogues.Search"
                  PlaceholderText="{x:Static loc:Strings.Library_DirectorySearchWatermark}" />
 
-        <!-- Narrow: the categories as a segmented strip (D2). -->
+        <!-- Narrow: the categories as a segmented strip (D2), and Add by URL beside it. -->
+        <Button Grid.Row="1" Name="StripAddByUrl" Classes="link" HorizontalAlignment="Right"
+                VerticalAlignment="Top" Margin="0,8,0,0" Command="{Binding ShowAddByUrlCommand}"
+                AutomationProperties.Name="{x:Static loc:Strings.Library_DirectoryAddByUrl}"
+                AutomationProperties.AutomationId="Catalogues.AddByUrl">
+            <StackPanel Orientation="Horizontal" Spacing="5">
+                <ic:FluentIcon Icon="Add" FontSize="13" VerticalAlignment="Center" />
+                <TextBlock Text="{x:Static loc:Strings.Library_DirectoryAddByUrl}" FontSize="13" FontWeight="Medium" />
+            </StackPanel>
+        </Button>
         <Border Grid.Row="1" Name="CategoryStrip" Background="{DynamicResource MutedBackgroundColor}" CornerRadius="6"
                 Padding="3" Margin="0,0,0,10" HorizontalAlignment="Left">
             <ItemsControl ItemsSource="{Binding Categories}"
@@ -217,6 +233,19 @@
             <!-- Categories first, each with its count (D6); match counts while searching. -->
             <Border Grid.Column="0" Name="Sidebar" Width="176" Padding="0,0,12,0" Margin="0,0,12,0"
                     BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,1,0">
+                <DockPanel>
+                <!-- Add by URL from any category: it opens My sources, where the form is (D10). -->
+                <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,1,0,0"
+                        Padding="10,8,0,0" IsVisible="{Binding CanAddByUrl}">
+                    <Button Classes="link" HorizontalAlignment="Left" Command="{Binding ShowAddByUrlCommand}"
+                            AutomationProperties.Name="{x:Static loc:Strings.Library_DirectoryAddByUrl}"
+                            AutomationProperties.AutomationId="Catalogues.AddByUrl">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <ic:FluentIcon Icon="Add" FontSize="13" VerticalAlignment="Center" />
+                            <TextBlock Text="{x:Static loc:Strings.Library_DirectoryAddByUrl}" FontSize="13" FontWeight="Medium" />
+                        </StackPanel>
+                    </Button>
+                </Border>
                 <ItemsControl ItemsSource="{Binding Categories}"
                               AutomationProperties.Name="{x:Static loc:Strings.Label_SourceCategories}"
                               AutomationProperties.AutomationId="Catalogues.Categories">
@@ -240,9 +269,40 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+                </DockPanel>
             </Border>
 
-            <Panel Grid.Column="1">
+            <Grid Grid.Column="1" RowDefinitions="Auto,*">
+                <!-- My sources: the URL form heads the list (D10). -->
+                <Border Grid.Row="0" IsVisible="{Binding ShowsUrlForm}" BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,0,0,1" Padding="0,2,0,12" Margin="0,0,0,6">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="{x:Static loc:Strings.Library_DirectoryUrlHeading}" FontSize="12.5" FontWeight="SemiBold" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBox Name="UrlBox" Text="{Binding CatalogueUrl}" Classes.error="{Binding HasUrlError}"
+                                     FontFamily="{StaticResource MonoFontFamily}" FontSize="12.5"
+                                     AutomationProperties.Name="{x:Static loc:Strings.Library_DirectoryUrlHeading}"
+                                     AutomationProperties.AutomationId="Catalogues.Url"
+                                     PlaceholderText="https://…/catalog.xml or feed.json" />
+                            <Button Grid.Column="1" Classes="Outline" Command="{Binding AddUrlCommand}" IsDefault="False"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Button_CheckAndAdd}"
+                                    AutomationProperties.AutomationId="Catalogues.CheckAndAdd">
+                                <Panel>
+                                    <TextBlock Text="{x:Static loc:Strings.Button_CheckAndAdd}" IsVisible="{Binding !IsChecking}" />
+                                    <TextBlock Text="{x:Static loc:Strings.Button_Checking}" IsVisible="{Binding IsChecking}" />
+                                </Panel>
+                            </Button>
+                        </Grid>
+                        <TextBlock Text="{x:Static loc:Strings.Library_DirectoryUrlHelp}" IsVisible="{Binding ShowsUrlHelp}"
+                                   Classes="muted" FontSize="12" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding UrlError}" IsVisible="{Binding HasUrlError}"
+                                   Classes="destructive" FontSize="12" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding UrlSuccess}" IsVisible="{Binding UrlSuccess, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                   Classes="success" FontSize="12" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+            <Panel Grid.Row="1">
                 <ListBox Name="CatalogueList"
                          AutomationProperties.AutomationId="Catalogues.List"
                          ItemsSource="{Binding Rows}"
@@ -261,12 +321,46 @@
                         <DataTemplate x:DataType="vm:CatalogueEntryViewModel">
                             <Panel>
                                 <!-- Region or category header (not selectable). -->
-                                <TextBlock IsVisible="{Binding IsGroupHeader}" Text="{Binding HeaderText}"
+                                <TextBlock IsVisible="{Binding IsHeaderText}" Text="{Binding HeaderText}"
                                            Classes="muted" FontSize="11.5" FontWeight="SemiBold" LetterSpacing="0.7"
                                            Padding="4,10,4,4" />
 
+                                <!-- SECOM services: the registry's own row (D10), read only when asked (#822). -->
+                                <StackPanel IsVisible="{Binding IsRegistryRow}" Spacing="6" Margin="0,8,0,4">
+                                    <Button Classes="registryAction" Command="{Binding Directory.ShowRegistryCommand}"
+                                            IsVisible="{Binding Directory.CanShowRegistry, FallbackValue=False}"
+                                            AutomationProperties.Name="{x:Static loc:Strings.Label_ShowSecomServices}"
+                                            AutomationProperties.HelpText="{x:Static loc:Strings.Library_RegistryShow}"
+                                            AutomationProperties.AutomationId="Catalogues.ShowRegistry">
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                            <ic:FluentIcon Icon="Globe" FontSize="15" VerticalAlignment="Top" Margin="0,1,0,0"
+                                                           Foreground="{DynamicResource AccentBrush}" />
+                                            <StackPanel Grid.Column="1" Spacing="2">
+                                                <TextBlock Text="{x:Static loc:Strings.Library_RegistryListTitle}" FontSize="13.5"
+                                                           FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" />
+                                                <TextBlock Text="{x:Static loc:Strings.Library_RegistryShow}" Classes="muted"
+                                                           FontSize="12.5" TextWrapping="Wrap" FontWeight="Normal" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Button>
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="4,0"
+                                          IsVisible="{Binding Directory.IsRegistryLoaded, FallbackValue=False}">
+                                        <TextBlock Text="{Binding Directory.RegistryText}" Classes="muted" FontSize="12"
+                                                   TextWrapping="Wrap" AutomationProperties.AutomationId="Catalogues.RegistrySummary" />
+                                        <Button Grid.Column="1" Classes="link" Content="{x:Static loc:Strings.Label_RefreshRegistry}"
+                                                Command="{Binding Directory.RefreshRegistryCommand}" VerticalAlignment="Top"
+                                                AutomationProperties.AutomationId="Catalogues.RefreshRegistry" />
+                                    </Grid>
+                                    <TextBlock Text="{x:Static loc:Strings.Library_RegistryLoading}" Margin="4,0"
+                                               IsVisible="{Binding Directory.IsLoadingRegistry, FallbackValue=False}"
+                                               Classes="muted" FontSize="12" />
+                                    <TextBlock Text="{Binding Directory.RegistryError}" Margin="4,0"
+                                               IsVisible="{Binding Directory.HasRegistryError, FallbackValue=False}"
+                                               FontSize="12" TextWrapping="Wrap" Classes="destructive" />
+                                </StackPanel>
+
                                 <!-- Two lines; the tint is the selection, no radio mark (D8). -->
-                                <Border IsVisible="{Binding !IsGroupHeader}" Classes="catalogueRow"
+                                <Border IsVisible="{Binding IsSourceRow}" Classes="catalogueRow"
                                         Classes.chosen="{Binding IsSelected}">
                                     <StackPanel Spacing="1">
                                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
@@ -315,11 +409,20 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-                <TextBlock Text="{x:Static loc:Strings.Library_DirectoryNoMatches}" IsVisible="{Binding HasNoMatches}"
-                           Classes="muted" FontSize="13" HorizontalAlignment="Center" Margin="0,24,0,0" />
-                <TextBlock Text="{x:Static loc:Strings.Library_DirectoryNoSources}" IsVisible="{Binding IsCategoryEmpty}"
-                           Classes="muted" FontSize="13" HorizontalAlignment="Center" Margin="0,24,0,0" />
+                <!-- Nothing matches: offer to add it by URL (D10). -->
+                <StackPanel IsVisible="{Binding HasNoMatches}" Spacing="4" HorizontalAlignment="Center" Margin="12,28,12,0">
+                    <TextBlock Text="{Binding NoMatchesText}" Classes="muted" FontSize="13" TextWrapping="Wrap"
+                               TextAlignment="Center" />
+                    <Button Classes="link" Content="{x:Static loc:Strings.Library_DirectoryAddItByUrl}" FontSize="13"
+                            HorizontalAlignment="Center" IsVisible="{Binding CanAddByUrl}"
+                            Command="{Binding ShowAddByUrlCommand}"
+                            AutomationProperties.AutomationId="Catalogues.NoMatches.AddByUrl" />
+                </StackPanel>
+                <TextBlock Text="{Binding EmptyCategoryText}" IsVisible="{Binding IsCategoryEmpty}"
+                           Classes="muted" FontSize="13" TextWrapping="Wrap" TextAlignment="Center"
+                           HorizontalAlignment="Center" Margin="12,24,12,0" />
             </Panel>
+            </Grid>
 
             <!-- Wide: the chosen source's details on the side, so selecting never moves the list (D8, D14). -->
             <Border Grid.Column="2" Name="DetailsPane" Width="300" Margin="12,0,0,0" Padding="16,4,0,4"
@@ -408,69 +511,5 @@
             </Border>
         </Grid>
 
-        <!-- Add a catalogue by URL: collapsed to one dashed row until asked for. -->
-        <StackPanel Grid.Row="3" Margin="0,10,0,0" Spacing="6">
-            <!-- SECOM services from the MCP service registry (#822): read only when asked. -->
-            <Button Classes="addByUrl" IsVisible="{Binding CanShowRegistry}" Command="{Binding ShowRegistryCommand}"
-                    AutomationProperties.Name="{x:Static loc:Strings.Label_ShowSecomServices}"
-                    AutomationProperties.HelpText="{x:Static loc:Strings.Library_RegistryShow}"
-                    AutomationProperties.AutomationId="Catalogues.ShowRegistry">
-                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="6">
-                    <ic:FluentIcon Icon="Globe" FontSize="14" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="1" Text="{x:Static loc:Strings.Library_RegistryShow}" FontSize="13"
-                               VerticalAlignment="Center" />
-                </Grid>
-            </Button>
-            <TextBlock Text="{x:Static loc:Strings.Library_RegistryLoading}" IsVisible="{Binding IsLoadingRegistry}"
-                       Classes="muted" FontSize="12" />
-            <TextBlock Text="{Binding RegistryText}" IsVisible="{Binding IsRegistryLoaded}" Classes="muted" FontSize="12"
-                       TextWrapping="Wrap" AutomationProperties.AutomationId="Catalogues.RegistrySummary" />
-            <TextBlock Text="{Binding RegistryError}" IsVisible="{Binding HasRegistryError}" FontSize="12"
-                       TextWrapping="Wrap" Classes="destructive" />
-            <Panel IsVisible="{Binding CanAddByUrl}">
-            <Button Classes="addByUrl" IsVisible="{Binding !IsUrlPanelOpen}" Command="{Binding OpenUrlPanelCommand}"
-                    AutomationProperties.Name="{x:Static loc:Strings.Library_DirectoryAddByUrl}"
-                    AutomationProperties.AutomationId="Catalogues.AddByUrl">
-                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
-                    <ic:FluentIcon Icon="Add" FontSize="14" VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="1" Text="{x:Static loc:Strings.Library_DirectoryAddByUrl}" FontSize="13"
-                               VerticalAlignment="Center" />
-                    <TextBlock Grid.Column="2" Text="{x:Static loc:Strings.Library_DirectoryAddByUrlHint}" Classes="muted"
-                               FontSize="12" VerticalAlignment="Center" />
-                </Grid>
-            </Button>
-
-            <Border Classes="wizardPanel" Padding="12,10" IsVisible="{Binding IsUrlPanelOpen}">
-                <StackPanel Spacing="6">
-                    <Grid ColumnDefinitions="*,Auto">
-                        <TextBlock Text="{x:Static loc:Strings.Library_DirectoryUrlHeading}" FontSize="13" FontWeight="SemiBold" />
-                        <Button Grid.Column="1" Classes="link" Content="{x:Static loc:Strings.Button_Close}"
-                                AutomationProperties.AutomationId="Catalogues.CloseUrlPanel"
-                                Command="{Binding CloseUrlPanelCommand}" />
-                    </Grid>
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                        <TextBox Name="UrlBox" Text="{Binding CatalogueUrl}" Classes.error="{Binding HasUrlError}"
-                                 AutomationProperties.Name="{x:Static loc:Strings.Library_DirectoryUrlHeading}"
-                                 AutomationProperties.AutomationId="Catalogues.Url"
-                                 PlaceholderText="https://…/catalogue.xml" />
-                        <Button Grid.Column="1" Classes="Outline" Command="{Binding AddUrlCommand}"
-                                AutomationProperties.Name="{x:Static loc:Strings.Button_CheckAndAdd}"
-                                AutomationProperties.AutomationId="Catalogues.CheckAndAdd">
-                            <Panel>
-                                <TextBlock Text="{x:Static loc:Strings.Button_CheckAndAdd}" IsVisible="{Binding !IsChecking}" />
-                                <TextBlock Text="{x:Static loc:Strings.Button_Checking}" IsVisible="{Binding IsChecking}" />
-                            </Panel>
-                        </Button>
-                    </Grid>
-                    <TextBlock Text="{x:Static loc:Strings.Library_DirectoryUrlHelp}" IsVisible="{Binding ShowsUrlHelp}"
-                               Classes="muted" FontSize="12" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding UrlError}" IsVisible="{Binding HasUrlError}"
-                               Classes="destructive" FontSize="12" TextWrapping="Wrap" />
-                    <TextBlock Text="{Binding UrlSuccess}" IsVisible="{Binding UrlSuccess, Converter={x:Static ObjectConverters.IsNotNull}}"
-                               Classes="success" FontSize="12" TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
-        </Panel>
-        </StackPanel>
     </Grid>
 </UserControl>
