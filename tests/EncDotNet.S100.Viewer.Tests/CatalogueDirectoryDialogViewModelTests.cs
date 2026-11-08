@@ -8,9 +8,16 @@ public class CatalogueDirectoryDialogViewModelTests
 {
     private static KnownCatalogueSource Source(
         string id, string region, KnownCatalogueCoverage coverage = KnownCatalogueCoverage.Polygons, bool editions = true,
-        string provider = "Provider", string? country = null, KnownCatalogueFormat format = KnownCatalogueFormat.NoaaEnc) =>
-        new(id, id.ToUpperInvariant(), provider, country is null ? [region] : [region, country], format,
+        string provider = "Provider", string? country = null, KnownCatalogueFormat format = KnownCatalogueFormat.NoaaEnc,
+        KnownCatalogueCategory? category = null)
+    {
+        var source = new KnownCatalogueSource(id, id.ToUpperInvariant(), provider, country is null ? [region] : [region, country], format,
             new Uri($"https://{id}.test/catalog.xml"), new Uri($"https://{id}.test/"), coverage, editions, Sizes: false);
+        return category is { } c ? source with { Category = c } : source;
+    }
+
+    private static int CountOf(CatalogueDirectoryDialogViewModel vm, KnownCatalogueCategory category) =>
+        vm.Categories.Single(c => c.Category == category).Count;
 
     [Fact]
     public void Lists_entries_by_region_then_name_and_preselects_the_first()
@@ -37,7 +44,7 @@ public class CatalogueDirectoryDialogViewModelTests
         Assert.Equal(
             ["NORTH AMERICA · UNITED STATES", "NOAA", "USACE", "EUROPE", "AT", "BG", "SOUTH AMERICA", "BR"],
             vm.Rows.Select(r => r.IsGroupHeader ? r.HeaderText : r.Name));
-        Assert.Equal("5", vm.CountText);
+        Assert.Equal("5", vm.Categories[0].CountText);
     }
 
     [Fact]
@@ -54,7 +61,7 @@ public class CatalogueDirectoryDialogViewModelTests
         Assert.Equal("b", vm.SelectedEntry!.Source.Id);
         Assert.True(vm.SelectedEntry.IsSelected);
         Assert.False(vm.Rows[1].IsSelected);
-        Assert.Equal("2", vm.CountText);
+        Assert.Equal(2, CountOf(vm, KnownCatalogueCategory.Charts));
         Assert.Equal(2, vm.Entries.Count);
     }
 
@@ -75,7 +82,7 @@ public class CatalogueDirectoryDialogViewModelTests
         vm.SearchText = text;
 
         Assert.Equal(expected, vm.Rows.Where(r => !r.IsGroupHeader).Select(r => r.Source.Id));
-        Assert.Equal($"{expected.Length} of 3", vm.CountText);
+        Assert.Equal(expected.Length, CountOf(vm, KnownCatalogueCategory.Charts));
         Assert.False(vm.HasNoMatches);
     }
 
@@ -107,11 +114,107 @@ public class CatalogueDirectoryDialogViewModelTests
         vm.Preselect(feed);
 
         Assert.Equal(feed.Id, vm.SelectedEntry!.Source.Id);
-        Assert.Equal("CUSTOM", vm.Rows[^2].HeaderText);
+        Assert.Equal(KnownCatalogueCategory.User, vm.SelectedCategory);
+        Assert.Equal([feed.Id], vm.Rows.Select(r => r.Source.Id));
         Assert.Empty(store.Sources);
 
         vm.Preselect(Source("a", "Europe"));
         Assert.Equal("a", vm.SelectedEntry!.Source.Id);
+        Assert.Equal(KnownCatalogueCategory.Charts, vm.SelectedCategory);
+    }
+
+    [Fact]
+    public void Built_in_list_opens_on_charts_with_noaa_enc_chosen_and_counts_each_category()
+    {
+        var vm = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All);
+
+        Assert.Equal(KnownCatalogueCategory.Charts, vm.SelectedCategory);
+        Assert.Equal("noaa-enc", vm.SelectedEntry!.Source.Id);
+        Assert.Equal(
+            ["Charts", "Depth, tides & currents", "Weather & ocean", "SECOM services", "My sources"],
+            vm.Categories.Select(c => c.Label));
+        Assert.Equal([17, 3, 11, 1, 0], vm.Categories.Select(c => c.Count));
+        Assert.True(vm.Categories[0].IsOpen);
+        Assert.All(vm.Rows.Where(r => !r.IsGroupHeader), r => Assert.Equal(KnownCatalogueCategory.Charts, r.Category));
+
+        // Region is the second grouping inside a category.
+        Assert.Equal(
+            ["NORTH AMERICA · UNITED STATES", "EUROPE", "SOUTH AMERICA"],
+            vm.Rows.Where(r => r.IsGroupHeader).Select(r => r.HeaderText));
+    }
+
+    [Fact]
+    public void Opening_a_category_lists_only_its_sources_and_keeps_the_choice()
+    {
+        var vm = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All);
+
+        vm.Categories.Single(c => c.Category == KnownCatalogueCategory.Weather).SelectCommand.Execute(null);
+
+        Assert.Equal(KnownCatalogueCategory.Weather, vm.SelectedCategory);
+        Assert.Equal(11, vm.Rows.Count(r => !r.IsGroupHeader));
+        Assert.Contains(vm.Rows, r => r.Source.Id == "noaa-erddap-currents");
+        Assert.Equal(["NORTH AMERICA · UNITED STATES", "WORLDWIDE"], vm.Rows.Where(r => r.IsGroupHeader).Select(r => r.HeaderText));
+        Assert.Equal("noaa-enc", vm.SelectedEntry!.Source.Id);
+        Assert.False(vm.Categories[0].IsOpen);
+    }
+
+    [Fact]
+    public void Search_spans_categories_with_match_counts_and_dims_the_empty_ones()
+    {
+        var vm = new CatalogueDirectoryDialogViewModel(
+        [
+            Source("enc", "Europe"),
+            Source("s111", "Europe", provider: "Currents office", format: KnownCatalogueFormat.S100ForecastModels),
+            Source("hf", "Europe", provider: "HF radar currents", category: KnownCatalogueCategory.Weather),
+            Source("ww3", "Europe", category: KnownCatalogueCategory.Weather),
+        ]);
+
+        vm.SearchText = "currents";
+
+        Assert.True(vm.IsSearching);
+        Assert.Equal(["Depth, tides & currents", "S111", "Weather & ocean", "HF"],
+            vm.Rows.Select(r => r.IsGroupHeader ? r.GroupTitle : r.Name));
+        Assert.Equal([0, 1, 1, 0, 0], vm.Categories.Select(c => c.Count));
+        Assert.Equal([true, false, false, true, true], vm.Categories.Select(c => c.IsDimmed));
+        Assert.DoesNotContain(vm.Categories, c => c.IsOpen);
+
+        // Clearing returns to the open category.
+        vm.SearchText = string.Empty;
+        Assert.Equal(KnownCatalogueCategory.Charts, vm.SelectedCategory);
+        Assert.Equal(["enc"], vm.Rows.Where(r => !r.IsGroupHeader).Select(r => r.Source.Id));
+        Assert.Equal([1, 1, 2, 0, 0], vm.Categories.Select(c => c.Count));
+        Assert.DoesNotContain(vm.Categories, c => c.IsDimmed);
+    }
+
+    [Fact]
+    public void A_source_chosen_from_search_results_is_shown_in_its_category_when_the_search_clears()
+    {
+        var vm = new CatalogueDirectoryDialogViewModel(
+            [Source("enc", "Europe"), Source("s111", "Europe", format: KnownCatalogueFormat.S100ForecastModels)]);
+
+        vm.SearchText = "s111";
+        vm.SelectedEntry = vm.Rows.Single(r => !r.IsGroupHeader);
+        Assert.Equal(2, vm.Rows.Count); // the rows don't change under the pointer
+
+        vm.SearchText = string.Empty;
+
+        Assert.Equal(KnownCatalogueCategory.Depth, vm.SelectedCategory);
+        Assert.Contains(vm.SelectedEntry, vm.Rows);
+    }
+
+    [Fact]
+    public void Choosing_a_category_clears_the_search()
+    {
+        var vm = new CatalogueDirectoryDialogViewModel(
+            [Source("enc", "Europe"), Source("s111", "Europe", format: KnownCatalogueFormat.S100ForecastModels)]);
+        vm.SearchText = "nothing like it";
+        Assert.True(vm.HasNoMatches);
+
+        vm.Categories.Single(c => c.Category == KnownCatalogueCategory.Charts).SelectCommand.Execute(null);
+
+        Assert.Equal(string.Empty, vm.SearchText);
+        Assert.False(vm.HasNoMatches);
+        Assert.Equal(["enc"], vm.Rows.Where(r => !r.IsGroupHeader).Select(r => r.Source.Id));
     }
 
     [Fact]
@@ -174,18 +277,23 @@ public class CatalogueDirectoryDialogViewModelTests
         Assert.Equal("example.test · added by URL", added.ProviderAndRegion);
         Assert.Equal("chartcatalogs", added.FormatText);
         Assert.Same(added, vm.Entries[^1]);
-        Assert.Equal("Recognised as chartcatalogs and added under Custom.", vm.UrlSuccess);
+        Assert.Equal("Recognised as chartcatalogs and added to My sources.", vm.UrlSuccess);
         Assert.False(vm.ShowsUrlHelp);
-        Assert.Equal("CUSTOM", vm.Rows[^2].HeaderText);
+        Assert.Equal(KnownCatalogueCategory.User, vm.SelectedCategory);
+        Assert.Same(added, Assert.Single(vm.Rows));
+        Assert.Equal(1, CountOf(vm, KnownCatalogueCategory.User));
 
         // Persisted: a new dialog lists it, and it can be removed.
         var reopened = new CatalogueDirectoryDialogViewModel([Source("a", "X")], null,
             new UserCatalogueStore(Path.Combine(context.Root, "catalogues.json")));
         var entry = Assert.Single(reopened.Entries, e => e.IsUser);
         Assert.False(reopened.CanAddByUrl);
+        reopened.SelectedCategory = KnownCatalogueCategory.User;
         entry.RemoveCommand.Execute(null);
 
         Assert.DoesNotContain(reopened.Entries, e => e.IsUser);
+        Assert.Equal(KnownCatalogueCategory.User, reopened.SelectedCategory);
+        Assert.True(reopened.IsCategoryEmpty);
         Assert.Empty(new UserCatalogueStore(Path.Combine(context.Root, "catalogues.json")).Sources);
     }
 

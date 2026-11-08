@@ -82,6 +82,43 @@
         <Style Selector="Button.addByUrl:pointerover /template/ Rectangle#PART_Dash">
             <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
         </Style>
+        <!-- Sidebar categories: a quiet row, tinted when open, dimmed when a search finds nothing in it. -->
+        <Style Selector="Button.categoryRow">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="PART_Row" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}" HorizontalContentAlignment="Stretch"
+                                          VerticalContentAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.categoryRow:pointerover">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
+        <Style Selector="Button.categoryRow.open">
+            <Setter Property="Background" Value="{DynamicResource WizardSelectedBrush}" />
+        </Style>
+        <Style Selector="Button.categoryRow TextBlock.categoryLabel">
+            <Setter Property="FontSize" Value="13.5" />
+            <Setter Property="FontWeight" Value="Medium" />
+        </Style>
+        <Style Selector="Button.categoryRow.open TextBlock.categoryLabel">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Button.categoryRow.dimmed">
+            <Setter Property="Opacity" Value="0.45" />
+        </Style>
         <Style Selector="TextBox.error">
             <Setter Property="BorderBrush" Value="{DynamicResource DestructiveColor}" />
         </Style>
@@ -92,18 +129,43 @@
 
     <Grid RowDefinitions="Auto,*,Auto">
 
-        <!-- Search, with the count at the right. -->
-        <Panel Grid.Row="0" Margin="0,0,0,8">
-            <TextBox Text="{Binding SearchText}" Padding="10,0,72,0"
-                     AutomationProperties.Name="{x:Static loc:Strings.Label_SearchCatalogues}"
-                     AutomationProperties.HelpText="{x:Static loc:Strings.Library_DirectorySearchWatermark}"
-                     AutomationProperties.AutomationId="Catalogues.Search"
-                     PlaceholderText="{x:Static loc:Strings.Library_DirectorySearchWatermark}" />
-            <TextBlock Text="{Binding CountText}" Classes="muted" FontSize="12" IsHitTestVisible="False"
-                       HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0" />
-        </Panel>
+        <!-- Search across every category (D7); the counts are in the sidebar. -->
+        <TextBox Grid.Row="0" Margin="0,0,0,10" Text="{Binding SearchText}"
+                 AutomationProperties.Name="{x:Static loc:Strings.Label_SearchCatalogues}"
+                 AutomationProperties.HelpText="{x:Static loc:Strings.Library_DirectorySearchWatermark}"
+                 AutomationProperties.AutomationId="Catalogues.Search"
+                 PlaceholderText="{x:Static loc:Strings.Library_DirectorySearchWatermark}" />
 
-        <Panel Grid.Row="1">
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,*">
+            <!-- Categories first, each with its count (D6); match counts while searching. -->
+            <Border Grid.Column="0" Width="176" Padding="0,0,12,0" Margin="0,0,12,0"
+                    BorderBrush="{DynamicResource BorderColor}" BorderThickness="0,0,1,0">
+                <ItemsControl ItemsSource="{Binding Categories}"
+                              AutomationProperties.Name="{x:Static loc:Strings.Label_SourceCategories}"
+                              AutomationProperties.AutomationId="Catalogues.Categories">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Spacing="2" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CatalogueCategoryViewModel">
+                            <Button Classes="categoryRow" Classes.open="{Binding IsOpen}" Classes.dimmed="{Binding IsDimmed}"
+                                    Command="{Binding SelectCommand}"
+                                    AutomationProperties.Name="{Binding AccessibleName}"
+                                    AutomationProperties.AutomationId="Catalogues.Category">
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Classes="categoryLabel" Text="{Binding Label}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{Binding CountText}" Classes="muted" FontSize="12"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+
+        <Panel Grid.Column="1">
             <ListBox Name="CatalogueList"
                      AutomationProperties.AutomationId="Catalogues.List"
                      ItemsSource="{Binding Rows}"
@@ -207,7 +269,10 @@
             </ListBox>
             <TextBlock Text="{x:Static loc:Strings.Library_DirectoryNoMatches}" IsVisible="{Binding HasNoMatches}"
                        Classes="muted" FontSize="13" HorizontalAlignment="Center" Margin="0,24,0,0" />
+            <TextBlock Text="{x:Static loc:Strings.Library_DirectoryNoSources}" IsVisible="{Binding IsCategoryEmpty}"
+                       Classes="muted" FontSize="13" HorizontalAlignment="Center" Margin="0,24,0,0" />
         </Panel>
+        </Grid>
 
         <!-- Add a catalogue by URL: collapsed to one dashed row until asked for. -->
         <StackPanel Grid.Row="2" Margin="0,10,0,0" Spacing="6">

@@ -3792,7 +3792,7 @@
     <value>Edit route</value>
   </data>
   <data name="Label_SearchCatalogues" xml:space="preserve">
-    <value>Search catalogues</value>
+    <value>Search sources</value>
   </data>
   <data name="Label_SearchFeatures" xml:space="preserve">
     <value>Search features</value>
@@ -3969,13 +3969,10 @@
     <value>Only the catalogue is indexed. Nothing is downloaded until you load cells from the Library panel.</value>
   </data>
   <data name="Library_DirectorySearchWatermark" xml:space="preserve">
-    <value>Search by name, provider or country</value>
-  </data>
-  <data name="Library_DirectoryCountFormat" xml:space="preserve">
-    <value>{0} of {1}</value>
+    <value>Search sources by name, provider or country</value>
   </data>
   <data name="Library_DirectoryNoMatches" xml:space="preserve">
-    <value>No catalogue matches. Add one by URL below.</value>
+    <value>No source matches. Add one by URL below.</value>
   </data>
   <data name="Library_DirectoryAddByUrl" xml:space="preserve">
     <value>Add a catalogue by URL</value>
@@ -3987,10 +3984,10 @@
     <value>Catalogue URL</value>
   </data>
   <data name="Library_DirectoryUrlHelp" xml:space="preserve">
-    <value>The format is recognised from the document itself. Added catalogues are listed under Custom.</value>
+    <value>The format is recognised from the document itself. Added sources are listed under My sources.</value>
   </data>
   <data name="Library_DirectoryUrlRecognisedFormat" xml:space="preserve">
-    <value>Recognised as {0} and added under Custom.</value>
+    <value>Recognised as {0} and added to My sources.</value>
   </data>
   <data name="Library_DirectoryAddedByUrl" xml:space="preserve">
     <value>added by URL</value>
@@ -4000,6 +3997,34 @@
   </data>
   <data name="Library_DirectoryRemove" xml:space="preserve">
     <value>Remove</value>
+  </data>
+  <data name="Library_Category_Charts" xml:space="preserve">
+    <value>Charts</value>
+  </data>
+  <data name="Library_Category_Depth" xml:space="preserve">
+    <value>Depth, tides &amp; currents</value>
+  </data>
+  <data name="Library_Category_Weather" xml:space="preserve">
+    <value>Weather &amp; ocean</value>
+  </data>
+  <data name="Library_Category_Secom" xml:space="preserve">
+    <value>SECOM services</value>
+  </data>
+  <data name="Library_Category_User" xml:space="preserve">
+    <value>My sources</value>
+  </data>
+  <data name="Library_CategoryCountMoreFormat" xml:space="preserve">
+    <value>{0:N0}+</value>
+    <comment>A category's count when more sources can be listed (SECOM services before the registry is read).</comment>
+  </data>
+  <data name="Library_CategoryAccessibleFormat" xml:space="preserve">
+    <value>{0}, {1} sources</value>
+  </data>
+  <data name="Label_SourceCategories" xml:space="preserve">
+    <value>Source categories</value>
+  </data>
+  <data name="Library_DirectoryNoSources" xml:space="preserve">
+    <value>Nothing added yet.</value>
   </data>
   <data name="Library_Format_NoaaEnc" xml:space="preserve">
     <value>NOAA ENC</value>
