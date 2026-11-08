@@ -790,8 +790,11 @@ public partial class App : Application
                 sp.GetRequiredService<Library.UserCatalogueStore>(),
                 sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(),
                 loadSecomRegistry: (refresh, ct) => registry.GetServicesAsync(refresh, ct),
-                probeSecom: (uri, ct) => registry.ProbeAsync(uri, cancellationToken: ct));
+                probeSecom: (uri, ct) => registry.ProbeAsync(uri, cancellationToken: ct),
+                session: sp.GetRequiredService<CatalogueDirectorySession>());
         });
+        // The directory's last source and category, for the app's lifetime (Q5).
+        services.AddSingleton<CatalogueDirectorySession>();
         // SECOM services from the MCP service registry (#822), cached with the feeds.
         services.AddSingleton(sp =>
         {

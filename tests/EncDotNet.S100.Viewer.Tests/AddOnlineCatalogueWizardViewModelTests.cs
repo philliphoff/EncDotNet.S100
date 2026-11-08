@@ -262,6 +262,68 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task A_single_download_skips_what_to_include()
+    {
+        var read = _read;
+        _read = uri => read(uri) is var full ? full with { Cells = [full.Cells[0]] } : null!;
+        var wizard = CreateWizard(Source("a"));
+        wizard.Start(null);
+
+        await NextAsync(wizard);
+
+        Assert.True(wizard.IsAddToStep);
+        Assert.Equal(3, wizard.CurrentStep);
+        Assert.True(wizard.Steps[1].IsDone);
+        Assert.Equal(wizard.Scope!.ScopeDescription, wizard.Steps[1].Value);
+        Assert.True(wizard.AddCommand.CanExecute(null));
+
+        // What to include is still there to read, and Next comes back.
+        wizard.BackCommand.Execute(null);
+        Assert.True(wizard.IsIncludeStep);
+        Assert.True(wizard.Scope.IsSingleEntry);
+        await NextAsync(wizard);
+        Assert.True(wizard.IsAddToStep);
+        Assert.Single(_loads);
+    }
+
+    [Fact]
+    public async Task Next_reads_the_catalogue_on_the_source_step_and_waits()
+    {
+        var gate = new TaskCompletionSource<NoaaEncProductCatalog>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var wizard = new AddOnlineCatalogueWizardViewModel(
+            new CatalogueDirectoryDialogViewModel([Source("a")]),
+            () => new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { NoaaEnc = (_, _) => gate.Task }));
+        wizard.Start(null);
+
+        var next = NextAsync(wizard);
+
+        Assert.True(wizard.IsCatalogueStep);
+        Assert.True(wizard.IsReadingCatalogue);
+        Assert.False(wizard.NextCommand.CanExecute(null));
+        Assert.Equal(Resources.Strings.Wizard_Loading, wizard.SelectionText);
+
+        gate.SetResult(_read(new Uri("https://a.test/catalog.xml")));
+        await next;
+
+        Assert.False(wizard.IsReadingCatalogue);
+        Assert.True(wizard.IsIncludeStep);
+    }
+
+    [Fact]
+    public async Task A_failed_read_on_next_shows_the_error_on_what_to_include()
+    {
+        _read = _ => throw new HttpRequestException("offline");
+        var wizard = CreateWizard(Source("a"));
+        wizard.Start(null);
+
+        await NextAsync(wizard);
+
+        Assert.True(wizard.IsIncludeStep);
+        Assert.True(wizard.Scope!.HasLoadError);
+        Assert.False(wizard.IsReadingCatalogue);
+    }
+
+    [Fact]
     public void Cancel_closes_without_adding()
     {
         var wizard = CreateWizard(Source("a"));
