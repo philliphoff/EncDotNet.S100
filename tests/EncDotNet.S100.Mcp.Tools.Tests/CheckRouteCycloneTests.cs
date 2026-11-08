@@ -39,7 +39,7 @@ public class CheckRouteCycloneTests
 
     private static async Task<CheckRouteResult> Ok(CheckRouteRequest request)
     {
-        var result = await new CheckRouteTool(Catalog()).InvokeAsync(request, TestContext.Current.CancellationToken);
+        var result = await CheckRouteTools.Create(Catalog()).InvokeAsync(request, TestContext.Current.CancellationToken);
         Assert.True(result.TryGetValue(out var value), result.TryGetError(out var e) ? e.Message : "");
         return value!;
     }
@@ -117,7 +117,7 @@ public class CheckRouteCycloneTests
     public async Task Bad_cyclone_settings_are_refused(int? against, string? inside, string parameter)
     {
         var (polyline, _) = Route();
-        var result = await new CheckRouteTool(Catalog()).InvokeAsync(
+        var result = await CheckRouteTools.Create(Catalog()).InvokeAsync(
             new CheckRouteRequest(Polyline: polyline, CycloneCheckAgainstKnots: against, CycloneMustReviewInside: inside),
             TestContext.Current.CancellationToken);
 

@@ -167,7 +167,7 @@ public sealed class ClearanceTests : IDisposable
         var (f, vm) = await CheckedAsync();
         f.Check.SetCursor(Meters(0.11));
 
-        var tool = new CheckRouteTool(f.Catalog, new ViewerPassageRouteProvider(f.Routes, new InlineInvoker()));
+        var tool = new CheckRouteTool(f.Catalog, routes: new ViewerPassageRouteProvider(f.Routes, new InlineInvoker()), sources: PassageCheckFixture.NewSources(), time: TimeProvider.System);
         var result = await tool.InvokeAsync(new CheckRouteRequest(IncludeSamples: true, MaxSamples: 10_000), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetValue(out var value));
         var sample = value!.Clearance!.Samples!.Single(s => s.Index == vm.ReadoutSample!.Index);

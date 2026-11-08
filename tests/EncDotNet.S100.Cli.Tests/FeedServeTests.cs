@@ -76,7 +76,7 @@ public sealed class FeedServeTests : IDisposable
     [Fact]
     public async Task A_served_feed_revalidates_and_its_items_download_on_another_machine()
     {
-        var publisher = new FeedPublisher(PublishedFolder(), "Test charts");
+        var publisher = new FeedPublisher(PublishedFolder(), title: "Test charts", timeProvider: TimeProvider.System);
         await using var server = await FeedServer.StartAsync(publisher, IPAddress.Loopback, 0, "secret-token", cancellationToken: TestContext.Current.CancellationToken);
         using var http = new HttpClient();
 
@@ -126,7 +126,7 @@ public sealed class FeedServeTests : IDisposable
     public async Task A_library_on_another_machine_indexes_downloads_and_follows_the_served_feed()
     {
         var folder = PublishedFolder();
-        var publisher = new FeedPublisher(folder, refreshInterval: TimeSpan.FromMilliseconds(1));
+        var publisher = new FeedPublisher(folder, refreshInterval: TimeSpan.FromMilliseconds(1), timeProvider: TimeProvider.System);
         await using var server = await FeedServer.StartAsync(publisher, IPAddress.Loopback, 0, "t0ken", cancellationToken: TestContext.Current.CancellationToken);
         using var http = new HttpClient();
         var indexer = CollectionIndexer.CreateDefault(feeds:
@@ -158,7 +158,7 @@ public sealed class FeedServeTests : IDisposable
     [Fact]
     public async Task The_feed_is_compressed_when_the_client_asks()
     {
-        var publisher = new FeedPublisher(PublishedFolder());
+        var publisher = new FeedPublisher(PublishedFolder(), timeProvider: TimeProvider.System);
         await using var server = await FeedServer.StartAsync(publisher, IPAddress.Loopback, 0, token: null, cancellationToken: TestContext.Current.CancellationToken);
         using var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.None });
         using var request = new HttpRequestMessage(HttpMethod.Get, server.FeedUri);

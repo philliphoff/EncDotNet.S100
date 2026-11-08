@@ -247,7 +247,7 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
     public async Task Check_route_returns_the_findings_list_route_checks()
     {
         using var s = await Start(fixture.Import("421ZZ00SPITX"));
-        var tool = new CheckRouteTool(s.Catalog, new ViewerPassageRouteProvider(s.Routes, new InlineInvoker()));
+        var tool = new CheckRouteTool(s.Catalog, routes: new ViewerPassageRouteProvider(s.Routes, new InlineInvoker()), sources: PassageCheckFixture.NewSources(), time: TimeProvider.System);
 
         var result = await tool.InvokeAsync(new CheckRouteRequest(), TestContext.Current.CancellationToken);
 

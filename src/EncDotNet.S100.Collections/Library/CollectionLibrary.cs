@@ -62,8 +62,8 @@ public sealed class CollectionLibrary : IDisposable
     /// <summary>Creates a library over the store and index cache named by <paramref name="options"/>.</summary>
     /// <param name="indexer">Indexes each source.</param>
     /// <param name="options">Where the library persists, and how.</param>
-    /// <param name="logger">Logs store, cache and indexing failures.</param>
-    /// <param name="timeProvider">The clock for creation and index times (tests).</param>
+    /// <param name="logger">Logs store, cache and indexing failures; <see langword="null"/> for none.</param>
+    /// <param name="timeProvider">The clock for creation and index times; <see langword="null"/> for <see cref="TimeProvider.System"/>.</param>
     public CollectionLibrary(
         CollectionIndexer indexer,
         CollectionLibraryOptions options,

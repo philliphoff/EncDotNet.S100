@@ -55,9 +55,9 @@ public static class S100McpTools
             new CountFeaturesTool(catalog),
             new SearchFeaturesTool(catalog),
             new SampleCoverageAlongTool(catalog),
-            new ListSpecsTool(catalog),
+            new ListSpecsTool(catalog, EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default),
             new ListTimeStepsTool(catalog),
-            new CheckRouteTool(catalog, passageRoutes, routeCheckSources))
+            new CheckRouteTool(catalog, passageRoutes, routeCheckSources, TimeProvider.System))
             .ToList();
     }
 }

@@ -52,7 +52,7 @@ Console.CancelKeyPress += (_, e) =>
     cts.Cancel();
 };
 
-var driver = new AisStreamIoMessageSource(new AisStreamIoOptions { ApiKey = apiKey });
+var driver = new AisStreamIoMessageSource(new AisStreamIoOptions { ApiKey = apiKey }, transportFactory: () => new ClientWebSocketTransport());
 await using var source = new AisDynamicFeatureSource(
     id: "ais",
     messageSource: driver,

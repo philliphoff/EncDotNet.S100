@@ -10,7 +10,7 @@ public class ListSpecsToolTests
     public async Task Empty_catalog_lists_every_known_spec_with_zero_counts()
     {
         var catalog = new FakeDatasetCatalog();
-        var tool = new ListSpecsTool(catalog);
+        var tool = new ListSpecsTool(catalog, registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
 
         var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
 
@@ -32,7 +32,7 @@ public class ListSpecsToolTests
         catalog.Add(LoadedDatasetFactory.S124("a"));
         catalog.Add(LoadedDatasetFactory.S124("b"));
         catalog.Add(LoadedDatasetFactory.S122("c"));
-        var tool = new ListSpecsTool(catalog);
+        var tool = new ListSpecsTool(catalog, registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
 
         var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
 
@@ -49,7 +49,7 @@ public class ListSpecsToolTests
     public async Task Capabilities_flag_coverage_versus_vector_specs_correctly()
     {
         var catalog = new FakeDatasetCatalog();
-        var tool = new ListSpecsTool(catalog);
+        var tool = new ListSpecsTool(catalog, registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
 
         var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
 
@@ -97,7 +97,7 @@ public class ListSpecsToolTests
     [Fact]
     public async Task PortrayalNote_marks_S104_as_SoundCharts_portrayal_only()
     {
-        var tool = new ListSpecsTool(new FakeDatasetCatalog());
+        var tool = new ListSpecsTool(new FakeDatasetCatalog(), registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
 
         var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
 
@@ -126,7 +126,7 @@ public class ListSpecsToolTests
     [Fact]
     public async Task Built_in_products_are_listed_from_the_registry_as_S100()
     {
-        var tool = new ListSpecsTool(new FakeDatasetCatalog());
+        var tool = new ListSpecsTool(new FakeDatasetCatalog(), registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
 
         var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
 
@@ -139,7 +139,7 @@ public class ListSpecsToolTests
     [Fact]
     public async Task The_built_in_weather_formats_are_listed_as_not_S100()
     {
-        var tool = new ListSpecsTool(new FakeDatasetCatalog());
+        var tool = new ListSpecsTool(new FakeDatasetCatalog(), registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
 
         var result = await tool.InvokeAsync(new ListSpecsRequest(), TestContext.Current.CancellationToken);
 

@@ -114,7 +114,7 @@ internal sealed class NmeaWeatherOverlay : IAsyncDisposable
                 case "tcp":
                     return string.IsNullOrEmpty(uri.Host)
                         ? null
-                        : new NmeaTcpLineSource(uri.Host, uri.IsDefaultPort || uri.Port <= 0 ? NmeaUdpLineSource.DefaultPort : uri.Port);
+                        : new NmeaTcpLineSource(uri.Host, TimeProvider.System, uri.IsDefaultPort || uri.Port <= 0 ? NmeaUdpLineSource.DefaultPort : uri.Port);
                 case "file":
                     return Replay(uri.LocalPath);
                 default:

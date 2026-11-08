@@ -50,10 +50,10 @@ internal sealed class TileMemoryPool
     private static readonly long ReapIntervalTicks = Stopwatch.Frequency;
 
     /// <summary>The process-wide pool of CPU tile images.</summary>
-    public static TileMemoryPool Raster { get; } = new(() => S100VectorTileRenderer.BudgetBytes, "raster");
+    public static TileMemoryPool Raster { get; } = new(() => S100VectorTileRenderer.BudgetBytes, "raster", Stopwatch.GetTimestamp);
 
     /// <summary>The process-wide pool of GPU-resident tile textures.</summary>
-    public static TileMemoryPool Gpu { get; } = new(() => S100VectorTileRenderer.GpuBudgetBytes, "gpu");
+    public static TileMemoryPool Gpu { get; } = new(() => S100VectorTileRenderer.GpuBudgetBytes, "gpu", Stopwatch.GetTimestamp);
 
     private readonly Func<long> _limit;
     private readonly Func<long> _clock;
@@ -71,12 +71,12 @@ internal sealed class TileMemoryPool
     /// <param name="name">A name for diagnostics.</param>
     /// <param name="clock">
     /// The <see cref="Stopwatch"/> timestamp source pins and pending disposals
-    /// are timed by, or <see langword="null"/> for <see cref="Stopwatch.GetTimestamp"/>.
+    /// are timed by (the renderer passes <see cref="Stopwatch.GetTimestamp"/>).
     /// </param>
-    internal TileMemoryPool(Func<long> limitBytes, string name, Func<long>? clock = null)
+    internal TileMemoryPool(Func<long> limitBytes, string name, Func<long> clock)
     {
         _limit = limitBytes ?? throw new ArgumentNullException(nameof(limitBytes));
-        _clock = clock ?? Stopwatch.GetTimestamp;
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         Name = name;
     }
 
