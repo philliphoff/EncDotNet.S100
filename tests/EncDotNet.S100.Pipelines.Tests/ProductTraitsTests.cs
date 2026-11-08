@@ -163,6 +163,16 @@ public class ProductTraitsTests
         Assert.Null(registration.DefaultPlaneFor("area"));
     }
 
+    [Theory]
+    [InlineData("S-124")]
+    [InlineData("S-412")]
+    public void WarningProducts_DefaultToTheCautionsAndWarningsPlane(string spec)
+    {
+        // S-412 weather warnings sit with S-124 navigational warnings
+        // (MSC.530(106)/Rev.1 §Appendix 2 layers 3-4; issue #841).
+        Assert.Equal(S98DisplayPlane.CautionsAndWarnings, ProductRegistry.Default.DisplayPlanes.GetDefaultPlane(spec));
+    }
+
     [Fact]
     public void DefaultPlanes_ComeFromTheRegistration()
     {
