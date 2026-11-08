@@ -208,6 +208,7 @@ public static class LoadedDatasetProjector
             S131DatasetData d => Gml(id, "S-131", d.Model.ReadMetadata(), data),
             S201DatasetData d => Gml(id, "S-201", d.Model.ReadMetadata(), data),
             S411DatasetData d => Gml(id, "S-411", d.Model.ReadMetadata(), data),
+            S412DatasetData d => Gml(id, "S-412", d.Model.ReadMetadata(), data),
             S421DatasetData d => Gml(id, "S-421", d.Model.ReadMetadata(), data),
             S102CoverageData d => new LoadedDataset(
                 id, d.Source.Spec, ResolveCoverageBounds(d.Source, ComputeS102Bounds(d.Source.Dataset), transforms), null, data),

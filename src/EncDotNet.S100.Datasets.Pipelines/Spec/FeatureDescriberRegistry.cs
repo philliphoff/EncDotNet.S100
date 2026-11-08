@@ -42,6 +42,7 @@ public sealed class FeatureDescriberRegistry
         new GmlFeatureDescriber("S-131"),
         new GmlFeatureDescriber("S-201"),
         new GmlFeatureDescriber("S-411"),
+        new GmlFeatureDescriber("S-412"),
         new GmlFeatureDescriber("S-421"),
         // CAP weather warnings (not S-100): each area's attributes are its
         // pick report's values.

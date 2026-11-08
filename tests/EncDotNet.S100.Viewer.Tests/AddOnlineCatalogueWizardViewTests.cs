@@ -14,7 +14,7 @@ using EncDotNet.S100.Viewer.Views;
 namespace EncDotNet.S100.Viewer.Tests;
 
 /// <summary>
-/// Smoke test that the "Add online catalogue" wizard's AXAML (and its three
+/// Smoke test that the "Add online source" wizard's AXAML (and its three
 /// nested step views) loads and lays out against its view-models at every
 /// step without error. Catches XAML/compiled-binding regressions that the
 /// view-model tests cannot.
@@ -47,12 +47,12 @@ public sealed class AddOnlineCatalogueWizardViewTests
         Layout(window);
 
         wizard.NextCommand.Execute(null);
-        Assert.Equal(3, wizard.CurrentStep);
+        Assert.Equal(2, wizard.CurrentStep);
         wizard.Scope!.Choices("States")[0].IsSelected = true;
         Layout(window);
 
         wizard.NextCommand.Execute(null);
-        Assert.Equal(4, wizard.CurrentStep);
+        Assert.Equal(3, wizard.CurrentStep);
         Layout(window);
 
         Assert.Equal(640, view.Bounds.Width);
@@ -86,7 +86,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
         Layout(window);
 
         wizard.NextCommand.Execute(null);
-        Assert.Equal(3, wizard.CurrentStep);
+        Assert.Equal(2, wizard.CurrentStep);
         Assert.True(wizard.Scope!.IsRegionPicker);
         wizard.Scope.SelectedFacetGroup = wizard.Scope.FacetGroups[1];
         wizard.Scope.FacetGroups[1].Options[0].IsSelected = true;
@@ -94,7 +94,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
         Layout(window);
 
         wizard.NextCommand.Execute(null);
-        Assert.Equal(4, wizard.CurrentStep);
+        Assert.Equal(3, wizard.CurrentStep);
         Layout(window);
 
         Assert.Equal(640, view.Bounds.Width);
@@ -143,8 +143,29 @@ public sealed class AddOnlineCatalogueWizardViewTests
         }
 
         // With room to spare, the dialog keeps its designed height.
-        if (windowHeight >= 600 + DialogWindowFit.WindowMargin)
-            Assert.Equal(600, view.Bounds.Height);
+        if (windowHeight >= 640 + DialogWindowFit.WindowMargin)
+            Assert.Equal(640, view.Bounds.Height);
+        window.Close();
+    }
+
+    [AvaloniaTheory]
+    [InlineData(1400, 920)]  // room to spare: the designed width
+    [InlineData(900, 804)]   // window − 96
+    [InlineData(800, 704)]   // the main window's minimum
+    public void The_dialog_is_920_wide_but_never_wider_than_the_window_allows(double windowWidth, double expected)
+    {
+        using var context = new LibraryTestContext();
+        using var library = context.CreateService();
+        var wizard = CreateNoaaEncWizard(library);
+        wizard.Start(null);
+
+        var view = new AddOnlineCatalogueWizardView { DataContext = wizard };
+        var window = new Window { Content = view, Width = windowWidth, Height = 800 };
+        window.Show();
+        window.Measure(new Size(windowWidth, 800));
+        window.Arrange(new Rect(0, 0, windowWidth, 800));
+
+        Assert.Equal(expected, view.Bounds.Width);
         window.Close();
     }
 
@@ -164,7 +185,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
         host.Type("NOAA ENC");
         host.Click(CatalogueRow(host, "noaa-enc"));
         host.Click(host.Find<Button>("Wizard.Next"));
-        Assert.Equal(3, wizard.CurrentStep);
+        Assert.Equal(2, wizard.CurrentStep);
 
         // Step 2: only one state.
         var state = wizard.Scope!.Choices("States")[0];
@@ -172,7 +193,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
         host.Click(host.FindAll<CheckBox>("CatalogueScope.Option").Single(c => ReferenceEquals(c.DataContext, state)));
         Assert.True(state.IsSelected);
         host.Click(host.Find<Button>("Wizard.Next"));
-        Assert.Equal(4, wizard.CurrentStep);
+        Assert.Equal(3, wizard.CurrentStep);
 
         // Step 3: a new collection, named by the user.
         host.Click(host.Find<RadioButton>("CatalogueTarget.CreateNew"));

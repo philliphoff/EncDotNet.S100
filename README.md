@@ -91,6 +91,7 @@ every product with a ✅ below ships a normative validation rule pack.
 | **S-131** | Marine Harbour Infrastructure | GML | Lua (Part 9A) | ✅ |
 | **S-201** | Aids to Navigation Information (IALA) | GML | XSLT | ✅ |
 | **S-411** | Sea Ice Information | GML | XSLT | ✅ |
+| **S-412** *(draft)* | Marine Weather Warnings | GML | XSLT | — |
 | **S-421** | Route Plans | GML | XSLT | ✅ |
 | **S-401** *(IEHG)* | Inland ENC | ISO 8211 | Lua (Part 9A) | — |
 | **S-57** *(legacy)* | Electronic Navigational Charts (Ed 3.1) | ISO 8211 | via S-101 pipeline | ✅ (delegated) |
@@ -261,6 +262,7 @@ split into focused packages.
 | **EncDotNet.S100.Datasets.S131** | S-131 marine harbour infrastructure reader, Lua portrayal pipeline (GML+Lua hybrid), validation pack. |
 | **EncDotNet.S100.Datasets.S201** | S-201 aids to navigation information (IALA) reader, XSLT portrayal pipeline, typed AtoN inventory data model, validation pack. |
 | **EncDotNet.S100.Datasets.S411** | S-411 sea ice reader, XSLT portrayal pipeline, validation pack. |
+| **EncDotNet.S100.Datasets.S412** | S-412 marine weather warnings reader (draft specification), typed warnings model, XSLT portrayal. |
 | **EncDotNet.S100.Datasets.S421** | S-421 route plan reader, XSLT portrayal pipeline, validation pack. |
 | **EncDotNet.S100.Datasets.S57** | Legacy S-57 ENC reader that translates to the in-memory S-101 model; pre-translation rules + delegation to the S-101 validation pack. |
 | **EncDotNet.S100.Datasets.Grib** | Managed GRIB2 decoder for wind and wave grids: regular latitude/longitude grids, analysis, forecast and time-interval products, and simple, complex, spatially differenced and PNG packing with bitmaps. Indexes fields on open, decodes on demand, and reads a whole file (or appended files) into a weather grid set. Drawn by `GribDatasetProcessor` in Datasets.Pipelines. No native dependencies. Not for navigation. |

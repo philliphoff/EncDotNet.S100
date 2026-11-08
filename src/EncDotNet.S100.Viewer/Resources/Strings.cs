@@ -1432,8 +1432,7 @@ internal static partial class Strings
     public static string Wizard_StepInclude => Get(nameof(Wizard_StepInclude));
     public static string Wizard_StepAddTo => Get(nameof(Wizard_StepAddTo));
     public static string Wizard_StepOfFormat => Get(nameof(Wizard_StepOfFormat));
-    public static string Wizard_ChooseCatalogueFirst => Get(nameof(Wizard_ChooseCatalogueFirst));
-    public static string Wizard_Collection => Get(nameof(Wizard_Collection));
+    public static string Wizard_SelectionFormat => Get(nameof(Wizard_SelectionFormat));
     public static string Wizard_Everything => Get(nameof(Wizard_Everything));
     public static string Wizard_OnlySelected => Get(nameof(Wizard_OnlySelected));
     public static string Wizard_NothingSelected => Get(nameof(Wizard_NothingSelected));
@@ -1818,8 +1817,6 @@ internal static partial class Strings
     public static string Keys_Revoked_Notification => Get(nameof(Keys_Revoked_Notification));
     public static string Keys_Revoked_NotificationAction => Get(nameof(Keys_Revoked_NotificationAction));
     public static string Wizard_StepConnection => Get(nameof(Wizard_StepConnection));
-    public static string Wizard_ConnectionNotNeeded => Get(nameof(Wizard_ConnectionNotNeeded));
-    public static string Wizard_ConnectionForSecom => Get(nameof(Wizard_ConnectionForSecom));
     public static string Secom_Identity_None => Get(nameof(Secom_Identity_None));
     public static string Secom_Identity_RowDefaultFormat => Get(nameof(Secom_Identity_RowDefaultFormat));
     public static string Secom_Identity_RowDefaultNotSet => Get(nameof(Secom_Identity_RowDefaultNotSet));

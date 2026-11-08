@@ -486,7 +486,7 @@ SoundCharts Library panel is built on it, and a headless host such as the
 
 `KnownSources/known-sources.json` is embedded in the library and exposed as
 `KnownCatalogueSources.All`. It lists the online chart catalogues SoundCharts
-offers under **Browse online catalogues…** in the Library. The list is
+offers under **Browse online sources…** in the Library. The list is
 maintained in this repository, under its MIT licence.
 
 To add a catalogue:
