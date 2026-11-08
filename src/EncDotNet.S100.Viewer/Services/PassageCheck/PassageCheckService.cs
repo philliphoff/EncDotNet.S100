@@ -1,4 +1,3 @@
-using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Navigation;
@@ -149,13 +148,13 @@ internal sealed class PassageCheckService : IDisposable
     /// thread pool, so it must not run them there concurrently with edits.
     /// </param>
     /// <param name="weather">The mariner's wind and wave limits for the weather check; a change re-runs the check.</param>
-    /// <param name="sources">The route-check sources, shared with other checks, or <c>null</c> for its own over ProjNet.</param>
+    /// <param name="sources">The route-check sources, shared with other checks.</param>
     /// <param name="warnings">The panel's warnings, or <c>null</c> to check the loaded S-124 datasets' own.</param>
     /// <param name="mariner">The mariner's safety contour and depth for the chart check's depth checks, or <c>null</c> to skip them.</param>
     /// <param name="options">The checker's tuning, or <c>null</c> for the defaults.</param>
     /// <param name="checks">
-    /// Creates the checks for each set of loaded data, in the order they run,
-    /// or <c>null</c> for every built-in check (<see cref="BuiltInChecks"/>).
+    /// Creates the checks for each set of loaded data, in the order they run
+    /// (the app passes every built-in check, <see cref="BuiltInChecks"/>).
     /// The window sweep uses the <see cref="ClearanceCheck"/> among them.
     /// </param>
     /// <param name="debounce">The delay before a recompute, or <c>null</c> for <see cref="DefaultDebounce"/>.</param>
@@ -164,25 +163,27 @@ internal sealed class PassageCheckService : IDisposable
         IDatasetCatalog catalog,
         Action<Action> post,
         IRouteWeatherLimits weather,
-        RouteCheckSourceCache? sources = null,
+        RouteCheckSourceCache sources,
+        Func<IEnumerable<IRouteCheck>> checks,
         PanelRouteWarningSource? warnings = null,
         IMarinerSettingsProvider? mariner = null,
         RouteCheckOptions? options = null,
-        Func<IEnumerable<IRouteCheck>>? checks = null,
         TimeSpan? debounce = null)
     {
         ArgumentNullException.ThrowIfNull(routes);
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(post);
         ArgumentNullException.ThrowIfNull(weather);
+        ArgumentNullException.ThrowIfNull(sources);
+        ArgumentNullException.ThrowIfNull(checks);
         _routes = routes;
         _weather = weather;
         _catalog = catalog;
-        _sources = sources ?? new RouteCheckSourceCache(new ProjNetCrsTransformFactory());
+        _sources = sources;
         _warnings = warnings;
         _mariner = mariner;
         _options = options;
-        _checks = checks ?? BuiltInChecks;
+        _checks = checks;
         Debounce = debounce ?? DefaultDebounce;
         _post = post;
 

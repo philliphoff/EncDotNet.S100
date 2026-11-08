@@ -96,28 +96,31 @@ internal sealed class NavigationalWarningsService : IDisposable
     /// <param name="loader">The loaded datasets.</param>
     /// <param name="datasets">The Datasets panel, for loading state.</param>
     /// <param name="sources">Where datasets came from and how fresh they are; <see langword="null"/> treats every dataset as a file opened directly.</param>
-    /// <param name="seen">Which warnings are new; an in-memory store when <see langword="null"/>.</param>
+    /// <param name="seen">Which warnings are new.</param>
     /// <param name="clock">The clock; NEW expires by it.</param>
     /// <param name="ownShip">Own ship's position while it is shown, for the NEW distance filter.</param>
     /// <param name="activeRoute">The active route's waypoints, for the NEW distance filter.</param>
-    /// <param name="classifications">Each warning's on chart / off chart / information classification; an in-memory store when <see langword="null"/>.</param>
+    /// <param name="classifications">Each warning's on chart / off chart / information classification.</param>
     public NavigationalWarningsService(
         IDatasetLoaderService loader,
-        DatasetsViewModel? datasets = null,
-        INavigationalWarningSources? sources = null,
-        NavigationalWarningSeenStore? seen = null,
-        TimeProvider? clock = null,
-        Func<GeoPosition?>? ownShip = null,
-        Func<IReadOnlyList<GeoPosition>?>? activeRoute = null,
-        NavigationalWarningClassificationStore? classifications = null)
+        DatasetsViewModel? datasets,
+        INavigationalWarningSources? sources,
+        NavigationalWarningSeenStore seen,
+        TimeProvider clock,
+        Func<GeoPosition?>? ownShip,
+        Func<IReadOnlyList<GeoPosition>?>? activeRoute,
+        NavigationalWarningClassificationStore classifications)
     {
         ArgumentNullException.ThrowIfNull(loader);
+        ArgumentNullException.ThrowIfNull(seen);
+        ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(classifications);
         _loader = loader;
         _datasets = datasets;
         _sources = sources;
-        _seen = seen ?? new NavigationalWarningSeenStore(null);
-        _classifications = classifications ?? new NavigationalWarningClassificationStore(null);
-        _clock = clock ?? TimeProvider.System;
+        _seen = seen;
+        _classifications = classifications;
+        _clock = clock;
         _ownShip = ownShip;
         _activeRoute = activeRoute;
         _context = SynchronizationContext.Current;

@@ -29,7 +29,7 @@ public sealed class LibraryShowOnMapServiceTests : IDisposable
         var datasets = new DatasetsViewModel(new LibraryLoadServiceTests.NoopDatasetLoader());
         var exchangeSets = new ExchangeSetService(datasets, Notifications.TestNotifications.Create());
         var loader = new LibraryLoadService(exchangeSets, datasets);
-        var service = new LibraryShowOnMapService(library, loader, new FakeLibraryDownloader(), _ => "Charts", dispatch: a => a());
+        var service = new LibraryShowOnMapService(library, loader, new FakeLibraryDownloader(), _ => "Charts", dispatch: a => a(), sync: null);
         _disposables.AddRange([library, exchangeSets, loader, service]);
         library.Initialize();
         return (library, datasets, service);

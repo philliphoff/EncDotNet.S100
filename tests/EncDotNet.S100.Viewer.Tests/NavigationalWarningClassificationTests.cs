@@ -91,9 +91,9 @@ public sealed class NavigationalWarningClassificationTests : IDisposable
         public Fixture(NavigationalWarningClassificationStore? store = null)
         {
             Loader.Processors = new Dictionary<DatasetEntry, IDatasetProcessor> { [Entry] = Processor };
-            Service = new NavigationalWarningsService(Loader, classifications: store);
-            Drawing = new NavigationalWarningDrawingService(Service, new FixedViewTime(Oct(15)), new ViewerSettings { IsReadOnly = true }, Loader, display: Display);
-            Panel = new NavigationalWarningsViewModel(Service, viewTime: new FixedViewTime(Oct(15)), clock: new FixedClock(Oct(15))) { Drawing = Drawing };
+            Service = new NavigationalWarningsService(Loader, classifications: store ?? new NavigationalWarningClassificationStore(null), datasets: null, sources: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null);
+            Drawing = new NavigationalWarningDrawingService(Service, new FixedViewTime(Oct(15)), new ViewerSettings { IsReadOnly = true }, Loader, display: Display, time: null, dispatch: action => action());
+            Panel = new NavigationalWarningsViewModel(Service, viewTime: new FixedViewTime(Oct(15)), clock: new FixedClock(Oct(15)), pick: null, pickReport: null, timeFormat: null, viewport: null, loader: null) { Drawing = Drawing };
         }
 
         public NavigationalWarningEntry Find(int ordinal) => Service.Find(Entry.DisplayName, PartId(ordinal))!;

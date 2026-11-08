@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using Avalonia.Threading;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Datasets.Pipelines.Query;
@@ -27,19 +26,21 @@ internal sealed class ViewerLibraryEditor : ILibraryEditor
         CollectionLibrary library,
         ViewerLibraryController reader,
         LibrarySourceAdder adder,
-        Func<Func<Task>, Task>? dispatch = null,
-        LibraryActivityTracker? activity = null)
+        Func<Func<Task>, Task> dispatch,
+        LibraryActivityTracker activity)
     {
         ArgumentNullException.ThrowIfNull(panel);
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(reader);
         ArgumentNullException.ThrowIfNull(adder);
+        ArgumentNullException.ThrowIfNull(dispatch);
+        ArgumentNullException.ThrowIfNull(activity);
         _panel = panel;
         _library = library;
         _reader = reader;
         _adder = adder;
-        _dispatch = dispatch ?? (work => Dispatcher.UIThread.InvokeAsync(work));
-        _activity = activity ?? new LibraryActivityTracker();
+        _dispatch = dispatch;
+        _activity = activity;
     }
 
     // ── add ─────────────────────────────────────────────────────────────

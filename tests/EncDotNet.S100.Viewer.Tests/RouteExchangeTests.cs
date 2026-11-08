@@ -45,7 +45,7 @@ public sealed class RouteExchangeTests(WarningsRouteScenarioFixture scenario) : 
     {
         public Harness(RouteFormatRegistry? formats = null)
         {
-            Received = new ReceivedRoutesService(Loader, Routes, read: e => S421Dataset.Open(e.FilePath));
+            Received = new ReceivedRoutesService(Loader, Routes, read: e => S421Dataset.Open(e.FilePath), checkSettings: new EncDotNet.S100.Viewer.Routing.Persistence.CheckSettingsStore(), closeDataset: null, notifications: null, follow: null);
             Exchange = new RouteExchangeService(Routes, Received, formats, OpenDataset, id => Loaded.FirstOrDefault(e => e.Id.Value == id));
         }
 

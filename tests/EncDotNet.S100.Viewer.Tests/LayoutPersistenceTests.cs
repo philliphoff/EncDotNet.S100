@@ -96,13 +96,15 @@ public sealed class LayoutPersistenceTests : IDisposable
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
             textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
             displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets),
+            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider()),
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
             notifications: Notifications.TestNotifications.Create(),
             activityTabs: tabs,
-            routes: routes);
+            routes: routes ?? new EncDotNet.S100.Viewer.Services.RoutesService(),
+            dialogManager: new ShadUI.DialogManager(),
+            measure: new EncDotNet.S100.Viewer.Services.MeasureSession());
     }
 
     private static IActivityTab[] StandardTabs() => new IActivityTab[]

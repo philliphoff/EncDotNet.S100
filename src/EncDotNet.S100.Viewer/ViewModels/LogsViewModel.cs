@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows.Input;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Viewer.Diagnostics;
 using EncDotNet.S100.Viewer.Resources;
@@ -78,25 +77,24 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
     /// <summary>Creates the view-model.</summary>
     /// <param name="buffer">The log buffer to show.</param>
     /// <param name="showFeedback">Opens the feedback dialog (Send feedback); the button is disabled without it.</param>
-    /// <param name="post">
-    /// Runs an action on the UI thread; defaults to posting to Avalonia's
-    /// dispatcher, or running inline when no Avalonia app is running.
-    /// </param>
+    /// <param name="post">Runs an action on the UI thread (the app passes <see cref="Services.UiThread.RunOrPostBackground"/>).</param>
     /// <param name="timeFormat">The Local/UTC preference; times are local without it.</param>
-    /// <param name="time">The clock whose zone is "local"; defaults to the machine's.</param>
+    /// <param name="time">The clock whose zone is "local".</param>
     public LogsViewModel(
         LogBuffer buffer,
-        Action? showFeedback = null,
-        Action<Action>? post = null,
-        ITimeFormatProvider? timeFormat = null,
-        TimeProvider? time = null)
+        Action? showFeedback,
+        Action<Action> post,
+        ITimeFormatProvider? timeFormat,
+        TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(buffer);
+        ArgumentNullException.ThrowIfNull(post);
+        ArgumentNullException.ThrowIfNull(time);
         _buffer = buffer;
         _showFeedback = showFeedback;
-        _post = post ?? PostToUiThread;
+        _post = post;
         _timeFormat = timeFormat;
-        _localZone = (time ?? TimeProvider.System).LocalTimeZone;
+        _localZone = time.LocalTimeZone;
 
         LevelFilters =
         [
@@ -710,14 +708,6 @@ internal sealed class LogsViewModel : ViewModelBase, IActivityTabBadge, IActivit
         OnPropertyChanged(nameof(BadgeName));
     }
 
-    private static void PostToUiThread(Action action)
-    {
-        if (Avalonia.Application.Current is not null && !Dispatcher.UIThread.CheckAccess())
-            Dispatcher.UIThread.Post(action, DispatcherPriority.Background);
-        else
-            action();
-    }
-
     /// <inheritdoc />
     public void Dispose()
     {
@@ -738,14 +728,15 @@ internal sealed class LogRowViewModel : ViewModelBase
     /// <param name="entry">The buffered entry.</param>
     /// <param name="zone">The zone its times show in; the machine's when omitted.</param>
     /// <param name="isUtc">Whether <paramref name="zone"/> is the UTC preference, which the full time spells out.</param>
-    public LogRowViewModel(LogEntry entry, TimeZoneInfo? zone = null, bool isUtc = false)
+    public LogRowViewModel(LogEntry entry, TimeZoneInfo zone, bool isUtc)
     {
         ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(zone);
         _entry = entry;
         AreaText = Strings.LogAreaName(entry.Area);
         LevelText = Strings.LogLevelName(entry.Level);
         LevelShortText = Strings.LogLevelShortName(entry.Level);
-        _zone = zone ?? TimeZoneInfo.Local;
+        _zone = zone;
         _isUtc = isUtc;
         var newline = entry.Message.IndexOfAny(['\r', '\n']);
         Summary = newline < 0 ? entry.Message : entry.Message[..newline] + " …";

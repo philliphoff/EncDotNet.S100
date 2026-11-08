@@ -97,9 +97,9 @@ public sealed class NavigationalWarningDrawingTests : IDisposable
                 Part(123, Oct(1), Oct(30)),
                 Part(124, Oct(1), Oct(30), published: Oct(12)) with { Cancels = [new NavigationalWarningReference("NAVAREA X", 123, 2026)] });
             Loader.Processors = new Dictionary<DatasetEntry, IDatasetProcessor> { [Entry] = processor };
-            Service = new NavigationalWarningsService(Loader);
-            Drawing = new NavigationalWarningDrawingService(Service, ViewTime, new ViewerSettings { IsReadOnly = true, ShowWarningsNotYetInForce = showNotYetInForce }, display: Display);
-            Panel = new NavigationalWarningsViewModel(Service, viewTime: ViewTime, clock: new FixedClock(Oct(15))) { Drawing = Drawing };
+            Service = new NavigationalWarningsService(Loader, datasets: null, sources: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null));
+            Drawing = new NavigationalWarningDrawingService(Service, ViewTime, new ViewerSettings { IsReadOnly = true, ShowWarningsNotYetInForce = showNotYetInForce }, display: Display, loader: null, time: null, dispatch: action => action());
+            Panel = new NavigationalWarningsViewModel(Service, viewTime: ViewTime, clock: new FixedClock(Oct(15)), pick: null, pickReport: null, timeFormat: null, viewport: null, loader: null) { Drawing = Drawing };
         }
 
         public NavigationalWarningEntry Find(int ordinal) => Service.Find(Entry.DisplayName, PartId(ordinal))!;
@@ -311,7 +311,7 @@ public sealed class NavigationalWarningDrawingTests : IDisposable
         var display = new EcdisDisplayState();
         display.SetShowNavigationalWarnings(false);
 
-        using var drawing = new NavigationalWarningDrawingService(new NavigationalWarningsService(loader), new MovableViewTime(Oct(15)), loader: loader, display: display);
+        using var drawing = new NavigationalWarningDrawingService(new NavigationalWarningsService(loader, datasets: null, sources: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null)), new MovableViewTime(Oct(15)), loader: loader, display: display, settings: null, time: null, dispatch: action => action());
 
         var policy = loader.HiddenFeaturesOnLoad;
         Assert.NotNull(policy);

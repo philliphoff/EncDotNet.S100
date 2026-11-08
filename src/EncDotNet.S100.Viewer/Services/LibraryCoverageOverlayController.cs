@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
-using Avalonia.Threading;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.DataModel;
@@ -93,7 +92,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         IMapViewportNotifier viewport,
         IMeasureOverlayAppearanceProvider appearance,
         Func<IMapViewportController?> viewportController,
-        Action<Action>? marshal = null)
+        Action<Action> marshal)
     {
         ArgumentNullException.ThrowIfNull(layers);
         ArgumentNullException.ThrowIfNull(panel);
@@ -101,6 +100,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         ArgumentNullException.ThrowIfNull(viewport);
         ArgumentNullException.ThrowIfNull(appearance);
         ArgumentNullException.ThrowIfNull(viewportController);
+        ArgumentNullException.ThrowIfNull(marshal);
 
         _layers = layers;
         _panel = panel;
@@ -108,7 +108,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         _viewport = viewport;
         _appearance = appearance;
         _viewportController = viewportController;
-        _marshal = marshal ?? DispatcherMarshal;
+        _marshal = marshal;
         _layer = new MemoryLayer { Name = LayerName, Style = null, Features = new List<IFeature>() };
 
         _panel.PropertyChanged += OnPanelChanged;
@@ -571,13 +571,6 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         return new GeoBounds(snapshot.MinLatitude, west, snapshot.MaxLatitude, east);
     }
 
-    private static void DispatcherMarshal(Action action)
-    {
-        if (Dispatcher.UIThread.CheckAccess())
-            action();
-        else
-            Dispatcher.UIThread.Post(action);
-    }
 
     public void Dispose()
     {

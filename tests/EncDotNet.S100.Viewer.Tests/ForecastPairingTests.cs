@@ -81,7 +81,7 @@ public sealed class ForecastPairingTests : IDisposable
         }
 
         await _library.WhenIdle();
-        var panel = new LibraryPanelViewModel(_library, _importer, new NullLoader(), _downloader, action => action(), time: _time);
+        var panel = new LibraryPanelViewModel(_library, _importer, new NullLoader(), _downloader, action => action(), time: _time, coalesce: action => action());
         panel.Sync();
         return panel;
     }
@@ -213,7 +213,7 @@ public sealed class ForecastPairingTests : IDisposable
             "rtofs_east" => new ForecastModelSummary(m, Run, 1, 1, 1, null) { TileBounds = [new GeoBounds(33.6, -81.6, 43.2, -72)] },
             _ => new ForecastModelSummary(m, Run, 1, 1, 1, null) { TileBounds = [new GeoBounds(10, 10, 11, 11)] },
         }).ToArray();
-        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { ForecastModels = (_, models, _) => Task.FromResult(Summaries(models)) });
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { ForecastModels = (_, models, _) => Task.FromResult(Summaries(models)) }, timeProvider: TimeProvider.System);
         vm.Initialize(known, targetCollectionId: null);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);
 

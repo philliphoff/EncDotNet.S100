@@ -1356,16 +1356,16 @@ internal sealed class MainViewModel : ViewModelBase
         IRecentFilesService recentFiles,
         IMeasureOverlayAppearanceProvider measureAppearance,
         INotificationService notifications,
-        ShadUI.DialogManager? dialogManager = null,
+        ShadUI.DialogManager dialogManager,
+        RoutesService routes,
+        MeasureSession measure,
         Func<FeedbackDialogViewModel>? feedbackDialogFactory = null,
         Func<AboutDialogViewModel>? aboutDialogFactory = null,
         IEnumerable<IActivityTab>? activityTabs = null,
         McpServerHost? mcpServerHost = null,
-        RoutesService? routes = null,
         NavigationalWarningsViewModel? navigationalWarnings = null,
         Services.NavigationalWarningDrawingService? navigationalWarningDrawing = null,
         DisplayCombinationsViewModel? displayCombinations = null,
-        MeasureSession? measure = null,
         MeasureCardViewModel? measureCard = null,
         RangeBearingState? rangeBearing = null)
     {
@@ -1386,21 +1386,21 @@ internal sealed class MainViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(recentFiles);
         ArgumentNullException.ThrowIfNull(measureAppearance);
         ArgumentNullException.ThrowIfNull(notifications);
+        ArgumentNullException.ThrowIfNull(dialogManager);
+        ArgumentNullException.ThrowIfNull(routes);
+        ArgumentNullException.ThrowIfNull(measure);
 
         _settings = settings;
         _theme = themeService;
         _recentFiles = recentFiles;
         _notifications = notifications;
-        // The dialog manager is supplied by DI in the running app; tests
-        // that construct the view-model directly omit it, so fall back to
-        // an unhosted manager to keep the DialogManager property non-null.
-        _dialogManager = dialogManager ?? new ShadUI.DialogManager();
+        _dialogManager = dialogManager;
         _feedbackDialogFactory = feedbackDialogFactory;
         _aboutDialogFactory = aboutDialogFactory;
         DialogManager = _dialogManager;
         _isDarkTheme = themeService.IsDarkTheme;
         _mcpServerHost = mcpServerHost;
-        _routes = routes ?? new RoutesService();
+        _routes = routes;
 
         // PR-M3: debounced settings writer used by the splitter-size
         // setters. 500 ms window coalesces rapid drag updates into one
@@ -1416,7 +1416,7 @@ internal sealed class MainViewModel : ViewModelBase
             AttachToMcpServer();
         }
 
-        _measure = measure ?? new MeasureSession();
+        _measure = measure;
         _measureTool = new MeasureTool(measureAppearance, _measure);
         MeasureCard = measureCard ?? new MeasureCardViewModel(_measure);
         MeasureCard.CloseRequested += (_, _) => Tools.Activate(null);

@@ -12,14 +12,14 @@ public class LastErrorTrackerTests
     [Fact]
     public void Current_IsNull_BeforeAnyError()
     {
-        var tracker = new LastErrorTracker();
+        var tracker = new LastErrorTracker(logger: Microsoft.Extensions.Logging.Abstractions.NullLogger<EncDotNet.S100.Viewer.Diagnostics.LastErrorTracker>.Instance);
         Assert.Null(tracker.Current);
     }
 
     [Fact]
     public void Record_Exception_CapturesTypeMessageAndStack()
     {
-        var tracker = new LastErrorTracker();
+        var tracker = new LastErrorTracker(logger: Microsoft.Extensions.Logging.Abstractions.NullLogger<EncDotNet.S100.Viewer.Diagnostics.LastErrorTracker>.Instance);
         Exception ex;
         try { throw new InvalidOperationException("kaboom"); }
         catch (Exception caught) { ex = caught; }
@@ -37,7 +37,7 @@ public class LastErrorTrackerTests
     [Fact]
     public void Record_Message_UsesFirstLineAsMessageAndKeepsFullText()
     {
-        var tracker = new LastErrorTracker();
+        var tracker = new LastErrorTracker(logger: Microsoft.Extensions.Logging.Abstractions.NullLogger<EncDotNet.S100.Viewer.Diagnostics.LastErrorTracker>.Instance);
         tracker.Record("UnhandledException", "Top line\nstack frame 1\nstack frame 2");
 
         var current = tracker.Current;
@@ -50,7 +50,7 @@ public class LastErrorTrackerTests
     [Fact]
     public void Record_LatestWins()
     {
-        var tracker = new LastErrorTracker();
+        var tracker = new LastErrorTracker(logger: Microsoft.Extensions.Logging.Abstractions.NullLogger<EncDotNet.S100.Viewer.Diagnostics.LastErrorTracker>.Instance);
         tracker.Record("first", new Exception("one"));
         tracker.Record("second", new Exception("two"));
 

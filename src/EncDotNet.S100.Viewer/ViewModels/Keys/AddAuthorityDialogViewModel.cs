@@ -19,12 +19,13 @@ internal sealed class AddAuthorityDialogViewModel : ViewModelBase
     private string _name = "";
     private string? _error;
 
-    public AddAuthorityDialogViewModel(TrustedAuthorityStore store, string path, TimeProvider? time = null)
+    public AddAuthorityDialogViewModel(TrustedAuthorityStore store, string path, TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(time);
         ArgumentException.ThrowIfNullOrEmpty(path);
         _store = store;
-        _time = time ?? TimeProvider.System;
+        _time = time;
         FileName = Path.GetFileName(path);
 
         try

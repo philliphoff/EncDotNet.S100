@@ -57,7 +57,7 @@ public sealed class NhcStormRefreshTests : IDisposable
         _library.Initialize();
         _library.AddCollection("Weather", [source]);
         await _library.WhenIdle();
-        var panel = new LibraryPanelViewModel(_library, new NoImporter(), _loader, _downloader, action => action(), notifications: _notifications, time: _time);
+        var panel = new LibraryPanelViewModel(_library, new NoImporter(), _loader, _downloader, action => action(), notifications: _notifications, time: _time, coalesce: action => action());
         panel.Sync();
         return (panel, source.Id);
     }
@@ -187,7 +187,7 @@ public sealed class NhcStormRefreshTests : IDisposable
         using var disposePanel = panel;
         var source = _library.Collections.SelectMany(c => c.Sources).Single(s => s.Id == sourceId);
         var item = Assert.Single(source.Index!.Items);
-        var row = new LibraryItemViewModel(item, source, _loader.StateOf, _downloader, "Weather", time: _time);
+        var row = new LibraryItemViewModel(item, source, _loader.StateOf, _downloader, "Weather", time: _time, download: null, timeFormat: null);
 
         // The source says how many storms are active (V27).
         Assert.Equal("1 active", panel.Nodes.Single().StatusLine);
@@ -207,7 +207,7 @@ public sealed class NhcStormRefreshTests : IDisposable
 
         // Eight hours after advisory 20, it's stale.
         _time.Advance(TimeSpan.FromHours(8));
-        var stale = new LibraryItemViewModel(item, source, _loader.StateOf, _downloader, "Weather", time: _time);
+        var stale = new LibraryItemViewModel(item, source, _loader.StateOf, _downloader, "Weather", time: _time, download: null, timeFormat: null);
         Assert.True(stale.IsStaleRun);
         Assert.Equal("Advisory 20 is over 7 hours old", stale.StaleRunText);
     }

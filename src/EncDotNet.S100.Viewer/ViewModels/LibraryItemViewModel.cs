@@ -28,22 +28,23 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     public LibraryItemViewModel(
         CollectionItem item,
         LibrarySource source,
-        Func<CollectionItem, LibraryLoadState>? loadState = null,
-        ILibraryDownloader? downloader = null,
-        string? collectionName = null,
-        Func<LibraryItemViewModel, Task>? download = null,
-        TimeProvider? time = null,
-        Func<TimeFormat>? timeFormat = null)
+        Func<CollectionItem, LibraryLoadState>? loadState,
+        ILibraryDownloader? downloader,
+        string? collectionName,
+        Func<LibraryItemViewModel, Task>? download,
+        TimeProvider time,
+        Func<TimeFormat>? timeFormat)
     {
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(time);
         Item = item;
         Source = source;
         _loadState = loadState;
         _downloader = downloader;
         _collectionName = collectionName;
         _download = download;
-        _time = time ?? TimeProvider.System;
+        _time = time;
         _timeFormat = timeFormat;
         RetryCommand = new CommunityToolkit.Mvvm.Input.AsyncRelayCommand(
             () => _download?.Invoke(this) ?? Task.CompletedTask);
@@ -207,7 +208,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// description, tagged "Unpacked", with its dataset count.
     /// </summary>
     internal static LibraryItemViewModel ForPackageGroup(
-        LibrarySource source, string package, string? title, int count, bool isExpanded, Action<LibraryItemViewModel> toggle,
+        LibrarySource source, string package, string? title, int count, bool isExpanded, Action<LibraryItemViewModel> toggle, TimeProvider time,
         DateTimeOffset? publishedAt = null, string productSpec = "S-57")
     {
         var item = new CollectionItem
@@ -220,7 +221,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             Properties = new Dictionary<string, string> { ["package"] = package },
         };
         LibraryItemViewModel? header = null;
-        header = new LibraryItemViewModel(item, source)
+        header = new LibraryItemViewModel(item, source, null, null, null, null, time, null)
         {
             IsGroupHeader = true,
             GroupKey = (source.Id, package),
@@ -239,8 +240,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// </summary>
     internal static LibraryItemViewModel ForModelGroup(
         LibrarySource source, IReadOnlyList<LibraryItemViewModel> members, bool isExpanded, Action<LibraryItemViewModel> toggle,
-        Func<CollectionItem, LibraryLoadState>? loadState, ILibraryDownloader? downloader, TimeProvider? time,
-        Func<TimeFormat>? timeFormat = null)
+        Func<CollectionItem, LibraryLoadState>? loadState, ILibraryDownloader? downloader, TimeProvider time,
+        Func<TimeFormat>? timeFormat)
     {
         var first = members[0].Item;
         var model = ForecastRuns.ModelOf(first) ?? first.Name;
@@ -253,7 +254,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
             Bounds = GeoBounds.UnionAll(members.Select(m => m.Item.Bounds).OfType<GeoBounds>()),
         };
         LibraryItemViewModel? header = null;
-        header = new LibraryItemViewModel(item, source, loadState, downloader, time: time, timeFormat: timeFormat)
+        header = new LibraryItemViewModel(item, source, loadState, downloader, null, null, time, timeFormat)
         {
             IsGroupHeader = true,
             IsModelHeader = true,

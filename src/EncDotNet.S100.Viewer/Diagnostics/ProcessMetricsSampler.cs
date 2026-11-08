@@ -201,19 +201,19 @@ internal sealed class ProcessMetricsSampler : IDisposable
     /// <summary>Creates a sampler.</summary>
     /// <param name="source">Reads the counters.</param>
     /// <param name="interval">How often the peaks are sampled while a window is open.</param>
-    /// <param name="processorCount">Logical processors; <see cref="Environment.ProcessorCount"/> by default.</param>
+    /// <param name="processorCount">Logical processors (the app passes <see cref="Environment.ProcessorCount"/>).</param>
     /// <param name="uiStalls">Probes the UI thread while a window is open, or null for no probe.</param>
     public ProcessMetricsSampler(
         IProcessMetricsSource source,
-        TimeSpan? interval = null,
-        int? processorCount = null,
-        UiThreadStallMonitor? uiStalls = null)
+        int processorCount,
+        UiThreadStallMonitor? uiStalls,
+        TimeSpan? interval = null)
     {
         ArgumentNullException.ThrowIfNull(source);
         _source = source;
         _uiStalls = uiStalls;
         Interval = interval ?? TimeSpan.FromMilliseconds(100);
-        _processorCount = processorCount ?? Environment.ProcessorCount;
+        _processorCount = processorCount;
     }
 
     /// <summary>How often peaks are sampled while a window is open.</summary>

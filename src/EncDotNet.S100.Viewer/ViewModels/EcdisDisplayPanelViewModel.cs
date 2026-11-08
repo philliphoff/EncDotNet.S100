@@ -37,18 +37,19 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         EcdisDisplayState state,
         PortrayalCatalogueManager catalogueManager,
         DatasetsViewModel datasets,
-        EcdisLabelOverrideProvider? labelOverrides = null,
+        EcdisLabelOverrideProvider labelOverrides,
         DisplayModeToolbarViewModel? displayModeToolbar = null,
         DisplayCombinationsViewModel? displayCombinations = null)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(catalogueManager);
         ArgumentNullException.ThrowIfNull(datasets);
+        ArgumentNullException.ThrowIfNull(labelOverrides);
 
         _state = state;
         _catalogueManager = catalogueManager;
         _datasets = datasets;
-        _labelOverrides = labelOverrides ?? new EcdisLabelOverrideProvider();
+        _labelOverrides = labelOverrides;
         _displayModeToolbar = displayModeToolbar;
         DisplayCombinations = displayCombinations;
 

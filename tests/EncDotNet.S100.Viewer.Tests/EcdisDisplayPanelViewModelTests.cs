@@ -69,7 +69,7 @@ public class EcdisDisplayPanelViewModelTests
         var catalogues = new PortrayalCatalogueManager();
         var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
 
-        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets);
+        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider());
 
         Assert.True(vm.IsEmpty);
         Assert.Empty(vm.Specs);
@@ -79,7 +79,7 @@ public class EcdisDisplayPanelViewModelTests
     public void NavigationalWarningsSwitch_TwoWaySyncWithState()
     {
         var state = new EcdisDisplayState();
-        using var vm = new EcdisDisplayPanelViewModel(state, new PortrayalCatalogueManager(), new DatasetsViewModel(new StubDatasetLoaderService()));
+        using var vm = new EcdisDisplayPanelViewModel(state, new PortrayalCatalogueManager(), new DatasetsViewModel(new StubDatasetLoaderService()), labelOverrides: new EcdisLabelOverrideProvider());
         var raised = new List<string?>();
         vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
 
@@ -99,7 +99,7 @@ public class EcdisDisplayPanelViewModelTests
         var catalogues = new PortrayalCatalogueManager();
         var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
 
-        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets);
+        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider());
 
         vm.ActiveCategory = EcdisDisplayCategory.All;
         Assert.Equal(EcdisDisplayCategory.All, state.Category);
@@ -120,7 +120,7 @@ public class EcdisDisplayPanelViewModelTests
         var catalogues = new PortrayalCatalogueManager();
         var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
 
-        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets);
+        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider());
 
         vm.ResetAllOverridesCommand.Execute(null);
 
@@ -135,7 +135,7 @@ public class EcdisDisplayPanelViewModelTests
         var catalogues = new PortrayalCatalogueManager();
         var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
 
-        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets);
+        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider());
 
         vm.SetDisplayBaseCommand.Execute(null);
         Assert.Equal(EcdisDisplayCategory.DisplayBase, state.Category);
@@ -151,7 +151,7 @@ public class EcdisDisplayPanelViewModelTests
         var catalogues = new PortrayalCatalogueManager();
         var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
 
-        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets);
+        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider());
 
         Assert.Null(vm.DisplayModeToolbar);
     }
@@ -169,7 +169,7 @@ public class EcdisDisplayPanelViewModelTests
             state,
             catalogues,
             datasets,
-            labelOverrides: null,
+            labelOverrides: new EcdisLabelOverrideProvider(),
             displayModeToolbar: toolbar);
 
         Assert.Same(toolbar, vm.DisplayModeToolbar);
@@ -185,7 +185,7 @@ public class EcdisDisplayPanelViewModelTests
         catalogues.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
         var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
 
-        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets);
+        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider());
         datasets.Add("US5MA1BO.000", "S-57");
 
         var spec = Assert.Single(vm.Specs);
@@ -202,7 +202,7 @@ public class EcdisDisplayPanelViewModelTests
         catalogues.SetSource("S-101", Specification.CreatePortrayalCatalogueSource("S-101"));
         var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
 
-        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets);
+        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider());
         datasets.Add("US5MA1BO.000", "S-57");
         datasets.Add("101AA00DS0008.000", "S-101");
 
@@ -221,7 +221,7 @@ public class EcdisDisplayPanelViewModelTests
         catalogues.SetSource("S-401", Specification.CreatePortrayalCatalogueSource("S-401"));
         var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
 
-        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets);
+        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider());
         var entry = datasets.Add("U37IL005.000", "S-57");
         Assert.Equal("S-101", Assert.Single(vm.Specs).SpecCode);
 
@@ -239,7 +239,7 @@ public class EcdisDisplayPanelViewModelTests
         catalogues.SetSource("S-401", Specification.CreatePortrayalCatalogueSource("S-401"));
         var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
 
-        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets);
+        using var vm = new EcdisDisplayPanelViewModel(state, catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider());
         datasets.Add("US5MA1BO.000", "S-57").SetPortrayalSpec("S-101");
         datasets.Add("U37IL005.000", "S-57").SetPortrayalSpec("S-401");
 

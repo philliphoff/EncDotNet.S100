@@ -480,6 +480,7 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
             App.Services.GetRequiredService<SettingsViewModel>(),
+            UiThread.RunOrPost,
             warningDrawing: App.Services.GetService<EncDotNet.S100.Viewer.Services.NavigationalWarningDrawingService>());
 
         // Out-of-scale extent indicators: outline the extents of loaded
@@ -490,7 +491,9 @@ public partial class MainWindow : ShadUI.Window
             _viewModel.Datasets,
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
-            App.Services.GetRequiredService<SettingsViewModel>());
+            App.Services.GetRequiredService<SettingsViewModel>(),
+            UiThread.RunOrPost,
+            UiThread.Post);
 
         // Timeline lanes (#710): the hovered lane's footprint.
         App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.TimelineMapScope>().Attach(_mapHost);
@@ -523,7 +526,8 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<IMapViewportNotifier>(),
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
-            () => App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current);
+            () => App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current,
+            UiThread.RunOrPost);
 
         // Chart-wide water level adjustment (#1132): the edge of the adjusted area.
         _adjustedAreaBoundary = new EncDotNet.S100.Viewer.Services.Depth.AdjustedAreaBoundaryController(
@@ -538,7 +542,8 @@ public partial class MainWindow : ShadUI.Window
             _loader,
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
-            App.Services.GetRequiredService<SettingsViewModel>());
+            App.Services.GetRequiredService<SettingsViewModel>(),
+            UiThread.RunOrPost);
         // Depth basis indicator (#1191): what the chart's depths are relative to.
         InitializeDepthBasis();
 

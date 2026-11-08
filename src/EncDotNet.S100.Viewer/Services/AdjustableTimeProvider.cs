@@ -23,10 +23,11 @@ internal sealed class AdjustableTimeProvider : TimeProvider
     private TimeSpan _offset;
     private DateTimeOffset? _frozenAt;
 
-    /// <summary>Creates a provider over <paramref name="inner"/> (the system clock by default).</summary>
-    public AdjustableTimeProvider(TimeProvider? inner = null)
+    /// <summary>Creates a provider over <paramref name="inner"/>.</summary>
+    public AdjustableTimeProvider(TimeProvider inner)
     {
-        _inner = inner ?? System;
+        ArgumentNullException.ThrowIfNull(inner);
+        _inner = inner;
     }
 
     /// <summary>Gets the offset added to the real clock while not frozen.</summary>

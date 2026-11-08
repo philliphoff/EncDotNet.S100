@@ -22,8 +22,8 @@ public sealed class LogsPanelTypographyTests
 
     private static (LogBuffer Buffer, LogsViewModel Panel) Create()
     {
-        var buffer = new LogBuffer();
-        var panel = new LogsViewModel(buffer, showFeedback: null, post: action => action());
+        var buffer = new LogBuffer(timeProvider: TimeProvider.System);
+        var panel = new LogsViewModel(buffer, showFeedback: null, post: action => action(), timeFormat: null, time: TimeProvider.System);
         return (buffer, panel);
     }
 
@@ -36,11 +36,11 @@ public sealed class LogsPanelTypographyTests
     [InlineData(LogLevel.Critical, "Crit", "Critical")]
     public void Rows_show_short_level_labels_and_keep_the_full_name_for_the_accessible_name(LogLevel level, string shortText, string fullText)
     {
-        var buffer = new LogBuffer { MinimumLevel = LogLevel.Trace };
+        var buffer = new LogBuffer(TimeProvider.System) { MinimumLevel = LogLevel.Trace };
         buffer.Add(level, Category, "message");
         buffer.Flush();
 
-        var row = new LogRowViewModel(Assert.Single(buffer.Snapshot()));
+        var row = new LogRowViewModel(Assert.Single(buffer.Snapshot()), zone: TimeZoneInfo.Local, isUtc: false);
         Assert.Equal(shortText, row.LevelShortText);
         Assert.Equal(fullText, row.LevelText);
         Assert.StartsWith(fullText, row.AccessibleName, StringComparison.Ordinal);

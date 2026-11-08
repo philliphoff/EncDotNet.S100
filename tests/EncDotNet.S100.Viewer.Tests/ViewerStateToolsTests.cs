@@ -469,7 +469,7 @@ public sealed class ViewerStateToolsTests
                 new DatasetsViewModel(new FakeDatasetLoaderService()), Immediate))),
             ViewerStateMcpAdapters.Create(new ListNotificationsTool(notifications)),
             ViewerStateMcpAdapters.Create(new DismissNotificationTool(notifications)),
-            ViewerStateMcpAdapters.Create(new SetTestClockTool(new AdjustableTimeProvider())),
+            ViewerStateMcpAdapters.Create(new SetTestClockTool(new AdjustableTimeProvider(inner: TimeProvider.System))),
         };
 
         Assert.Equal(

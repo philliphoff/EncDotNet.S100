@@ -1,5 +1,4 @@
 using System.Collections.Specialized;
-using Avalonia.Threading;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -24,20 +23,21 @@ internal sealed class LayerTimeCoordinator
         DatasetsViewModel datasets,
         TimeRefreshProgress progress,
         TimeProvider clock,
-        ITimeFormatProvider? format = null,
-        Action<Action>? dispatch = null,
-        Func<ILibraryTimeSource?>? library = null)
+        ITimeFormatProvider? format,
+        Action<Action> dispatch,
+        Func<ILibraryTimeSource?>? library)
     {
         ArgumentNullException.ThrowIfNull(time);
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(progress);
         ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(dispatch);
         _time = time;
         _datasets = datasets;
         _progress = progress;
         _clock = clock;
         _format = format;
-        _dispatch = dispatch ?? PostToUiThread;
+        _dispatch = dispatch;
         _library = library;
 
         _time.CurrentTimeChanged += _ => Update();
@@ -75,13 +75,5 @@ internal sealed class LayerTimeCoordinator
                 entry.SetLayerTime(null, null);
             }
         }
-    }
-
-    private static void PostToUiThread(Action action)
-    {
-        if (Dispatcher.UIThread.CheckAccess())
-            action();
-        else
-            Dispatcher.UIThread.Post(action);
     }
 }

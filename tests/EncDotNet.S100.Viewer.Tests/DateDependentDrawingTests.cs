@@ -85,7 +85,7 @@ public sealed class DateDependentDrawingTests
                 [Chart] = Processor,
                 [Bathymetry] = new PlainProcessor(),
             };
-            Service = new DateDependentDrawingService(Loader, ViewTime, TimeFormat, new Zoned(East));
+            Service = new DateDependentDrawingService(Loader, ViewTime, TimeFormat, new Zoned(East), dispatch: null);
         }
     }
 

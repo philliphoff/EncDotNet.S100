@@ -36,8 +36,8 @@ public sealed class RollingFileLoggerProviderTests : IDisposable
         int pid = 4242,
         Func<int, DateTime, bool>? isSessionAlive = null,
         Func<IEnumerable<PreviousSession>>? unreportedCrashes = null) =>
-        new(_directory, LogLevel.Information, maxFileBytes, maxFiles, start ?? SessionStart, pid,
-            isSessionAlive ?? ((_, _) => false), unreportedCrashes);
+        new(_directory, LogLevel.Information, start ?? SessionStart, pid,
+            isSessionAlive ?? ((_, _) => false), unreportedCrashes, maxFileBytes, maxFiles);
 
     /// <summary>Writes a crashed session's log file, last written
     /// <paramref name="age"/> ago, and returns its path.</summary>
@@ -293,7 +293,7 @@ public sealed class RollingFileLoggerProviderTests : IDisposable
     {
         // The quiet instance runs in this (live) process, with the default
         // liveness check; the busy instance rolls over many times meanwhile.
-        using var quiet = new RollingFileLoggerProvider(_directory, LogLevel.Information);
+        using var quiet = new RollingFileLoggerProvider(_directory, LogLevel.Information, sessionStartUtc: DateTime.UtcNow, processId: Environment.ProcessId, isSessionAlive: EncDotNet.S100.Viewer.Diagnostics.RollingFileLoggerProvider.IsSessionAlive, unreportedCrashes: null);
         var quietLogger = quiet.CreateLogger("Quiet");
         quietLogger.LogInformation("quiet before");
         SpinWait.SpinUntil(() => quiet.CurrentFilePath is { } p && File.Exists(p), TimeSpan.FromSeconds(5));
@@ -301,7 +301,7 @@ public sealed class RollingFileLoggerProviderTests : IDisposable
         Assert.NotNull(quietPath);
         File.SetLastWriteTimeUtc(quietPath, DateTime.UtcNow.AddDays(-1));
 
-        using (var busy = new RollingFileLoggerProvider(_directory, LogLevel.Information, 500, 3, processId: 999_999))
+        using (var busy = new RollingFileLoggerProvider(_directory, LogLevel.Information, maxFileBytes: 500, maxFiles: 3, processId: 999_999, sessionStartUtc: DateTime.UtcNow, isSessionAlive: EncDotNet.S100.Viewer.Diagnostics.RollingFileLoggerProvider.IsSessionAlive, unreportedCrashes: null))
         {
             WriteMany(busy, "Busy", 200);
         }
@@ -326,7 +326,7 @@ public sealed class RollingFileLoggerProviderTests : IDisposable
         File.WriteAllText(reused, "old");
         File.SetLastWriteTimeUtc(reused, DateTime.UtcNow.AddDays(-1));
 
-        using (var provider = new RollingFileLoggerProvider(_directory, LogLevel.Information, 500, 1, processId: 999_998))
+        using (var provider = new RollingFileLoggerProvider(_directory, LogLevel.Information, maxFileBytes: 500, maxFiles: 1, processId: 999_998, sessionStartUtc: DateTime.UtcNow, isSessionAlive: EncDotNet.S100.Viewer.Diagnostics.RollingFileLoggerProvider.IsSessionAlive, unreportedCrashes: null))
         {
             provider.CreateLogger("Test").LogInformation("new session");
         }

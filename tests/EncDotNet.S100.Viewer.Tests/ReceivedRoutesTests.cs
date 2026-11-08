@@ -74,7 +74,7 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
         public Harness(CheckSettingsStore? store = null)
         {
             Closed = [];
-            Service = new ReceivedRoutesService(Loader, Routes, store, Closed.Add, read: e => S421Dataset.Open(e.FilePath));
+            Service = new ReceivedRoutesService(Loader, Routes, store ?? new CheckSettingsStore(), Closed.Add, read: e => S421Dataset.Open(e.FilePath), notifications: null, follow: null);
         }
 
         public FakeDatasetLoaderService Loader { get; } = new();
@@ -232,7 +232,7 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
         File.Copy(Fixture("RTE-TEST-GMIN.s421.gml"), Path.Combine(minFolder, "route.gml"));
         var loader = new FakeDatasetLoaderService();
         var routes = new RoutesService();
-        var service = new ReceivedRoutesService(loader, routes);
+        var service = new ReceivedRoutesService(loader, routes, checkSettings: new EncDotNet.S100.Viewer.Routing.Persistence.CheckSettingsStore(), closeDataset: null, notifications: null, follow: null, read: EncDotNet.S100.Viewer.Services.ReceivedRoutesService.ReadDataset);
         var datasets = new DatasetsViewModel(loader);
         using var basicSource = Core.FileSystemAssetSource.Create(basicFolder);
         using var minSource = Core.FileSystemAssetSource.Create(minFolder);

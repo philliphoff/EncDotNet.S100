@@ -118,7 +118,7 @@ public sealed class AreaFindingsTests(RestrictedAreasScenarioFixture fixture) : 
         routes.Routes.SetActiveRoute(route);
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
         var check = new PassageCheckService(routes, catalog,
-            checks: () => [new ChartCheck(), new AreaCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: new UiThread().Post, weather: new FixedWeatherLimits());
+            checks: () => [new ChartCheck(), new AreaCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: new UiThread().Post, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources());
         var findings = new RouteFindingsService(check, routes, catalog, timeFormat: new Utc());
         routes.IsCheckModeActive = true;
         await findings.WhenIdle();

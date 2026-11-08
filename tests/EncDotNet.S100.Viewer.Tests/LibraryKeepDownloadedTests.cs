@@ -30,7 +30,7 @@ public sealed class LibraryKeepDownloadedTests : IDisposable
     }
 
     private LibraryPanelViewModel Panel() =>
-        new(_library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), a => a(), sync: _sync);
+        new(_library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), a => a(), a => a(), TimeProvider.System, sync: _sync);
 
     [Fact]
     public void An_online_source_can_be_kept_downloaded_from_its_menu()
@@ -71,7 +71,7 @@ public sealed class LibraryKeepDownloadedTests : IDisposable
             EncDotNet.S100.Collections.Feeds.S100Feed.FormatName, 1, "Shared charts",
             new DateTimeOffset(2026, 9, 25, 0, 0, 0, TimeSpan.Zero), "f1",
             [new CollectionItem { Key = "A", ProductSpec = "S-101", Name = "A", Location = new RemoteItemLocation(new Uri(feedUri, "items/A.zip"), 1024) }]);
-        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { S100Feed = (_, _) => Task.FromResult(feed) });
+        var vm = new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { S100Feed = (_, _) => Task.FromResult(feed) }, timeProvider: TimeProvider.System);
 
         vm.Initialize(known, targetCollectionId: null);
         await vm.LoadCatalogAsync(TestContext.Current.CancellationToken);

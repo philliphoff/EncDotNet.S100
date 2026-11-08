@@ -68,9 +68,10 @@ internal sealed class ViewSettleMonitor
     /// Turns the tile renderer's settle stamps on or off; the viewer passes
     /// <see cref="S100VectorTileRenderer.SettleTrackingEnabled"/>.
     /// </param>
-    public ViewSettleMonitor(Action<bool>? setTileTracking = null)
+    public ViewSettleMonitor(Action<bool> setTileTracking)
     {
-        _setTileTracking = setTileTracking ?? (enabled => S100VectorTileRenderer.SettleTrackingEnabled = enabled);
+        ArgumentNullException.ThrowIfNull(setTileTracking);
+        _setTileTracking = setTileTracking;
     }
 
     /// <summary>Reads the lazy-load coordinator's visible work, or null when none is wired.</summary>
