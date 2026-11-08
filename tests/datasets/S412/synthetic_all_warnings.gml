@@ -49,6 +49,15 @@
         <S412:agencyName>Example Marine Forecast Desk</S412:agencyName>
         <S412:emailAddress>forecast@example.org</S412:emailAddress>
       </S412:contactInformation>
+      <S412:preparationService>
+        <S412:issuingServiceName>
+          <S412:information>
+            <S412:language>eng</S412:language>
+            <S412:text>Example Marine Forecast Desk</S412:text>
+          </S412:information>
+        </S412:issuingServiceName>
+        <S412:countryName>Example</S412:countryName>
+      </S412:preparationService>
     </S412:DataProvider>
 
     <S412:WindWarning gml:id="WIND1">
@@ -103,6 +112,8 @@
       <S412:fixedDateRange>
         <S412:dateStart><S100:date>2026-11-07</S100:date></S412:dateStart>
         <S412:dateEnd><S100:date>2026-11-09</S100:date></S412:dateEnd>
+        <S412:timeOfDayStart>00:00:00Z</S412:timeOfDayStart>
+        <S412:timeOfDayEnd>00:00:00Z</S412:timeOfDayEnd>
       </S412:fixedDateRange>
       <S412:issueDate>2026-11-07</S412:issueDate>
       <S412:weatherWarningNumber>W-002</S412:weatherWarningNumber>
@@ -157,6 +168,8 @@
       <S412:fixedDateRange>
         <S412:dateStart><S100:date>2026-11-07</S100:date></S412:dateStart>
         <S412:dateEnd><S100:date>2026-11-08</S100:date></S412:dateEnd>
+        <S412:timeOfDayStart>00:00:00Z</S412:timeOfDayStart>
+        <S412:timeOfDayEnd>00:00:00Z</S412:timeOfDayEnd>
       </S412:fixedDateRange>
       <S412:issueDate>2026-11-07</S412:issueDate>
       <S412:weatherWarningNumber>W-004</S412:weatherWarningNumber>
@@ -182,6 +195,8 @@
       <S412:fixedDateRange>
         <S412:dateStart><S100:date>2026-11-07</S100:date></S412:dateStart>
         <S412:dateEnd><S100:date>2026-11-10</S100:date></S412:dateEnd>
+        <S412:timeOfDayStart>00:00:00Z</S412:timeOfDayStart>
+        <S412:timeOfDayEnd>00:00:00Z</S412:timeOfDayEnd>
       </S412:fixedDateRange>
       <S412:issueDate>2026-11-07</S412:issueDate>
       <S412:weatherWarningNumber>W-005</S412:weatherWarningNumber>
