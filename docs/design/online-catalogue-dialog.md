@@ -1,7 +1,8 @@
 # Add online catalogue: design pass
 
-> Status: **Accepted** (2026-11-07, after the canvas mock). Built in the
-> slices of §7: A1 #1348, B1 #1346, B2 #1349, B3 #1350, and C1 (D12 + Q5). Follows the wizard as it grew from
+> Status: **Built** (2026-11-08). Accepted after the canvas mock on 2026-11-07
+> and built in the slices of §7: A1 #1348, B1 #1346, B2 #1349, B3 #1350 and
+> C1 #1353. Follows the wizard as it grew from
 > [#670](https://github.com/philliphoff/EncDotNet.S100/issues/670) (curated
 > catalogues, add by URL) through #685 (NOAA S-1xx on AWS), #822/#883 (SECOM
 > registry and the Connection step) and #1075/#1226 (weather sources).
@@ -346,25 +347,25 @@ At 720–840 px the details pane folds back into the selected row (D9); below
 
 - **Q1.** Rename to "Add online source" (D15)? It's more accurate now that half
   the entries aren't catalogues, but "catalogue" is used across the docs and the
-  Library.
+  Library. *Decided: yes (A1).*
 - **Q2.** 920 px three-column (D1+D8), or stop at ~800 px two-column with the
   compact inline card (D9)? Three columns gives the biggest density win; two
-  columns is less work and keeps the familiar card.
+  columns is less work and keeps the familiar card. *Decided: three columns at 920 px (B2).*
 - **Q3.** Categories by *what the data is* or by *how it's reached*? The
   proposal mixes them: SECOM services is a protocol category (it has its own
   Connection step), so a SECOM S-101 service would sit there, not in Charts; and
   HF-radar/AOML currents are weather-format but could sit in Depth, tides &
   currents. Alternative: allow an entry in more than one category. Recommendation:
   one category per entry, set explicitly in `known-sources.json`; currents
-  observations stay in Weather & ocean.
+  observations stay in Weather & ocean. *Decided: by kind of data, one category per entry; currents observations in Weather & ocean (B1).*
 - **Q4.** Is it acceptable for D12 to read the catalogue on Next from step 1
   (spinner in the button) so single-download sources can skip a step, or keep
-  the explicit step for predictability?
+  the explicit step for predictability? *Decided: yes, read on Next (C1).*
 - **Q5.** Should the dialog remember the last category across sessions (a
-  setting) or only within a session?
+  setting) or only within a session? *Decided: within the session only (C1).*
 - **Q6.** Keep the registry opt-in ("List services…") or list it automatically
   when the SECOM category is opened? It's a network call to the MCP registry;
-  today it is deliberately on request (#822).
+  today it is deliberately on request (#822). *Decided: on request (B3).*
 
 ## 6. Out of scope
 
@@ -389,7 +390,7 @@ Two tracks that touch different files and can run in parallel:
 `AddOnlineCatalogueWizardViewModel.cs`, `LibraryImportCoordinator.cs`,
 `DialogWindowFit.cs`, wizard VM tests):
 
-- **A1. Size, steps and footer** — D1 (920 × 640, width capped to the window),
+- **A1. Size, steps and footer** (#1348) — D1 (920 × 640, width capped to the window),
   D3 (three steps, four for SECOM), D4 (subtitles only for done steps, step 1
   renamed Source), D5 (no Back on step 1, selection in the footer), D13 (step 3
   region column), D15 (rename to "Add online source").
@@ -398,16 +399,16 @@ Two tracks that touch different files and can run in parallel:
 `CatalogueDirectoryDialogViewModel.cs`, `KnownCatalogueSources.cs`,
 `known-sources.json`, directory VM tests), sequential within the track:
 
-- **B1. Categories and search** — D6 + D7: explicit `category` per entry,
+- **B1. Categories and search** (#1346) — D6 + D7: explicit `category` per entry,
   sidebar with counts, region as the second grouping, cross-category search.
-- **B2. Details pane, limitations and breakpoints** — D8, D14 (revised), D2 and
+- **B2. Details pane, limitations and breakpoints** (#1349) — D8, D14 (revised), D2 and
   D9 as the narrow-width form. Stacked on B1.
-- **B3. Escape hatches home** — D10: registry inside SECOM services, URL form at
+- **B3. Escape hatches home** (#1350) — D10: registry inside SECOM services, URL form at
   the top of My sources, sidebar "Add by URL", empty-state link. Stacked on B1
   (can run alongside B2 only if it avoids the list/details markup).
 
 Both tracks add strings to `Strings.resx`; expect a trivial merge there.
-**C1 — skip the single-download step and remember the category** (decided
+**C1 — skip the single-download step and remember the category** (#1353; decided
 2026-11-08: Q4 yes, Q5 within the session). Next on the Source step reads the
 catalogue while the footer says "Reading the catalogue…"; a catalogue with one
 download goes straight to Add to, with What to include done and still reachable
