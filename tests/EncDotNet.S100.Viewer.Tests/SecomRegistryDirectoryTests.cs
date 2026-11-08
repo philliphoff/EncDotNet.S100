@@ -38,6 +38,8 @@ public sealed class SecomRegistryDirectoryTests
         var directory = Directory(_ => new SecomProbeResult(SecomReachability.Open));
         Assert.True(directory.CanShowRegistry);
         Assert.DoesNotContain(directory.Entries, e => e.IsRegistry);
+        // Until the registry is listed, SECOM services may hold more than the curated one.
+        Assert.Equal("1+", directory.Categories.Single(c => c.Category == KnownCatalogueCategory.Secom).CountText);
 
         directory.ShowRegistryCommand.Execute(null);
         await SettleAsync(() => directory.IsRegistryLoaded);
@@ -47,7 +49,10 @@ public sealed class SecomRegistryDirectoryTests
         // The fixture's usable services less one OTHER (not S-100 data).
         Assert.Equal(4, registry.Length);
         Assert.All(registry, e => Assert.Equal(KnownCatalogueFormat.Secom, e.Source.Format));
+        Assert.All(registry, e => Assert.Equal(KnownCatalogueCategory.Secom, e.Category));
+        directory.SelectedCategory = KnownCatalogueCategory.Secom;
         Assert.Contains(directory.Rows, r => r.IsGroupHeader && r.GroupTitle!.StartsWith("SECOM service registry", StringComparison.Ordinal));
+        Assert.Equal("5", directory.Categories.Single(c => c.Category == KnownCatalogueCategory.Secom).CountText);
         Assert.StartsWith("4 SECOM data services", directory.RegistryText);
 
         // Provisional registrations show as pilots; released ones do not.

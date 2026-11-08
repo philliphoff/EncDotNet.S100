@@ -501,6 +501,11 @@ To add a catalogue:
   `weather`. A build
   skips entries in a format it doesn't know, instead of rejecting the list, so
   newer lists still load.
+- Set `category`, the group the source is listed under when browsing:
+  `charts`, `depth` (depth, tides and currents), `weather` (weather and ocean)
+  or `secom`. It's set per entry because format and kind of data don't always
+  agree: ERDDAP current feeds are `weather` services listed with weather and
+  ocean. Without it, the category follows the format.
 - Describe accurately what the catalogue provides. These fields drive the
   quality chips users see:
   - `coverage`: `polygons`, `boundingBoxes` or `none`.

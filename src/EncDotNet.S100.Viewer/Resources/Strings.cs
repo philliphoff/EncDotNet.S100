@@ -1506,7 +1506,6 @@ internal static partial class Strings
     public static string Wizard_Review_UpdatesForecast => Get(nameof(Wizard_Review_UpdatesForecast));
     public static string Wizard_ForecastEndedFormat => Get(nameof(Wizard_ForecastEndedFormat));
     public static string Library_DirectorySearchWatermark => Get(nameof(Library_DirectorySearchWatermark));
-    public static string Library_DirectoryCountFormat => Get(nameof(Library_DirectoryCountFormat));
     public static string Library_DirectoryNoMatches => Get(nameof(Library_DirectoryNoMatches));
     public static string Library_DirectoryAddByUrl => Get(nameof(Library_DirectoryAddByUrl));
     public static string Library_DirectoryAddByUrlHint => Get(nameof(Library_DirectoryAddByUrlHint));

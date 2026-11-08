@@ -9,11 +9,13 @@ using EncDotNet.S100.Viewer.Resources;
 namespace EncDotNet.S100.Viewer.ViewModels;
 
 /// <summary>
-/// View model for the catalogue step of "Add online catalogue" (issue #670):
-/// lists the curated known chart catalogues grouped by region, with what each
-/// provides, plus the catalogues the user added by URL (recognised by their
-/// root element and kept in a <see cref="UserCatalogueStore"/>) under Custom.
-/// The list can be searched; the wizard reads <see cref="SelectedEntry"/>.
+/// View model for the source step of "Add online source" (issues #670,
+/// online-catalogue-dialog D6/D7): lists the curated known sources by
+/// category (charts; depth, tides and currents; weather and ocean; SECOM
+/// services) and by region within a category, plus the sources the user added
+/// by URL (recognised by their root element and kept in a
+/// <see cref="UserCatalogueStore"/>) under My sources. A search spans every
+/// category; the wizard reads <see cref="SelectedEntry"/>.
 /// </summary>
 internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
 {
@@ -26,6 +28,7 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
     private IReadOnlyList<CatalogueEntryViewModel> _rows = [];
     private CatalogueEntryViewModel? _selected;
     private string _searchText = string.Empty;
+    private KnownCatalogueCategory _selectedCategory = KnownCatalogueCategory.Charts;
     private string _catalogueUrl = string.Empty;
     private string? _urlError;
     private string? _urlSuccess;
@@ -57,16 +60,28 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
         _probe = probe;
         _user = [.. userCatalogues?.Sources ?? []];
 
+        Categories = [.. CategoryOrder.Select(c => new CatalogueCategoryViewModel(c, () => SelectCategory(c)))];
         AddUrlCommand = new AsyncRelayCommand(AddUrlAsync, () => CanAddUrl);
         OpenUrlPanelCommand = new RelayCommand(() => IsUrlPanelOpen = true);
         CloseUrlPanelCommand = new RelayCommand(() => IsUrlPanelOpen = false);
         Rebuild(selectId: null);
     }
 
+    /// <summary>The categories in the order the sidebar lists them.</summary>
+    private static readonly KnownCatalogueCategory[] CategoryOrder =
+    [
+        KnownCatalogueCategory.Charts,
+        KnownCatalogueCategory.Depth,
+        KnownCatalogueCategory.Weather,
+        KnownCatalogueCategory.Secom,
+        KnownCatalogueCategory.User,
+    ];
+
     /// <summary>
-    /// Every catalogue (not filtered by the search), grouped by region in the
-    /// order the curated list first names each region, by name within a
-    /// region, followed by the user's own.
+    /// Every source (not filtered by the search or category): by category,
+    /// then by region in the order the curated list first names each region,
+    /// by name within a region; registry services follow the curated SECOM
+    /// services, and the user's own come last.
     /// </summary>
     public IReadOnlyList<CatalogueEntryViewModel> Entries
     {
@@ -74,7 +89,11 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
         private set => SetProperty(ref _entries, value);
     }
 
-    /// <summary>The list as shown: the catalogues matching the search, under non-selectable region headers.</summary>
+    /// <summary>
+    /// The list as shown: the open category's sources under non-selectable
+    /// region headers, or while searching, the matches from every category
+    /// under category headers.
+    /// </summary>
     public IReadOnlyList<CatalogueEntryViewModel> Rows
     {
         get => _rows;
@@ -103,6 +122,18 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
             _selected.IsSelected = true;
             OnPropertyChanged();
             OnPropertyChanged(nameof(CanContinueWithSelection));
+
+            // The open category follows the choice, so clearing a search (or
+            // coming back to the step) shows it in its own category.
+            if (value.Category != _selectedCategory)
+            {
+                _selectedCategory = value.Category;
+                OnPropertyChanged(nameof(SelectedCategory));
+                if (!IsSearching)
+                    ShowMatches();
+                else
+                    UpdateCategories();
+            }
             if (value.IsRegistry && value.Reachability is null && !value.IsProbing)
                 _ = ProbeAsync(value);
         }
@@ -138,6 +169,7 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
             if (SetProperty(ref _isLoadingRegistry, value))
             {
                 OnPropertyChanged(nameof(CanShowRegistry));
+                UpdateCategories();
                 ((AsyncRelayCommand)ShowRegistryCommand).NotifyCanExecuteChanged();
             }
         }
@@ -225,31 +257,61 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Filters the list by name, provider, region or format.</summary>
+    /// <summary>Filters every category by name, provider, region or format.</summary>
     public string SearchText
     {
         get => _searchText;
         set
         {
             if (SetProperty(ref _searchText, value ?? string.Empty))
+            {
+                OnPropertyChanged(nameof(IsSearching));
                 ShowMatches();
+            }
         }
     }
 
-    /// <summary>"18", or "3 of 18" while searching.</summary>
-    public string CountText
+    /// <summary>True while <see cref="SearchText"/> filters the list.</summary>
+    public bool IsSearching => _searchText.Trim().Length > 0;
+
+    /// <summary>The sidebar: each category with its count (its match count while searching).</summary>
+    public IReadOnlyList<CatalogueCategoryViewModel> Categories { get; }
+
+    /// <summary>
+    /// The open category. Choosing one clears the search; it follows
+    /// <see cref="SelectedEntry"/> so the choice is shown in its own category.
+    /// </summary>
+    public KnownCatalogueCategory SelectedCategory
     {
-        get
-        {
-            var shown = _rows.Count(r => !r.IsGroupHeader);
-            return shown == _entries.Count
-                ? _entries.Count.ToString("N0", CultureInfo.CurrentCulture)
-                : string.Format(CultureInfo.CurrentCulture, Strings.Library_DirectoryCountFormat, shown, _entries.Count);
-        }
+        get => _selectedCategory;
+        set => SelectCategory(value);
     }
 
-    /// <summary>True when the search matches no catalogue.</summary>
-    public bool HasNoMatches => _rows.Count == 0;
+    private void SelectCategory(KnownCatalogueCategory category)
+    {
+        var changed = category != _selectedCategory;
+        _selectedCategory = category;
+        if (changed)
+            OnPropertyChanged(nameof(SelectedCategory));
+        if (_searchText.Length > 0)
+        {
+            _searchText = string.Empty;
+            OnPropertyChanged(nameof(SearchText));
+            OnPropertyChanged(nameof(IsSearching));
+        }
+        else if (!changed)
+        {
+            return;
+        }
+
+        ShowMatches();
+    }
+
+    /// <summary>True when the search matches no source in any category.</summary>
+    public bool HasNoMatches => IsSearching && _rows.Count == 0;
+
+    /// <summary>True when the open category lists nothing (My sources before anything is added).</summary>
+    public bool IsCategoryEmpty => !IsSearching && _rows.Count == 0;
 
     /// <summary>True while the "Add a catalogue by URL" panel is expanded.</summary>
     public bool IsUrlPanelOpen
@@ -403,15 +465,20 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
 
     private void Remove(KnownCatalogueSource source)
     {
+        // Stay in the category the source was removed from, on another of the user's own if any.
+        var category = _selectedCategory;
+        var next = _selected?.Source.Id == source.Id ? _user.FirstOrDefault(s => s.Id != source.Id)?.Id : _selected?.Source.Id;
         _user.RemoveAll(s => s.Id == source.Id);
         _store?.Remove(source.Id);
-        Rebuild(_selected?.Source.Id == source.Id ? null : _selected?.Source.Id);
+        Rebuild(next);
+        if (_selectedCategory != category && !IsSearching)
+            SelectCategory(category);
     }
 
     private void Rebuild(string? selectId)
     {
-        // Regions in the order the curated list first names them; registry services
-        // next (by product), then the user's own, under Custom.
+        // Within a category: regions in the order the curated list first names them,
+        // registry services next (by product), then the user's own.
         var regionOrder = _known.Select(s => s.Region.FirstOrDefault() ?? string.Empty).Distinct().ToList();
         var previous = _entries.Where(e => e.IsRegistry).ToDictionary(e => e.Source.Id, StringComparer.Ordinal);
         Entries = _known
@@ -425,8 +492,10 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
                 // Keep what was already found out about a service.
                 .Select(s => previous.TryGetValue(s.Id, out var kept) ? kept : new CatalogueEntryViewModel(s, _openUrl, isRegistry: true, openFix: OnFixRequested)))
             .Concat(_user.Select(s => new CatalogueEntryViewModel(s, _openUrl, Remove)))
+            .OrderBy(e => Array.IndexOf(CategoryOrder, e.Category)) // stable: keeps the order above within a category
             .ToArray();
 
+        // Opens on the first category's first source (NOAA ENC in the built-in list).
         var keep = _entries.FirstOrDefault(e => e.Source.Id == selectId) ?? _entries.FirstOrDefault();
         _selected = null;
         if (keep is not null)
@@ -440,24 +509,50 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
     {
         var text = _searchText.Trim();
         var rows = new List<CatalogueEntryViewModel>();
-        foreach (var group in _entries.GroupBy(e => e.IsUser ? KnownCatalogueSources.CustomRegion
-            : e.IsRegistry ? Strings.Library_RegistryRegion
-            : e.Source.Region.FirstOrDefault() ?? string.Empty))
+        if (text.Length > 0)
         {
-            var matches = group.Where(e => e.Matches(text)).ToArray();
-            if (matches.Length == 0)
-                continue;
-
-            rows.Add(CatalogueEntryViewModel.Header(GroupTitle(group.Key, group.ToArray())));
-            rows.AddRange(matches);
+            // Every category's matches, under the category's name.
+            foreach (var group in _entries.Where(e => e.Matches(text)).GroupBy(e => e.Category))
+            {
+                rows.Add(CatalogueEntryViewModel.Header(CatalogueCategoryViewModel.LabelOf(group.Key)));
+                rows.AddRange(group);
+            }
+        }
+        else
+        {
+            // The open category, by region; registry services under their own header.
+            // The user's own sources need no header: the category says whose they are.
+            foreach (var group in _entries.Where(e => e.Category == _selectedCategory)
+                .GroupBy(e => e.IsUser ? string.Empty : e.IsRegistry ? Strings.Library_RegistryRegion : e.Source.Region.FirstOrDefault() ?? string.Empty))
+            {
+                var entries = group.ToArray();
+                if (group.Key.Length > 0)
+                    rows.Add(CatalogueEntryViewModel.Header(GroupTitle(group.Key, entries)));
+                rows.AddRange(entries);
+            }
         }
 
         Rows = rows;
-        OnPropertyChanged(nameof(CountText));
+        UpdateCategories();
         OnPropertyChanged(nameof(HasNoMatches));
+        OnPropertyChanged(nameof(IsCategoryEmpty));
 
         // Replacing the rows clears the list's highlight; restore it on the kept choice.
         OnPropertyChanged(nameof(SelectedEntry));
+    }
+
+    /// <summary>Updates the sidebar's counts, the open category and the dimmed (no match) ones.</summary>
+    private void UpdateCategories()
+    {
+        var text = _searchText.Trim();
+        var searching = text.Length > 0;
+        foreach (var category in Categories)
+        {
+            var count = _entries.Count(e => e.Category == category.Category && (!searching || e.Matches(text)));
+            // Until the registry is listed, SECOM services may hold more than the curated ones.
+            var more = !searching && category.Category == KnownCatalogueCategory.Secom && CanShowRegistry;
+            category.Update(count, more, isOpen: !searching && category.Category == _selectedCategory, isDimmed: searching && count == 0);
+        }
     }
 
     /// <summary>"Europe", or "North America · United States" when a region's catalogues all share the country.</summary>
@@ -525,6 +620,14 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
 
     /// <summary>True for a SECOM service listed from the service registry (#822).</summary>
     public bool IsRegistry { get; }
+
+    /// <summary>
+    /// The category the entry is listed under: the user's own sources (added
+    /// by URL or a shared feed) under My sources, registry services under
+    /// SECOM services, curated ones as the list says.
+    /// </summary>
+    public KnownCatalogueCategory Category =>
+        IsUser ? KnownCatalogueCategory.User : IsRegistry ? KnownCatalogueCategory.Secom : Source.Category;
 
     /// <summary>Whether a registry service can be read, once probed; <see langword="null"/> before.</summary>
     public SecomReachability? Reachability => _reachability?.Reachability;
@@ -760,4 +863,78 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
     public ICommand OpenHomepageCommand { get; }
 
     public bool HasHomepage => Source.Homepage is not null;
+}
+
+/// <summary>One category in the directory's sidebar, with its count (#670, D6/D7).</summary>
+internal sealed class CatalogueCategoryViewModel : ViewModelBase
+{
+    private int _count;
+    private bool _hasMore;
+    private bool _isOpen;
+    private bool _isDimmed;
+
+    public CatalogueCategoryViewModel(KnownCatalogueCategory category, Action select)
+    {
+        Category = category;
+        SelectCommand = new RelayCommand(select);
+    }
+
+    /// <summary>The category.</summary>
+    public KnownCatalogueCategory Category { get; }
+
+    /// <summary>"Charts", "Depth, tides &amp; currents", …</summary>
+    public string Label => LabelOf(Category);
+
+    /// <summary>The label for <paramref name="category"/>.</summary>
+    public static string LabelOf(KnownCatalogueCategory category) => category switch
+    {
+        KnownCatalogueCategory.Depth => Strings.Library_Category_Depth,
+        KnownCatalogueCategory.Weather => Strings.Library_Category_Weather,
+        KnownCatalogueCategory.Secom => Strings.Library_Category_Secom,
+        KnownCatalogueCategory.User => Strings.Library_Category_User,
+        _ => Strings.Library_Category_Charts,
+    };
+
+    /// <summary>How many sources the category lists (how many match while searching).</summary>
+    public int Count => _count;
+
+    /// <summary>"17", or "1+" for SECOM services before the registry is listed.</summary>
+    public string CountText => _hasMore
+        ? string.Format(CultureInfo.CurrentCulture, Strings.Library_CategoryCountMoreFormat, _count)
+        : _count.ToString("N0", CultureInfo.CurrentCulture);
+
+    /// <summary>The sidebar row's accessible name: "Charts, 17 sources".</summary>
+    public string AccessibleName => string.Format(CultureInfo.CurrentCulture, Strings.Library_CategoryAccessibleFormat, Label, CountText);
+
+    /// <summary>True for the open category (not while searching, when every category is shown).</summary>
+    public bool IsOpen
+    {
+        get => _isOpen;
+        private set => SetProperty(ref _isOpen, value);
+    }
+
+    /// <summary>True while searching when nothing in the category matches.</summary>
+    public bool IsDimmed
+    {
+        get => _isDimmed;
+        private set => SetProperty(ref _isDimmed, value);
+    }
+
+    /// <summary>Opens the category (and clears the search).</summary>
+    public ICommand SelectCommand { get; }
+
+    internal void Update(int count, bool hasMore, bool isOpen, bool isDimmed)
+    {
+        if (count != _count || hasMore != _hasMore)
+        {
+            _count = count;
+            _hasMore = hasMore;
+            OnPropertyChanged(nameof(Count));
+            OnPropertyChanged(nameof(CountText));
+            OnPropertyChanged(nameof(AccessibleName));
+        }
+
+        IsOpen = isOpen;
+        IsDimmed = isDimmed;
+    }
 }
