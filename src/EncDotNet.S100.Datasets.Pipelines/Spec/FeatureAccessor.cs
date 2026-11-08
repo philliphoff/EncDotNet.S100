@@ -72,6 +72,7 @@ public static class FeatureAccessor
             S131DatasetData s131 => FilterByExtent(s131.Model.Features, extent),
             S201DatasetData s201 => FilterByExtent(s201.Model.Features, extent),
             S411DatasetData s411 => FilterByExtent(s411.Model.Features, extent),
+            S412DatasetData s412 => FilterByExtent(s412.Model.Features, extent),
             S421DatasetData s421 => FilterByExtent(s421.Model.Features, extent),
             // CAP warnings: every area not superseded or cancelled, as a
             // render without a time step draws them.

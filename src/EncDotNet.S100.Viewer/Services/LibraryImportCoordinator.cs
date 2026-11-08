@@ -149,9 +149,11 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
                 RevealLibrary();
         };
 
+        // The view is 920 wide (DialogWindowFit narrows it in a small window); a smaller host
+        // maximum would silently keep it narrower.
         _dialogManager.CreateDialog(wizard)
             .Dismissible()
-            .WithMaxWidth(640)
+            .WithMaxWidth(920)
             .Show();
     }
 

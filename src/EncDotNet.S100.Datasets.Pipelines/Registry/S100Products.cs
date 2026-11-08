@@ -13,6 +13,7 @@ using EncDotNet.S100.Datasets.S129;
 using EncDotNet.S100.Datasets.S131;
 using EncDotNet.S100.Datasets.S201;
 using EncDotNet.S100.Datasets.S411;
+using EncDotNet.S100.Datasets.S412;
 using EncDotNet.S100.Datasets.S421;
 using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Hdf5;
@@ -334,6 +335,26 @@ public static class S100Products
         static (stream, _) => new S411DatasetData(S411Dataset.Open(stream)),
         S411Dataset.ReadMetadata);
 
+    /// <summary>S-412 Marine Weather Warnings (WMO, draft).</summary>
+    public static ProductRegistration S412 { get; } = Gml(
+        "S-412",
+        (s, path) => new S412DatasetProcessor(
+            path, s.CatalogueManager, s.AuthorityProvider, s.FeatureCatalogueManager),
+        (s, r) => new S412DatasetProcessor(
+            r.Source, r.RelativePath, s.CatalogueManager, s.AuthorityProvider,
+            s.FeatureCatalogueManager),
+        // The upstream sample roots at <S412:Dataset
+        // xmlns:S412="http://www.iho.int/S412/1.1">.
+        static d => Ns(d, "S-412", "S412") || Local(d, "S412")
+            || d.ContainsProductIdentifier("S-412")
+            || DataSetAttr(d, "S412", "S-412"),
+        static (stream, _) => new S412DatasetData(S412Dataset.Open(stream)),
+        S412Dataset.ReadMetadata,
+        // Weather warnings are an overlay on the cautions and warnings plane,
+        // like S-124 navigational warnings and CAP marine warnings
+        // (MSC.530(106)/Rev.1 §Appendix 2 layers 3-4; S-98 Main §9.2.1).
+        Planes((ProductRegistration.AnyLayerKind, S98DisplayPlane.CautionsAndWarnings)));
+
     /// <summary>S-421 Route Plan.</summary>
     public static ProductRegistration S421 { get; } = Gml(
         "S-421",
@@ -356,7 +377,7 @@ public static class S100Products
         new[]
         {
             S101, S57, S102, S104, S111, S122, S124, S125, S127, S128,
-            S129, S131, S201, S401, S411, S421,
+            S129, S131, S201, S401, S411, S412, S421,
         });
 
     /// <summary>

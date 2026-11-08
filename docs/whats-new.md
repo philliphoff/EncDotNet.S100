@@ -6,6 +6,17 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **S-412 Marine Weather Warnings (draft).** The new
+  `EncDotNet.S100.Datasets.S412` package reads S-412 GML datasets (wind,
+  significant wave height, restricted visibility, thunderstorm and ice
+  accretion warnings) and portrays them with the draft WMO portrayal
+  catalogue, now bundled with the feature catalogue in
+  `EncDotNet.S100.Specifications`. `s100 render` and the other
+  hosts detect S-412 and draw it on the S-98 cautions and warnings plane, with
+  S-124. `S412MarineWeatherWarnings` is the typed model. S-412 isn't
+  approved yet, so expect its catalogues to change; there's no validation
+  pack, and the timeline doesn't filter warnings by validity yet. See the
+  [S-412 README](../src/EncDotNet.S100.Datasets.S412/README.md).
 - **Faster multi-cell `s100 render` and `s100 tiles`, and HiDPI captures.**
   The CLI and `s100 mcp serve` now render through the chart engine
   (`EncDotNet.S100.Rendering.Engine`): cells parse, portray and build their

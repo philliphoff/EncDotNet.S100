@@ -61,6 +61,9 @@
   <data name="SpecName_S411" xml:space="preserve">
     <value>Sea Ice Information</value>
   </data>
+  <data name="SpecName_S412" xml:space="preserve">
+    <value>Marine Weather Warnings</value>
+  </data>
   <data name="SpecName_S421" xml:space="preserve">
     <value>Route Plan</value>
   </data>

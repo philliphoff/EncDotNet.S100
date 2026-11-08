@@ -172,7 +172,7 @@ For the options, see [`feed export`](cli.md#feed-export).
 2. Paste the feed's URL into **Feed URL** and choose **Connect**. SoundCharts
    checks that the URL answers with a feed before adding it.
 
-You can also add a feed's URL from **Add** > **Browse online catalogues…**
+You can also add a feed's URL from **Add** > **Browse online sources…**
 with **Add a catalogue by URL** and **Check & add**. SoundCharts recognises a
 feed by its `format` property, and you choose which products to include.
 
