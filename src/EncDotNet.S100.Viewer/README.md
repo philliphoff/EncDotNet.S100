@@ -214,19 +214,21 @@ panel. The menu groups sources by where the data is.
   `.s100collection.json` file. See
   [Local collection manifests](../../docs/local-collection-manifest.md).
 
-**Online:** **Browse online catalogues…** opens the **Add online catalogue**
-wizard. See [Add an online catalogue](#add-an-online-catalogue).
+**Online:** **Browse online sources…** opens the **Add online source**
+wizard. See [Add an online source](#add-an-online-source).
 
 **Another computer:** **Connect to a shared feed…** adds datasets served by
 `s100` on another computer. See [Shared feeds](#shared-feeds).
 
-### Add an online catalogue
+### Add an online source
 
-The **Add online catalogue** wizard has three steps. **Back** and the step
-header go back without losing your choices, and each catalogue is read only
-once.
+The **Add online source** wizard has three steps, or four for a SECOM service
+(see [SECOM services](#secom-services)). The step header shows what you chose
+in each step you've completed. **Back** and the step header go back without
+losing your choices, and each catalogue is read only once. On the first step
+the footer repeats your selection.
 
-1. **Catalogue**: choose from a curated directory, grouped by region. Search
+1. **Source**: choose from a curated directory, grouped by region. Search
    by name, provider or country. The directory includes NOAA ENC; USACE Inland
    ENC rivers and buoy overlay; NOAA S-102 bathymetry and S-104 and S-111
    forecasts; S-124 navigational warnings from Canada over SECOM; community

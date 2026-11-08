@@ -87,10 +87,10 @@ public sealed class ViewerUiAutomationTests
         using var host = ViewHost.Show(new AddOnlineCatalogueWizardView { DataContext = wizard }, width: 640, height: 760);
         var automation = Automation(host);
 
-        // There is nothing to go back to on the first step.
-        var disabled = await Assert.ThrowsAsync<UiAutomationException>(
+        // There is nothing to go back to on the first step, so Back isn't shown.
+        var hidden = await Assert.ThrowsAsync<UiAutomationException>(
             () => automation.ActAsync(new UiTarget("Wizard.Back", null), UiAction.Invoke, null));
-        Assert.Equal(UiFailure.Disabled, disabled.Failure);
+        Assert.Equal(UiFailure.NotFound, hidden.Failure);
 
         var search = await automation.ActAsync(new UiTarget("Catalogues.Search", null), UiAction.SetValue, "NOAA ENC");
         Assert.Equal("NOAA ENC", search.Value);
@@ -98,7 +98,7 @@ public sealed class ViewerUiAutomationTests
         var row = Flatten(list).First(e => e.Role == "listItem" && e.Name?.Contains("all U.S. waters") == true);
         await automation.ActAsync(new UiTarget(null, row.Ref), UiAction.Select, null);
         await automation.ActAsync(new UiTarget("Wizard.Next", null), UiAction.Invoke, null);
-        Assert.Equal(3, wizard.CurrentStep);  // NOAA ENC skips Connection (#883)
+        Assert.True(wizard.IsIncludeStep);  // NOAA ENC has no Connection step (#883)
 
         var state = wizard.Scope!.Choices("States")[0];
         var options = await Assert.ThrowsAsync<UiAutomationException>(

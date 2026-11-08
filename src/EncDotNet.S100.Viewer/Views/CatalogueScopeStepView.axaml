@@ -9,6 +9,8 @@
     <UserControl.Styles>
         <!-- Facet tabs: a segmented strip; each tab carries a count badge when it has ticks. -->
         <Style Selector="ListBox.facetTabs">
+            <!-- As wide as its tabs, not the column (the wizard is wide enough to leave a gap). -->
+            <Setter Property="HorizontalAlignment" Value="Left" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="0" />
@@ -305,7 +307,7 @@
                     </ScrollViewer>
 
                     <!-- A remote catalogue: regions (with a count of ticked areas) beside the chosen region's areas. -->
-                    <Grid Grid.Row="1" ColumnDefinitions="200,Auto,*" IsVisible="{Binding IsRegionPicker}">
+                    <Grid Grid.Row="1" ColumnDefinitions="240,Auto,*" IsVisible="{Binding IsRegionPicker}">
                         <DockPanel>
                             <TextBlock DockPanel.Dock="Top" Text="{Binding RegionsHeader}" Classes="muted" FontSize="11.5"
                                        FontWeight="SemiBold" LetterSpacing="0.4" Margin="14,8,10,4" />
