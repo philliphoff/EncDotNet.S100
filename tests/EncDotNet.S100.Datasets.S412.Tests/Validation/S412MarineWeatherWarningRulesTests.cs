@@ -11,7 +11,9 @@ namespace EncDotNet.S100.Datasets.S412.Tests.Validation;
 /// </summary>
 public class S412MarineWeatherWarningRulesTests
 {
-    private static readonly string Synthetic = File.ReadAllText(S412DatasetReaderTests.SyntheticFile);
+    // LF line endings whatever the checkout uses (Windows runners check out
+    // CRLF), so edits that span lines apply everywhere.
+    private static readonly string Synthetic = File.ReadAllText(S412DatasetReaderTests.SyntheticFile).ReplaceLineEndings("\n");
 
     private static ValidationReport Validate(string gml)
     {
