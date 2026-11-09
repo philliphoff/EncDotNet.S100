@@ -6,7 +6,7 @@ namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
 /// Default <see cref="IViewerUiController"/> implementation — drives the
-/// activity-panel state exposed by <see cref="MainViewModel"/> (dock open
+/// activity-panel state exposed by <see cref="ShellLayoutViewModel"/> (dock open
 /// flags and per-dock tab selection) through the Avalonia UI dispatcher.
 /// </summary>
 /// <remarks>
@@ -19,9 +19,9 @@ namespace EncDotNet.S100.Viewer.Services;
 /// </remarks>
 internal sealed class ViewerUiController : IViewerUiController
 {
-    private readonly MainViewModel _viewModel;
+    private readonly ShellLayoutViewModel _viewModel;
 
-    public ViewerUiController(MainViewModel viewModel)
+    public ViewerUiController(ShellLayoutViewModel viewModel)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
         _viewModel = viewModel;
@@ -44,7 +44,7 @@ internal sealed class ViewerUiController : IViewerUiController
     private IReadOnlyList<ViewerPanelState> SnapshotPanels()
     {
         // Left dock first, then right, then bottom; each dock in
-        // activity-bar order (IActivityTab.Order ascending). MainViewModel
+        // activity-bar order (IActivityTab.Order ascending). ShellLayoutViewModel
         // already sorts Tabs by Order, so a stable OrderBy on the dock is
         // sufficient to group without disturbing intra-dock ordering.
         return _viewModel.Tabs
@@ -107,7 +107,7 @@ internal sealed class ViewerUiController : IViewerUiController
 
     /// <summary>
     /// Selects the tab and opens its dock. Guards against
-    /// <see cref="MainViewModel.SelectedLeftTab"/>'s toggle behaviour —
+    /// <see cref="ShellLayoutViewModel.SelectedLeftTab"/>'s toggle behaviour —
     /// re-selecting the already-selected left tab while its dock is open
     /// would close the dock, so a panel that is already showing is left
     /// untouched.

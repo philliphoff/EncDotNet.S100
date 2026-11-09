@@ -793,7 +793,7 @@
                           ResizeDirection="Rows"
                           ResizeBehavior="PreviousAndNext"
                           bh:HoverDelay.DelayMilliseconds="500"
-                          bh:SplitterPersistence.SavedFraction="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).DatasetsInnerSplit, Mode=TwoWay}" />
+                          bh:SplitterPersistence.SavedFraction="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.DatasetsInnerSplit, Mode=TwoWay}" />
 
             <!-- Properties sub-panel. Tabbed: "Dataset" controls
                  the dataset as a whole, "Layers" exposes per-sub-layer

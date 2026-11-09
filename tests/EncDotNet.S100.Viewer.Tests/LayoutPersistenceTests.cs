@@ -83,8 +83,9 @@ public sealed class LayoutPersistenceTests : IDisposable
         settings ??= new ViewerSettings { SettingsFilePath = _tempSettingsPath };
         var catalogues = new PortrayalCatalogueManager();
         var datasets = new DatasetsViewModel(new NoopLoader());
+        var timeline = new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
         return new MainViewModel(
-            settings,
+            layout: new ShellLayoutViewModel(settings, tabs ?? [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post),
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
@@ -92,7 +93,7 @@ public sealed class LayoutPersistenceTests : IDisposable
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
             settingsViewModel: new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null),
             pickReport: new PickReportViewModel(),
-            timeline: new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null),
+            timeline: timeline,
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
             textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
             displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
@@ -101,7 +102,6 @@ public sealed class LayoutPersistenceTests : IDisposable
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
             notifications: Notifications.TestNotifications.Create(),
-            activityTabs: tabs,
             routes: routes ?? new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System)),
             dialogManager: new ShadUI.DialogManager(),
             measure: new EncDotNet.S100.Viewer.Services.MeasureSession(settings: null));
@@ -119,29 +119,29 @@ public sealed class LayoutPersistenceTests : IDisposable
     {
         var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var vm = CreateViewModel(StandardTabs(), routes: routes);
-        vm.IsRightDockOpen = true;
-        Assert.True(vm.IsRightDockShown);
-        Assert.False(vm.IsRightDockEdgeTabVisible);
+        vm.Layout.IsRightDockOpen = true;
+        Assert.True(vm.Layout.IsRightDockShown);
+        Assert.False(vm.Layout.IsRightDockEdgeTabVisible);
 
         routes.IsCheckModeActive = true;
 
         Assert.True(vm.IsCheckModeActive);
-        Assert.True(vm.IsRightDockOpen);
-        Assert.False(vm.IsRightDockShown);
-        Assert.True(vm.IsRightDockEdgeTabVisible);
+        Assert.True(vm.Layout.IsRightDockOpen);
+        Assert.False(vm.Layout.IsRightDockShown);
+        Assert.True(vm.Layout.IsRightDockEdgeTabVisible);
 
         // The edge tab unfolds the dock while the mode stays on.
-        vm.UnfoldRightDockCommand.Execute(null);
-        Assert.True(vm.IsRightDockShown);
+        vm.Layout.UnfoldRightDockCommand.Execute(null);
+        Assert.True(vm.Layout.IsRightDockShown);
         routes.IsCheckModeActive = false;
         routes.IsCheckModeActive = true;
-        Assert.False(vm.IsRightDockShown);
+        Assert.False(vm.Layout.IsRightDockShown);
 
         routes.IsCheckModeActive = false;
 
         Assert.False(vm.IsCheckModeActive);
-        Assert.True(vm.IsRightDockShown);
-        Assert.False(vm.IsRightDockEdgeTabVisible);
+        Assert.True(vm.Layout.IsRightDockShown);
+        Assert.False(vm.Layout.IsRightDockEdgeTabVisible);
     }
 
     private static IActivityTab[] TabsWithClearance(RoutesService routes) =>
@@ -149,9 +149,9 @@ public sealed class LayoutPersistenceTests : IDisposable
         new FakeTab { Id = "Datasets", Order = 30, Dock = TabDock.Left },
         new FakeTab { Id = "Pick", Order = 10, Dock = TabDock.Right },
         new ActivityTab<object, ContentControl>(
-            MainViewModel.TimelineTabId, 10, "Timeline", "Timeline", () => new ContentControl(), new object(), false, visibility: null, TabDock.Bottom),
+            ShellLayoutViewModel.TimelineTabId, 10, "Timeline", "Timeline", () => new ContentControl(), new object(), false, visibility: null, TabDock.Bottom),
         new ActivityTab<object, ContentControl>(
-            MainViewModel.ClearanceTabId, 20, "Clearance", "Clearance", () => new ContentControl(), new object(), false,
+            ShellLayoutViewModel.ClearanceTabId, 20, "Clearance", "Clearance", () => new ContentControl(), new object(), false,
             new CheckModeVisibilitySource(routes), TabDock.Bottom),
     ];
 
@@ -173,18 +173,18 @@ public sealed class LayoutPersistenceTests : IDisposable
     {
         var routes = RoutesWithDraft(draft: null);
         var vm = CreateViewModel(TabsWithClearance(routes), routes: routes);
-        vm.WindowWidth = 1200;
+        vm.Layout.WindowWidth = 1200;
 
         routes.IsCheckModeActive = true;
-        Assert.False(vm.IsBottomDockOpen);
-        Assert.Equal([MainViewModel.TimelineTabId], vm.VisibleBottomTabs.Select(t => t.Id));
+        Assert.False(vm.Layout.IsBottomDockOpen);
+        Assert.Equal([ShellLayoutViewModel.TimelineTabId], vm.Layout.VisibleBottomTabs.Select(t => t.Id));
 
         // Setting a draft brings the tab, opened on Clearance; removing it puts things back.
         routes.Routes.ActiveRoute!.SetPassageValue(EncDotNet.S100.Viewer.Routing.RoutePassageField.Draft, 5);
-        Assert.True(vm.IsClearanceTabSelected);
+        Assert.True(vm.Layout.IsClearanceTabSelected);
         routes.Routes.ActiveRoute!.SetPassageValue(EncDotNet.S100.Viewer.Routing.RoutePassageField.Draft, null);
-        Assert.False(vm.IsBottomDockOpen);
-        Assert.Equal([MainViewModel.TimelineTabId], vm.VisibleBottomTabs.Select(t => t.Id));
+        Assert.False(vm.Layout.IsBottomDockOpen);
+        Assert.Equal([ShellLayoutViewModel.TimelineTabId], vm.Layout.VisibleBottomTabs.Select(t => t.Id));
     }
 
     [Fact]
@@ -192,29 +192,29 @@ public sealed class LayoutPersistenceTests : IDisposable
     {
         var routes = RoutesWithDraft();
         var vm = CreateViewModel(TabsWithClearance(routes), routes: routes);
-        vm.WindowWidth = 1200;
-        Assert.False(vm.IsBottomDockOpen);
-        Assert.False(vm.HasBottomDockTabs);
-        Assert.Equal([MainViewModel.TimelineTabId], vm.VisibleBottomTabs.Select(t => t.Id));
+        vm.Layout.WindowWidth = 1200;
+        Assert.False(vm.Layout.IsBottomDockOpen);
+        Assert.False(vm.Layout.HasBottomDockTabs);
+        Assert.Equal([ShellLayoutViewModel.TimelineTabId], vm.Layout.VisibleBottomTabs.Select(t => t.Id));
 
         routes.IsCheckModeActive = true;
 
-        Assert.True(vm.IsBottomDockOpen);
-        Assert.True(vm.IsClearanceTabSelected);
-        Assert.True(vm.HasBottomDockTabs);
-        Assert.Equal([MainViewModel.TimelineTabId, MainViewModel.ClearanceTabId], vm.VisibleBottomTabs.Select(t => t.Id));
+        Assert.True(vm.Layout.IsBottomDockOpen);
+        Assert.True(vm.Layout.IsClearanceTabSelected);
+        Assert.True(vm.Layout.HasBottomDockTabs);
+        Assert.Equal([ShellLayoutViewModel.TimelineTabId, ShellLayoutViewModel.ClearanceTabId], vm.Layout.VisibleBottomTabs.Select(t => t.Id));
 
         // The dock's tabs switch between the two.
-        vm.SelectTabCommand.Execute(vm.VisibleBottomTabs[0]);
-        Assert.True(vm.IsTimelineTabSelected);
-        vm.SelectTabCommand.Execute(vm.VisibleBottomTabs[1]);
-        Assert.True(vm.IsClearanceTabSelected);
+        vm.Layout.SelectTabCommand.Execute(vm.Layout.VisibleBottomTabs[0]);
+        Assert.True(vm.Layout.IsTimelineTabSelected);
+        vm.Layout.SelectTabCommand.Execute(vm.Layout.VisibleBottomTabs[1]);
+        Assert.True(vm.Layout.IsClearanceTabSelected);
 
         routes.IsCheckModeActive = false;
 
-        Assert.False(vm.IsBottomDockOpen);
-        Assert.True(vm.IsTimelineTabSelected);
-        Assert.False(vm.HasBottomDockTabs);
+        Assert.False(vm.Layout.IsBottomDockOpen);
+        Assert.True(vm.Layout.IsTimelineTabSelected);
+        Assert.False(vm.Layout.HasBottomDockTabs);
     }
 
     [Fact]
@@ -222,16 +222,16 @@ public sealed class LayoutPersistenceTests : IDisposable
     {
         var routes = RoutesWithDraft();
         var vm = CreateViewModel(TabsWithClearance(routes), routes: routes);
-        vm.WindowWidth = 1200;
-        vm.SelectTabCommand.Execute(vm.VisibleBottomTabs[0]);
-        Assert.True(vm.IsBottomDockOpen);
+        vm.Layout.WindowWidth = 1200;
+        vm.Layout.SelectTabCommand.Execute(vm.Layout.VisibleBottomTabs[0]);
+        Assert.True(vm.Layout.IsBottomDockOpen);
 
         routes.IsCheckModeActive = true;
-        Assert.True(vm.IsClearanceTabSelected);
+        Assert.True(vm.Layout.IsClearanceTabSelected);
         routes.IsCheckModeActive = false;
 
-        Assert.True(vm.IsBottomDockOpen);
-        Assert.True(vm.IsTimelineTabSelected);
+        Assert.True(vm.Layout.IsBottomDockOpen);
+        Assert.True(vm.Layout.IsTimelineTabSelected);
     }
 
     [Fact]
@@ -239,35 +239,35 @@ public sealed class LayoutPersistenceTests : IDisposable
     {
         var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var vm = CreateViewModel(StandardTabs(), routes: routes);
-        Assert.False(vm.IsRightDockOpen);
+        Assert.False(vm.Layout.IsRightDockOpen);
 
         routes.IsCheckModeActive = true;
 
-        Assert.False(vm.IsRightDockShown);
-        Assert.False(vm.IsRightDockEdgeTabVisible);
+        Assert.False(vm.Layout.IsRightDockShown);
+        Assert.False(vm.Layout.IsRightDockEdgeTabVisible);
         routes.IsCheckModeActive = false;
-        Assert.False(vm.IsRightDockShown);
+        Assert.False(vm.Layout.IsRightDockShown);
     }
 
     [Fact]
     public void IsLeftDockOpen_DefaultsToTrue_WhenSettingsAbsent()
     {
         var vm = CreateViewModel(StandardTabs());
-        Assert.True(vm.IsLeftDockOpen);
+        Assert.True(vm.Layout.IsLeftDockOpen);
     }
 
     [Fact]
     public void IsRightDockOpen_DefaultsToFalse_WhenSettingsAbsent()
     {
         var vm = CreateViewModel(StandardTabs());
-        Assert.False(vm.IsRightDockOpen);
+        Assert.False(vm.Layout.IsRightDockOpen);
     }
 
     [Fact]
     public void IsBottomDockOpen_DefaultsToFalse_WhenSettingsAbsent()
     {
         var vm = CreateViewModel(StandardTabs());
-        Assert.False(vm.IsBottomDockOpen);
+        Assert.False(vm.Layout.IsBottomDockOpen);
     }
 
     [Fact]
@@ -279,7 +279,7 @@ public sealed class LayoutPersistenceTests : IDisposable
             IsRightDockOpen = true,
         };
         var vm = CreateViewModel(StandardTabs(), settings);
-        Assert.True(vm.IsRightDockOpen);
+        Assert.True(vm.Layout.IsRightDockOpen);
     }
 
     [Fact]
@@ -291,7 +291,7 @@ public sealed class LayoutPersistenceTests : IDisposable
             IsBottomDockOpen = true,
         };
         var vm = CreateViewModel(StandardTabs(), settings);
-        Assert.True(vm.IsBottomDockOpen);
+        Assert.True(vm.Layout.IsBottomDockOpen);
     }
 
     [Fact]
@@ -303,7 +303,7 @@ public sealed class LayoutPersistenceTests : IDisposable
             IsLeftDockOpen = false,
         };
         var vm = CreateViewModel(StandardTabs(), settings);
-        Assert.False(vm.IsLeftDockOpen);
+        Assert.False(vm.Layout.IsLeftDockOpen);
     }
 
     [Fact]
@@ -312,7 +312,7 @@ public sealed class LayoutPersistenceTests : IDisposable
         var settings = new ViewerSettings { SettingsFilePath = _tempSettingsPath };
         var vm = CreateViewModel(StandardTabs(), settings);
 
-        vm.IsRightDockOpen = true;
+        vm.Layout.IsRightDockOpen = true;
 
         Assert.True(settings.IsRightDockOpen);
         Assert.True(File.Exists(_tempSettingsPath));
@@ -330,8 +330,8 @@ public sealed class LayoutPersistenceTests : IDisposable
         };
         var vm = CreateViewModel(new IActivityTab[] { pick, alt }, settings);
 
-        Assert.NotNull(vm.SelectedRightTab);
-        Assert.Equal("Alt", vm.SelectedRightTab!.Id);
+        Assert.NotNull(vm.Layout.SelectedRightTab);
+        Assert.Equal("Alt", vm.Layout.SelectedRightTab!.Id);
     }
 
     [Fact]
@@ -345,8 +345,8 @@ public sealed class LayoutPersistenceTests : IDisposable
         };
         var vm = CreateViewModel(new IActivityTab[] { pick }, settings);
 
-        Assert.NotNull(vm.SelectedRightTab);
-        Assert.Equal("Pick", vm.SelectedRightTab!.Id);
+        Assert.NotNull(vm.Layout.SelectedRightTab);
+        Assert.Equal("Pick", vm.Layout.SelectedRightTab!.Id);
     }
 
     [Fact]
@@ -361,8 +361,8 @@ public sealed class LayoutPersistenceTests : IDisposable
         };
         var vm = CreateViewModel(new IActivityTab[] { timeline, alt }, settings);
 
-        Assert.NotNull(vm.SelectedBottomTab);
-        Assert.Equal("AltB", vm.SelectedBottomTab!.Id);
+        Assert.NotNull(vm.Layout.SelectedBottomTab);
+        Assert.Equal("AltB", vm.Layout.SelectedBottomTab!.Id);
     }
 
     [Fact]
@@ -373,7 +373,7 @@ public sealed class LayoutPersistenceTests : IDisposable
         var settings = new ViewerSettings { SettingsFilePath = _tempSettingsPath };
         var vm = CreateViewModel(new IActivityTab[] { pick, alt }, settings);
 
-        vm.SelectedRightTab = alt;
+        vm.Layout.SelectedRightTab = alt;
 
         Assert.Equal("Alt", settings.LastSelectedRightTab);
     }
@@ -398,11 +398,11 @@ public sealed class LayoutPersistenceTests : IDisposable
         var vm = CreateViewModel(new IActivityTab[] { pick }, settings);
 
         // Dock should already be open from settings, before any signal fires.
-        Assert.True(vm.IsRightDockOpen);
+        Assert.True(vm.Layout.IsRightDockOpen);
 
         // Subsequent auto-open is a no-op (dock stays open).
         signal.Raise();
-        Assert.True(vm.IsRightDockOpen);
+        Assert.True(vm.Layout.IsRightDockOpen);
     }
 
     [Fact]
@@ -422,11 +422,11 @@ public sealed class LayoutPersistenceTests : IDisposable
         };
         var vm = CreateViewModel(StandardTabs(), settings);
 
-        Assert.Equal(250, vm.LeftDockSavedWidth);
-        Assert.Equal(320, vm.RightDockSavedWidth);
-        Assert.Equal(180, vm.BottomDockSavedHeight);
-        Assert.Equal(0.4, vm.DatasetsInnerSplit);
-        Assert.Equal(0.6, vm.CatalogInnerSplit);
+        Assert.Equal(250, vm.Layout.LeftDockSavedWidth);
+        Assert.Equal(320, vm.Layout.RightDockSavedWidth);
+        Assert.Equal(180, vm.Layout.BottomDockSavedHeight);
+        Assert.Equal(0.4, vm.Layout.DatasetsInnerSplit);
+        Assert.Equal(0.6, vm.Layout.CatalogInnerSplit);
     }
 
     [Fact]
@@ -435,7 +435,7 @@ public sealed class LayoutPersistenceTests : IDisposable
         var settings = new ViewerSettings { SettingsFilePath = _tempSettingsPath };
         var vm = CreateViewModel(StandardTabs(), settings);
 
-        vm.DatasetsInnerSplit = 0.42;
+        vm.Layout.DatasetsInnerSplit = 0.42;
 
         Assert.Equal(0.42, settings.Panels.DatasetsInnerSplit);
     }
@@ -446,7 +446,7 @@ public sealed class LayoutPersistenceTests : IDisposable
         var settings = new ViewerSettings { SettingsFilePath = _tempSettingsPath };
         var vm = CreateViewModel(StandardTabs(), settings);
 
-        vm.CatalogInnerSplit = 0.33;
+        vm.Layout.CatalogInnerSplit = 0.33;
 
         Assert.Equal(0.33, settings.Panels.CatalogInnerSplit);
     }
@@ -457,8 +457,8 @@ public sealed class LayoutPersistenceTests : IDisposable
         var settings = new ViewerSettings { SettingsFilePath = _tempSettingsPath };
         var vm = CreateViewModel(StandardTabs(), settings);
 
-        vm.CatalogInnerSplit = 0.33;
-        var ex = Record.Exception(() => vm.OnShutdown());
+        vm.Layout.CatalogInnerSplit = 0.33;
+        var ex = Record.Exception(() => vm.Layout.OnShutdown());
 
         Assert.Null(ex);
     }

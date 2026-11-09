@@ -259,7 +259,7 @@
                 BorderThickness="0,1,0,0"
                 Padding="8,4"
                 Height="30"
-                IsVisible="{Binding IsStatusBarVisible}">
+                IsVisible="{Binding Layout.IsStatusBarVisible}">
             <DockPanel x:Name="StatusBarDock" LastChildFill="False">
                 <DockPanel.Styles>
                     <!-- Shared vertical divider between status-bar items. Each
@@ -440,7 +440,7 @@
                 -->
                 <ItemsControl DockPanel.Dock="Bottom"
                               Margin="0,4"
-                              ItemsSource="{Binding LeftDockBottomTabs}">
+                              ItemsSource="{Binding Layout.LeftDockBottomTabs}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <StackPanel Spacing="2" />
@@ -453,7 +453,7 @@
                                         Background="{DynamicResource AccentBrush}">
                                     <Border.IsVisible>
                                         <MultiBinding Converter="{x:Static activities:ActiveTabConverter.Instance}">
-                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).SelectedLeftTabId" />
+                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.SelectedLeftTabId" />
                                             <Binding Path="Id" />
                                         </MultiBinding>
                                     </Border.IsVisible>
@@ -462,7 +462,7 @@
                                               AutomationProperties.AutomationId="{Binding Id, StringFormat=ActivityBar.{0}}"
                                               AutomationProperties.Name="{Binding Name}"
                                               AutomationProperties.HelpText="{Binding Tooltip}"
-                                              Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).SelectTabCommand}"
+                                              Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.SelectTabCommand}"
                                               CommandParameter="{Binding}"
                                               ToolTip.Tip="{Binding Tooltip}"
                                               Content="{Binding CreateIcon, Converter={x:Static activities:IconFactoryConverter.Instance}}"
@@ -472,7 +472,7 @@
                                               VerticalContentAlignment="Center">
                                     <ToggleButton.IsChecked>
                                         <MultiBinding Mode="OneWay" Converter="{x:Static activities:ActiveTabConverter.Instance}">
-                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).SelectedLeftTabId" />
+                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.SelectedLeftTabId" />
                                             <Binding Path="Id" />
                                         </MultiBinding>
                                     </ToggleButton.IsChecked>
@@ -504,7 +504,7 @@
 
                 <ItemsControl DockPanel.Dock="Top"
                               Margin="0,4"
-                              ItemsSource="{Binding LeftDockTopTabs}">
+                              ItemsSource="{Binding Layout.LeftDockTopTabs}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <StackPanel Spacing="2" />
@@ -517,7 +517,7 @@
                                         Background="{DynamicResource AccentBrush}">
                                     <Border.IsVisible>
                                         <MultiBinding Converter="{x:Static activities:ActiveTabConverter.Instance}">
-                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).SelectedLeftTabId" />
+                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.SelectedLeftTabId" />
                                             <Binding Path="Id" />
                                         </MultiBinding>
                                     </Border.IsVisible>
@@ -526,7 +526,7 @@
                                               AutomationProperties.AutomationId="{Binding Id, StringFormat=ActivityBar.{0}}"
                                               AutomationProperties.Name="{Binding Name}"
                                               AutomationProperties.HelpText="{Binding Tooltip}"
-                                              Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).SelectTabCommand}"
+                                              Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.SelectTabCommand}"
                                               CommandParameter="{Binding}"
                                               ToolTip.Tip="{Binding Tooltip}"
                                               Content="{Binding CreateIcon, Converter={x:Static activities:IconFactoryConverter.Instance}}"
@@ -536,7 +536,7 @@
                                               VerticalContentAlignment="Center">
                                     <ToggleButton.IsChecked>
                                         <MultiBinding Mode="OneWay" Converter="{x:Static activities:ActiveTabConverter.Instance}">
-                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).SelectedLeftTabId" />
+                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.SelectedLeftTabId" />
                                             <Binding Path="Id" />
                                         </MultiBinding>
                                     </ToggleButton.IsChecked>
@@ -572,20 +572,20 @@
         <Grid x:Name="ContentGrid">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="320" MinWidth="200" MaxWidth="600"
-                                  bh:CollapsibleColumn.IsVisible="{Binding IsLeftDockShown}"
+                                  bh:CollapsibleColumn.IsVisible="{Binding Layout.IsLeftDockShown}"
                                   bh:CollapsibleColumn.ExpandedWidth="320"
                                   bh:CollapsibleColumn.MinWidthWhenVisible="200"
                                   bh:CollapsibleColumn.MaxWidthWhenVisible="600"
-                                  bh:CollapsibleColumn.SavedWidth="{Binding LeftDockSavedWidth, Mode=TwoWay}" />
+                                  bh:CollapsibleColumn.SavedWidth="{Binding Layout.LeftDockSavedWidth, Mode=TwoWay}" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="360" MinWidth="240" MaxWidth="600"
-                                  bh:CollapsibleColumn.IsVisible="{Binding IsRightDockShown}"
+                                  bh:CollapsibleColumn.IsVisible="{Binding Layout.IsRightDockShown}"
                                   bh:CollapsibleColumn.ExpandedWidth="360"
                                   bh:CollapsibleColumn.MinWidthWhenVisible="240"
                                   bh:CollapsibleColumn.MaxWidthWhenVisible="600"
-                                  bh:CollapsibleColumn.SavedWidth="{Binding RightDockSavedWidth, Mode=TwoWay}" />
+                                  bh:CollapsibleColumn.SavedWidth="{Binding Layout.RightDockSavedWidth, Mode=TwoWay}" />
                 <!-- The folded Object Information edge tab (#901). -->
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
@@ -594,16 +594,16 @@
                  No close button — content swaps via the activity bar. -->
             <views:ApplicationPanel Grid.Column="0"
                                     x:Name="LeftDockPanel"
-                                    Title="{Binding LeftDockTitle}"
-                                    Content="{Binding LeftDockContent}"
-                                    IsVisible="{Binding IsLeftDockShown}" />
+                                    Title="{Binding Layout.LeftDockTitle}"
+                                    Content="{Binding Layout.LeftDockContent}"
+                                    IsVisible="{Binding Layout.IsLeftDockShown}" />
 
             <!-- Resize grip between pane and map -->
             <GridSplitter Grid.Column="1"
                           Classes="PaneSplitter"
                           Width="4"
                           ResizeDirection="Columns"
-                          IsVisible="{Binding IsLeftDockShown}"
+                          IsVisible="{Binding Layout.IsLeftDockShown}"
                           bh:HoverDelay.DelayMilliseconds="500"
                           Name="PaneSplitter" />
 
@@ -615,10 +615,10 @@
                     <RowDefinition Height="Auto" />
                     <!-- 260: room for a few Timeline lanes (#710); a saved height wins. -->
                     <RowDefinition Height="260" MinHeight="120"
-                                   bh:CollapsibleRow.IsVisible="{Binding IsBottomDockShown}"
+                                   bh:CollapsibleRow.IsVisible="{Binding Layout.IsBottomDockShown}"
                                    bh:CollapsibleRow.ExpandedHeight="260"
                                    bh:CollapsibleRow.MinHeightWhenVisible="120"
-                                   bh:CollapsibleRow.SavedHeight="{Binding BottomDockSavedHeight, Mode=TwoWay}" />
+                                   bh:CollapsibleRow.SavedHeight="{Binding Layout.BottomDockSavedHeight, Mode=TwoWay}" />
                 </Grid.RowDefinitions>
                 <!--
                     ClipToBounds keeps the map overlays (scale bar, pick/
@@ -638,11 +638,11 @@
                      bottom centre of the map while the Timeline tab isn't shown
                      (dock closed, on another tab, or the window too narrow). -->
                 <views:TimeHudView DataContext="{Binding Timeline}"
-                                   IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsTimeHudVisible}"
-                                   DockCommand="{Binding $parent[Window].((vm:MainViewModel)DataContext).ToggleTimelineDockCommand}"
-                                   IsDockOpen="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsBottomDockShown}"
-                                   IsDockAvailable="{Binding !$parent[Window].((vm:MainViewModel)DataContext).IsWindowNarrow}"
-                                   MapWidth="{Binding $parent[Window].((vm:MainViewModel)DataContext).MapWidth}"
+                                   IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).Layout.IsTimeHudVisible}"
+                                   DockCommand="{Binding $parent[Window].((vm:MainViewModel)DataContext).Layout.ToggleTimelineDockCommand}"
+                                   IsDockOpen="{Binding $parent[Window].((vm:MainViewModel)DataContext).Layout.IsBottomDockShown}"
+                                   IsDockAvailable="{Binding !$parent[Window].((vm:MainViewModel)DataContext).Layout.IsWindowNarrow}"
+                                   MapWidth="{Binding $parent[Window].((vm:MainViewModel)DataContext).Layout.MapWidth}"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Bottom"
                                    Margin="0,0,0,14" />
@@ -665,7 +665,7 @@
                        Margin="12,12,0,0"
                        IsHitTestVisible="False"
                        AutomationProperties.AutomationId="Map.TimeStamp"
-                       IsVisible="{Binding IsMapStampVisible}">
+                       IsVisible="{Binding Layout.IsMapStampVisible}">
                     <Border Background="{DynamicResource MapOverlaySurfaceBrush}"
                             CornerRadius="6" />
                     <StackPanel Orientation="Horizontal"
@@ -1218,7 +1218,7 @@
                               Classes="PaneSplitter"
                               Height="4"
                               ResizeDirection="Rows"
-                              IsVisible="{Binding IsBottomDockShown}"
+                              IsVisible="{Binding Layout.IsBottomDockShown}"
                               bh:HoverDelay.DelayMilliseconds="500"
                               Name="TimelineSplitter" />
 
@@ -1230,24 +1230,24 @@
                 -->
                 <views:ApplicationPanel Grid.Row="2"
                                         x:Name="TimelinePanel"
-                                        Title="{Binding BottomDockTitle}"
-                                        Content="{Binding SelectedBottomTab}"
+                                        Title="{Binding Layout.BottomDockTitle}"
+                                        Content="{Binding Layout.SelectedBottomTab}"
                                         ShowCloseButton="True"
-                                        CloseCommand="{Binding CloseDockCommand}"
+                                        CloseCommand="{Binding Layout.CloseDockCommand}"
                                         CloseCommandParameter="Bottom"
                                         CloseButtonToolTip="{x:Static loc:Strings.Tooltip_CloseTimelinePanel}"
-                                        IsVisible="{Binding IsBottomDockShown}">
+                                        IsVisible="{Binding Layout.IsBottomDockShown}">
                     <!-- #902 D1: TIMELINE | CLEARANCE while Check passage adds the
                          Clearance tab; the plain title otherwise. -->
                     <views:ApplicationPanel.TitleContent>
                         <Panel>
-                            <TextBlock Text="{Binding BottomDockTitle, Converter={x:Static conv:ToUpperConverter.Instance}}"
-                                       IsVisible="{Binding !HasBottomDockTabs}"
+                            <TextBlock Text="{Binding Layout.BottomDockTitle, Converter={x:Static conv:ToUpperConverter.Instance}}"
+                                       IsVisible="{Binding !Layout.HasBottomDockTabs}"
                                        FontSize="11"
                                        LetterSpacing="1"
                                        VerticalAlignment="Center" />
-                            <ItemsControl ItemsSource="{Binding VisibleBottomTabs}"
-                                          IsVisible="{Binding HasBottomDockTabs}">
+                            <ItemsControl ItemsSource="{Binding Layout.VisibleBottomTabs}"
+                                          IsVisible="{Binding Layout.HasBottomDockTabs}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <StackPanel Orientation="Horizontal" Spacing="14" />
@@ -1258,7 +1258,7 @@
                                         <ToggleButton Classes="dockTab"
                                                       AutomationProperties.AutomationId="{Binding Id, StringFormat=Dock.Tab.{0}}"
                                                       AutomationProperties.Name="{Binding Title}"
-                                                      Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).SelectTabCommand}"
+                                                      Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.SelectTabCommand}"
                                                       CommandParameter="{Binding}">
                                             <!-- The title, and a count badge such as the Logs tab's
                                                  new warnings (#1080). -->
@@ -1286,7 +1286,7 @@
                                             </StackPanel>
                                             <ToggleButton.IsChecked>
                                                 <MultiBinding Mode="OneWay" Converter="{x:Static activities:ActiveTabConverter.Instance}">
-                                                    <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).SelectedBottomTabId" />
+                                                    <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.SelectedBottomTabId" />
                                                     <Binding Path="Id" />
                                                 </MultiBinding>
                                             </ToggleButton.IsChecked>
@@ -1299,7 +1299,7 @@
                     <views:ApplicationPanel.HeaderContent>
                         <Panel>
                             <!-- #710 E6: lanes or the strip, remembered. -->
-                            <Panel IsVisible="{Binding IsTimelineTabSelected}">
+                            <Panel IsVisible="{Binding Layout.IsTimelineTabSelected}">
                             <Button Classes="Ghost"
                                     AutomationProperties.AutomationId="Timeline.ToggleStrip"
                                     x:DataType="vm:TimelineViewModel"
@@ -1315,8 +1315,8 @@
                             <StackPanel Orientation="Horizontal"
                                         Spacing="10"
                                         x:DataType="vm:ClearanceViewModel"
-                                        DataContext="{Binding $parent[Window].((vm:MainViewModel)DataContext).Clearance}"
-                                        IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsClearanceTabSelected}">
+                                        DataContext="{Binding $parent[Window].((vm:MainViewModel)DataContext).Layout.Clearance}"
+                                        IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).Layout.IsClearanceTabSelected}">
                                 <TabControl Classes="pillTabs compact"
                                             AutomationProperties.AutomationId="Clearance.Axis"
                                             HorizontalAlignment="Left"
@@ -1351,7 +1351,7 @@
                           Classes="PaneSplitter"
                           Width="4"
                           ResizeDirection="Columns"
-                          IsVisible="{Binding IsRightDockShown}"
+                          IsVisible="{Binding Layout.IsRightDockShown}"
                           bh:HoverDelay.DelayMilliseconds="500"
                           Name="PickPanelSplitter" />
 
@@ -1365,13 +1365,13 @@
             -->
             <views:ApplicationPanel Grid.Column="4"
                                     x:Name="RightDockPanel"
-                                    Title="{Binding RightDockTitle}"
-                                    Content="{Binding SelectedRightTab}"
+                                    Title="{Binding Layout.RightDockTitle}"
+                                    Content="{Binding Layout.SelectedRightTab}"
                                     ShowCloseButton="True"
-                                    CloseCommand="{Binding CloseDockCommand}"
+                                    CloseCommand="{Binding Layout.CloseDockCommand}"
                                     CloseCommandParameter="Right"
                                     CloseButtonToolTip="{x:Static loc:Strings.Tooltip_ClosePickPanel}"
-                                    IsVisible="{Binding IsRightDockShown}" />
+                                    IsVisible="{Binding Layout.IsRightDockShown}" />
 
             <!-- Check passage folds the Object Information dock to a 26 px
                  edge tab with a vertical label (#901, C1); clicking it, or
@@ -1380,8 +1380,8 @@
                     AutomationProperties.AutomationId="Dock.ObjectInformationEdge"
                     AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ObjectInformationEdge}"
                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ObjectInformationEdge}"
-                    IsVisible="{Binding IsRightDockEdgeTabVisible}"
-                    Command="{Binding UnfoldRightDockCommand}"
+                    IsVisible="{Binding Layout.IsRightDockEdgeTabVisible}"
+                    Command="{Binding Layout.UnfoldRightDockCommand}"
                     Width="26"
                     MinWidth="26"
                     Padding="0"
@@ -1415,14 +1415,14 @@
                     x:Name="ContentPanelHost"
                     Grid.ColumnSpan="6"
                     ZIndex="10"
-                    IsVisible="{Binding IsContentPanelOpen}">
+                    IsVisible="{Binding Layout.IsContentPanelOpen}">
                 <Border.Background>
                     <SolidColorBrush Color="{DynamicResource WindowBackgroundColor}" />
                 </Border.Background>
-                <views:ApplicationPanel Title="{Binding LeftDockTitle}"
-                                        Content="{Binding ContentPanelTab}"
+                <views:ApplicationPanel Title="{Binding Layout.LeftDockTitle}"
+                                        Content="{Binding Layout.ContentPanelTab}"
                                         ShowCloseButton="True"
-                                        CloseCommand="{Binding CloseDockCommand}"
+                                        CloseCommand="{Binding Layout.CloseDockCommand}"
                                         CloseCommandParameter="Left"
                                         CloseButtonToolTip="{x:Static loc:Strings.Tooltip_CloseSettings}" />
             </Border>

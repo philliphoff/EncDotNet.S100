@@ -73,8 +73,9 @@ public class MainViewModelOpenRecentTests : IDisposable
         recent = new StubRecentFilesService();
         notifications = Notifications.TestNotifications.Create();
         var datasets = new DatasetsViewModel(loader);
+        var timeline = new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
         return new MainViewModel(
-            settings,
+            layout: new ShellLayoutViewModel(settings, [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post),
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
@@ -82,7 +83,7 @@ public class MainViewModelOpenRecentTests : IDisposable
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
             settingsViewModel: new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null),
             pickReport: new PickReportViewModel(),
-            timeline: new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null),
+            timeline: timeline,
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
             textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
             displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),

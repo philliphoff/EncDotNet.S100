@@ -54,8 +54,9 @@ public class MainViewModelPickModeTests
         var settings = new ViewerSettings();
         var catalogues = new PortrayalCatalogueManager();
         var datasets = new DatasetsViewModel(new StubDatasetLoaderService());
+        var timeline = new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
         return new MainViewModel(
-            settings,
+            layout: new ShellLayoutViewModel(settings, activityTabs ?? [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post),
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
@@ -63,7 +64,7 @@ public class MainViewModelPickModeTests
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
             settingsViewModel: new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null),
             pickReport: pickReport ?? new PickReportViewModel(),
-            timeline: new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null),
+            timeline: timeline,
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
             textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
             displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
@@ -72,7 +73,6 @@ public class MainViewModelPickModeTests
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
             notifications: Notifications.TestNotifications.Create(),
-            activityTabs: activityTabs,
             dialogManager: new ShadUI.DialogManager(),
             routes: new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System)),
             measure: new EncDotNet.S100.Viewer.Services.MeasureSession(settings: null));
@@ -229,11 +229,11 @@ public class MainViewModelPickModeTests
 
         pickReport.SetPick("FT", "FT name", "ref-1", "ds.000", "S-101", NoAttrs);
         Assert.True(pickReport.HasPick);
-        Assert.True(vm.IsRightDockOpen);
+        Assert.True(vm.Layout.IsRightDockOpen);
 
-        vm.CloseDockCommand.Execute(TabDock.Right);
+        vm.Layout.CloseDockCommand.Execute(TabDock.Right);
 
-        Assert.False(vm.IsRightDockOpen);
+        Assert.False(vm.Layout.IsRightDockOpen);
         Assert.False(pickReport.HasPick);
     }
 
@@ -246,12 +246,12 @@ public class MainViewModelPickModeTests
         var vm = CreateViewModel(pickReport, new[] { CreatePickReportTab(pickReport) });
 
         pickReport.SetPick("FT", "FT name", "ref-1", "ds.000", "S-101", NoAttrs);
-        vm.CloseDockCommand.Execute(TabDock.Right);
-        Assert.False(vm.IsRightDockOpen);
+        vm.Layout.CloseDockCommand.Execute(TabDock.Right);
+        Assert.False(vm.Layout.IsRightDockOpen);
 
         pickReport.SetPick("FT2", "FT2 name", "ref-2", "ds.000", "S-101", NoAttrs);
 
         Assert.True(pickReport.HasPick);
-        Assert.True(vm.IsRightDockOpen);
+        Assert.True(vm.Layout.IsRightDockOpen);
     }
 }

@@ -166,8 +166,8 @@ public partial class MainWindow : ShadUI.Window
             visual => ReferenceEquals(visual, MapControl) || ReferenceEquals(visual, MapArea));
 
         // The Time HUD and the dock follow the map's width (#712 F5).
-        MapArea.SizeChanged += (_, e) => _viewModel.MapWidth = e.NewSize.Width;
-        SizeChanged += (_, e) => _viewModel.WindowWidth = e.NewSize.Width;
+        MapArea.SizeChanged += (_, e) => _viewModel.Layout.MapWidth = e.NewSize.Width;
+        SizeChanged += (_, e) => _viewModel.Layout.WindowWidth = e.NewSize.Width;
 
         // Hand the loader a map host now that the Mapsui control exists, and
         // seed catalogues / build the pipeline factory from CLI options. The
@@ -202,7 +202,7 @@ public partial class MainWindow : ShadUI.Window
         // activity-panel state (which docks are open and which tab each
         // shows) without exposing MainViewModel directly.
         App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current =
-            new ViewerUiController(_viewModel);
+            new ViewerUiController(_viewModel.Layout);
         _loader.Initialize(_mapHost, _mapHost, options);
         // Wire validation finding click-to-zoom: each finding view-model
         // routes its <c>ZoomToFindingCommand</c> through this dispatcher.
@@ -242,7 +242,7 @@ public partial class MainWindow : ShadUI.Window
             }
             // PR-M3: flush any pending debounced size writes so the last
             // splitter drag isn't lost on shutdown.
-            _viewModel.OnShutdown();
+            _viewModel.Layout.OnShutdown();
             // Record a clean shutdown so the next launch does not report
             // this (graceful) exit as a crash.
             EncDotNet.S100.Viewer.Diagnostics.UncleanShutdownSentinel.MarkCleanExit();
@@ -503,26 +503,26 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<LibraryPanelViewModel>(),
             _viewModel.Timeline,
             App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.GlobalTimeService>(),
-            _viewModel);
+            _viewModel.Layout);
 
         // Navigational warnings (#932): the no-sources state's Open Library.
         if (_viewModel.NavigationalWarnings is { } warnings)
         {
-            warnings.OpenLibraryRequested += (_, _) => _viewModel.SelectTab(LibraryImportCoordinator.LibraryPanelId);
+            warnings.OpenLibraryRequested += (_, _) => _viewModel.Layout.SelectTab(LibraryImportCoordinator.LibraryPanelId);
             // #959 E1: a finding's "Open in Navigational warnings" brings the panel forward.
-            warnings.RevealRequested += (_, _) => _viewModel.SelectTab("NavigationalWarnings");
+            warnings.RevealRequested += (_, _) => _viewModel.Layout.SelectTab("NavigationalWarnings");
         }
 
         // #959: a Warning card's "Crosses route · leg 3 → 4" brings the Routes panel's Findings forward.
         if (App.Services.GetService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>() is { } routeFindings)
-            routeFindings.OpenRequested += (_, _) => _viewModel.SelectTab("Routes");
+            routeFindings.OpenRequested += (_, _) => _viewModel.Layout.SelectTab("Routes");
 
         // Library coverage (issue #655): outline the datasets listed in the
         // Library panel — without loading them — while that panel is showing.
         _libraryCoverageController = new LibraryCoverageOverlayController(
             _mapHost,
             App.Services.GetRequiredService<LibraryPanelViewModel>(),
-            _viewModel,
+            _viewModel.Layout,
             App.Services.GetRequiredService<IMapViewportNotifier>(),
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
@@ -861,7 +861,7 @@ public partial class MainWindow : ShadUI.Window
         {
             if (datasetPaths.Length > 0)
             {
-                _viewModel.SelectDefaultTab();
+                _viewModel.Layout.SelectDefaultTab();
                 foreach (var datasetPath in datasetPaths)
                 {
                     // No registered product claims an unrecognised file, so skip
@@ -1139,11 +1139,11 @@ public partial class MainWindow : ShadUI.Window
         RouteCheckLegend.DataContext = _routeCheckLegend;
         // Clear of the Time HUD when it's shown, else close to the map's edge.
         void PlaceLegend() => RouteCheckLegend.Margin = new Thickness(
-            12, 0, 0, _viewModel.IsTimeHudVisible ? EncDotNet.S100.Viewer.Tools.RouteOverlayRenderer.LegendBottomMargin : 12);
+            12, 0, 0, _viewModel.Layout.IsTimeHudVisible ? EncDotNet.S100.Viewer.Tools.RouteOverlayRenderer.LegendBottomMargin : 12);
         PlaceLegend();
-        _viewModel.PropertyChanged += (_, e) =>
+        _viewModel.Layout.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(MainViewModel.IsTimeHudVisible))
+            if (e.PropertyName == nameof(ShellLayoutViewModel.IsTimeHudVisible))
                 PlaceLegend();
         };
         RouteCheckLegend.LayoutUpdated += (_, _) =>
@@ -1316,7 +1316,7 @@ public partial class MainWindow : ShadUI.Window
         if (paths.Count == 0)
             return;
 
-        _viewModel.SelectDefaultTab();
+        _viewModel.Layout.SelectDefaultTab();
 
         foreach (var path in paths)
         {
@@ -1347,7 +1347,7 @@ public partial class MainWindow : ShadUI.Window
 
     private async Task RunExchangeSetAsync(string sourcePath)
     {
-        _viewModel.SelectDefaultTab();
+        _viewModel.Layout.SelectDefaultTab();
 
         var token = _viewModel.BeginExchangeSetLoad(sourcePath);
 
@@ -1620,7 +1620,7 @@ public partial class MainWindow : ShadUI.Window
         if (e.DataTransfer.TryGetFiles() is not { } files)
             return;
 
-        _viewModel.SelectDefaultTab();
+        _viewModel.Layout.SelectDefaultTab();
 
         foreach (var item in files)
         {
@@ -1722,7 +1722,7 @@ public partial class MainWindow : ShadUI.Window
             return;
         if (e.Key == Key.T && e.KeyModifiers == KeyModifiers.None)
         {
-            _viewModel.ToggleTimelineCommand.Execute(null);
+            _viewModel.Layout.ToggleTimelineCommand.Execute(null);
             e.Handled = true;
             return;
         }
