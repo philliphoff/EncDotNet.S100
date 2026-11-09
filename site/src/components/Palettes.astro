@@ -1,13 +1,14 @@
 ---
+import Permalink from './Permalink.astro';
 import Shot from './Shot.astro';
 
 const palettes = ['Day', 'Dusk', 'Night'];
 ---
-<section class="palettes" aria-labelledby="pal-title">
+<section id="palettes" class="palettes" aria-labelledby="pal-title">
   <div class="wrap">
     <div class="section-head">
       <span class="eyebrow">Palettes</span>
-      <h2 id="pal-title">Day, Dusk and Night.</h2>
+      <div class="anchored"><h2 id="pal-title">Day, Dusk and Night.</h2><Permalink to="palettes" label="Palettes" /></div>
       <p class="lede">All three IHO colour palettes, with the app's chrome following along, from a bright afternoon to a dark wheelhouse.</p>
     </div>
     <div class="triptych">

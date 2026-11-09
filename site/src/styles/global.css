@@ -244,3 +244,22 @@ footer a:hover { color: var(--ink); }
   box-shadow: 0 6px 24px rgba(0,0,0,.3);
 }
 .review-bar button { font: inherit; border: 0; border-radius: 999px; padding: 7px 12px; cursor: pointer; background: #ffd84d; color: #1b1b1b; }
+
+/* ---------- section links ---------- */
+/* Deep-linkable sections, feature rows and cards (#weather-cyclones, #s-102, …): leave
+   a little room above them when a link scrolls one into view. */
+section[id], .feature[id], .mini[id], .dev[id], .product[id], [id].standards-block { scroll-margin-top: 24px; }
+.anchored { display: flex; align-items: baseline; gap: 10px; }
+.permalink {
+  flex: none; position: relative; display: inline-flex; align-self: center; padding: 4px; border-radius: 6px;
+  color: var(--ink-2); opacity: 0; transition: opacity .15s ease;
+}
+.palettes .permalink { color: var(--hero-ink-2); }
+.anchored:hover .permalink, .permalink:focus-visible, .permalink[data-copied] { opacity: .85; }
+.permalink:hover { color: var(--accent); }
+@media (hover: none) { .permalink { opacity: .45; } }
+.permalink[data-copied]::after {
+  content: "Link copied"; position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%);
+  white-space: nowrap; padding: 5px 9px; border-radius: 6px; background: var(--ink); color: var(--bg);
+  font: 500 12px/1 "Inter Variable", system-ui, sans-serif;
+}
