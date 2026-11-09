@@ -163,7 +163,8 @@ var carolinasBox = new Box(31.4, -81.4, 38.0, -71.4);
 // Hatteras or passes ahead of or behind it.
 (double Lat, double Lon)[] lookoutToChesapeake =
 [
-    (34.55, -76.40), (35.20, -75.30), (36.40, -75.50), (36.92, -75.72),
+    // Offshore of the Cape Lookout and Diamond shoals, so no leg crosses the safety contour.
+    (34.45, -76.10), (35.10, -75.00), (36.40, -75.40), (36.92, -75.72),
 ];
 var erinClipBox = new Box(32.4, -77.1, 37.7, -70.6);
 // W8: sea fog off eastern Maine and in the Bay of Fundy on a June morning. The minis are map renders
@@ -1005,6 +1006,9 @@ async Task<byte[]> ErinClip(Viewer v)
     await clip.Frame(v, 1.5);                                      // the route and the storm
     Step("first frame");
     await v.Call("set_check_mode", new() { ["on"] = true });
+    // With the check on the map never quite goes idle (each frame waited out the
+    // full 2 min), so give each frame a few seconds to draw instead.
+    v.RenderIdleTimeoutMs = 6000;
     Step("check on");
     foreach (var f in (await v.Call("get_findings"))?["findings"]?.AsArray() ?? [])
         Console.WriteLine($"      {f!["group"]} {f!["code"]} {f!["title"]}");
@@ -1025,6 +1029,7 @@ async Task<byte[]> ErinClip(Viewer v)
         await clip.Frame(v, 0.15);
     }
     var poster = await clip.Frame(v, 3.0);
+    v.RenderIdleTimeoutMs = 120000;
     foreach (var f in (await v.Call("get_findings"))?["findings"]?.AsArray() ?? [])
         Console.WriteLine($"    {f!["group"]} {f!["code"]} {f!["title"]}");
 
@@ -1579,9 +1584,12 @@ sealed class Viewer : IAsyncDisposable
         await Settle();
     }
 
+    /// <summary>How long Settle waits for the map to go quiet; clips with a live check lower it.</summary>
+    public int RenderIdleTimeoutMs { get; set; } = 120000;
+
     public async Task Settle()
     {
-        await Call("await_render_idle", new() { ["quietPeriodMs"] = 1500, ["timeoutMs"] = 120000 });
+        await Call("await_render_idle", new() { ["quietPeriodMs"] = 1500, ["timeoutMs"] = RenderIdleTimeoutMs });
         await Call("dismiss_notification");
     }
 
