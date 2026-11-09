@@ -164,7 +164,9 @@ var carolinasBox = new Box(31.4, -81.4, 38.0, -71.4);
 (double Lat, double Lon)[] lookoutToChesapeake =
 [
     // Offshore of the Cape Lookout and Diamond shoals, so no leg crosses the safety contour.
-    (34.45, -76.10), (35.10, -75.00), (36.40, -75.40), (36.92, -75.72),
+    // Clear of the 0.1 m obstruction off Hatteras (US3NC1BE) and the shoal depth areas
+    // off Back Bay and Cape Henry, so only the weather check has anything to review.
+    (34.40, -76.00), (35.15, -74.85), (36.40, -75.25), (36.93, -75.55),
 ];
 // The band 2 NOAA cells (US2ATLN*/O*, 28.8–38.4°N, 76.8–67.2°W) cover the whole
 // frame, with Erin's track crossing it, at the Routes panel's map aspect.
