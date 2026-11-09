@@ -80,7 +80,8 @@ public class DatasetExtentIndicatorControllerTests
 
         using var controller = new DatasetExtentIndicatorController(
             host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
-            marshal: a => a());
+            marshal: a => a(),
+            coalesce: a => a());
 
         Assert.Contains(host.OverlayLayers, l => l.Name == LayerName);
     }
@@ -94,7 +95,8 @@ public class DatasetExtentIndicatorControllerTests
         var entries = Enumerable.Range(0, 20).Select(i => LoadedOutOfScaleEntry(vm)).ToArray();
         using var controller = new DatasetExtentIndicatorController(
             host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
-            marshal: posted.Enqueue);
+            marshal: posted.Enqueue,
+            coalesce: posted.Enqueue);
         while (posted.TryDequeue(out var action))
             action();
 
@@ -117,7 +119,8 @@ public class DatasetExtentIndicatorControllerTests
         var vm = new DatasetsViewModel(new NoopLoader());
         using var controller = new DatasetExtentIndicatorController(
             host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
-            marshal: a => a());
+            marshal: a => a(),
+            coalesce: a => a());
 
         LoadedOutOfScaleEntry(vm);
 
@@ -131,7 +134,8 @@ public class DatasetExtentIndicatorControllerTests
         var vm = new DatasetsViewModel(new NoopLoader());
         using var controller = new DatasetExtentIndicatorController(
             host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
-            marshal: a => a());
+            marshal: a => a(),
+            coalesce: a => a());
 
         var entry = vm.Add("/a.000", "S-101");
         entry.IsLoaded = true;
@@ -148,7 +152,8 @@ public class DatasetExtentIndicatorControllerTests
         var vm = new DatasetsViewModel(new NoopLoader());
         using var controller = new DatasetExtentIndicatorController(
             host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
-            marshal: a => a());
+            marshal: a => a(),
+            coalesce: a => a());
 
         var entry = LoadedOutOfScaleEntry(vm);
         entry.IsVisible = false;
@@ -164,7 +169,8 @@ public class DatasetExtentIndicatorControllerTests
         var settings = NewSettings(indicatorsOn: true);
         using var controller = new DatasetExtentIndicatorController(
             host, vm, new StubMeasureOverlayAppearanceProvider(), settings,
-            marshal: a => a());
+            marshal: a => a(),
+            coalesce: a => a());
 
         LoadedOutOfScaleEntry(vm);
         Assert.Equal(1, FeatureCount(host));
@@ -180,7 +186,8 @@ public class DatasetExtentIndicatorControllerTests
         var vm = new DatasetsViewModel(new NoopLoader());
         var controller = new DatasetExtentIndicatorController(
             host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
-            marshal: a => a());
+            marshal: a => a(),
+            coalesce: a => a());
 
         controller.Dispose();
 
@@ -215,7 +222,8 @@ public class DatasetExtentIndicatorControllerTests
         var vm = new DatasetsViewModel(new NoopLoader());
         using var controller = new DatasetExtentIndicatorController(
             host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
-            marshal: a => a());
+            marshal: a => a(),
+            coalesce: a => a());
 
         var entry = DeferredEntry(vm);
 
@@ -231,7 +239,8 @@ public class DatasetExtentIndicatorControllerTests
         var vm = new DatasetsViewModel(new NoopLoader());
         using var controller = new DatasetExtentIndicatorController(
             host, vm, new StubMeasureOverlayAppearanceProvider(), NewSettings(),
-            marshal: a => a());
+            marshal: a => a(),
+            coalesce: a => a());
 
         var entry = DeferredEntry(vm);
         Assert.Equal(1, FeatureCount(host));

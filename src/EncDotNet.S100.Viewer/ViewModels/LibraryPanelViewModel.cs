@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows.Input;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Library;
@@ -79,36 +78,35 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     private IReadOnlyList<LibraryItemViewModel>? _tapHits;
     private bool _selectingTapHit;
 
+    /// <param name="library">The Library the panel shows.</param>
+    /// <param name="importer">Adds sources interactively.</param>
+    /// <param name="loader">Loads datasets and reports their state.</param>
+    /// <param name="downloader">Downloads online items.</param>
+    /// <param name="dispatch">Runs a change on the UI thread (the app passes <see cref="Services.UiThread.RunOrPost"/>).</param>
+    /// <param name="coalesce">Queues a refresh for later on the UI thread, even from it, so a burst of changes refreshes once (the app passes <see cref="Services.UiThread.Post"/>).</param>
+    /// <param name="time">The clock (forecast ages, staleness).</param>
+    /// <param name="feedHealth">A shared feed's last reachability; <see langword="null"/> shows none.</param>
+    /// <param name="notifications">Where refresh results are announced; <see langword="null"/> for none.</param>
+    /// <param name="viewTime">The time the map shows; <see langword="null"/> without a timeline.</param>
+    /// <param name="timeFormat">The Local/UTC setting; <see langword="null"/> shows UTC.</param>
+    /// <param name="sync">Keeps synced sources downloaded; <see langword="null"/> without syncing.</param>
     public LibraryPanelViewModel(
         CollectionLibrary library,
         ILibraryImporter importer,
         ILibraryLoader loader,
         ILibraryDownloader downloader,
+        Action<Action> dispatch,
+        Action<Action> coalesce,
+        TimeProvider time,
         Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth = null,
         Services.Notifications.INotificationService? notifications = null,
-        TimeProvider? time = null,
         Services.GlobalTimeService? viewTime = null,
         Services.ITimeFormatProvider? timeFormat = null,
         LibrarySync? sync = null)
-        : this(library, importer, loader, downloader, PostToUiThread, feedHealth, notifications, time, viewTime, timeFormat, sync, PostLater)
     {
-    }
-
-    internal LibraryPanelViewModel(
-        CollectionLibrary library,
-        ILibraryImporter importer,
-        ILibraryLoader loader,
-        ILibraryDownloader downloader,
-        Action<Action> dispatch,
-        Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth = null,
-        Services.Notifications.INotificationService? notifications = null,
-        TimeProvider? time = null,
-        Services.GlobalTimeService? viewTime = null,
-        Services.ITimeFormatProvider? timeFormat = null,
-        LibrarySync? sync = null,
-        Action<Action>? coalesce = null)
-    {
-        _time = time ?? TimeProvider.System;
+        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(coalesce);
+        _time = time;
         _sync = sync;
         if (sync is not null)
             sync.Synced += (_, _) => dispatch(UpdateCatalogueCounts);
@@ -128,7 +126,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         _importer = importer;
         _loader = loader;
         _dispatch = dispatch;
-        _coalesce = coalesce ?? dispatch;
+        _coalesce = coalesce;
 
         AddFolderCommand = new AsyncRelayCommand(() => _importer.AddFolderAsync(TargetCollectionId));
         AddExchangeSetZipCommand = new AsyncRelayCommand(() => _importer.AddExchangeSetZipAsync(TargetCollectionId));
@@ -1866,7 +1864,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
             if (!_packageHeaders.TryGetValue(key, out var header) || !ReferenceEquals(header.Source, row.Source))
             {
                 _packageHeaders[key] = header = LibraryItemViewModel.ForPackageGroup(
-                    row.Source, key.Item2, row.Item.Properties.GetValueOrDefault("packageTitle"), members.Count, expanded, TogglePackage,
+                    row.Source, key.Item2, row.Item.Properties.GetValueOrDefault("packageTitle"), members.Count, expanded, TogglePackage, _time,
                     members.Select(m => (m.Item.Location as RemoteItemLocation)?.LastModified).Max(),
                     members.Select(m => m.Item.ProductSpec).Distinct(StringComparer.Ordinal).SingleOrDefault() ?? "S-57");
             }
@@ -2022,15 +2020,6 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
             _library.KeepSessionCatalogue(source.Id);
     }
 
-    private static void PostToUiThread(Action action)
-    {
-        if (Dispatcher.UIThread.CheckAccess())
-            action();
-        else
-            Dispatcher.UIThread.Post(action);
-    }
-
-    private static void PostLater(Action action) => Dispatcher.UIThread.Post(action);
 }
 
 /// <summary>

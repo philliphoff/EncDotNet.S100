@@ -204,7 +204,7 @@ public sealed class SecomConnectionWizardTests : IDisposable
                 },
                 NoaaEnc = (_, _) => Task.FromResult(Collections.Noaa.NoaaEncProductCatalogReader.Read(LibraryTestContext.RepoFile(
                     "tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml"))),
-            }),
+            }, timeProvider: TimeProvider.System),
             _ => { },
             (source, openKeys) => new SecomConnectionStepViewModel(source, directory, (uri, identity, _) =>
             {

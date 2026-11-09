@@ -18,7 +18,7 @@ public sealed class NdbcObservationsOverlayTests : IAsyncLifetime
     public NdbcObservationsOverlayTests()
     {
         var http = new HttpClient(_handler);
-        var source = new NdbcObservationSource(http, new NdbcObservationSourceOptions { Id = NdbcObservationsServiceCollectionExtensions.SourceId });
+        var source = new NdbcObservationSource(http, options: new NdbcObservationSourceOptions { Id = NdbcObservationsServiceCollectionExtensions.SourceId }, timeProvider: TimeProvider.System);
         _overlay = new NdbcObservationsOverlay(source, http, _notifier, debounce: TimeSpan.FromMilliseconds(10));
     }
 

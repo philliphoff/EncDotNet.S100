@@ -42,25 +42,26 @@ public sealed class HeadlessLibrary : ILibraryReader, ILibraryEditor
     /// <param name="sync">Keeps synced sources downloaded, or <see langword="null"/> when nothing syncs.</param>
     /// <param name="userCatalogues">The user's own catalogues, listed after the curated ones; none when null.</param>
     /// <param name="health">How a shared feed's or catalogue's server last answered, for status lines; unknown when null.</param>
-    /// <param name="time">The clock (forecast windows); the system clock when null.</param>
+    /// <param name="time">The clock (forecast windows).</param>
     /// <param name="readers">Reads online catalogues when a source is added; none can be added without.</param>
     /// <param name="probe">Recognises a catalogue URL's format, for adding by URL; URLs are refused without.</param>
     public HeadlessLibrary(
         LibraryOperations operations,
-        LibrarySync? sync = null,
-        Func<IReadOnlyList<KnownCatalogueSource>>? userCatalogues = null,
-        Func<CollectionSource, FeedHealth?>? health = null,
-        TimeProvider? time = null,
-        LibraryCatalogueReaders? readers = null,
-        Func<Uri, CancellationToken, Task<CatalogueProbe>>? probe = null)
+        LibrarySync? sync,
+        Func<IReadOnlyList<KnownCatalogueSource>>? userCatalogues,
+        Func<CollectionSource, FeedHealth?>? health,
+        TimeProvider time,
+        LibraryCatalogueReaders? readers,
+        Func<Uri, CancellationToken, Task<CatalogueProbe>>? probe)
     {
         ArgumentNullException.ThrowIfNull(operations);
+        ArgumentNullException.ThrowIfNull(time);
         _operations = operations;
         _sync = sync;
         _userCatalogues = userCatalogues ?? (() => []);
         _health = health;
-        _time = time ?? TimeProvider.System;
-        _adder = new LibrarySourceAdder(readers, _userCatalogues, probe, _time);
+        _time = time;
+        _adder = new LibrarySourceAdder(readers ?? new LibraryCatalogueReaders(), _userCatalogues, probe, _time);
     }
 
     private CollectionLibrary Library => _operations.Library;

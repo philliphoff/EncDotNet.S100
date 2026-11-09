@@ -81,7 +81,7 @@ public sealed class RouteCycloneCheckTests : IDisposable
             routes.Routes.Add(route);
         routes.Routes.SetActiveRoute(route);
         var limits = new FixedWeatherLimits();
-        var check = new PassageCheckService(routes, new PassageCheckFixture.FixedCatalog([Ian()]), PassageCheckFixture.SerialPost, limits, debounce: TimeSpan.Zero);
+        var check = new PassageCheckService(routes, new PassageCheckFixture.FixedCatalog([Ian()]), PassageCheckFixture.SerialPost, limits, debounce: TimeSpan.Zero, sources: PassageCheckFixture.NewSources(), checks: EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService.BuiltInChecks);
         routes.IsCheckModeActive = true;
         return new Setup(routes, check, limits);
     }

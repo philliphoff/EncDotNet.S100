@@ -79,7 +79,7 @@ internal static class ViewerObservability
 
         // The Logs panel's in-memory buffer (#1080) always runs, with its own
         // minimum level so the panel's Everything level leaves OTLP alone.
-        var logBuffer = new LogBuffer(minimumLevel: verbose ? LogLevel.Debug : LogLevel.Information);
+        var logBuffer = new LogBuffer(TimeProvider.System, minimumLevel: verbose ? LogLevel.Debug : LogLevel.Information);
         services.AddSingleton(logBuffer);
 
         services.AddLogging(builder =>
@@ -113,7 +113,7 @@ internal static class ViewerObservability
                         : () => UncleanShutdownSentinel.ReadUnreportedSessions(crashMarkerDirectory);
                 builder.Services.AddSingleton<ILoggerProvider>(_ => new RollingFileLoggerProvider(
                     rollingLogDirectory, verbose ? LogLevel.Debug : LogLevel.Information,
-                    unreportedCrashes: unreportedCrashes));
+                    DateTime.UtcNow, Environment.ProcessId, RollingFileLoggerProvider.IsSessionAlive, unreportedCrashes));
             }
 
             builder.AddOpenTelemetry(options =>

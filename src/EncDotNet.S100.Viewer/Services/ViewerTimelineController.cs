@@ -1,4 +1,3 @@
-using Avalonia.Threading;
 using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Services;
@@ -21,17 +20,18 @@ internal sealed class ViewerTimelineController : IViewerTimelineController
         TimelineViewModel timeline,
         DatasetsViewModel datasets,
         TimeProvider clock,
-        Func<Action, Task>? dispatch = null)
+        Func<Action, Task> dispatch)
     {
         ArgumentNullException.ThrowIfNull(time);
         ArgumentNullException.ThrowIfNull(timeline);
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(dispatch);
         _time = time;
         _timeline = timeline;
         _datasets = datasets;
         _clock = clock;
-        _dispatch = dispatch ?? (action => Dispatcher.UIThread.InvokeAsync(action).GetTask());
+        _dispatch = dispatch;
     }
 
     /// <inheritdoc />

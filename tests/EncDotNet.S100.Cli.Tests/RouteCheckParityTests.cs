@@ -52,7 +52,7 @@ public sealed class RouteCheckParityTests : IDisposable
         var sdk = report.Findings.Select(f => (f.Code.Value, f.Id, f.LegIndex)).ToList();
 
         // MCP: the route as a host hands it to check_route.
-        var tool = new CheckRouteTool(catalog, new PlanRoutes(plan), sources);
+        var tool = new CheckRouteTool(catalog, routes: new PlanRoutes(plan), sources: sources, time: TimeProvider.System);
         var result = await tool.InvokeAsync(new CheckRouteRequest(SafetyContourMeters: Safety, SafetyDepthMeters: Safety), TestContext.Current.CancellationToken);
         Assert.True(result.TryGetValue(out var mcpResult), result.TryGetError(out var error) ? error.Message : "");
         var mcp = mcpResult!.Findings.Select(f => (f.Code, f.Id, f.LegIndex)).ToList();

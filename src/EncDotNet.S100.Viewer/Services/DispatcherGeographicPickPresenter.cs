@@ -1,5 +1,3 @@
-using Avalonia.Threading;
-
 namespace EncDotNet.S100.Viewer.Services;
 
 /// <summary>
@@ -15,16 +13,13 @@ internal sealed class DispatcherGeographicPickPresenter : IGeographicPickPresent
 
     /// <summary>Creates a new presenter.</summary>
     /// <param name="pickService">Pick service that owns pick-report updates.</param>
-    /// <param name="marshal">
-    /// Optional UI-thread marshalling override. Defaults to
-    /// <see cref="Dispatcher.UIThread"/>; tests inject a synchronous
-    /// implementation.
-    /// </param>
-    public DispatcherGeographicPickPresenter(IPickService pickService, Action<Action>? marshal = null)
+    /// <param name="marshal">Runs a pick on the UI thread (the app passes <see cref="UiThread.RunOrPost"/>).</param>
+    public DispatcherGeographicPickPresenter(IPickService pickService, Action<Action> marshal)
     {
         ArgumentNullException.ThrowIfNull(pickService);
+        ArgumentNullException.ThrowIfNull(marshal);
         _pickService = pickService;
-        _marshal = marshal ?? DispatcherMarshal;
+        _marshal = marshal;
     }
 
     /// <inheritdoc />
@@ -32,11 +27,5 @@ internal sealed class DispatcherGeographicPickPresenter : IGeographicPickPresent
     {
         ArgumentNullException.ThrowIfNull(features);
         _marshal(() => _pickService.PresentGeographicPick(latitude, longitude, features));
-    }
-
-    private static void DispatcherMarshal(Action action)
-    {
-        if (Dispatcher.UIThread.CheckAccess()) action();
-        else Dispatcher.UIThread.Post(action);
     }
 }

@@ -47,20 +47,21 @@ internal sealed class LogBuffer : IDisposable
     private bool _disposed;
 
     /// <summary>Creates a buffer.</summary>
+    /// <param name="timeProvider">Clock for timestamps and the notification timer.</param>
     /// <param name="capacity">How many entries to keep; older ones are dropped.</param>
     /// <param name="minimumLevel">The lowest level captured.</param>
-    /// <param name="timeProvider">Clock for timestamps and the notification timer.</param>
     /// <param name="notifyInterval">How long to batch writes before raising <see cref="Changed"/>.</param>
     public LogBuffer(
+        TimeProvider timeProvider,
         int capacity = DefaultCapacity,
         LogLevel minimumLevel = LogLevel.Information,
-        TimeProvider? timeProvider = null,
         TimeSpan? notifyInterval = null)
     {
+        ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentOutOfRangeException.ThrowIfLessThan(capacity, 1);
         _ring = new LogEntry?[capacity];
         _minimumLevel = (int)minimumLevel;
-        _time = timeProvider ?? TimeProvider.System;
+        _time = timeProvider;
         _notifyInterval = notifyInterval ?? DefaultNotifyInterval;
         _notifyTimer = _time.CreateTimer(_ => RaiseChanged(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
     }

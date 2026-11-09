@@ -42,7 +42,7 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
                     _loads.Add(uri);
                     return Task.FromResult(_read(uri));
                 },
-            }));
+            }, timeProvider: TimeProvider.System));
 
     private static Task NextAsync(AddOnlineCatalogueWizardViewModel wizard) =>
         ((IAsyncRelayCommand)wizard.NextCommand).ExecuteAsync(null);
@@ -292,7 +292,7 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
         var gate = new TaskCompletionSource<NoaaEncProductCatalog>(TaskCreationOptions.RunContinuationsAsynchronously);
         var wizard = new AddOnlineCatalogueWizardViewModel(
             new CatalogueDirectoryDialogViewModel([Source("a")]),
-            () => new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { NoaaEnc = (_, _) => gate.Task }));
+            () => new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { NoaaEnc = (_, _) => gate.Task }, timeProvider: TimeProvider.System));
         wizard.Start(null);
 
         var next = NextAsync(wizard);

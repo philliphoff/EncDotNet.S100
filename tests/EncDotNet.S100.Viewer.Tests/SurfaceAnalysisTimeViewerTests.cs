@@ -132,8 +132,8 @@ public sealed class SurfaceAnalysisTimeViewerTests
             },
         };
 
-        var fresh = new LibraryItemViewModel(item, source, time: new FakeTimeProvider(run.AddHours(5)));
-        var stale = new LibraryItemViewModel(item, source, time: new FakeTimeProvider(run.AddHours(7)));
+        var fresh = new LibraryItemViewModel(item, source, time: new FakeTimeProvider(run.AddHours(5)), loadState: null, downloader: null, collectionName: null, download: null, timeFormat: null);
+        var stale = new LibraryItemViewModel(item, source, time: new FakeTimeProvider(run.AddHours(7)), loadState: null, downloader: null, collectionName: null, download: null, timeFormat: null);
 
         Assert.False(fresh.IsStaleRun);
         Assert.True(stale.IsStaleRun);

@@ -22,9 +22,9 @@ public sealed class LogsPanelTests
 
     private static (LogBuffer Buffer, LogsViewModel Panel) Create(int capacity = LogBuffer.DefaultCapacity, Action? showFeedback = null)
     {
-        var buffer = new LogBuffer(capacity);
+        var buffer = new LogBuffer(capacity: capacity, timeProvider: TimeProvider.System);
         // Inline "UI thread": a flush applies the buffer's changes at once.
-        var panel = new LogsViewModel(buffer, showFeedback, post: action => action());
+        var panel = new LogsViewModel(buffer, showFeedback, post: action => action(), timeFormat: null, time: TimeProvider.System);
         return (buffer, panel);
     }
 
@@ -142,8 +142,8 @@ public sealed class LogsPanelTests
     [Fact]
     public void A_buffer_already_capturing_debug_starts_on_Everything()
     {
-        var buffer = new LogBuffer(minimumLevel: LogLevel.Debug);
-        var panel = new LogsViewModel(buffer, post: action => action());
+        var buffer = new LogBuffer(minimumLevel: LogLevel.Debug, timeProvider: TimeProvider.System);
+        var panel = new LogsViewModel(buffer, post: action => action(), showFeedback: null, timeFormat: null, time: TimeProvider.System);
 
         Assert.Equal(LogLevel.Debug, panel.SelectedLevelFilter.Level);
         Assert.True(panel.IsCapturingDebug);
@@ -494,9 +494,9 @@ public sealed class LogsPanelTests
     public void Badge_counts_new_warnings_and_errors_while_the_tab_is_hidden()
     {
         // Warnings logged at startup, before the panel existed, count too.
-        var buffer = new LogBuffer();
+        var buffer = new LogBuffer(timeProvider: TimeProvider.System);
         buffer.Add(LogLevel.Warning, Category, "early");
-        var panel = new LogsViewModel(buffer, post: action => action());
+        var panel = new LogsViewModel(buffer, post: action => action(), showFeedback: null, timeFormat: null, time: TimeProvider.System);
         Assert.Equal(1, panel.BadgeCount);
 
         buffer.Add(LogLevel.Information, Category, "fine");

@@ -13,7 +13,7 @@ using var httpClient = new HttpClient
 var updateChecker = new CliUpdateChecker(
     version,
     new GitHubReleaseClient(httpClient),
-    new JsonCliUpdateCache(),
+    new JsonCliUpdateCache(JsonCliUpdateCache.DefaultPath),
     TimeProvider.System);
 
 return await CliRunner.RunAsync(args, version, updateChecker, Console.Error);

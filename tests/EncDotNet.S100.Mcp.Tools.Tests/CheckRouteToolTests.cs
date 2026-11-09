@@ -35,7 +35,7 @@ public class CheckRouteToolTests
     [Fact]
     public async Task A_polyline_off_every_chart_leaves_coverage_on_each_leg()
     {
-        var value = await Ok(new CheckRouteTool(new FakeDatasetCatalog()), new CheckRouteRequest(Polyline: Polyline));
+        var value = await Ok(CheckRouteTools.Create(new FakeDatasetCatalog()), new CheckRouteRequest(Polyline: Polyline));
 
         Assert.Null(value.RouteId);
         Assert.Equal(2, value.Summary.Count);
@@ -64,7 +64,7 @@ public class CheckRouteToolTests
     [Fact]
     public async Task The_corridor_half_width_applies_to_both_sides()
     {
-        var value = await Ok(new CheckRouteTool(new FakeDatasetCatalog()), new CheckRouteRequest(Polyline: Polyline, CorridorHalfWidthMeters: 120));
+        var value = await Ok(CheckRouteTools.Create(new FakeDatasetCatalog()), new CheckRouteRequest(Polyline: Polyline, CorridorHalfWidthMeters: 120));
 
         Assert.All(value.Legs, l =>
         {
@@ -76,7 +76,7 @@ public class CheckRouteToolTests
     [Fact]
     public async Task A_polylines_own_corridor_width_is_a_half_width()
     {
-        var value = await Ok(new CheckRouteTool(new FakeDatasetCatalog()), new CheckRouteRequest(Polyline: Polyline with { CorridorWidthMeters = 80 }));
+        var value = await Ok(CheckRouteTools.Create(new FakeDatasetCatalog()), new CheckRouteRequest(Polyline: Polyline with { CorridorWidthMeters = 80 }));
 
         Assert.Equal(80, value.Legs[0].PortMeters);
         Assert.Equal(80, value.Legs[0].StarboardMeters);
@@ -92,7 +92,7 @@ public class CheckRouteToolTests
         ], DateTimeOffset.UnixEpoch);
         var routes = new FakeRoutes(route);
 
-        var value = await Ok(new CheckRouteTool(new FakeDatasetCatalog(), routes), new CheckRouteRequest(RouteId: "r1"));
+        var value = await Ok(CheckRouteTools.Create(new FakeDatasetCatalog(), routes: routes, time: TimeProvider.System), new CheckRouteRequest(RouteId: "r1"));
 
         Assert.Equal("r1", routes.LastRouteId);
         Assert.Equal("r1", value.RouteId);
@@ -104,7 +104,7 @@ public class CheckRouteToolTests
     [Fact]
     public async Task Without_host_routes_a_polyline_is_required()
     {
-        var error = await Err(new CheckRouteTool(new FakeDatasetCatalog()), new CheckRouteRequest());
+        var error = await Err(CheckRouteTools.Create(new FakeDatasetCatalog()), new CheckRouteRequest());
 
         Assert.Equal("invalid_argument", error.Code);
     }
@@ -112,7 +112,7 @@ public class CheckRouteToolTests
     [Fact]
     public async Task Route_lookup_errors_pass_through()
     {
-        var error = await Err(new CheckRouteTool(new FakeDatasetCatalog(), new FakeRoutes(null)), new CheckRouteRequest(RouteId: "nope"));
+        var error = await Err(CheckRouteTools.Create(new FakeDatasetCatalog(), routes: new FakeRoutes(null), time: TimeProvider.System), new CheckRouteRequest(RouteId: "nope"));
 
         Assert.Equal("invalid_argument", error.Code);
     }
@@ -122,7 +122,7 @@ public class CheckRouteToolTests
     [InlineData(double.NaN)]
     public async Task A_negative_half_width_is_rejected(double half)
     {
-        var error = await Err(new CheckRouteTool(new FakeDatasetCatalog()), new CheckRouteRequest(Polyline: Polyline, CorridorHalfWidthMeters: half));
+        var error = await Err(CheckRouteTools.Create(new FakeDatasetCatalog()), new CheckRouteRequest(Polyline: Polyline, CorridorHalfWidthMeters: half));
 
         Assert.Equal("invalid_argument", error.Code);
     }
@@ -132,7 +132,7 @@ public class CheckRouteToolTests
     [InlineData(null, double.NaN)]
     public async Task A_negative_track_clearance_or_near_band_is_rejected(double? clearance, double? nearby)
     {
-        var error = await Err(new CheckRouteTool(new FakeDatasetCatalog()), new CheckRouteRequest(Polyline: Polyline, TrackClearanceMeters: clearance, NearbyDistanceMeters: nearby));
+        var error = await Err(CheckRouteTools.Create(new FakeDatasetCatalog()), new CheckRouteRequest(Polyline: Polyline, TrackClearanceMeters: clearance, NearbyDistanceMeters: nearby));
 
         Assert.Equal("invalid_argument", error.Code);
     }
@@ -140,7 +140,7 @@ public class CheckRouteToolTests
     [Fact]
     public async Task An_unknown_area_kind_is_rejected()
     {
-        var error = await Err(new CheckRouteTool(new FakeDatasetCatalog()), new CheckRouteRequest(Polyline: Polyline, AreaKindsOff: ["anchorage_area", "lagoon"]));
+        var error = await Err(CheckRouteTools.Create(new FakeDatasetCatalog()), new CheckRouteRequest(Polyline: Polyline, AreaKindsOff: ["anchorage_area", "lagoon"]));
 
         Assert.Equal("invalid_argument", error.Code);
         Assert.Contains("lagoon", error.Message, StringComparison.Ordinal);
@@ -172,7 +172,7 @@ public class CheckRouteToolTests
     [Fact]
     public async Task The_safety_contour_and_depth_go_together()
     {
-        var error = await Err(new CheckRouteTool(new FakeDatasetCatalog()), new CheckRouteRequest(Polyline: Polyline, SafetyContourMeters: 10));
+        var error = await Err(CheckRouteTools.Create(new FakeDatasetCatalog()), new CheckRouteRequest(Polyline: Polyline, SafetyContourMeters: 10));
 
         Assert.Equal("invalid_argument", error.Code);
     }
@@ -180,7 +180,7 @@ public class CheckRouteToolTests
     [Fact]
     public async Task With_depths_and_no_charts_only_missing_data_is_found()
     {
-        var value = await Ok(new CheckRouteTool(new FakeDatasetCatalog()),
+        var value = await Ok(CheckRouteTools.Create(new FakeDatasetCatalog()),
             new CheckRouteRequest(Polyline: Polyline, SafetyContourMeters: 10, SafetyDepthMeters: 8, DraftMeters: 5));
 
         // The draft turns on the clearance check, which finds no depth or water level either.

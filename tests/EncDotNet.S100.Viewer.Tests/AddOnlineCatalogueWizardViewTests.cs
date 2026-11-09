@@ -34,7 +34,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
             {
                 NoaaEnc = (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
                     LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml"))),
-            }));
+            }, timeProvider: TimeProvider.System));
         wizard.Start(null);
 
         var view = new AddOnlineCatalogueWizardView { DataContext = wizard };
@@ -76,7 +76,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
                         "tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-s102-catalog.xml"));
                     return Task.FromResult(RemoteS100CatalogueReader.Read(stream, uri));
                 },
-            }));
+            }, timeProvider: TimeProvider.System));
         wizard.Start(null);
 
         var view = new AddOnlineCatalogueWizardView { DataContext = wizard };
@@ -117,7 +117,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
             {
                 NoaaEnc = (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
                     LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml"))),
-            }));
+            }, timeProvider: TimeProvider.System));
         wizard.Start(null);
 
         var view = new AddOnlineCatalogueWizardView { DataContext = wizard };
@@ -272,7 +272,7 @@ public sealed class AddOnlineCatalogueWizardViewTests
             {
                 NoaaEnc = (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
                     LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml"))),
-            }));
+            }, timeProvider: TimeProvider.System));
         wizard.Start(null);
         return wizard;
     }

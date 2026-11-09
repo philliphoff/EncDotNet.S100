@@ -295,11 +295,11 @@ internal sealed record WarningsRouteCheck(RoutesService Routes, Route Route, Pas
                     g => new DatasetEntry($"/tmp/{g.Key}.gml", "S-124"),
                     g => (IDatasetProcessor)new WarningProcessor(g.ToList())),
         };
-        var warnings = new NavigationalWarningsService(loader);
+        var warnings = new NavigationalWarningsService(loader, datasets: null, sources: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null));
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
         var check = new PassageCheckService(routes, catalog, warnings: new PanelRouteWarningSource(warnings),
             checks: () => [new WarningCheck(), new ClearanceCheck()],
-            options: options is null ? null : new RouteCheckOptions { Warnings = options }, debounce: TimeSpan.Zero, post: post ?? PassageCheckFixture.SerialPost, weather: new FixedWeatherLimits());
+            options: options is null ? null : new RouteCheckOptions { Warnings = options }, debounce: TimeSpan.Zero, post: post ?? PassageCheckFixture.SerialPost, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources());
         var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(), warnings: warnings);
         return new WarningsRouteCheck(routes, route, check, findings) { Warnings = warnings };
     }

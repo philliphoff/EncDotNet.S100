@@ -118,7 +118,7 @@ public sealed class AreaFindingsTests(RestrictedAreasScenarioFixture fixture) : 
         routes.Routes.SetActiveRoute(route);
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
         var check = new PassageCheckService(routes, catalog,
-            checks: () => [new ChartCheck(), new AreaCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: new UiThread().Post, weather: new FixedWeatherLimits());
+            checks: () => [new ChartCheck(), new AreaCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: new UiThread().Post, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources());
         var findings = new RouteFindingsService(check, routes, catalog, timeFormat: new Utc());
         routes.IsCheckModeActive = true;
         await findings.WhenIdle();
@@ -171,7 +171,7 @@ public sealed class AreaFindingsTests(RestrictedAreasScenarioFixture fixture) : 
     public async Task Check_route_returns_the_same_area_findings()
     {
         using var s = await Start(fixture.Import());
-        var tool = new CheckRouteTool(s.Catalog, new ViewerPassageRouteProvider(s.Routes, new InlineInvoker()));
+        var tool = new CheckRouteTool(s.Catalog, routes: new ViewerPassageRouteProvider(s.Routes, new InlineInvoker()), sources: PassageCheckFixture.NewSources(), time: TimeProvider.System);
 
         var result = await tool.InvokeAsync(new CheckRouteRequest(), TestContext.Current.CancellationToken);
 
@@ -194,7 +194,7 @@ public sealed class AreaFindingsTests(RestrictedAreasScenarioFixture fixture) : 
     public async Task Check_route_judges_a_polyline_at_the_given_time()
     {
         using var s = await Start(fixture.Import());
-        var tool = new CheckRouteTool(s.Catalog);
+        var tool = new CheckRouteTool(s.Catalog, routes: null, sources: PassageCheckFixture.NewSources(), time: TimeProvider.System);
         var points = s.Route.Waypoints.Select(w => new EncDotNet.S100.Datasets.Pipelines.Geometry.GeoPoint(w.Position.Latitude, w.Position.Longitude)).ToList();
 
         var summer = await tool.InvokeAsync(

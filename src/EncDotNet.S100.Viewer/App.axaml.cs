@@ -638,7 +638,9 @@ public partial class App : Application
         services.AddSingleton(sp => new ViewModels.Keys.KeysAndCertificatesViewModel(
             sp.GetRequiredService<Services.Secom.SecomIdentityStore>(),
             sp.GetRequiredService<Services.Secom.TrustedAuthorityStore>(),
-            sp.GetRequiredService<ViewModels.Keys.IKeysDialogs>()));
+            sp.GetRequiredService<ViewModels.Keys.IKeysDialogs>(),
+            sp.GetRequiredService<TimeProvider>(),
+            UiThread.Post));
         services.AddSingleton(sp =>
         {
             // SECOM services (issue #804): objects get bounds once downloaded.
@@ -744,7 +746,8 @@ public partial class App : Application
             (Library.LibraryLoadService)sp.GetRequiredService<Library.ILibraryLoader>(),
             sp.GetRequiredService<Library.ILibraryDownloader>(),
             id => sp.GetRequiredService<LibraryPanelViewModel>().SourceDisplayName(id),
-            sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>()));
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>(),
+            UiThread.Post));
         services.AddSingleton<Library.ILibraryLoader>(sp => new Library.LibraryLoadService(
             sp.GetRequiredService<IExchangeSetService>(),
             sp.GetRequiredService<DatasetsViewModel>(),
@@ -899,7 +902,8 @@ public partial class App : Application
         });
         services.AddSingleton<IDatasetMetadataReader>(sp =>
             new CachingDatasetMetadataReader(
-                sp.GetRequiredService<EncDotNet.S100.Core.Metadata.IDatasetMetadataCache>()));
+                sp.GetRequiredService<EncDotNet.S100.Core.Metadata.IDatasetMetadataCache>(),
+                ProductRegistry.Default));
         services.AddSingleton<Services.Caching.IS57CatalogCache>(sp =>
         {
             // Cross-session cache of an S-57 exchange set's base-cell
@@ -1027,6 +1031,7 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
                 sp.GetRequiredService<ViewerDatasetCatalog>(),
                 sources: sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>(),
+                checks: EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService.BuiltInChecks,
                 warnings: sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PanelRouteWarningSource>(),
                 mariner: sp.GetService<IMarinerSettingsProvider>(),
                 weather: sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.IRouteWeatherLimits>(),
@@ -1080,7 +1085,8 @@ public partial class App : Application
                 checkSettings,
                 entry => datasets.Entries.Remove(entry),
                 sp.GetService<EncDotNet.S100.Viewer.Services.Notifications.INotificationService>(),
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService>());
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService>(),
+                EncDotNet.S100.Viewer.Services.ReceivedRoutesService.ReadDataset);
         });
         // Import route…, Copy to edit and Export… (#960), shared by the Routes panel and MCP.
         services.AddSingleton(sp =>
@@ -1107,7 +1113,8 @@ public partial class App : Application
             sp.GetRequiredService<TimeRefreshProgress>(),
             sp.GetRequiredService<TimeProvider>(),
             sp.GetService<ITimeFormatProvider>(),
-            library: () => sp.GetService<ILibraryTimeSource>()));
+            UiThread.RunOrPost,
+            () => sp.GetService<ILibraryTimeSource>()));
         services.AddSingleton<EcdisDisplayState>(sp =>
             EcdisDisplayStatePersistence.Create(sp.GetRequiredService<ViewerSettings>()));
         services.AddSingleton<IUiDispatcher, AvaloniaUiDispatcher>();
@@ -1115,7 +1122,7 @@ public partial class App : Application
         // is adjustable so set_test_clock can age forecasts and Live (#715).
         services.AddSingleton<TimeProvider>(sp =>
             sp.GetRequiredService<ViewerSettings>().McpTestHooks
-                ? new AdjustableTimeProvider()
+                ? new AdjustableTimeProvider(TimeProvider.System)
                 : TimeProvider.System);
         services.AddSingleton<INotificationService, NotificationService>();
 
@@ -1163,7 +1170,7 @@ public partial class App : Application
             sp.GetRequiredService<DatasetLoaderService>());
         services.AddSingleton<IPickService, PickService>();
         services.AddSingleton<IGeographicPickPresenter>(sp =>
-            new DispatcherGeographicPickPresenter(sp.GetRequiredService<IPickService>()));
+            new DispatcherGeographicPickPresenter(sp.GetRequiredService<IPickService>(), UiThread.RunOrPost));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicSourcePickService>(sp =>
             new EncDotNet.S100.Viewer.Services.DynamicSources.DynamicSourcePickService(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>()));
@@ -1218,6 +1225,7 @@ public partial class App : Application
                     CourseOverGround: EncDotNet.S100.Quantities.Angle.FromDegrees(90.0),
                     SpeedOverGround: EncDotNet.S100.Quantities.Speed.FromMetresPerSecond(5.0),
                     Timestamp: DateTimeOffset.UtcNow),
+                time: TimeProvider.System,
                 cadence: TimeSpan.FromSeconds(1)));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipPositionProvider>(sp =>
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.SteerableOwnShipPositionProvider>());
@@ -1337,7 +1345,8 @@ public partial class App : Application
         services.AddSingleton<IDatasetLoadGateway>(sp => new DatasetLoadGateway(
             sp.GetRequiredService<DatasetsViewModel>(),
             sp.GetRequiredService<IDatasetLoaderService>(),
-            sp.GetRequiredService<IExchangeSetService>()));
+            sp.GetRequiredService<IExchangeSetService>(),
+            UiThread.InvokeAsync));
         services.AddSingleton<McpServerHost>(sp => new McpServerHost(
             sp.GetRequiredService<ViewerDatasetCatalog>(),
             sp.GetRequiredService<ViewerSettings>(),
@@ -1359,10 +1368,12 @@ public partial class App : Application
                 sp.GetRequiredService<GlobalTimeService>(),
                 sp.GetRequiredService<TimelineViewModel>(),
                 sp.GetRequiredService<DatasetsViewModel>(),
-                sp.GetRequiredService<TimeProvider>()),
-            new ViewerDatasetStateController(sp.GetRequiredService<DatasetsViewModel>()),
+                sp.GetRequiredService<TimeProvider>(),
+                UiThread.InvokeAsync),
+            new ViewerDatasetStateController(sp.GetRequiredService<DatasetsViewModel>(), UiThread.InvokeAsync),
             new ViewerNotificationController(
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Notifications.INotificationService>()),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Notifications.INotificationService>(),
+                UiThread.InvokeAsync),
             sp.GetRequiredService<TimeProvider>() as AdjustableTimeProvider,
             sp.GetRequiredService<ViewerLibraryController>(),
             new ViewerLibraryEditor(
@@ -1373,7 +1384,9 @@ public partial class App : Application
                     sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibraryCatalogueReaders>(),
                     () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources,
                     sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(),
-                    sp.GetRequiredService<TimeProvider>())),
+                    sp.GetRequiredService<TimeProvider>()),
+                UiThread.InvokeAsync,
+                new EncDotNet.S100.Collections.Library.LibraryActivityTracker()),
             // Only with --mcp-test-hooks: the ui_* tools are for scripted testing.
             sp.GetRequiredService<ViewerSettings>().McpTestHooks ? ViewerUiAutomation.ForApplication() : null,
             sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRegistry>(),
@@ -1409,7 +1422,8 @@ public partial class App : Application
         });
         // The settled signal and process metrics behind the perf harness's MCP
         // tools (map rendering slice 1). Both are inert until a tool uses them.
-        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor(
+            enabled => EncDotNet.S100.Rendering.Engine.S100VectorTileRenderer.SettleTrackingEnabled = enabled)
         {
             LoadProbe = () => sp.GetRequiredService<
                 EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetLazyLoadCoordinator>().GetVisibleWork(),
@@ -1417,12 +1431,14 @@ public partial class App : Application
         services.AddSingleton(_ => new EncDotNet.S100.Viewer.Diagnostics.ProcessMetricsSampler(
             new EncDotNet.S100.Viewer.Diagnostics.RuntimeProcessMetricsSource(
                 () => EncDotNet.S100.Rendering.Engine.S100VectorTileRenderer.GetTileCacheMemory().TotalBytes),
-            uiStalls: new EncDotNet.S100.Viewer.Diagnostics.UiThreadStallMonitor(
+            Environment.ProcessorCount,
+            new EncDotNet.S100.Viewer.Diagnostics.UiThreadStallMonitor(
                 action => Avalonia.Threading.Dispatcher.UIThread.Post(action, Avalonia.Threading.DispatcherPriority.Send))));
         services.AddSingleton<McpTools.PortrayalPrewarmOverride>();
         services.AddSingleton(sp => new ViewerLibraryController(
             sp.GetRequiredService<LibraryPanelViewModel>(),
-            () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources));
+            () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources,
+            UiThread.InvokeAsync));
 
         // View models
         services.AddSingleton<FeatureCataloguesViewModel>(sp => new FeatureCataloguesViewModel(
@@ -1442,6 +1458,9 @@ public partial class App : Application
                 sp.GetRequiredService<ILibraryImporter>(),
                 sp.GetRequiredService<Library.ILibraryLoader>(),
                 sp.GetRequiredService<Library.ILibraryDownloader>(),
+                UiThread.RunOrPost,
+                UiThread.Post,
+                sp.GetRequiredService<TimeProvider>(),
                 source => source switch
                 {
                     EncDotNet.S100.Collections.S100FeedSource feed => feeds.HealthOf(feed.FeedUri),
@@ -1449,7 +1468,6 @@ public partial class App : Application
                     EncDotNet.S100.Collections.S100ForecastFeedSource forecast => forecasts.HealthOf(forecast),
                     _ => null,
                 },
-                time: sp.GetRequiredService<TimeProvider>(),
                 viewTime: sp.GetRequiredService<GlobalTimeService>(),
                 timeFormat: sp.GetService<ITimeFormatProvider>(),
                 sync: sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>());
@@ -1473,7 +1491,9 @@ public partial class App : Application
             sp.GetRequiredService<LibraryPanelViewModel>(),
             sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
             sp.GetRequiredService<Library.ILibraryLoader>(),
-            sp.GetRequiredService<TimeProvider>()));
+            sp.GetRequiredService<TimeProvider>(),
+            // Always defers, even on the UI thread, so a burst of changes raises Changed once.
+            UiThread.Post));
         services.AddSingleton<ILibraryTimeSource>(sp => sp.GetRequiredService<LibraryTimeSource>());
         services.AddSingleton<LayerStackViewModel>();
         services.AddSingleton<FeatureSearchViewModel>();
@@ -1534,7 +1554,9 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IViewTime>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentState>(),
-            sp.GetRequiredService<ITimelineMapScope>()));
+            sp.GetRequiredService<ITimelineMapScope>(),
+            UiThread.PostBackground,
+            Task.Run));
         services.AddSingleton<TimelineViewModel>(sp =>
         {
             var timeline = Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<TimelineViewModel>(sp);
@@ -1587,14 +1609,15 @@ public partial class App : Application
                     EncDotNet.S100.Collections.S100CatalogueFeedSource catalogue => catalogues.HealthOf(catalogue.CatalogUri),
                     _ => null,
                 },
-                id => sp.GetRequiredService<LibraryPanelViewModel>().SourceDisplayName(id));
+                id => sp.GetRequiredService<LibraryPanelViewModel>().SourceDisplayName(id),
+                UiThread.Post);
         });
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.NavigationalWarningsService(
             sp.GetRequiredService<IDatasetLoaderService>(),
             sp.GetRequiredService<DatasetsViewModel>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.INavigationalWarningSources>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore>(),
-            sp.GetService<TimeProvider>(),
+            sp.GetRequiredService<TimeProvider>(),
             // The NEW distance filter measures from own ship while it is shown, and the active route (#997).
             ownShip: () =>
             {
@@ -1613,12 +1636,12 @@ public partial class App : Application
             sp.GetService<ITimeFormatProvider>(),
             sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
             sp.GetRequiredService<IDatasetLoaderService>(),
-            sp.GetService<TimeProvider>())
+            sp.GetRequiredService<TimeProvider>())
         {
             NewOptions = new NavigationalWarningNewOptionsViewModel(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
                 sp.GetRequiredService<ViewerSettings>(),
-                sp.GetService<TimeProvider>()),
+                sp.GetRequiredService<TimeProvider>()),
             // #959 E3: the checked route's warnings, and the findings list's inline cards' navigator.
             RouteFindings = sp.GetService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>(),
         });
@@ -1627,8 +1650,8 @@ public partial class App : Application
             sp.GetRequiredService<IDatasetLoaderService>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IViewTime>(),
             sp.GetService<EncDotNet.S100.Viewer.Services.ITimeFormatProvider>(),
-            sp.GetService<TimeProvider>() ?? TimeProvider.System,
-            action => Avalonia.Threading.Dispatcher.UIThread.Post(action)));
+            sp.GetRequiredService<TimeProvider>(),
+            UiThread.Post));
         services.AddSingleton(sp =>
         {
             var drawing = new EncDotNet.S100.Viewer.Services.NavigationalWarningDrawingService(
@@ -1636,8 +1659,8 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IViewTime>(),
                 sp.GetRequiredService<ViewerSettings>(),
                 sp.GetRequiredService<IDatasetLoaderService>(),
-                sp.GetService<TimeProvider>() ?? TimeProvider.System,
-                action => Avalonia.Threading.Dispatcher.UIThread.Post(action),
+                sp.GetRequiredService<TimeProvider>(),
+                UiThread.Post,
                 sp.GetRequiredService<EcdisDisplayState>());
             drawing.Follow(sp.GetRequiredService<PickReportViewModel>());
             sp.GetRequiredService<NavigationalWarningsViewModel>().Drawing = drawing;
@@ -1811,6 +1834,7 @@ public partial class App : Application
         services.AddSingleton(sp => new LogsViewModel(
             sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.LogBuffer>(),
             showFeedback: () => sp.GetRequiredService<MainViewModel>().ShowFeedbackCommand.Execute(null),
+            post: UiThread.RunOrPostBackground,
             timeFormat: sp.GetService<ITimeFormatProvider>(),
             time: sp.GetRequiredService<TimeProvider>()));
         services.AddActivityTab<LogsViewModel, LogsView>(

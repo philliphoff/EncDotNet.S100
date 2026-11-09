@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using Avalonia.Threading;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Spec;
@@ -69,11 +68,7 @@ internal sealed class PickHighlightController : IDisposable
     /// Settings view-model supplying the active chart palette, which drives the
     /// marker's casing colour (dimmed against a dark Dusk/Night basemap).
     /// </param>
-    /// <param name="marshal">
-    /// Optional UI-thread marshalling override. Defaults to
-    /// <see cref="Dispatcher.UIThread"/>; tests inject a synchronous
-    /// implementation.
-    /// </param>
+    /// <param name="marshal">Runs work on the UI thread (the app passes <see cref="UiThread.RunOrPost"/>).</param>
     /// <param name="warningDrawing">
     /// Which S-124 warnings the map draws; with its Navigational warnings
     /// switch off, a warning's pick isn't highlighted either (#995).
@@ -85,21 +80,22 @@ internal sealed class PickHighlightController : IDisposable
         IDatasetCatalog catalog,
         IMeasureOverlayAppearanceProvider appearance,
         SettingsViewModel settings,
-        Action<Action>? marshal = null,
-        NavigationalWarningDrawingService? warningDrawing = null)
+        Action<Action> marshal,
+        NavigationalWarningDrawingService? warningDrawing)
     {
         ArgumentNullException.ThrowIfNull(layers);
         ArgumentNullException.ThrowIfNull(pickReport);
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(appearance);
         ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(marshal);
 
         _layers = layers;
         _pickReport = pickReport;
         _catalog = catalog;
         _appearance = appearance;
         _settings = settings;
-        _marshal = marshal ?? DispatcherMarshal;
+        _marshal = marshal;
         _warningDrawing = warningDrawing;
 
         _layer = PickHighlightOverlayLayer.Create();
@@ -240,12 +236,6 @@ internal sealed class PickHighlightController : IDisposable
         var list = new List<IReadOnlyList<GeoPosition>>(source.Count);
         foreach (var ring in source) list.Add(ToList(ring));
         return list;
-    }
-
-    private static void DispatcherMarshal(Action action)
-    {
-        if (Dispatcher.UIThread.CheckAccess()) action();
-        else Dispatcher.UIThread.Post(action);
     }
 
     /// <summary>Detaches the overlay layer and unsubscribes. Idempotent.</summary>

@@ -23,7 +23,7 @@ namespace EncDotNet.S100.Viewer.Tests;
 public sealed class CycloneDisplaySwitchesTests
 {
     private static EcdisDisplayPanelViewModel Panel(DatasetsViewModel datasets, EcdisDisplayState? state = null) =>
-        new(state ?? new EcdisDisplayState(), new PortrayalCatalogueManager(), datasets);
+        new(state ?? new EcdisDisplayState(), new PortrayalCatalogueManager(), datasets, new EcdisLabelOverrideProvider());
 
     [Fact]
     public void The_section_shows_for_a_cyclone_or_a_surface_analysis_and_the_cyclone_switches_only_for_a_cyclone()

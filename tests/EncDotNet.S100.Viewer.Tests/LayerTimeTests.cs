@@ -297,7 +297,7 @@ public sealed class LayerTimeTests
             Datasets = [.. service.TimedDatasets.Select(d => d with { DatasetId = d.DatasetId == "cbofs" ? cbofsRow.Id.Value : baltimoreRow.Id.Value })],
         });
 
-        _ = new LayerTimeCoordinator(service, datasets, progress, new FakeTimeProvider(), new FixedFormat(), action => action());
+        _ = new LayerTimeCoordinator(service, datasets, progress, new FakeTimeProvider(), new FixedFormat(), action => action(), library: null);
 
         Assert.Equal("13:00Z (−30 min)", cbofsRow.LayerTimeText);
         Assert.False(cbofsRow.IsLayerHidden);

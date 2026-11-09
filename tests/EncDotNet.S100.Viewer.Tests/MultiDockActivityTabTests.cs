@@ -202,12 +202,15 @@ public sealed class MultiDockActivityTabTests : IDisposable
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
             textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
             displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets),
+            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider()),
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
             notifications: Notifications.TestNotifications.Create(),
-            activityTabs: tabs);
+            activityTabs: tabs,
+            dialogManager: new ShadUI.DialogManager(),
+            routes: new EncDotNet.S100.Viewer.Services.RoutesService(),
+            measure: new EncDotNet.S100.Viewer.Services.MeasureSession());
     }
 
     [Fact]
@@ -447,8 +450,8 @@ public sealed class MultiDockActivityTabTests : IDisposable
     [Fact]
     public void Show_logs_opens_the_bottom_dock_on_the_logs_tab_and_tells_it_it_is_shown()
     {
-        using var buffer = new EncDotNet.S100.Viewer.Diagnostics.LogBuffer();
-        using var logs = new LogsViewModel(buffer, post: action => action());
+        using var buffer = new EncDotNet.S100.Viewer.Diagnostics.LogBuffer(timeProvider: TimeProvider.System);
+        using var logs = new LogsViewModel(buffer, post: action => action(), showFeedback: null, timeFormat: null, time: TimeProvider.System);
         var timeline = new FakeTab { Id = MainViewModel.TimelineTabId, Order = 10, Dock = TabDock.Bottom };
         var logsTab = new ActivityTab<LogsViewModel, ContentControl>(
             MainViewModel.LogsTabId, 30, "Logs", "Logs", () => new ContentControl(), logs, false, TabDock.Bottom);
@@ -481,8 +484,8 @@ public sealed class MultiDockActivityTabTests : IDisposable
     [Fact]
     public void The_logs_badge_reaches_its_bottom_dock_tab()
     {
-        using var buffer = new EncDotNet.S100.Viewer.Diagnostics.LogBuffer();
-        using var logs = new LogsViewModel(buffer, post: action => action());
+        using var buffer = new EncDotNet.S100.Viewer.Diagnostics.LogBuffer(timeProvider: TimeProvider.System);
+        using var logs = new LogsViewModel(buffer, post: action => action(), showFeedback: null, timeFormat: null, time: TimeProvider.System);
         using var logsTab = new ActivityTab<LogsViewModel, ContentControl>(
             MainViewModel.LogsTabId, 30, "Logs", "Logs", () => new ContentControl(), logs, false, TabDock.Bottom);
 

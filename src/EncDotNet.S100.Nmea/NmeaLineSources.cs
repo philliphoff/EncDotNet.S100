@@ -291,16 +291,17 @@ public sealed class NmeaTcpLineSource : INmeaLineSource
     /// <param name="host">The server's host name or address.</param>
     /// <param name="port">The server's port.</param>
     /// <param name="reconnectDelay">The wait before reconnecting; <see langword="null"/> for 5 seconds.</param>
-    /// <param name="timeProvider">The clock the wait runs on; <see langword="null"/> for <see cref="TimeProvider.System"/>.</param>
-    public NmeaTcpLineSource(string host, int port = NmeaUdpLineSource.DefaultPort, TimeSpan? reconnectDelay = null, TimeProvider? timeProvider = null)
+    /// <param name="timeProvider">The clock the wait runs on.</param>
+    public NmeaTcpLineSource(string host, TimeProvider timeProvider, int port = NmeaUdpLineSource.DefaultPort, TimeSpan? reconnectDelay = null)
     {
+        ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentException.ThrowIfNullOrEmpty(host);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(port);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(port, IPEndPoint.MaxPort);
         Host = host;
         Port = port;
         ReconnectDelay = reconnectDelay ?? TimeSpan.FromSeconds(5);
-        _time = timeProvider ?? TimeProvider.System;
+        _time = timeProvider;
     }
 
     /// <summary>The server's host.</summary>

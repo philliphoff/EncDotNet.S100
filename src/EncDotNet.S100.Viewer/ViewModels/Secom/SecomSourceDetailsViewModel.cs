@@ -46,14 +46,15 @@ internal sealed class SecomSourceDetailsViewModel : ViewModelBase
     /// <param name="openKeys">Opens Settings → Keys &amp; certificates on a tab.</param>
     /// <param name="time">The clock.</param>
     public SecomSourceDetailsViewModel(
-        SecomIdentityDirectory identities, Func<Guid, CollectionSource, bool> update, Action<Keys.KeysTab>? openKeys = null, TimeProvider? time = null)
+        SecomIdentityDirectory identities, Func<Guid, CollectionSource, bool> update, Action<Keys.KeysTab>? openKeys, TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(identities);
         ArgumentNullException.ThrowIfNull(update);
+        ArgumentNullException.ThrowIfNull(time);
         _identities = identities;
         _update = update;
         _openKeys = openKeys;
-        _time = time ?? TimeProvider.System;
+        _time = time;
         Picker = new IdentityPickerViewModel(identities, openKeys is null ? null : () => openKeys(Keys.KeysTab.Identities));
         Picker.Chosen += (_, setting) => Choose(setting);
         ActionCommand = new RelayCommand(RunAction, () => ActionKind is not null);

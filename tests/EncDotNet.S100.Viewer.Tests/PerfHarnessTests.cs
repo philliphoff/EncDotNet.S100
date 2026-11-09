@@ -266,7 +266,7 @@ public sealed class PerfHarnessTests
     public void Sampler_TracksPeaksOnlyWhileAWindowIsOpen()
     {
         var source = new FakeSource();
-        using var sampler = new ProcessMetricsSampler(source, interval: TimeSpan.FromHours(1), processorCount: 4);
+        using var sampler = new ProcessMetricsSampler(source, interval: TimeSpan.FromHours(1), processorCount: 4, uiStalls: null);
 
         source.WorkingSet = 5_000;
         sampler.SampleOnce();
@@ -340,7 +340,7 @@ public sealed class PerfHarnessTests
     public void GetProcessMetrics_StartRestartStop()
     {
         var source = new FakeSource();
-        using var sampler = new ProcessMetricsSampler(source, interval: TimeSpan.FromHours(1), processorCount: 4);
+        using var sampler = new ProcessMetricsSampler(source, interval: TimeSpan.FromHours(1), processorCount: 4, uiStalls: null);
         var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), () => 7);
 
         Assert.True(tool.Invoke(null).TryGetValue(out var none));
@@ -362,7 +362,7 @@ public sealed class PerfHarnessTests
     public async Task GetProcessMetrics_ReportsTheSchedulerOverTheWindow()
     {
         var source = new FakeSource();
-        using var sampler = new ProcessMetricsSampler(source, interval: TimeSpan.FromHours(1), processorCount: 4);
+        using var sampler = new ProcessMetricsSampler(source, interval: TimeSpan.FromHours(1), processorCount: 4, uiStalls: null);
         using var scheduler = new WorkScheduler(new WorkSchedulerOptions { WorkerCount = 2, ThreadName = "metrics test" });
         var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), schedulerStats: scheduler.GetStats);
 
@@ -503,7 +503,7 @@ public sealed class PerfHarnessTests
             Assert.NotNull(settleJson[field]);
         Assert.NotNull(settleJson["loads"]!["loaded"]);
 
-        using var sampler = new ProcessMetricsSampler(new FakeSource(), TimeSpan.FromHours(1), 4);
+        using var sampler = new ProcessMetricsSampler(new FakeSource(), interval: TimeSpan.FromHours(1), processorCount: 4, uiStalls: null);
         var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment());
         Assert.True(tool.Invoke("start").TryGetValue(out var metrics));
         var metricsJson = Reply(ToolResultOk(metrics!));

@@ -75,7 +75,8 @@ public sealed class NonS100ProductViewTests : IDisposable
     {
         var path = FakeWeatherProduct.Write(_dir);
         var reader = new CachingDatasetMetadataReader(
-            new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(Path.Combine(_dir, "cache"), 1_000_000, DiskDatasetMetadataCache.KindOptions)));
+            new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(Path.Combine(_dir, "cache"), 1_000_000, DiskDatasetMetadataCache.KindOptions)),
+            registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
 
         var metadata = reader.TryRead(path);
 

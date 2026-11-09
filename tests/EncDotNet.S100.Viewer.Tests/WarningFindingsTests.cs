@@ -94,10 +94,10 @@ public sealed class WarningFindingsTests(WarningsScenarioFixture fixture) : ICla
         var loader = new FakeDatasetLoaderService();
         if (withWarnings)
             loader.Processors = Processors();
-        var warnings = new NavigationalWarningsService(loader);
+        var warnings = new NavigationalWarningsService(loader, datasets: null, sources: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null));
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
         var check = new PassageCheckService(routes, catalog, warnings: new PanelRouteWarningSource(warnings),
-            checks: () => [new WarningCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: PassageCheckFixture.SerialPost, weather: new FixedWeatherLimits());
+            checks: () => [new WarningCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: PassageCheckFixture.SerialPost, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources());
         var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(), warnings: warnings);
         return new Setup(routes, route, check, loader, warnings, findings);
     }

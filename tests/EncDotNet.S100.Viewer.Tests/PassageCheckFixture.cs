@@ -27,6 +27,10 @@ internal sealed class PassageCheckFixture
 
     private static readonly Lock SerialGate = new();
 
+    /// <summary>A fresh set of route-check sources over ProjNet, as the app's shared one.</summary>
+    public static EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache NewSources() =>
+        new(new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
     /// <summary>
     /// A <c>post</c> that runs each result under one lock, standing in for the
     /// UI thread: without it, a result lands on a pool thread while the test
@@ -74,10 +78,11 @@ internal sealed class PassageCheckFixture
         Check = new PassageCheckService(
             Routes,
             Catalog,
-            checks: allChecks ? null : () => [new EncDotNet.S100.Navigation.ClearanceCheck(), .. checks ?? []],
+            checks: allChecks ? PassageCheckService.BuiltInChecks : () => [new EncDotNet.S100.Navigation.ClearanceCheck(), .. checks ?? []],
             debounce: debounce ?? TimeSpan.Zero,
             post: post ?? SerialPost,
-            weather: Weather);
+            weather: Weather,
+            sources: PassageCheckFixture.NewSources());
     }
 
     /// <summary>The mariner's weather limits the check reads; none until a test sets them.</summary>

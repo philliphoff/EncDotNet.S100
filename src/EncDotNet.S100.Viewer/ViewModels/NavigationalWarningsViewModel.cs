@@ -101,15 +101,16 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
 
     public NavigationalWarningsViewModel(
         NavigationalWarningsService service,
-        IPickService? pick = null,
-        PickReportViewModel? pickReport = null,
-        IViewTime? viewTime = null,
-        ITimeFormatProvider? timeFormat = null,
-        ICapabilityAccessor<IMapViewportController>? viewport = null,
-        IDatasetLoaderService? loader = null,
-        TimeProvider? clock = null)
+        IPickService? pick,
+        PickReportViewModel? pickReport,
+        IViewTime? viewTime,
+        ITimeFormatProvider? timeFormat,
+        ICapabilityAccessor<IMapViewportController>? viewport,
+        IDatasetLoaderService? loader,
+        TimeProvider clock)
     {
         ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(clock);
         _service = service;
         _pick = pick;
         _pickReport = pickReport;
@@ -117,7 +118,7 @@ internal sealed class NavigationalWarningsViewModel : ViewModelBase, INavigation
         _timeFormat = timeFormat;
         _viewport = viewport;
         _loader = loader;
-        _clock = clock ?? TimeProvider.System;
+        _clock = clock;
 
         ToggleTextOnlyCommand = new RelayCommand(() => IsTextOnlyFilter = !IsTextOnlyFilter);
         ToggleNotInForceCommand = new RelayCommand(() => IsNotInForceExpanded = !IsNotInForceExpanded);

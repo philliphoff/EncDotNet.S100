@@ -578,7 +578,7 @@ internal sealed class McpServerHost : IAsyncDisposable
             tools.Add(ReceivedRouteMcpAdapters.Create(new SetRouteDisplayModeTool(_routesService, invoker)));
             if (_routeExchange is not null)
             {
-                tools.Add(ReceivedRouteMcpAdapters.Create(new ImportRouteTool(_routesService, invoker, _routeExchange)));
+                tools.Add(ReceivedRouteMcpAdapters.Create(new ImportRouteTool(_routesService, invoker, _routeExchange, Path.Combine(Path.GetTempPath(), "soundcharts-route-imports"))));
                 tools.Add(ReceivedRouteMcpAdapters.Create(new CopyRouteTool(_routesService, invoker, _routeExchange)));
                 tools.Add(ReceivedRouteMcpAdapters.Create(new ExportRouteTool(_routesService, invoker, _routeExchange)));
             }

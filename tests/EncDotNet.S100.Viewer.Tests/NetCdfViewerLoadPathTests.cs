@@ -75,7 +75,8 @@ public sealed class NetCdfViewerLoadPathTests : IDisposable
     {
         var path = NetCdfFixtures.WriteWaveNetCdf3(Path.Combine(_dir, "ww3.nc"));
         var reader = new CachingDatasetMetadataReader(
-            new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(Path.Combine(_dir, "cache"), 1_000_000, DiskDatasetMetadataCache.KindOptions)));
+            new DiskDatasetMetadataCache(EncDotNet.S100.Testing.TestContentKinds.Open(Path.Combine(_dir, "cache"), 1_000_000, DiskDatasetMetadataCache.KindOptions)),
+            registry: EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default);
 
         var metadata = reader.TryRead(path);
 

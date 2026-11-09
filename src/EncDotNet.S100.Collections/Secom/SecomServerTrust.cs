@@ -125,7 +125,7 @@ public sealed class SecomServerTrust
 
     /// <summary>Creates a validator trusting <paramref name="anchors"/>.</summary>
     /// <param name="anchors">The anchors server certificates may chain to; by default <see cref="SecomTrustAnchors.BuiltIn"/>.</param>
-    /// <param name="timeProvider">The clock validity periods are judged by.</param>
+    /// <param name="timeProvider">The clock validity periods are judged by; <see langword="null"/> for <see cref="TimeProvider.System"/>.</param>
     /// <param name="revocation">Checks anchor-trusted chains for revocation; <see langword="null"/> skips the check.</param>
     public SecomServerTrust(SecomTrustAnchors? anchors = null, TimeProvider? timeProvider = null, SecomRevocation? revocation = null)
     {

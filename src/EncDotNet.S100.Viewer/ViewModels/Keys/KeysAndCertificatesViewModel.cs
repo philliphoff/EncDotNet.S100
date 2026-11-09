@@ -46,17 +46,19 @@ internal sealed class KeysAndCertificatesViewModel : ViewModelBase, IDisposable
     public KeysAndCertificatesViewModel(
         SecomIdentityStore identities,
         TrustedAuthorityStore authorities,
-        IKeysDialogs? dialogs = null,
-        TimeProvider? time = null,
-        Action<Action>? post = null)
+        IKeysDialogs? dialogs,
+        TimeProvider time,
+        Action<Action> post)
     {
         ArgumentNullException.ThrowIfNull(identities);
         ArgumentNullException.ThrowIfNull(authorities);
+        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(post);
         _identities = identities;
         _authorities = authorities;
         _dialogs = dialogs;
-        _time = time ?? TimeProvider.System;
-        _post = post ?? (a => Avalonia.Threading.Dispatcher.UIThread.Post(a));
+        _time = time;
+        _post = post;
 
         ImportIdentityCommand = new RelayCommand(() => _ = ImportAsync(replacing: null));
         AddAuthorityCommand = new RelayCommand(() => _ = AddAuthorityAsync());

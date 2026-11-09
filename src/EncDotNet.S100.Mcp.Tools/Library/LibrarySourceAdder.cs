@@ -22,17 +22,19 @@ public sealed class LibrarySourceAdder
     /// <param name="readers">Reads online catalogues; a catalogue without a reader is refused.</param>
     /// <param name="userCatalogues">The user's own catalogues, found by id after the curated ones; none when null.</param>
     /// <param name="probe">Recognises a catalogue URL's format, for adding by URL; URLs are refused without.</param>
-    /// <param name="time">The clock (catalogue age, forecast end); the system clock when null.</param>
+    /// <param name="time">The clock (catalogue age, forecast end).</param>
     public LibrarySourceAdder(
-        LibraryCatalogueReaders? readers = null,
-        Func<IReadOnlyList<KnownCatalogueSource>>? userCatalogues = null,
-        Func<Uri, CancellationToken, Task<CatalogueProbe>>? probe = null,
-        TimeProvider? time = null)
+        LibraryCatalogueReaders readers,
+        Func<IReadOnlyList<KnownCatalogueSource>>? userCatalogues,
+        Func<Uri, CancellationToken, Task<CatalogueProbe>>? probe,
+        TimeProvider time)
     {
-        _readers = readers ?? new LibraryCatalogueReaders();
+        ArgumentNullException.ThrowIfNull(readers);
+        ArgumentNullException.ThrowIfNull(time);
+        _readers = readers;
         _userCatalogues = userCatalogues ?? (() => []);
         _probe = probe;
-        _time = time ?? TimeProvider.System;
+        _time = time;
     }
 
     /// <summary>Previews or adds the source <paramref name="request"/> describes.</summary>

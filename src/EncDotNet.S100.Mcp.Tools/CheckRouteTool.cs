@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Geometry;
@@ -96,17 +95,18 @@ public sealed class CheckRouteTool
     /// <param name="catalog">The loaded datasets.</param>
     /// <param name="routes">The host's routes, or <c>null</c> when the host has none (polylines only).</param>
     /// <param name="sources">
-    /// The sources shared with the host's other route checks, or <c>null</c>
-    /// for the tool's own over ProjNet.
+    /// The sources shared with the host's other route checks.
     /// </param>
-    /// <param name="time">The clock for "now", or <c>null</c> for the system clock.</param>
-    public CheckRouteTool(IDatasetCatalog catalog, IPassageRouteProvider? routes = null, RouteCheckSourceCache? sources = null, TimeProvider? time = null)
+    /// <param name="time">The clock for "now".</param>
+    public CheckRouteTool(IDatasetCatalog catalog, IPassageRouteProvider? routes, RouteCheckSourceCache sources, TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         _catalog = catalog;
         _routes = routes;
-        _sources = sources ?? new RouteCheckSourceCache(new ProjNetCrsTransformFactory());
-        _time = time ?? TimeProvider.System;
+        ArgumentNullException.ThrowIfNull(sources);
+        ArgumentNullException.ThrowIfNull(time);
+        _sources = sources;
+        _time = time;
     }
 
     /// <summary>Executes the tool.</summary>

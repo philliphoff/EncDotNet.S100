@@ -36,7 +36,7 @@ public sealed partial class LiveAccessibleNameTests
         library.AddCollection("Charts", [new ExchangeSetSource(Guid.NewGuid(), null, context.CreateS57ExchangeSet("Charts"))]);
         await library.WhenIdle();
         using var panel = new LibraryPanelViewModel(
-            library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action());
+            library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System);
         using var host = ViewHost.Show(new LibraryPanelView { DataContext = panel }, width: 420, height: 900);
         Assert.NotEmpty(panel.Items);
         host.Click(host.Find<Avalonia.Controls.ListBoxItem>(r => ReferenceEquals(r.DataContext, panel.Items[0])));
@@ -130,7 +130,7 @@ public sealed partial class LiveAccessibleNameTests
         var wizard = new AddOnlineCatalogueWizardViewModel(
             new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
                 Task.FromResult(new CatalogueProbe(null, null, null))),
-            () => new AddToLibraryDialogViewModel(library));
+            () => new AddToLibraryDialogViewModel(library, readers: new EncDotNet.S100.Collections.Library.LibraryCatalogueReaders(), timeProvider: TimeProvider.System));
         wizard.Start(null);
         using var host = ViewHost.Show(new AddOnlineCatalogueWizardView { DataContext = wizard }, width: 640, height: 760);
 

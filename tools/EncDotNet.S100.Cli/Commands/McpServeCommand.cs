@@ -151,8 +151,8 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
             // it holds each dataset both as a projected LoadedDataset (read tools)
             // and an open render handle (headless renderer), and is what
             // open_dataset / close_dataset and the Library's loads mutate.
-            using var catalog = new HeadlessMutableCatalog(
-                new ProjNetCrsTransformFactory(), luaEngine: LuaEngineOption.Resolve(settings.LuaEngine));
+            using var processors = BundledDatasetProcessorFactory.Create(LuaEngineOption.Resolve(settings.LuaEngine));
+            using var catalog = new HeadlessMutableCatalog(new ProjNetCrsTransformFactory(), processors);
 
             // Ownership of any exchange-set extraction transfers to the catalog,
             // which keeps it alive for the whole session (the composite renderer
@@ -185,9 +185,9 @@ internal sealed class McpServeCommand : AsyncCommand<McpServeCommand.Settings>
                 });
             services.Library.Initialize();
             var operations = new LibraryOperations(services.Library, services.Downloads, new LibraryLoader(opener));
-            var adder = new LibrarySourceAdder(services.Readers, probe: services.ProbeCatalogue);
+            var adder = new LibrarySourceAdder(services.Readers, userCatalogues: null, services.ProbeCatalogue, TimeProvider.System);
             var library = new HeadlessLibrary(
-                operations, services.Sync, readers: services.Readers, probe: services.ProbeCatalogue);
+                operations, services.Sync, userCatalogues: null, health: null, TimeProvider.System, services.Readers, services.ProbeCatalogue);
 
             foreach (var collection in settings.Collections)
             {

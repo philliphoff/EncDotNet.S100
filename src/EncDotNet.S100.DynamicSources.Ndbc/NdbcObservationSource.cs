@@ -101,19 +101,20 @@ public sealed class NdbcObservationSource : IDynamicFeatureSource, IDynamicFeatu
     /// <c>User-Agent</c> (NDBC asks automated clients to identify themselves).
     /// </param>
     /// <param name="options">The options; <see langword="null"/> for the defaults.</param>
-    /// <param name="timeProvider">The clock; <see langword="null"/> for <see cref="TimeProvider.System"/>.</param>
+    /// <param name="timeProvider">The clock.</param>
     /// <param name="logger">The logger; <see langword="null"/> for none.</param>
     public NdbcObservationSource(
         HttpClient httpClient,
-        NdbcObservationSourceOptions? options = null,
-        TimeProvider? timeProvider = null,
+        NdbcObservationSourceOptions? options,
+        TimeProvider timeProvider,
         ILogger<NdbcObservationSource>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(timeProvider);
         _options = options ?? new NdbcObservationSourceOptions();
         _options.Validate();
         _http = httpClient;
-        _time = timeProvider ?? TimeProvider.System;
+        _time = timeProvider;
         _logger = (ILogger?)logger ?? NullLogger.Instance;
 
         Id = _options.Id;
