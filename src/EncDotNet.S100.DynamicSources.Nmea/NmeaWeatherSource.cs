@@ -125,18 +125,19 @@ public sealed class NmeaWeatherSource : IDynamicFeatureSource, IDynamicFeatureDe
     /// <see langword="null"/> when the host feeds <see cref="ProcessLine"/> itself.
     /// </param>
     /// <param name="options">The options; <see langword="null"/> for the defaults.</param>
-    /// <param name="timeProvider">The clock; <see langword="null"/> for <see cref="TimeProvider.System"/>.</param>
+    /// <param name="timeProvider">The clock.</param>
     /// <param name="logger">The logger; <see langword="null"/> for none.</param>
     public NmeaWeatherSource(
-        INmeaLineSource? input = null,
-        NmeaWeatherSourceOptions? options = null,
-        TimeProvider? timeProvider = null,
+        INmeaLineSource? input,
+        NmeaWeatherSourceOptions? options,
+        TimeProvider timeProvider,
         ILogger<NmeaWeatherSource>? logger = null)
     {
+        ArgumentNullException.ThrowIfNull(timeProvider);
         _options = options ?? new NmeaWeatherSourceOptions();
         _options.Validate();
         _input = input;
-        _time = timeProvider ?? TimeProvider.System;
+        _time = timeProvider;
         _logger = (ILogger?)logger ?? NullLogger.Instance;
 
         Id = _options.Id;

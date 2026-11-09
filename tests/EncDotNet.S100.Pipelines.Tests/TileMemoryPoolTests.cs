@@ -218,7 +218,7 @@ public class TileMemoryPoolTests
     public void LimitChange_AppliesOnTheNextInsert()
     {
         var limit = 2 * TileCache.MinBudgetBytes;
-        var pool = new TileMemoryPool(() => limit, "test");
+        var pool = new TileMemoryPool(() => limit, "test", clock: System.Diagnostics.Stopwatch.GetTimestamp);
         using var cache = new TileCache(pool, owner: null);
         for (var i = 0; i < 2 * FloorTiles; i++)
         {

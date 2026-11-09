@@ -77,6 +77,7 @@ internal static class AisOverlayServiceCollectionExtensions
             id: "ais",
             messageSource: new AisStreamIoMessageSource(
                 new AisStreamIoOptions { ApiKey = apiKey },
+                () => new ClientWebSocketTransport(),
                 loggerFactory),
             request: new AisSubscriptionRequest { Area = area });
 

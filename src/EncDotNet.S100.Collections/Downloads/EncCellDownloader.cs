@@ -129,6 +129,9 @@ public sealed partial class EncCellDownloader
     private readonly TimeProvider _time;
 
     /// <summary>Creates a downloader writing under <paramref name="root"/>.</summary>
+    /// <param name="httpClient">The client cells are downloaded with.</param>
+    /// <param name="root">The folder cells are written under.</param>
+    /// <param name="timeProvider">The clock download records are stamped by; <see langword="null"/> for <see cref="TimeProvider.System"/>.</param>
     public EncCellDownloader(HttpClient httpClient, string root, TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(httpClient);

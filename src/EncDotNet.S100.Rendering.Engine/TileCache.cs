@@ -52,7 +52,7 @@ internal sealed class TileCache : IDisposable
     /// <param name="budgetBytes">The native-byte eviction budget.</param>
     /// <param name="deferDisposal">See <see cref="TileCache(TileMemoryPool, object?, bool)"/>.</param>
     public TileCache(long budgetBytes, bool deferDisposal = false)
-        : this(new TileMemoryPool(() => budgetBytes, "private"), owner: null, deferDisposal)
+        : this(new TileMemoryPool(() => budgetBytes, "private", System.Diagnostics.Stopwatch.GetTimestamp), owner: null, deferDisposal)
     {
     }
 

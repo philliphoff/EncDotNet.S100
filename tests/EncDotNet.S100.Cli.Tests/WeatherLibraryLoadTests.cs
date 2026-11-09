@@ -30,7 +30,7 @@ public sealed class WeatherLibraryLoadTests : IDisposable
     private static readonly GeoBounds UsEast = new(32.1, -75.9, 39.9, -68.2);
 
     private readonly string _root = Path.Combine(Path.GetTempPath(), "weather-library-" + Guid.NewGuid().ToString("N"));
-    private readonly HeadlessMutableCatalog _catalog = new();
+    private readonly HeadlessMutableCatalog _catalog = new(null, CliTestProcessors.Bundled);
     private readonly List<IDisposable> _owned = [];
 
     public WeatherLibraryLoadTests() => Directory.CreateDirectory(_root);

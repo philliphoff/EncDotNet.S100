@@ -45,7 +45,7 @@ public class CheckRouteWeatherTests
     [Fact]
     public async Task Limits_check_the_forecast_along_the_route()
     {
-        var value = await Ok(new CheckRouteTool(Catalog()), new CheckRouteRequest(
+        var value = await Ok(CheckRouteTools.Create(Catalog()), new CheckRouteRequest(
             Polyline: Polyline, SpeedKnots: 6, Departure: RunTime.AddHours(3), MaxWindKnots: 15, MaxWaveHeightMeters: 2));
 
         var check = value.Checks.Single(c => c.Name == "weather");
@@ -82,7 +82,7 @@ public class CheckRouteWeatherTests
     [Fact]
     public async Task Without_limits_the_weather_check_is_skipped()
     {
-        var value = await Ok(new CheckRouteTool(Catalog()), new CheckRouteRequest(Polyline: Polyline, SpeedKnots: 6, Departure: RunTime));
+        var value = await Ok(CheckRouteTools.Create(Catalog()), new CheckRouteRequest(Polyline: Polyline, SpeedKnots: 6, Departure: RunTime));
 
         var check = value.Checks.Single(c => c.Name == "weather");
         Assert.Equal("skipped", check.State);
@@ -93,7 +93,7 @@ public class CheckRouteWeatherTests
     [Fact]
     public async Task A_departure_after_the_forecast_is_not_checked()
     {
-        var value = await Ok(new CheckRouteTool(Catalog()), new CheckRouteRequest(
+        var value = await Ok(CheckRouteTools.Create(Catalog()), new CheckRouteRequest(
             Polyline: Polyline, SpeedKnots: 6, Departure: RunTime.AddDays(2), MaxWindKnots: 40));
 
         Assert.Equal("forecast_ends_before_arrival", value.Weather!.Verdict);
@@ -106,7 +106,7 @@ public class CheckRouteWeatherTests
     [Fact]
     public async Task The_window_sweeps_departures_across_the_forecast()
     {
-        var value = await Ok(new CheckRouteTool(Catalog()), new CheckRouteRequest(
+        var value = await Ok(CheckRouteTools.Create(Catalog()), new CheckRouteRequest(
             Polyline: Polyline, SpeedKnots: 6, Departure: RunTime, MaxWaveHeightMeters: 2.6, IncludeWindow: true, WindowStepMinutes: 60));
 
         var window = value.Weather!.Window!;
@@ -130,11 +130,11 @@ public class CheckRouteWeatherTests
             RunTime.AddHours(3),
             new WeatherLimits { MaxWind = Speed.FromKnots(30), MaxWaveHeight = Length.FromMetres(2) }));
 
-        var own = await Ok(new CheckRouteTool(Catalog(), routes), new CheckRouteRequest());
+        var own = await Ok(CheckRouteTools.Create(Catalog(), routes: routes, time: TimeProvider.System), new CheckRouteRequest());
         Assert.Equal(["route", "route"], own.Weather!.Limits.Select(l => l.Origin));
         Assert.Equal([RouteFindingCodes.WavesAboveLimit.Value], own.Findings.Where(f => f.Category == "weather").Select(f => f.Code));
 
-        var replaced = await Ok(new CheckRouteTool(Catalog(), routes), new CheckRouteRequest(MaxWindKnots: 15));
+        var replaced = await Ok(CheckRouteTools.Create(Catalog(), routes: routes, time: TimeProvider.System), new CheckRouteRequest(MaxWindKnots: 15));
         Assert.Equal(["settings", "route"], replaced.Weather!.Limits.Select(l => l.Origin));
         Assert.Equal(2, replaced.Findings.Count(f => f.Category == "weather"));
     }
@@ -145,7 +145,7 @@ public class CheckRouteWeatherTests
     [InlineData(null, 0.0, "maxWaveHeightMeters")]
     public async Task Limits_must_be_positive(double? wind, double? wave, string parameter)
     {
-        var result = await new CheckRouteTool(Catalog()).InvokeAsync(
+        var result = await CheckRouteTools.Create(Catalog()).InvokeAsync(
             new CheckRouteRequest(Polyline: Polyline, MaxWindKnots: wind, MaxWaveHeightMeters: wave),
             TestContext.Current.CancellationToken);
 

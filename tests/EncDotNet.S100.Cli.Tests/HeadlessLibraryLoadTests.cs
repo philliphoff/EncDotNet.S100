@@ -15,7 +15,7 @@ namespace EncDotNet.S100.Cli.Tests;
 public sealed class HeadlessLibraryLoadTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "headless-library-" + Guid.NewGuid().ToString("N"));
-    private readonly HeadlessMutableCatalog _catalog = new();
+    private readonly HeadlessMutableCatalog _catalog = new(null, CliTestProcessors.Bundled);
     private readonly CollectionLibrary _library;
     private readonly LibraryOperations _operations;
     private readonly CatalogLibraryOpener _opener;

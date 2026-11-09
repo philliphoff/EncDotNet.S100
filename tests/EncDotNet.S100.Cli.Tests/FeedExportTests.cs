@@ -45,7 +45,7 @@ public sealed class FeedExportTests : IDisposable
     }
 
     private static async Task<FeedExportResult> ExportAsync(string folder, string output) =>
-        await FeedExporter.ExportAsync(await new FeedPublisher(folder, "Static charts").GetAsync(force: true), output);
+        await FeedExporter.ExportAsync(await new FeedPublisher(folder, title: "Static charts", timeProvider: TimeProvider.System).GetAsync(force: true), output);
 
     [Fact]
     public async Task An_export_is_a_feed_a_plain_file_host_can_serve()

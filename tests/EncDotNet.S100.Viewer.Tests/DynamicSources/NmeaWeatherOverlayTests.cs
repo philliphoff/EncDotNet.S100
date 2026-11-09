@@ -74,7 +74,7 @@ public sealed class NmeaWeatherOverlayTests
     {
         var ownShip = new StubOwnShipPositionProvider();
         bool shown = true;
-        var source = new NmeaWeatherSource(NmeaStreamLineSource.FromText(string.Empty), new NmeaWeatherSourceOptions { PublishInterval = TimeSpan.Zero });
+        var source = new NmeaWeatherSource(input: NmeaStreamLineSource.FromText(string.Empty), options: new NmeaWeatherSourceOptions { PublishInterval = TimeSpan.Zero }, timeProvider: TimeProvider.System);
         await using var overlay = new NmeaWeatherOverlay(source, ownShip, () => shown);
         ownShip.Push(new OwnShipPosition(42.36, -70.70, Angle.FromDegrees(95), Speed.FromKnots(6.5), Now, Angle.FromDegrees(90)));
         overlay.Attach();

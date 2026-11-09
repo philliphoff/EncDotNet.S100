@@ -48,14 +48,15 @@ public sealed partial class ClearanceCheck
         /// <summary>Creates the model over the given sources.</summary>
         /// <param name="depth">The charted-depth source.</param>
         /// <param name="waterLevel">The water-level source.</param>
-        /// <param name="options">Tuning, or <c>null</c> for <see cref="PassageCheckOptions.Default"/>.</param>
-        public UkcModel(IChartedDepthSource depth, IWaterLevelSource waterLevel, PassageCheckOptions? options = null)
+        /// <param name="options">Tuning.</param>
+        public UkcModel(IChartedDepthSource depth, IWaterLevelSource waterLevel, PassageCheckOptions options)
         {
             ArgumentNullException.ThrowIfNull(depth);
             ArgumentNullException.ThrowIfNull(waterLevel);
             _depth = depth;
             _waterLevel = waterLevel;
-            _options = options ?? PassageCheckOptions.Default;
+            ArgumentNullException.ThrowIfNull(options);
+            _options = options;
             if (!(_options.SampleSpacingMeters > 0) || !(_options.GridStepFactor > 0)
                 || !(_options.MinimumStepMeters > 0) || _options.MaxStepsPerLeg < 1)
             {

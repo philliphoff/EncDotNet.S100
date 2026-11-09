@@ -133,14 +133,15 @@ public sealed class ListSpecsTool
     /// <summary>Creates a new <see cref="ListSpecsTool"/>.</summary>
     /// <param name="catalog">The host's dataset catalog.</param>
     /// <param name="registry">
-    /// The products the host can load; <see langword="null"/> for
-    /// <see cref="ProductRegistry.Default"/>.
+    /// The products the host can load (hosts usually pass
+    /// <see cref="ProductRegistry.Default"/>).
     /// </param>
-    public ListSpecsTool(IDatasetCatalog catalog, ProductRegistry? registry = null)
+    public ListSpecsTool(IDatasetCatalog catalog, ProductRegistry registry)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         _catalog = catalog;
-        _registry = registry ?? ProductRegistry.Default;
+        ArgumentNullException.ThrowIfNull(registry);
+        _registry = registry;
     }
 
     /// <summary>Executes the tool.</summary>
