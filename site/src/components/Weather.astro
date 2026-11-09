@@ -1,4 +1,5 @@
 ---
+import Permalink from './Permalink.astro';
 import Shot from './Shot.astro';
 import { docs, withBase } from '../data/content';
 
@@ -9,7 +10,7 @@ const miniSizes = '(max-width: 900px) 100vw, 360px';
   <div class="wrap">
     <div class="section-head">
       <span class="eyebrow">Weather</span>
-      <h2 id="weather-title">The weather, on the chart you're using.</h2>
+      <div class="anchored"><h2 id="weather-title">The weather, on the chart you're using.</h2><Permalink to="weather" label="Weather" /></div>
       <p class="lede">
         Forecast grids, tropical cyclone advisories and surface analyses draw over your charts, on the same timeline as
         tides and currents, and Check route reads them at your ETA. Weather data isn't S-100 data and isn't for
@@ -18,10 +19,10 @@ const miniSizes = '(max-width: 900px) 100vw, 360px';
     </div>
 
     <div class="features">
-      <div class="feature">
+      <div id="weather-wind-waves" class="feature">
         <div class="feature-copy">
           <span class="eyebrow">Wind and waves</span>
-          <h3>Wind and waves over the chart.</h3>
+          <div class="anchored"><h3>Wind and waves over the chart.</h3><Permalink to="weather-wind-waves" label="Wind and waves" /></div>
           <p>
             Open GRIB2 and NetCDF forecasts, such as NOAA's GFS and GFS-Wave, and see wave height, wind barbs and
             isobars. Step through the run on the Timeline. Marine warnings, buoy reports and your own wind instruments
@@ -43,10 +44,10 @@ const miniSizes = '(max-width: 900px) 100vw, 360px';
         />
       </div>
 
-      <div class="feature flip">
+      <div id="weather-ocean" class="feature flip">
         <div class="feature-copy">
           <span class="eyebrow">Ocean</span>
-          <h3>Sea temperature and currents.</h3>
+          <div class="anchored"><h3>Sea temperature and currents.</h3><Permalink to="weather-ocean" label="Ocean" /></div>
           <p>
             Sea surface temperature fills in a band for each degree, so fronts such as the edge of the Gulf Stream
             show as closely spaced bands, with isotherms every 2 °C if you want them. Ocean currents draw in S-111's
@@ -68,10 +69,10 @@ const miniSizes = '(max-width: 900px) 100vw, 360px';
         />
       </div>
 
-      <div class="feature">
+      <div id="weather-hazards" class="feature">
         <div class="feature-copy">
           <span class="eyebrow">Hazards</span>
-          <h3>Ice, fog, rain and thunderstorms.</h3>
+          <div class="anchored"><h3>Ice, fog, rain and thunderstorms.</h3><Permalink to="weather-hazards" label="Hazards" /></div>
           <p>
             Freezing spray is worked out from the wind, air temperature and sea temperature with the icing predictor
             NOAA's Ocean Prediction Center uses, and drawn in four classes from light to extreme. Restricted visibility
@@ -93,10 +94,10 @@ const miniSizes = '(max-width: 900px) 100vw, 360px';
         />
       </div>
 
-      <div class="feature flip">
+      <div id="weather-cyclones" class="feature flip">
         <div class="feature-copy">
           <span class="eyebrow">Tropical cyclones</span>
-          <h3>The storm, where it will be.</h3>
+          <div class="anchored"><h3>The storm, where it will be.</h3><Permalink to="weather-cyclones" label="Tropical cyclones" /></div>
           <p>
             Add the storms NHC is issuing advisories for from the Library, or open an advisory's files. SoundCharts draws
             the cone, forecast track, wind radii and past track, and the storm at the view time, estimated between
@@ -118,10 +119,10 @@ const miniSizes = '(max-width: 900px) 100vw, 360px';
         />
       </div>
 
-      <div class="feature">
+      <div id="weather-surface-analysis" class="feature">
         <div class="feature-copy">
           <span class="eyebrow">Surface analysis</span>
-          <h3>Fronts and pressure centres.</h3>
+          <div class="anchored"><h3>Fronts and pressure centres.</h3><Permalink to="weather-surface-analysis" label="Surface analysis" /></div>
           <p>
             The Weather Prediction Center's coded surface analysis draws like a printed weather map: cold, warm, occluded
             and stationary fronts, troughs, and highs and lows with their central pressure. The Library fetches each new
@@ -142,10 +143,10 @@ const miniSizes = '(max-width: 900px) 100vw, 360px';
         />
       </div>
 
-      <div class="feature flip">
+      <div id="weather-route" class="feature flip">
         <div class="feature-copy">
           <span class="eyebrow">On a route</span>
-          <h3>Weather at your ETA.</h3>
+          <div class="anchored"><h3>Weather at your ETA.</h3><Permalink to="weather-route" label="Weather on a route" /></div>
           <p>
             Set a wind or wave limit and Check route reads the loaded forecast at the time you'd reach each point. It
             lists the stretches above a limit, with their time window and highest value, and the stretches the forecast
@@ -171,7 +172,7 @@ const miniSizes = '(max-width: 900px) 100vw, 360px';
     </div>
 
     <div class="minis three">
-      <div class="mini">
+      <div id="weather-fog" class="mini">
         <Shot
           id="W8"
           alt="Sea fog off eastern Maine: NOAA GFS restricted visibility over the NOAA charts of Penobscot Bay and Mount Desert"
@@ -180,11 +181,11 @@ const miniSizes = '(max-width: 900px) 100vw, 360px';
           sizes={miniSizes}
         />
         <div class="body">
-          <h3>Fog</h3>
+          <div class="anchored"><h3>Fog</h3><Permalink to="weather-fog" label="Fog" /></div>
           <p>Visibility under 5 nautical miles in three greys, from moderate to fog.</p>
         </div>
       </div>
-      <div class="mini">
+      <div id="weather-rain" class="mini">
         <Shot
           id="W9"
           alt="Rain and thunderstorm risk over south Florida from NOAA GFS, over the NOAA charts"
@@ -193,11 +194,11 @@ const miniSizes = '(max-width: 900px) 100vw, 360px';
           sizes={miniSizes}
         />
         <div class="body">
-          <h3>Rain and thunderstorms</h3>
+          <div class="anchored"><h3>Rain and thunderstorms</h3><Permalink to="weather-rain" label="Rain and thunderstorms" /></div>
           <p>Precipitation in rain radar colours, thunderstorm risk where CAPE is high, and a light cloud veil.</p>
         </div>
       </div>
-      <div class="mini">
+      <div id="weather-sources" class="mini">
         <Shot
           id="W7"
           alt="The Library listing its weather sources: GFS, sea surface temperature from ERDDAP, NHC's active storms and WPC's surface analysis"
@@ -206,7 +207,7 @@ const miniSizes = '(max-width: 900px) 100vw, 360px';
           sizes={miniSizes}
         />
         <div class="body">
-          <h3>Sources in the Library</h3>
+          <div class="anchored"><h3>Sources in the Library</h3><Permalink to="weather-sources" label="Weather sources" /></div>
           <p>
             GFS runs, ERDDAP analyses, NHC storms and WPC analyses for the map view, refreshed as new ones are issued and
             tagged Stale when they're old.
