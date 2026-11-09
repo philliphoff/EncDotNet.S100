@@ -166,7 +166,9 @@ var carolinasBox = new Box(31.4, -81.4, 38.0, -71.4);
     // Offshore of the Cape Lookout and Diamond shoals, so no leg crosses the safety contour.
     (34.45, -76.10), (35.10, -75.00), (36.40, -75.40), (36.92, -75.72),
 ];
-var erinClipBox = new Box(32.4, -77.1, 37.7, -70.6);
+// The band 2 NOAA cells (US2ATLN*/O*, 28.8–38.4°N, 76.8–67.2°W) cover the whole
+// frame, with Erin's track crossing it, at the Routes panel's map aspect.
+var erinClipBox = new Box(31.2, -76.75, 38.3, -67.2);
 // W8: sea fog off eastern Maine and in the Bay of Fundy on a June morning. The minis are map renders
 // at 1280 × 720 logical pixels, so the band 3 charts still draw at their scale.
 var gulfOfMaineBox = new Box(43.4, -69.6, 45.0, -66.4);
@@ -974,7 +976,7 @@ async Task<byte[]> ErinClip(Viewer v)
 {
     await v.Reset(category: "DisplayBase");
     // Bands 1–3, so the open ocean east of the coastal cells has chart too.
-    await CoastalCharts(v, ["NC", "VA"], erinClipBox, bands: "123");
+    await CoastalCharts(v, ["SC", "NC", "VA"], erinClipBox, bands: "123");
     var run = erinRoute.Departure.UtcDateTime;
     int[] hours = [.. Enumerable.Range(0, 17).Select(i => i * 3)];
     await v.OpenAll([await data.GfsWaveHours(run, "atlocn.0p16", hours, ["HTSGW:surface", "PERPW:surface", "DIRPW:surface"])]);
@@ -1011,7 +1013,12 @@ async Task<byte[]> ErinClip(Viewer v)
     v.RenderIdleTimeoutMs = 6000;
     Step("check on");
     foreach (var f in (await v.Call("get_findings"))?["findings"]?.AsArray() ?? [])
-        Console.WriteLine($"      {f!["group"]} {f!["code"]} {f!["title"]}");
+    {
+        var json = f!.ToJsonString();
+        Console.WriteLine(f["group"]?.ToString() == "must_review" || f["code"]?.ToString()?.StartsWith("weather.") == true
+            ? $"      {json[..Math.Min(json.Length, 700)]}"
+            : $"      {f["group"]} {f["code"]} {f["title"]}");
+    }
     await v.Call("set_panel", new() { ["panel"] = "Clearance", ["visible"] = false });
     await v.Call("set_map_legend", new() { ["open"] = false });
     await v.Call("set_follow_passage", new() { ["on"] = true });  // weather and storm at the vessel's ETA
@@ -1025,7 +1032,10 @@ async Task<byte[]> ErinClip(Viewer v)
         var title = state?["verdictTitle"]?.ToString();
         if (title != lastTitle) Console.WriteLine($"  {departure:u}: {title} · {state?["verdictSubtitle"]}");
         lastTitle = title;
-        Step($"departure {departure:dd HH:mm}");
+        var weather = ((await v.Call("get_findings"))?["findings"]?.AsArray() ?? [])
+            .Where(f => f!["code"]?.ToString()?.StartsWith("weather.") == true)
+            .Select(f => $"{f!["code"]?.ToString()?.Replace("weather.", "")}: {f["title"]}");
+        Step($"departure {departure:dd HH:mm} · {string.Join(" · ", weather)}");
         await clip.Frame(v, 0.15);
     }
     var poster = await clip.Frame(v, 3.0);
