@@ -89,10 +89,10 @@ internal sealed class LayerStackViewModel : ViewModelBase
 
     public LayerStackViewModel(
         IDatasetLoaderService loader,
-        IS100DynamicSourceRegistry? dynamicSources = null,
-        ITimeFormatProvider? timeFormat = null,
-        Services.DisplayCombinations.DisplayCombinationService? displayCombinations = null,
-        DatasetsViewModel? datasets = null)
+        IS100DynamicSourceRegistry? dynamicSources,
+        ITimeFormatProvider? timeFormat,
+        Services.DisplayCombinations.DisplayCombinationService? displayCombinations,
+        DatasetsViewModel? datasets)
     {
         ArgumentNullException.ThrowIfNull(loader);
         _loader = loader;
@@ -379,7 +379,7 @@ internal sealed class LayerStackEntryViewModel : ViewModelBase
     public LayerStackEntryViewModel(
         IDatasetLoaderService loader,
         LayerStackEntry entry,
-        Func<string, string?>? inactiveReason = null)
+        Func<string, string?>? inactiveReason)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(entry);

@@ -34,9 +34,9 @@ public sealed class DisplayCombinationViewTests
             // A weather dataset gives the panel a section of its own, so it
             // shows its controls rather than the empty state.
             Datasets.Entries.Add(new DatasetEntry("/data/gfs.grib2", "GRIB2") { IsLoaded = true });
-            Service = new DisplayCombinationService(State, Loader, Datasets, new ViewerSettings { IsReadOnly = true });
-            Combinations = new DisplayCombinationsViewModel(Service);
-            ViewModel = new EcdisDisplayPanelViewModel(State, new PortrayalCatalogueManager(), Datasets, displayCombinations: Combinations, labelOverrides: new EcdisLabelOverrideProvider());
+            Service = new DisplayCombinationService(State, Loader, Datasets, new ViewerSettings { IsReadOnly = true }, post: null);
+            Combinations = new DisplayCombinationsViewModel(Service, ui: null);
+            ViewModel = new EcdisDisplayPanelViewModel(State, new PortrayalCatalogueManager(), Datasets, displayCombinations: Combinations, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null);
         }
 
         public void Dispose()
@@ -81,9 +81,9 @@ public sealed class DisplayCombinationViewTests
     {
         var loader = new FakeDatasetLoaderService();
         var datasets = new DatasetsViewModel(loader);
-        using var service = new DisplayCombinationService(new EcdisDisplayState(), loader, datasets, new ViewerSettings { IsReadOnly = true });
-        using var combinations = new DisplayCombinationsViewModel(service);
-        using var vm = new EcdisDisplayPanelViewModel(new EcdisDisplayState(), new PortrayalCatalogueManager(), datasets, displayCombinations: combinations, labelOverrides: new EcdisLabelOverrideProvider());
+        using var service = new DisplayCombinationService(new EcdisDisplayState(), loader, datasets, new ViewerSettings { IsReadOnly = true }, post: null);
+        using var combinations = new DisplayCombinationsViewModel(service, ui: null);
+        using var vm = new EcdisDisplayPanelViewModel(new EcdisDisplayState(), new PortrayalCatalogueManager(), datasets, displayCombinations: combinations, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null);
         using var host = ViewHost.Show(new EcdisDisplayPanelView { DataContext = vm }, width: 380, height: 1200);
 
         Assert.True(vm.IsEmpty);

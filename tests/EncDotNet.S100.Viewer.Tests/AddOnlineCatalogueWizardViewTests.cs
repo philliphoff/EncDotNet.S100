@@ -29,12 +29,19 @@ public sealed class AddOnlineCatalogueWizardViewTests
 
         var wizard = new AddOnlineCatalogueWizardViewModel(
             new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
-                Task.FromResult(new CatalogueProbe(null, null, null))),
+                Task.FromResult(new CatalogueProbe(null, null, null)),
+                openUrl: null,
+                userCatalogues: null,
+                loadSecomRegistry: null,
+                probeSecom: null,
+                session: null),
             () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
             {
                 NoaaEnc = (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
                     LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml"))),
-            }, timeProvider: TimeProvider.System));
+            }, timeProvider: TimeProvider.System),
+            openKeys: null,
+            connectionFactory: null);
         wizard.Start(null);
 
         var view = new AddOnlineCatalogueWizardView { DataContext = wizard };
@@ -67,7 +74,12 @@ public sealed class AddOnlineCatalogueWizardViewTests
 
         var wizard = new AddOnlineCatalogueWizardViewModel(
             new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
-                Task.FromResult(new CatalogueProbe(null, null, null))),
+                Task.FromResult(new CatalogueProbe(null, null, null)),
+                openUrl: null,
+                userCatalogues: null,
+                loadSecomRegistry: null,
+                probeSecom: null,
+                session: null),
             () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
             {
                 S100Catalogue = (uri, _) =>
@@ -76,7 +88,9 @@ public sealed class AddOnlineCatalogueWizardViewTests
                         "tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-s102-catalog.xml"));
                     return Task.FromResult(RemoteS100CatalogueReader.Read(stream, uri));
                 },
-            }, timeProvider: TimeProvider.System));
+            }, timeProvider: TimeProvider.System),
+            openKeys: null,
+            connectionFactory: null);
         wizard.Start(null);
 
         var view = new AddOnlineCatalogueWizardView { DataContext = wizard };
@@ -112,12 +126,19 @@ public sealed class AddOnlineCatalogueWizardViewTests
 
         var wizard = new AddOnlineCatalogueWizardViewModel(
             new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
-                Task.FromResult(new CatalogueProbe(null, null, null))),
+                Task.FromResult(new CatalogueProbe(null, null, null)),
+                openUrl: null,
+                userCatalogues: null,
+                loadSecomRegistry: null,
+                probeSecom: null,
+                session: null),
             () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
             {
                 NoaaEnc = (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
                     LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml"))),
-            }, timeProvider: TimeProvider.System));
+            }, timeProvider: TimeProvider.System),
+            openKeys: null,
+            connectionFactory: null);
         wizard.Start(null);
 
         var view = new AddOnlineCatalogueWizardView { DataContext = wizard };
@@ -267,12 +288,19 @@ public sealed class AddOnlineCatalogueWizardViewTests
     {
         var wizard = new AddOnlineCatalogueWizardViewModel(
             new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
-                Task.FromResult(new CatalogueProbe(null, null, null))),
+                Task.FromResult(new CatalogueProbe(null, null, null)),
+                openUrl: null,
+                userCatalogues: null,
+                loadSecomRegistry: null,
+                probeSecom: null,
+                session: null),
             () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
             {
                 NoaaEnc = (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
                     LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml"))),
-            }, timeProvider: TimeProvider.System));
+            }, timeProvider: TimeProvider.System),
+            openKeys: null,
+            connectionFactory: null);
         wizard.Start(null);
         return wizard;
     }

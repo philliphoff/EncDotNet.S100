@@ -1425,7 +1425,7 @@ internal sealed class MainViewModel : ViewModelBase
         Tools.Register(new PickTool());
         Tools.Register(_measureTool);
         Tools.Register(_routeEditTool);
-        var rangeBearingState = rangeBearing ?? new RangeBearingState();
+        var rangeBearingState = rangeBearing ?? new RangeBearingState(settings: null);
         _rangeBearingTool = new RangeBearingTool(rangeBearingState, measureAppearance, () => settingsViewModel.DistanceUnit);
         Tools.Register(_rangeBearingTool);
         RangeBearing = new RangeBearingViewModel(

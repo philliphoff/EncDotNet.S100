@@ -57,7 +57,7 @@ public sealed class NhcStormRefreshTests : IDisposable
         _library.Initialize();
         _library.AddCollection("Weather", [source]);
         await _library.WhenIdle();
-        var panel = new LibraryPanelViewModel(_library, new NoImporter(), _loader, _downloader, action => action(), notifications: _notifications, time: _time, coalesce: action => action());
+        var panel = new LibraryPanelViewModel(_library, new NoImporter(), _loader, _downloader, action => action(), notifications: _notifications, time: _time, coalesce: action => action(), feedHealth: null, viewTime: null, timeFormat: null, sync: null);
         panel.Sync();
         return (panel, source.Id);
     }

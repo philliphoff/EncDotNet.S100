@@ -39,7 +39,7 @@ internal interface IProcessMetricsSource
 
 /// <summary>Reads the counters from the runtime and the current process.</summary>
 /// <param name="tileNativeBytes">Reads the tile caches' native bytes, or null for 0.</param>
-internal sealed class RuntimeProcessMetricsSource(Func<long>? tileNativeBytes = null) : IProcessMetricsSource
+internal sealed class RuntimeProcessMetricsSource(Func<long>? tileNativeBytes) : IProcessMetricsSource
 {
     private readonly Process _process = Process.GetCurrentProcess();
     private readonly object _gate = new();

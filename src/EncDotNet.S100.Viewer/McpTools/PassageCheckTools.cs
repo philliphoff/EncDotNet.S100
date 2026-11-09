@@ -121,7 +121,7 @@ internal abstract class PassageCheckToolBase : RouteToolBase
     /// <summary>How long a waiting tool waits for a result.</summary>
     internal static readonly TimeSpan WaitTimeout = TimeSpan.FromSeconds(60);
 
-    protected PassageCheckToolBase(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check, RouteFindingsService? findings = null)
+    protected PassageCheckToolBase(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check, RouteFindingsService? findings)
         : base(routes, invoker)
     {
         ArgumentNullException.ThrowIfNull(check);
@@ -280,7 +280,7 @@ internal sealed class SetCheckModeTool : PassageCheckToolBase
 {
     public const string Name = "set_check_mode";
 
-    public SetCheckModeTool(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check, RouteFindingsService? findings = null)
+    public SetCheckModeTool(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check, RouteFindingsService? findings)
         : base(routes, invoker, check, findings) { }
 
     public async Task<ToolResult<CheckStateDto>> InvokeAsync(SetCheckModeRequest request, CancellationToken cancellationToken = default)
@@ -321,7 +321,7 @@ internal sealed class GetCheckStateTool : PassageCheckToolBase
 {
     public const string Name = "get_check_state";
 
-    public GetCheckStateTool(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check, RouteFindingsService? findings = null)
+    public GetCheckStateTool(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check, RouteFindingsService? findings)
         : base(routes, invoker, check, findings) { }
 
     public async Task<ToolResult<CheckStateDto>> InvokeAsync(bool wait, CancellationToken cancellationToken = default)
@@ -338,7 +338,7 @@ internal sealed class SetPassageCursorTool : PassageCheckToolBase
 {
     public const string Name = "set_passage_cursor";
 
-    public SetPassageCursorTool(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check, RouteFindingsService? findings = null)
+    public SetPassageCursorTool(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check, RouteFindingsService? findings)
         : base(routes, invoker, check, findings) { }
 
     public async Task<ToolResult<CheckStateDto>> InvokeAsync(SetPassageCursorRequest request, CancellationToken cancellationToken = default)
@@ -369,7 +369,7 @@ internal sealed class SetDepartureTool : PassageCheckToolBase
 {
     public const string Name = "set_departure";
 
-    public SetDepartureTool(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check, RouteFindingsService? findings = null)
+    public SetDepartureTool(RoutesService routes, IRouteEditInvoker invoker, PassageCheckService check, RouteFindingsService? findings)
         : base(routes, invoker, check, findings) { }
 
     public async Task<ToolResult<CheckStateDto>> InvokeAsync(SetDepartureRequest request, CancellationToken cancellationToken = default)

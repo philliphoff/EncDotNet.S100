@@ -483,8 +483,8 @@ internal sealed class McpServerHost : IAsyncDisposable
         }
         if (_displayCombinations is not null)
         {
-            tools.Add(DisplayCombinationMcpAdapters.Create(new ListDisplayCombinationsTool(_displayCombinations)));
-            tools.Add(DisplayCombinationMcpAdapters.Create(new SetDisplayCombinationTool(_displayCombinations)));
+            tools.Add(DisplayCombinationMcpAdapters.Create(new ListDisplayCombinationsTool(_displayCombinations, UiThread.InvokeAsync)));
+            tools.Add(DisplayCombinationMcpAdapters.Create(new SetDisplayCombinationTool(_displayCombinations, UiThread.InvokeAsync)));
         }
         if (_logBuffer is not null)
         {
@@ -626,7 +626,7 @@ internal sealed class McpServerHost : IAsyncDisposable
         ICapabilityAccessor<ITimeController>? time =
             _globalTime is not null
                 ? new StaticCapabilityAccessor<ITimeController>(
-                    new ViewerTimeController(_globalTime))
+                    new ViewerTimeController(_globalTime, UiThread.InvokeAsync))
                 : null;
 
         // render_to_image: the viewer's live map host implements the shared

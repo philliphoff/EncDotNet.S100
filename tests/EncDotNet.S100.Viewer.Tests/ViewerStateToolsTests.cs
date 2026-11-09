@@ -41,7 +41,7 @@ public sealed class ViewerStateToolsTests
     {
         var time = new GlobalTimeService();
         var clock = new FakeTimeProvider(new DateTimeOffset(now));
-        var timeline = new TimelineViewModel(time, timeFormat: null, clock, action => action());
+        var timeline = new TimelineViewModel(time, timeFormat: null, clock, action => action(), refresher: null, progress: null, scope: null, library: null);
         var controller = new ViewerTimelineController(
             time, timeline, new DatasetsViewModel(new FakeDatasetLoaderService()), clock, Immediate);
         return (time, controller, clock);
@@ -441,7 +441,7 @@ public sealed class ViewerStateToolsTests
     {
         var time = new GlobalTimeService();
         var clock = new AdjustableTimeProvider(new FakeTimeProvider(new DateTimeOffset(Run.AddHours(9))));
-        _ = new TimelineViewModel(time, timeFormat: null, clock, action => action());
+        _ = new TimelineViewModel(time, timeFormat: null, clock, action => action(), refresher: null, progress: null, scope: null, library: null);
         time.ApplySnapshot(RunSnapshot());
         Assert.Equal(TimeMode.Live, time.Mode);
 

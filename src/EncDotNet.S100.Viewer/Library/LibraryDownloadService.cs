@@ -63,7 +63,7 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
     private readonly INotificationService? _notifications;
 
     /// <summary>Creates a service that downloads every cell with <paramref name="downloader"/>.</summary>
-    public LibraryDownloadService(EncCellDownloader downloader, INotificationService? notifications = null)
+    public LibraryDownloadService(EncCellDownloader downloader, INotificationService? notifications)
         : this(new LibraryDownloads(downloader), notifications)
     {
     }
@@ -75,13 +75,13 @@ internal sealed class LibraryDownloadService : ILibraryDownloader
     /// means the location is not downloadable.
     /// </summary>
     public LibraryDownloadService(
-        Func<RemoteItemLocation, EncCellDownloader?> downloaderFor, INotificationService? notifications = null)
+        Func<RemoteItemLocation, EncCellDownloader?> downloaderFor, INotificationService? notifications)
         : this(new LibraryDownloads(downloaderFor), notifications)
     {
     }
 
     /// <summary>Creates a service over <paramref name="downloads"/>.</summary>
-    public LibraryDownloadService(LibraryDownloads downloads, INotificationService? notifications = null)
+    public LibraryDownloadService(LibraryDownloads downloads, INotificationService? notifications)
     {
         ArgumentNullException.ThrowIfNull(downloads);
         _downloads = downloads;

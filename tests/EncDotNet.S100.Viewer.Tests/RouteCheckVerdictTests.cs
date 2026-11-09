@@ -135,7 +135,7 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
     public async Task Without_a_draft_the_scenario_has_one_warning_to_review_and_two_near()
     {
         using var s = Create();
-        var panel = new RoutesPanelViewModel(s.Routes, timeFormat: new Utc(), check: s.Check, findings: s.Findings);
+        var panel = new RoutesPanelViewModel(s.Routes, timeFormat: new Utc(), check: s.Check, findings: s.Findings, viewport: null, marinerSettings: null, exchange: null, dialogs: null);
         Assert.True(panel.CanCheckPassage);
         panel.IsCheckingPassage = true;
         await s.Findings.WhenIdle();
@@ -193,7 +193,7 @@ public sealed class RouteCheckVerdictTests(WarningsScenarioFixture fixture) : IC
     {
         void Post(Action action) => Avalonia.Threading.Dispatcher.UIThread.Post(action);
         using var s = Create(Post);
-        var panel = new RoutesPanelViewModel(s.Routes, timeFormat: new Utc(), check: s.Check, findings: s.Findings);
+        var panel = new RoutesPanelViewModel(s.Routes, timeFormat: new Utc(), check: s.Check, findings: s.Findings, viewport: null, marinerSettings: null, exchange: null, dialogs: null);
         using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 900);
 
         // A1: the toggle is "Check route", enabled with two waypoints.
@@ -280,7 +280,7 @@ internal sealed record WarningsRouteCheck(RoutesService Routes, Route Route, Pas
     public static WarningsRouteCheck Create(WarningsScenarioFixture fixture, Action<Action>? post = null, RouteWarningOptions? options = null)
     {
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = RouteS421Mapping.FromS421(fixture.S421Route());
         route.SetPassageValue(RoutePassageField.Draft, null);
         route.SetDeparture(new DateTimeOffset(2026, 3, 1, 6, 0, 0, TimeSpan.Zero));
@@ -299,8 +299,9 @@ internal sealed record WarningsRouteCheck(RoutesService Routes, Route Route, Pas
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
         var check = new PassageCheckService(routes, catalog, warnings: new PanelRouteWarningSource(warnings),
             checks: () => [new WarningCheck(), new ClearanceCheck()],
-            options: options is null ? null : new RouteCheckOptions { Warnings = options }, debounce: TimeSpan.Zero, post: post ?? PassageCheckFixture.SerialPost, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources());
-        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(), warnings: warnings);
+            options: options is null ? null : new RouteCheckOptions { Warnings = options }, debounce: TimeSpan.Zero, post: post ?? PassageCheckFixture.SerialPost, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources(),
+            mariner: null);
+        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(), warnings: warnings, mariner: null);
         return new WarningsRouteCheck(routes, route, check, findings) { Warnings = warnings };
     }
 

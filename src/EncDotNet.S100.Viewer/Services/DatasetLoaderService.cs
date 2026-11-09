@@ -87,10 +87,10 @@ internal sealed class DatasetLoaderService : IDatasetLoaderService, IMapPresenta
         INotificationService notifications,
         DatasetProcessorOwner processorOwner,
         IMapViewportNotifier viewportNotifier,
-        IRenderActivityMonitor? renderActivityMonitor = null,
-        TimeRefreshProgress? timeProgress = null,
-        ILogger<DatasetLoaderService>? logger = null,
-        CellSceneStore? cellScenes = null)
+        IRenderActivityMonitor? renderActivityMonitor,
+        TimeRefreshProgress? timeProgress,
+        CellSceneStore? cellScenes,
+        ILogger<DatasetLoaderService>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(catalogueManager);

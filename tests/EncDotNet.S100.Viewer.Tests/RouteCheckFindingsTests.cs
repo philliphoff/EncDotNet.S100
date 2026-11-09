@@ -117,14 +117,17 @@ public sealed class RouteCheckFindingsTests(SpitCrossingScenarioFixture fixture)
     private async Task<Setup> Start(Route route)
     {
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         route.SetDeparture(Now);
         routes.Routes.Add(route);
         routes.Routes.SetActiveRoute(route);
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
         var check = new PassageCheckService(routes, catalog,
-            checks: () => [new ChartCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: new UiThread().Post, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources());
-        var findings = new RouteFindingsService(check, routes, catalog, timeFormat: new Utc());
+            checks: () => [new ChartCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: new UiThread().Post, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources(),
+            warnings: null,
+            mariner: null,
+            options: null);
+        var findings = new RouteFindingsService(check, routes, catalog, timeFormat: new Utc(), viewport: null, mariner: null, warnings: null);
         routes.IsCheckModeActive = true;
         await findings.WhenIdle();
         return new Setup(routes, route, check, findings, catalog);

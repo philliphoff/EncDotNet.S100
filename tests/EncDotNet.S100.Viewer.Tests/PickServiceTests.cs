@@ -24,7 +24,7 @@ public class PickServiceTests
         // The pick service surfaces its picks through the view-model's shared
         // PickReport; failed reference navigations surface as notifications.
         notifications = Notifications.TestNotifications.Create();
-        return new PickService(loader, viewModel.PickReport, notifications);
+        return new PickService(loader, viewModel.PickReport, notifications, globalTime: null, timeFormat: null, themeService: null, marinerSettings: null, catalog: null, routeSources: null, waterLevelSettings: null);
     }
 
 
@@ -69,22 +69,22 @@ public class PickServiceTests
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
-            layerStack: new LayerStackViewModel(new StubLoader()),
+            layerStack: new LayerStackViewModel(new StubLoader(), dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null),
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
-            settingsViewModel: new SettingsViewModel(settings),
+            settingsViewModel: new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null),
             pickReport: new PickReportViewModel(),
-            timeline: new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider()),
+            timeline: new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null),
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
             textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
             displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider()),
+            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null),
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
             notifications: Notifications.TestNotifications.Create(),
             dialogManager: new ShadUI.DialogManager(),
-            routes: new EncDotNet.S100.Viewer.Services.RoutesService(),
-            measure: new EncDotNet.S100.Viewer.Services.MeasureSession());
+            routes: new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System)),
+            measure: new EncDotNet.S100.Viewer.Services.MeasureSession(settings: null));
     }
 
     [Fact]

@@ -240,12 +240,12 @@ internal sealed class ExchangeSetLazyLoadCoordinator : IDisposable
         IMapViewportNotifier notifier,
         Func<DatasetEntry, CancellationToken, Task> loadAsync,
         Action<DatasetEntry> unload,
-        LazyLoadOptions? options = null,
-        ILogger<ExchangeSetLazyLoadCoordinator>? logger = null,
-        Action<Action>? marshal = null,
-        Func<bool>? hasVisibleTileWork = null,
-        Action<IReadOnlyList<DatasetEntry>>? unloadMany = null,
-        DemandPlanner? planner = null)
+        LazyLoadOptions? options,
+        Action<Action>? marshal,
+        Func<bool>? hasVisibleTileWork,
+        Action<IReadOnlyList<DatasetEntry>>? unloadMany,
+        DemandPlanner? planner,
+        ILogger<ExchangeSetLazyLoadCoordinator>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(notifier);
         ArgumentNullException.ThrowIfNull(loadAsync);

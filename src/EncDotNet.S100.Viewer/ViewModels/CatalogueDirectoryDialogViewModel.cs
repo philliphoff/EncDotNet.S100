@@ -44,12 +44,12 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
 
     public CatalogueDirectoryDialogViewModel(
         IReadOnlyList<KnownCatalogueSource> sources,
-        Action<Uri>? openUrl = null,
-        UserCatalogueStore? userCatalogues = null,
-        Func<Uri, CancellationToken, Task<CatalogueProbe>>? probe = null,
-        Func<bool, CancellationToken, Task<SecomRegistryListing>>? loadSecomRegistry = null,
-        Func<Uri, CancellationToken, Task<SecomProbeResult>>? probeSecom = null,
-        CatalogueDirectorySession? session = null)
+        Action<Uri>? openUrl,
+        UserCatalogueStore? userCatalogues,
+        Func<Uri, CancellationToken, Task<CatalogueProbe>>? probe,
+        Func<bool, CancellationToken, Task<SecomRegistryListing>>? loadSecomRegistry,
+        Func<Uri, CancellationToken, Task<SecomProbeResult>>? probeSecom,
+        CatalogueDirectorySession? session)
     {
         _loadRegistry = loadSecomRegistry;
         _probeSecom = probeSecom;
@@ -544,14 +544,14 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
         Entries = _known
             .OrderBy(s => regionOrder.IndexOf(s.Region.FirstOrDefault() ?? string.Empty))
             .ThenBy(s => s.Name, StringComparer.CurrentCulture)
-            .Select(s => new CatalogueEntryViewModel(s, _openUrl, copyText: OnCopyRequested))
+            .Select(s => new CatalogueEntryViewModel(s, _openUrl, copyText: OnCopyRequested, remove: null, openFix: null))
             .Concat(_registry
                 .OrderBy(s => s.Pilot)
                 .ThenBy(s => s.Product, StringComparer.Ordinal)
                 .ThenBy(s => s.Name, StringComparer.CurrentCulture)
                 // Keep what was already found out about a service.
-                .Select(s => previous.TryGetValue(s.Id, out var kept) ? kept : new CatalogueEntryViewModel(s, _openUrl, isRegistry: true, openFix: OnFixRequested, copyText: OnCopyRequested)))
-            .Concat(_user.Select(s => new CatalogueEntryViewModel(s, _openUrl, Remove, copyText: OnCopyRequested)))
+                .Select(s => previous.TryGetValue(s.Id, out var kept) ? kept : new CatalogueEntryViewModel(s, _openUrl, isRegistry: true, openFix: OnFixRequested, copyText: OnCopyRequested, remove: null)))
+            .Concat(_user.Select(s => new CatalogueEntryViewModel(s, _openUrl, Remove, copyText: OnCopyRequested, openFix: null)))
             .OrderBy(e => Array.IndexOf(CategoryOrder, e.Category)) // stable: keeps the order above within a category
             .ToArray();
 
@@ -679,10 +679,10 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
     public CatalogueEntryViewModel(
         KnownCatalogueSource source,
         Action<Uri>? openUrl,
-        Action<KnownCatalogueSource>? remove = null,
-        bool isRegistry = false,
-        Action<Keys.KeysTab>? openFix = null,
-        Action<string>? copyText = null)
+        Action<KnownCatalogueSource>? remove,
+        Action<Keys.KeysTab>? openFix,
+        Action<string>? copyText,
+        bool isRegistry = false)
     {
         ArgumentNullException.ThrowIfNull(source);
         Source = source;
@@ -703,7 +703,7 @@ internal sealed class CatalogueEntryViewModel : ViewModelBase
     }
 
     private CatalogueEntryViewModel(string title)
-        : this(HeaderSource, null)
+        : this(HeaderSource, null, remove: null, openFix: null, copyText: null)
     {
         IsGroupHeader = true;
         GroupTitle = title.Length > 0 ? title : null;

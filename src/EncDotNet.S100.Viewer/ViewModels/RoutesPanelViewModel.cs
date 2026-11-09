@@ -47,13 +47,13 @@ internal sealed class RoutesPanelViewModel : ViewModelBase
 
     public RoutesPanelViewModel(
         RoutesService routes,
-        ICapabilityAccessor<IMapViewportController>? viewport = null,
-        IMarinerSettingsProvider? marinerSettings = null,
-        ITimeFormatProvider? timeFormat = null,
-        PassageCheckService? check = null,
-        RouteFindingsService? findings = null,
-        RouteExchangeService? exchange = null,
-        IRouteDialogs? dialogs = null)
+        ICapabilityAccessor<IMapViewportController>? viewport,
+        IMarinerSettingsProvider? marinerSettings,
+        ITimeFormatProvider? timeFormat,
+        PassageCheckService? check,
+        RouteFindingsService? findings,
+        RouteExchangeService? exchange,
+        IRouteDialogs? dialogs)
     {
         ArgumentNullException.ThrowIfNull(routes);
         _routes = routes;

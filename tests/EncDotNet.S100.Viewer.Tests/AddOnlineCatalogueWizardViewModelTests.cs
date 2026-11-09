@@ -34,7 +34,7 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
 
     private AddOnlineCatalogueWizardViewModel CreateWizard(params KnownCatalogueSource[] sources) =>
         new(
-            new CatalogueDirectoryDialogViewModel(sources),
+            new CatalogueDirectoryDialogViewModel(sources, openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null),
             () => new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders
             {
                 NoaaEnc = (uri, _) =>
@@ -42,7 +42,9 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
                     _loads.Add(uri);
                     return Task.FromResult(_read(uri));
                 },
-            }, timeProvider: TimeProvider.System));
+            }, timeProvider: TimeProvider.System),
+            openKeys: null,
+            connectionFactory: null);
 
     private static Task NextAsync(AddOnlineCatalogueWizardViewModel wizard) =>
         ((IAsyncRelayCommand)wizard.NextCommand).ExecuteAsync(null);
@@ -291,8 +293,10 @@ public sealed class AddOnlineCatalogueWizardViewModelTests : IDisposable
     {
         var gate = new TaskCompletionSource<NoaaEncProductCatalog>(TaskCreationOptions.RunContinuationsAsynchronously);
         var wizard = new AddOnlineCatalogueWizardViewModel(
-            new CatalogueDirectoryDialogViewModel([Source("a")]),
-            () => new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { NoaaEnc = (_, _) => gate.Task }, timeProvider: TimeProvider.System));
+            new CatalogueDirectoryDialogViewModel([Source("a")], openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null),
+            () => new AddToLibraryDialogViewModel(_library, new LibraryCatalogueReaders { NoaaEnc = (_, _) => gate.Task }, timeProvider: TimeProvider.System),
+            openKeys: null,
+            connectionFactory: null);
         wizard.Start(null);
 
         var next = NextAsync(wizard);

@@ -27,7 +27,7 @@ public sealed class PassageCheckTests : IDisposable
     }
 
     private static RoutesPanelViewModel Panel(PassageCheckFixture f) =>
-        new(f.Routes, timeFormat: new Utc(), check: f.Check);
+        new(f.Routes, timeFormat: new Utc(), check: f.Check, viewport: null, marinerSettings: null, findings: null, exchange: null, dialogs: null);
 
     private static RouteCheckOverlay Overlay(PassageCheckFixture f) =>
         Assert.IsType<RouteCheckOverlay>(RouteCheckOverlay.Build(
@@ -299,7 +299,7 @@ public sealed class PassageCheckTests : IDisposable
     public void Without_the_service_check_passage_stays_off()
     {
         var f = new PassageCheckFixture();
-        var vm = new RoutesPanelViewModel(f.Routes);
+        var vm = new RoutesPanelViewModel(f.Routes, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null, exchange: null, dialogs: null);
 
         Assert.True(vm.HasDraft);
         Assert.False(vm.CanCheckPassage);

@@ -36,7 +36,7 @@ public sealed class LayerStackLegendTests
     [Fact]
     public void A_fill_with_a_legend_gets_one_row_per_band_lowest_first()
     {
-        var entry = new LayerStackEntryViewModel(new LayerStackViewModelTests.ControllableLoader(), FillEntry("gfswave.grib2", WaveLegend));
+        var entry = new LayerStackEntryViewModel(new LayerStackViewModelTests.ControllableLoader(), FillEntry("gfswave.grib2", WaveLegend), inactiveReason: null);
 
         Assert.True(entry.HasLegend);
         Assert.Equal(WaveLegend.Select(e => e.Label), entry.Legend.Select(i => i.Label));
@@ -51,8 +51,9 @@ public sealed class LayerStackLegendTests
         var loader = new LayerStackViewModelTests.ControllableLoader();
 
         var plain = new LayerStackEntryViewModel(loader, new LayerStackEntry(
-            new MemoryLayer("a.000"), new SubLayerStackItem(new SyntheticStackPayload("a.000"), S98DisplayPlane.BaseChartUnder, 0, "a.000")));
-        var unlabelled = new LayerStackEntryViewModel(loader, FillEntry("s104.h5", legend: null));
+            new MemoryLayer("a.000"), new SubLayerStackItem(new SyntheticStackPayload("a.000"), S98DisplayPlane.BaseChartUnder, 0, "a.000")),
+            inactiveReason: null);
+        var unlabelled = new LayerStackEntryViewModel(loader, FillEntry("s104.h5", legend: null), inactiveReason: null);
 
         Assert.False(plain.HasLegend);
         Assert.Empty(plain.Legend);
@@ -75,7 +76,7 @@ public sealed class LayerStackLegendTests
         loader.SetEntries(
             FillEntry("gfswave.grib2", WaveLegend),
             new LayerStackEntry(new MemoryLayer("a.000"), new SubLayerStackItem(new SyntheticStackPayload("a.000"), S98DisplayPlane.BaseChartUnder, 0, "a.000")));
-        var stack = new LayerStackViewModel(loader);
+        var stack = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null);
         using var host = ViewHost.Show(new LayerStackView { DataContext = stack }, width: 420, height: 700);
 
         // Only the weather fill has a legend.
@@ -93,7 +94,7 @@ public sealed class LayerStackLegendTests
     {
         var loader = new LayerStackViewModelTests.ControllableLoader();
         loader.SetEntries(FillEntry("gfswave.grib2", WaveLegend));
-        var stack = new LayerStackViewModel(loader);
+        var stack = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null);
         using var host = ViewHost.Show(new LayerStackView { DataContext = stack }, width: 420, height: 700);
         Assert.Equal(3, host.FindAll<StackPanel>("LayerStack.Entry.Legend.Band").Count);
 
@@ -110,7 +111,7 @@ public sealed class LayerStackLegendTests
     [Fact]
     public void A_vector_overlay_gets_a_glyph_row_per_legend_entry()
     {
-        var entry = new LayerStackEntryViewModel(new LayerStackViewModelTests.ControllableLoader(), FrontsEntry("codsus_hr.txt", FrontsLegend()));
+        var entry = new LayerStackEntryViewModel(new LayerStackViewModelTests.ControllableLoader(), FrontsEntry("codsus_hr.txt", FrontsLegend()), inactiveReason: null);
 
         Assert.True(entry.HasLegend);
         Assert.Equal(["Cold front", "Stationary front", "Trough", "Triangle", "34 kt winds", "Calm"], entry.Legend.Select(i => i.Label));
@@ -148,7 +149,7 @@ public sealed class LayerStackLegendTests
             new MemoryLayer(processor.FileName),
             new SubLayerStackItem(new VectorStackPayload(result, subLayer), subLayer.Plane, subLayer.WithinPlanePriority, processor.FileName, subLayer.SourceFeatureType)))]);
 
-        var stack = new LayerStackViewModel(loader);
+        var stack = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null);
 
         var track = (LayerStackEntryViewModel)Assert.Single(stack.Planes.Single(p => p.Plane == S98DisplayPlane.OtherChartOverlays).Children);
         var areas = (LayerStackEntryViewModel)Assert.Single(stack.Planes.Single(p => p.Plane == S98DisplayPlane.OnDemandSurface).Children);
@@ -176,7 +177,7 @@ public sealed class LayerStackLegendTests
             new MemoryLayer(processor.FileName),
             new SubLayerStackItem(new VectorStackPayload(result, subLayer), subLayer.Plane, subLayer.WithinPlanePriority, processor.FileName, subLayer.SourceFeatureType));
 
-        var entry = new LayerStackEntryViewModel(new LayerStackViewModelTests.ControllableLoader(), stackEntry);
+        var entry = new LayerStackEntryViewModel(new LayerStackViewModelTests.ControllableLoader(), stackEntry, inactiveReason: null);
 
         Assert.Equal(S98DisplayPlane.OtherChartOverlays, subLayer.Plane);
         Assert.Equal(92, subLayer.WithinPlanePriority);
@@ -192,7 +193,7 @@ public sealed class LayerStackLegendTests
     [Fact]
     public void A_vector_overlay_without_a_legend_has_none()
     {
-        var entry = new LayerStackEntryViewModel(new LayerStackViewModelTests.ControllableLoader(), FrontsEntry("codsus_hr.txt", legend: null));
+        var entry = new LayerStackEntryViewModel(new LayerStackViewModelTests.ControllableLoader(), FrontsEntry("codsus_hr.txt", legend: null), inactiveReason: null);
 
         Assert.False(entry.HasLegend);
         Assert.Empty(entry.Legend);
@@ -203,7 +204,7 @@ public sealed class LayerStackLegendTests
     {
         var loader = new LayerStackViewModelTests.ControllableLoader();
         loader.SetEntries(FrontsEntry("codsus_hr.txt", FrontsLegend()), FillEntry("gfswave.grib2", WaveLegend));
-        var stack = new LayerStackViewModel(loader);
+        var stack = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null);
         using var host = ViewHost.Show(new LayerStackView { DataContext = stack }, width: 420, height: 900);
 
         var legends = host.FindAll<ItemsControl>("LayerStack.Entry.Legend").Where(c => c.IsVisible).ToArray();

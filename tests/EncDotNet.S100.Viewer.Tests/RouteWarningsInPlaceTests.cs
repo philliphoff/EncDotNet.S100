@@ -261,7 +261,7 @@ public sealed class RouteWarningsInPlaceTests(WarningsScenarioFixture fixture) :
         void Post(Action action) => Avalonia.Threading.Dispatcher.UIThread.Post(action);
         using var s = WarningsRouteCheck.Create(fixture, Post);
         using var warnings = new NavigationalWarningsViewModel(s.Warnings, timeFormat: new Utc(), pick: null, pickReport: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
-        var panel = new RoutesPanelViewModel(s.Routes, timeFormat: new Utc(), check: s.Check, findings: s.Findings);
+        var panel = new RoutesPanelViewModel(s.Routes, timeFormat: new Utc(), check: s.Check, findings: s.Findings, viewport: null, marinerSettings: null, exchange: null, dialogs: null);
         using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 1600);
 
         host.Click(host.Find<ToggleButton>("Routes.CheckRouteToggle"));

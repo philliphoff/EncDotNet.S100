@@ -75,13 +75,13 @@ public sealed class RouteWeatherCheckTests : IDisposable
 
     private static Setup Start(IReadOnlyList<LoadedDataset> datasets, Func<RoutesService, Route>? route = null)
     {
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var active = (route ?? Route)(routes);
         if (!routes.Routes.Routes.Contains(active))
             routes.Routes.Add(active);
         routes.Routes.SetActiveRoute(active);
         var limits = new FixedWeatherLimits();
-        var check = new PassageCheckService(routes, new PassageCheckFixture.FixedCatalog(datasets), PassageCheckFixture.SerialPost, limits, debounce: TimeSpan.Zero, sources: PassageCheckFixture.NewSources(), checks: EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService.BuiltInChecks);
+        var check = new PassageCheckService(routes, new PassageCheckFixture.FixedCatalog(datasets), PassageCheckFixture.SerialPost, limits, debounce: TimeSpan.Zero, sources: PassageCheckFixture.NewSources(), checks: EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService.BuiltInChecks, warnings: null, mariner: null, options: null);
         routes.IsCheckModeActive = true;
         return new Setup(routes, check, limits);
     }
@@ -219,7 +219,7 @@ public sealed class RouteWeatherCheckTests : IDisposable
     public void The_settings_keep_the_limits_and_show_waves_in_the_depth_unit()
     {
         var settings = new ViewerSettings { SettingsFilePath = _settingsFile };
-        var vm = new SettingsViewModel(settings);
+        var vm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         var raised = 0;
         vm.RouteWeatherLimitsChanged += () => raised++;
 
@@ -248,7 +248,7 @@ public sealed class RouteWeatherCheckTests : IDisposable
         Assert.Null(vm.RouteMaxWindKnots);
         Assert.Null(settings.RouteMaxWindKnots);
 
-        var reloaded = new SettingsViewModel(ViewerSettings.Load(_settingsFile));
+        var reloaded = new SettingsViewModel(ViewerSettings.Load(_settingsFile), dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         Assert.Null(reloaded.RouteMaxWindKnots);
         Assert.Equal(3.048, reloaded.RouteMaxWaveHeightMetres!.Value, 6);
     }
@@ -256,7 +256,7 @@ public sealed class RouteWeatherCheckTests : IDisposable
     [AvaloniaFact]
     public void The_settings_page_has_the_two_limit_boxes()
     {
-        var vm = new SettingsViewModel(new ViewerSettings { SettingsFilePath = _settingsFile, RouteMaxWindKnots = 28 });
+        var vm = new SettingsViewModel(new ViewerSettings { SettingsFilePath = _settingsFile, RouteMaxWindKnots = 28 }, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         using var host = ViewHost.Show(new ChartSettingsPage { DataContext = vm }, width: 500, height: 2400);
 
         var wind = host.Find<TextBox>("Settings.RouteMaxWind");
@@ -272,7 +272,7 @@ public sealed class RouteWeatherCheckTests : IDisposable
     public async Task The_mcp_tools_read_and_set_the_limits()
     {
         var settings = new ViewerSettings { SettingsFilePath = _settingsFile };
-        var vm = new SettingsViewModel(settings);
+        var vm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         var tools = new RouteWeatherSettingsTools(vm, new ImmediateInvoker());
         var ct = TestContext.Current.CancellationToken;
 

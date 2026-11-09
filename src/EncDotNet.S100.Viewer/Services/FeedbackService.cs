@@ -49,7 +49,7 @@ internal sealed class FeedbackService : IFeedbackService
         SettingsViewModel settings,
         IAppScreenshotProvider screenshot,
         ICapabilityAccessor<IImageRenderer> mapRendererAccessor,
-        LogBuffer? logs = null)
+        LogBuffer? logs)
     {
         ArgumentNullException.ThrowIfNull(datasets);
         ArgumentNullException.ThrowIfNull(viewport);

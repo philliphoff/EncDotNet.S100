@@ -37,7 +37,7 @@ public sealed class ClearanceTests : IDisposable
     private static async Task<(PassageCheckFixture F, ClearanceViewModel Vm)> CheckedAsync(PassageCheckFixture? fixture = null)
     {
         var f = fixture ?? new PassageCheckFixture();
-        var vm = new ClearanceViewModel(f.Check, timeFormat: new Utc());
+        var vm = new ClearanceViewModel(f.Check, timeFormat: new Utc(), mariner: null, theme: null);
         await f.CheckAsync();
         return (f, vm);
     }
@@ -48,7 +48,7 @@ public sealed class ClearanceTests : IDisposable
     public async Task The_profile_follows_check_mode()
     {
         var f = new PassageCheckFixture();
-        var vm = new ClearanceViewModel(f.Check, timeFormat: new Utc());
+        var vm = new ClearanceViewModel(f.Check, timeFormat: new Utc(), mariner: null, theme: null);
         Assert.False(vm.HasProfile);
         Assert.Equal("Turn on Check route on a route with a draft to see its clearance profile.", vm.EmptyText);
 

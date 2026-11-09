@@ -26,7 +26,7 @@ public class RouteMcpToolsTests
     }
 
     private static (RoutesService routes, InlineRouteEditInvoker invoker) Make()
-        => (new RoutesService(), new InlineRouteEditInvoker());
+        => (new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System)), new InlineRouteEditInvoker());
 
     private static T Value<T>(ToolResult<T> result)
     {
@@ -489,7 +489,7 @@ public class RouteMcpToolsTests
     [Fact]
     public void Adapter_success_payload_is_camel_case_route_detail()
     {
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = routes.Routes.CreateRoute("Demo", "rid");
         var detail = RouteProjection.Detail(route, routes);
 
@@ -521,7 +521,7 @@ public class RouteMcpToolsTests
     [Fact]
     public void Adapter_route_detail_reports_passage_and_effective_and_overridden_leg_values()
     {
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = routes.Routes.CreateRoute("Demo", "rid");
         route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(50.0, -1.0));
         route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(50.1, -1.1));
@@ -546,7 +546,7 @@ public class RouteMcpToolsTests
     [Fact]
     public void Adapter_get_passage_payload_is_camel_case()
     {
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = routes.Routes.CreateRoute("Demo", "rid");
         route.Info.Vessel = new EncDotNet.S100.Viewer.Routing.RouteVesselInfo { Name = "MV Test" };
         route.SetPassageValue(EncDotNet.S100.Viewer.Routing.RoutePassageField.Draft, 4.8);

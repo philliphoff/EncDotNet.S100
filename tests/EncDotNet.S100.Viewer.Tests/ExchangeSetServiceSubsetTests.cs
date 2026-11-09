@@ -19,7 +19,7 @@ public sealed class ExchangeSetServiceSubsetTests
     {
         var loader = new CountingLoader();
         var datasets = new DatasetsViewModel(loader);
-        return (datasets, new ExchangeSetService(datasets, Notifications.TestNotifications.Create()), loader);
+        return (datasets, new ExchangeSetService(datasets, Notifications.TestNotifications.Create(), lazyCoordinator: null, metadataReader: null, s57CatalogCache: null), loader);
     }
 
     private static ExchangeSetSubsetItem Cell(string name) =>
@@ -52,8 +52,13 @@ public sealed class ExchangeSetServiceSubsetTests
         var loader = new CountingLoader();
         var datasets = new DatasetsViewModel(loader);
         using var coordinator = new EncDotNet.S100.Viewer.Services.LazyLoading.ExchangeSetLazyLoadCoordinator(
-            new SilentNotifier(), (_, _) => Task.CompletedTask, _ => { });
-        using var service = new ExchangeSetService(datasets, Notifications.TestNotifications.Create(), coordinator);
+            new SilentNotifier(), (_, _) => Task.CompletedTask, _ => { },
+            options: null,
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
+        using var service = new ExchangeSetService(datasets, Notifications.TestNotifications.Create(), coordinator, metadataReader: null, s57CatalogCache: null);
         var request = new ExchangeSetSubsetRequest(Fixture("Synthetic-S57-Framed"), "CATALOG.031", [Cell("US5WA52M")]);
         var ct = TestContext.Current.CancellationToken;
 
@@ -201,8 +206,12 @@ public sealed class ExchangeSetServiceSubsetTests
         var datasets = new DatasetsViewModel(loader);
         using var coordinator = new Services.LazyLoading.ExchangeSetLazyLoadCoordinator(
             new SilentNotifier(), (_, _) => Task.CompletedTask, _ => { },
-            new Services.LazyLoading.LazyLoadOptions { CellThreshold = 1 });
-        using var service = new ExchangeSetService(datasets, Notifications.TestNotifications.Create(), coordinator);
+            new Services.LazyLoading.LazyLoadOptions { CellThreshold = 1 },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
+        using var service = new ExchangeSetService(datasets, Notifications.TestNotifications.Create(), coordinator, metadataReader: null, s57CatalogCache: null);
 
         await service.OpenAsync(Fixture("Synthetic-S57-Framed"), cancellationToken: TestContext.Current.CancellationToken);
         var subset = await service.OpenSubsetAsync(

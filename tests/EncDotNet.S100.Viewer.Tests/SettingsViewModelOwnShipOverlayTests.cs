@@ -13,7 +13,7 @@ public class SettingsViewModelOwnShipOverlayTests
     [Fact]
     public void DefaultsTo_False()
     {
-        var vm = new SettingsViewModel(NewSettings());
+        var vm = new SettingsViewModel(NewSettings(), dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         Assert.False(vm.OwnShipOverlayEnabled);
     }
 
@@ -22,7 +22,7 @@ public class SettingsViewModelOwnShipOverlayTests
     {
         var s = NewSettings();
         s.OwnShipOverlayEnabled = true;
-        var vm = new SettingsViewModel(s);
+        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         Assert.True(vm.OwnShipOverlayEnabled);
     }
 
@@ -30,7 +30,7 @@ public class SettingsViewModelOwnShipOverlayTests
     public void Setting_Persists_To_Settings()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s);
+        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         vm.OwnShipOverlayEnabled = true;
         Assert.True(s.OwnShipOverlayEnabled);
     }
@@ -38,7 +38,7 @@ public class SettingsViewModelOwnShipOverlayTests
     [Fact]
     public void Setting_Raises_OwnShipOverlayEnabledChanged()
     {
-        var vm = new SettingsViewModel(NewSettings());
+        var vm = new SettingsViewModel(NewSettings(), dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         bool? raised = null;
         vm.OwnShipOverlayEnabledChanged += v => raised = v;
 
@@ -50,7 +50,7 @@ public class SettingsViewModelOwnShipOverlayTests
     [Fact]
     public void Setting_Same_Value_Does_Not_Raise_Event()
     {
-        var vm = new SettingsViewModel(NewSettings());
+        var vm = new SettingsViewModel(NewSettings(), dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         var count = 0;
         vm.OwnShipOverlayEnabledChanged += _ => count++;
 

@@ -19,7 +19,7 @@ public sealed class ViewerLuaEngineTests
 
         Assert.Null(settings.LuaEngine);
         Assert.Equal(LuaEngineKind.LuaCSharp, settings.ResolveLuaEngine());
-        Assert.Equal(LuaEngineKind.LuaCSharp, new SettingsViewModel(settings).SelectedLuaEngine);
+        Assert.Equal(LuaEngineKind.LuaCSharp, new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null).SelectedLuaEngine);
     }
 
     [Theory]
@@ -40,7 +40,7 @@ public sealed class ViewerLuaEngineTests
     {
         Assert.SkipWhen(ViewerLuaEngine.IsPinnedByEnvironment, "S100_LUA_ENGINE pins the engine.");
         var settings = NewSettings();
-        var vm = new SettingsViewModel(settings);
+        var vm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
 
         vm.SelectedLuaEngine = LuaEngineKind.MoonSharp;
 

@@ -105,7 +105,7 @@ internal sealed class SetViewportTool
     /// Called after a viewport is applied; the viewer marks the settle
     /// trigger with it (<c>await_settled</c>).
     /// </param>
-    public SetViewportTool(ICapabilityAccessor<IMapViewportController> accessor, Action? onApplied = null)
+    public SetViewportTool(ICapabilityAccessor<IMapViewportController> accessor, Action? onApplied)
     {
         ArgumentNullException.ThrowIfNull(accessor);
         _accessor = accessor;

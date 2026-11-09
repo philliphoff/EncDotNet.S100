@@ -18,7 +18,7 @@ public class SampleCoverageAlongToolTests
             "s102-1",
             bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
             source: new S102CoverageSource(dataset)));
-        var tool = new SampleCoverageAlongTool(catalog);
+        var tool = new SampleCoverageAlongTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var polyline = new GeoPolyline([
             new GeoPoint(0.01, 0.01),
@@ -49,7 +49,7 @@ public class SampleCoverageAlongToolTests
             "s102-1",
             bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
             source: new S102CoverageSource(dataset)));
-        var tool = new SampleCoverageAlongTool(catalog);
+        var tool = new SampleCoverageAlongTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var polyline = new GeoPolyline([
             new GeoPoint(0.02, 0.02),       // inside
@@ -70,7 +70,7 @@ public class SampleCoverageAlongToolTests
     public async Task Unsupported_spec_propagates_as_request_level_error()
     {
         var catalog = new FakeDatasetCatalog();
-        var tool = new SampleCoverageAlongTool(catalog);
+        var tool = new SampleCoverageAlongTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var polyline = new GeoPolyline([
             new GeoPoint(0, 0),
@@ -89,7 +89,7 @@ public class SampleCoverageAlongToolTests
     public async Task Empty_polyline_returns_geometry_invalid()
     {
         var catalog = new FakeDatasetCatalog();
-        var tool = new SampleCoverageAlongTool(catalog);
+        var tool = new SampleCoverageAlongTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var polyline = new GeoPolyline([]);
 

@@ -21,8 +21,8 @@ public sealed class RoutesViewTests
 {
     private static (RoutesService Service, Route Route, ViewHost Host) Show()
     {
-        var service = new RoutesService();
-        var panel = new RoutesPanelViewModel(service);
+        var service = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
+        var panel = new RoutesPanelViewModel(service, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null, exchange: null, dialogs: null);
         var route = service.Routes.CreateRoute("Solent");
         route.AppendWaypoint(new GeoPosition(50.70, -1.10));
         route.AppendWaypoint(new GeoPosition(50.75, -1.20));
@@ -134,7 +134,7 @@ public sealed class RoutesViewTests
         try
         {
             var fixture = new PassageCheckFixture(post: action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
-            var panel = new RoutesPanelViewModel(fixture.Routes, check: fixture.Check);
+            var panel = new RoutesPanelViewModel(fixture.Routes, check: fixture.Check, viewport: null, marinerSettings: null, timeFormat: null, findings: null, exchange: null, dialogs: null);
             using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
 
             var check = host.Find<ToggleButton>("Routes.CheckRouteToggle");
@@ -191,7 +191,7 @@ public sealed class RoutesViewTests
                 post: action => Avalonia.Threading.Dispatcher.UIThread.Post(action));
             var viewport = new RouteFindingsTests.RecordingViewport();
             using var findings = RouteFindingsTests.Findings(fixture, viewport);
-            var panel = new RoutesPanelViewModel(fixture.Routes, check: fixture.Check, findings: findings);
+            var panel = new RoutesPanelViewModel(fixture.Routes, check: fixture.Check, findings: findings, viewport: null, marinerSettings: null, timeFormat: null, exchange: null, dialogs: null);
             using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 800);
 
             host.Click(host.Find<ToggleButton>("Routes.CheckRouteToggle"));
@@ -462,7 +462,7 @@ public sealed class RouteEditorKeysTests
 {
     private static (RoutesService Service, Route Route) Make()
     {
-        var service = new RoutesService();
+        var service = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = service.Routes.CreateRoute("R");
         route.History.Execute(RouteEditLabels.AppendWaypoint, () => route.AppendWaypoint(new GeoPosition(0, 0)));
         route.History.Execute(RouteEditLabels.AppendWaypoint, () => route.AppendWaypoint(new GeoPosition(0, 1)));

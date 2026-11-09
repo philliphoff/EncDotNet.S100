@@ -89,7 +89,7 @@ public sealed class SurfaceAnalysisTimeViewerTests
     public void The_Timeline_groups_analyses_under_Surface_analysis_with_a_WPC_lane()
     {
         var service = new GlobalTimeService();
-        var timeline = new TimelineViewModel(service, new UtcFormat(), new FakeTimeProvider(new DateTimeOffset(Analysis.AddHours(3))), action => action());
+        var timeline = new TimelineViewModel(service, new UtcFormat(), new FakeTimeProvider(new DateTimeOffset(Analysis.AddHours(3))), action => action(), refresher: null, progress: null, scope: null, library: null);
         var wpc = Bulletin("wpc", Analysis);
         service.ApplySnapshot(new MapsuiMapTimeSnapshot
         {

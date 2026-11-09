@@ -37,9 +37,9 @@ internal sealed class LibraryImportCoordinator : ILibraryImporter
         DialogManager dialogManager,
         Func<AddToLibraryDialogViewModel> dialogFactory,
         Func<AddOnlineCatalogueWizardViewModel> wizardFactory,
-        Func<SharedFeedDialogViewModel>? sharedFeedFactory = null,
-        IViewerUiControllerAccessor? ui = null,
-        Notifications.INotificationService? notifications = null)
+        Func<SharedFeedDialogViewModel>? sharedFeedFactory,
+        IViewerUiControllerAccessor? ui,
+        Notifications.INotificationService? notifications)
     {
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(fileDialogs);

@@ -22,7 +22,7 @@ public class CatalogueDirectoryDialogViewModelTests
     [Fact]
     public void Lists_entries_by_region_then_name_and_preselects_the_first()
     {
-        var vm = new CatalogueDirectoryDialogViewModel([Source("b", "Europe"), Source("a", "North America"), Source("c", "Europe")]);
+        var vm = new CatalogueDirectoryDialogViewModel([Source("b", "Europe"), Source("a", "North America"), Source("c", "Europe")], openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null);
 
         Assert.Equal(["b", "c", "a"], vm.Entries.Select(e => e.Source.Id));
         Assert.Same(vm.Entries[0], vm.SelectedEntry);
@@ -39,7 +39,13 @@ public class CatalogueDirectoryDialogViewModelTests
             Source("at", "Europe", country: "Austria"),
             Source("bg", "Europe", country: "Bulgaria"),
             Source("br", "South America", country: "Brazil"),
-        ]);
+        ],
+        openUrl: null,
+        userCatalogues: null,
+        probe: null,
+        loadSecomRegistry: null,
+        probeSecom: null,
+        session: null);
 
         Assert.Equal(
             ["NORTH AMERICA · UNITED STATES", "NOAA", "USACE", "EUROPE", "AT", "BG", "SOUTH AMERICA", "BR"],
@@ -50,7 +56,7 @@ public class CatalogueDirectoryDialogViewModelTests
     [Fact]
     public void Group_headers_are_not_selectable_and_not_counted()
     {
-        var vm = new CatalogueDirectoryDialogViewModel([Source("a", "Europe"), Source("b", "Europe")]);
+        var vm = new CatalogueDirectoryDialogViewModel([Source("a", "Europe"), Source("b", "Europe")], openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null);
         var header = vm.Rows[0];
         Assert.True(header.IsGroupHeader);
 
@@ -77,7 +83,13 @@ public class CatalogueDirectoryDialogViewModelTests
             Source("at", "Europe", provider: "Waterways Austria", country: "Austria", format: KnownCatalogueFormat.ChartCatalogs),
             Source("bg", "Europe", country: "Bulgaria", format: KnownCatalogueFormat.ChartCatalogs),
             Source("br", "South America", country: "Brazil"),
-        ]);
+        ],
+        openUrl: null,
+        userCatalogues: null,
+        probe: null,
+        loadSecomRegistry: null,
+        probeSecom: null,
+        session: null);
 
         vm.SearchText = text;
 
@@ -89,7 +101,7 @@ public class CatalogueDirectoryDialogViewModelTests
     [Fact]
     public void Search_keeps_the_choice_while_it_is_hidden()
     {
-        var vm = new CatalogueDirectoryDialogViewModel([Source("a", "Europe"), Source("b", "Europe")]);
+        var vm = new CatalogueDirectoryDialogViewModel([Source("a", "Europe"), Source("b", "Europe")], openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null);
         vm.SelectedEntry = vm.Entries[1];
 
         vm.SearchText = "nothing like it";
@@ -108,7 +120,7 @@ public class CatalogueDirectoryDialogViewModelTests
     {
         using var context = new LibraryTestContext();
         var store = new UserCatalogueStore(Path.Combine(context.Root, "catalogues.json"));
-        var vm = new CatalogueDirectoryDialogViewModel([Source("a", "Europe")], null, store);
+        var vm = new CatalogueDirectoryDialogViewModel([Source("a", "Europe")], null, store, probe: null, loadSecomRegistry: null, probeSecom: null, session: null);
         var feed = KnownCatalogueSources.FromUrl(new Uri("http://machine.test:8100/feed.json"), KnownCatalogueFormat.S100Feed, "Shared");
 
         vm.Preselect(feed);
@@ -126,7 +138,7 @@ public class CatalogueDirectoryDialogViewModelTests
     [Fact]
     public void Built_in_list_opens_on_charts_with_noaa_enc_chosen_and_counts_each_category()
     {
-        var vm = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All);
+        var vm = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null);
 
         Assert.Equal(KnownCatalogueCategory.Charts, vm.SelectedCategory);
         Assert.Equal("noaa-enc", vm.SelectedEntry!.Source.Id);
@@ -146,7 +158,7 @@ public class CatalogueDirectoryDialogViewModelTests
     [Fact]
     public void Opening_a_category_lists_only_its_sources_and_keeps_the_choice()
     {
-        var vm = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All);
+        var vm = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null);
 
         vm.Categories.Single(c => c.Category == KnownCatalogueCategory.Weather).SelectCommand.Execute(null);
 
@@ -167,7 +179,13 @@ public class CatalogueDirectoryDialogViewModelTests
             Source("s111", "Europe", provider: "Currents office", format: KnownCatalogueFormat.S100ForecastModels),
             Source("hf", "Europe", provider: "HF radar currents", category: KnownCatalogueCategory.Weather),
             Source("ww3", "Europe", category: KnownCatalogueCategory.Weather),
-        ]);
+        ],
+        openUrl: null,
+        userCatalogues: null,
+        probe: null,
+        loadSecomRegistry: null,
+        probeSecom: null,
+        session: null);
 
         vm.SearchText = "currents";
 
@@ -190,7 +208,13 @@ public class CatalogueDirectoryDialogViewModelTests
     public void A_source_chosen_from_search_results_is_shown_in_its_category_when_the_search_clears()
     {
         var vm = new CatalogueDirectoryDialogViewModel(
-            [Source("enc", "Europe"), Source("s111", "Europe", format: KnownCatalogueFormat.S100ForecastModels)]);
+            [Source("enc", "Europe"), Source("s111", "Europe", format: KnownCatalogueFormat.S100ForecastModels)],
+            openUrl: null,
+            userCatalogues: null,
+            probe: null,
+            loadSecomRegistry: null,
+            probeSecom: null,
+            session: null);
 
         vm.SearchText = "s111";
         vm.SelectedEntry = vm.Rows.Single(r => !r.IsGroupHeader);
@@ -206,7 +230,13 @@ public class CatalogueDirectoryDialogViewModelTests
     public void Choosing_a_category_clears_the_search()
     {
         var vm = new CatalogueDirectoryDialogViewModel(
-            [Source("enc", "Europe"), Source("s111", "Europe", format: KnownCatalogueFormat.S100ForecastModels)]);
+            [Source("enc", "Europe"), Source("s111", "Europe", format: KnownCatalogueFormat.S100ForecastModels)],
+            openUrl: null,
+            userCatalogues: null,
+            probe: null,
+            loadSecomRegistry: null,
+            probeSecom: null,
+            session: null);
         vm.SearchText = "nothing like it";
         Assert.True(vm.HasNoMatches);
 
@@ -221,7 +251,10 @@ public class CatalogueDirectoryDialogViewModelTests
     public void Add_by_url_opens_my_sources_with_the_form_and_carries_a_searched_url()
     {
         var vm = new CatalogueDirectoryDialogViewModel([Source("a", "X")], null, null,
-            Probe(new CatalogueProbe(null, null, null)));
+            Probe(new CatalogueProbe(null, null, null)),
+            loadSecomRegistry: null,
+            probeSecom: null,
+            session: null);
         var focused = 0;
         vm.UrlEntryRequested += (_, _) => focused++;
         Assert.False(vm.ShowsUrlForm);
@@ -251,7 +284,7 @@ public class CatalogueDirectoryDialogViewModelTests
     [Fact]
     public void Without_a_probe_there_is_no_add_by_url()
     {
-        var vm = new CatalogueDirectoryDialogViewModel([Source("a", "X")]);
+        var vm = new CatalogueDirectoryDialogViewModel([Source("a", "X")], openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null);
 
         Assert.False(vm.ShowAddByUrlCommand.CanExecute(null));
         vm.SelectedCategory = KnownCatalogueCategory.User;
@@ -267,7 +300,13 @@ public class CatalogueDirectoryDialogViewModelTests
             Source("full", "X"),
             Source("bare", "X", KnownCatalogueCoverage.None, editions: false),
             Source("forecast", "X", KnownCatalogueCoverage.None, editions: false, format: KnownCatalogueFormat.S100ForecastModels) with { Pilot = true },
-        ]);
+        ],
+        openUrl: null,
+        userCatalogues: null,
+        probe: null,
+        loadSecomRegistry: null,
+        probeSecom: null,
+        session: null);
 
         // Source() publishes no sizes; a full source would say nothing.
         Assert.Equal(["Download sizes are not known in advance."], vm.Entries.Single(e => e.Source.Id == "full").Limitations);
@@ -281,14 +320,14 @@ public class CatalogueDirectoryDialogViewModelTests
         Assert.Contains("A pilot service: it may cover little and may stop.", forecast.Limitations);
         Assert.StartsWith("No coverage on the map until it is downloaded · Download sizes", forecast.LimitationsLine, StringComparison.Ordinal);
 
-        var noaa = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All).SelectedEntry!;
+        var noaa = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null).SelectedEntry!;
         Assert.False(noaa.HasLimitations);
     }
 
     [Fact]
     public void Rows_name_the_country_only_when_the_header_does_not()
     {
-        var vm = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All);
+        var vm = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null);
 
         Assert.Equal("NOAA Office of Coast Survey", vm.SelectedEntry!.RowDetail);
         Assert.Equal("NOAA Office of Coast Survey · United States", vm.SelectedEntry.ProviderAndPlace);
@@ -302,7 +341,7 @@ public class CatalogueDirectoryDialogViewModelTests
     [Fact]
     public void Copying_a_catalogue_url_goes_through_the_view()
     {
-        var vm = new CatalogueDirectoryDialogViewModel([Source("a", "X")]);
+        var vm = new CatalogueDirectoryDialogViewModel([Source("a", "X")], openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null);
         string? copied = null;
         vm.CopyRequested += (_, text) => copied = text;
 
@@ -316,7 +355,7 @@ public class CatalogueDirectoryDialogViewModelTests
     public void Homepage_opens_through_the_url_opener()
     {
         Uri? opened = null;
-        var vm = new CatalogueDirectoryDialogViewModel([Source("a", "X")], uri => opened = uri);
+        var vm = new CatalogueDirectoryDialogViewModel([Source("a", "X")], uri => opened = uri, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null);
 
         vm.Entries[0].OpenHomepageCommand.Execute(null);
 
@@ -326,7 +365,7 @@ public class CatalogueDirectoryDialogViewModelTests
     [Fact]
     public void Built_in_known_sources_are_listed()
     {
-        var vm = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All);
+        var vm = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null);
 
         Assert.Contains(vm.Entries, e => e.Source.Id == "noaa-enc");
         Assert.Contains(vm.Entries, e => e.Source.Id == "usace-ienc-buoys");
@@ -345,7 +384,10 @@ public class CatalogueDirectoryDialogViewModelTests
         using var context = new LibraryTestContext();
         var store = new UserCatalogueStore(Path.Combine(context.Root, "catalogues.json"));
         var vm = new CatalogueDirectoryDialogViewModel([Source("a", "X")], null, store,
-            Probe(new CatalogueProbe("RncProductCatalogChartCatalogs", KnownCatalogueFormat.ChartCatalogs, "Test Inland ENC Charts")));
+            Probe(new CatalogueProbe("RncProductCatalogChartCatalogs", KnownCatalogueFormat.ChartCatalogs, "Test Inland ENC Charts")),
+            loadSecomRegistry: null,
+            probeSecom: null,
+            session: null);
         Assert.True(vm.CanAddByUrl);
         Assert.False(vm.AddUrlCommand.CanExecute(null));
 
@@ -368,7 +410,11 @@ public class CatalogueDirectoryDialogViewModelTests
 
         // Persisted: a new dialog lists it, and it can be removed.
         var reopened = new CatalogueDirectoryDialogViewModel([Source("a", "X")], null,
-            new UserCatalogueStore(Path.Combine(context.Root, "catalogues.json")));
+            new UserCatalogueStore(Path.Combine(context.Root, "catalogues.json")),
+            probe: null,
+            loadSecomRegistry: null,
+            probeSecom: null,
+            session: null);
         var entry = Assert.Single(reopened.Entries, e => e.IsUser);
         Assert.False(reopened.CanAddByUrl);
         reopened.SelectedCategory = KnownCatalogueCategory.User;
@@ -390,7 +436,10 @@ public class CatalogueDirectoryDialogViewModelTests
     {
         var requests = new List<Uri>();
         var vm = new CatalogueDirectoryDialogViewModel([Source("a", "X")], null, null,
-            Probe(new CatalogueProbe(root, format, null, IsJson: url.EndsWith(".json", StringComparison.Ordinal)), requests));
+            Probe(new CatalogueProbe(root, format, null, IsJson: url.EndsWith(".json", StringComparison.Ordinal)), requests),
+            loadSecomRegistry: null,
+            probeSecom: null,
+            session: null);
 
         vm.CatalogueUrl = url;
         await ((CommunityToolkit.Mvvm.Input.IAsyncRelayCommand)vm.AddUrlCommand).ExecuteAsync(null);
@@ -406,7 +455,10 @@ public class CatalogueDirectoryDialogViewModelTests
     {
         var requests = new List<Uri>();
         var vm = new CatalogueDirectoryDialogViewModel([Source("a", "X"), Source("b", "Y")], null, null,
-            Probe(new CatalogueProbe("EncProductCatalog", KnownCatalogueFormat.NoaaEnc, null), requests));
+            Probe(new CatalogueProbe("EncProductCatalog", KnownCatalogueFormat.NoaaEnc, null), requests),
+            loadSecomRegistry: null,
+            probeSecom: null,
+            session: null);
 
         vm.CatalogueUrl = "https://b.test/catalog.xml";
         await ((CommunityToolkit.Mvvm.Input.IAsyncRelayCommand)vm.AddUrlCommand).ExecuteAsync(null);
@@ -419,7 +471,10 @@ public class CatalogueDirectoryDialogViewModelTests
     public async Task A_failed_fetch_is_reported()
     {
         var vm = new CatalogueDirectoryDialogViewModel([Source("a", "X")], null, null,
-            (_, _) => throw new HttpRequestException("offline"));
+            (_, _) => throw new HttpRequestException("offline"),
+            loadSecomRegistry: null,
+            probeSecom: null,
+            session: null);
 
         vm.CatalogueUrl = "https://example.test/c.xml";
         await ((CommunityToolkit.Mvvm.Input.IAsyncRelayCommand)vm.AddUrlCommand).ExecuteAsync(null);
@@ -449,12 +504,12 @@ public class CatalogueDirectoryDialogViewModelTests
         ];
         var session = new CatalogueDirectorySession();
 
-        var first = new CatalogueDirectoryDialogViewModel(sources, session: session);
+        var first = new CatalogueDirectoryDialogViewModel(sources, session: session, openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null);
         Assert.Equal("chart", first.SelectedEntry!.Source.Id);
         first.SelectedEntry = first.Entries.Single(e => e.Source.Id == "wx");
         first.SelectedCategory = KnownCatalogueCategory.Depth;  // browsing on without choosing
 
-        var second = new CatalogueDirectoryDialogViewModel(sources, session: session);
+        var second = new CatalogueDirectoryDialogViewModel(sources, session: session, openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null);
 
         Assert.Equal("wx", second.SelectedEntry!.Source.Id);
         Assert.Equal(KnownCatalogueCategory.Depth, second.SelectedCategory);
@@ -468,10 +523,10 @@ public class CatalogueDirectoryDialogViewModelTests
             Source("chart", "Europe", category: KnownCatalogueCategory.Charts),
             Source("wx", "Worldwide", category: KnownCatalogueCategory.Weather),
         ];
-        var first = new CatalogueDirectoryDialogViewModel(sources);
+        var first = new CatalogueDirectoryDialogViewModel(sources, openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null);
         first.SelectedEntry = first.Entries.Single(e => e.Source.Id == "wx");
 
-        var second = new CatalogueDirectoryDialogViewModel(sources);
+        var second = new CatalogueDirectoryDialogViewModel(sources, openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null);
 
         Assert.Equal("chart", second.SelectedEntry!.Source.Id);
         Assert.Equal(KnownCatalogueCategory.Charts, second.SelectedCategory);
@@ -482,7 +537,7 @@ public class CatalogueDirectoryDialogViewModelTests
     {
         var session = new CatalogueDirectorySession { LastSourceId = "removed", LastCategory = KnownCatalogueCategory.Charts };
 
-        var vm = new CatalogueDirectoryDialogViewModel([Source("chart", "Europe", category: KnownCatalogueCategory.Charts)], session: session);
+        var vm = new CatalogueDirectoryDialogViewModel([Source("chart", "Europe", category: KnownCatalogueCategory.Charts)], session: session, openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null);
 
         Assert.Equal("chart", vm.SelectedEntry!.Source.Id);
         Assert.Equal("chart", session.LastSourceId);

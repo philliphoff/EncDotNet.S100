@@ -44,41 +44,14 @@ internal sealed class PickService : IPickService
     public PickService(
         IDatasetLoaderService loader,
         PickReportViewModel pickReport,
-        INotificationService notifications)
-        : this(loader, pickReport, notifications, globalTime: null, timeFormat: null, themeService: null)
-    {
-    }
-
-    public PickService(
-        IDatasetLoaderService loader,
-        PickReportViewModel pickReport,
-        INotificationService notifications,
-        GlobalTimeService? globalTime)
-        : this(loader, pickReport, notifications, globalTime, timeFormat: null, themeService: null)
-    {
-    }
-
-    public PickService(
-        IDatasetLoaderService loader,
-        PickReportViewModel pickReport,
-        INotificationService notifications,
-        GlobalTimeService? globalTime,
-        ITimeFormatProvider? timeFormat)
-        : this(loader, pickReport, notifications, globalTime, timeFormat, themeService: null)
-    {
-    }
-
-    public PickService(
-        IDatasetLoaderService loader,
-        PickReportViewModel pickReport,
         INotificationService notifications,
         GlobalTimeService? globalTime,
         ITimeFormatProvider? timeFormat,
         IThemeService? themeService,
-        IMarinerSettingsProvider? marinerSettings = null,
-        ViewerDatasetCatalog? catalog = null,
-        EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? routeSources = null,
-        EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentSettings? waterLevelSettings = null)
+        IMarinerSettingsProvider? marinerSettings,
+        ViewerDatasetCatalog? catalog,
+        EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache? routeSources,
+        EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentSettings? waterLevelSettings)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(pickReport);

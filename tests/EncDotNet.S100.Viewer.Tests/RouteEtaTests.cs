@@ -61,7 +61,7 @@ public sealed class RouteEtaTests : IDisposable
     {
         var time = new ViewTime(Departure);
         var service = new RoutesService(time);
-        var vm = new RoutesPanelViewModel(service, timeFormat: new Utc());
+        var vm = new RoutesPanelViewModel(service, timeFormat: new Utc(), viewport: null, marinerSettings: null, check: null, findings: null, exchange: null, dialogs: null);
         var route = service.Routes.CreateRoute("North", "r");
         route.AppendWaypoint(new GeoPosition(50.0, -1.0));
         route.AppendWaypoint(new GeoPosition(50.1, -1.0));

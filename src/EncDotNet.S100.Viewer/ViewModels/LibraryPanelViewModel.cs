@@ -98,11 +98,11 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         Action<Action> dispatch,
         Action<Action> coalesce,
         TimeProvider time,
-        Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth = null,
-        Services.Notifications.INotificationService? notifications = null,
-        Services.GlobalTimeService? viewTime = null,
-        Services.ITimeFormatProvider? timeFormat = null,
-        LibrarySync? sync = null)
+        Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth,
+        Services.Notifications.INotificationService? notifications,
+        Services.GlobalTimeService? viewTime,
+        Services.ITimeFormatProvider? timeFormat,
+        LibrarySync? sync)
     {
         ArgumentNullException.ThrowIfNull(time);
         ArgumentNullException.ThrowIfNull(coalesce);

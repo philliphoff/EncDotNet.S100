@@ -23,23 +23,24 @@ internal sealed class RouteExchangeService
     /// <summary>Creates the service.</summary>
     /// <param name="routes">The route collection.</param>
     /// <param name="received">The received routes, which datasets and imported files feed.</param>
-    /// <param name="formats">The route formats; the built-in ones when omitted.</param>
+    /// <param name="formats">The route formats.</param>
     /// <param name="openDataset">Opens a file as a dataset the user chose (Import route… for a format that opens as one).</param>
     /// <param name="findDataset">Finds an open dataset by its id, for <see cref="OpenDataset"/>.</param>
     public RouteExchangeService(
         RoutesService routes,
         ReceivedRoutesService received,
-        RouteFormatRegistry? formats = null,
-        Func<string, Task<DatasetEntry?>>? openDataset = null,
-        Func<string, DatasetEntry?>? findDataset = null)
+        RouteFormatRegistry formats,
+        Func<string, Task<DatasetEntry?>>? openDataset,
+        Func<string, DatasetEntry?>? findDataset)
     {
         ArgumentNullException.ThrowIfNull(routes);
         ArgumentNullException.ThrowIfNull(received);
+        ArgumentNullException.ThrowIfNull(formats);
         _routes = routes;
         _received = received;
         _openDataset = openDataset;
         _findDataset = findDataset;
-        Formats = formats ?? RouteFormatRegistry.Default;
+        Formats = formats;
         LastExportFormat = Formats.Formats.FirstOrDefault()?.Name;
     }
 

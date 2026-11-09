@@ -71,8 +71,8 @@ internal sealed class DepthOverTimeViewModel : StationTimeSeriesViewModel
         DepthUnit depthUnit,
         double? safetyDepthMetres,
         GlobalTimeService? globalTime,
-        ITimeFormatProvider? timeFormat = null,
-        IThemeService? themeService = null)
+        ITimeFormatProvider? timeFormat,
+        IThemeService? themeService)
         : base(BuildSnapshot(result, locationLabel, latitude, longitude, depthUnit), globalTime, timeFormat, themeService)
     {
         ArgumentNullException.ThrowIfNull(result);

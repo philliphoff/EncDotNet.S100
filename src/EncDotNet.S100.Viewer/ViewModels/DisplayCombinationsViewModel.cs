@@ -128,7 +128,7 @@ internal sealed class DisplayCombinationsViewModel : ViewModelBase, IDisposable
     /// <summary>Creates the view-model over <paramref name="service"/>.</summary>
     /// <param name="service">The combinations.</param>
     /// <param name="ui">Opens the Display controls panel for <b>Manage…</b>; optional.</param>
-    public DisplayCombinationsViewModel(DisplayCombinationService service, IViewerUiControllerAccessor? ui = null)
+    public DisplayCombinationsViewModel(DisplayCombinationService service, IViewerUiControllerAccessor? ui)
     {
         ArgumentNullException.ThrowIfNull(service);
         _service = service;

@@ -22,7 +22,7 @@ public class SampleCoverageToolWindowedTests
         catalog.Add(LoadedDatasetFactory.S104(
             "s104-1", source: new EncDotNet.S100.Datasets.S104.S104CoverageSource(
                 S104Synth.Dataset(times: HourlyTimes))));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var t = new DateTimeOffset(2024, 1, 1, 2, 30, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
@@ -42,7 +42,7 @@ public class SampleCoverageToolWindowedTests
         catalog.Add(LoadedDatasetFactory.S104(
             "s104-1", source: new EncDotNet.S100.Datasets.S104.S104CoverageSource(
                 S104Synth.Dataset(times: HourlyTimes))));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S104Spec,
@@ -65,7 +65,7 @@ public class SampleCoverageToolWindowedTests
         catalog.Add(LoadedDatasetFactory.S104(
             "s104-1", source: new EncDotNet.S100.Datasets.S104.S104CoverageSource(
                 S104Synth.Dataset(times: HourlyTimes))));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         // Every 30 min from 00:00 to 03:00 = 7 instants.
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
@@ -91,7 +91,7 @@ public class SampleCoverageToolWindowedTests
         catalog.Add(LoadedDatasetFactory.S104(
             "s104-1", source: new EncDotNet.S100.Datasets.S104.S104CoverageSource(
                 S104Synth.Dataset(times: HourlyTimes))));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S104Spec,
@@ -116,7 +116,7 @@ public class SampleCoverageToolWindowedTests
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S102(
             "s102-1", bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04)));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S102Spec,
@@ -136,7 +136,7 @@ public class SampleCoverageToolWindowedTests
         catalog.Add(LoadedDatasetFactory.S111(
             "s111-1", source: new EncDotNet.S100.Datasets.S111.S111CoverageSource(
                 S111Synth.Dataset(times: HourlyTimes))));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S111Spec,

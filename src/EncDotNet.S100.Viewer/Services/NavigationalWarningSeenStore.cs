@@ -132,7 +132,7 @@ internal sealed partial class NavigationalWarningSeenStore : IDisposable
         _path = path;
         _readOnly = readOnly;
         _logger = logger;
-        _saver = new DebouncedSettingsSaver(Save, delayMilliseconds: 2000);
+        _saver = new DebouncedSettingsSaver(Save, delayMilliseconds: 2000, dispatch: null);
     }
 
     /// <summary>Writes pending changes now.</summary>

@@ -15,7 +15,7 @@ public class SettingsViewModelTimeFormatTests
     public void DefaultsTo_Local_When_Missing()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s);
+        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         Assert.Equal(TimeFormat.Local, vm.SelectedTimeFormat);
     }
 
@@ -24,7 +24,7 @@ public class SettingsViewModelTimeFormatTests
     {
         var s = NewSettings();
         s.TimeFormat = "utc";
-        var vm = new SettingsViewModel(s);
+        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         Assert.Equal(TimeFormat.Utc, vm.SelectedTimeFormat);
     }
 
@@ -33,7 +33,7 @@ public class SettingsViewModelTimeFormatTests
     {
         var s = NewSettings();
         s.TimeFormat = "totally-bogus";
-        var vm = new SettingsViewModel(s);
+        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         Assert.Equal(TimeFormat.Local, vm.SelectedTimeFormat);
     }
 
@@ -41,7 +41,7 @@ public class SettingsViewModelTimeFormatTests
     public void Setting_Raises_Event_And_Persists()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s);
+        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         TimeFormat? raised = null;
         vm.TimeFormatChanged += f => raised = f;
 
@@ -66,7 +66,7 @@ public class TimeFormatProviderTests
     public void Current_Reflects_SettingsViewModel()
     {
         var settings = NewSettings();
-        var vm = new SettingsViewModel(settings);
+        var vm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         var provider = new TimeFormatProvider(vm);
         Assert.Equal(TimeFormat.Local, provider.Current);
 
@@ -80,7 +80,7 @@ public class TimeFormatProviderTests
     public void Provider_ReBroadcasts_Change()
     {
         var settings = NewSettings();
-        var vm = new SettingsViewModel(settings);
+        var vm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         var provider = new TimeFormatProvider(vm);
         TimeFormat? heard = null;
         provider.TimeFormatChanged += f => heard = f;

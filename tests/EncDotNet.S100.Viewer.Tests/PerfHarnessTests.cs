@@ -170,7 +170,11 @@ public sealed class PerfHarnessTests
             notifier,
             (_, _) => release.Task,
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         coordinator.Register([Cell("A", 40, -75, 41, -74.5), Cell("B", 40, -74.5, 41, -74)]);
         notifier.Publish(Viewport(40, -75, 41, -74));
@@ -197,7 +201,11 @@ public sealed class PerfHarnessTests
             notifier,
             (entry, _) => { loaded.Add(entry); return Task.CompletedTask; },
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.FromMilliseconds(80) });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.FromMilliseconds(80) },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
         coordinator.Register([Cell("A", 40, -75, 41, -74)]);
 
         notifier.Publish(Viewport(40, -75, 41, -74));
@@ -216,7 +224,11 @@ public sealed class PerfHarnessTests
             notifier,
             (_, _) => release.Task,
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 2 });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 2 },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         // Just east of the view, inside the ahead margin.
         coordinator.Register([Cell("Ahead", 40, -73.9, 41, -73.6)]);
@@ -303,7 +315,7 @@ public sealed class PerfHarnessTests
         }));
         using var sampler = new ProcessMetricsSampler(
             new FakeSource(), interval: TimeSpan.FromHours(1), processorCount: 4, uiStalls: stalls);
-        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment());
+        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), tileCount: null, schedulerStats: null, predictionStats: null);
 
         Assert.True(tool.Invoke("start").TryGetValue(out _));
         var deadline = Stopwatch.StartNew();
@@ -341,7 +353,7 @@ public sealed class PerfHarnessTests
     {
         var source = new FakeSource();
         using var sampler = new ProcessMetricsSampler(source, interval: TimeSpan.FromHours(1), processorCount: 4, uiStalls: null);
-        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), () => 7);
+        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), () => 7, schedulerStats: null, predictionStats: null);
 
         Assert.True(tool.Invoke(null).TryGetValue(out var none));
         Assert.Null(none!.Window);
@@ -364,7 +376,7 @@ public sealed class PerfHarnessTests
         var source = new FakeSource();
         using var sampler = new ProcessMetricsSampler(source, interval: TimeSpan.FromHours(1), processorCount: 4, uiStalls: null);
         using var scheduler = new WorkScheduler(new WorkSchedulerOptions { WorkerCount = 2, ThreadName = "metrics test" });
-        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), schedulerStats: scheduler.GetStats);
+        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), schedulerStats: scheduler.GetStats, tileCount: null, predictionStats: null);
 
         Assert.True(tool.Invoke(null).TryGetValue(out var none));
         Assert.Null(none!.Scheduler);
@@ -504,7 +516,7 @@ public sealed class PerfHarnessTests
         Assert.NotNull(settleJson["loads"]!["loaded"]);
 
         using var sampler = new ProcessMetricsSampler(new FakeSource(), interval: TimeSpan.FromHours(1), processorCount: 4, uiStalls: null);
-        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment());
+        var tool = new GetProcessMetricsTool(sampler, renderMonitor: null, () => Environment(), tileCount: null, schedulerStats: null, predictionStats: null);
         Assert.True(tool.Invoke("start").TryGetValue(out var metrics));
         var metricsJson = Reply(ToolResultOk(metrics!));
         foreach (var field in new[]

@@ -65,7 +65,10 @@ public sealed class ForecastLibraryTests : IDisposable
         _library.AddCollection("S-111", [new S100ForecastFeedSource(Guid.NewGuid(), null, ModelsUri, [Cbofs, Nyofs])]);
         await _library.WhenIdle();
         var panel = new LibraryPanelViewModel(
-            _library, new NullImporter(), new NullLoader(), _downloader, action => action(), time: _time, viewTime: viewTime, timeFormat: timeFormat, coalesce: action => action());
+            _library, new NullImporter(), new NullLoader(), _downloader, action => action(), time: _time, viewTime: viewTime, timeFormat: timeFormat, coalesce: action => action(),
+            feedHealth: null,
+            notifications: null,
+            sync: null);
         panel.Sync();
         panel.SelectedNode = Source(panel);
         return panel;

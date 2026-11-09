@@ -14,7 +14,7 @@ public class SettingsViewModelAisActivationTests
     public void Defaults_to_AisOverlaySettings_default_when_unset()
     {
         var s = NewSettings();
-        var vm = new SettingsViewModel(s);
+        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         // When AisOverlay block is absent, VM falls back to the
         // AisOverlaySettings default (50°), matching the gate that
         // would apply at runtime if the user enabled AIS without
@@ -27,7 +27,7 @@ public class SettingsViewModelAisActivationTests
     {
         var s = NewSettings();
         s.AisOverlay = new AisOverlaySettings { ActivationViewportSpanDegrees = 12.5 };
-        var vm = new SettingsViewModel(s);
+        var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         Assert.Equal(12.5, vm.AisActivationViewportSpanDegrees);
     }
 
@@ -37,7 +37,7 @@ public class SettingsViewModelAisActivationTests
         var s = NewSettings();
         try
         {
-            var vm = new SettingsViewModel(s);
+            var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
             vm.AisActivationViewportSpanDegrees = 30.0;
             Assert.Equal(30.0, s.AisOverlay?.ActivationViewportSpanDegrees);
         }
@@ -55,7 +55,7 @@ public class SettingsViewModelAisActivationTests
         var s = NewSettings();
         try
         {
-            var vm = new SettingsViewModel(s);
+            var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
             vm.AisActivationViewportSpanDegrees = v;
             Assert.Null(vm.AisActivationViewportSpanDegrees);
             Assert.Null(s.AisOverlay?.ActivationViewportSpanDegrees);
@@ -73,7 +73,7 @@ public class SettingsViewModelAisActivationTests
         s.AisOverlay = new AisOverlaySettings { ActivationViewportSpanDegrees = 25.0 };
         try
         {
-            var vm = new SettingsViewModel(s);
+            var vm = new SettingsViewModel(s, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
             vm.AisActivationViewportSpanDegrees = null;
             Assert.Null(vm.AisActivationViewportSpanDegrees);
             Assert.Null(s.AisOverlay?.ActivationViewportSpanDegrees);
