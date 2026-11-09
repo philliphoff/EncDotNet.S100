@@ -170,7 +170,7 @@ var carolinasBox = new Box(31.4, -81.4, 38.0, -71.4);
 ];
 // The band 2 NOAA cells (US2ATLN*/O*, 28.8–38.4°N, 76.8–67.2°W) cover the whole
 // frame, with Erin's track crossing it, at the Routes panel's map aspect.
-var erinClipBox = new Box(31.2, -76.75, 38.3, -67.2);
+var erinClipBox = new Box(31.2, -76.95, 38.3, -67.4);
 // W8: sea fog off eastern Maine and in the Bay of Fundy on a June morning. The minis are map renders
 // at 1280 × 720 logical pixels, so the band 3 charts still draw at their scale.
 var gulfOfMaineBox = new Box(43.4, -69.6, 45.0, -66.4);
