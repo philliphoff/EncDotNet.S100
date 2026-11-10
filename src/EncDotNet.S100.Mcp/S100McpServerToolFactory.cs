@@ -268,7 +268,11 @@ internal static class S100McpServerToolFactory
             "answers which datasets' bounds cover the point). Area features use exact point-in-" +
             "polygon containment (interior-ring holes honoured); point and curve features match " +
             "within radiusMeters. Works across every vector spec (S-101, S-122, S-124, S-125, " +
-            "S-127, S-128, S-129, S-131, S-201, S-411, S-421). Each match reports the dataset ID, " +
+            "S-127, S-128, S-129, S-131, S-201, S-411, S-412, S-421, CAP and vector weather). " +
+            "Time-dependent products (S-412 and CAP warnings, surface analyses, tropical cyclones) " +
+            "return only the features drawn at 'time'; without it, a host with a map (SoundCharts) " +
+            "returns what its map draws at the view time, hidden S-124 parts left out, and a headless " +
+            "host returns every drawable feature. Each match reports the dataset ID, " +
             "spec, feature ID and type, geometry primitive, bounds, containment ('inside'/'near'), " +
             "and approximate distance — follow up with describe_feature for full attributes.";
 
@@ -277,6 +281,7 @@ internal static class S100McpServerToolFactory
                    [Description("Optional spec filter (e.g. \"S-101\" or \"S-124/1.5.0\"); null matches every vector spec. Accepts a string or the {\"name\",\"edition\"} spec object the tools return.")] JsonElement? spec = null,
                    [Description("Search tolerance for point/curve features in metres; area features use exact containment and ignore it. Clamped to [0, 100000]. Default 50.")] double radiusMeters = 50.0,
                    [Description("Maximum ranked matches to return; clamped to [1, 200]. Default 20.")] int maxResults = 20,
+                   [Description("Optional UTC ISO-8601 time to identify at: time-dependent products (S-412, CAP, surface analyses, tropical cyclones) return only the features drawn then. Omit to follow the host's map (SoundCharts: the view time and the warnings it shows), or, in a headless host, to identify every drawable feature.")] DateTimeOffset? time = null,
                    CancellationToken ct = default) =>
             DispatchAsync(() =>
                 inner.InvokeAsync(
@@ -285,7 +290,8 @@ internal static class S100McpServerToolFactory
                         longitude,
                         ParseSpec(spec),
                         radiusMeters,
-                        maxResults),
+                        maxResults,
+                        time),
                     ct));
 
         return McpServerTool.Create(del, new McpServerToolCreateOptions

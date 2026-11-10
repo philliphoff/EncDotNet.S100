@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Mcp;
 using EncDotNet.S100.Mcp.Library;
 using EncDotNet.S100.Mcp.Tools.Library;
@@ -34,6 +35,7 @@ internal sealed class McpServerHost : IAsyncDisposable
     private readonly IRenderStateControllerAccessor? _renderStateAccessor;
     private readonly MapPresentationStateProjection? _presentationProjection;
     private readonly GlobalTimeService? _globalTime;
+    private readonly IMapDrawState? _mapDrawState;
     private readonly IRenderActivityMonitor? _renderActivityMonitor;
     private readonly IDatasetLoadGateway? _loadGateway;
     private readonly EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm? _ownShipHelm;
@@ -125,8 +127,10 @@ internal sealed class McpServerHost : IAsyncDisposable
         EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel? measureCard = null,
         EncDotNet.S100.Viewer.Tools.RangeBearingState? rangeBearing = null,
         EncDotNet.S100.Viewer.ViewModels.EcdisDisplayPanelViewModel? ecdisDisplay = null,
-        EncDotNet.S100.Viewer.ViewModels.SettingsViewModel? settingsViewModel = null)
+        EncDotNet.S100.Viewer.ViewModels.SettingsViewModel? settingsViewModel = null,
+        IMapDrawState? mapDrawState = null)
     {
+        _mapDrawState = mapDrawState;
         _ecdisDisplay = ecdisDisplay;
         _settingsViewModel = settingsViewModel;
         _rangeBearing = rangeBearing;
@@ -250,6 +254,7 @@ internal sealed class McpServerHost : IAsyncDisposable
                 ? null
                 : new ViewerPassageRouteProvider(_routesService, new DispatcherRouteEditInvoker()),
             RouteCheckSources = _routeCheckSources,
+            MapDrawState = _mapDrawState,
         };
         var next = new S100McpServer(_catalog, options, _loggers);
         try
@@ -398,7 +403,10 @@ internal sealed class McpServerHost : IAsyncDisposable
         if (_coordinateAccessor is not null)
         {
             tools.Add(PickFeaturesMcpAdapter.Create(
-                new PickFeaturesTool(_coordinateAccessor, _catalog, _pickPresenter)));
+                new PickFeaturesTool(
+                    _coordinateAccessor,
+                    _mapDrawState is null ? new EncDotNet.S100.Mcp.Tools.IdentifyFeaturesTool(_catalog) : new EncDotNet.S100.Mcp.Tools.IdentifyFeaturesTool(_catalog, _mapDrawState),
+                    _pickPresenter)));
         }
         // Presentation (set_palette / set_display_category / set_display_mode)
         // and time (set_time_step) now come from the shared, renderer-neutral

@@ -18,11 +18,28 @@ public sealed class IdentifyFeaturesTool
 
     private readonly IdentifyFeaturesService _service;
 
-    /// <summary>Creates a new <see cref="IdentifyFeaturesTool"/>.</summary>
+    /// <summary>
+    /// Creates a new <see cref="IdentifyFeaturesTool"/> for a host with no
+    /// map: a request with no time identifies every drawable feature.
+    /// </summary>
     public IdentifyFeaturesTool(IDatasetCatalog catalog)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         _service = new IdentifyFeaturesService(catalog);
+    }
+
+    /// <summary>
+    /// Creates a new <see cref="IdentifyFeaturesTool"/> for a host whose map
+    /// draws as <paramref name="drawState"/> says: a request with no time
+    /// identifies what the map draws.
+    /// </summary>
+    /// <param name="catalog">The catalog.</param>
+    /// <param name="drawState">What the host's map draws.</param>
+    public IdentifyFeaturesTool(IDatasetCatalog catalog, IMapDrawState drawState)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(drawState);
+        _service = new IdentifyFeaturesService(catalog, drawState);
     }
 
     /// <summary>Executes the tool by delegating to the shared service.</summary>
