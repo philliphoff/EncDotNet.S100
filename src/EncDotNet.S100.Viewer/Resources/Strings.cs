@@ -108,6 +108,7 @@ internal static partial class Strings
     public static string LayerStack_Plane_OnDemandSurface => Get(nameof(LayerStack_Plane_OnDemandSurface));
     public static string LayerStack_Plane_BaseChartOver => Get(nameof(LayerStack_Plane_BaseChartOver));
     public static string LayerStack_Plane_OtherChartOverlays => Get(nameof(LayerStack_Plane_OtherChartOverlays));
+    public static string LayerStack_Plane_AdditionalMilitaryLayers => Get(nameof(LayerStack_Plane_AdditionalMilitaryLayers));
     public static string LayerStack_Plane_CautionsAndWarnings => Get(nameof(LayerStack_Plane_CautionsAndWarnings));
     public static string LayerStack_Plane_DynamicArrows => Get(nameof(LayerStack_Plane_DynamicArrows));
     public static string LayerStack_Plane_MarinerOverlay => Get(nameof(LayerStack_Plane_MarinerOverlay));

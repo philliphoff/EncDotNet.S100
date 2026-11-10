@@ -28,6 +28,7 @@
     <Project Path="src/EncDotNet.S100.Datasets.S57/EncDotNet.S100.Datasets.S57.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.Grib/EncDotNet.S100.Datasets.Grib.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.Weather/EncDotNet.S100.Datasets.Weather.csproj" />
+    <Project Path="src/EncDotNet.S100.Datasets.Aml/EncDotNet.S100.Datasets.Aml.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.Cap/EncDotNet.S100.Datasets.Cap.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.TropicalCyclones/EncDotNet.S100.Datasets.TropicalCyclones.csproj" />
     <Project Path="src/EncDotNet.S100.Datasets.Pipelines/EncDotNet.S100.Datasets.Pipelines.csproj" />

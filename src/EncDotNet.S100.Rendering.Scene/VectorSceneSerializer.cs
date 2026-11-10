@@ -36,7 +36,8 @@ public static class VectorSceneSerializer
     /// The format version. Bump it when the layout changes; a reader refuses
     /// any other version.
     /// </summary>
-    public const int FormatVersion = 1;
+    /// <remarks>Version 2 stores each text op's <see cref="TextPaintOp.FontSlant"/>.</remarks>
+    public const int FormatVersion = 2;
 
     private const uint Magic = 0x4E435353; // "SSCN" little-endian
 
@@ -269,6 +270,7 @@ public static class VectorSceneSerializer
                 w.Write7BitEncodedInt((int)text.FontProportion);
                 WriteNullable(w, text.HaloColor);
                 w.Write(text.HaloWidthPx);
+                w.Write7BitEncodedInt((int)text.FontSlant);
                 break;
 
             default:
@@ -487,6 +489,7 @@ public static class VectorSceneSerializer
                     FontProportion = (TextFontProportion)r.Read7BitEncodedInt(),
                     HaloColor = ReadNullableColor(r),
                     HaloWidthPx = r.ReadDouble(),
+                    FontSlant = (TextFontSlant)r.Read7BitEncodedInt(),
                 };
 
             default:

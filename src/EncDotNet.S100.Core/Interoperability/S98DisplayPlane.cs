@@ -78,6 +78,21 @@ public enum S98DisplayPlane
     OtherChartOverlays = 40,
 
     /// <summary>
+    /// NATO Additional Military Layers (AML): the code-built AML overlay
+    /// portrayal of <c>EncDotNet.S100.Datasets.Aml</c>, above the chart, S-102
+    /// and the weather overlays (<see cref="OtherChartOverlays"/>) and below
+    /// the cautions, routes and alerts (AML design handoff decision 25, epic
+    /// #1369).
+    /// </summary>
+    /// <remarks>
+    /// S-98 Ed 2.0.0 does not name this plane. AML isn't an S-100 product, and
+    /// MSC.530(106)/Rev.1 §Appendix 2 leaves non-official overlays to the
+    /// application; drawing them between the official overlays and the
+    /// cautions is this library's placement.
+    /// </remarks>
+    AdditionalMilitaryLayers = 45,
+
+    /// <summary>
     /// Navigational warnings and notices to mariners (S-124).
     /// MSC.530(106)/Rev.1 §Appendix 2 layers 3-4 ("Notices to
     /// Mariners…", "Official-caution"); S-98 Main §9.2.1 layers

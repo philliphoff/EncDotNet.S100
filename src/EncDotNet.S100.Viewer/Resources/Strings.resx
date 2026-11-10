@@ -100,6 +100,9 @@
   <data name="LayerStack_Plane_OtherChartOverlays" xml:space="preserve">
     <value>Other chart overlays</value>
   </data>
+  <data name="LayerStack_Plane_AdditionalMilitaryLayers" xml:space="preserve">
+    <value>Additional military layers</value>
+  </data>
   <data name="LayerStack_Plane_CautionsAndWarnings" xml:space="preserve">
     <value>Cautions and warnings</value>
   </data>
