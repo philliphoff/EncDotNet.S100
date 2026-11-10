@@ -2,6 +2,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
 using EncDotNet.S100.Datasets.Aml;
+using EncDotNet.S100.Datasets.Aml.Families;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Datasets.S57;
@@ -69,7 +70,12 @@ public sealed class AmlDisplayTests : IDisposable
         public Task<T> InvokeAsync<T>(Func<T> action) => Task.FromResult(action());
     }
 
-    private AmlDisplayService CreateService() => new(_datasets, _loader, _state, _viewport, action => action());
+    private AmlDisplayService CreateService()
+    {
+        var service = new AmlDisplayService(_state, _viewport, action => action());
+        service.Attach(_datasets, _loader);
+        return service;
+    }
 
     // Loads a synthetic AML cell of product PRSP productSpecification in scale band band.
     private DatasetEntry Load(string name, int productSpecification, int band)
@@ -247,7 +253,11 @@ public sealed class AmlDisplayTests : IDisposable
 
         var labels = section.Legend.SelectMany(g => g.Entries).Select(e => e.Label).ToList();
 
-        Assert.Equal(AmlStyleCatalog.Default.Classes.Select(c => c.LegendLabel), labels);
+        var expected = AmlStyleCatalog.Default.BuildLegend(EncDotNet.S100.Pipelines.PaletteType.Day).SelectMany(g => g.Entries).Select(e => e.Label);
+        Assert.Equal(expected, labels);
+        // Every module's classes are listed, including the later slices' (CLB's contours, for one).
+        Assert.Contains(ClbStyles.DepthContour.LegendLabel, labels);
+        Assert.Contains(ClbStyles.Bathymetry.Name, section.Legend.Select(g => g.Name));
         Assert.Equal(
             AmlStyleCatalog.Default.BuildLegend(EncDotNet.S100.Pipelines.PaletteType.Day).Select(g => g.Family.Name),
             section.Legend.Select(g => g.Name));
@@ -261,11 +271,25 @@ public sealed class AmlDisplayTests : IDisposable
         _viewport.ZoomTo(50_000);
         Assert.False(section.IsClbChipShown);
 
+        var presence = (IAmlClbPresence)service;
+        var raised = 0;
+        presence.Changed += () => raised++;
+
         LoadDrawnClb();
         Assert.True(section.IsClbChipShown);
+        Assert.True(presence.IsClbDrawn);
+        Assert.Equal(1, raised);
+        Assert.Equal(ClbStyles.NotForDepthChecksChip, section.ClbChipText);
 
+        // A zoom that changes nothing about CLB doesn't raise the presence.
+        _viewport.ZoomTo(40_000);
+        Assert.Equal(1, raised);
+
+        // A switched-off product no longer counts, for the chip or the safety-contour halo.
         service.SetProductVisible("CLB", false);
         Assert.False(section.IsClbChipShown);
+        Assert.False(presence.IsClbDrawn);
+        Assert.Equal(2, raised);
     }
 
     [Fact]
@@ -354,6 +378,6 @@ public sealed class AmlDisplayTests : IDisposable
             .Where(p => AutomationProperties.GetAutomationId(p) == "EcdisDisplayPanel.Aml.LegendEntry")
             .Select(AutomationProperties.GetName)
             .ToList();
-        Assert.Equal(AmlStyleCatalog.Default.Classes.Select(c => c.LegendLabel), entries);
+        Assert.Equal(section.Legend.SelectMany(g => g.Entries).Select(e => e.Label), entries);
     }
 }

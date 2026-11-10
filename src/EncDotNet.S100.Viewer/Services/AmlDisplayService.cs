@@ -29,11 +29,19 @@ internal sealed record AmlProductState(string Code, string Name, string Swatch, 
 /// so the Datasets panel's own eye keeps its state and nothing is re-rendered.
 /// </summary>
 /// <remarks>
-/// It also says whether CLB contours are drawn, for the corner chip
-/// "AML · CLB not used for depth checks" (decision 23): the chip shows while
-/// any drawn CLB cell is shown.
+/// <para>
+/// It is also the viewer's <see cref="IAmlClbPresence"/>: whether a drawn CLB
+/// cell is shown, after the product switches and scale bands. That drives the
+/// corner chip "AML · CLB not used for depth checks" (decision 23) and the ENC
+/// safety-contour halo (decision 22).
+/// </para>
+/// <para>
+/// It follows the datasets once attached (<see cref="Attach"/>), after the
+/// container is built: the presentation projection reads it as the CLB
+/// presence, and the loader is built from the projection's first snapshot.
+/// </para>
 /// </remarks>
-internal sealed class AmlDisplayService : IDisposable
+internal sealed class AmlDisplayService : IAmlClbPresence, IDisposable
 {
     /// <summary>The code the section uses for the AML 3.0 integrated product, which has none of its own.</summary>
     public const string IntegratedCode = "3.0";
@@ -44,51 +52,67 @@ internal sealed class AmlDisplayService : IDisposable
     // The order of the Library's AML product menu (decision 5).
     private static readonly string[] ProductOrder = ["CLB", "ESB", "LBO", "SBO", "MFF", "RAL", IntegratedCode];
 
-    private readonly DatasetsViewModel _datasets;
-    private readonly IDatasetLoaderService _loader;
     private readonly EcdisDisplayState _state;
     private readonly IMapViewportNotifier _viewport;
     private readonly Action<Action> _marshal;
     private readonly HashSet<DatasetEntry> _subscribed = [];
     private readonly Dictionary<DatasetEntry, Cell> _seen = [];
+    private DatasetsViewModel? _datasets;
+    private IDatasetLoaderService? _loader;
     private List<Cell> _cells = [];
     private double _scale = double.NaN;
     private bool _disposed;
 
-    /// <summary>Creates the service and applies the current state.</summary>
-    /// <param name="datasets">The loaded datasets.</param>
-    /// <param name="loader">The loader, whose processors hold each AML cell's facts.</param>
+    /// <summary>Creates the service; it follows the datasets once <see cref="Attach"/>ed.</summary>
     /// <param name="state">The display state holding the AML switches.</param>
     /// <param name="viewport">The map viewport, for the scale.</param>
     /// <param name="marshal">Runs an action on the UI thread.</param>
     public AmlDisplayService(
-        DatasetsViewModel datasets,
-        IDatasetLoaderService loader,
         EcdisDisplayState state,
         IMapViewportNotifier viewport,
         Action<Action> marshal)
     {
-        ArgumentNullException.ThrowIfNull(datasets);
-        ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(viewport);
         ArgumentNullException.ThrowIfNull(marshal);
-        _datasets = datasets;
-        _loader = loader;
         _state = state;
         _viewport = viewport;
         _marshal = marshal;
 
         _scale = ScaleOf(viewport.Current);
+        _state.AmlDisplayChanged += OnSwitchesChanged;
+        _viewport.ViewportChanged += OnViewportChanged;
+        Apply();
+    }
+
+    /// <summary>Starts following <paramref name="datasets"/> and <paramref name="loader"/>'s processors, and applies the controls.</summary>
+    /// <param name="datasets">The loaded datasets.</param>
+    /// <param name="loader">The loader, whose processors hold each AML cell's facts.</param>
+    /// <exception cref="InvalidOperationException">It is already attached.</exception>
+    public void Attach(DatasetsViewModel datasets, IDatasetLoaderService loader)
+    {
+        ArgumentNullException.ThrowIfNull(datasets);
+        ArgumentNullException.ThrowIfNull(loader);
+        if (_datasets is not null)
+            throw new InvalidOperationException("Already attached to the datasets.");
+        _datasets = datasets;
+        _loader = loader;
         _datasets.Entries.CollectionChanged += OnEntriesChanged;
         _loader.DatasetLoaded += OnDatasetChanged;
         _loader.DatasetRemoved += OnDatasetChanged;
-        _state.AmlDisplayChanged += OnSwitchesChanged;
-        _viewport.ViewportChanged += OnViewportChanged;
         foreach (var entry in _datasets.Entries)
             Subscribe(entry);
         Rebuild();
     }
+
+    /// <summary>Raised on the UI thread when <see cref="IsClbDrawn"/> changes (the CLB presence).</summary>
+    event Action? IAmlClbPresence.Changed
+    {
+        add => ClbDrawnChanged += value;
+        remove => ClbDrawnChanged -= value;
+    }
+
+    private event Action? ClbDrawnChanged;
 
     /// <summary>Raised on the UI thread after the products, the cells shown or the chip change.</summary>
     public event Action? Changed;
@@ -175,7 +199,7 @@ internal sealed class AmlDisplayService : IDisposable
         {
             foreach (var entry in _subscribed.ToArray())
                 Unsubscribe(entry);
-            foreach (var entry in _datasets.Entries)
+            foreach (var entry in _datasets!.Entries)
                 Subscribe(entry);
         }
 
@@ -227,7 +251,7 @@ internal sealed class AmlDisplayService : IDisposable
     /// <summary>Reads the AML cells again and applies the controls.</summary>
     internal void Rebuild()
     {
-        if (_disposed)
+        if (_disposed || _datasets is null || _loader is null)
             return;
 
         // A processor the loader doesn't hold right now isn't in its snapshot,
@@ -288,8 +312,12 @@ internal sealed class AmlDisplayService : IDisposable
                 !hidden.Contains(code));
         });
         Products = [.. rows.OrderByDescending(r => r.IsLoaded)];
-        IsClbDrawn = _cells.Any(c => c.Code == ClbCode && c.Drawn && IsShown(c));
+        var clbDrawn = _cells.Any(c => c.Code == ClbCode && c.Drawn && IsShown(c));
+        var clbChanged = clbDrawn != IsClbDrawn;
+        IsClbDrawn = clbDrawn;
         Changed?.Invoke();
+        if (clbChanged)
+            ClbDrawnChanged?.Invoke();
     }
 
     private static bool IsShown(Cell cell) => cell.Entry.IsVisible && !cell.Entry.IsHiddenByDisplay;
@@ -300,9 +328,14 @@ internal sealed class AmlDisplayService : IDisposable
         if (_disposed)
             return;
         _disposed = true;
-        _datasets.Entries.CollectionChanged -= OnEntriesChanged;
-        _loader.DatasetLoaded -= OnDatasetChanged;
-        _loader.DatasetRemoved -= OnDatasetChanged;
+        if (_datasets is not null)
+            _datasets.Entries.CollectionChanged -= OnEntriesChanged;
+        if (_loader is not null)
+        {
+            _loader.DatasetLoaded -= OnDatasetChanged;
+            _loader.DatasetRemoved -= OnDatasetChanged;
+        }
+
         _state.AmlDisplayChanged -= OnSwitchesChanged;
         _viewport.ViewportChanged -= OnViewportChanged;
         foreach (var entry in _subscribed.ToArray())

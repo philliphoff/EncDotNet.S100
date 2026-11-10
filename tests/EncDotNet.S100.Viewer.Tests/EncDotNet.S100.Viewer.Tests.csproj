@@ -35,7 +35,6 @@
     <Compile Include="..\_shared\TestContentKinds.cs" Link="TestSupport\TestContentKinds.cs" />
     <Compile Include="..\_shared\TestLuaEngine.cs" Link="TestSupport\TestLuaEngine.cs" />
     <Compile Include="..\_shared\SyntheticS57Cell.cs" Link="TestSupport\SyntheticS57Cell.cs" />
-    <Compile Include="..\_shared\SyntheticAmlCell.cs" Link="TestSupport\SyntheticAmlCell.cs" />
     <Compile Include="..\_shared\AmlFixtures.cs" Link="TestSupport\AmlFixtures.cs" />
     <Compile Include="..\_shared\FakeWeatherProduct.cs" Link="TestSupport\FakeWeatherProduct.cs" />
     <Compile Include="..\_shared\NetCdfFixtures.cs" Link="TestSupport\NetCdfFixtures.cs" />
