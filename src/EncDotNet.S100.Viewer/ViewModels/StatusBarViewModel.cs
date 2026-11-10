@@ -151,6 +151,13 @@ internal sealed class StatusBarViewModel : ViewModelBase
     public DepthBasisIndicatorViewModel DepthBasis { get; } = new();
 
     /// <summary>
+    /// The MARKING pill (#1371): the highest protective marking of the AML
+    /// data loaded, after DEPTHS and before MCP. Fed by
+    /// <see cref="Services.Aml.AmlSessionService"/>.
+    /// </summary>
+    public AmlMarkingIndicatorViewModel AmlMarking { get; } = new();
+
+    /// <summary>
     /// Applies a freshly-computed depth <paramref name="basis"/> to the
     /// status-bar indicator. Called whenever the depth basis service
     /// recomputes, and when the Local/UTC setting changes.

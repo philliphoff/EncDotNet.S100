@@ -72,12 +72,13 @@ public sealed record AmlClassStyle(string Acronym, AmlFamily Family, AmlClassKin
     public Func<AmlFeature, AmlDrawingContext, IEnumerable<DrawingInstruction>>? Build { get; init; }
 
     /// <summary>
-    /// The class's legend entry in a palette, in place of the one its
-    /// <see cref="Kind"/> gives, or <see langword="null"/> for that one. For a
-    /// class whose <see cref="Build"/> draws something the kinds don't, such
-    /// as CLB's thin contours or sounding figures.
+    /// The class's own legend entries in a palette, in place of the one entry
+    /// its <see cref="Kind"/> gives, or <see langword="null"/> for that entry.
+    /// For a class whose <see cref="Build"/> draws something the kinds don't,
+    /// such as CLB's thin contours or sounding figures, or whose drawing needs
+    /// several rows, such as sediment's patterns.
     /// </summary>
-    public Func<AmlStyleCatalog, PaletteType, LegendEntry>? Legend { get; init; }
+    public Func<AmlStyleCatalog, PaletteType, IReadOnlyList<LegendEntry>>? Legend { get; init; }
 
     /// <summary>Checks the style is complete: a point class needs a glyph.</summary>
     internal void Validate()

@@ -13,7 +13,7 @@ using EncDotNet.S100.Viewer.Services;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
-internal sealed class DatasetEntry : ViewModelBase
+internal sealed partial class DatasetEntry : ViewModelBase
 {
     private readonly MapDatasetId _id;
     private MapDataset? _mapDataset;
@@ -276,7 +276,11 @@ internal sealed class DatasetEntry : ViewModelBase
     public bool IsLoading
     {
         get => _isLoading;
-        set => SetProperty(ref _isLoading, value);
+        set
+        {
+            if (SetProperty(ref _isLoading, value) && IsAml)
+                OnPropertyChanged(nameof(AmlStateText));
+        }
     }
 
     /// <summary>
@@ -404,6 +408,7 @@ internal sealed class DatasetEntry : ViewModelBase
                 UpdateMapDataset();
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(RowOpacity));
+                OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
             }
         }
     }
@@ -425,6 +430,7 @@ internal sealed class DatasetEntry : ViewModelBase
             _isHiddenByDisplay = value;
             UpdateMapDataset();
             OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
         }
     }
 
@@ -901,6 +907,7 @@ internal sealed class DatasetEntry : ViewModelBase
             ReconcileSubLayerProjectionSubscriptions();
             UpdateMapDataset();
             OnPropertyChanged(nameof(HasSubLayers));
+            OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
         };
     }
 
@@ -958,6 +965,8 @@ internal sealed class DatasetEntry : ViewModelBase
         if (e.PropertyName == nameof(DatasetSubLayer.State))
         {
             UpdateMapDataset();
+            if (_aml is not null)
+                OnPropertyChanged(nameof(ShowsAmlCoverageOutline));
         }
     }
 }

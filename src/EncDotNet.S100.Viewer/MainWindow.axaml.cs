@@ -41,6 +41,11 @@ public partial class MainWindow : ShadUI.Window
     private EncDotNet.S100.Renderers.Mapsui.DynamicSources.S100DynamicSourceHost? _dynamicSourceOverlayHost;
     private EncDotNet.S100.Viewer.Services.PickHighlightController? _pickHighlightController;
     private EncDotNet.S100.Viewer.Services.DatasetExtentIndicatorController? _extentIndicatorController;
+    private EncDotNet.S100.Viewer.Services.Aml.AmlCoverageOutlineController? _amlOutlineController;
+
+    /// <summary>The status-bar width below which the MARKING pill drops its label.</summary>
+    private const double AmlMarkingLabelMinWidth = 900;
+
     private LibraryCoverageOverlayController? _libraryCoverageController;
     private EncDotNet.S100.Viewer.Services.Depth.AdjustedAreaBoundaryController? _adjustedAreaBoundary;
     private EncDotNet.S100.Viewer.Services.OverscaleCurtainController? _overscaleCurtainController;
@@ -257,6 +262,8 @@ public partial class MainWindow : ShadUI.Window
             _pickHighlightController = null;
             _extentIndicatorController?.Dispose();
             _extentIndicatorController = null;
+            _amlOutlineController?.Dispose();
+            _amlOutlineController = null;
             _libraryCoverageController?.Dispose();
             _libraryCoverageController = null;
             _adjustedAreaBoundary?.Dispose();
@@ -492,6 +499,16 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
             App.Services.GetRequiredService<SettingsViewModel>(),
+            UiThread.RunOrPost,
+            UiThread.Post);
+
+        // AML coverage outlines (#1371): where AML cells that aren't drawn
+        // (or are hidden) lie, as an ink frame with inward ticks.
+        _amlOutlineController = new EncDotNet.S100.Viewer.Services.Aml.AmlCoverageOutlineController(
+            _mapHost,
+            _viewModel.Datasets,
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
             UiThread.RunOrPost,
             UiThread.Post);
 
@@ -1774,6 +1791,10 @@ public partial class MainWindow : ShadUI.Window
             pill.Fit(room);
         }
         StatusBarDock.SizeChanged += (_, _) => FitDepthBasis();
+        // The MARKING pill keeps its marking whole and drops its label when
+        // the status bar is short of room (#1371, decision 10).
+        StatusBarDock.SizeChanged += (_, _) =>
+            _viewModel.StatusBar.AmlMarking.ShowsLabel = StatusBarDock.Bounds.Width >= AmlMarkingLabelMinWidth;
         StatusRightCluster.SizeChanged += (_, _) => FitDepthBasis();
         _viewModel.StatusBar.DepthBasis.PropertyChanged += (_, e) =>
         {

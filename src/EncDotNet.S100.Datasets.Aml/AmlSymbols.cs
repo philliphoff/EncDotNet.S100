@@ -29,11 +29,22 @@ public sealed class AmlSymbols
         "M -2.7 -3.6 L 2.0 -3.6 L 3.6 -2.0 L 3.6 2.7 Q 3.6 3.6 2.7 3.6 L -2.7 3.6 Q -3.6 3.6 -3.6 2.7 L -3.6 -2.7 Q -3.6 -3.6 -2.7 -3.6 Z";
 
     private readonly Dictionary<string, string> _svg = new(StringComparer.Ordinal);
+    private readonly IReadOnlyList<Func<string, string?>> _resolvers;
 
     /// <summary>Writes the symbols of <paramref name="families"/>, with the framed symbols of <paramref name="glyphs"/> in each.</summary>
     /// <param name="families">The families.</param>
     /// <param name="glyphs">The glyphs used in each family.</param>
-    public AmlSymbols(IEnumerable<AmlFamily> families, IEnumerable<(AmlFamily Family, AmlGlyph Glyph)> glyphs)
+    /// <param name="extra">More symbols by name (<see cref="AmlStyleResources.Symbols"/>), or <see langword="null"/>.</param>
+    /// <param name="resolvers">
+    /// Makers of symbols on demand, such as pattern tiles
+    /// (<see cref="AmlStyleResources.SymbolResolver"/>), asked in turn for a
+    /// name none of the others has; or <see langword="null"/>.
+    /// </param>
+    public AmlSymbols(
+        IEnumerable<AmlFamily> families,
+        IEnumerable<(AmlFamily Family, AmlGlyph Glyph)> glyphs,
+        IEnumerable<KeyValuePair<string, string>>? extra = null,
+        IReadOnlyList<Func<string, string?>>? resolvers = null)
     {
         ArgumentNullException.ThrowIfNull(families);
         ArgumentNullException.ThrowIfNull(glyphs);
@@ -61,10 +72,18 @@ public sealed class AmlSymbols
             _svg.Add(name, svg);
         }
 
+        foreach (var (name, svg) in extra ?? [])
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(name);
+            ArgumentException.ThrowIfNullOrWhiteSpace(svg);
+            Add(name, svg);
+        }
+
+        _resolvers = resolvers ?? [];
         Provider = GetSymbol;
     }
 
-    /// <summary>The names of every symbol.</summary>
+    /// <summary>The names of every symbol, except those made on demand.</summary>
     public IReadOnlyCollection<string> Names => _svg.Keys;
 
     /// <summary>The symbols by name, for a renderer's symbol provider.</summary>
@@ -72,12 +91,23 @@ public sealed class AmlSymbols
 
     /// <summary>The SVG of the symbol <paramref name="name"/>, or <see langword="null"/>.</summary>
     /// <param name="name">The symbol's name.</param>
-    public string? GetSymbol(string name) => _svg.TryGetValue(name, out var svg) ? svg : null;
+    public string? GetSymbol(string name)
+    {
+        if (_svg.TryGetValue(name, out var svg))
+            return svg;
+        foreach (var resolve in _resolvers)
+        {
+            if (resolve(name) is { } made)
+                return made;
+        }
+
+        return null;
+    }
 
     private void Add(string name, string svg)
     {
         if (!_svg.TryAdd(name, svg))
-            throw new ArgumentException($"Two AML families make the symbol '{name}'.");
+            throw new ArgumentException($"Two AML symbols are named '{name}'.");
     }
 
     private static string Framed(string name, AmlFamily family, AmlGlyph glyph)

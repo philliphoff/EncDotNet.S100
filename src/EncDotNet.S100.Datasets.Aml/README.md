@@ -84,8 +84,9 @@ bathymetry.
 
 The built-in styles cover the Routes, Areas and Limits (RAL) air and
 operational classes, Contour Line Bathymetry (CLB), Maritime Foundation &
-Facilities (MFF), and the AML 3.0 chart and land background (NCD, LND) and
-airfields. The AML 3.0 trials use the same classes.
+Facilities (MFF), Environment, Seabed and Beach (ESB), and the AML 3.0 chart
+and land background (NCD, LND) and airfields. The AML 3.0 trials, including
+the sediment (SED) trials, use the same classes.
 
 | Family | Class | Drawn as |
 |---|---|---|
@@ -112,8 +113,53 @@ airfields. The AML 3.0 trials use the same classes.
 | Bathymetry | `DEPCNT` depth contour | Solid 0.7 px seabed brown at 55 %, its depth in small italic brown |
 | Bathymetry | `DEPARE` depth area | Nothing: no fill, its edges are the contours |
 | Bathymetry | `SOUNDG` sounding | Each sounding a small italic brown figure |
+| Environmental | `sedlay` geological layer | Sediment pattern over a 7 % wash (see below) |
+| Environmental | `botmft` bottom feature | Framed chevron; areas and lines in the signature |
+| Environmental | `twlscr` trawl scours | Short parallel strokes along the scour |
+| Environmental | `lndzne`, `lngare`, `lndste`, `lndstp`, `lndpnt`, `lndplc` landing zone, area, site, strip, point, place | Framed L |
+| Environmental | `drpzne` drop zone | Framed D |
+| Environmental | `bchext` beach exit | Solid line on a halo with chevrons, off the beach |
+| Environmental | `divloc`, `viewpt`, `resloc`, `shlloc` diving, viewpoint, resource, shelter | Framed wave and arrow, eye, crate, house |
+| Environmental | `icebrg` iceberg | Framed peaks over a waterline |
+| Environmental | `icemov` ice movement | Arrow turned to the drift (`icebdr`), "drift SE" |
+| Environmental | `icelin` ice line, `bchprf` beach profile | Line |
+| Environmental | ice leads, polynyas, sea ice, land ice, iceberg areas and the ESB zones | Area |
 
-Other classes aren't drawn yet, but are still features.
+Other classes aren't drawn yet, but are still features. The IHO chart classes
+in ESB cells (lights, landmarks, coastline and the like) are left to the ENC.
+
+### Sediment
+
+Sediment is a pattern over a 7 % wash in the environmental ink, never a
+colour ramp, so it never competes with the chart's depth shading. Each
+`natsed` value is drawn with the marks of its kinds:
+
+| Kind | Mark | `natsed` |
+|---|---|---|
+| Sand | Dots | sand |
+| Mud | Short dashes | mud, silt, clays |
+| Gravel | Small rings | gravel, pebbles, stone |
+| Boulders | Large rings | cobbles, boulder |
+| Rock | Small crosses | rock, every bedrock type, lava; in AML 3.0 crystalline and sedimentary rock |
+| Shells | Small cups | shells, coral |
+| Till | Small open triangles | till, glaciofluvial drift (AML 3.0) |
+
+A Folk mixture draws its parts in one pattern: the main sediment with every
+mark, a qualifier ("sandy") with every other one, a trace ("slightly
+gravelly") with every fourth. A list of values such as `525,523,522` is drawn
+the same way, the first as the main sediment. Code 544 is gravelly muddy sand
+in AML 1.0 but crystalline rock in AML 3.0, so the cell's catalogue decides.
+Boundaries are a thin dash-dot with no halo or ticks, and areas have no
+label.
+
+The patterns are made on demand (`EsbSediment.ResolveTile`,
+`EsbSediment.ResolveFill`). With a content scope, the sub-layer carries a
+`PatternClipCacheKey`, so the renderer clips a cell's patterns once rather
+than for every tile.
+
+The renderer has no on-map legend box, so the sediment legend is the
+geological layer's own legend entries: one swatch per kind and one for a
+mixture, shown with the rest of the AML legend while ESB is drawn.
 
 **CLB (decision 22).** CLB is drawn in its own style, never the chart's:
 with S-101 portrayal its depth areas would look like the chart and bring a
@@ -166,6 +212,13 @@ new AmlClassStyle("seddep", AmlFamily.Environmental, AmlClassKind.Area, "Sedimen
     Build = (feature, context) => [context.Boundary(), context.At(5).Area(feature.Id, "AMLENV", 0.93)],
 };
 ```
+
+When that drawing needs symbols, line styles or area fills of its own, the
+module brings them in its `Resources` (an `AmlStyleResources`): fixed symbols
+and line styles, and resolvers for families of symbols and fills made on
+demand. Name them after the family's symbol stem and an underscore, such as
+`AML_ENVIRONMENTAL_SCOUR`. A class whose legend needs more than one row sets
+`AmlClassStyle.Legend`. `Families/EsbEnvironmentalStyles.cs` uses both.
 
 ## Legend
 
