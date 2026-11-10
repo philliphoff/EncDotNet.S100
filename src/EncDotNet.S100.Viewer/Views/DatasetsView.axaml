@@ -422,6 +422,7 @@
                                 <TreeDataTemplate DataType="vm:ExchangeSetHeader"
                                                   ItemsSource="{Binding Datasets}">
                                     <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
+                                          RowDefinitions="Auto,Auto"
                                           ColumnSpacing="6">
                                         <Button Grid.Column="0"
                                                 AutomationProperties.AutomationId="Datasets.Source.ToggleVisibility"
@@ -468,6 +469,29 @@
                                                            IsVisible="{Binding SignatureStatus, Converter={StaticResource SignatureStatusCheckingConverter}}"
                                                            Icon="Shield" IconVariant="Regular" Opacity="0.4" />
                                         </Panel>
+                                        <!-- AML set (#1371, decision 7): the AML badge, the
+                                             highest marking in the set and "highest of N".
+                                             It sits beside the signature badge, not instead
+                                             of it, so a signed set shows both. -->
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="4"
+                                                    Orientation="Horizontal"
+                                                    Spacing="6"
+                                                    Margin="0,3,0,2"
+                                                    IsVisible="{Binding IsAml}"
+                                                    AutomationProperties.AutomationId="Datasets.Source.Aml">
+                                            <views:AmlTagChip Text="{x:Static loc:Strings.Aml_Chip}"
+                                                              ToolTip.Tip="{x:Static loc:Strings.Aml_Heading}" />
+                                            <views:AmlMarkingChip Marking="{Binding AmlHighestMarking}"
+                                                                  IsVisible="{Binding HasAmlHighestMarking}"
+                                                                  AutomationProperties.AutomationId="Datasets.Source.AmlMarking"
+                                                                  AutomationProperties.Name="{Binding AmlHighestMarking}"
+                                                                  ToolTip.Tip="{x:Static loc:Strings.Aml_ProtectiveMarking}" />
+                                            <TextBlock Text="{Binding AmlHighestOfText}"
+                                                       IsVisible="{Binding HasAmlHighestMarking}"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource MutedColor}"
+                                                       VerticalAlignment="Center" />
+                                        </StackPanel>
                                         <Button Grid.Column="4"
                                                 AutomationProperties.AutomationId="Datasets.Source.Close"
                                                 AutomationProperties.Name="{x:Static loc:Strings.Label_CloseExchangeSet}"
@@ -501,8 +525,51 @@
                                         </Button>
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding DisplayName}"
+                                                       IsVisible="{Binding !IsAml}"
                                                        Opacity="{Binding RowOpacity}"
                                                        TextTrimming="CharacterEllipsis" />
+                                            <!-- AML row (#1371, decision 8): the cell, "AML · {code},
+                                                 {product name}" and the state. The icon is a dashed ink
+                                                 frame while the cell isn't drawn, never the failure look. -->
+                                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6"
+                                                  IsVisible="{Binding IsAml}"
+                                                  Opacity="{Binding RowOpacity}">
+                                                <Panel Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center">
+                                                    <Rectangle Width="12" Height="12"
+                                                               Stroke="{DynamicResource ForegroundColor}"
+                                                               StrokeThickness="1.2"
+                                                               StrokeDashArray="2,1.5"
+                                                               IsVisible="{Binding ShowsAmlNotDrawnIcon}"
+                                                               AutomationProperties.AutomationId="Datasets.Source.Dataset.AmlNotDrawnIcon"
+                                                               ToolTip.Tip="{x:Static loc:Strings.Aml_Row_NotDrawnIconToolTip}" />
+                                                    <ic:FluentIcon Icon="Layer" IconVariant="Regular" FontSize="14"
+                                                                   IsVisible="{Binding ShowsAmlDrawnIcon}" />
+                                                </Panel>
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{Binding DisplayName}"
+                                                           FontFamily="{StaticResource MonoFontFamily}"
+                                                           VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <views:AmlMarkingChip Grid.Column="2"
+                                                                      Marking="{Binding AmlMarking}"
+                                                                      IsVisible="{Binding ShowsAmlMarking}" />
+                                            </Grid>
+                                            <TextBlock Text="{Binding AmlProductLine}"
+                                                       IsVisible="{Binding IsAml}"
+                                                       Opacity="{Binding RowOpacity}"
+                                                       AutomationProperties.AutomationId="Datasets.Source.Dataset.AmlProduct"
+                                                       ToolTip.Tip="{Binding AmlTagToolTip}"
+                                                       Margin="20,1,0,0"
+                                                       FontSize="12"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding AmlStateText}"
+                                                       IsVisible="{Binding IsAml}"
+                                                       Opacity="{Binding RowOpacity}"
+                                                       AutomationProperties.AutomationId="Datasets.Source.Dataset.AmlState"
+                                                       Margin="20,1,0,2"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource MutedColor}"
+                                                       TextWrapping="Wrap" />
                                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6" IsVisible="{Binding HasLayerTime}">
                                             <Button Grid.Column="0"
                                                     AutomationProperties.AutomationId="Datasets.Source.Dataset.LayerTime"
@@ -535,7 +602,7 @@
                                             </Panel>
                                         </Grid>
                                         </StackPanel>
-                                        <Border Grid.Column="2" Classes="SpecTag">
+                                        <Border Grid.Column="2" Classes="SpecTag" IsVisible="{Binding ShowsSpecTag}">
                                             <TextBlock Text="{Binding ProductSpec}"
                                                        FontSize="10"
                                                        FontWeight="SemiBold"

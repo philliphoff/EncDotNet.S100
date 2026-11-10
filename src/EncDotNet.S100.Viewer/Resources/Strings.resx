@@ -7969,6 +7969,98 @@
   <data name="Tooltip_EcdisPanel_Bathymetry_ReliefShading" xml:space="preserve">
     <value>Shade the S-102 depth surface by its slope, lit from the north-west, so the shape of the seabed shows. A display aid, not part of the S-102 portrayal: the depth band colours keep their meaning. Off by default.</value>
   </data>
+  <data name="Aml_TagFormat" xml:space="preserve">
+    <value>AML · {0}</value>
+    <comment>The AML tag before a cell loads, from the cell name's product code. {0}: the code, e.g. CLB</comment>
+  </data>
+  <data name="Aml_Row_ProductFormat" xml:space="preserve">
+    <value>{0}, {1}</value>
+    <comment>Second line of an AML dataset row. {0}: the tag, e.g. 'AML · CLB'; {1}: the product name</comment>
+  </data>
+  <data name="Aml_Row_Opening" xml:space="preserve">
+    <value>Opening…</value>
+    <comment>Third line of an AML dataset row while the cell opens</comment>
+  </data>
+  <data name="Aml_Row_DrawnFormat" xml:space="preserve">
+    <value>Drawn · {0:N0} features</value>
+    <comment>Third line of an AML dataset row the AML portrayal draws. {0}: feature count</comment>
+  </data>
+  <data name="Aml_Row_NotDrawnOutlinedFormat" xml:space="preserve">
+    <value>{0}. Its coverage is outlined on the map.</value>
+    <comment>Third line of the first not-drawn AML row of a set. {0}: 'Recognised, not drawn'</comment>
+  </data>
+  <data name="Aml_Row_NotDrawnIconToolTip" xml:space="preserve">
+    <value>Recognised, not drawn. The eye shows or hides its coverage outline.</value>
+    <comment>Tooltip on the dashed frame of a not-drawn AML row</comment>
+  </data>
+  <data name="Aml_Header_HighestOfFormat" xml:space="preserve">
+    <value>highest of {0}</value>
+    <comment>After the marking chip on an AML exchange-set header. {0}: number of AML cells in the set</comment>
+  </data>
+  <data name="Aml_Outline_NotDrawn" xml:space="preserve">
+    <value>Not drawn</value>
+    <comment>Label card on the coverage outline of an AML cell that isn't drawn</comment>
+  </data>
+  <data name="Aml_Outline_Hidden" xml:space="preserve">
+    <value>Hidden</value>
+    <comment>Label card on the coverage outline of a drawn AML cell whose layers are hidden</comment>
+  </data>
+  <data name="Aml_Pill_ToolTip" xml:space="preserve">
+    <value>Protective marking of the Additional Military Layers data loaded. The highest wins.</value>
+    <comment>Tooltip of the status-bar MARKING pill</comment>
+  </data>
+  <data name="Aml_Pill_AccessibleNameFormat" xml:space="preserve">
+    <value>Protective marking {0}</value>
+    <comment>Accessible name of the MARKING pill. {0}: the marking</comment>
+  </data>
+  <data name="Aml_Pill_FlyoutHeader" xml:space="preserve">
+    <value>PROTECTIVE MARKING</value>
+    <comment>Header of the MARKING pill's flyout</comment>
+  </data>
+  <data name="Aml_Pill_FlyoutRule" xml:space="preserve">
+    <value>Highest wins: UNCLASSIFIED, then RESTRICTED, then NATO RESTRICTED, then any other marking as written.</value>
+    <comment>Footnote of the MARKING pill's flyout</comment>
+  </data>
+  <data name="Aml_Pill_SetCellsFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>A set line in the MARKING flyout. {0}: set name; {1}: its cell count text</comment>
+  </data>
+  <data name="Aml_CellCountOne" xml:space="preserve">
+    <value>1 cell</value>
+    <comment>AML cell count, singular</comment>
+  </data>
+  <data name="Aml_CellCountFormat" xml:space="preserve">
+    <value>{0} cells</value>
+    <comment>AML cell count, plural. {0}: count</comment>
+  </data>
+  <data name="Aml_Notice_TitleFormat" xml:space="preserve">
+    <value>{0} is military data</value>
+    <comment>First-open notification title. {0}: exchange set name</comment>
+  </data>
+  <data name="Aml_Notice_NotDrawnOneFormat" xml:space="preserve">
+    <value>1 Additional Military Layers cell ({0}). SoundCharts shows where it is but doesn't draw it.</value>
+    <comment>First-open notification body, one cell not drawn. {0}: product codes</comment>
+  </data>
+  <data name="Aml_Notice_NotDrawnFormat" xml:space="preserve">
+    <value>{0} Additional Military Layers cells ({1}). SoundCharts shows where they are but doesn't draw them.</value>
+    <comment>First-open notification body. {0}: count; {1}: product codes</comment>
+  </data>
+  <data name="Aml_Notice_DrawnOneFormat" xml:space="preserve">
+    <value>1 Additional Military Layers cell ({0}). SoundCharts draws it as an overlay, not a chart.</value>
+    <comment>First-open notification body, one cell drawn. {0}: product codes</comment>
+  </data>
+  <data name="Aml_Notice_DrawnFormat" xml:space="preserve">
+    <value>{0} Additional Military Layers cells ({1}). SoundCharts draws them as an overlay, not a chart.</value>
+    <comment>First-open notification body, cells drawn. {0}: count; {1}: product codes</comment>
+  </data>
+  <data name="Aml_Notice_MarkedFormat" xml:space="preserve">
+    <value>Marked {0}.</value>
+    <comment>Added to the first-open notification when the marking is above UNCLASSIFIED. {0}: the marking</comment>
+  </data>
+  <data name="Aml_Notice_Details" xml:space="preserve">
+    <value>Details</value>
+    <comment>First-open notification action: opens the Library item</comment>
+  </data>
   <data name="Pick_AmlClass" xml:space="preserve">
     <value>AML class</value>
     <comment>Object Information class line for a class an AML catalogue adds (#1372)</comment>
