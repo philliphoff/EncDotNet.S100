@@ -101,8 +101,12 @@ public sealed class AmlDatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// <summary>What happened to the cell's updates, when it was opened with them; otherwise <see langword="null"/>.</summary>
     public S57UpdateReport? UpdateReport { get; }
 
-    /// <summary>Whether the cell is drawn: <see langword="false"/> while AML is "recognised, not drawn".</summary>
-    public bool Drawn => _portrayal.Draws;
+    /// <summary>
+    /// Whether the cell is drawn: whether its portrayal has a style for any of
+    /// its features' classes. <see langword="false"/> while the cell is
+    /// "recognised, not drawn".
+    /// </summary>
+    public bool Drawn => _portrayal.Draws && _portrayal.DrawsAny(_content.Value.Features);
 
     /// <summary>
     /// The state hosts report: <c>"drawn"</c>, or <c>"recognised-not-drawn"</c>
@@ -140,7 +144,7 @@ public sealed class AmlDatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     };
 
     /// <inheritdoc />
-    public LoadedDatasetData CreateLoadedData() => new AmlDatasetData(Info, Metadata);
+    public LoadedDatasetData CreateLoadedData() => new AmlDatasetData(Info, Metadata) { Drawn = Drawn };
 
     /// <summary>
     /// Reads an AML cell's catalog payload from <paramref name="stream"/>
@@ -168,11 +172,15 @@ public sealed class AmlDatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         ArgumentNullException.ThrowIfNull(document);
         var features = S57ChartFeatures.Read(S57Chart.FromDocument(document), document.GetObjectCatalogue());
         var coverage = S57ChartFeatures.ResolveCoverage(features, out _);
+        var portrayal = S100Products.AmlPortrayal;
         return new AmlDatasetData(info, new DatasetMetadata
         {
             Spec = SpecOf(info),
             Extent = ExtentOf(coverage),
-        });
+        })
+        {
+            Drawn = portrayal.Draws && portrayal.DrawsAny(features),
+        };
     }
 
     private static SpecRef SpecOf(AmlDatasetInfo info) => new(AmlDatasetInfo.SpecName,

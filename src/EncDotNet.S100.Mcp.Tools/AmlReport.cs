@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.S57;
 
 namespace EncDotNet.S100.Mcp.Tools;
@@ -45,10 +46,16 @@ public sealed record AmlReport(
                 : null);
     }
 
-    /// <summary>The status hosts report for AML: "recognised-not-drawn" until SoundCharts draws AML.</summary>
-    public static string Status => S100Products.AmlPortrayal.Draws ? "drawn" : "recognised-not-drawn";
+    /// <summary>The status hosts report for an AML cell: <c>"drawn"</c> or <c>"recognised-not-drawn"</c>.</summary>
+    /// <param name="drawn">Whether the cell is drawn.</param>
+    public static string StatusOf(bool drawn) => drawn ? "drawn" : "recognised-not-drawn";
 
-    /// <summary>Whether AML is drawn.</summary>
+    /// <summary>
+    /// Whether SoundCharts draws AML at all, for a cell whose features haven't
+    /// been read (a Library item). A loaded cell answers for itself
+    /// (<see cref="AmlDatasetData.Drawn"/>): it isn't drawn when none of its
+    /// classes has a style.
+    /// </summary>
     public static bool Drawn => S100Products.AmlPortrayal.Draws;
 
     private static string MarkingSourceName(AmlMarkingSource source) => source switch

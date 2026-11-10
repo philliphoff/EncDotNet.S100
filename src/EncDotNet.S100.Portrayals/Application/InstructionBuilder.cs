@@ -103,6 +103,7 @@ public sealed record InstructionBuilder
             FontColor = style.FontColor,
             FontWeight = style.FontWeight,
             FontProportion = style.FontProportion,
+            FontSlant = style.FontSlant,
             HaloColor = style.HaloColor,
             HaloWidth = style.HaloWidth,
             HorizontalAlignment = style.HorizontalAlignment,
@@ -260,6 +261,9 @@ public sealed record TextInstructionStyle
 
     /// <summary>The font proportion.</summary>
     public TextFontProportion FontProportion { get; init; } = TextFontProportion.Proportional;
+
+    /// <summary>The font slant; <see cref="TextFontSlant.Upright"/> by default.</summary>
+    public TextFontSlant FontSlant { get; init; } = TextFontSlant.Upright;
 
     /// <summary>The halo's colour token, or <see langword="null"/> (the default) for no halo.</summary>
     public string? HaloColor { get; init; }
