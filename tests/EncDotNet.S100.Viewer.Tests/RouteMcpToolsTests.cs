@@ -493,7 +493,7 @@ public class RouteMcpToolsTests
         var route = routes.Routes.CreateRoute("Demo", "rid");
         var detail = RouteProjection.Detail(route, routes);
 
-        var call = CreateRouteMcpAdapter.TranslateResult(ToolResult<RouteDetail>.Ok(detail));
+        var call = McpAdapterShared.Translate(ToolResult<RouteDetail>.Ok(detail));
 
         Assert.False(call.IsError);
         var text = Assert.IsType<TextContentBlock>(call.Content.Single()).Text;
@@ -507,7 +507,7 @@ public class RouteMcpToolsTests
     [Fact]
     public void Adapter_failure_payload_has_code_message_details()
     {
-        var call = GetRouteMcpAdapter.TranslateResult(
+        var call = McpAdapterShared.Translate(
             ToolResult<RouteDetail>.Err(new RouteNotFound("ghost")));
 
         Assert.True(call.IsError);
@@ -529,7 +529,7 @@ public class RouteMcpToolsTests
         route.SetPassageValue(EncDotNet.S100.Viewer.Routing.RoutePassageField.Speed, 10);
         route.SetLegOverride(1, EncDotNet.S100.Viewer.Routing.RoutePassageField.Speed, 6);
 
-        var call = GetRouteMcpAdapter.TranslateResult(ToolResult<RouteDetail>.Ok(RouteProjection.Detail(route, routes)));
+        var call = McpAdapterShared.Translate(ToolResult<RouteDetail>.Ok(RouteProjection.Detail(route, routes)));
 
         var text = Assert.IsType<TextContentBlock>(call.Content.Single()).Text;
         using var doc = JsonDocument.Parse(text);
@@ -552,7 +552,7 @@ public class RouteMcpToolsTests
         route.SetPassageValue(EncDotNet.S100.Viewer.Routing.RoutePassageField.Draft, 4.8);
         route.SetDeparture(new DateTimeOffset(2026, 10, 12, 6, 40, 0, TimeSpan.Zero));
 
-        var call = GetPassageMcpAdapter.TranslateResult(
+        var call = McpAdapterShared.Translate(
             ToolResult<GetPassageResult>.Ok(new GetPassageResult(route.Id, RouteProjection.Passage(route))));
 
         Assert.False(call.IsError);
@@ -732,7 +732,7 @@ public class RouteMcpToolsTests
     [Fact]
     public void Edit_mode_adapter_payload_names_the_mode()
     {
-        var call = SetRouteEditModeMcpAdapter.TranslateResult(
+        var call = McpAdapterShared.Translate(
             ToolResult<RouteEditModeResult>.Ok(new RouteEditModeResult(true, "r1")));
 
         var text = Assert.IsType<TextContentBlock>(call.Content.Single()).Text;
@@ -805,7 +805,7 @@ public class RouteMcpToolsTests
     [Fact]
     public void Passage_card_adapter_payload_names_the_state()
     {
-        var call = SetPassageCardMcpAdapter.TranslateResult(ToolResult<PassageCardResult>.Ok(new PassageCardResult(true)));
+        var call = McpAdapterShared.Translate(ToolResult<PassageCardResult>.Ok(new PassageCardResult(true)));
 
         var text = Assert.IsType<TextContentBlock>(call.Content.Single()).Text;
         using var doc = JsonDocument.Parse(text);
