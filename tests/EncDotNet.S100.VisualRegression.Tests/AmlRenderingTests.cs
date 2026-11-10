@@ -66,7 +66,9 @@ public sealed class AmlRenderingTests
     public async Task The_AML_3_air_classes(PaletteType palette)
     {
         var drawing = new AmlPortrayal().Draw(AmlFixtures.Fai(), "AMLTEST0U_FAI.000");
-        var vector = drawing.ToVectorPortrayalResult(Spec, "AMLTEST0U_FAI.000", new RenderContext { Palette = palette });
+        // Without text: the cell is small, so labels in each platform's own font
+        // would be most of its ink. The unit tests check the labels' text.
+        var vector = WithoutText(drawing.ToVectorPortrayalResult(Spec, "AMLTEST0U_FAI.000", new RenderContext { Palette = palette }));
         using var bitmap = new ChartCompositor(new ProjNetCrsTransformFactory(), new InteroperabilityAuthority(ProductRegistry.Default.DisplayPlanes)).Render(
             [ChartCompositeInput.ForVector(vector)],
             new ChartCompositeOptions
@@ -84,7 +86,7 @@ public sealed class AmlRenderingTests
                 Background = Background(palette),
             });
 
-        await TestHelpers.VerifySparseBitmap(bitmap.Copy(), minimumInkPixels: 4_000, maxDifferentInkFraction: 0.25, Background(palette).ToSkia())
+        await TestHelpers.VerifySparseBitmap(bitmap.Copy(), minimumInkPixels: 2_500, maxDifferentInkFraction: 0.03, Background(palette).ToSkia())
             .UseParameters(palette);
     }
 
@@ -103,8 +105,7 @@ public sealed class AmlRenderingTests
         Assert.Equal(Background(PaletteType.Day).ToSkia(), bitmap.GetPixel(x, y));
     }
 
-    // The S-57 spec until S1 (#1236) registers AML's own.
-    private static SpecRef Spec { get; } = new("S-57", default);
+    private static SpecRef Spec { get; } = new(SpecName.Aml, new SpecVersion(1, 0, 0));
 
     private const double West = -1.48, East = -0.98, South = 50.40, North = 50.68;
     private const int Width = 1000, Height = 880;
