@@ -5,7 +5,6 @@ using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Geometry;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S57;
-using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S57;
@@ -44,6 +43,7 @@ public sealed class AmlDatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     private readonly string _contentScope;
     private readonly Lazy<CellContent> _content;
     private DatasetMetadata? _metadata;
+    private volatile IReadOnlyDictionary<string, int>? _drawingPriorities;
 
     /// <summary>Reads the AML cell at <paramref name="path"/>.</summary>
     /// <param name="path">Path to the base cell (<c>….000</c>).</param>
@@ -143,8 +143,25 @@ public sealed class AmlDatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         HorizontalCrsEpsg = null,
     };
 
+    /// <summary>The cell's features with the catalogue that names them, for Object Information.</summary>
+    public AmlCellFeatures Cell => _content.Value.Cell;
+
+    /// <summary>
+    /// Whether the feature <paramref name="featureRef"/> was drawn by the
+    /// last portrayal: <see langword="false"/> for every feature while the
+    /// cell is "recognised, not drawn", and for the features a drawing
+    /// portrayal leaves out.
+    /// </summary>
+    /// <param name="featureRef">The feature reference (the decimal record id).</param>
+    public bool IsFeatureDrawn(string featureRef) => DrawingPriority(featureRef) is not null;
+
     /// <inheritdoc />
-    public LoadedDatasetData CreateLoadedData() => new AmlDatasetData(Info, Metadata) { Drawn = Drawn };
+    public LoadedDatasetData CreateLoadedData() => new AmlDatasetData(Info, Metadata)
+    {
+        Drawn = Drawn,
+        Cell = Cell,
+        DrawingPriority = DrawingPriority,
+    };
 
     /// <summary>
     /// Reads an AML cell's catalog payload from <paramref name="stream"/>
@@ -170,16 +187,44 @@ public sealed class AmlDatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     {
         ArgumentNullException.ThrowIfNull(info);
         ArgumentNullException.ThrowIfNull(document);
-        var features = S57ChartFeatures.Read(S57Chart.FromDocument(document), document.GetObjectCatalogue());
+        var catalogue = document.GetObjectCatalogue();
+        var features = S57ChartFeatures.Read(S57Chart.FromDocument(document), catalogue);
         var coverage = S57ChartFeatures.ResolveCoverage(features, out _);
         var portrayal = S100Products.AmlPortrayal;
+        var drawn = portrayal.Draws && portrayal.DrawsAny(features);
+        var spec = SpecOf(info);
+
+        // Without a host that portrays the cell, which features the portrayal
+        // draws is worked out once, on the first question, so a headless pick
+        // reports the same drawn state as SoundCharts.
+        var priorities = new Lazy<IReadOnlyDictionary<string, int>>(() => S101DatasetProcessor.DrawingPriorities(
+            portrayal.PortrayAsync(
+                new AmlPortrayalInput
+                {
+                    Info = info,
+                    Document = document,
+                    Catalogue = catalogue,
+                    Features = features,
+                    Coverage = coverage,
+                    Spec = spec,
+                    FileName = info.DataSetName,
+                    ContentScope = $"aml:{info.DataSetName}",
+                },
+                context: null,
+                CancellationToken.None).GetAwaiter().GetResult()
+            .SubLayers.SelectMany(l => l.Instructions)));
+
         return new AmlDatasetData(info, new DatasetMetadata
         {
-            Spec = SpecOf(info),
+            Spec = spec,
             Extent = ExtentOf(coverage),
         })
         {
-            Drawn = portrayal.Draws && portrayal.DrawsAny(features),
+            Drawn = drawn,
+            Cell = new AmlCellFeatures(info, catalogue, features),
+            DrawingPriority = drawn
+                ? featureRef => priorities.Value.TryGetValue(featureRef, out var priority) ? priority : null
+                : null,
         };
     }
 
@@ -187,10 +232,11 @@ public sealed class AmlDatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         SpecVersion.TryParse(info.Version, out var version) ? version : default);
 
     /// <inheritdoc />
-    public Task<VectorPortrayalResult> BuildVectorPortrayalAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
+    /// <remarks>Records which features the result draws, for <see cref="IsFeatureDrawn"/>.</remarks>
+    public async Task<VectorPortrayalResult> BuildVectorPortrayalAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
     {
         var content = _content.Value;
-        return _portrayal.PortrayAsync(
+        var result = await _portrayal.PortrayAsync(
             new AmlPortrayalInput
             {
                 Info = Info,
@@ -203,17 +249,19 @@ public sealed class AmlDatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
                 ContentScope = _contentScope,
             },
             context,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
+        _drawingPriorities = S101DatasetProcessor.DrawingPriorities(result.SubLayers.SelectMany(l => l.Instructions));
+        return result;
     }
+
+    // The feature's drawing priority in the last portrayal, or null when it
+    // isn't drawn (or the cell hasn't been portrayed).
+    private int? DrawingPriority(string featureRef) =>
+        _drawingPriorities is { } priorities && priorities.TryGetValue(featureRef, out var priority) ? priority : null;
 
     /// <inheritdoc />
-    public FeatureInfo? GetFeatureInfo(string featureRef)
-    {
-        if (!long.TryParse(featureRef, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
-            return null;
-
-        return _content.Value.ById.TryGetValue(id, out var feature) ? BuildFeatureInfo(feature) : null;
-    }
+    public FeatureInfo? GetFeatureInfo(string featureRef) =>
+        Cell.Find(featureRef) is { } feature ? BuildFeatureInfo(feature) : null;
 
     /// <inheritdoc />
     public FeatureInfo? GetFeatureInfoAt(int ordinal)
@@ -223,9 +271,12 @@ public sealed class AmlDatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     }
 
     /// <inheritdoc />
-    /// <remarks>Every feature with geometry is pickable, drawn or not.</remarks>
+    /// <remarks>
+    /// Every feature with geometry is pickable, drawn or not, except the meta
+    /// features (<see cref="AmlCellFeatures.PickableFeatures"/>).
+    /// </remarks>
     public IReadOnlyList<FeatureGeometryHit> HitTestFeatures(double latitude, double longitude, double radiusMeters) =>
-        FeatureHitTester.HitTest(_content.Value.Features, latitude, longitude, radiusMeters);
+        FeatureHitTester.HitTest(Cell.PickableFeatures, latitude, longitude, radiusMeters);
 
     /// <inheritdoc />
     public IEnumerable<FeatureSummary> EnumerateFeatures()
@@ -244,53 +295,8 @@ public sealed class AmlDatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         }
     }
 
-    private FeatureInfo BuildFeatureInfo(Feature feature)
-    {
-        var content = _content.Value;
-        var attributes = new List<PickAttribute>(feature.Attributes.Count);
-        foreach (var (acronym, value) in feature.Attributes)
-        {
-            var raw = value?.ToString() ?? string.Empty;
-            content.Catalogue.TryGetAttribute(acronym, out var definition);
-            attributes.Add(new PickAttribute
-            {
-                Code = acronym,
-                Name = definition?.Name,
-                RawValue = raw,
-                DisplayValue = definition is null ? null : DecodeValue(definition, raw),
-            });
-        }
-
-        return new FeatureInfo
-        {
-            FeatureRef = feature.Id.ToString(CultureInfo.InvariantCulture),
-            FeatureType = feature.FeatureType,
-            FeatureTypeName = content.ClassName(feature.FeatureType),
-            Attributes = attributes,
-            Geometry = ((IS100Feature)feature).GeometryType,
-        };
-    }
-
-    // Enumerated and list values are codes ("1,3"); show their names.
-    private static string? DecodeValue(S57AttributeDefinition definition, string raw)
-    {
-        if (definition.Values.Count == 0 || raw.Length == 0)
-            return null;
-
-        var names = new List<string>();
-        foreach (var part in raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (!int.TryParse(part, NumberStyles.Integer, CultureInfo.InvariantCulture, out var code)
-                || !definition.TryGetValue(code, out var value) || value is null)
-            {
-                return null;
-            }
-
-            names.Add(value.Name);
-        }
-
-        return string.Join(", ", names);
-    }
+    private FeatureInfo BuildFeatureInfo(Feature feature) =>
+        Cell.BuildFeatureInfo(feature, DrawingPriority(feature.Id.ToString(CultureInfo.InvariantCulture)));
 
     private CellContent ReadContent()
     {
@@ -298,7 +304,7 @@ public sealed class AmlDatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         var catalogue = _document.GetObjectCatalogue();
         var features = S57ChartFeatures.Read(chart, catalogue);
         var coverage = S57ChartFeatures.ResolveCoverage(features, out var isBoundingBox);
-        return new CellContent(catalogue, features, coverage, isBoundingBox);
+        return new CellContent(new AmlCellFeatures(Info, catalogue, features), coverage, isBoundingBox);
     }
 
     private static BoundingBox? ExtentOf(IReadOnlyList<CoverageArea> coverage)
@@ -354,24 +360,20 @@ public sealed class AmlDatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     }
 
     private sealed class CellContent(
-        S57ObjectCatalogue catalogue,
-        IReadOnlyList<Feature> features,
+        AmlCellFeatures cell,
         IReadOnlyList<CoverageArea> coverage,
         bool coverageIsBoundingBox)
     {
-        public S57ObjectCatalogue Catalogue { get; } = catalogue;
+        public AmlCellFeatures Cell { get; } = cell;
 
-        public IReadOnlyList<Feature> Features { get; } = features;
+        public S57ObjectCatalogue Catalogue => Cell.Catalogue;
+
+        public IReadOnlyList<Feature> Features => Cell.Features;
 
         public IReadOnlyList<CoverageArea> Coverage { get; } = coverage;
 
         public bool CoverageIsBoundingBox { get; } = coverageIsBoundingBox;
 
-        public Dictionary<long, Feature> ById { get; } = features
-            .GroupBy(f => f.Id)
-            .ToDictionary(g => g.Key, g => g.First());
-
-        public string? ClassName(string acronym) =>
-            Catalogue.TryGetObjectClass(acronym, out var definition) ? definition?.Name : null;
+        public string? ClassName(string acronym) => Cell.ClassName(acronym);
     }
 }
