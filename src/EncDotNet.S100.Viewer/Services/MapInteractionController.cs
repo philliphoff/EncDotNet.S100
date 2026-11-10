@@ -265,7 +265,7 @@ internal sealed class MapInteractionController
     {
         scaleBar.UpdateForViewport(viewport.Resolution, viewport.CenterY);
         compassRose.UpdateForViewport(viewport.Rotation);
-        _viewModel.MapScaleText = MapScaleFormatter.Format(viewport.Resolution, viewport.CenterY);
+        _viewModel.StatusBar.MapScaleText = MapScaleFormatter.Format(viewport.Resolution, viewport.CenterY);
         UpdateOverscale(viewport);
         DepthBasis?.Invalidate();
     }
@@ -282,7 +282,7 @@ internal sealed class MapInteractionController
         var cells = _loader.GetOverscaleCells();
         if (cells.Count == 0)
         {
-            _viewModel.UpdateOverscale(OverscaleReport.None);
+            _viewModel.StatusBar.UpdateOverscale(OverscaleReport.None);
             return;
         }
 
@@ -290,7 +290,7 @@ internal sealed class MapInteractionController
         var envelope = new NetTopologySuite.Geometries.Envelope(
             extent.MinX, extent.MaxX, extent.MinY, extent.MaxY);
         var report = OverscaleEvaluator.Evaluate(cells, envelope, viewport.Resolution);
-        _viewModel.UpdateOverscale(report);
+        _viewModel.StatusBar.UpdateOverscale(report);
     }
 
     private void OnMapMagnify(object? sender, PointerDeltaEventArgs e)
@@ -619,8 +619,8 @@ internal sealed class MapInteractionController
     private void OnMapPointerExited(object? sender, PointerEventArgs e)
     {
         _lastMouseScreenPos = null;
-        _viewModel.MouseLatText = LatLonFormatter.Placeholder;
-        _viewModel.MouseLonText = LatLonFormatter.Placeholder;
+        _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
+        _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
     }
 
     private void HandleViewportChangedForMouseLatLon()
@@ -645,8 +645,8 @@ internal sealed class MapInteractionController
             position.X > bounds.Width || position.Y > bounds.Height)
         {
             _lastMouseScreenPos = null;
-            _viewModel.MouseLatText = LatLonFormatter.Placeholder;
-            _viewModel.MouseLonText = LatLonFormatter.Placeholder;
+            _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
+            _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
             return;
         }
 
@@ -658,8 +658,8 @@ internal sealed class MapInteractionController
     {
         if (_mapControl?.Map?.Navigator is not { } navigator)
         {
-            _viewModel.MouseLatText = LatLonFormatter.Placeholder;
-            _viewModel.MouseLonText = LatLonFormatter.Placeholder;
+            _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
+            _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
             return;
         }
 
@@ -669,16 +669,16 @@ internal sealed class MapInteractionController
             double.IsInfinity(lat) || double.IsInfinity(lon) ||
             lat < -90.0 || lat > 90.0)
         {
-            _viewModel.MouseLatText = LatLonFormatter.Placeholder;
-            _viewModel.MouseLonText = LatLonFormatter.Placeholder;
+            _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
+            _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
             return;
         }
 
         // Normalize longitude into the canonical [-180, 180] range so that
         // panning past the antimeridian still produces sensible readings.
         lon = ((lon + 540.0) % 360.0) - 180.0;
-        _viewModel.MouseLatText = LatLonFormatter.FormatLatitude(lat);
-        _viewModel.MouseLonText = LatLonFormatter.FormatLongitude(lon);
+        _viewModel.StatusBar.MouseLatText = LatLonFormatter.FormatLatitude(lat);
+        _viewModel.StatusBar.MouseLonText = LatLonFormatter.FormatLongitude(lon);
     }
 
     private void OnMapPointerReleased(object? sender, PointerReleasedEventArgs e)

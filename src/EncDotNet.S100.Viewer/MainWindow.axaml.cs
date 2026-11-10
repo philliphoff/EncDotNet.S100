@@ -1758,7 +1758,7 @@ public partial class MainWindow : ShadUI.Window
             return;
 
         var timeFormat = App.Services.GetService<ITimeFormatProvider>();
-        void Push() => _viewModel.UpdateDepthBasis(
+        void Push() => _viewModel.StatusBar.UpdateDepthBasis(
             depthBasis.Current, depthBasis.WaterLevelLoaded, timeFormat?.Current ?? TimeFormat.Utc);
         depthBasis.Changed += (_, _) => Push();
         if (timeFormat is not null)
@@ -1775,7 +1775,7 @@ public partial class MainWindow : ShadUI.Window
         }
         StatusBarDock.SizeChanged += (_, _) => FitDepthBasis();
         StatusRightCluster.SizeChanged += (_, _) => FitDepthBasis();
-        _viewModel.DepthBasis.PropertyChanged += (_, e) =>
+        _viewModel.StatusBar.DepthBasis.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(DepthBasisIndicatorViewModel.FormTexts))
                 Dispatcher.UIThread.Post(FitDepthBasis, DispatcherPriority.Render);
