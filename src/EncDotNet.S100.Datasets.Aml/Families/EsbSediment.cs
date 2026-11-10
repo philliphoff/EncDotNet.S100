@@ -172,31 +172,31 @@ public static class EsbSediment
     /// <param name="aml30">Whether the cell is AML 3.0, where 544 is crystalline rock rather than gravelly muddy sand.</param>
     public static IReadOnlyList<AmlSedimentPart> Classify(int value, bool aml30)
     {
-        const AmlSedimentShare Main = AmlSedimentShare.Main, Minor = AmlSedimentShare.Minor, Trace = AmlSedimentShare.Trace;
+        const AmlSedimentShare main = AmlSedimentShare.Main, minor = AmlSedimentShare.Minor, trace = AmlSedimentShare.Trace;
         static AmlSedimentPart P(AmlSedimentKind kind, AmlSedimentShare share) => new(kind, share);
         return value switch
         {
-            513 or 530 => [P(AmlSedimentKind.Shells, Main)],
-            514 or 521 or 522 => [P(AmlSedimentKind.Mud, Main)],
-            523 => [P(AmlSedimentKind.Sand, Main)],
-            524 or 525 or 526 => [P(AmlSedimentKind.Gravel, Main)],
-            527 or 531 => [P(AmlSedimentKind.Boulders, Main)],
-            (>= 501 and <= 512) or (>= 515 and <= 520) or 528 or 529 or 545 => [P(AmlSedimentKind.Rock, Main)],
-            546 or 547 => [P(AmlSedimentKind.Till, Main)],
-            544 when aml30 => [P(AmlSedimentKind.Rock, Main)],
+            513 or 530 => [P(AmlSedimentKind.Shells, main)],
+            514 or 521 or 522 => [P(AmlSedimentKind.Mud, main)],
+            523 => [P(AmlSedimentKind.Sand, main)],
+            524 or 525 or 526 => [P(AmlSedimentKind.Gravel, main)],
+            527 or 531 => [P(AmlSedimentKind.Boulders, main)],
+            (>= 501 and <= 512) or (>= 515 and <= 520) or 528 or 529 or 545 => [P(AmlSedimentKind.Rock, main)],
+            546 or 547 => [P(AmlSedimentKind.Till, main)],
+            544 when aml30 => [P(AmlSedimentKind.Rock, main)],
             // Folk classes: the noun is the main sediment.
-            532 => [P(AmlSedimentKind.Mud, Main), P(AmlSedimentKind.Sand, Minor)],
-            533 => [P(AmlSedimentKind.Mud, Main), P(AmlSedimentKind.Gravel, Trace)],
-            534 => [P(AmlSedimentKind.Mud, Main), P(AmlSedimentKind.Sand, Minor), P(AmlSedimentKind.Gravel, Trace)],
-            535 => [P(AmlSedimentKind.Mud, Main), P(AmlSedimentKind.Gravel, Minor)],
-            536 => [P(AmlSedimentKind.Sand, Main), P(AmlSedimentKind.Mud, Minor)],
-            537 => [P(AmlSedimentKind.Sand, Main), P(AmlSedimentKind.Gravel, Trace)],
-            538 => [P(AmlSedimentKind.Sand, Main), P(AmlSedimentKind.Mud, Minor), P(AmlSedimentKind.Gravel, Trace)],
-            539 or 544 => [P(AmlSedimentKind.Sand, Main), P(AmlSedimentKind.Mud, Minor), P(AmlSedimentKind.Gravel, Minor)],
-            540 => [P(AmlSedimentKind.Sand, Main), P(AmlSedimentKind.Gravel, Minor)],
-            541 => [P(AmlSedimentKind.Gravel, Main), P(AmlSedimentKind.Mud, Minor)],
-            542 => [P(AmlSedimentKind.Gravel, Main), P(AmlSedimentKind.Sand, Minor), P(AmlSedimentKind.Mud, Minor)],
-            543 => [P(AmlSedimentKind.Gravel, Main), P(AmlSedimentKind.Sand, Minor)],
+            532 => [P(AmlSedimentKind.Mud, main), P(AmlSedimentKind.Sand, minor)],
+            533 => [P(AmlSedimentKind.Mud, main), P(AmlSedimentKind.Gravel, trace)],
+            534 => [P(AmlSedimentKind.Mud, main), P(AmlSedimentKind.Sand, minor), P(AmlSedimentKind.Gravel, trace)],
+            535 => [P(AmlSedimentKind.Mud, main), P(AmlSedimentKind.Gravel, minor)],
+            536 => [P(AmlSedimentKind.Sand, main), P(AmlSedimentKind.Mud, minor)],
+            537 => [P(AmlSedimentKind.Sand, main), P(AmlSedimentKind.Gravel, trace)],
+            538 => [P(AmlSedimentKind.Sand, main), P(AmlSedimentKind.Mud, minor), P(AmlSedimentKind.Gravel, trace)],
+            539 or 544 => [P(AmlSedimentKind.Sand, main), P(AmlSedimentKind.Mud, minor), P(AmlSedimentKind.Gravel, minor)],
+            540 => [P(AmlSedimentKind.Sand, main), P(AmlSedimentKind.Gravel, minor)],
+            541 => [P(AmlSedimentKind.Gravel, main), P(AmlSedimentKind.Mud, minor)],
+            542 => [P(AmlSedimentKind.Gravel, main), P(AmlSedimentKind.Sand, minor), P(AmlSedimentKind.Mud, minor)],
+            543 => [P(AmlSedimentKind.Gravel, main), P(AmlSedimentKind.Sand, minor)],
             _ => [],
         };
     }
@@ -435,7 +435,7 @@ public static class EsbSediment
             return sb.ToString();
         }
 
-        const int Columns = 6, Rows = 6;
+        const int slotColumns = 6, slotRows = 6;
         // The slot groups after the main sediment's: the odd slots in even rows,
         // then in odd rows; a trace takes half a group.
         var groups = new Queue<Func<int, int, bool>>(
@@ -453,12 +453,12 @@ public static class EsbSediment
                 _ => Half(groups.Dequeue()),
             };
             var mark = Lattice(part.Kind).Mark;
-            for (int j = 0; j < Rows; j++)
+            for (int j = 0; j < slotRows; j++)
             {
-                for (int i = 0; i < Columns; i++)
+                for (int i = 0; i < slotColumns; i++)
                 {
                     if (slots(i, j))
-                        sb.Append(Mark(mark, Columns, Rows, i, j, brick: false, originX, originY));
+                        sb.Append(Mark(mark, slotColumns, slotRows, i, j, brick: false, originX, originY));
                 }
             }
         }
@@ -491,10 +491,10 @@ public static class EsbSediment
     // thirds), outlined in the ink.
     private static string Swatch(IReadOnlyList<AmlSedimentPart> parts)
     {
-        const double Width = TileSize, Height = 6.4;
+        const double width = TileSize, height = 6.4;
         var ink = Ink;
         var marks = Marks(parts, 0, 1.6);
-        return $"""<svg xmlns="http://www.w3.org/2000/svg" version="1.2" width="{Mm(Width)}mm" height="{Mm(Height)}mm" viewBox="{Mm(-Width / 2)} {Mm(-Height / 2)} {Mm(Width)} {Mm(Height)}"><defs><clipPath id="swatch"><rect x="{Mm(-Width / 2)}" y="{Mm(-Height / 2)}" width="{Mm(Width)}" height="{Mm(Height)}"/></clipPath></defs><rect class="f{ink}" fill-opacity="{Mm(1 - WashTransparency)}" x="{Mm(-Width / 2)}" y="{Mm(-Height / 2)}" width="{Mm(Width)}" height="{Mm(Height)}"/><g clip-path="url(#swatch)">{marks}</g><rect class="s{ink} f0" stroke-width="0.2" x="{Mm(-Width / 2 + 0.1)}" y="{Mm(-Height / 2 + 0.1)}" width="{Mm(Width - 0.2)}" height="{Mm(Height - 0.2)}"/></svg>""";
+        return $"""<svg xmlns="http://www.w3.org/2000/svg" version="1.2" width="{Mm(width)}mm" height="{Mm(height)}mm" viewBox="{Mm(-width / 2)} {Mm(-height / 2)} {Mm(width)} {Mm(height)}"><defs><clipPath id="swatch"><rect x="{Mm(-width / 2)}" y="{Mm(-height / 2)}" width="{Mm(width)}" height="{Mm(height)}"/></clipPath></defs><rect class="f{ink}" fill-opacity="{Mm(1 - WashTransparency)}" x="{Mm(-width / 2)}" y="{Mm(-height / 2)}" width="{Mm(width)}" height="{Mm(height)}"/><g clip-path="url(#swatch)">{marks}</g><rect class="s{ink} f0" stroke-width="0.2" x="{Mm(-width / 2 + 0.1)}" y="{Mm(-height / 2 + 0.1)}" width="{Mm(width - 0.2)}" height="{Mm(height - 0.2)}"/></svg>""";
     }
 
     private static string Mm(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);

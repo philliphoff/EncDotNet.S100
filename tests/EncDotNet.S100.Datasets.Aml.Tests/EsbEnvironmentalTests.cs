@@ -136,6 +136,18 @@ public sealed class EsbEnvironmentalTests
     }
 
     [Fact]
+    public void A_cell_with_a_content_scope_has_its_sediment_patterns_clipped_once_per_cell()
+    {
+        var cached = Esb.ToVectorPortrayalResult(new Core.SpecRef("AML", default), "UKE6TEST.000", contentScope: "sha:1");
+        var uncached = Esb.ToVectorPortrayalResult(new Core.SpecRef("AML", default), "UKE6TEST.000");
+        var ral = new AmlPortrayal().Draw(AmlFixtures.Ral()).ToVectorPortrayalResult(new Core.SpecRef("AML", default), "R", contentScope: "sha:2");
+
+        Assert.Equal($"aml|sha:1|{AmlStyleCatalog.Default.ContentScope}|environmental", Assert.Single(cached.SubLayers).PatternClipCacheKey);
+        Assert.Null(Assert.Single(uncached.SubLayers).PatternClipCacheKey);
+        Assert.All(ral.SubLayers, s => Assert.Null(s.PatternClipCacheKey));
+    }
+
+    [Fact]
     public void Sand_is_dots_mud_dashes_and_gravel_rings()
     {
         var sand = EsbSediment.ResolveTile(EsbSediment.FillName(AmlSedimentKind.Sand))!;

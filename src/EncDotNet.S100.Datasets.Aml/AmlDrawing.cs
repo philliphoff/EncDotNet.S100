@@ -69,9 +69,18 @@ public sealed class AmlDrawing
     /// <paramref name="palette"/>.
     /// </summary>
     /// <param name="palette">The palette the legends are drawn in.</param>
-    public IReadOnlyList<VectorSubLayer> BuildSubLayers(PaletteType palette) =>
+    /// <param name="patternClipScope">
+    /// A stable scope for the cell's content, or <see langword="null"/>. With
+    /// it, a sub-layer that has pattern fills (sediment) gets a
+    /// <see cref="VectorSubLayer.PatternClipCacheKey"/>, so the renderer clips
+    /// its patterns once per cell rather than once per tile.
+    /// </param>
+    public IReadOnlyList<VectorSubLayer> BuildSubLayers(PaletteType palette, string? patternClipScope = null) =>
         [.. Instructions.Select(p => new VectorSubLayer
         {
+            PatternClipCacheKey = patternClipScope is not null && p.Value.Any(i => i is AreaInstruction { AreaFillReference: not null })
+                ? $"aml|{patternClipScope}|{p.Key.Key}"
+                : null,
             LayerKey = p.Key.LayerKey,
             LayerName = $"AML {p.Key.Name.ToLowerInvariant()}: {DatasetName}",
             Instructions = p.Value,
@@ -104,7 +113,8 @@ public sealed class AmlDrawing
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceDatasetId);
         var palette = context?.Palette ?? PaletteType.Day;
-        var subLayers = BuildSubLayers(palette);
+        var scope = contentScope is null ? null : $"{contentScope}|{Catalog.ContentScope}";
+        var subLayers = BuildSubLayers(palette, scope);
         return new VectorPortrayalResult
         {
             SubLayers = subLayers,
@@ -113,7 +123,7 @@ public sealed class AmlDrawing
             Product = spec.Name,
             Spec = spec,
             SourceDatasetId = sourceDatasetId,
-            ContentScope = contentScope is null ? null : $"{contentScope}|{Catalog.ContentScope}",
+            ContentScope = scope,
             Info = Info,
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
