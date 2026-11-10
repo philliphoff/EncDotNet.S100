@@ -33,6 +33,7 @@
          and styles live. WeatherGridProcessorBase is here, not in Datasets.Weather,
          because it implements IHeadlessImageRenderer and ILoadedDatasetProjection,
          which live in this project. -->
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.Aml\EncDotNet.S100.Datasets.Aml.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.Cap\EncDotNet.S100.Datasets.Cap.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.Grib\EncDotNet.S100.Datasets.Grib.csproj" />
     <ProjectReference Include="..\EncDotNet.S100.Datasets.NetCdf\EncDotNet.S100.Datasets.NetCdf.csproj" />
