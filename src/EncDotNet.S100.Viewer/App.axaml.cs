@@ -496,6 +496,106 @@ public partial class App : Application
     /// </summary>
     private const double PortrayalPrewarmCacheShare = 0.75;
 
+    /// <summary>
+    /// The viewer's own MCP tools, one group per area of the app. The order is
+    /// the order the tools are listed in.
+    /// </summary>
+    private static IReadOnlyList<McpTools.Groups.IViewerMcpToolGroup> CreateMcpToolGroups(IServiceProvider sp)
+    {
+        var settings = sp.GetRequiredService<ViewerSettings>();
+        var catalog = sp.GetRequiredService<ViewerDatasetCatalog>();
+        var viewport = sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>();
+        var routes = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>();
+        var passageCheck = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>();
+        var timeline = sp.GetRequiredService<IViewerTimelineController>();
+        var depthBasis = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>();
+        var displayCombinations = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService>();
+        var perfHarness = sp.GetRequiredService<McpTools.PerfHarnessServices>();
+        return
+        [
+            new McpTools.Groups.MapViewMcpToolGroup(
+                viewport,
+                sp.GetRequiredService<ICapabilityAccessor<IMapCoordinateConverter>>(),
+                catalog,
+                sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Query.IMapDrawState>(),
+                sp.GetRequiredService<IGeographicPickPresenter>(),
+                perfHarness.Settle),
+            new McpTools.Groups.PresentationMcpToolGroup(
+                sp.GetRequiredService<IRenderStateControllerAccessor>(),
+                sp.GetRequiredService<MapPresentationStateProjection>(),
+                sp.GetRequiredService<GlobalTimeService>(),
+                sp.GetRequiredService<ICapabilityAccessor<IImageRenderer>>(),
+                sp.GetRequiredService<IDatasetLoadGateway>(),
+                catalog),
+            new McpTools.Groups.DisplaySettingsMcpToolGroup(
+                sp.GetRequiredService<EcdisDisplayPanelViewModel>(),
+                sp.GetRequiredService<SettingsViewModel>(),
+                displayCombinations,
+                depthBasis),
+            new McpTools.Groups.DiagnosticsMcpToolGroup(
+                sp.GetRequiredService<IRenderActivityMonitor>(),
+                perfHarness,
+                settings,
+                viewport,
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.LogBuffer>()),
+            new McpTools.Groups.ShellMcpToolGroup(
+                sp.GetRequiredService<IViewerUiControllerAccessor>(),
+                sp.GetRequiredService<IAppScreenshotProvider>(),
+                displayCombinations),
+            new McpTools.Groups.ViewerStateMcpToolGroup(
+                timeline,
+                new ViewerDatasetStateController(sp.GetRequiredService<DatasetsViewModel>(), UiThread.InvokeAsync),
+                new ViewerNotificationController(
+                    sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Notifications.INotificationService>(),
+                    UiThread.InvokeAsync),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>()),
+            new McpTools.Groups.LibraryMcpToolGroup(
+                sp.GetRequiredService<ViewerLibraryController>(),
+                new ViewerLibraryEditor(
+                    sp.GetRequiredService<LibraryPanelViewModel>(),
+                    sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
+                    sp.GetRequiredService<ViewerLibraryController>(),
+                    new EncDotNet.S100.Mcp.Tools.Library.LibrarySourceAdder(
+                        sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibraryCatalogueReaders>(),
+                        () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources,
+                        sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(),
+                        sp.GetRequiredService<TimeProvider>()),
+                    UiThread.InvokeAsync,
+                    new EncDotNet.S100.Collections.Library.LibraryActivityTracker()),
+                sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRegistry>(),
+                sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>(),
+                new Services.Secom.SecomIdentityReferences(sp.GetRequiredService<Services.Secom.SecomIdentityStore>())),
+            // Only with --mcp-test-hooks: set_test_clock and the ui_* tools are for scripted testing.
+            new McpTools.Groups.TestHooksMcpToolGroup(
+                settings,
+                sp.GetRequiredService<TimeProvider>() as AdjustableTimeProvider,
+                settings.McpTestHooks ? ViewerUiAutomation.ForApplication() : null),
+            new McpTools.Groups.NavigationalWarningsMcpToolGroup(
+                sp.GetRequiredService<NavigationalWarningsViewModel>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>()),
+            new McpTools.Groups.RouteMcpToolGroup(
+                routes,
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RouteExchangeService>(),
+                sp.GetRequiredService<ClearanceViewModel>()),
+            new McpTools.Groups.PassageCheckMcpToolGroup(
+                routes,
+                passageCheck,
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>(),
+                depthBasis,
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService>(),
+                timeline),
+            new McpTools.Groups.RouteCheckLegendMcpToolGroup(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState>(),
+                routes,
+                passageCheck),
+            new McpTools.Groups.MeasuringMcpToolGroup(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MeasureSession>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Tools.RangeBearingState>(),
+                settings),
+        ];
+    }
+
     private static IServiceProvider ConfigureServices()
     {
         var services = new ServiceCollection();
@@ -1353,82 +1453,34 @@ public partial class App : Application
             sp.GetRequiredService<IDatasetLoaderService>(),
             sp.GetRequiredService<IExchangeSetService>(),
             UiThread.InvokeAsync));
+        // What the map draws now, shared by the MCP server's queries and pick_features.
+        services.AddSingleton<EncDotNet.S100.Datasets.Pipelines.Query.IMapDrawState>(sp => new ViewerMapDrawState(
+            sp.GetRequiredService<GlobalTimeService>(),
+            sp.GetRequiredService<ViewerDatasetCatalog>()));
+        // The Timeline as the MCP tools drive it, shared by the timeline and Check passage tools.
+        services.AddSingleton<IViewerTimelineController>(sp => new ViewerTimelineController(
+            sp.GetRequiredService<GlobalTimeService>(),
+            sp.GetRequiredService<TimelineViewModel>(),
+            sp.GetRequiredService<DatasetsViewModel>(),
+            sp.GetRequiredService<TimeProvider>(),
+            UiThread.InvokeAsync));
+        // Settle harness and render metrics (map rendering slice 1).
+        services.AddSingleton(sp => new McpTools.PerfHarnessServices(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.ProcessMetricsSampler>(),
+            () => sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalCacheWarmer>().Status,
+            sp.GetRequiredService<McpTools.PortrayalPrewarmOverride>(),
+            () => sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalCacheWarmer>().ConcurrencyLimit,
+            sp.GetRequiredService<ViewerDataPaths>().RenderCacheDirectory,
+            sp.GetRequiredService<EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner>()));
         services.AddSingleton<McpServerHost>(sp => new McpServerHost(
             sp.GetRequiredService<ViewerDatasetCatalog>(),
             sp.GetRequiredService<ViewerSettings>(),
-            sp.GetRequiredService<ICapabilityAccessor<IImageRenderer>>(),
-            sp.GetRequiredService<ICapabilityAccessor<IMapViewportController>>(),
-            sp.GetRequiredService<ICapabilityAccessor<IMapCoordinateConverter>>(),
-            sp.GetService<ILoggerFactory>(),
-            sp.GetRequiredService<IRenderStateControllerAccessor>(),
-            sp.GetRequiredService<GlobalTimeService>(),
-            sp.GetRequiredService<IRenderActivityMonitor>(),
-            sp.GetRequiredService<IDatasetLoadGateway>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
-            sp.GetRequiredService<IGeographicPickPresenter>(),
-            sp.GetRequiredService<IViewerUiControllerAccessor>(),
-            sp.GetRequiredService<IAppScreenshotProvider>(),
-            sp.GetRequiredService<MapPresentationStateProjection>(),
-            new ViewerTimelineController(
-                sp.GetRequiredService<GlobalTimeService>(),
-                sp.GetRequiredService<TimelineViewModel>(),
-                sp.GetRequiredService<DatasetsViewModel>(),
-                sp.GetRequiredService<TimeProvider>(),
-                UiThread.InvokeAsync),
-            new ViewerDatasetStateController(sp.GetRequiredService<DatasetsViewModel>(), UiThread.InvokeAsync),
-            new ViewerNotificationController(
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Notifications.INotificationService>(),
-                UiThread.InvokeAsync),
-            sp.GetRequiredService<TimeProvider>() as AdjustableTimeProvider,
-            sp.GetRequiredService<ViewerLibraryController>(),
-            new ViewerLibraryEditor(
-                sp.GetRequiredService<LibraryPanelViewModel>(),
-                sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
-                sp.GetRequiredService<ViewerLibraryController>(),
-                new EncDotNet.S100.Mcp.Tools.Library.LibrarySourceAdder(
-                    sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibraryCatalogueReaders>(),
-                    () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources,
-                    sp.GetRequiredService<Func<Uri, CancellationToken, Task<EncDotNet.S100.Collections.KnownSources.CatalogueProbe>>>(),
-                    sp.GetRequiredService<TimeProvider>()),
-                UiThread.InvokeAsync,
-                new EncDotNet.S100.Collections.Library.LibraryActivityTracker()),
-            // Only with --mcp-test-hooks: the ui_* tools are for scripted testing.
-            sp.GetRequiredService<ViewerSettings>().McpTestHooks ? ViewerUiAutomation.ForApplication() : null,
-            sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomRegistry>(),
-            sp.GetRequiredService<EncDotNet.S100.Collections.Secom.SecomServerTrust>(),
-            new Services.Secom.SecomIdentityReferences(sp.GetRequiredService<Services.Secom.SecomIdentityStore>()),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),
-            sp.GetRequiredService<ClearanceViewModel>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService>(),
-            sp.GetRequiredService<NavigationalWarningsViewModel>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningsService>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RouteExchangeService>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState>(),
+            new McpTools.ViewerPassageRouteProvider(sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(), new McpTools.DispatcherRouteEditInvoker()),
             sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Navigation.RouteCheckSourceCache>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.LogBuffer>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MeasureSession>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Tools.RangeBearingState>(),
-            sp.GetRequiredService<EcdisDisplayPanelViewModel>(),
-            sp.GetRequiredService<SettingsViewModel>(),
-            new ViewerMapDrawState(
-                sp.GetRequiredService<GlobalTimeService>(),
-                sp.GetRequiredService<ViewerDatasetCatalog>()))
-        {
-            // Settle harness and render metrics (map rendering slice 1).
-            PerfHarness = new McpTools.PerfHarnessServices(
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor>(),
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.ProcessMetricsSampler>(),
-                () => sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalCacheWarmer>().Status,
-                sp.GetRequiredService<McpTools.PortrayalPrewarmOverride>(),
-                () => sp.GetRequiredService<EncDotNet.S100.Viewer.Services.LazyLoading.PortrayalCacheWarmer>().ConcurrencyLimit,
-                sp.GetRequiredService<ViewerDataPaths>().RenderCacheDirectory,
-                sp.GetRequiredService<EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner>()),
-        });
+            sp.GetRequiredService<EncDotNet.S100.Datasets.Pipelines.Query.IMapDrawState>(),
+            CreateMcpToolGroups(sp),
+            sp.GetService<ILoggerFactory>()));
         // The settled signal and process metrics behind the perf harness's MCP
         // tools (map rendering slice 1). Both are inert until a tool uses them.
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor(
@@ -1691,6 +1743,13 @@ public partial class App : Application
             sp.GetRequiredService<INotificationService>(),
             sp.GetRequiredService<DatasetsViewModel>(),
             sp.GetRequiredService<ShellLayoutViewModel>()));
+        services.AddSingleton(sp => new MapChromeViewModel(
+            sp.GetRequiredService<DisplayToolbarViewModel>(),
+            sp.GetRequiredService<TextGroupToolbarViewModel>(),
+            sp.GetRequiredService<DisplayModeToolbarViewModel>(),
+            sp.GetRequiredService<DisplayCombinationsViewModel>(),
+            sp.GetRequiredService<NavigationalWarningsViewModel>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningDrawingService>()));
         services.AddSingleton<MainViewModel>();
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.DateDependentDrawingService(
             sp.GetRequiredService<IDatasetLoaderService>(),
