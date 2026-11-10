@@ -33,7 +33,7 @@ public class McpServerHostCommandLineTests
             McpConfiguredFromCommandLine = true,
         };
 
-        await using var host = new McpServerHost(new EmptyCatalog(), settings);
+        await using var host = TestMcpServerHost.Create(new EmptyCatalog(), settings);
         await host.Apply(TestContext.Current.CancellationToken);
 
         Assert.NotNull(host.Server);
@@ -59,7 +59,7 @@ public class McpServerHostCommandLineTests
             McpPortFilePath = portFile,
         };
 
-        await using var host = new McpServerHost(new EmptyCatalog(), settings);
+        await using var host = TestMcpServerHost.Create(new EmptyCatalog(), settings);
         await host.Apply(TestContext.Current.CancellationToken);
 
         Assert.True(File.Exists(portFile));

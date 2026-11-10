@@ -151,6 +151,10 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
         for (int i = 0; i < bands.Length; i++)
             bandPacked[i] = PackRgba(bands[i].Color);
 
+        // Optional relief shading (a factor per source cell), applied to band
+        // colours only: no-data fill stays flat.
+        float[]? shade = layer.ReliefShade is { } rs && rs.Length == srcRows * srcCols ? rs : null;
+
         for (int r = 0; r < srcRows; r++)
             for (int c = 0; c < srcCols; c++)
             {
@@ -175,6 +179,8 @@ public sealed class MapsuiCoverageRenderer : ICoverageRenderer<ILayer>
                         }
                     }
                     if (packed == 0) continue;
+                    if (shade is not null)
+                        packed = ReliefShading.ShadeRgba8888(packed, shade[r * srcCols + c]);
                 }
 
                 int target = nodeToPixel[r * srcCols + c];

@@ -298,6 +298,11 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
                     adjustmentKey = count > 0 ? adjustment.Key : null;
                 }
 
+                // Optional relief shading (off by default; not part of the
+                // S-102 portrayal): a hillshade over the band colours.
+                if (S102Relief.IsOn(context?.EcdisDisplay))
+                    styledLayer = S102Relief.Apply(styledLayer, nativeToWgs84, ReliefShading.Default);
+
                 var depthLines = BuildDepthLineSubLayers(
                     styledLayer, context?.Mariner ?? MarinerSettings.Default, crs, nativeToWgs84, adjustmentKey);
 
@@ -566,6 +571,14 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
         // identity for geographic (EPSG:4326) grids. (See issue #239.)
         int crs = _dataset.HorizontalCRS ?? 4326;
         var nativeToWgs84 = _crsTransformFactory.Create($"EPSG:{crs}", "EPSG:4326");
+        if (S102Relief.IsOn(context?.EcdisDisplay))
+        {
+            styledLayer = S102Relief.Apply(
+                styledLayer,
+                nativeToWgs84.IsIdentity ? null : (x, y) => nativeToWgs84.Transform(x, y),
+                ReliefShading.Default);
+        }
+
         var extent = _source.Metadata.GetGeographicExtent(_crsTransformFactory);
         var (west, south, east, north) =
             (extent.WestLongitude, extent.SouthLatitude, extent.EastLongitude, extent.NorthLatitude);

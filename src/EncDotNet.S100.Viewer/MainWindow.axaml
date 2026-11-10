@@ -717,7 +717,7 @@
                         MaxWidth="300"
                         IsHitTestVisible="False"
                         AutomationProperties.AutomationId="Map.WarningNote"
-                        IsVisible="{Binding NavigationalWarnings.HasMapNote, FallbackValue=False}"
+                        IsVisible="{Binding MapChrome.NavigationalWarnings.HasMapNote, FallbackValue=False}"
                         Background="{DynamicResource MapOverlaySurfaceBrush}"
                         BorderBrush="{DynamicResource BorderColor}"
                         BorderThickness="1"
@@ -730,9 +730,9 @@
                                        Margin="0,0,8,0"
                                        VerticalAlignment="Center"
                                        Foreground="{DynamicResource MutedColor}"
-                                       IsVisible="{Binding NavigationalWarnings.IsMapNoteTextOnly, FallbackValue=False}" />
+                                       IsVisible="{Binding MapChrome.NavigationalWarnings.IsMapNoteTextOnly, FallbackValue=False}" />
                         <TextBlock Grid.Column="1"
-                                   Text="{Binding NavigationalWarnings.MapNote, FallbackValue={x:Null}}"
+                                   Text="{Binding MapChrome.NavigationalWarnings.MapNote, FallbackValue={x:Null}}"
                                    FontSize="11.5"
                                    TextWrapping="Wrap"
                                    Foreground="{DynamicResource ForegroundColor}"
@@ -782,12 +782,12 @@
                         BorderBrush="{DynamicResource BorderColor}"
                         Background="{DynamicResource MapOverlaySurfaceBrush}"
                         Foreground="{DynamicResource ForegroundColor}"
-                        IsVisible="{Binding DisplayCombinations, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        IsVisible="{Binding MapChrome.DisplayCombinations, Converter={x:Static ObjectConverters.IsNotNull}}"
                         AutomationProperties.AutomationId="Map.View"
                         AutomationProperties.Name="{x:Static loc:Strings.Label_DisplayCombination_Pill}"
                         AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayCombination_Pill}"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayCombination_Pill}">
-                    <TextBlock Text="{Binding DisplayCombinations.PillLabel, FallbackValue=''}"
+                    <TextBlock Text="{Binding MapChrome.DisplayCombinations.PillLabel, FallbackValue=''}"
                                FontSize="12"
                                FontWeight="Medium"
                                MaxWidth="260"
@@ -796,14 +796,14 @@
                         <Flyout Placement="BottomEdgeAlignedRight">
                             <Border Padding="14,12,14,12" Background="Transparent">
                                 <StackPanel Width="340" Spacing="8">
-                                    <views:DisplayCombinationsView DataContext="{Binding DisplayCombinations}" />
+                                    <views:DisplayCombinationsView DataContext="{Binding MapChrome.DisplayCombinations}" />
                                     <Button Classes="Ghost"
                                             HorizontalAlignment="Left"
                                             Padding="8,4"
                                             AutomationProperties.AutomationId="Map.View.Manage"
                                             AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayCombination_Manage}"
                                             Content="{x:Static loc:Strings.DisplayCombination_Manage}"
-                                            Command="{Binding DisplayCombinations.ManageCommand, FallbackValue={x:Null}}"
+                                            Command="{Binding MapChrome.DisplayCombinations.ManageCommand, FallbackValue={x:Null}}"
                                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayCombination_Manage}" />
                                 </StackPanel>
                             </Border>
@@ -1059,26 +1059,26 @@
                                                              AutomationProperties.AutomationId="DisplaySettings.Category.Base"
                                                              GroupName="DisplaySettingsCategory"
                                                              Content="{x:Static loc:Strings.Segment_DisplayBase}"
-                                                             IsChecked="{Binding DisplayToolbar.IsDisplayBase, Mode=OneWay}"
-                                                             Command="{Binding DisplayToolbar.SetDisplayBaseCommand}" />
+                                                             IsChecked="{Binding MapChrome.DisplayToolbar.IsDisplayBase, Mode=OneWay}"
+                                                             Command="{Binding MapChrome.DisplayToolbar.SetDisplayBaseCommand}" />
                                                 <RadioButton Classes="segment"
                                                              AutomationProperties.AutomationId="DisplaySettings.Category.Standard"
                                                              GroupName="DisplaySettingsCategory"
                                                              Content="{x:Static loc:Strings.DisplayCategory_Standard}"
-                                                             IsChecked="{Binding DisplayToolbar.IsStandard, Mode=OneWay}"
-                                                             Command="{Binding DisplayToolbar.SetStandardCommand}" />
+                                                             IsChecked="{Binding MapChrome.DisplayToolbar.IsStandard, Mode=OneWay}"
+                                                             Command="{Binding MapChrome.DisplayToolbar.SetStandardCommand}" />
                                                 <RadioButton Classes="segment"
                                                              AutomationProperties.AutomationId="DisplaySettings.Category.Other"
                                                              GroupName="DisplaySettingsCategory"
                                                              Content="{x:Static loc:Strings.Segment_DisplayOther}"
-                                                             IsChecked="{Binding DisplayToolbar.IsOtherInformation, Mode=OneWay}"
-                                                             Command="{Binding DisplayToolbar.SetOtherInformationCommand}" />
+                                                             IsChecked="{Binding MapChrome.DisplayToolbar.IsOtherInformation, Mode=OneWay}"
+                                                             Command="{Binding MapChrome.DisplayToolbar.SetOtherInformationCommand}" />
                                                 <RadioButton Classes="segment"
                                                              AutomationProperties.AutomationId="DisplaySettings.Category.All"
                                                              GroupName="DisplaySettingsCategory"
                                                              Content="{x:Static loc:Strings.DisplayCategory_All}"
-                                                             IsChecked="{Binding DisplayToolbar.IsAll, Mode=OneWay}"
-                                                             Command="{Binding DisplayToolbar.SetAllCommand}" />
+                                                             IsChecked="{Binding MapChrome.DisplayToolbar.IsAll, Mode=OneWay}"
+                                                             Command="{Binding MapChrome.DisplayToolbar.SetAllCommand}" />
                                             </UniformGrid>
                                         </Border>
                                     </StackPanel>
@@ -1090,23 +1090,23 @@
                                                    FontWeight="Medium"
                                                    Opacity="0.8" />
                                         <Border Classes="segmentTrack"
-                                                IsEnabled="{Binding TextToolbar.IsEnabled}">
+                                                IsEnabled="{Binding MapChrome.TextToolbar.IsEnabled}">
                                             <UniformGrid Rows="1">
                                                 <ToggleButton Classes="segment"
                                                               AutomationProperties.AutomationId="DisplaySettings.Text.Important"
                                                               Content="{x:Static loc:Strings.Segment_TextImportant}"
-                                                              IsChecked="{Binding TextToolbar.IsImportantVisible, Mode=OneWay}"
-                                                              Command="{Binding TextToolbar.ToggleImportantCommand}" />
+                                                              IsChecked="{Binding MapChrome.TextToolbar.IsImportantVisible, Mode=OneWay}"
+                                                              Command="{Binding MapChrome.TextToolbar.ToggleImportantCommand}" />
                                                 <ToggleButton Classes="segment"
                                                               AutomationProperties.AutomationId="DisplaySettings.Text.Other"
                                                               Content="{x:Static loc:Strings.Segment_TextOther}"
-                                                              IsChecked="{Binding TextToolbar.IsOtherVisible, Mode=OneWay}"
-                                                              Command="{Binding TextToolbar.ToggleOtherCommand}" />
+                                                              IsChecked="{Binding MapChrome.TextToolbar.IsOtherVisible, Mode=OneWay}"
+                                                              Command="{Binding MapChrome.TextToolbar.ToggleOtherCommand}" />
                                                 <ToggleButton Classes="segment"
                                                               AutomationProperties.AutomationId="DisplaySettings.Text.All"
                                                               Content="{x:Static loc:Strings.Segment_TextAll}"
-                                                              IsChecked="{Binding TextToolbar.IsAllVisible, Mode=OneWay}"
-                                                              Command="{Binding TextToolbar.ToggleAllCommand}" />
+                                                              IsChecked="{Binding MapChrome.TextToolbar.IsAllVisible, Mode=OneWay}"
+                                                              Command="{Binding MapChrome.TextToolbar.ToggleAllCommand}" />
                                             </UniformGrid>
                                         </Border>
                                     </StackPanel>
@@ -1163,8 +1163,8 @@
                                         <CheckBox AutomationProperties.AutomationId="DisplaySettings.ShowWarningsNotYetInForce"
                                                   Content="{x:Static loc:Strings.DisplaySettings_ShowWarningsNotYetInForce}"
                                                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowWarningsNotYetInForce}"
-                                                  IsChecked="{Binding NavigationalWarningDrawing.ShowNotYetInForce, FallbackValue=False}"
-                                                  IsEnabled="{Binding NavigationalWarningDrawing.ShowNavigationalWarnings, FallbackValue=True}" />
+                                                  IsChecked="{Binding MapChrome.NavigationalWarningDrawing.ShowNotYetInForce, FallbackValue=False}"
+                                                  IsEnabled="{Binding MapChrome.NavigationalWarningDrawing.ShowNavigationalWarnings, FallbackValue=True}" />
                                     </StackPanel>
 
                                     <!--
@@ -1176,7 +1176,7 @@
                                       self-hides unless a loaded dataset declares
                                       more than one mode (S-411 today).
                                     -->
-                                    <views:DisplayModeSelectorView DataContext="{Binding DisplayModeToolbar}" />
+                                    <views:DisplayModeSelectorView DataContext="{Binding MapChrome.DisplayModeToolbar}" />
                                 </StackPanel>
                                 </Border>
                             </Flyout>
