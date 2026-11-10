@@ -27,12 +27,19 @@ namespace EncDotNet.S100.Datasets.Pipelines.Query;
 /// the radius. Clamped to <c>[0, 100000]</c>.
 /// </param>
 /// <param name="MaxResults">Maximum ranked matches to return; clamped to <c>[1, 200]</c>.</param>
+/// <param name="Time">
+/// The time (UTC) to identify at: time-dependent products (S-412, CAP,
+/// surface analyses, tropical cyclones) return only the features drawn then.
+/// <see langword="null"/> follows the host's map (<see cref="IMapDrawState"/>)
+/// when it has one, else identifies every drawable feature.
+/// </param>
 public sealed record IdentifyFeaturesRequest(
     [property: Description("Pick latitude in decimal degrees on WGS-84 (EPSG:4326). Must be in [-90, 90].")] double Latitude,
     [property: Description("Pick longitude in decimal degrees on WGS-84 (EPSG:4326). Must be in [-540, 540]; a value past ±180 (a point on an adjacent world copy) matches the same place one world east or west, so data kept in a 0…360 or other continuous longitude frame is found either way.")] double Longitude,
     [property: Description("Optional spec filter; null matches every vector spec.")] SpecRef? Spec = null,
     [property: Description("Search tolerance for point/curve features in metres; area features use exact containment and ignore it. Clamped to [0, 100000]. Default 50.")] double RadiusMeters = 50.0,
-    [property: Description("Maximum ranked matches to return; clamped to [1, 200]. Default 20.")] int MaxResults = 20);
+    [property: Description("Maximum ranked matches to return; clamped to [1, 200]. Default 20.")] int MaxResults = 20,
+    [property: Description("Optional UTC ISO-8601 time to identify at: time-dependent products (S-412, CAP, surface analyses, tropical cyclones) return only the features drawn then. Omit to follow the host's map (SoundCharts: the view time and the warnings it shows), or, in a headless host, to identify every drawable feature.")] DateTimeOffset? Time = null);
 
 /// <summary>
 /// A single feature picked at the query point by
@@ -126,12 +133,30 @@ public sealed class IdentifyFeaturesService
         new(StringComparer.OrdinalIgnoreCase) { "fileReference", "TXTDSC", "NTXTDS" };
 
     private readonly IDatasetCatalog _catalog;
+    private readonly IMapDrawState? _drawState;
 
-    /// <summary>Creates a new <see cref="IdentifyFeaturesService"/>.</summary>
+    /// <summary>
+    /// Creates a new <see cref="IdentifyFeaturesService"/> for a host with no
+    /// map: a request with no time identifies every drawable feature.
+    /// </summary>
     public IdentifyFeaturesService(IDatasetCatalog catalog)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         _catalog = catalog;
+    }
+
+    /// <summary>
+    /// Creates a new <see cref="IdentifyFeaturesService"/> for a host whose
+    /// map draws as <paramref name="drawState"/> says: a request with no
+    /// time identifies what the map draws.
+    /// </summary>
+    /// <param name="catalog">The catalog.</param>
+    /// <param name="drawState">What the host's map draws.</param>
+    public IdentifyFeaturesService(IDatasetCatalog catalog, IMapDrawState drawState)
+        : this(catalog)
+    {
+        ArgumentNullException.ThrowIfNull(drawState);
+        _drawState = drawState;
     }
 
     /// <summary>Executes the tool.</summary>
@@ -179,6 +204,11 @@ public sealed class IdentifyFeaturesService
         var snapshot = _catalog.Datasets;
         var hits = new List<Hit>();
 
+        // An explicit time identifies what a render then draws; without one,
+        // follow the host's map: its time and the features it hides.
+        var followsMap = request.Time is null && _drawState is not null;
+        var time = request.Time ?? _drawState?.Time;
+
         foreach (var dataset in snapshot)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -203,11 +233,13 @@ public sealed class IdentifyFeaturesService
                 longitude - lonPad,
                 Math.Clamp(request.Latitude + latPad, -90.0, 90.0),
                 longitude + lonPad);
-            var features = FeatureAccessor.GetFeatures(dataset, pickExtent);
+            var features = FeatureAccessor.GetFeatures(dataset, pickExtent, time);
             if (features is null)
             {
                 continue;
             }
+
+            var hidden = followsMap ? FeatureAccessor.UndrawnFeatures(dataset, _drawState!.HiddenFeatures(dataset)) : null;
 
             var s101 = dataset.Data as S101DatasetData;
             var resolver = s101?.ExternalTextResolver;
@@ -216,6 +248,11 @@ public sealed class IdentifyFeaturesService
             foreach (var feature in features)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
+                if (hidden is not null && hidden.Contains(feature.Id))
+                {
+                    continue;
+                }
 
                 if (TryMatch(feature, datasetPoint, latPad, lonPad, out var hit)
                     && (hit.Inside || hit.DistanceMeters <= radius))

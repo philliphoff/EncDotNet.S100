@@ -24,6 +24,14 @@ month. For package versions and release assets, see
   `describe_feature` decodes a warning's threshold, Beaufort force and
   message in each language. See the
   [S-412 README](../src/EncDotNet.S100.Datasets.S412/README.md).
+- **Picks match the map's time.** MCP `identify_features` takes an optional
+  `time` and returns only the S-412 and CAP warnings in force then, the
+  surface analysis valid then and a tropical cyclone's position then. In
+  SoundCharts, `identify_features` without a time and `pick_features` follow
+  the map: its view time and the S-124 parts it hides. Hosts supply what
+  their map draws through `IMapDrawState` (`S100McpServerOptions.MapDrawState`),
+  and `FeatureAccessor.GetFeatures` has an overload that takes the time.
+  `PickFeaturesTool` now takes the `IdentifyFeaturesTool` it uses.
 - **Faster multi-cell `s100 render` and `s100 tiles`, and HiDPI captures.**
   The CLI and `s100 mcp serve` now render through the chart engine
   (`EncDotNet.S100.Rendering.Engine`): cells parse, portray and build their

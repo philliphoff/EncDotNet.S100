@@ -1,5 +1,8 @@
+using System.Runtime.CompilerServices;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.S101;
+using EncDotNet.S100.Datasets.S412;
+using EncDotNet.S100.Datasets.S412.DataModel;
 using EncDotNet.S100.Features;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
@@ -58,8 +61,30 @@ public static class FeatureAccessor
     /// </para>
     /// </remarks>
     public static IEnumerable<IS100Feature>? GetFeatures(LoadedDataset dataset, BoundingBox? extent)
+        => GetFeatures(dataset, extent, time: null);
+
+    /// <summary>
+    /// Returns the features intersecting <paramref name="extent"/> that a
+    /// render at <paramref name="time"/> draws, or every drawable feature
+    /// when <paramref name="time"/> is <see langword="null"/> (as a render
+    /// with no time step draws them). Same null-semantics as the other
+    /// overloads.
+    /// </summary>
+    /// <param name="dataset">The dataset.</param>
+    /// <param name="extent">The extent, or <see langword="null"/> for the whole dataset.</param>
+    /// <param name="time">
+    /// The view time (UTC), or <see langword="null"/> for none. Only the
+    /// products whose drawing depends on the time narrow their features:
+    /// S-412 warnings in force then, CAP areas in force then, the surface
+    /// analysis valid then and the tropical cyclone's position then. Other
+    /// products, S-124 among them, return the same features whatever the
+    /// time: a render draws every S-124 part unless the host hides some
+    /// (see <see cref="Query.IMapDrawState.HiddenFeatures"/>).
+    /// </param>
+    public static IEnumerable<IS100Feature>? GetFeatures(LoadedDataset dataset, BoundingBox? extent, DateTimeOffset? time)
     {
         ArgumentNullException.ThrowIfNull(dataset);
+        var timeStep = time?.UtcDateTime;
         return dataset.Data switch
         {
             S101DatasetData s101 => S101Features(s101.Dataset, extent),
@@ -72,18 +97,60 @@ public static class FeatureAccessor
             S131DatasetData s131 => FilterByExtent(s131.Model.Features, extent),
             S201DatasetData s201 => FilterByExtent(s201.Model.Features, extent),
             S411DatasetData s411 => FilterByExtent(s411.Model.Features, extent),
-            S412DatasetData s412 => FilterByExtent(s412.Model.Features, extent),
+            // S-412 warnings: those in force at the time, or every warning
+            // with no time.
+            S412DatasetData s412 => FilterByExtent(S412DrawnAt(s412.Model, time), extent),
             S421DatasetData s421 => FilterByExtent(s421.Model.Features, extent),
-            // CAP warnings: every area not superseded or cancelled, as a
-            // render without a time step draws them.
-            CapDatasetData cap => FilterByExtent(cap.Warnings.DrawnAt(null).Select(a => new CapAreaFeature(a)), extent),
-            // Surface analyses: the fronts and centres of the analysis a
-            // render without a time step draws (the bulletin's first).
-            SurfaceAnalysisDatasetData analysis => FilterByExtent(SurfaceAnalysisDatasetProcessor.DrawnFeatures(analysis.Bulletin, timeStep: null), extent),
-            // Tropical cyclones: every drawn part of the storm (#1296).
-            TropicalCycloneDatasetData tc => FilterByExtent(TropicalCycloneDatasetProcessor.DrawnFeatures(tc.Advisory), extent),
+            // CAP warnings: the areas in force at the time, or, with no time,
+            // every area not superseded or cancelled.
+            CapDatasetData cap => FilterByExtent(cap.Warnings.DrawnAt(time).Select(a => new CapAreaFeature(a)), extent),
+            // Surface analyses: the fronts and centres of the analysis drawn
+            // at the time (with no time, the bulletin's first).
+            SurfaceAnalysisDatasetData analysis => FilterByExtent(SurfaceAnalysisDatasetProcessor.DrawnFeatures(analysis.Bulletin, timeStep), extent),
+            // Tropical cyclones: every drawn part of the storm, with its
+            // position at the time (#1296).
+            TropicalCycloneDatasetData tc => FilterByExtent(TropicalCycloneDatasetProcessor.DrawnFeatures(tc.Advisory, timeStep), extent),
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// The ids of the features of <paramref name="dataset"/> a render that
+    /// hides <paramref name="hidden"/> (<see cref="Query.IMapDrawState.HiddenFeatures"/>)
+    /// neither draws nor picks: for S-124 the hidden parts with the areas and
+    /// texts only they reference (all of the dataset when every part is
+    /// hidden), else <paramref name="hidden"/> itself.
+    /// </summary>
+    /// <param name="dataset">The dataset.</param>
+    /// <param name="hidden">The features the host hides, or <see langword="null"/> for none.</param>
+    /// <returns>The ids, or <see langword="null"/> when nothing is left out.</returns>
+    public static IReadOnlySet<string>? UndrawnFeatures(LoadedDataset dataset, IReadOnlySet<string>? hidden)
+    {
+        ArgumentNullException.ThrowIfNull(dataset);
+        if (hidden is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        return dataset.Data is S124DatasetData s124
+            ? S124DatasetProcessor.UndrawnFeaturesOf(s124.Model, hidden)
+            : hidden;
+    }
+
+    // The typed warnings of each S-412 dataset, built once: the drawn set is
+    // asked for on every identify and pick.
+    private static readonly ConditionalWeakTable<S412Dataset, S412MarineWeatherWarnings> S412Warnings = new();
+
+    private static IEnumerable<S412Feature> S412DrawnAt(S412Dataset dataset, DateTimeOffset? time)
+    {
+        if (time is null)
+        {
+            return dataset.Features;
+        }
+
+        var warnings = S412Warnings.GetValue(dataset, d => S412MarineWeatherWarnings.From(d, out _));
+        var drawn = warnings.DrawnAt(time).Select(w => w.Id).ToHashSet(StringComparer.Ordinal);
+        return dataset.Features.Where(f => drawn.Contains(f.Id));
     }
 
     private static IEnumerable<Feature> S101Features(S101Dataset dataset, BoundingBox? extent) =>

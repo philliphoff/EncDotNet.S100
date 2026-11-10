@@ -137,8 +137,7 @@ public sealed class S124DatasetProcessor : GmlDatasetProcessorBase<S124Feature>
             return null;
         }
 
-        var parts = _dataset.Features.Where(IsPart).ToList();
-        if (parts.Count == 0 || !parts.All(p => hidden.Contains(p.Id)))
+        if (!HidesEveryPart(_dataset, hidden))
             return null;
 
         _undrawn = _dataset.Features.Select(f => f.Id).ToHashSet(StringComparer.Ordinal);
@@ -152,7 +151,33 @@ public sealed class S124DatasetProcessor : GmlDatasetProcessorBase<S124Feature>
     /// The features a render with <paramref name="hidden"/> leaves out: the
     /// hidden parts and what only they reference.
     /// </summary>
-    internal IReadOnlySet<string> UndrawnFeatures(IReadOnlySet<string>? hidden)
+    internal IReadOnlySet<string> UndrawnFeatures(IReadOnlySet<string>? hidden) =>
+        UndrawnFeatures(_dataset, hidden);
+
+    /// <summary>
+    /// The features of <paramref name="dataset"/> a render with
+    /// <paramref name="hidden"/> neither draws nor picks: every feature when
+    /// every part is hidden, else the hidden parts and what only they
+    /// reference. For the catalog's identify and pick.
+    /// </summary>
+    /// <param name="dataset">The dataset.</param>
+    /// <param name="hidden">The hidden part ids, or null for none.</param>
+    internal static IReadOnlySet<string> UndrawnFeaturesOf(S124Dataset dataset, IReadOnlySet<string>? hidden)
+    {
+        if (hidden is not { Count: > 0 })
+            return Empty;
+        return HidesEveryPart(dataset, hidden)
+            ? dataset.Features.Select(f => f.Id).ToHashSet(StringComparer.Ordinal)
+            : UndrawnFeatures(dataset, hidden);
+    }
+
+    private static bool HidesEveryPart(S124Dataset dataset, IReadOnlySet<string> hidden)
+    {
+        var parts = dataset.Features.Where(IsPart).ToList();
+        return parts.Count > 0 && parts.All(p => hidden.Contains(p.Id));
+    }
+
+    private static IReadOnlySet<string> UndrawnFeatures(S124Dataset dataset, IReadOnlySet<string>? hidden)
     {
         if (hidden is not { Count: > 0 })
             return Empty;
@@ -161,7 +186,7 @@ public sealed class S124DatasetProcessor : GmlDatasetProcessorBase<S124Feature>
         // Areas and texts referenced by at least one drawn part.
         var kept = new HashSet<string>(StringComparer.Ordinal);
         var referencedByHidden = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var feature in _dataset.Features)
+        foreach (var feature in dataset.Features)
         {
             if (!IsPart(feature))
                 continue;
@@ -175,7 +200,7 @@ public sealed class S124DatasetProcessor : GmlDatasetProcessorBase<S124Feature>
             }
         }
 
-        foreach (var feature in _dataset.Features)
+        foreach (var feature in dataset.Features)
         {
             if (feature.FeatureType is "NavwarnAreaAffected" or "TextPlacement"
                 && referencedByHidden.Contains(feature.Id)
