@@ -199,7 +199,7 @@
 
     <shadui:Window.RightWindowTitleBarContent>
         <StackPanel Orientation="Horizontal" Spacing="0">
-            <Button Command="{Binding ShowFeedbackCommand}"
+            <Button Command="{Binding AppCommands.ShowFeedbackCommand}"
                     AutomationProperties.AutomationId="MainWindow.Feedback"
                     AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ReportFeedback}"
                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ReportFeedback}"
@@ -212,7 +212,7 @@
                 <ic:FluentIcon Icon="PersonFeedback" IconVariant="Regular" FontSize="16"
                                Foreground="{DynamicResource ForegroundColor}" />
             </Button>
-            <Button Command="{Binding ToggleThemeCommand}"
+            <Button Command="{Binding AppCommands.ToggleThemeCommand}"
                     AutomationProperties.AutomationId="MainWindow.ToggleTheme"
                     AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ToggleTheme}"
                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleTheme}"
@@ -226,11 +226,11 @@
                     <!-- Sun icon (shown in dark mode, click to go light) -->
                     <ic:FluentIcon Icon="WeatherSunny" IconVariant="Regular" FontSize="16"
                                    Foreground="{DynamicResource ForegroundColor}"
-                                   IsVisible="{Binding IsDarkTheme}" />
+                                   IsVisible="{Binding AppCommands.IsDarkTheme}" />
                     <!-- Moon icon (shown in light mode, click to go dark) -->
                     <ic:FluentIcon Icon="WeatherMoon" IconVariant="Regular" FontSize="16"
                                    Foreground="{DynamicResource ForegroundColor}"
-                                   IsVisible="{Binding !IsDarkTheme}" />
+                                   IsVisible="{Binding !AppCommands.IsDarkTheme}" />
                 </Panel>
             </Button>
         </StackPanel>
@@ -238,7 +238,7 @@
 
     <shadui:Window.Hosts>
         <!-- Hosts ShadUI modal dialogs (e.g. Report Feedback). -->
-        <shadui:DialogHost Manager="{Binding DialogManager}" x:Name="PART_DialogHost" />
+        <shadui:DialogHost Manager="{Binding AppCommands.DialogManager}" x:Name="PART_DialogHost" />
     </shadui:Window.Hosts>
 
     <Panel>

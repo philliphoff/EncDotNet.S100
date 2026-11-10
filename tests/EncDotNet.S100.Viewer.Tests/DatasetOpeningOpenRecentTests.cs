@@ -1,17 +1,16 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
-using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
-public class MainViewModelOpenRecentTests : IDisposable
+public class DatasetOpeningOpenRecentTests : IDisposable
 {
     private readonly string _tempSettingsPath;
 
-    public MainViewModelOpenRecentTests()
+    public DatasetOpeningOpenRecentTests()
     {
         _tempSettingsPath = Path.Combine(
             Path.GetTempPath(),
@@ -25,14 +24,6 @@ public class MainViewModelOpenRecentTests : IDisposable
     }
 
 
-    private sealed class StubThemeService : IThemeService
-    {
-        public bool IsDarkTheme => false;
-        public event System.EventHandler? ThemeChanged { add { } remove { } }
-        public bool ToggleTheme() => false;
-        public ChromeTheme Current => ChromeTheme.Light;
-        public void SetTheme(ChromeTheme theme) { }
-    }
 
     private sealed class RecordingLoaderService : IDatasetLoaderService
     {
@@ -57,46 +48,27 @@ public class MainViewModelOpenRecentTests : IDisposable
         public event Action<string>? ActiveChanged { add { } remove { } }
     }
 
-    private MainViewModel CreateViewModel(
+    private DatasetOpeningViewModel CreateViewModel(
         out RecordingLoaderService loader,
         out StubRecentFilesService recent)
         => CreateViewModel(out loader, out recent, out _);
 
-    private MainViewModel CreateViewModel(
+    private DatasetOpeningViewModel CreateViewModel(
         out RecordingLoaderService loader,
         out StubRecentFilesService recent,
         out Services.Notifications.NotificationService notifications)
     {
         var settings = new ViewerSettings { SettingsFilePath = _tempSettingsPath };
-        var catalogues = new PortrayalCatalogueManager();
         loader = new RecordingLoaderService();
         recent = new StubRecentFilesService();
         notifications = Notifications.TestNotifications.Create();
         var datasets = new DatasetsViewModel(loader);
         var timeline = new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
-        var settingsVm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
-        var routeStore = new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
-        return new MainViewModel(
-            layout: new ShellLayoutViewModel(settings, [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post),
-            mapTools: TestMapTools.Create(settingsVm, routeStore),
-            statusBar: new StatusBarViewModel(mcpServerHost: null, Notifications.TestNotifications.Create(), EncDotNet.S100.Viewer.Services.UiThread.Post),
-            featureCatalogues: new FeatureCataloguesViewModel(settings),
-            portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
-            datasets: datasets,
-            layerStack: new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null),
-            search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
-            settingsViewModel: settingsVm,
-            pickReport: new PickReportViewModel(),
-            timeline: timeline,
-            displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
-            textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
-            displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null),
-            themeService: new StubThemeService(),
-            recentFiles: recent,
-            notifications: notifications,
-            dialogManager: new ShadUI.DialogManager(),
-            routes: routeStore);
+        return new DatasetOpeningViewModel(
+            recent,
+            notifications,
+            datasets,
+            new ShellLayoutViewModel(settings, [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post));
     }
 
     [Fact]
@@ -154,7 +126,7 @@ public class MainViewModelOpenRecentTests : IDisposable
     {
         var path = LibraryTestContext.Datasets(relative.Split('/'));
 
-        Assert.Equal(expected, MainViewModel.IsExchangeSetPath(path));
+        Assert.Equal(expected, DatasetOpeningViewModel.IsExchangeSetPath(path));
     }
 
     [Theory]

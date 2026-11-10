@@ -153,14 +153,6 @@ public sealed class MultiDockActivityTabTests : IDisposable
     }
 
 
-    private sealed class StubThemeService : IThemeService
-    {
-        public bool IsDarkTheme => false;
-        public event System.EventHandler? ThemeChanged { add { } remove { } }
-        public bool ToggleTheme() => false;
-        public ChromeTheme Current => ChromeTheme.Light;
-        public void SetTheme(ChromeTheme theme) { }
-    }
 
     private sealed class NoopLoader : IDatasetLoaderService
     {
@@ -192,10 +184,13 @@ public sealed class MultiDockActivityTabTests : IDisposable
         var timelineVm = timeline ?? new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
         var settingsVm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         var routeStore = new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
+        var shellLayout = new ShellLayoutViewModel(settings, tabs ?? [], timelineVm, EncDotNet.S100.Viewer.Services.UiThread.Post);
         return new MainViewModel(
-            layout: new ShellLayoutViewModel(settings, tabs ?? [], timelineVm, EncDotNet.S100.Viewer.Services.UiThread.Post),
+            layout: shellLayout,
             mapTools: TestMapTools.Create(settingsVm, routeStore),
             statusBar: new StatusBarViewModel(mcpServerHost: null, Notifications.TestNotifications.Create(), EncDotNet.S100.Viewer.Services.UiThread.Post),
+            appCommands: TestAppCommands.Create(),
+            datasetOpening: new DatasetOpeningViewModel(new StubRecentFilesService(), Notifications.TestNotifications.Create(), datasets, shellLayout),
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
@@ -208,10 +203,6 @@ public sealed class MultiDockActivityTabTests : IDisposable
             textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
             displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
             ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null),
-            themeService: new StubThemeService(),
-            recentFiles: new StubRecentFilesService(),
-            notifications: Notifications.TestNotifications.Create(),
-            dialogManager: new ShadUI.DialogManager(),
             routes: routeStore);
     }
 

@@ -149,7 +149,7 @@ internal sealed class NativeMenuBuilder
         var fileMenu = BuildFileMenu();
 
         var reportFeedbackItem = new NativeMenuItem(Strings.Menu_ReportFeedback);
-        reportFeedbackItem.Click += (_, _) => _viewModel.ShowFeedbackCommand.Execute(null);
+        reportFeedbackItem.Click += (_, _) => _viewModel.AppCommands.ShowFeedbackCommand.Execute(null);
 
         // On macOS the About item lives in the application menu (see
         // App.ConfigureMacApplicationMenu); elsewhere it belongs in Help.
@@ -160,7 +160,7 @@ internal sealed class NativeMenuBuilder
         if (!OperatingSystem.IsMacOS())
         {
             var aboutItem = new NativeMenuItem(Strings.Menu_About);
-            aboutItem.Click += (_, _) => _viewModel.ShowAboutCommand.Execute(null);
+            aboutItem.Click += (_, _) => _viewModel.AppCommands.ShowAboutCommand.Execute(null);
             helpSubMenu.Add(aboutItem);
         }
         var helpMenu = new NativeMenuItem(Strings.Menu_Help)
@@ -288,7 +288,7 @@ internal sealed class NativeMenuBuilder
                 IsEnabled = File.Exists(path) || Directory.Exists(path),
             };
             var captured = path;
-            item.Click += (_, _) => _viewModel.OpenRecentCommand.Execute(captured);
+            item.Click += (_, _) => _viewModel.DatasetOpening.OpenRecentCommand.Execute(captured);
             _openRecentMenu.Items.Add(item);
         }
 
