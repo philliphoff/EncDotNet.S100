@@ -59,6 +59,6 @@
         <Setter Property="BorderBrush" Value="{DynamicResource ForegroundColor}" />
     </Style>
     <Style Selector="views|AmlMarkingChip:elevated /template/ TextBlock#PART_Text">
-        <Setter Property="Foreground" Value="{DynamicResource BackgroundColor}" />
+        <Setter Property="Foreground" Value="{DynamicResource CardBackgroundColor}" />
     </Style>
 </Styles>
