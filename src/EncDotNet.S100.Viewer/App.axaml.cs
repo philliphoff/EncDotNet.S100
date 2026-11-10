@@ -1691,6 +1691,13 @@ public partial class App : Application
             sp.GetRequiredService<INotificationService>(),
             sp.GetRequiredService<DatasetsViewModel>(),
             sp.GetRequiredService<ShellLayoutViewModel>()));
+        services.AddSingleton(sp => new MapChromeViewModel(
+            sp.GetRequiredService<DisplayToolbarViewModel>(),
+            sp.GetRequiredService<TextGroupToolbarViewModel>(),
+            sp.GetRequiredService<DisplayModeToolbarViewModel>(),
+            sp.GetRequiredService<DisplayCombinationsViewModel>(),
+            sp.GetRequiredService<NavigationalWarningsViewModel>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningDrawingService>()));
         services.AddSingleton<MainViewModel>();
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.DateDependentDrawingService(
             sp.GetRequiredService<IDatasetLoaderService>(),
