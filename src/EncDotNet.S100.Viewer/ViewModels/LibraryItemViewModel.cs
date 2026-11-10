@@ -641,7 +641,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
 
     /// <summary>A core tag as the row shows it; a failed download's tag retries it when clicked.</summary>
     private LibraryItemTag Tag(LibraryTag tag) =>
-        new(tag.Text, tag.Kind, tag.Kind == LibraryTagKind.Failed && _download is not null ? RetryCommand : null);
+        new(tag.Text, tag.Kind, tag.Kind == LibraryTagKind.Failed && _download is not null ? RetryCommand : null, tag.ToolTip);
 
     /// <summary>The row as the Library core describes it (#792): tags and details in shared words.</summary>
     private LibraryItemTextInput TextInput => new(Item, Source, Availability, EffectiveItem)

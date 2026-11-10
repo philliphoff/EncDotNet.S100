@@ -139,7 +139,10 @@ public sealed record LibraryBounds(
 [Description("One Library item with the groups of fields its details pane shows.")]
 public sealed record LibraryItemDetail(
     [property: Description("The item, as query_library_items reports it.")] LibraryItemInfo Item,
-    [property: Description("The details pane's groups (Forecast, Product, Coverage, Source, …).")] IReadOnlyList<LibraryDetailGroupInfo> Details);
+    [property: Description("The details pane's groups (Forecast, Product, Coverage, Source, …).")] IReadOnlyList<LibraryDetailGroupInfo> Details,
+    [property: Description("Whether SoundCharts draws the item; null unless it's NATO Additional Military Layers data, which is false while AML is recognised, not drawn.")] bool? Drawn = null,
+    [property: Description("\"recognised-not-drawn\" or \"drawn\" for AML; null otherwise.")] string? Status = null,
+    [property: Description("NATO Additional Military Layers facts (military overlay data, not a chart); null unless the item is AML.")] AmlReport? Aml = null);
 
 /// <summary>A details-pane group.</summary>
 [Description("A group of fields in the Library details pane.")]

@@ -739,4 +739,108 @@
     <value>Bulletins</value>
     <comment>Heading over the WPC bulletins to include: the analysis and the forecast fronts</comment>
   </data>
+  <data name="SpecName_AML" xml:space="preserve">
+    <value>Additional Military Layers</value>
+  </data>
+  <data name="Aml_Chip" xml:space="preserve">
+    <value>AML</value>
+    <comment>The short name in chips and tags (decision 1). Never 'military chart'.</comment>
+  </data>
+  <data name="Aml_Heading" xml:space="preserve">
+    <value>Additional Military Layers</value>
+    <comment>Headings and tooltips</comment>
+  </data>
+  <data name="Aml_ProtectiveMarking" xml:space="preserve">
+    <value>Protective marking</value>
+    <comment>Details label. Never 'Classification'.</comment>
+  </data>
+  <data name="Aml_MarkingPill" xml:space="preserve">
+    <value>MARKING</value>
+    <comment>Status-bar pill label</comment>
+  </data>
+  <data name="Aml_State_RecognisedNotDrawn" xml:space="preserve">
+    <value>Recognised, not drawn</value>
+    <comment>The state of AML data SoundCharts reads but doesn't draw. Neutral, never a failure.</comment>
+  </data>
+  <data name="Aml_NotAChart" xml:space="preserve">
+    <value>Additional Military Layers, not a chart</value>
+    <comment>First line wherever AML data is described</comment>
+  </data>
+  <data name="Aml_ItemNote" xml:space="preserve">
+    <value>Military overlay data, not a chart. SoundCharts shows where it is but doesn't draw it.</value>
+    <comment>Note at the top of an AML item's details</comment>
+  </data>
+  <data name="Aml_Field_Product" xml:space="preserve">
+    <value>Product</value>
+  </data>
+  <data name="Aml_Field_Version" xml:space="preserve">
+    <value>Version</value>
+  </data>
+  <data name="Aml_Field_IdoStatus" xml:space="preserve">
+    <value>IDO status</value>
+  </data>
+  <data name="Aml_Field_OwnerAuthority" xml:space="preserve">
+    <value>Owner authority</value>
+  </data>
+  <data name="Aml_Field_Caveat" xml:space="preserve">
+    <value>Caveat</value>
+  </data>
+  <data name="Aml_Field_ScaleBand" xml:space="preserve">
+    <value>Scale band</value>
+  </data>
+  <data name="Aml_ScaleBandFormat" xml:space="preserve">
+    <value>Band {0}</value>
+    <comment>An AML scale band (0–9), not an ENC usage band</comment>
+  </data>
+  <data name="Aml_VersionFormat" xml:space="preserve">
+    <value>AML {0}</value>
+    <comment>The AML version, e.g. 'AML 1.0'</comment>
+  </data>
+  <data name="Aml_FromCellName" xml:space="preserve">
+    <value>From the cell name</value>
+    <comment>Group of facts decoded from the cell name</comment>
+  </data>
+  <data name="Aml_MarkingFromCellNameFormat" xml:space="preserve">
+    <value>{0} (from cell name)</value>
+    <comment>A marking taken from the cell name's classification letter because the cell gives none</comment>
+  </data>
+  <data name="Aml_NoDepthChecks" xml:space="preserve">
+    <value>AML depths aren't used for depth answers or route checks.</value>
+  </data>
+  <data name="Library_Property_amlProductSpecification" xml:space="preserve">
+    <value>AML product specification</value>
+  </data>
+  <data name="Library_Property_amlProduct" xml:space="preserve">
+    <value>AML product</value>
+  </data>
+  <data name="Library_Property_amlProductName" xml:space="preserve">
+    <value>AML product name</value>
+  </data>
+  <data name="Library_Property_amlVersion" xml:space="preserve">
+    <value>AML version</value>
+  </data>
+  <data name="Library_Property_amlTitle" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="Library_Property_amlProtectiveMarking" xml:space="preserve">
+    <value>Protective marking</value>
+  </data>
+  <data name="Library_Property_amlMarkingSource" xml:space="preserve">
+    <value>Marking from</value>
+  </data>
+  <data name="Library_Property_amlIdoStatus" xml:space="preserve">
+    <value>IDO status</value>
+  </data>
+  <data name="Library_Property_amlOwnerAuthority" xml:space="preserve">
+    <value>Owner authority</value>
+  </data>
+  <data name="Library_Property_amlCaveat" xml:space="preserve">
+    <value>Caveat</value>
+  </data>
+  <data name="Library_Property_amlScaleBand" xml:space="preserve">
+    <value>Scale band</value>
+  </data>
+  <data name="Library_Property_amlUpdate" xml:space="preserve">
+    <value>AML update cell</value>
+  </data>
 </root>

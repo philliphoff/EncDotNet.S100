@@ -29,12 +29,20 @@ public enum LibraryTagKind
 
     /// <summary>A weather run more than 12 hours old (#1075): "Stale", with "Load latest run" offered.</summary>
     Stale,
+
+    /// <summary>
+    /// NATO Additional Military Layers data, "AML · {code}": outlined ink with a
+    /// layers glyph, so it never reads as a state colour or as
+    /// <see cref="Neutral"/>.
+    /// </summary>
+    Military,
 }
 
 /// <summary>A short sentence-case tag after an item's name, e.g. "Ed 46 available" or "Loaded".</summary>
 /// <param name="Text">The tag's text.</param>
 /// <param name="Kind">What it says.</param>
-public sealed record LibraryTag(string Text, LibraryTagKind Kind);
+/// <param name="ToolTip">More about it on hover, or <see langword="null"/>.</param>
+public sealed record LibraryTag(string Text, LibraryTagKind Kind, string? ToolTip = null);
 
 /// <summary>A group of an item's details (Forecast, Product, Coverage, Source).</summary>
 /// <param name="Title">The group's title.</param>
@@ -206,6 +214,9 @@ public static class LibraryItemText
 
         if (IsPackageEntry(item))
             tags.Add(new LibraryTag(LibraryText.Get("Library_Tag_Package"), LibraryTagKind.Neutral));
+
+        if (AmlLibraryProperties.Read(item.Properties, item.Name) is { } aml)
+            tags.Add(new LibraryTag(aml.TagText, LibraryTagKind.Military, aml.TagToolTip));
 
         switch (input.Availability)
         {

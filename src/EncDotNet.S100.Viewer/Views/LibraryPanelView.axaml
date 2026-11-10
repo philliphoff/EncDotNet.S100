@@ -276,14 +276,20 @@
              has a button over it, so the keyboard and automation clients reach its
              command as well as the pointer (#784). -->
         <DataTemplate x:Key="LibraryTagTemplate" x:DataType="vm:LibraryItemTag">
-            <Panel>
+            <Panel ToolTip.Tip="{Binding ToolTip}">
                 <Border Classes="libraryTag"
+                        IsVisible="{Binding IsPill}"
                         Classes.update="{Binding IsUpdate}"
                         Classes.loaded="{Binding IsLoaded}"
                         Classes.queued="{Binding IsQueued}"
                         Classes.failed="{Binding IsFailed}">
                     <TextBlock Text="{Binding Text}" />
                 </Border>
+                <!-- AML (#1236, decision 2): outlined ink with a layers glyph. -->
+                <views:AmlTagChip IsVisible="{Binding IsMilitary}"
+                                  Text="{Binding Text}"
+                                  AutomationProperties.AutomationId="Library.Row.AmlTag"
+                                  AutomationProperties.Name="{Binding Text}" />
                 <Button Classes="libraryTagAction"
                         IsVisible="{Binding IsClickable}"
                         Command="{Binding Command}"
