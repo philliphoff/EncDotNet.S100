@@ -256,6 +256,7 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
 
         OnPropertyChanged(nameof(MemberCount));
         OnPropertyChanged(nameof(IsAnyDatasetVisible));
+        UpdateAml();
     }
 
     private void OnMemberPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -263,6 +264,10 @@ internal sealed partial class ExchangeSetHeader : ViewModelBase
         if (e.PropertyName == nameof(DatasetEntry.IsVisible))
         {
             OnPropertyChanged(nameof(IsAnyDatasetVisible));
+        }
+        else if (e.PropertyName == nameof(DatasetEntry.Aml))
+        {
+            UpdateAml();
         }
     }
 
