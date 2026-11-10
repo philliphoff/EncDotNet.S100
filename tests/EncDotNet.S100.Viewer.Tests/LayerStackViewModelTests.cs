@@ -61,7 +61,7 @@ public class LayerStackViewModelTests
         Assert.Single(vm.Planes); // only the populated plane
 
         vm.ShowEmptyPlanes = true;
-        Assert.Equal(10, vm.Planes.Count); // all canonical planes and Additional military layers
+        Assert.Equal(10, vm.Planes.Count); // all canonical planes, AML's included
 
         vm.ShowEmptyPlanes = false;
         Assert.Single(vm.Planes);

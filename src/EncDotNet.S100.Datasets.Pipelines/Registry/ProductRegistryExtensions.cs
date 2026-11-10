@@ -29,6 +29,18 @@ public static class ProductRegistryExtensions
     }
 
     /// <summary>
+    /// Registers NATO Additional Military Layers (<see cref="S100Products.Aml"/>)
+    /// and returns the registry for chaining. AML isn't an S-100 product, so
+    /// <see cref="AddAllS100Products"/> leaves it out.
+    /// </summary>
+    public static ProductRegistry AddAmlProduct(this ProductRegistry registry)
+    {
+        ArgumentNullException.ThrowIfNull(registry);
+        registry.Register(S100Products.Aml);
+        return registry;
+    }
+
+    /// <summary>
     /// Registers the built-in weather formats (<see cref="WeatherProducts"/>:
     /// NetCDF-CF) and returns the registry for chaining. They aren't S-100
     /// products, so <see cref="AddAllS100Products"/> leaves them out.
