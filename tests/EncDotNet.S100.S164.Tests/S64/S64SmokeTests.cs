@@ -1,4 +1,6 @@
 using System.Text.RegularExpressions;
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines;
 
 namespace EncDotNet.S100.S164.Tests.S64;
 
@@ -157,7 +159,34 @@ public sealed partial class S64SmokeTests
         "8.0 Skin of the Earth/SOE_Test_5_Base/ENC_ROOT/GB55062B.000",
     ];
 
-    public static TheoryData<string> BaseCells() => new(Cells);
+    /// <summary>
+    /// The 3.8.5 "Non ENC data" cells: NATO Additional Military Layers (AML
+    /// 3.0 CLB) cells, which an ECDIS mustn't show as ENC. They open as AML
+    /// (#1236), never through the S-57 translation.
+    /// </summary>
+    private const string NonEncDataFolder = "3.8.5 Non ENC data/";
+
+    /// <summary>The ENC base cells, portrayed through the S-57 translation.</summary>
+    public static TheoryData<string> BaseCells() => new(Cells.Where(c => !c.StartsWith(NonEncDataFolder, StringComparison.Ordinal)));
+
+    /// <summary>The non-ENC (AML) base cells.</summary>
+    public static TheoryData<string> NonEncCells() => new(Cells.Where(c => c.StartsWith(NonEncDataFolder, StringComparison.Ordinal)));
+
+    [Theory]
+    [MemberData(nameof(NonEncCells))]
+    public async Task NonEncDataOpensAsAml_NotAsAChart(string cell)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var source = await S64TestData.OpenSourceAsync(ct);
+
+        var processor = new AmlDatasetProcessor(source, cell, AmlNotDrawnPortrayal.Instance);
+
+        Assert.Equal(SpecName.Aml, processor.Spec.Name);
+        Assert.Equal("CLB", processor.Info.ProductCode);
+        Assert.False(processor.Drawn);
+        var portrayal = await processor.BuildVectorPortrayalAsync(null, ct);
+        Assert.Empty(portrayal.SubLayers);
+    }
 
     [Fact]
     public async Task CellListMatchesTheArchive()
