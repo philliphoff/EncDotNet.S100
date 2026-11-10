@@ -149,18 +149,18 @@ public partial class MainWindow : ShadUI.Window
         // Measure keys (#1130, D20): G geometry, Delete clears, Ctrl+C (⌘C) copies.
         Tools.MeasureKeys.Attach(
             this,
-            _viewModel.MeasureSession,
-            _viewModel.MeasureCard,
+            _viewModel.MapTools.MeasureSession,
+            _viewModel.MapTools.MeasureCard,
             visual => ReferenceEquals(visual, MapControl) || ReferenceEquals(visual, MapArea));
 
         // Range & bearing keys (#1130 D20): G geometry, Delete clears, Ctrl+C
         // (⌘C) copies; only while the tool is on and never while typing.
         Tools.RangeBearingKeys.Attach(
             this,
-            _viewModel.RangeBearing.State,
+            _viewModel.MapTools.RangeBearing.State,
             () =>
             {
-                if (_viewModel.RangeBearing.CopyText is { } text && Clipboard is { } clipboard)
+                if (_viewModel.MapTools.RangeBearing.CopyText is { } text && Clipboard is { } clipboard)
                     _ = clipboard.SetTextAsync(text);
             },
             visual => ReferenceEquals(visual, MapControl) || ReferenceEquals(visual, MapArea));
@@ -586,7 +586,7 @@ public partial class MainWindow : ShadUI.Window
         // Apply the cursor that matches the current mode and keep it in sync
         // with the active tool.
         ApplyToolCursor();
-        _viewModel.Tools.ActiveToolChanged += _ => Dispatcher.UIThread.Post(ApplyToolCursor);
+        _viewModel.MapTools.Tools.ActiveToolChanged += _ => Dispatcher.UIThread.Post(ApplyToolCursor);
 
         // Enable drag & drop of dataset files onto the map
         AddHandler(DragDrop.DropEvent, OnDrop);
@@ -1051,7 +1051,7 @@ public partial class MainWindow : ShadUI.Window
     /// </summary>
     private void ApplyToolCursor()
     {
-        MapControl.Cursor = _viewModel.Tools.ActiveTool?.Cursor ?? Cursor.Default;
+        MapControl.Cursor = _viewModel.MapTools.Tools.ActiveTool?.Cursor ?? Cursor.Default;
     }
 
     /// <summary>
@@ -1062,13 +1062,13 @@ public partial class MainWindow : ShadUI.Window
     /// </summary>
     private void InitializeMapTools(MapInteractionController interactionController)
     {
-        var tools = _viewModel.Tools;
+        var tools = _viewModel.MapTools.Tools;
 
         var context = new MapToolContext(
             mapControl: MapControl,
             addLayer: _mapHost.AddToolLayer,
             removeLayer: _mapHost.RemoveToolLayer,
-            setStatusSummary: text => Dispatcher.UIThread.Post(() => _viewModel.MeasureSummary = text),
+            setStatusSummary: text => Dispatcher.UIThread.Post(() => _viewModel.MapTools.MeasureSummary = text),
             refreshGraphics: _mapHost.RequestRedraw,
             screenToLatLon: ScreenToLatLon,
             latLonToScreen: LatLonToScreen);
