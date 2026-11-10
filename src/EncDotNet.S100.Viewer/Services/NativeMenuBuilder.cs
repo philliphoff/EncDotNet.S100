@@ -96,44 +96,44 @@ internal sealed class NativeMenuBuilder
 
         var pickModeItem = BuildToggleItem(
             Strings.Menu_PickMode,
-            _viewModel,
-            initiallyChecked: _viewModel.IsPickModeActive,
-            execute: () => _viewModel.TogglePickModeCommand.Execute(null),
-            propertyName: nameof(MainViewModel.IsPickModeActive),
-            checkedSelector: () => _viewModel.IsPickModeActive,
+            _viewModel.MapTools,
+            initiallyChecked: _viewModel.MapTools.IsPickModeActive,
+            execute: () => _viewModel.MapTools.TogglePickModeCommand.Execute(null),
+            propertyName: nameof(MapToolsViewModel.IsPickModeActive),
+            checkedSelector: () => _viewModel.MapTools.IsPickModeActive,
             gesture: new KeyGesture(Key.I));
 
         var measureModeItem = BuildToggleItem(
             Strings.Menu_MeasureMode,
-            _viewModel,
-            initiallyChecked: _viewModel.IsMeasureModeActive,
-            execute: () => _viewModel.ToggleMeasureModeCommand.Execute(null),
-            propertyName: nameof(MainViewModel.IsMeasureModeActive),
-            checkedSelector: () => _viewModel.IsMeasureModeActive,
+            _viewModel.MapTools,
+            initiallyChecked: _viewModel.MapTools.IsMeasureModeActive,
+            execute: () => _viewModel.MapTools.ToggleMeasureModeCommand.Execute(null),
+            propertyName: nameof(MapToolsViewModel.IsMeasureModeActive),
+            checkedSelector: () => _viewModel.MapTools.IsMeasureModeActive,
             gesture: new KeyGesture(Key.M, KeyModifiers.Meta));
 
         var rangeBearingModeItem = BuildToggleItem(
             Strings.Menu_RangeBearingMode,
-            _viewModel,
-            initiallyChecked: _viewModel.IsRangeBearingModeActive,
-            execute: () => _viewModel.ToggleRangeBearingModeCommand.Execute(null),
-            propertyName: nameof(MainViewModel.IsRangeBearingModeActive),
-            checkedSelector: () => _viewModel.IsRangeBearingModeActive,
+            _viewModel.MapTools,
+            initiallyChecked: _viewModel.MapTools.IsRangeBearingModeActive,
+            execute: () => _viewModel.MapTools.ToggleRangeBearingModeCommand.Execute(null),
+            propertyName: nameof(MapToolsViewModel.IsRangeBearingModeActive),
+            checkedSelector: () => _viewModel.MapTools.IsRangeBearingModeActive,
             gesture: new KeyGesture(Key.R, KeyModifiers.Meta));
 
         // ⌘E is also handled by Tools.RouteEditorKeys; the menu's copy of the
         // shortcut must not fire while a text field has focus either.
         var routeEditModeItem = BuildToggleItem(
             Strings.Menu_RouteEditMode,
-            _viewModel,
-            initiallyChecked: _viewModel.IsRouteEditModeActive,
+            _viewModel.MapTools,
+            initiallyChecked: _viewModel.MapTools.IsRouteEditModeActive,
             execute: () =>
             {
                 if (!Tools.RouteEditorKeys.IsTextInputFocused(window))
-                    _viewModel.ToggleRouteEditModeCommand.Execute(null);
+                    _viewModel.MapTools.ToggleRouteEditModeCommand.Execute(null);
             },
-            propertyName: nameof(MainViewModel.IsRouteEditModeActive),
-            checkedSelector: () => _viewModel.IsRouteEditModeActive,
+            propertyName: nameof(MapToolsViewModel.IsRouteEditModeActive),
+            checkedSelector: () => _viewModel.MapTools.IsRouteEditModeActive,
             gesture: new KeyGesture(Key.E, KeyModifiers.Meta));
 
         var appearanceMenu = new NativeMenuItem(Strings.Menu_Appearance)

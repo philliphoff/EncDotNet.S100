@@ -46,16 +46,16 @@
 
     <shadui:Window.KeyBindings>
         <!-- Esc exits the active map tool (pick or measure). -->
-        <KeyBinding Gesture="Escape" Command="{Binding ExitPickModeCommand}" />
+        <KeyBinding Gesture="Escape" Command="{Binding MapTools.ExitPickModeCommand}" />
         <!-- Cmd+M / Ctrl+M toggles Measure Mode. -->
-        <KeyBinding Gesture="Cmd+M" Command="{Binding ToggleMeasureModeCommand}" />
-        <KeyBinding Gesture="Ctrl+M" Command="{Binding ToggleMeasureModeCommand}" />
+        <KeyBinding Gesture="Cmd+M" Command="{Binding MapTools.ToggleMeasureModeCommand}" />
+        <KeyBinding Gesture="Ctrl+M" Command="{Binding MapTools.ToggleMeasureModeCommand}" />
         <!-- Cmd+R / Ctrl+R toggles Range & bearing (#1130 D11). -->
-        <KeyBinding Gesture="Cmd+R" Command="{Binding ToggleRangeBearingModeCommand}" />
-        <KeyBinding Gesture="Ctrl+R" Command="{Binding ToggleRangeBearingModeCommand}" />
+        <KeyBinding Gesture="Cmd+R" Command="{Binding MapTools.ToggleRangeBearingModeCommand}" />
+        <KeyBinding Gesture="Ctrl+R" Command="{Binding MapTools.ToggleRangeBearingModeCommand}" />
         <!-- Enter / Backspace are tool actions while a tool is active. -->
-        <KeyBinding Gesture="Enter" Command="{Binding ToolCommitCommand}" />
-        <KeyBinding Gesture="Back" Command="{Binding ToolBackstepCommand}" />
+        <KeyBinding Gesture="Enter" Command="{Binding MapTools.ToolCommitCommand}" />
+        <KeyBinding Gesture="Back" Command="{Binding MapTools.ToolBackstepCommand}" />
     </shadui:Window.KeyBindings>
 
     <shadui:Window.Styles>
@@ -287,9 +287,9 @@
                             VerticalAlignment="Center">
 
                     <!-- Measure / route-edit tool summary -->
-                    <Border Classes="StatusSeparator" IsVisible="{Binding IsToolSummaryVisible}" />
-                    <TextBlock Text="{Binding MeasureSummary}"
-                               IsVisible="{Binding IsToolSummaryVisible}"
+                    <Border Classes="StatusSeparator" IsVisible="{Binding MapTools.IsToolSummaryVisible}" />
+                    <TextBlock Text="{Binding MapTools.MeasureSummary}"
+                               IsVisible="{Binding MapTools.IsToolSummaryVisible}"
                                FontSize="12"
                                FontFeatures="+tnum"
                                Opacity="0.85"
@@ -699,10 +699,10 @@
                             Margin="12,44,64,0"
                             Spacing="8">
                 <!-- Measure card (#1130, D1). -->
-                <views:MeasureCardView DataContext="{Binding MeasureCard}"
-                                       IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsMeasureModeActive}"
+                <views:MeasureCardView DataContext="{Binding MapTools.MeasureCard}"
+                                       IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).MapTools.IsMeasureModeActive}"
                                        HorizontalAlignment="Left" />
-                <views:RangeBearingCardView DataContext="{Binding RangeBearing}"
+                <views:RangeBearingCardView DataContext="{Binding MapTools.RangeBearing}"
                                             IsVisible="{Binding IsActive}" />
                 <!-- Navigational warning note (#932): while a warning opened from
                      the panel draws nothing (no location) or isn't framed (not in
@@ -742,7 +742,7 @@
                         Margin="12,44,64,0"
                         IsHitTestVisible="False"
                         AutomationProperties.AutomationId="Map.RouteEditChip"
-                        IsVisible="{Binding IsRouteEditModeActive}"
+                        IsVisible="{Binding MapTools.IsRouteEditModeActive}"
                         Background="{DynamicResource MapOverlaySurfaceBrush}"
                         BorderBrush="{DynamicResource BorderColor}"
                         BorderThickness="1"
@@ -816,8 +816,8 @@
                             AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_PickMode}"
                             AutomationProperties.AcceleratorKey="I"
                             Classes="Icon MapOverlay"
-                            Classes.pickActive="{Binding IsPickModeActive}"
-                            Command="{Binding TogglePickModeCommand}"
+                            Classes.pickActive="{Binding MapTools.IsPickModeActive}"
+                            Command="{Binding MapTools.TogglePickModeCommand}"
                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_PickMode}">
                         <Button.Styles>
                             <!--
@@ -879,8 +879,8 @@
                             AutomationProperties.Name="{x:Static loc:Strings.Label_MeasureMode}"
                             AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_MeasureMode}"
                             Classes="Icon MapOverlay"
-                            Classes.measureActive="{Binding IsMeasureModeActive}"
-                            Command="{Binding ToggleMeasureModeCommand}"
+                            Classes.measureActive="{Binding MapTools.IsMeasureModeActive}"
+                            Command="{Binding MapTools.ToggleMeasureModeCommand}"
                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_MeasureMode}">
                         <Button.Styles>
                             <Style Selector="Button#MeasureModeButton.measureActive">
@@ -911,11 +911,11 @@
                     <Button x:Name="RangeBearingModeButton"
                             AutomationProperties.AutomationId="Map.RangeBearingMode"
                             AutomationProperties.Name="{x:Static loc:Strings.Label_RangeBearingMode}"
-                            AutomationProperties.HelpText="{Binding RangeBearingModeTooltip}"
+                            AutomationProperties.HelpText="{Binding MapTools.RangeBearingModeTooltip}"
                             Classes="Icon MapOverlay"
-                            Classes.rangeBearingActive="{Binding IsRangeBearingModeActive}"
-                            Command="{Binding ToggleRangeBearingModeCommand}"
-                            ToolTip.Tip="{Binding RangeBearingModeTooltip}">
+                            Classes.rangeBearingActive="{Binding MapTools.IsRangeBearingModeActive}"
+                            Command="{Binding MapTools.ToggleRangeBearingModeCommand}"
+                            ToolTip.Tip="{Binding MapTools.RangeBearingModeTooltip}">
                         <Button.Styles>
                             <Style Selector="Button#RangeBearingModeButton.rangeBearingActive">
                                 <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
@@ -947,11 +947,11 @@
                     <Button x:Name="RouteEditModeButton"
                             AutomationProperties.AutomationId="Map.RouteEditMode"
                             AutomationProperties.Name="{x:Static loc:Strings.Label_RouteEditMode}"
-                            AutomationProperties.HelpText="{Binding RouteEditModeTooltip}"
+                            AutomationProperties.HelpText="{Binding MapTools.RouteEditModeTooltip}"
                             Classes="Icon MapOverlay"
-                            Classes.routeActive="{Binding IsRouteEditModeActive}"
-                            Command="{Binding ToggleRouteEditModeCommand}"
-                            ToolTip.Tip="{Binding RouteEditModeTooltip}">
+                            Classes.routeActive="{Binding MapTools.IsRouteEditModeActive}"
+                            Command="{Binding MapTools.ToggleRouteEditModeCommand}"
+                            ToolTip.Tip="{Binding MapTools.RouteEditModeTooltip}">
                         <Button.Styles>
                             <Style Selector="Button#RouteEditModeButton.routeActive">
                                 <Setter Property="Background" Value="{DynamicResource AccentBrush}" />

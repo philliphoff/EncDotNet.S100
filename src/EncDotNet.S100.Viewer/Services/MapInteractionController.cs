@@ -382,7 +382,7 @@ internal sealed class MapInteractionController
 
         // In Pick Mode the double-tap zoom is suppressed so that successive
         // taps on adjacent features each register as picks rather than zooms.
-        if (_viewModel.IsPickModeActive)
+        if (_viewModel.MapTools.IsPickModeActive)
         {
             e.Handled = true;
             return;
@@ -427,7 +427,7 @@ internal sealed class MapInteractionController
         // doesn't fight with double-tap-to-zoom (the first tap of a double-tap
         // also fires here; clearing on it is harmless). A tap while a map tool
         // (e.g. Measure) is active is left for the tool and never clears.
-        if (!_viewModel.IsPickModeActive)
+        if (!_viewModel.MapTools.IsPickModeActive)
         {
             if (ShouldClearPickOnTap(
                     pickModeActive: false,

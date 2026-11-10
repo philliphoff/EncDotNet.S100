@@ -791,7 +791,7 @@
                         AutomationProperties.Name="{x:Static loc:Strings.Label_PromoteMeasurement}"
                         AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_PromoteMeasurement}"
                         Classes="Icon"
-                        Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).PromoteMeasurementToRouteCommand}"
+                        Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).MapTools.PromoteMeasurementToRouteCommand}"
                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_PromoteMeasurement}">
                     <ic:FluentIcon Icon="Ruler" IconVariant="Regular" FontSize="16" />
                 </Button>

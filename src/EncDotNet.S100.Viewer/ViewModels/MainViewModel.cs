@@ -3,7 +3,6 @@ using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.Services.Notifications;
-using EncDotNet.S100.Viewer.Tools;
 using ShadUI;
 namespace EncDotNet.S100.Viewer.ViewModels;
 
@@ -13,10 +12,6 @@ internal sealed class MainViewModel : ViewModelBase
     private readonly IRecentFilesService _recentFiles;
     private readonly INotificationService _notifications;
     private readonly RoutesService _routes;
-    private readonly MeasureTool _measureTool;
-    private readonly MeasureSession _measure;
-    private readonly RouteEditTool _routeEditTool;
-    private readonly RangeBearingTool _rangeBearingTool;
     private readonly ShadUI.DialogManager _dialogManager;
     private readonly Func<FeedbackDialogViewModel>? _feedbackDialogFactory;
     private readonly Func<AboutDialogViewModel>? _aboutDialogFactory;
@@ -207,73 +202,8 @@ internal sealed class MainViewModel : ViewModelBase
             Strings.Status_OverscaleFactor,
             factor);
 
-    private bool _isPickModeActive;
-    /// <summary>
-    /// True when the user has activated the ECDIS-style "Cursor Pick" tool.
-    /// While active, single-taps on the map perform a pick and the
-    /// double-tap-to-zoom gesture is suppressed. This is transient state
-    /// and is not persisted between sessions.
-    /// </summary>
-    /// <remarks>
-    /// Backed by <see cref="Tools"/>; reflects whether
-    /// <see cref="MapToolController.ActiveToolId"/> is the pick tool's id.
-    /// Setting this property activates / deactivates the pick tool in
-    /// the controller (deactivating any other tool that was active).
-    /// </remarks>
-    public bool IsPickModeActive
-    {
-        get => _isPickModeActive;
-        set
-        {
-            if (_isPickModeActive == value) return;
-            // Drive the change through the controller so other tools are
-            // properly deactivated; the controller's ActiveToolChanged
-            // callback below will flip our backing flag.
-            Tools.Activate(value ? PickTool.ToolId : null);
-        }
-    }
-
-    public ICommand TogglePickModeCommand { get; }
-
-    /// <summary>
-    /// Convenience command that exits the active map tool (pick or measure).
-    /// Wired to the <c>Esc</c> key on the main window.
-    /// </summary>
-    public ICommand ExitPickModeCommand { get; }
-
-    /// <summary>
-    /// True when the Measure Mode tool is active. Mirrors
-    /// <see cref="MapToolController.ActiveToolId"/> just like
-    /// <see cref="IsPickModeActive"/>.
-    /// </summary>
-    public bool IsMeasureModeActive => Tools.IsActive(MeasureTool.ToolId);
-
-    public ICommand ToggleMeasureModeCommand { get; }
-
-    /// <summary>The measure card shown while Measure is on (#1130, D1).</summary>
-    public MeasureCardViewModel MeasureCard { get; }
-
-    /// <summary>The measure tool's shared state (path, geometry, unit).</summary>
-    internal MeasureSession MeasureSession => _measure;
-
-    /// <summary>
-    /// True when the Range &amp; bearing tool is active (#1130 D11). Mirrors
-    /// <see cref="MapToolController.ActiveToolId"/> like
-    /// <see cref="IsMeasureModeActive"/>.
-    /// </summary>
-    public bool IsRangeBearingModeActive => Tools.IsActive(RangeBearingTool.ToolId);
-
-    /// <summary>Toggles the Range &amp; bearing tool (Ctrl+R, or ⌘R on macOS).</summary>
-    public ICommand ToggleRangeBearingModeCommand { get; }
-
-    /// <summary>The Range &amp; bearing card, shown while its tool is on.</summary>
-    public RangeBearingViewModel RangeBearing { get; }
-
-    /// <summary>Tooltip on the map's Range &amp; bearing button, naming its shortcut.</summary>
-    public string RangeBearingModeTooltip => string.Format(
-        System.Globalization.CultureInfo.CurrentCulture,
-        Strings.Tooltip_RangeBearingMode,
-        ShortcutText.Command("R"));
+    /// <summary>The map's interactive tools: pick, measure, range &amp; bearing and the route editor.</summary>
+    public MapToolsViewModel MapTools { get; }
 
     /// <summary>
     /// The application-scoped editable route store. Exposed so the host
@@ -281,73 +211,6 @@ internal sealed class MainViewModel : ViewModelBase
     /// panel can bind to it.
     /// </summary>
     public RoutesService RoutesService => _routes;
-
-    /// <summary>
-    /// True when the interactive route editor tool is active. Mirrors
-    /// <see cref="MapToolController.ActiveToolId"/> like
-    /// <see cref="IsMeasureModeActive"/>.
-    /// </summary>
-    public bool IsRouteEditModeActive => Tools.IsActive(RouteEditTool.ToolId);
-
-    /// <summary>
-    /// True when the tool-owned status summary should be shown — i.e. while
-    /// either Measure Mode or Route Edit Mode is active.
-    /// </summary>
-    public bool IsToolSummaryVisible => IsMeasureModeActive || IsRouteEditModeActive || IsRangeBearingModeActive;
-
-    /// <summary>Toggles the interactive route editor tool on/off.</summary>
-    public ICommand ToggleRouteEditModeCommand { get; }
-
-    /// <summary>
-    /// Tooltip on the map's Route tool button, naming its shortcut
-    /// (Ctrl+E, or ⌘E on macOS).
-    /// </summary>
-    public string RouteEditModeTooltip => string.Format(
-        System.Globalization.CultureInfo.CurrentCulture,
-        Strings.Tooltip_RouteEditMode,
-        ShortcutText.Command("E"));
-
-    /// <summary>
-    /// Activates the interactive route editor tool. Unlike
-    /// <see cref="ToggleRouteEditModeCommand"/> this never turns the tool
-    /// off, so it is safe to bind to an explicit "edit" affordance.
-    /// </summary>
-    public ICommand EnterRouteEditModeCommand { get; }
-
-    /// <summary>
-    /// Promotes the current Measure Mode path into a new editable route and
-    /// switches to the route editor. Enabled only when the measurement has
-    /// at least two waypoints.
-    /// </summary>
-    public ICommand PromoteMeasurementToRouteCommand { get; }
-
-    /// <summary>
-    /// Discrete tool actions wired to keyboard accelerators; current
-    /// active tool decides what (if anything) to do.
-    /// </summary>
-    public ICommand ToolCommitCommand { get; }
-    public ICommand ToolBackstepCommand { get; }
-
-    /// <summary>
-    /// Status-bar summary owned by the active tool (e.g. measure-leg /
-    /// total). <c>null</c> when no tool is active or the tool has nothing
-    /// to display.
-    /// </summary>
-    public string? MeasureSummary
-    {
-        get => _measureSummary;
-        set => SetProperty(ref _measureSummary, value);
-    }
-    private string? _measureSummary;
-
-    /// <summary>
-    /// Map-tool registry / dispatcher. Tools (pick, measure) are
-    /// registered from the constructor so view-model-level commands and
-    /// tests work without the host having to register anything.
-    /// <see cref="MapToolController.Initialize"/> is called by the view
-    /// layer once the visual tree is up.
-    /// </summary>
-    public MapToolController Tools { get; } = new();
 
     private bool _isDarkTheme;
     public bool IsDarkTheme
@@ -471,36 +334,6 @@ internal sealed class MainViewModel : ViewModelBase
         }
     }
 
-    /// <summary>
-    /// Copies the current Measure Mode path into a brand-new editable route,
-    /// makes it the active route, and switches to the route editor tool so
-    /// the user can immediately refine it. The legs keep the measure geometry:
-    /// a great-circle measurement makes geodesic legs (#1130, D10).
-    /// </summary>
-    private void PromoteMeasurementToRoute()
-    {
-        var waypoints = _measureTool.State.Waypoints;
-        if (waypoints.Count < 2)
-            return;
-
-        var name = string.Format(
-            System.Globalization.CultureInfo.CurrentCulture,
-            Strings.Routes_NewRouteNameFormat,
-            _routes.Routes.Routes.Count + 1);
-        var route = _routes.Routes.CreateRoute(name);
-        foreach (var (lat, lon) in waypoints)
-            route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(lat, lon));
-        if (_measure.Geometry == EncDotNet.S100.Navigation.LegGeometry.GreatCircle)
-        {
-            foreach (var leg in route.Legs)
-                leg.GeometryType = Routing.RouteLegGeometryType.Geodesic;
-            route.NotifyChanged();
-        }
-
-        _routes.SelectedWaypointIndex = null;
-        Tools.Activate(RouteEditTool.ToolId);
-    }
-
     private void AttachToMcpServer()
     {
         if (_attachedMcpServer is { } prev)
@@ -597,6 +430,7 @@ internal sealed class MainViewModel : ViewModelBase
 
     public MainViewModel(
         ShellLayoutViewModel layout,
+        MapToolsViewModel mapTools,
         FeatureCataloguesViewModel featureCatalogues,
         PortrayalCataloguesViewModel portrayalCatalogues,
         DatasetsViewModel datasets,
@@ -611,21 +445,18 @@ internal sealed class MainViewModel : ViewModelBase
         EcdisDisplayPanelViewModel ecdisDisplayPanel,
         IThemeService themeService,
         IRecentFilesService recentFiles,
-        IMeasureOverlayAppearanceProvider measureAppearance,
         INotificationService notifications,
         ShadUI.DialogManager dialogManager,
         RoutesService routes,
-        MeasureSession measure,
         Func<FeedbackDialogViewModel>? feedbackDialogFactory = null,
         Func<AboutDialogViewModel>? aboutDialogFactory = null,
         McpServerHost? mcpServerHost = null,
         NavigationalWarningsViewModel? navigationalWarnings = null,
         Services.NavigationalWarningDrawingService? navigationalWarningDrawing = null,
-        DisplayCombinationsViewModel? displayCombinations = null,
-        MeasureCardViewModel? measureCard = null,
-        RangeBearingState? rangeBearing = null)
+        DisplayCombinationsViewModel? displayCombinations = null)
     {
         ArgumentNullException.ThrowIfNull(layout);
+        ArgumentNullException.ThrowIfNull(mapTools);
         ArgumentNullException.ThrowIfNull(featureCatalogues);
         ArgumentNullException.ThrowIfNull(portrayalCatalogues);
         ArgumentNullException.ThrowIfNull(datasets);
@@ -640,13 +471,12 @@ internal sealed class MainViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(ecdisDisplayPanel);
         ArgumentNullException.ThrowIfNull(themeService);
         ArgumentNullException.ThrowIfNull(recentFiles);
-        ArgumentNullException.ThrowIfNull(measureAppearance);
         ArgumentNullException.ThrowIfNull(notifications);
         ArgumentNullException.ThrowIfNull(dialogManager);
         ArgumentNullException.ThrowIfNull(routes);
-        ArgumentNullException.ThrowIfNull(measure);
 
         Layout = layout;
+        MapTools = mapTools;
         _theme = themeService;
         _recentFiles = recentFiles;
         _notifications = notifications;
@@ -665,43 +495,12 @@ internal sealed class MainViewModel : ViewModelBase
             AttachToMcpServer();
         }
 
-        _measure = measure;
-        _measureTool = new MeasureTool(measureAppearance, _measure);
-        MeasureCard = measureCard ?? new MeasureCardViewModel(_measure);
-        MeasureCard.CloseRequested += (_, _) => Tools.Activate(null);
-        _measure.ActivationRequested += (_, _) => Tools.Activate(MeasureTool.ToolId);
-        _routeEditTool = new RouteEditTool(_routes);
-        Tools.Register(new PickTool());
-        Tools.Register(_measureTool);
-        Tools.Register(_routeEditTool);
-        var rangeBearingState = rangeBearing ?? new RangeBearingState(settings: null);
-        _rangeBearingTool = new RangeBearingTool(rangeBearingState, measureAppearance, () => settingsViewModel.DistanceUnit);
-        Tools.Register(_rangeBearingTool);
-        RangeBearing = new RangeBearingViewModel(
-            rangeBearingState,
-            () => settingsViewModel.DistanceUnit,
-            () => Tools.Activate(null));
-        settingsViewModel.DistanceUnitChanged += _ =>
-        {
-            RangeBearing.OnUnitChanged();
-            _rangeBearingTool.InvalidateOverlay();
-        };
-        // The MCP tools turn the tool on through the shared state, as
-        // set_route_edit_mode does through RoutesService.
-        rangeBearingState.ToolActiveChanged += (_, _) =>
-        {
-            if (rangeBearingState.IsToolActive != IsRangeBearingModeActive)
-                Tools.Activate(rangeBearingState.IsToolActive ? RangeBearingTool.ToolId : null);
-        };
-
         FeatureCatalogues = featureCatalogues;
         PortrayalCatalogues = portrayalCatalogues;
         Datasets = datasets;
         LayerStack = layerStack;
         Search = search;
         Settings = settingsViewModel;
-        _measure.Unit = settingsViewModel.DistanceUnit;
-        settingsViewModel.DistanceUnitChanged += unit => _measure.Unit = unit;
         PickReport = pickReport;
         // Dismissing the Pick Report also drops the map highlight, so the
         // report and overlay stay in sync and a later pick re-opens the dock.
@@ -721,75 +520,12 @@ internal sealed class MainViewModel : ViewModelBase
         // "No data … for N of M layers" opens the dataset list on that layer (#709, handoff D4).
         Timeline.ShowLayerRequested += ShowLayer;
 
-
-        TogglePickModeCommand = new RelayCommand(() => Tools.Toggle(PickTool.ToolId));
-        ExitPickModeCommand = new RelayCommand(() => Tools.Activate(null));
-        ToggleMeasureModeCommand = new RelayCommand(() => Tools.Toggle(MeasureTool.ToolId));
-        ToggleRangeBearingModeCommand = new RelayCommand(() => Tools.Toggle(RangeBearingTool.ToolId));
-        ToggleRouteEditModeCommand = new RelayCommand(() => Tools.Toggle(RouteEditTool.ToolId));
-        EnterRouteEditModeCommand = new RelayCommand(() => Tools.Activate(RouteEditTool.ToolId));
-        PromoteMeasurementToRouteCommand = new RelayCommand(
-            PromoteMeasurementToRoute,
-            () => _measureTool.State.Waypoints.Count >= 2);
-        _measure.Changed += (_, _) => ((RelayCommand)PromoteMeasurementToRouteCommand).NotifyCanExecuteChanged();
-        ToolCommitCommand = new RelayCommand(
-            () => Tools.OnAction(MapToolAction.Commit),
-            () => Tools.ActiveTool != null);
-        ToolBackstepCommand = new RelayCommand(
-            () => Tools.OnAction(MapToolAction.Backstep),
-            () => Tools.ActiveTool != null);
-
-        // Mirror the controller's active-tool changes onto the legacy
-        // IsPickModeActive flag (kept so existing XAML/cursor wiring
-        // continues to function) and the IsMeasureModeActive property.
-        // Also re-evaluate Commit/Backstep CanExecute so that the
-        // window-level Enter/Backspace key bindings only consume those
-        // keys while a tool is actually active — without this guard
-        // typing Backspace in any TextBox is swallowed by the binding.
-        Tools.ActiveToolChanged += _ =>
-        {
-            var newPick = Tools.IsActive(PickTool.ToolId);
-            if (_isPickModeActive != newPick)
-            {
-                _isPickModeActive = newPick;
-                OnPropertyChanged(nameof(IsPickModeActive));
-            }
-            OnPropertyChanged(nameof(IsMeasureModeActive));
-            OnPropertyChanged(nameof(IsRouteEditModeActive));
-            OnPropertyChanged(nameof(IsRangeBearingModeActive));
-            OnPropertyChanged(nameof(IsToolSummaryVisible));
-            // Switching away clears the tool (D19).
-            if (!IsRangeBearingModeActive && RangeBearing.State.IsToolActive)
-                RangeBearing.State.Reset();
-            RangeBearing.State.IsToolActive = IsRangeBearingModeActive;
-            ((RelayCommand)ToolCommitCommand).NotifyCanExecuteChanged();
-            ((RelayCommand)ToolBackstepCommand).NotifyCanExecuteChanged();
-            ((RelayCommand)PromoteMeasurementToRouteCommand).NotifyCanExecuteChanged();
-            _routes.IsEditModeActive = IsRouteEditModeActive;
-            // A received route can't be edited: the tool turns back off and
-            // the Routes panel offers Copy to edit instead (#960).
-            if (IsRouteEditModeActive && !_routes.IsEditModeActive)
-            {
-                Tools.Activate(null);
-                _routes.RequestEdit();
-            }
-        };
-
-        // Route edit mode is shared state on RoutesService: the Routes panel's
-        // Edit toggle, Ctrl+E (⌘E) and the MCP set_route_edit_mode tool set it
-        // there, and the route edit tool follows.
         // Check passage folds the Object Information dock to its edge tab
         // while it's on, and restores it when it's turned off (C1).
         _routes.CheckModeChanged += (_, _) =>
         {
             Layout.IsRightDockFolded = _routes.IsCheckModeActive;
             OnPropertyChanged(nameof(IsCheckModeActive));
-        };
-
-        _routes.EditModeChanged += (_, _) =>
-        {
-            if (_routes.IsEditModeActive != IsRouteEditModeActive)
-                Tools.Activate(_routes.IsEditModeActive ? RouteEditTool.ToolId : null);
         };
 
         ToggleThemeCommand = new RelayCommand(() => IsDarkTheme = _theme.ToggleTheme());
