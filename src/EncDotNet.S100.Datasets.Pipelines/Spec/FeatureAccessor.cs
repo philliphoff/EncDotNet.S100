@@ -110,6 +110,8 @@ public static class FeatureAccessor
             // Tropical cyclones: every drawn part of the storm, with its
             // position at the time (#1296).
             TropicalCycloneDatasetData tc => FilterByExtent(TropicalCycloneDatasetProcessor.DrawnFeatures(tc.Advisory, timeStep), extent),
+            // AML features keep their S-57 classes; they're never S-101 (#1372).
+            AmlDatasetData { Cell: { } aml } => FilterByExtent(aml.Features, extent),
             _ => null,
         };
     }

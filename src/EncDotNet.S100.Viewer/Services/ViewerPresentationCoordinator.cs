@@ -23,6 +23,7 @@ internal sealed class ViewerPresentationCoordinator : IDisposable
     private readonly MapPresentationStateProjection _projection;
     private readonly IMapPresentationController _controller;
     private readonly IDepthAdjustmentRequests _depthAdjustment;
+    private readonly IAmlClbPresence _amlClb;
 
     public ViewerPresentationCoordinator(
         SettingsViewModel settings,
@@ -30,7 +31,8 @@ internal sealed class ViewerPresentationCoordinator : IDisposable
         IMarinerSettingsProvider marinerSettings,
         MapPresentationStateProjection projection,
         IMapPresentationController controller,
-        IDepthAdjustmentRequests depthAdjustment)
+        IDepthAdjustmentRequests depthAdjustment,
+        IAmlClbPresence amlClb)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(ecdisDisplay);
@@ -38,6 +40,7 @@ internal sealed class ViewerPresentationCoordinator : IDisposable
         ArgumentNullException.ThrowIfNull(projection);
         ArgumentNullException.ThrowIfNull(controller);
         ArgumentNullException.ThrowIfNull(depthAdjustment);
+        ArgumentNullException.ThrowIfNull(amlClb);
 
         _settings = settings;
         _ecdisDisplay = ecdisDisplay;
@@ -45,6 +48,7 @@ internal sealed class ViewerPresentationCoordinator : IDisposable
         _projection = projection;
         _controller = controller;
         _depthAdjustment = depthAdjustment;
+        _amlClb = amlClb;
 
         _settings.PaletteChanged += OnPaletteChanged;
         _settings.DisplayScaleChanged += OnPresentationChanged;
@@ -52,6 +56,7 @@ internal sealed class ViewerPresentationCoordinator : IDisposable
         _ecdisDisplay.Changed += OnPresentationChanged;
         _marinerSettings.Changed += OnMarinerChanged;
         _depthAdjustment.RequestChanged += OnDepthAdjustmentRequested;
+        _amlClb.Changed += OnAmlClbChanged;
     }
 
     public void Dispose()
@@ -62,6 +67,7 @@ internal sealed class ViewerPresentationCoordinator : IDisposable
         _ecdisDisplay.Changed -= OnPresentationChanged;
         _marinerSettings.Changed -= OnMarinerChanged;
         _depthAdjustment.RequestChanged -= OnDepthAdjustmentRequested;
+        _amlClb.Changed -= OnAmlClbChanged;
     }
 
     private void OnPaletteChanged(PaletteType _) => ApplyCurrent();
@@ -77,8 +83,21 @@ internal sealed class ViewerPresentationCoordinator : IDisposable
     private void ApplyCurrent()
     {
         var adjustment = _depthAdjustment.Requested;
-        var presentation = _projection.CreateSnapshot().WithDepthAdjustment(adjustment);
-        _ = ApplyCurrentAsync(presentation, adjustment);
+        _ = ApplyCurrentAsync(Snapshot(adjustment), adjustment);
+    }
+
+    // The current settings (with the safety contour's halo while AML CLB is
+    // drawn) and the requested water level.
+    private MapPresentationState Snapshot(IDepthAdjustment? adjustment) =>
+        _projection.CreateSnapshot().WithDepthAdjustment(adjustment);
+
+    // AML CLB drawn or not: only the depth layers (S-101, S-57, S-102) draw
+    // the safety contour, so they re-draw as for a water level change, and
+    // no "settings applied" toast shows for loading a cell.
+    private void OnAmlClbChanged()
+    {
+        var adjustment = _depthAdjustment.Requested;
+        _ = ApplyDepthAdjustmentAsync(Snapshot(adjustment), adjustment);
     }
 
     private async Task ApplyCurrentAsync(MapPresentationState presentation, IDepthAdjustment? adjustment)
@@ -99,8 +118,7 @@ internal sealed class ViewerPresentationCoordinator : IDisposable
     private void OnDepthAdjustmentRequested(object? sender, EventArgs e)
     {
         var adjustment = _depthAdjustment.Requested;
-        var presentation = _projection.CreateSnapshot().WithDepthAdjustment(adjustment);
-        _ = ApplyDepthAdjustmentAsync(presentation, adjustment);
+        _ = ApplyDepthAdjustmentAsync(Snapshot(adjustment), adjustment);
     }
 
     private async Task ApplyDepthAdjustmentAsync(MapPresentationState presentation, IDepthAdjustment? adjustment)

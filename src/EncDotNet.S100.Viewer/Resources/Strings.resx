@@ -8001,4 +8001,28 @@
     <value>AML · CLB not used for depth checks</value>
     <comment>Corner chip on the map while AML CLB contours are drawn (AML decision 23)</comment>
   </data>
+  <data name="Pick_AmlClass" xml:space="preserve">
+    <value>AML class</value>
+    <comment>Object Information class line for a class an AML catalogue adds (#1372)</comment>
+  </data>
+  <data name="Pick_AmlStandardClassWithAml" xml:space="preserve">
+    <value>S-57 class with AML attributes</value>
+    <comment>Object Information class line for a standard S-57 class carrying AML-only attributes (#1372)</comment>
+  </data>
+  <data name="Pick_AmlStandardClass" xml:space="preserve">
+    <value>S-57 class</value>
+    <comment>Object Information class line for a standard S-57 class in an AML cell (#1372)</comment>
+  </data>
+  <data name="Pick_AmlNotDrawn" xml:space="preserve">
+    <value>Not drawn. Picked from its position.</value>
+    <comment>Object Information line for an AML feature the map doesn't draw (#1372)</comment>
+  </data>
+  <data name="Pick_AmlAttributeMarkToolTip" xml:space="preserve">
+    <value>Added by Additional Military Layers to this S-57 class</value>
+    <comment>Tooltip of the AML mark before an AML-only attribute (#1372)</comment>
+  </data>
+  <data name="Pick_AmlProvenanceName" xml:space="preserve">
+    <value>AML provenance</value>
+    <comment>Accessible name of the AML provenance strip in Object Information (#1372)</comment>
+  </data>
 </root>

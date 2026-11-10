@@ -55,6 +55,9 @@ public sealed record IdentifyFeaturesRequest(
 /// <param name="DistanceMeters">Approximate distance from the pick to the feature (0 for <c>inside</c>); <c>null</c> when not computed.</param>
 /// <param name="ReferencedTexts">Resolved external text files referenced by the feature's <c>fileReference</c> / <c>TXTDSC</c> / <c>NTXTDS</c> attributes, or by those of the information types it links to; empty when none or unresolvable.</param>
 /// <param name="DrawingPriority">The highest drawing priority of the feature's drawing instructions in the dataset's portrayal; <c>null</c> when it isn't drawn or the dataset wasn't portrayed.</param>
+/// <param name="FeatureTypeName">The feature type's catalogue name ("Obstruction"); <c>null</c> where the product doesn't report it.</param>
+/// <param name="Attributes">The feature's attributes as Object Information shows them; <c>null</c> where the product doesn't report them.</param>
+/// <param name="Aml">Where an AML feature comes from and whether it's drawn; <c>null</c> for every other product.</param>
 public sealed record IdentifyMatch(
     [property: Description("Dataset the feature belongs to.")] DatasetId DatasetId,
     [property: Description("Spec the dataset declares.")] SpecRef Spec,
@@ -65,7 +68,49 @@ public sealed record IdentifyMatch(
     [property: Description("'inside' when the pick is within an area feature; 'near' when within the radius of a point/curve feature.")] string Containment,
     [property: Description("Approximate distance from the pick to the feature in metres (0 for 'inside'); null when not computed.")] double? DistanceMeters,
     [property: Description("Resolved external text files referenced by the feature's fileReference / TXTDSC / NTXTDS attributes, or by those of the information types it links to; empty when none or unresolvable.")] IReadOnlyList<ReferencedText>? ReferencedTexts = null,
-    [property: Description("Highest drawing priority of the feature's drawing instructions in the dataset's portrayal; null when it isn't drawn or the dataset wasn't portrayed.")] int? DrawingPriority = null);
+    [property: Description("Highest drawing priority of the feature's drawing instructions in the dataset's portrayal; null when it isn't drawn or the dataset wasn't portrayed.")] int? DrawingPriority = null,
+    [property: Description("Feature type name from the product's catalogue (\"Obstruction\" for an AML OBSTRN). Reported for NATO Additional Military Layers (AML) features; null otherwise.")] string? FeatureTypeName = null,
+    [property: Description("The feature's attributes as the viewer's Object Information shows them: catalogue names, decoded values, and on a standard S-57 class the AML-only attributes last with mark \"AML\". Reported for AML features; null otherwise.")] IReadOnlyList<IdentifyAttribute>? Attributes = null,
+    [property: Description("Provenance of a NATO Additional Military Layers (AML) feature (product tag, cell, protective marking) and whether it's drawn; null for every other product.")] IdentifyAmlFeature? Aml = null);
+
+/// <summary>One attribute of an <see cref="IdentifyMatch"/>, as Object Information shows it.</summary>
+/// <param name="Code">The attribute acronym as encoded (<c>CATOBS</c>, <c>sonsig</c>).</param>
+/// <param name="Name">The catalogue name ("Category of obstruction"); <c>null</c> when the catalogue doesn't have it.</param>
+/// <param name="Value">The value to show: decoded names for enumerated and list values, otherwise the value as encoded.</param>
+/// <param name="RawValue">The value as encoded ("6", "1,3").</param>
+/// <param name="Mark"><c>"AML"</c> on an attribute an AML catalogue adds to a standard S-57 class; <c>null</c> otherwise.</param>
+public sealed record IdentifyAttribute(
+    [property: Description("Attribute acronym as encoded (CATOBS, sonsig).")] string Code,
+    [property: Description("Catalogue name of the attribute (\"Category of obstruction\"); null when the catalogue doesn't define it.")] string? Name,
+    [property: Description("Value to show: the decoded names of enumerated and list values, otherwise the value as encoded.")] string Value,
+    [property: Description("Value as encoded (\"6\", \"1,3\").")] string RawValue,
+    [property: Description("\"AML\" on an attribute an AML catalogue adds to a standard S-57 class (listed after the standard ones); null otherwise.")] string? Mark = null)
+{
+    internal static IdentifyAttribute From(PickAttribute attribute) =>
+        new(attribute.Code, attribute.Name, attribute.DisplayText, attribute.RawValue, attribute.Mark);
+}
+
+/// <summary>
+/// The provenance strip of an AML feature (#1372, design decision 13): the
+/// AML tag, the cell and the protective marking, plus whether it's drawn.
+/// </summary>
+/// <param name="Tag">The AML tag, "AML · LBO" or "AML 3.0 · SBO".</param>
+/// <param name="Product">The product code (LBO, SBO), or <c>null</c> for an AML 3.0 cell whose name gives none.</param>
+/// <param name="ProductName">The product's full name.</param>
+/// <param name="Cell">The cell (data set) name.</param>
+/// <param name="ProtectiveMarking">The cell's protective marking, as given; <c>null</c> when the cell has none.</param>
+/// <param name="ClassKind"><c>"aml"</c> for a class an AML catalogue adds, <c>"standard"</c> for a standard S-57 class.</param>
+/// <param name="Drawn">Whether the map draws the feature.</param>
+/// <param name="Note">"Not drawn. Picked from its position." when it isn't drawn; otherwise <c>null</c>.</param>
+public sealed record IdentifyAmlFeature(
+    [property: Description("AML tag, \"AML · LBO\" or \"AML 3.0 · SBO\".")] string Tag,
+    [property: Description("AML product code (LBO, SBO, CLB …); null for an AML 3.0 cell whose name gives none.")] string? Product,
+    [property: Description("Full product name.")] string ProductName,
+    [property: Description("Cell (data set) name.")] string Cell,
+    [property: Description("The cell's protective marking, as given (\"UNCLASSIFIED\"); null when the cell has none.")] string? ProtectiveMarking,
+    [property: Description("\"aml\" for an object class an AML catalogue adds; \"standard\" for a standard S-57 class.")] string ClassKind,
+    [property: Description("Whether the map draws this feature. AML features are pickable whether or not they're drawn.")] bool Drawn,
+    [property: Description("\"Not drawn. Picked from its position.\" when the feature isn't drawn; null otherwise.")] string? Note);
 
 /// <summary>
 /// The resolved content of an external text file referenced by a feature's
@@ -242,6 +287,7 @@ public sealed class IdentifyFeaturesService
             var hidden = followsMap ? FeatureAccessor.UndrawnFeatures(dataset, _drawState!.HiddenFeatures(dataset)) : null;
 
             var s101 = dataset.Data as S101DatasetData;
+            var aml = dataset.Data as AmlDatasetData;
             var resolver = s101?.ExternalTextResolver;
             var priorityOf = s101?.DrawingPriority;
 
@@ -254,10 +300,16 @@ public sealed class IdentifyFeaturesService
                     continue;
                 }
 
+                // An AML cell's meta features describe the cell, not a place.
+                if (aml?.Cell is { } amlCell && amlCell.IsMetaClass(feature.FeatureType))
+                {
+                    continue;
+                }
+
                 if (TryMatch(feature, datasetPoint, latPad, lonPad, out var hit)
                     && (hit.Inside || hit.DistanceMeters <= radius))
                 {
-                    hits.Add(hit with { DatasetId = dataset.Id, Spec = dataset.Spec, Resolver = resolver, Feature = feature, Document = s101?.Dataset.Document, DrawingPriority = priorityOf?.Invoke(hit.FeatureId) });
+                    hits.Add(hit with { DatasetId = dataset.Id, Spec = dataset.Spec, Resolver = resolver, Feature = feature, Document = s101?.Dataset.Document, DrawingPriority = priorityOf?.Invoke(hit.FeatureId) ?? aml?.DrawingPriority?.Invoke(hit.FeatureId), Aml = aml });
                 }
             }
         }
@@ -270,6 +322,7 @@ public sealed class IdentifyFeaturesService
         for (var i = 0; i < take; i++)
         {
             var h = hits[i];
+            var amlInfo = AmlFeatureInfo(h);
             builder.Add(new IdentifyMatch(
                 h.DatasetId,
                 h.Spec,
@@ -280,7 +333,10 @@ public sealed class IdentifyFeaturesService
                 h.Inside ? "inside" : "near",
                 h.Inside ? 0.0 : h.DistanceMeters,
                 ResolveReferencedTexts(h.Feature, h.Resolver, LinkedFileReferences(h)),
-                h.DrawingPriority));
+                h.DrawingPriority,
+                amlInfo?.Info.FeatureTypeName,
+                amlInfo?.Info.Attributes.Select(IdentifyAttribute.From).ToList(),
+                amlInfo?.Provenance));
         }
 
         return Task.FromResult(ToolResult<IdentifyFeaturesResult>.Ok(
@@ -535,8 +591,31 @@ public sealed class IdentifyFeaturesService
         return filter.Edition == default || actual.Edition == filter.Edition;
     }
 
+    // The Object Information of an AML hit, and its provenance strip (#1372).
+    private static (FeatureInfo Info, IdentifyAmlFeature Provenance)? AmlFeatureInfo(Hit hit)
+    {
+        if (hit.Aml is not { Cell: { } cell } || cell.Find(hit.FeatureId) is not { } feature)
+        {
+            return null;
+        }
+
+        var info = cell.BuildFeatureInfo(feature, hit.DrawingPriority);
+        var drawn = hit.DrawingPriority is not null;
+        var amlInfo = cell.Info;
+        return (info, new IdentifyAmlFeature(
+            amlInfo.TagText,
+            amlInfo.ProductCode,
+            amlInfo.ProductName,
+            amlInfo.DataSetName,
+            amlInfo.ProtectiveMarking,
+            cell.IsAmlClass(feature.FeatureType) ? "aml" : "standard",
+            drawn,
+            drawn ? null : AmlCellFeatures.NotDrawnNote));
+    }
+
     private record struct Hit
     {
+        public AmlDatasetData? Aml { get; init; }
         public DatasetId DatasetId { get; init; }
         public SpecRef Spec { get; init; }
         public string FeatureId { get; init; }

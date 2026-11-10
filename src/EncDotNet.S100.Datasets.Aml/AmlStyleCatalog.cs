@@ -96,8 +96,8 @@ public sealed class AmlStyleCatalog
         ContentScope = ApplicationContentScope.For(StyleName, Version);
     }
 
-    /// <summary>The built-in modules: <see cref="RalAirStyles"/> and <see cref="RalOperationalStyles"/>.</summary>
-    public static IReadOnlyList<IAmlStyleModule> BuiltInModules { get; } = [RalAirStyles.Module, RalOperationalStyles.Module];
+    /// <summary>The built-in modules, such as <see cref="RalAirStyles"/> and <see cref="ClbStyles"/>.</summary>
+    public static IReadOnlyList<IAmlStyleModule> BuiltInModules { get; } = [RalAirStyles.Module, RalOperationalStyles.Module, ClbStyles.Module, MffStyles.Module, ChartBackgroundStyles.Module, AirfieldStyles.Module];
 
     /// <summary>The catalogue of <see cref="BuiltInModules"/>.</summary>
     public static AmlStyleCatalog Default { get; } = new(BuiltInModules);
@@ -159,6 +159,9 @@ public sealed class AmlStyleCatalog
 
     private LegendEntry Entry(AmlClassStyle style, LegendBuilder legend, PaletteType palette)
     {
+        if (style.Legend is { } custom)
+            return custom(this, palette);
+
         var family = style.Family;
         return style.Kind switch
         {

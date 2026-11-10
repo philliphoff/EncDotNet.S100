@@ -52,7 +52,22 @@ internal static class SyntheticAmlCell
 
         /// <summary>Whether to write the <c>M_COVR</c> coverage area.</summary>
         public bool WithCoverage { get; init; } = true;
+
+        /// <summary>
+        /// More point features at the point position, record ids
+        /// <see cref="ExtraPointRecordId"/> on: a class acronym and its
+        /// attributes (acronym, value as encoded) from the cell's catalogue.
+        /// </summary>
+        public IReadOnlyList<ExtraPoint> ExtraPoints { get; init; } = [];
     }
+
+    /// <summary>A point feature of <see cref="Options.ExtraPoints"/>.</summary>
+    /// <param name="ClassAcronym">The object class acronym (<c>OBSTRN</c>, <c>contct</c>).</param>
+    /// <param name="Attributes">The attributes: acronym and value as encoded.</param>
+    public sealed record ExtraPoint(string ClassAcronym, params (string Acronym, string Value)[] Attributes);
+
+    /// <summary>The record id of the first of <see cref="Options.ExtraPoints"/>.</summary>
+    public const int ExtraPointRecordId = 10;
 
     /// <summary>The usual header comment of a UKHO AML 1.0 cell.</summary>
     public static string UkhoComment(string marking = "UNCLASSIFIED") =>
@@ -121,6 +136,17 @@ internal static class SyntheticAmlCell
                 MetaCoverage,
                 [new S57AttributeValue { AttributeCode = CategoryOfCoverage, Value = "1" }],
                 [.. Enumerable.Range(0, 4).Select(i => Pointer(130, 20 + i, usage: S57UsageIndicator.Exterior))]));
+        }
+
+        for (var i = 0; i < options.ExtraPoints.Count; i++)
+        {
+            var extra = options.ExtraPoints[i];
+            features.Add(Feature(
+                ExtraPointRecordId + i,
+                S57GeometricPrimitive.Point,
+                catalogue.GetObjectClass(extra.ClassAcronym)!.Code,
+                [.. extra.Attributes.Select(a => new S57AttributeValue { AttributeCode = catalogue.GetAttribute(a.Acronym)!.Code, Value = a.Value })],
+                [Pointer(110, 1)]));
         }
 
         if (options.SecurityMarkingCode is { } marking)
