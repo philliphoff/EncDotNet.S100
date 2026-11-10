@@ -83,9 +83,8 @@ internal static class SetViewportMcpAdapter
     }
 
     /// <summary>
-    /// Test seam: translates an already-completed <see cref="ToolResult{T}"/>
-    /// into a <see cref="CallToolResult"/> using the same shape this
-    /// adapter produces in production.
+    /// Translates the tool's <see cref="ToolResult{T}"/> into the
+    /// <see cref="CallToolResult"/> a client receives.
     /// </summary>
     internal static CallToolResult TranslateResult(ToolResult<SetViewportResult> result)
     {
