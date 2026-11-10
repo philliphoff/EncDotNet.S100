@@ -119,6 +119,7 @@ public sealed class AmlDrawing
             TextScale = context?.TextScale ?? 1.0,
             SymbolProvider = Catalog.Symbols.Provider,
             LineStyleProvider = Catalog.LineStyleProvider,
+            AreaFillProvider = Catalog.AreaFillProvider,
             LayerNames = [.. subLayers.Select(s => s.LayerKey)],
             GeographicExtent = Extent,
             CoverageAreas = coverage ?? [],

@@ -1,4 +1,6 @@
 using System.Globalization;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals.Application;
 
@@ -68,6 +70,14 @@ public sealed record AmlClassStyle(string Acronym, AmlFamily Family, AmlClassKin
     /// family's viewing group and the feature's <c>SCAMIN</c>.
     /// </summary>
     public Func<AmlFeature, AmlDrawingContext, IEnumerable<DrawingInstruction>>? Build { get; init; }
+
+    /// <summary>
+    /// The class's own legend entries in a palette, in place of the one entry
+    /// its <see cref="Kind"/> gives, or <see langword="null"/> for that entry.
+    /// For a class whose drawing says more than its kind, such as sediment,
+    /// whose patterns each need a row.
+    /// </summary>
+    public Func<AmlStyleCatalog, PaletteType, IReadOnlyList<LegendEntry>>? Legend { get; init; }
 
     /// <summary>Checks the style is complete: a point class needs a glyph.</summary>
     internal void Validate()

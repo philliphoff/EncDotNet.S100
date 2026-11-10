@@ -44,6 +44,9 @@ internal sealed class AmlCellBuilder
     /// <summary>An AML 1.0 Routes, Areas and Limits (RAL) cell: DSID PRSP 52, PRED 1.0.</summary>
     public static AmlCellBuilder Ral(string name = "UKR0TEST.000") => new(S57ObjectCatalogue.Aml10, 52, "1.0", 16, name);
 
+    /// <summary>An AML 1.0 Environment, Seabed and Beach (ESB) cell: DSID PRSP 55, PRED 1.0.</summary>
+    public static AmlCellBuilder Esb(string name = "UKE6TEST.000") => new(S57ObjectCatalogue.Aml10, 55, "1.0", 16, name);
+
     /// <summary>An AML 3.0 integrated cell (the FAI/MFI trials): DSID PRSP 57, PRED 3.0.</summary>
     public static AmlCellBuilder Aml30(string name = "AMLTEST0U_FAI.000") => new(S57ObjectCatalogue.Aml30, 57, "3.0", 20, name);
 
@@ -302,4 +305,63 @@ internal static class AmlFixtures
             ("OBJNAM", "TRA-WESER 2"), ("efaltu", "FL100"), ("efaltl", "01000AGL"), ("SCAMIN", "1500000"))
         .Point("AIRARE", (9.6, 53.7), ("OBJNAM", "HAMBURG"))
         .Build();
+
+    /// <summary>
+    /// An ESB cell laid out as the design's frame B2d (#1376): sediment bands
+    /// (sand, mud, gravel, sandy gravel, rock) with a chalk sample, a bottom
+    /// feature as point, line and area, trawl scours, landing and drop zones,
+    /// a beach exit, the framed location classes, ice, an environmentally
+    /// sensitive area, and a chart light, which AML leaves to the ENC.
+    /// </summary>
+    public static AmlDataSet Esb() => AmlCellBuilder.Esb()
+        // Sediment, north to south.
+        .Area("sedlay", Band(50.62, 50.68), ("natsed", "523"))
+        .Area("sedlay", Band(50.56, 50.62), ("natsed", "521"))
+        .Area("sedlay", Band(50.50, 50.56), ("natsed", "525"))
+        .Area("sedlay", Band(50.46, 50.50), ("natsed", "543"))
+        .Area("sedlay", Band(50.42, 50.46), ("natsed", "528"))
+        .Point("sedlay", (-1.44, 50.43), ("natsed", "519"))
+        // Bottom features and scours.
+        .Point("botmft", (-1.10, 50.655), ("OBJNAM", "Widget"), ("catbot", "507"))
+        .Line("botmft", [(-1.20, 50.60), (-1.16, 50.61), (-1.12, 50.605)], ("OBJNAM", "Pooley"), ("catbot", "504"))
+        .Area("botmft", [(-1.08, 50.53), (-1.03, 50.53), (-1.03, 50.51), (-1.08, 50.51), (-1.08, 50.53)], ("OBJNAM", "Reela"), ("catbot", "510"))
+        .Line("twlscr", [(-1.10, 50.585), (-1.06, 50.595)], ("ORIENT", "75"))
+        .Line("twlscr", [(-1.10, 50.578), (-1.06, 50.588)], ("ORIENT", "75"))
+        .Line("twlscr", [(-1.10, 50.571), (-1.06, 50.581)], ("ORIENT", "75"))
+        // Zones, the beach exit and locations, on and off the beach.
+        .Area("lndzne", [(-1.46, 50.66), (-1.40, 50.66), (-1.40, 50.63), (-1.46, 50.63), (-1.46, 50.66)], ("OBJNAM", "LZ985"))
+        .Point("lndpnt", (-1.36, 50.645), ("OBJNAM", "LP846"))
+        .Point("drpzne", (-1.38, 50.47), ("OBJNAM", "AX56"))
+        .Line("bchext", [(-1.33, 50.555), (-1.37, 50.565), (-1.41, 50.570)], ("exitus", "502"))
+        .Point("divloc", (-1.22, 50.475), ("OBJNAM", "Stokes Bay"), ("divact", "503"))
+        .Point("viewpt", (-1.44, 50.60))
+        .Point("resloc", (-1.44, 50.55), ("typres", "501"))
+        .Point("shlloc", (-1.44, 50.51), ("OBJNAM", "Village hall"))
+        // Ice.
+        .Point("icebrg", (-1.04, 50.45), ("OBJNAM", "Blanco"))
+        .Point("icemov", (-1.12, 50.445), ("OBJNAM", "Little Ice Island"), ("icebdr", "504"))
+        .Point("icemov", (-1.12, 50.415), ("icebdr", "501"))
+        .Line("icelin", [(-1.30, 50.41), (-1.15, 50.405), (-1.00, 50.41)], ("OBJNAM", "Ice edge"))
+        .Area("seaice", [(-1.08, 50.48), (-1.00, 50.48), (-1.00, 50.42), (-1.08, 50.42), (-1.08, 50.48)], ("OBJNAM", "SI001"))
+        .Area("envare", [(-1.47, 50.58), (-1.38, 50.58), (-1.38, 50.53), (-1.47, 50.53), (-1.47, 50.58)], ("OBJNAM", "Nature reserve"))
+        // A chart class: not AML's to draw.
+        .Point("LIGHTS", (-1.36, 50.60))
+        .Build();
+
+    /// <summary>
+    /// An AML 3.0 SED cell, as the Baltic trial (#1376): crystalline rock
+    /// (544, which AML 1.0 reads as gravelly muddy sand), till, gravelly sand
+    /// and shells, with a sediment sample.
+    /// </summary>
+    public static AmlDataSet Sed() => AmlCellBuilder.Aml30("AMLTEST6U_SED.000")
+        .Area("sedlay", [(10.00, 54.60), (10.20, 54.60), (10.20, 54.50), (10.00, 54.50), (10.00, 54.60)], ("natsed", "544"), ("laynum", "0"))
+        .Area("sedlay", [(10.20, 54.60), (10.40, 54.60), (10.40, 54.50), (10.20, 54.50), (10.20, 54.60)], ("natsed", "546"), ("laynum", "0"))
+        .Area("sedlay", [(10.00, 54.50), (10.20, 54.50), (10.20, 54.40), (10.00, 54.40), (10.00, 54.50)], ("natsed", "540"), ("laynum", "0"))
+        .Area("sedlay", [(10.20, 54.50), (10.40, 54.50), (10.40, 54.40), (10.20, 54.40), (10.20, 54.50)], ("natsed", "530"), ("laynum", "0"))
+        .Point("sedlay", (10.30, 54.45), ("natsed", "523"))
+        .Build();
+
+    // A sediment band from 1.30°W to 1.00°W, clockwise.
+    private static (double Lon, double Lat)[] Band(double south, double north) =>
+        [(-1.30, north), (-1.00, north), (-1.00, south), (-1.30, south), (-1.30, north)];
 }
