@@ -27,10 +27,10 @@ public sealed class AmlPortrayalTests
     }
 
     [Fact]
-    public void Features_are_identified_by_their_long_name_and_classed_through_the_catalogue()
+    public void Features_are_identified_by_their_RCID_and_classed_through_the_catalogue()
     {
         var area = Assert.Single(Ral.Features, f => f.FeatureType == "airres");
-        Assert.Equal("021C-00000004-0001", area.Id);
+        Assert.Equal("4", area.Id);
         Assert.Equal("Airspace Restriction", area.ClassName);
         Assert.Equal("D 613", area.Attribute("OBJNAM"));
     }

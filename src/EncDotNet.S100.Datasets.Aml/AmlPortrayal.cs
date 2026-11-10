@@ -145,12 +145,11 @@ public sealed class AmlPortrayal
             attributes.TryAdd(key, attribute.Value.Value ?? string.Empty);
         }
 
-        var id = record.LongName is { } lnam
-            ? string.Create(CultureInfo.InvariantCulture, $"{lnam.AgencyCode:X4}-{lnam.FeatureId:X8}-{lnam.FeatureSubdivision:X4}")
-            : string.Create(CultureInfo.InvariantCulture, $"RCID {record.RecordName.RecordId}");
+        // The decimal RCID, as the S-57 and S-101 paths and the AML processor's picks name features.
+        var id = record.RecordName.RecordId.ToString(CultureInfo.InvariantCulture);
         var unique = id;
         for (int n = 2; !ids.Add(unique); n++)
-            unique = string.Create(CultureInfo.InvariantCulture, $"{id} ({n})");
+            unique = string.Create(CultureInfo.InvariantCulture, $"{id}-{n}");
 
         return record switch
         {

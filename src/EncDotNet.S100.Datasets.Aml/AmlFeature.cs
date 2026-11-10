@@ -39,8 +39,8 @@ public sealed class AmlFeature : IS100Feature
 
     /// <inheritdoc />
     /// <remarks>
-    /// The feature's long name (LNAM) as <c>AGEN-FIDN-FIDS</c> in hexadecimal,
-    /// such as <c>021C-0000A1B2-0001</c>; <c>RCID {n}</c> when it has none.
+    /// The feature record's RCID in decimal, such as <c>412</c>, as the S-57
+    /// and S-101 paths name features.
     /// </remarks>
     public string Id { get; }
 
