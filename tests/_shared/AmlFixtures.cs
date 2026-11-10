@@ -259,7 +259,10 @@ internal static class AmlFixtures
     /// points, a patrol area and internal waters. Also a radar station, a RAL
     /// class with no style.
     /// </summary>
-    public static AmlDataSet Ral() => AmlCellBuilder.Ral()
+    public static AmlDataSet Ral() => RalBuilder().Build();
+
+    /// <summary>The builder of <see cref="Ral"/>, for tests that write the cell to a file.</summary>
+    public static AmlCellBuilder RalBuilder() => AmlCellBuilder.Ral()
         // Air.
         .Line("atsctl", [(-1.40, 50.62), (-1.20, 50.52), (-1.02, 50.44)], ("OBJNAM", "N864"))
         .Line("atsctl", [(-1.46, 50.49), (-1.20, 50.52), (-1.10, 50.57)], ("OBJNAM", "UL975"))
@@ -287,8 +290,7 @@ internal static class AmlFixtures
             ("OBJNAM", "Patrol area"))
         .Area("intwtr", [(-1.46, 50.66), (-1.36, 50.66), (-1.36, 50.62), (-1.46, 50.62), (-1.46, 50.66)])
         // No style.
-        .Point("RADSTA", (-1.08, 50.66), ("OBJNAM", "Radar"))
-        .Build();
+        .Point("RADSTA", (-1.08, 50.66), ("OBJNAM", "Radar"));
 
     /// <summary>An AML 3.0 cell (FAI-like): an ATS route with coded limits, air waypoints, a NAVAID and an airspace restriction with coded limits.</summary>
     public static AmlDataSet Fai() => AmlCellBuilder.Aml30()

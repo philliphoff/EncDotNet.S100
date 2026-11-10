@@ -95,7 +95,7 @@ public sealed class ListDatasetsTool
                 dataset.Bounds,
                 dataset.TimeRange,
                 dataset.Data is AmlDatasetData aml
-                    ? new AmlDatasetSummary(aml.Info.ProductCode, aml.Info.ProtectiveMarking, AmlReport.Drawn, AmlReport.Status)
+                    ? new AmlDatasetSummary(aml.Info.ProductCode, aml.Info.ProtectiveMarking, aml.Drawn, AmlReport.StatusOf(aml.Drawn))
                     : null));
         }
 

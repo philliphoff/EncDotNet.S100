@@ -180,6 +180,8 @@ public class AmlDatasetProcessorTests
 
         public bool Draws => true;
 
+        public bool DrawsAny(IReadOnlyList<EncDotNet.S100.Pipelines.Vector.Feature> features) => true;
+
         public Task<EncDotNet.S100.Datasets.Pipelines.Portrayal.VectorPortrayalResult> PortrayAsync(AmlPortrayalInput cell, RenderContext? context, CancellationToken cancellationToken)
         {
             Inputs.Add(cell);
