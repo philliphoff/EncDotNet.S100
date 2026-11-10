@@ -1,5 +1,5 @@
 using System.Globalization;
-using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Features;
 
 namespace EncDotNet.S100.Datasets.Aml.Families;
 
@@ -76,7 +76,7 @@ public static class SeabedStyles
         Glyph = SeabedGlyphs.Scour,
         Label = NoLabel,
         Clustering = LboClustering,
-        Build = (feature, context) => feature.GeometryType == Features.S100GeometryType.Point
+        Build = (feature, context) => feature.GeometryType == S100GeometryType.Point
             ? [context.At(AmlDrawingContext.PointPriority).Point(feature.Id, AmlSignature.FramedSymbol(context.Family, SeabedGlyphs.Scour), ScourRotation(feature))]
             : [],
     };
@@ -139,7 +139,7 @@ public static class SeabedStyles
         OtherGlyphs = [SeabedGlyphs.Mine],
         Label = NoLabel,
         Clustering = SboClustering,
-        Build = (feature, context) => feature.GeometryType == Features.S100GeometryType.Point
+        Build = (feature, context) => feature.GeometryType == S100GeometryType.Point
             ? [context.Symbol(IsMineLike(feature) ? SeabedGlyphs.Mine : SeabedGlyphs.Contact)]
             : [],
     };
