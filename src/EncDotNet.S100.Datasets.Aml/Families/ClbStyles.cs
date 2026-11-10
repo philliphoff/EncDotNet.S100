@@ -78,9 +78,12 @@ public static class ClbStyles
         IsChartClass = true,
         Label = feature => Depth(feature.Attribute("VALDCO")),
         Build = BuildContour,
-        Legend = (catalog, palette) => new LineLegendEntry(
-            new LegendLineSample { Color = catalog.Palette.Resolve(Bathymetry.ColorToken, palette).ToHex(), Width = ContourWidth },
-            "Depth contour"),
+        Legend = (catalog, palette) =>
+        [
+            new LineLegendEntry(
+                new LegendLineSample { Color = catalog.Palette.Resolve(Bathymetry.ColorToken, palette).ToHex(), Width = ContourWidth },
+                "Depth contour"),
+        ],
     };
 
     /// <summary>Depth areas: no fill and no boundary, since their edges are the contours.</summary>
@@ -88,7 +91,7 @@ public static class ClbStyles
     {
         IsChartClass = true,
         Build = static (_, _) => [],
-        Legend = static (_, _) => new SwatchLegendEntry("#00000000", "Depth area (no fill)"),
+        Legend = static (_, _) => [new SwatchLegendEntry("#00000000", "Depth area (no fill)")],
     };
 
     /// <summary>Soundings: small italic brown figures.</summary>
@@ -96,7 +99,7 @@ public static class ClbStyles
     {
         IsChartClass = true,
         Build = BuildSoundings,
-        Legend = (catalog, palette) => new SymbolLegendEntry(SoundingSample(catalog.Palette.Resolve(AmlFamily.Seabed.ColorToken, palette)), "Sounding"),
+        Legend = (catalog, palette) => [new SymbolLegendEntry(SoundingSample(catalog.Palette.Resolve(AmlFamily.Seabed.ColorToken, palette)), "Sounding")],
     };
 
     /// <summary>The CLB module, in legend order.</summary>
