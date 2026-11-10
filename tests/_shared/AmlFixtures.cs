@@ -18,6 +18,7 @@ namespace EncDotNet.S100.TestSupport;
 internal sealed class AmlCellBuilder
 {
     private const int Comf = 10_000_000;
+    private const int SoundingFactor = 10;
     private const int Agency = 0x021C;
 
     private readonly S57ObjectCatalogue _catalogue;
@@ -44,6 +45,12 @@ internal sealed class AmlCellBuilder
     /// <summary>An AML 1.0 Routes, Areas and Limits (RAL) cell: DSID PRSP 52, PRED 1.0.</summary>
     public static AmlCellBuilder Ral(string name = "UKR0TEST.000") => new(S57ObjectCatalogue.Aml10, 52, "1.0", 16, name);
 
+    /// <summary>An AML 1.0 Contour Line Bathymetry (CLB) cell: DSID PRSP 54, PRED 1.0.</summary>
+    public static AmlCellBuilder Clb(string name = "UKC6TEST.000") => new(S57ObjectCatalogue.Aml10, 54, "1.0", 16, name);
+
+    /// <summary>An AML 1.0 Maritime Foundation &amp; Facilities (MFF) cell: DSID PRSP 51, PRED 1.0.</summary>
+    public static AmlCellBuilder Mff(string name = "UKM6TEST.000") => new(S57ObjectCatalogue.Aml10, 51, "1.0", 16, name);
+
     /// <summary>An AML 3.0 integrated cell (the FAI/MFI trials): DSID PRSP 57, PRED 3.0.</summary>
     public static AmlCellBuilder Aml30(string name = "AMLTEST0U_FAI.000") => new(S57ObjectCatalogue.Aml30, 57, "3.0", 20, name);
 
@@ -53,6 +60,33 @@ internal sealed class AmlCellBuilder
         var node = new S57RecordName { RecordNameCode = 110, RecordId = _nextIsolated++ };
         _vectors.Add(Vector(node, [Coordinate(position)], []));
         AddFeature(acronym, S57GeometricPrimitive.Point, attributes, [Pointer(node, S57Orientation.NotApplicable, S57UsageIndicator.NotApplicable)]);
+        return this;
+    }
+
+    /// <summary>
+    /// Adds a sounding feature (<c>SOUNDG</c>): one isolated node holding every
+    /// sounding as a 3-D coordinate (<c>SG3D</c>), depths in metres, positive down.
+    /// </summary>
+    public AmlCellBuilder Soundings(params (double Lon, double Lat, double Depth)[] soundings)
+    {
+        var node = new S57RecordName { RecordNameCode = 110, RecordId = _nextIsolated++ };
+        _vectors.Add(new S57VectorRecord
+        {
+            RecordName = node,
+            RecordVersion = 1,
+            UpdateInstruction = S57UpdateInstruction.Insert,
+            Attributes = [],
+            VectorPointers = [],
+            Coordinates2D = [],
+            Soundings = [.. soundings.Select(s => new S57Sounding
+            {
+                X = (int)Math.Round(s.Lon * Comf),
+                Y = (int)Math.Round(s.Lat * Comf),
+                Depth = (int)Math.Round(s.Depth * SoundingFactor),
+            })],
+            ArcCurves = [],
+        });
+        AddFeature("SOUNDG", S57GeometricPrimitive.Point, [], [Pointer(node, S57Orientation.NotApplicable, S57UsageIndicator.NotApplicable)]);
         return this;
     }
 
@@ -132,7 +166,7 @@ internal sealed class AmlCellBuilder
             PositionalUnits = 1,
             CoordinateUnits = 1,
             CoordinateMultiplicationFactor = Comf,
-            SoundingMultiplicationFactor = 10,
+            SoundingMultiplicationFactor = SoundingFactor,
         },
         VectorRecords = _vectors,
         FeatureRecords = _features,
@@ -292,7 +326,54 @@ internal static class AmlFixtures
         // No style.
         .Point("RADSTA", (-1.08, 50.66), ("OBJNAM", "Radar"));
 
-    /// <summary>An AML 3.0 cell (FAI-like): an ATS route with coded limits, air waypoints, a NAVAID and an airspace restriction with coded limits.</summary>
+    /// <summary>
+    /// A CLB cell in the RAL cell's area (about 50.5°N 1.2°W), laid out like
+    /// the design's B2e frame: nine depth contours from 22 m to 38 m, 2 m
+    /// apart, curving down the frame; the depth areas between some of them;
+    /// a row of soundings; and a named sea area.
+    /// </summary>
+    public static AmlDataSet Clb() => ClbBuilder().Build();
+
+    /// <summary>The builder of <see cref="Clb"/>.</summary>
+    public static AmlCellBuilder ClbBuilder()
+    {
+        var builder = AmlCellBuilder.Clb();
+        for (int i = 0; i < 9; i++)
+        {
+            double x = -1.42 + (i * 0.05);
+            builder.Line(
+                "DEPCNT",
+                [(x, 50.67), (x + 0.03, 50.60), (x + 0.01, 50.52), (x + 0.04, 50.41)],
+                ("VALDCO", (22 + (2 * i)).ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        }
+
+        builder
+            .Area("DEPARE", [(-1.42, 50.67), (-1.37, 50.67), (-1.34, 50.41), (-1.38, 50.41), (-1.42, 50.67)], ("DRVAL1", "22"), ("DRVAL2", "24"))
+            .Area("DEPARE", [(-1.37, 50.67), (-1.32, 50.67), (-1.29, 50.41), (-1.34, 50.41), (-1.37, 50.67)], ("DRVAL1", "24"), ("DRVAL2", "26"))
+            .Soundings((-1.375, 50.47, 23.4), (-1.325, 50.47, 25.1), (-1.275, 50.47, 27.0), (-1.225, 50.47, 29.9), (-1.175, 50.47, 31.7), (-1.125, 50.47, 34.2))
+            .Area("SEAARE", [(-1.46, 50.66), (-1.00, 50.66), (-1.00, 50.42), (-1.46, 50.42), (-1.46, 50.66)], ("OBJNAM", "Test Deep"));
+        return builder;
+    }
+
+    /// <summary>
+    /// An MFF cell with a class of each kind: a coastline, a light, a buoy and
+    /// a beacon (chart background), a submarine cable and a pipeline area
+    /// (seabed), an offshore platform and a traffic separation zone
+    /// (operational), and a tidal stream station (environmental).
+    /// </summary>
+    public static AmlDataSet Mff() => AmlCellBuilder.Mff()
+        .Line("COALNE", [(-1.46, 50.42), (-1.44, 50.55), (-1.46, 50.67)])
+        .Point("LIGHTS", (-1.43, 50.60), ("OBJNAM", "Test Light"))
+        .Point("BOYLAT", (-1.38, 50.58))
+        .Point("BCNCAR", (-1.38, 50.50))
+        .Line("CBLSUB", [(-1.44, 50.45), (-1.20, 50.47), (-1.02, 50.44)])
+        .Area("PIPARE", [(-1.30, 50.64), (-1.20, 50.64), (-1.20, 50.60), (-1.30, 50.60), (-1.30, 50.64)], ("OBJNAM", "Pipeline area"))
+        .Point("OFSPLF", (-1.10, 50.62), ("OBJNAM", "Alpha"))
+        .Area("TSEZNE", [(-1.25, 50.56), (-1.05, 50.56), (-1.05, 50.53), (-1.25, 50.53), (-1.25, 50.56)])
+        .Point("TS_PAD", (-1.15, 50.50))
+        .Build();
+
+    /// <summary>An AML 3.0 cell (FAI-like): an ATS route with coded limits, air waypoints, a NAVAID, an airspace restriction with coded limits, and a user-defined object, a class with no style.</summary>
     public static AmlDataSet Fai() => AmlCellBuilder.Aml30()
         .Line("atsctl", [(9.0, 53.6), (9.6, 53.9), (9.8, 54.0)], ("OBJNAM", "UL619"), ("limitu", "FL660"), ("limitl", "FL245"))
         .Point("awaypt", (9.0, 53.6), ("identy", "OSTOR"))
@@ -302,6 +383,6 @@ internal static class AmlFixtures
             "airres",
             [(9.1, 54.0), (9.3, 54.0), (9.3, 53.9), (9.1, 53.9), (9.1, 54.0)],
             ("OBJNAM", "TRA-WESER 2"), ("efaltu", "FL100"), ("efaltl", "01000AGL"), ("SCAMIN", "1500000"))
-        .Point("AIRARE", (9.6, 53.7), ("OBJNAM", "HAMBURG"))
+        .Point("u_defd", (9.6, 53.7))
         .Build();
 }

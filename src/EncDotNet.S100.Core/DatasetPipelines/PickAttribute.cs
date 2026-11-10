@@ -65,6 +65,17 @@ public sealed class PickAttribute
     public double? DepthMetresValue { get; init; }
 
     /// <summary>
+    /// A short outlined mark shown before the attribute's name, or
+    /// <see langword="null"/> for none: <c>"AML"</c> on an attribute that a
+    /// NATO Additional Military Layers catalogue adds to a standard S-57
+    /// object class (<see cref="AmlMark"/>).
+    /// </summary>
+    public string? Mark { get; init; }
+
+    /// <summary>The <see cref="Mark"/> of an AML-only attribute on a standard S-57 class: <c>"AML"</c>.</summary>
+    public const string AmlMark = "AML";
+
+    /// <summary>
     /// Sub-attributes of a complex attribute. Empty for simple attributes
     /// and for leaf rows of a complex attribute.
     /// </summary>

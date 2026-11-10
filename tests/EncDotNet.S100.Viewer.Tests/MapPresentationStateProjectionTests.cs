@@ -20,7 +20,7 @@ public class MapPresentationStateProjectionTests
         var ecdis = new EcdisDisplayState();
         var mariner = new StubMarinerSettingsProvider();
         var projection = new MapPresentationStateProjection(
-            settingsViewModel, ecdis, mariner, TimeProvider.System);
+            settingsViewModel, ecdis, mariner, TimeProvider.System, new FakeAmlClbPresence());
 
         settingsViewModel.SelectedPalette = PaletteType.Night;
         settingsViewModel.SymbolScale = 1.25;
@@ -47,7 +47,7 @@ public class MapPresentationStateProjectionTests
         var settingsViewModel = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         var zone = TimeZoneInfo.CreateCustomTimeZone("Test+3", TimeSpan.FromHours(3), "Test+3", "Test+3");
         var projection = new MapPresentationStateProjection(
-            settingsViewModel, new EcdisDisplayState(), new StubMarinerSettingsProvider(), new ZoneClock(zone));
+            settingsViewModel, new EcdisDisplayState(), new StubMarinerSettingsProvider(), new ZoneClock(zone), new FakeAmlClbPresence());
 
         settingsViewModel.SelectedTimeFormat = TimeFormat.Utc;
         Assert.Equal(TimeZoneInfo.Utc, projection.CreateSnapshot().DisplayTimeZone);
@@ -56,6 +56,26 @@ public class MapPresentationStateProjectionTests
         var snapshot = projection.CreateSnapshot();
         Assert.Equal(zone, snapshot.DisplayTimeZone);
         Assert.Equal(zone, snapshot.ApplyTo(new RenderContext(), new SpecRef("TC", default)).DisplayTimeZone);
+    }
+
+    [Fact]
+    public void Every_snapshot_carries_the_safety_contour_halo_while_AML_CLB_is_drawn()
+    {
+        // MCP loads and lazily portrayed exchange-set cells take snapshots
+        // here directly, so the halo has to be in them, not added later.
+        var settings = new ViewerSettings
+        {
+            SettingsFilePath = Path.Combine(
+                Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json"),
+        };
+        var settingsViewModel = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var clb = new FakeAmlClbPresence();
+        var projection = new MapPresentationStateProjection(
+            settingsViewModel, new EcdisDisplayState(), new StubMarinerSettingsProvider(), TimeProvider.System, clb);
+
+        Assert.False(projection.CreateSnapshot().SafetyContourHalo);
+        clb.Set(true);
+        Assert.True(projection.CreateSnapshot().SafetyContourHalo);
     }
 
     private sealed class ZoneClock(TimeZoneInfo zone) : TimeProvider

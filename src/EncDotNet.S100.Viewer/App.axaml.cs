@@ -166,6 +166,7 @@ public partial class App : Application
         };
 
         _services = ConfigureServices();
+        _services.GetRequiredService<AmlClbPresence>().Attach(_services.GetRequiredService<IDatasetLoaderService>());
         _services.GetRequiredService<ViewerPresentationCoordinator>();
         _services.GetRequiredService<LayerTimeCoordinator>();
         _services.GetRequiredService<PresentationRevealCoordinator>();
@@ -1576,6 +1577,8 @@ public partial class App : Application
         services.AddSingleton<MapPresentationStateProjection>();
         services.AddSingleton(sp =>
             sp.GetRequiredService<MapPresentationStateProjection>().CreateSnapshot());
+        services.AddSingleton<AmlClbPresence>();
+        services.AddSingleton<IAmlClbPresence>(sp => sp.GetRequiredService<AmlClbPresence>());
         services.AddSingleton<ViewerPresentationCoordinator>();
         services.AddSingleton<PresentationRevealCoordinator>();
         services.AddSingleton<ITimeFormatProvider, TimeFormatProvider>();

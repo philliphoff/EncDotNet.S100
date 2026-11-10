@@ -287,6 +287,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         ExternalText = row.ExternalText,
         IsNavigationNotice = row.IsNavigationNotice,
         IsStaleNotice = row.IsStaleNotice,
+        Mark = row.Mark,
         Children = children,
     };
 
@@ -322,6 +323,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 ExternalText = attr.ExternalText,
                 IsNavigationNotice = attr.IsNavigationNotice,
                 IsStaleNotice = attr.IsStaleNotice,
+                Mark = attr.Mark,
                 Children = children,
             };
         }
@@ -340,6 +342,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 ExternalText = attr.ExternalText,
                 IsNavigationNotice = attr.IsNavigationNotice,
                 IsStaleNotice = attr.IsStaleNotice,
+                Mark = attr.Mark,
                 Children = children,
             };
         }
@@ -358,6 +361,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 ExternalText = attr.ExternalText,
                 IsNavigationNotice = attr.IsNavigationNotice,
                 IsStaleNotice = attr.IsStaleNotice,
+                Mark = attr.Mark,
                 Children = children,
             };
         }
@@ -376,6 +380,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
                 ExternalText = attr.ExternalText,
                 IsNavigationNotice = attr.IsNavigationNotice,
                 IsStaleNotice = attr.IsStaleNotice,
+                Mark = attr.Mark,
                 Children = children,
             };
         }
@@ -451,6 +456,11 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             if (_selectedHit is null)
                 return null;
 
+            // An AML feature's spec, cell and marking are on its provenance
+            // strip; the caption names its class instead (#1372).
+            if (_selectedHit.Aml is { } aml)
+                return $"{FeatureType} · {aml.ClassKindText(_selectedHit.Attributes)}";
+
             var segments = new List<string>(3);
             if (!string.IsNullOrEmpty(FeatureRef))
                 segments.Add(string.Format(CultureInfo.CurrentCulture, Strings.Pick_IdCaption, FeatureRef));
@@ -469,10 +479,32 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     /// the user clicked isn't IHO symbology; <see langword="null"/> otherwise
     /// (issue #937).
     /// </summary>
-    public string? PortrayalNote => _selectedHit is null ? null : PortrayalNoteText.For(ProductSpec);
+    /// <remarks>An AML feature the map doesn't draw has no symbol to explain; it says <see cref="AmlNotDrawnNote"/> instead.</remarks>
+    public string? PortrayalNote => _selectedHit is null || _selectedHit.Aml is { Drawn: false }
+        ? null
+        : PortrayalNoteText.For(ProductSpec);
 
     /// <summary>True when <see cref="PortrayalNote"/> has a value to show.</summary>
     public bool HasPortrayalNote => PortrayalNote is not null;
+
+    /// <summary>
+    /// The provenance strip of the selected hit when it's a NATO Additional
+    /// Military Layers feature: AML tag, cell and protective marking (#1372,
+    /// design decision 13); <see langword="null"/> otherwise.
+    /// </summary>
+    public AmlPickProvenance? Aml => _selectedHit?.Aml;
+
+    /// <summary>True when <see cref="Aml"/> has a strip to show.</summary>
+    public bool HasAml => Aml is not null;
+
+    /// <summary>
+    /// "Not drawn. Picked from its position." when the selected hit is an AML
+    /// feature the map doesn't draw; <see langword="null"/> otherwise.
+    /// </summary>
+    public string? AmlNotDrawnNote => Aml is { Drawn: false } ? Strings.Pick_AmlNotDrawn : null;
+
+    /// <summary>True when <see cref="AmlNotDrawnNote"/> has a value to show.</summary>
+    public bool HasAmlNotDrawnNote => AmlNotDrawnNote is not null;
 
     /// <summary>
     /// The pick report's first line for a product that isn't S-100, such as
@@ -518,6 +550,8 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
             var identity = string.IsNullOrEmpty(caption)
                 ? PrimaryLabel
                 : $"{PrimaryLabel}\n{caption}";
+            if (Aml is { } aml)
+                identity = $"{aml.TagText} · {aml.CellName}{(aml.HasMarking ? " · " + aml.Marking : string.Empty)}\n{identity}";
             return NavigationNotice is { } notice ? $"{notice}\n{identity}" : identity;
         }
     }
@@ -1354,6 +1388,10 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(IdentityCaption));
         OnPropertyChanged(nameof(PortrayalNote));
         OnPropertyChanged(nameof(HasPortrayalNote));
+        OnPropertyChanged(nameof(Aml));
+        OnPropertyChanged(nameof(HasAml));
+        OnPropertyChanged(nameof(AmlNotDrawnNote));
+        OnPropertyChanged(nameof(HasAmlNotDrawnNote));
         OnPropertyChanged(nameof(NavigationNotice));
         OnPropertyChanged(nameof(HasNavigationNotice));
         OnPropertyChanged(nameof(DataCredit));
