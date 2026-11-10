@@ -61,13 +61,18 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
         var noDataSkColor = NoDataColor.ToSkia();
         float noDataValue = layer.NoDataValue;
         bool noDataIsNaN = float.IsNaN(noDataValue);
+        // Optional relief shading (a factor per cell), applied to band colours
+        // only: no-data fill stays flat.
+        float[]? shade = layer.ReliefShade is { } rs && rs.Length == rows * cols ? rs : null;
 
         for (int row = 0; row < rows; row++)
             for (int col = 0; col < cols; col++)
             {
                 int index = row * cols + col;
                 float value = fieldSpan[index];
-                SKColor color = ResolveColor(value, resolvedBands, noDataValue, noDataIsNaN, noDataSkColor);
+                SKColor color = ResolveColor(value, resolvedBands, noDataValue, noDataIsNaN, noDataSkColor, out bool isBand);
+                if (isBand && shade is not null)
+                    color = Shade(color, shade[index]);
                 // Grid row 0 is the southernmost (bottom of image), so flip vertically.
                 bitmap.SetPixel(col, rows - 1 - row, color);
             }
@@ -83,8 +88,10 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
         ReadOnlySpan<ResolvedBand> bands,
         float noDataValue,
         bool noDataIsNaN,
-        SKColor noDataColor)
+        SKColor noDataColor,
+        out bool isBand)
     {
+        isBand = false;
         bool isNoData = noDataIsNaN ? float.IsNaN(value) : value == noDataValue;
         if (isNoData)
             return noDataColor;
@@ -93,11 +100,23 @@ public class SkiaCoverageRenderer : ICoverageRenderer<SKBitmap>
         {
             ref readonly var band = ref bands[i];
             if (value >= band.MinValue && value < band.MaxValue)
+            {
+                isBand = true;
                 return band.Color;
+            }
         }
 
         return SKColors.Transparent;
     }
+
+    // SKColor is unpremultiplied, so shade the channels directly.
+    private static SKColor Shade(SKColor color, float factor) => factor == 1f
+        ? color
+        : new SKColor(
+            ReliefShading.ShadeChannel(color.Red, factor),
+            ReliefShading.ShadeChannel(color.Green, factor),
+            ReliefShading.ShadeChannel(color.Blue, factor),
+            color.Alpha);
 
     private readonly record struct ResolvedBand(float MinValue, float MaxValue, SKColor Color);
 }

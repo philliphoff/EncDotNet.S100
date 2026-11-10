@@ -30,4 +30,12 @@ public sealed class StyledCoverageLayer : IPortrayalLayer
     /// When set, a renderer may produce an additional symbol layer on top of the color raster.
     /// </summary>
     public CoverageSymbolScheme? SymbolScheme { get; init; }
+
+    /// <summary>
+    /// Optional relief shading: a brightness factor per sampled cell, row-major
+    /// like the coverage values, that the renderer multiplies into each cell's
+    /// band colour (<see cref="ReliefShading.ShadeRgba8888"/>). <see langword="null"/>
+    /// (the default) draws the flat band colours of the portrayal.
+    /// </summary>
+    public float[]? ReliefShade { get; init; }
 }
