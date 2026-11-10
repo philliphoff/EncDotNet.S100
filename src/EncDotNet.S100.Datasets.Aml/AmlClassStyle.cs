@@ -74,8 +74,9 @@ public sealed record AmlClassStyle(string Acronym, AmlFamily Family, AmlClassKin
     /// <summary>
     /// The class's own legend entries in a palette, in place of the one entry
     /// its <see cref="Kind"/> gives, or <see langword="null"/> for that entry.
-    /// For a class whose drawing says more than its kind, such as sediment,
-    /// whose patterns each need a row.
+    /// For a class whose <see cref="Build"/> draws something the kinds don't,
+    /// such as CLB's thin contours or sounding figures, or whose drawing needs
+    /// several rows, such as sediment's patterns.
     /// </summary>
     public Func<AmlStyleCatalog, PaletteType, IReadOnlyList<LegendEntry>>? Legend { get; init; }
 

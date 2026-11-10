@@ -17,14 +17,20 @@ public sealed class EsbEnvironmentalTests
     private static readonly AmlDrawing Sed = new AmlPortrayal().Draw(AmlFixtures.Sed(), "AMLTEST6U_SED.000");
 
     [Fact]
-    public void Every_ESB_class_is_drawn_in_the_environmental_family_but_chart_classes_are_left_to_the_ENC()
+    public void Every_ESB_class_is_drawn_in_the_environmental_family_and_chart_classes_in_their_own()
     {
-        Assert.Equal(["LIGHTS"], Esb.UndrawnClasses);
-        Assert.Equal(Esb.Features.Count - 1, Esb.DrawnFeatureCount);
-        var family = Assert.Single(Esb.Instructions.Keys);
-        Assert.Equal(AmlFamily.Environmental, family);
-        Assert.Equal(["aml.environmental"], Esb.BuildSubLayers(PaletteType.Day).Select(l => l.LayerKey));
-        Assert.All(Esb.Instructions[family], i => Assert.Equal(AmlFamily.Environmental.ViewingGroup, i.ViewingGroup));
+        Assert.Empty(Esb.UndrawnClasses);
+        Assert.Equal(Esb.Features.Count, Esb.DrawnFeatureCount);
+        var environmental = Esb.Instructions[AmlFamily.Environmental];
+        Assert.All(environmental, i => Assert.Equal(AmlFamily.Environmental.ViewingGroup, i.ViewingGroup));
+        Assert.All(
+            Esb.Features.Where(f => f.FeatureType != "LIGHTS"),
+            f => Assert.Contains(environmental, i => i.FeatureReference == f.Id));
+
+        // The chart light is S9's chart background, not an environmental class.
+        var light = Assert.Single(Esb.Features, f => f.FeatureType == "LIGHTS");
+        Assert.DoesNotContain(environmental, i => i.FeatureReference == light.Id);
+        Assert.NotEqual(AmlFamily.Environmental, AmlStyleCatalog.Default.Find("LIGHTS")?.Family);
     }
 
     [Fact]
@@ -142,8 +148,12 @@ public sealed class EsbEnvironmentalTests
         var uncached = Esb.ToVectorPortrayalResult(new Core.SpecRef("AML", default), "UKE6TEST.000");
         var ral = new AmlPortrayal().Draw(AmlFixtures.Ral()).ToVectorPortrayalResult(new Core.SpecRef("AML", default), "R", contentScope: "sha:2");
 
-        Assert.Equal($"aml|sha:1|{AmlStyleCatalog.Default.ContentScope}|environmental", Assert.Single(cached.SubLayers).PatternClipCacheKey);
-        Assert.Null(Assert.Single(uncached.SubLayers).PatternClipCacheKey);
+        Assert.Equal(
+            $"aml|sha:1|{AmlStyleCatalog.Default.ContentScope}|environmental",
+            cached.SubLayers.Single(s => s.LayerKey == "aml.environmental").PatternClipCacheKey);
+        // Only a sub-layer with pattern fills gets a key.
+        Assert.All(cached.SubLayers.Where(s => s.LayerKey != "aml.environmental"), s => Assert.Null(s.PatternClipCacheKey));
+        Assert.All(uncached.SubLayers, s => Assert.Null(s.PatternClipCacheKey));
         Assert.All(ral.SubLayers, s => Assert.Null(s.PatternClipCacheKey));
     }
 
@@ -289,8 +299,11 @@ public sealed class EsbEnvironmentalTests
     [Fact]
     public void The_sediment_legend_has_a_swatch_per_kind_and_a_mixture()
     {
+        // The family also holds S9's MFF environmental classes, before ESB's.
         var legend = AmlStyleCatalog.Default.BuildLegend(AmlFamily.Environmental, PaletteType.Day);
-        var sediment = legend.Take(8).ToList();
+        int first = legend.ToList().FindIndex(e => e.Label == "Sediment: sand");
+        Assert.True(first >= 0, "No sediment legend.");
+        var sediment = legend.Skip(first).Take(8).ToList();
 
         Assert.All(sediment, e => Assert.IsType<SymbolLegendEntry>(e));
         Assert.Equal(
@@ -305,8 +318,8 @@ public sealed class EsbEnvironmentalTests
         Assert.Contains("fill-opacity=\"0.07\"", sand.Svg, StringComparison.Ordinal);
         Assert.DoesNotContain("AMLENV", sand.Svg, StringComparison.Ordinal);
 
-        // Then one entry per other class, in module order.
-        Assert.Equal(EsbEnvironmentalStyles.Module.Classes.Count - 1 + 8, legend.Count);
+        // Then one entry per other ESB class, in module order.
+        Assert.Equal(EsbEnvironmentalStyles.Module.Classes.Count - 1 + 8, legend.Count - first);
         Assert.IsType<LineLegendEntry>(legend.Single(e => e.Label == "Trawl scours"));
         Assert.IsType<LineLegendEntry>(legend.Single(e => e.Label == "Beach exit"));
         Assert.IsType<SymbolLegendEntry>(legend.Single(e => e.Label == "Viewpoint"));

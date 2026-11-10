@@ -112,8 +112,8 @@ public sealed class AmlStyleCatalog
         ContentScope = ApplicationContentScope.For(StyleName, Version);
     }
 
-    /// <summary>The built-in modules: <see cref="RalAirStyles"/>, <see cref="RalOperationalStyles"/> and <see cref="EsbEnvironmentalStyles"/>.</summary>
-    public static IReadOnlyList<IAmlStyleModule> BuiltInModules { get; } = [RalAirStyles.Module, RalOperationalStyles.Module, EsbEnvironmentalStyles.Module];
+    /// <summary>The built-in modules, such as <see cref="RalAirStyles"/>, <see cref="ClbStyles"/> and <see cref="EsbEnvironmentalStyles"/>.</summary>
+    public static IReadOnlyList<IAmlStyleModule> BuiltInModules { get; } = [RalAirStyles.Module, RalOperationalStyles.Module, ClbStyles.Module, MffStyles.Module, ChartBackgroundStyles.Module, AirfieldStyles.Module, EsbEnvironmentalStyles.Module];
 
     /// <summary>The catalogue of <see cref="BuiltInModules"/>.</summary>
     public static AmlStyleCatalog Default { get; } = new(BuiltInModules);
