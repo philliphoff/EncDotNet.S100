@@ -6,6 +6,17 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **S-102 relief shading.** An optional hillshade over the S-102 depth bands
+  shows the shape of the seabed (dredged pits, sand waves, berth toes) in
+  high-resolution bathymetry. It lights the depth surface from the north-west
+  and darkens or lightens each band colour by slope, so the bands and the
+  safety contour keep their meaning. It isn't part of the S-102 portrayal, so
+  it's off by default. In SoundCharts, switch it on in the new **Bathymetry**
+  section of Display controls, shown while an S-102 dataset is loaded, or with
+  the `get_bathymetry_display` and `set_bathymetry_display` MCP tools.
+  `s100 render --show-layer s102.relief` draws it. `ReliefShading` and
+  `S102Relief` are the library types, and `StyledCoverageLayer.ReliefShade`
+  carries the shading to the coverage renderers.
 - **S-412 Marine Weather Warnings (draft).** The new
   `EncDotNet.S100.Datasets.S412` package reads S-412 GML datasets (wind,
   significant wave height, restricted visibility, thunderstorm and ice

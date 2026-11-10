@@ -111,6 +111,26 @@
                     </Grid>
                 </StackPanel>
 
+                <!-- Bathymetry: the S-102 relief shading switch, map-wide and kept
+                     between sessions. Shown while an S-102 dataset is loaded.
+                     Relief shading is a display aid, not S-102 portrayal, so it
+                     is off until switched on. -->
+                <StackPanel Spacing="4" IsVisible="{Binding HasBathymetryData}">
+                    <TextBlock Text="{x:Static loc:Strings.EcdisPanel_BathymetryHeader}"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               LetterSpacing="0.5"
+                               Opacity="0.7" />
+                    <Grid Classes="settingRow" ColumnDefinitions="*,Auto"
+                          ToolTip.Tip="{x:Static loc:Strings.Tooltip_EcdisPanel_Bathymetry_ReliefShading}">
+                        <TextBlock Grid.Column="0" Text="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefShading}" />
+                        <ToggleSwitch Grid.Column="1" Classes="setting" IsChecked="{Binding IsReliefShadingVisible}"
+                                      AutomationProperties.AutomationId="EcdisDisplayPanel.Bathymetry.ReliefShading"
+                                      AutomationProperties.Name="{x:Static loc:Strings.EcdisPanel_Bathymetry_ReliefShading}"
+                                      AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_EcdisPanel_Bathymetry_ReliefShading}" />
+                    </Grid>
+                </StackPanel>
+
                 <!-- Weather (#1072): map-wide switches for the optional weather
                      layers, applied to every weather dataset and kept between
                      sessions. Shown while a weather dataset (GRIB2, NetCDF, a
