@@ -261,6 +261,9 @@ public partial class App : Application
         // Start (or leave disabled) the MCP server based on persisted settings.
         // Failures are logged but never block app startup.
         var mcpHost = _services.GetRequiredService<McpServerHost>();
+        // The status bar listens for the server's port conflict, so it has to
+        // exist before the first Apply below; the main window comes later.
+        _services.GetRequiredService<StatusBarViewModel>();
         var settingsVm = _services.GetRequiredService<SettingsViewModel>();
         // Judges which S-124 warnings the map draws from the first load on (#993),
         // and has the map stamp say "Display Not Real Time" while they're loaded
@@ -1671,6 +1674,10 @@ public partial class App : Application
             sp.GetRequiredService<EncDotNet.S100.Viewer.Tools.RangeBearingState>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.RoutesService>(),
             sp.GetRequiredService<SettingsViewModel>()));
+        services.AddSingleton(sp => new StatusBarViewModel(
+            sp.GetRequiredService<McpServerHost>(),
+            sp.GetRequiredService<INotificationService>(),
+            UiThread.Post));
         services.AddSingleton<MainViewModel>();
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.DateDependentDrawingService(
             sp.GetRequiredService<IDatasetLoaderService>(),
