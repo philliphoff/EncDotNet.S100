@@ -75,8 +75,7 @@ public sealed class AmlSeabedRenderingTests
         Assert.True(Count(day, SKColors.White, x - 8, y - 8, 16, 16) > 20, "No bubble at the field.");
     }
 
-    // The S-57 spec until S1 (#1236) registers AML's own.
-    private static SpecRef Spec { get; } = new("S-57", default);
+    private static SpecRef Spec { get; } = new(SpecName.Aml, new SpecVersion(1, 0, 0));
 
     private static IReadOnlyList<VectorPortrayalResult> Cells(PaletteType palette) =>
     [
