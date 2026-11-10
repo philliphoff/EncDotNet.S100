@@ -162,7 +162,7 @@ public sealed class AmlPortrayalTests
     {
         var fai = new AmlPortrayal().Draw(AmlFixtures.Fai());
 
-        Assert.Equal(["AIRARE"], fai.UndrawnClasses);
+        Assert.Equal(["u_defd"], fai.UndrawnClasses);
         Assert.Equal(["aml.air"], fai.Instructions.Keys.Select(k => k.LayerKey));
         var waypoint = fai.Features.First(f => f.FeatureType == "awaypt");
         Assert.Equal(

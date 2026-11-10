@@ -72,6 +72,7 @@ internal static class CellSceneKey
             .Append("|symbolScale:").Append(presentation.SymbolScale.ToString("R", c))
             .Append("|textScale:").Append(presentation.TextScale.ToString("R", c))
             .Append("|category:").Append(display.Category)
+            .Append("|halo:").Append(presentation.SafetyContourHalo ? '1' : '0')
             .Append("|mode:").Append(ChartEngine.Options.SceneMode);
 
         foreach (var (product, groups) in display.HiddenViewingGroups.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))

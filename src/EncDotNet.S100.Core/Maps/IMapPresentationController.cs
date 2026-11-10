@@ -37,10 +37,11 @@ public interface IMapPresentationController
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Applies <paramref name="presentation"/> when only its
-    /// <see cref="MapPresentationState.DepthAdjustment"/> changed, re-rendering
-    /// just the datasets whose depths it adjusts. The default re-applies the
-    /// whole presentation.
+    /// Applies <paramref name="presentation"/> when only how depths are drawn
+    /// changed, its <see cref="MapPresentationState.DepthAdjustment"/> or its
+    /// <see cref="MapPresentationState.SafetyContourHalo"/>, re-rendering just
+    /// the datasets that adjust depths. The default re-applies the whole
+    /// presentation.
     /// </summary>
     /// <param name="presentation">The presentation carrying the new adjustment.</param>
     /// <param name="cancellationToken">Cancels the refresh.</param>

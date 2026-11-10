@@ -58,7 +58,9 @@
         <Setter Property="Background" Value="{DynamicResource ForegroundColor}" />
         <Setter Property="BorderBrush" Value="{DynamicResource ForegroundColor}" />
     </Style>
+    <!-- The window's background colour, not BackgroundColor: that one is
+         transparent in the app's themes, which left the text invisible. -->
     <Style Selector="views|AmlMarkingChip:elevated /template/ TextBlock#PART_Text">
-        <Setter Property="Foreground" Value="{DynamicResource BackgroundColor}" />
+        <Setter Property="Foreground" Value="{DynamicResource WindowBackgroundColor}" />
     </Style>
 </Styles>

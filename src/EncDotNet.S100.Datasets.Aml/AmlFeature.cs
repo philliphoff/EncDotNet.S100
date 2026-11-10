@@ -26,7 +26,8 @@ public sealed class AmlFeature : IS100Feature
         IReadOnlyDictionary<string, string> attributes,
         IReadOnlyList<GeoPosition> points,
         IReadOnlyList<IReadOnlyList<GeoPosition>> curves,
-        IReadOnlyList<SurfacePart> surfaces)
+        IReadOnlyList<SurfacePart> surfaces,
+        IReadOnlyList<AmlSounding> soundings)
     {
         Id = id;
         Record = record;
@@ -35,6 +36,7 @@ public sealed class AmlFeature : IS100Feature
         Points = points;
         Curves = curves;
         _surfaces = surfaces;
+        Soundings = soundings;
     }
 
     /// <inheritdoc />
@@ -67,6 +69,13 @@ public sealed class AmlFeature : IS100Feature
     /// <inheritdoc />
     public IReadOnlyList<GeoPosition> Points { get; }
 
+    /// <summary>
+    /// The feature's soundings, with their depths, when its node holds 3-D
+    /// coordinates, as a CLB <c>SOUNDG</c> does; empty otherwise. Their
+    /// positions are also the feature's <see cref="Points"/>.
+    /// </summary>
+    public IReadOnlyList<AmlSounding> Soundings { get; }
+
     /// <inheritdoc />
     public IReadOnlyList<IReadOnlyList<GeoPosition>> Curves { get; }
 
@@ -91,3 +100,8 @@ public sealed class AmlFeature : IS100Feature
     public string? Attribute(string acronym) =>
         Attributes.TryGetValue(acronym, out var value) && !string.IsNullOrWhiteSpace(value) ? value.Trim() : null;
 }
+
+/// <summary>One sounding of an AML feature: its position and its depth, in the cell's units, positive down.</summary>
+/// <param name="Position">The sounding's position.</param>
+/// <param name="Depth">The depth.</param>
+public readonly record struct AmlSounding(GeoPosition Position, double Depth);
