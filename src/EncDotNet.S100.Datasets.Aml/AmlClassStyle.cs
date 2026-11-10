@@ -69,6 +69,24 @@ public sealed record AmlClassStyle(string Acronym, AmlFamily Family, AmlClassKin
     /// </summary>
     public Func<AmlFeature, AmlDrawingContext, IEnumerable<DrawingInstruction>>? Build { get; init; }
 
+    /// <summary>
+    /// How the class's points cluster when dense (decision 20), or
+    /// <see langword="null"/> for never. Classes with the same clustering
+    /// cluster together, so a bubble can count contacts and mines as one.
+    /// </summary>
+    public AmlClustering? Clustering { get; init; }
+
+    /// <summary>
+    /// Every glyph the class draws: its <see cref="Glyph"/>, the glyphs its
+    /// <see cref="Build"/> uses besides (<see cref="OtherGlyphs"/>), and its
+    /// clustering's bubble. The catalogue makes a symbol of each in the class's family.
+    /// </summary>
+    public IEnumerable<AmlGlyph> Glyphs =>
+        new[] { Glyph, Clustering?.Bubble }.OfType<AmlGlyph>().Concat(OtherGlyphs);
+
+    /// <summary>Glyphs a custom <see cref="Build"/> draws other than <see cref="Glyph"/>, such as a contact's mine-like variant.</summary>
+    public IReadOnlyList<AmlGlyph> OtherGlyphs { get; init; } = [];
+
     /// <summary>Checks the style is complete: a point class needs a glyph.</summary>
     internal void Validate()
     {
@@ -78,6 +96,14 @@ public sealed record AmlClassStyle(string Acronym, AmlFamily Family, AmlClassKin
         if (Kind == AmlClassKind.Point && Glyph is null && Build is null)
             throw new ArgumentException($"AML point class '{Acronym}' needs a glyph.");
         Glyph?.Validate();
+        foreach (var glyph in OtherGlyphs)
+            glyph.Validate();
+        if (Clustering is { } clustering)
+        {
+            clustering.Validate();
+            if (clustering.Family != Family)
+                throw new ArgumentException($"AML class '{Acronym}' clusters in another family's bubble ({clustering.Name}).");
+        }
     }
 }
 
@@ -112,13 +138,12 @@ public sealed class AmlDrawingContext
     // The height of a line of label text, in millimetres, for stacking.
     private const double LineHeight = 3.9;
 
-    internal AmlDrawingContext(AmlFeature feature, AmlFamily family)
+    internal AmlDrawingContext(AmlFeature feature, AmlFamily family, double? clusteredBeyond = null)
     {
         Feature = feature;
         Family = family;
-        ScaleMinimum = double.TryParse(feature.Attribute("SCAMIN"), NumberStyles.Float, CultureInfo.InvariantCulture, out var scamin) && scamin > 0
-            ? scamin
-            : null;
+        var scamin = FeatureScaleMinimum(feature);
+        ScaleMinimum = clusteredBeyond is { } beyond && !(scamin <= beyond) ? beyond : scamin;
         Label = new TextInstructionStyle
         {
             FontSize = FontSize,
@@ -135,8 +160,22 @@ public sealed class AmlDrawingContext
     /// <summary>The family it is drawn in.</summary>
     public AmlFamily Family { get; }
 
-    /// <summary>The feature's <c>SCAMIN</c>: the largest scale denominator it is drawn at; <see langword="null"/> for all.</summary>
+    /// <summary>
+    /// The largest scale denominator the feature is drawn at: its <c>SCAMIN</c>,
+    /// or less where it joins a cluster (<see cref="AmlClassStyle.Clustering"/>);
+    /// <see langword="null"/> for all.
+    /// </summary>
     public double? ScaleMinimum { get; }
+
+    /// <summary>A feature's <c>SCAMIN</c>, or <see langword="null"/> when it has none.</summary>
+    /// <param name="feature">The feature.</param>
+    public static double? FeatureScaleMinimum(AmlFeature feature)
+    {
+        ArgumentNullException.ThrowIfNull(feature);
+        return double.TryParse(feature.Attribute("SCAMIN"), NumberStyles.Float, CultureInfo.InvariantCulture, out var scamin) && scamin > 0
+            ? scamin
+            : null;
+    }
 
     /// <summary>The family's label style: italic, in its ink, with a halo (decision 16), centred on the anchor.</summary>
     public TextInstructionStyle Label { get; }

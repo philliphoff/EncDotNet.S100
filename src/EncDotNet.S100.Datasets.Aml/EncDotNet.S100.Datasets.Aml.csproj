@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <IsPackable>true</IsPackable>
-    <Description>SoundCharts' own code-built portrayal of NATO Additional Military Layers (AML) cells, read with EncDotNet.S57: the overlay signature (dash-dot lines on a halo, unfilled areas with inward ticks, framed point symbols), four colour families in Day, Dusk and Night, italic labels, airspace limits, and the RAL air and operational classes. Not the official AML portrayal, which is restricted to S-52 Presentation Library holders. AML is never a source of depths or route checks. Not for navigation. Depends on EncDotNet.S100.Core, EncDotNet.S100.Portrayals and EncDotNet.S57.</Description>
+    <Description>SoundCharts' own code-built portrayal of NATO Additional Military Layers (AML) cells, read with EncDotNet.S57: the overlay signature (dash-dot lines on a halo, unfilled areas with inward ticks, framed point symbols), four colour families in Day, Dusk and Night, italic labels, airspace limits, the RAL air and operational classes, and the SBO and LBO seabed classes with screen-space clustering. Not the official AML portrayal, which is restricted to S-52 Presentation Library holders. AML is never a source of depths or route checks. Not for navigation. Depends on EncDotNet.S100.Core, EncDotNet.S100.Portrayals and EncDotNet.S57.</Description>
   </PropertyGroup>
 
   <ItemGroup>

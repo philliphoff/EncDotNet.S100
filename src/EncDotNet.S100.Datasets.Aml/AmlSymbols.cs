@@ -84,6 +84,8 @@ public sealed class AmlSymbols
     {
         var body = glyph.Body.Replace("{ink}", family.ColorToken, StringComparison.Ordinal)
             .Replace("{halo}", AmlPalette.HaloToken, StringComparison.Ordinal);
+        if (!glyph.Framed)
+            return Svg(name, $"{glyph.Description} AML, {family.Name.ToLowerInvariant()} family.", 4.8, body);
         return Svg(
             name,
             $"{glyph.Description} In the AML frame, {family.Name.ToLowerInvariant()} family.",

@@ -58,7 +58,7 @@ public sealed class AmlStyleCatalog
     public const string StyleName = "Aml";
 
     /// <summary>The style's version: bump it whenever its symbols, palette or rules change.</summary>
-    public const int Version = 1;
+    public const int Version = 2;
 
     /// <summary>The caption the legend and the display section show (decision 23).</summary>
     public const string NoChecksNote = "AML depths aren't used for depth answers or route checks.";
@@ -89,15 +89,15 @@ public sealed class AmlStyleCatalog
         Palette = AmlPalette.Build(Families);
         Symbols = new AmlSymbols(
             Families,
-            classes.Where(c => c.Glyph is not null).Select(c => (c.Family, c.Glyph!)).Distinct());
+            classes.SelectMany(c => c.Glyphs.Select(g => (c.Family, g))).Distinct());
         foreach (var style in Families.SelectMany(AmlSignature.LineStyles))
             _lineStyles.Add(style.Name, style);
         LineStyleProvider = name => _lineStyles.GetValueOrDefault(name);
         ContentScope = ApplicationContentScope.For(StyleName, Version);
     }
 
-    /// <summary>The built-in modules: <see cref="RalAirStyles"/> and <see cref="RalOperationalStyles"/>.</summary>
-    public static IReadOnlyList<IAmlStyleModule> BuiltInModules { get; } = [RalAirStyles.Module, RalOperationalStyles.Module];
+    /// <summary>The built-in modules: <see cref="RalAirStyles"/>, <see cref="RalOperationalStyles"/> and <see cref="SeabedStyles"/>.</summary>
+    public static IReadOnlyList<IAmlStyleModule> BuiltInModules { get; } = [RalAirStyles.Module, RalOperationalStyles.Module, SeabedStyles.SboModule, SeabedStyles.LboModule];
 
     /// <summary>The catalogue of <see cref="BuiltInModules"/>.</summary>
     public static AmlStyleCatalog Default { get; } = new(BuiltInModules);

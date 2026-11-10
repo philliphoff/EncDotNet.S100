@@ -44,6 +44,12 @@ internal sealed class AmlCellBuilder
     /// <summary>An AML 1.0 Routes, Areas and Limits (RAL) cell: DSID PRSP 52, PRED 1.0.</summary>
     public static AmlCellBuilder Ral(string name = "UKR0TEST.000") => new(S57ObjectCatalogue.Aml10, 52, "1.0", 16, name);
 
+    /// <summary>An AML 1.0 Small Bottom Objects (SBO) cell: DSID PRSP 56, PRED 1.0.</summary>
+    public static AmlCellBuilder Sbo(string name = "UKS0TEST.000") => new(S57ObjectCatalogue.Aml10, 56, "1.0", 18, name);
+
+    /// <summary>An AML 1.0 Large Bottom Objects (LBO) cell: DSID PRSP 53, PRED 1.0.</summary>
+    public static AmlCellBuilder Lbo(string name = "UKL0TEST.000") => new(S57ObjectCatalogue.Aml10, 53, "1.0", 10, name);
+
     /// <summary>An AML 3.0 integrated cell (the FAI/MFI trials): DSID PRSP 57, PRED 3.0.</summary>
     public static AmlCellBuilder Aml30(string name = "AMLTEST0U_FAI.000") => new(S57ObjectCatalogue.Aml30, 57, "3.0", 20, name);
 
@@ -301,5 +307,63 @@ internal static class AmlFixtures
             [(9.1, 54.0), (9.3, 54.0), (9.3, 53.9), (9.1, 53.9), (9.1, 54.0)],
             ("OBJNAM", "TRA-WESER 2"), ("efaltu", "FL100"), ("efaltl", "01000AGL"), ("SCAMIN", "1500000"))
         .Point("AIRARE", (9.6, 53.7), ("OBJNAM", "HAMBURG"))
+        .Build();
+
+    /// <summary>The centre of the dense SBO cluster in <see cref="Sbo"/>.</summary>
+    public static (double Lon, double Lat) SboClusterCentre { get; } = (-1.10, 50.47);
+
+    /// <summary>
+    /// An SBO cell laid out like the design's B2c frame, about 50.5°N 1.2°W:
+    /// a contact, a contact classified mine-like (MILCO), a mine and two more
+    /// contacts, kilometres apart; and a dense field of 38 contacts within
+    /// about 300 m of <see cref="SboClusterCentre"/>, two of them mine-like
+    /// (one MILCO contact, one mine). Also a viewpoint, an SBO class with no style.
+    /// </summary>
+    public static AmlDataSet Sbo()
+    {
+        var builder = AmlCellBuilder.Sbo()
+            .Point("contct", (-1.30, 50.55), ("stacon", "504"), ("contrn", "826"), ("conshp", "sphere"))
+            .Point("contct", (-1.18, 50.60), ("stacon", "502"), ("contrn", "3214"))
+            .Point("mindev", (-1.04, 50.58), ("stacon", "505"), ("minern", "nme45"))
+            .Point("contct", (-1.36, 50.46), ("stacon", "501"))
+            .Point("contct", (-1.24, 50.44), ("stacon", "503"));
+
+        // A sunflower field: even, deterministic, about 300 m across.
+        var (lon0, lat0) = SboClusterCentre;
+        for (int i = 0; i < 38; i++)
+        {
+            double r = 0.0004 * Math.Sqrt(i + 0.5), a = i * 2.39996;
+            var position = (lon0 + (r * Math.Cos(a) / Math.Cos(lat0 * Math.PI / 180)), lat0 + (r * Math.Sin(a)));
+            if (i == 7)
+                builder.Point("mindev", position, ("stacon", "505"));
+            else
+                builder.Point("contct", position, ("stacon", i == 21 ? "502" : "504"));
+        }
+
+        return builder.Point("viewpt", (-1.40, 50.62)).Build();
+    }
+
+    /// <summary>
+    /// An LBO cell, about 50.5°N 1.2°W: a sensor anomaly, impact scours
+    /// east–west and northeast–southwest, and a wreck, an obstruction and a
+    /// rock, the chart classes AML rings; all kilometres apart.
+    /// </summary>
+    public static AmlDataSet Lbo() => AmlCellBuilder.Lbo()
+        .Point("senanm", (-1.34, 50.60), ("WATLEV", "3"), ("orcard", "503"))
+        .Point("iscour", (-1.22, 50.60), ("orcard", "502"), ("WATLEV", "3"))
+        .Point("iscour", (-1.10, 50.60), ("orcard", "503"), ("WATLEV", "3"))
+        .Point("WRECKS", (-1.34, 50.50), ("CATWRK", "2"), ("OBJNAM", "SS Example"), ("WATLEV", "3"))
+        .Point("OBSTRN", (-1.22, 50.50), ("CATOBS", "7"), ("WATLEV", "3"))
+        .Point("UWTROC", (-1.10, 50.50), ("WATLEV", "4"))
+        .Build();
+
+    /// <summary>
+    /// An AML 3.0 integrated SBO cell (the Baltic trials): small bottom objects,
+    /// one classified non-MILCO, one identified as a mine, one MILCO and then neutralised.
+    /// </summary>
+    public static AmlDataSet SmallBottomObjects() => AmlCellBuilder.Aml30("AMLTEST0U_SBO.000")
+        .Point("smalbo", (9.90, 54.47), ("staobj", "503"))
+        .Point("smalbo", (9.94, 54.48), ("staobj", "505"), ("minern", "123"))
+        .Point("smalbo", (9.98, 54.47), ("staobj", "502,508"))
         .Build();
 }

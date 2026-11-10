@@ -127,7 +127,8 @@ public sealed class AmlStyleCatalogTests
     {
         var legend = AmlStyleCatalog.Default.BuildLegend(PaletteType.Night);
 
-        Assert.Equal([AmlFamily.Air, AmlFamily.Operational], legend.Select(g => g.Family));
+        // Top of the plane first; later families follow.
+        Assert.Equal([AmlFamily.Air, AmlFamily.Operational], legend.Select(g => g.Family).Take(2));
         var air = legend[0].Entries;
         Assert.Equal(
             ["ATS route", "Air waypoint", "NAVAID", "Airspace restriction", "Controlled airspace", "Military exercise airspace"],
