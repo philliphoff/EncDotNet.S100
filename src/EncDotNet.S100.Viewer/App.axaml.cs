@@ -139,7 +139,7 @@ public partial class App : Application
         {
             try
             {
-                Services.GetRequiredService<MainViewModel>().ShowAboutCommand.Execute(null);
+                Services.GetRequiredService<AppCommandsViewModel>().ShowAboutCommand.Execute(null);
             }
             catch (InvalidOperationException)
             {
@@ -1681,6 +1681,16 @@ public partial class App : Application
             sp.GetRequiredService<McpServerHost>(),
             sp.GetRequiredService<INotificationService>(),
             UiThread.Post));
+        services.AddSingleton(sp => new AppCommandsViewModel(
+            sp.GetRequiredService<IThemeService>(),
+            sp.GetRequiredService<ShadUI.DialogManager>(),
+            sp.GetRequiredService<Func<FeedbackDialogViewModel>>(),
+            sp.GetRequiredService<Func<AboutDialogViewModel>>()));
+        services.AddSingleton(sp => new DatasetOpeningViewModel(
+            sp.GetRequiredService<IRecentFilesService>(),
+            sp.GetRequiredService<INotificationService>(),
+            sp.GetRequiredService<DatasetsViewModel>(),
+            sp.GetRequiredService<ShellLayoutViewModel>()));
         services.AddSingleton<MainViewModel>();
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.DateDependentDrawingService(
             sp.GetRequiredService<IDatasetLoaderService>(),
@@ -1869,7 +1879,7 @@ public partial class App : Application
         // the Timeline and Clearance. Always visible; it never opens by itself.
         services.AddSingleton(sp => new LogsViewModel(
             sp.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.LogBuffer>(),
-            showFeedback: () => sp.GetRequiredService<MainViewModel>().ShowFeedbackCommand.Execute(null),
+            showFeedback: () => sp.GetRequiredService<AppCommandsViewModel>().ShowFeedbackCommand.Execute(null),
             post: UiThread.RunOrPostBackground,
             timeFormat: sp.GetService<ITimeFormatProvider>(),
             time: sp.GetRequiredService<TimeProvider>()));

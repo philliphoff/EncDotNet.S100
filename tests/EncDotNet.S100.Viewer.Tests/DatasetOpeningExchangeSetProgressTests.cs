@@ -1,13 +1,12 @@
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
-using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Services;
 using EncDotNet.S100.Viewer.ViewModels;
 using Mapsui.Layers;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
-public class MainViewModelExchangeSetProgressTests : IDisposable
+public class DatasetOpeningExchangeSetProgressTests : IDisposable
 {
     private readonly string _tempSettingsPath = Path.Combine(
         Path.GetTempPath(), $"viewer-tests-{Guid.NewGuid():N}.json");
@@ -19,14 +18,6 @@ public class MainViewModelExchangeSetProgressTests : IDisposable
     }
 
 
-    private sealed class StubThemeService : IThemeService
-    {
-        public bool IsDarkTheme => false;
-        public event System.EventHandler? ThemeChanged { add { } remove { } }
-        public bool ToggleTheme() => false;
-        public ChromeTheme Current => ChromeTheme.Light;
-        public void SetTheme(ChromeTheme theme) { }
-    }
 
     private sealed class NoopLoader : IDatasetLoaderService
     {
@@ -50,35 +41,16 @@ public class MainViewModelExchangeSetProgressTests : IDisposable
         public event Action<string>? ActiveChanged { add { } remove { } }
     }
 
-    private MainViewModel CreateViewModel()
+    private DatasetOpeningViewModel CreateViewModel()
     {
         var settings = new ViewerSettings { SettingsFilePath = _tempSettingsPath };
-        var catalogues = new PortrayalCatalogueManager();
         var datasets = new DatasetsViewModel(new NoopLoader());
         var timeline = new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
-        var settingsVm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
-        var routeStore = new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
-        return new MainViewModel(
-            layout: new ShellLayoutViewModel(settings, [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post),
-            mapTools: TestMapTools.Create(settingsVm, routeStore),
-            statusBar: new StatusBarViewModel(mcpServerHost: null, Notifications.TestNotifications.Create(), EncDotNet.S100.Viewer.Services.UiThread.Post),
-            featureCatalogues: new FeatureCataloguesViewModel(settings),
-            portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
-            datasets: datasets,
-            layerStack: new LayerStackViewModel(new NoopLoader(), dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null),
-            search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
-            settingsViewModel: settingsVm,
-            pickReport: new PickReportViewModel(),
-            timeline: timeline,
-            displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
-            textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
-            displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null),
-            themeService: new StubThemeService(),
-            recentFiles: new StubRecentFilesService(),
-            notifications: Notifications.TestNotifications.Create(),
-            dialogManager: new ShadUI.DialogManager(),
-            routes: routeStore);
+        return new DatasetOpeningViewModel(
+            new StubRecentFilesService(),
+            Notifications.TestNotifications.Create(),
+            datasets,
+            new ShellLayoutViewModel(settings, [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post));
     }
 
     [Fact]

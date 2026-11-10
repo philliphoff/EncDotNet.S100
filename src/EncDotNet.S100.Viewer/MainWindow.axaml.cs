@@ -287,7 +287,7 @@ public partial class MainWindow : ShadUI.Window
             libraryImporter: _libraryImporter);
 
         // Open Recent replays exchange sets through the same progress UI.
-        _viewModel.ExchangeSetOpener = RunExchangeSetAsync;
+        _viewModel.DatasetOpening.ExchangeSetOpener = RunExchangeSetAsync;
 
         // Show built-in specification entries in the catalogue views
         foreach (var spec in Specifications.Specification.AvailableSpecs)
@@ -763,7 +763,7 @@ public partial class MainWindow : ShadUI.Window
             .WithContent(body)
             .WithAction(
                 Strings.Toast_PreviousCrashAction,
-                () => _viewModel.ShowFeedbackCommand.Execute(null))
+                () => _viewModel.AppCommands.ShowFeedbackCommand.Execute(null))
             .Persistent()
             .Show();
     }
@@ -1349,7 +1349,7 @@ public partial class MainWindow : ShadUI.Window
     {
         _viewModel.Layout.SelectDefaultTab();
 
-        var token = _viewModel.BeginExchangeSetLoad(sourcePath);
+        var token = _viewModel.DatasetOpening.BeginExchangeSetLoad(sourcePath);
 
         // One progress notification drives the whole open: indeterminate
         // until the catalogue is parsed, then determinate as datasets are
@@ -1365,7 +1365,7 @@ public partial class MainWindow : ShadUI.Window
             .Persistent()
             .WithAction(
                 Strings.Toast_Cancel,
-                () => _viewModel.CancelExchangeSetCommand.Execute(null),
+                () => _viewModel.DatasetOpening.CancelExchangeSetCommand.Execute(null),
                 dismissOnInvoke: false)
             .Show();
 
@@ -1443,7 +1443,7 @@ public partial class MainWindow : ShadUI.Window
 
             var result = await _exchangeSetService.OpenAsync(
                 sourcePath, progress, token, notification, onFramingReady);
-            _viewModel.EndExchangeSetLoad(result);
+            _viewModel.DatasetOpening.EndExchangeSetLoad(result);
 
             // Remember a successfully opened exchange set in Open Recent
             // (issue #655). A dropped CATALOG.031 is recorded as its folder.
@@ -1481,7 +1481,7 @@ public partial class MainWindow : ShadUI.Window
         }
         catch (Exception ex)
         {
-            _viewModel.EndExchangeSetLoad(new Services.ExchangeSetOpenResult
+            _viewModel.DatasetOpening.EndExchangeSetLoad(new Services.ExchangeSetOpenResult
             {
                 SourcePath = sourcePath,
                 FailureMessage = ex.Message,
