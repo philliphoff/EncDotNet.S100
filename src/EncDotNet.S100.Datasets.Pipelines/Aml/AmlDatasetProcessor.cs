@@ -132,9 +132,10 @@ public sealed class AmlDatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
 
     /// <inheritdoc />
     /// <remarks>
-    /// The extent of <see cref="Coverage"/>. There's no display-scale window
-    /// yet, so the cell's outline shows at every scale; the AML scale bands
-    /// (<see cref="AmlScaleBands"/>) are for the portrayal.
+    /// The extent of <see cref="Coverage"/>. The cell declares no display-scale
+    /// window: hosts apply the AML scale bands across the cells they show
+    /// (<see cref="AmlScaleBandVisibility"/>), since a band gives way only to
+    /// finer cells of the same product.
     /// </remarks>
     public DatasetMetadata Metadata => _metadata ??= new DatasetMetadata
     {

@@ -96,7 +96,7 @@ public sealed class LayoutPersistenceTests : IDisposable
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
             textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
             displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null),
+            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null, amlDisplay: null),
             routes: routeStore);
     }
 

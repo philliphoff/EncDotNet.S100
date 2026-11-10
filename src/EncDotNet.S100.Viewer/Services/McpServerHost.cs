@@ -420,6 +420,12 @@ internal sealed class McpServerHost : IAsyncDisposable
             var weatherDisplay = new WeatherDisplayTools(_ecdisDisplay, new DispatcherRouteEditInvoker());
             tools.Add(WeatherDisplayMcpAdapters.CreateGet(weatherDisplay));
             tools.Add(WeatherDisplayMcpAdapters.CreateSet(weatherDisplay));
+            if (_ecdisDisplay.Aml is { } aml)
+            {
+                var amlDisplay = new AmlDisplayTools(aml.Service, new DispatcherRouteEditInvoker());
+                tools.Add(AmlDisplayMcpAdapters.CreateGet(amlDisplay));
+                tools.Add(AmlDisplayMcpAdapters.CreateSet(amlDisplay));
+            }
         }
 
         if (_settingsViewModel is not null)

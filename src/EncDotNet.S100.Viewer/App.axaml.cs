@@ -1600,6 +1600,16 @@ public partial class App : Application
         services.AddSingleton(sp => new DisplayCombinationsViewModel(
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService>(),
             sp.GetRequiredService<IViewerUiControllerAccessor>()));
+        // AML display controls (#1374): product switches and scale bands.
+        services.AddSingleton(sp => new AmlDisplayService(
+            sp.GetRequiredService<DatasetsViewModel>(),
+            sp.GetRequiredService<IDatasetLoaderService>(),
+            sp.GetRequiredService<EcdisDisplayState>(),
+            sp.GetRequiredService<IMapViewportNotifier>(),
+            UiThread.RunOrPost));
+        services.AddSingleton(sp => new AmlDisplaySectionViewModel(
+            sp.GetRequiredService<AmlDisplayService>(),
+            EncDotNet.S100.Datasets.Pipelines.AmlOverlayPortrayal.Default.Catalog));
         services.AddSingleton<EcdisDisplayPanelViewModel>();
         services.AddSingleton<HelmViewModel>();
         services.AddSingleton<RoutesPanelViewModel>();
