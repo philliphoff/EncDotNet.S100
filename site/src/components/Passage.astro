@@ -1,4 +1,5 @@
 ---
+import Permalink from './Permalink.astro';
 import Shot from './Shot.astro';
 import { docs, withBase } from '../data/content';
 
@@ -9,7 +10,7 @@ const miniSizes = '(max-width: 900px) 100vw, 540px';
   <div class="wrap">
     <div class="section-head">
       <span class="eyebrow">Passage planning</span>
-      <h2 id="passage-title">Plan it, check it, stay warned.</h2>
+      <div class="anchored"><h2 id="passage-title">Plan it, check it, stay warned.</h2><Permalink to="passage" label="Passage planning" /></div>
       <p class="lede">
         A route in SoundCharts is checked against everything you've loaded: charts, depths, tides, regulated areas and
         navigational warnings. Each point is judged at the time you'd get there, not just the time you leave.
@@ -17,10 +18,10 @@ const miniSizes = '(max-width: 900px) 100vw, 540px';
     </div>
 
     <div class="features">
-      <div class="feature">
+      <div id="passage-plan" class="feature">
         <div class="feature-copy">
           <span class="eyebrow">Plan</span>
-          <h3>Sketch a passage.</h3>
+          <div class="anchored"><h3>Sketch a passage.</h3><Permalink to="passage-plan" label="Plan" /></div>
           <p>
             Drop waypoints on the chart and drag them around. Each leg can be great-circle or rhumb-line, distance and
             bearing update as you edit, and routes are stored in the S-421 route model. RTZ routes open too.
@@ -29,10 +30,10 @@ const miniSizes = '(max-width: 900px) 100vw, 540px';
         <Shot id="F4" alt="A route from Colman Dock round West Point to Shilshole Bay Marina, with the leg table open" sizes={sizes} />
       </div>
 
-      <div class="feature flip">
+      <div id="passage-check" class="feature flip">
         <div class="feature-copy">
           <span class="eyebrow">Check</span>
-          <h3>See what's on the way.</h3>
+          <div class="anchored"><h3>See what's on the way.</h3><Permalink to="passage-check" label="Check route" /></div>
           <p>
             Check route sweeps a corridor along every leg and lists what it finds, worst first. Findings are marked on the
             map, and selecting one takes you to it.
@@ -53,10 +54,10 @@ const miniSizes = '(max-width: 900px) 100vw, 540px';
         />
       </div>
 
-      <div class="feature">
+      <div id="passage-warnings" class="feature">
         <div class="feature-copy">
           <span class="eyebrow">Warnings</span>
-          <h3>Warnings that know your route.</h3>
+          <div class="anchored"><h3>Warnings that know your route.</h3><Permalink to="passage-warnings" label="Warnings" /></div>
           <p>
             S-124 navigational warnings are drawn only while they're in force, stay marked NEW until you've read them, and
             can be set to on chart, off chart or information, as S-98 asks. While you check a route, the list narrows to the
@@ -78,7 +79,7 @@ const miniSizes = '(max-width: 900px) 100vw, 540px';
     </div>
 
     <div class="minis">
-      <div class="mini">
+      <div id="passage-warning-findings" class="mini">
         <Shot
           id="F12"
           alt="A warning card showing it crosses the route between legs 3 and 4"
@@ -87,13 +88,13 @@ const miniSizes = '(max-width: 900px) 100vw, 540px';
           sizes={miniSizes}
         />
         <div class="body">
-          <h3>From warning to finding</h3>
+          <div class="anchored"><h3>From warning to finding</h3><Permalink to="passage-warning-findings" label="From warning to finding" /></div>
           <p>A warning's card says where it meets the route. Select it to open that finding.</p>
         </div>
       </div>
-      <div class="mini">
+      <div id="passage-ci" class="mini">
         <div class="body">
-          <h3>The same checks in CI</h3>
+          <div class="anchored"><h3>The same checks in CI</h3><Permalink to="passage-ci" label="The same checks in CI" /></div>
           <p>
             <code>s100 route check</code> runs the same checks on RTZ and S-421 routes, with the same findings, and fails
             the build when something needs review.

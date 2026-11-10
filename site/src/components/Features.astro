@@ -1,4 +1,5 @@
 ---
+import Permalink from './Permalink.astro';
 import Shot from './Shot.astro';
 
 const sizes = '(max-width: 900px) 100vw, 690px';
@@ -7,7 +8,7 @@ const sizes = '(max-width: 900px) 100vw, 690px';
   <div class="wrap">
     <div class="section-head">
       <span class="eyebrow">The viewer</span>
-      <h2 id="viewer-title">Built for exploring the data.</h2>
+      <div class="anchored"><h2 id="viewer-title">Built for exploring the data.</h2><Permalink to="viewer" label="The viewer" /></div>
       <p class="lede">
         SoundCharts is a desktop app for anyone who wants to see what S-100 data actually contains: hydrographers,
         developers, sailors and anyone curious.
@@ -15,10 +16,10 @@ const sizes = '(max-width: 900px) 100vw, 690px';
     </div>
 
     <div class="features">
-      <div class="feature">
+      <div id="viewer-layers" class="feature">
         <div class="feature-copy">
           <span class="eyebrow">Layers</span>
-          <h3>Layers that know their place.</h3>
+          <div class="anchored"><h3>Layers that know their place.</h3><Permalink to="viewer-layers" label="Layers" /></div>
           <p>
             Products stack by the S-98 interoperability rules (display planes, priorities and inter-product rules), not
             by the order you loaded them. Add depths and currents to a chart and they stay readable.
@@ -38,10 +39,10 @@ const sizes = '(max-width: 900px) 100vw, 690px';
         </div>
       </div>
 
-      <div class="feature flip">
+      <div id="viewer-timeline" class="feature flip">
         <div class="feature-copy">
           <span class="eyebrow">Time</span>
-          <h3>Tides and currents on one timeline.</h3>
+          <div class="anchored"><h3>Tides and currents on one timeline.</h3><Permalink to="viewer-timeline" label="Timeline" /></div>
           <p>
             Time-varying products share one clock. Follow Live, pin a moment, or step through a forecast run, and every
             layer shows which sample it's drawing.
@@ -55,10 +56,10 @@ const sizes = '(max-width: 900px) 100vw, 690px';
         <Shot id="F2" alt="Timeline animating surface currents over Chesapeake Bay" sizes={sizes} />
       </div>
 
-      <div class="feature">
+      <div id="viewer-inspect" class="feature">
         <div class="feature-copy">
           <span class="eyebrow">Inspect</span>
-          <h3>Click anything.</h3>
+          <div class="anchored"><h3>Click anything.</h3><Permalink to="viewer-inspect" label="Inspect" /></div>
           <p>
             Object Information decodes every attribute into plain names and follows links between features. For tide and
             current stations it charts the time series right in the panel.
