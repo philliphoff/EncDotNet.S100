@@ -135,6 +135,52 @@ public class AmlObjectInformationTests
     }
 
     [Fact]
+    public async Task DrawnState_FollowsTheAmlPortrayal_InTheViewerAndHeadless()
+    {
+        // A RAL cell under the real AML portrayal (#1373). The turning point is
+        // drawn. The ATS route centre line, written here as a point, is a styled
+        // class that the portrayal still doesn't draw: drawn is per feature, not
+        // per class. A headless identify (no portrayal by the host) agrees.
+        var dir = Directory.CreateTempSubdirectory("aml-info-").FullName;
+        try
+        {
+            var path = SyntheticAmlCell.Write(dir, "UKR6UT00.000", new SyntheticAmlCell.Options
+            {
+                ProductSpecification = 52,
+                ExtraPoints = [new("turnpt", ("OBJNAM", "WAYPOINT C"))],
+            });
+            var processor = new AmlDatasetProcessor(path, S100Products.AmlPortrayal);
+            _ = await processor.BuildVectorPortrayalAsync(null, TestContext.Current.CancellationToken);
+            const string turningPoint = "10";
+            var routePoint = SyntheticAmlCell.PointRecordId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            Assert.Equal("turnpt", processor.Cell.Find(turningPoint)!.FeatureType);
+            Assert.True(S100Products.AmlPortrayal.DrawsAny([processor.Cell.Find(routePoint)!]));
+
+            Assert.True(processor.IsFeatureDrawn(turningPoint));
+            Assert.NotNull(processor.GetFeatureInfo(turningPoint)!.DrawingPriority);
+            Assert.False(processor.IsFeatureDrawn(routePoint));
+
+            LoadedDataset headless;
+            using (var stream = File.OpenRead(path))
+                headless = LoadedDatasetProjector.Project(new DatasetId("aml-s57"), "S-57", stream)!;
+            var result = await new IdentifyFeaturesService(new Catalog([headless])).InvokeAsync(
+                new IdentifyFeaturesRequest(SyntheticAmlCell.PointLatitude, SyntheticAmlCell.PointLongitude),
+                TestContext.Current.CancellationToken);
+            Assert.True(result.TryGetValue(out var value));
+            var turning = Assert.Single(value!.Features, f => f.FeatureId == turningPoint).Aml!;
+            Assert.True(turning.Drawn);
+            Assert.Null(turning.Note);
+            var route = Assert.Single(value.Features, f => f.FeatureId == routePoint).Aml!;
+            Assert.False(route.Drawn);
+            Assert.Equal(AmlCellFeatures.NotDrawnNote, route.Note);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Identify_ReturnsTheSameNamesAndValues_WithProvenance() => WithCell("UKL6UT00.000", Lbo with { SecurityMarkingCode = 507 }, path =>
     {
         var processor = new AmlDatasetProcessor(path, AmlNotDrawnPortrayal.Instance);
@@ -197,6 +243,8 @@ public class AmlObjectInformationTests
     private sealed class DrawsOnly(string featureRef, int priority) : IAmlPortrayal
     {
         public bool Draws => true;
+
+        public bool DrawsAny(IReadOnlyList<Feature> features) => features.Any(f => f.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) == featureRef);
 
         public async Task<VectorPortrayalResult> PortrayAsync(AmlPortrayalInput cell, RenderContext? context, CancellationToken cancellationToken)
         {

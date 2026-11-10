@@ -977,6 +977,7 @@ public sealed class VectorSceneBuilder
             OffsetYpx = (instruction.OffsetY ?? 0) / S100PixelSizeMm,
             FontWeight = instruction.FontWeight,
             FontProportion = instruction.FontProportion,
+            FontSlant = instruction.FontSlant,
             HaloColor = string.IsNullOrEmpty(instruction.HaloColor) ? null : ResolveColor(instruction.HaloColor),
             HaloWidthPx = instruction.HaloWidth / S100PixelSizeMm * TextScale,
         };

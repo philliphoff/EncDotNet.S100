@@ -307,6 +307,9 @@ public sealed class TextPaintOp : PaintOp
     /// <summary>Font proportion (S-100 Part 9 <c>FontCharacteristics.proportion</c>).</summary>
     public TextFontProportion FontProportion { get; init; } = TextFontProportion.Proportional;
 
+    /// <summary>Font slant (S-100 Part 9 <c>FontCharacteristics.slant</c>).</summary>
+    public TextFontSlant FontSlant { get; init; } = TextFontSlant.Upright;
+
     /// <summary>Resolved halo colour stroked around the glyphs, or null for no halo.</summary>
     public RgbaColor? HaloColor { get; init; }
 

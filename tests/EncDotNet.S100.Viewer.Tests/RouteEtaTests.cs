@@ -230,7 +230,7 @@ public sealed class RouteEtaTests : IDisposable
         Assert.Equal(75, detail.Times.DurationMinutes!.Value, 0);
         Assert.Null(detail.Times.EtasStopAtLeg);
 
-        var call = GetRouteMcpAdapter.TranslateResult(EncDotNet.S100.Datasets.Pipelines.Query.ToolResult<RouteDetail>.Ok(detail));
+        var call = McpAdapterShared.Translate(EncDotNet.S100.Datasets.Pipelines.Query.ToolResult<RouteDetail>.Ok(detail));
         var text = Assert.IsType<ModelContextProtocol.Protocol.TextContentBlock>(call.Content.Single()).Text;
         using var doc = System.Text.Json.JsonDocument.Parse(text);
         Assert.True(doc.RootElement.GetProperty("times").GetProperty("fromViewTime").GetBoolean());

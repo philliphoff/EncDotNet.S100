@@ -510,6 +510,7 @@ internal static class S101DepthAdjustmentPortrayal
         AreaPlacement = t.AreaPlacement,
         FontWeight = t.FontWeight,
         FontProportion = t.FontProportion,
+        FontSlant = t.FontSlant,
         HaloColor = t.HaloColor,
         HaloWidth = t.HaloWidth,
     };

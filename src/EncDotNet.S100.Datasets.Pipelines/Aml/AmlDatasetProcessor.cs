@@ -101,8 +101,12 @@ public sealed class AmlDatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// <summary>What happened to the cell's updates, when it was opened with them; otherwise <see langword="null"/>.</summary>
     public S57UpdateReport? UpdateReport { get; }
 
-    /// <summary>Whether the cell is drawn: <see langword="false"/> while AML is "recognised, not drawn".</summary>
-    public bool Drawn => _portrayal.Draws;
+    /// <summary>
+    /// Whether the cell is drawn: whether its portrayal has a style for any of
+    /// its features' classes. <see langword="false"/> while the cell is
+    /// "recognised, not drawn".
+    /// </summary>
+    public bool Drawn => _portrayal.Draws && _portrayal.DrawsAny(_content.Value.Features);
 
     /// <summary>
     /// The state hosts report: <c>"drawn"</c>, or <c>"recognised-not-drawn"</c>
@@ -154,6 +158,7 @@ public sealed class AmlDatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// <inheritdoc />
     public LoadedDatasetData CreateLoadedData() => new AmlDatasetData(Info, Metadata)
     {
+        Drawn = Drawn,
         Cell = Cell,
         DrawingPriority = DrawingPriority,
     };
@@ -185,13 +190,41 @@ public sealed class AmlDatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         var catalogue = document.GetObjectCatalogue();
         var features = S57ChartFeatures.Read(S57Chart.FromDocument(document), catalogue);
         var coverage = S57ChartFeatures.ResolveCoverage(features, out _);
+        var portrayal = S100Products.AmlPortrayal;
+        var drawn = portrayal.Draws && portrayal.DrawsAny(features);
+        var spec = SpecOf(info);
+
+        // Without a host that portrays the cell, which features the portrayal
+        // draws is worked out once, on the first question, so a headless pick
+        // reports the same drawn state as SoundCharts.
+        var priorities = new Lazy<IReadOnlyDictionary<string, int>>(() => S101DatasetProcessor.DrawingPriorities(
+            portrayal.PortrayAsync(
+                new AmlPortrayalInput
+                {
+                    Info = info,
+                    Document = document,
+                    Catalogue = catalogue,
+                    Features = features,
+                    Coverage = coverage,
+                    Spec = spec,
+                    FileName = info.DataSetName,
+                    ContentScope = $"aml:{info.DataSetName}",
+                },
+                context: null,
+                CancellationToken.None).GetAwaiter().GetResult()
+            .SubLayers.SelectMany(l => l.Instructions)));
+
         return new AmlDatasetData(info, new DatasetMetadata
         {
-            Spec = SpecOf(info),
+            Spec = spec,
             Extent = ExtentOf(coverage),
         })
         {
+            Drawn = drawn,
             Cell = new AmlCellFeatures(info, catalogue, features),
+            DrawingPriority = drawn
+                ? featureRef => priorities.Value.TryGetValue(featureRef, out var priority) ? priority : null
+                : null,
         };
     }
 
