@@ -15,4 +15,18 @@ public sealed record AmlDatasetData(AmlDatasetInfo Info, DatasetMetadata Dataset
 {
     /// <inheritdoc />
     public override DatasetMetadata Metadata => DatasetMetadata;
+
+    /// <summary>
+    /// The cell's features with the catalogue that names them, so the MCP
+    /// pick tools report AML features as Object Information does (#1372);
+    /// <see langword="null"/> when the payload was built without them.
+    /// </summary>
+    public AmlCellFeatures? Cell { get; init; }
+
+    /// <summary>
+    /// A feature's highest drawing priority in the cell's latest portrayal,
+    /// by feature id, or <c>null</c> when it isn't drawn; <c>null</c> when
+    /// the payload has no portrayal (every feature is then "not drawn").
+    /// </summary>
+    public Func<string, int?>? DrawingPriority { get; init; }
 }
