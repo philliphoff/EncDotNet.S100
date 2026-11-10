@@ -144,11 +144,12 @@ public static class S100Products
     };
 
     /// <summary>
-    /// The portrayal AML cells are drawn with: <see cref="AmlNotDrawnPortrayal"/>
-    /// until SoundCharts has its own AML portrayal, so AML is "recognised, not
-    /// drawn". This is the one place a portrayal plugs in.
+    /// The portrayal AML cells are drawn with: SoundCharts' own
+    /// (<see cref="AmlOverlayPortrayal"/>). A cell none of whose classes has a
+    /// style is "recognised, not drawn". This is the one place a portrayal
+    /// plugs in.
     /// </summary>
-    public static IAmlPortrayal AmlPortrayal => AmlNotDrawnPortrayal.Instance;
+    public static IAmlPortrayal AmlPortrayal => AmlOverlayPortrayal.Default;
 
     /// <summary>
     /// NATO Additional Military Layers (AML): S-57 encoded military overlay
