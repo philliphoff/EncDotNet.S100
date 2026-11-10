@@ -759,6 +759,8 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
                 .ProcessAsync(featureSource, s101Cat, mariner: mariner, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
             var prepared = ((IVectorLayer)portrayalLayer).Instructions;
+            if (context?.SafetyContourHalo == true)
+                prepared = SafetyContourHalo.Apply(prepared);
 
             var geometryProvider = new FeatureGeometryProvider<Feature>(new S101VectorSource(_dataset).GetFeatures());
 
@@ -891,6 +893,10 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
         _portrayalTimeIntervals = PortrayalTimeFilter.Intervals(unfiltered);
         var prepared = PortrayalTimeFilter.Apply(
             VectorPipeline.ApplyDisplayFilters(unfiltered, s101Cat), context?.PortrayalTime);
+        // AML CLB drawn over the chart: the safety contour keeps its weight
+        // and gains a halo (AML design handoff decision 22).
+        if (context?.SafetyContourHalo == true)
+            prepared = SafetyContourHalo.Apply(prepared);
         Console.WriteLine($"[S101] {prepared.Count} of {unfiltered.Count} drawing instructions shown");
         _drawingPriorities = DrawingPriorities(prepared);
 

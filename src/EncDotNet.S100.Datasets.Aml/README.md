@@ -72,15 +72,20 @@ The colours come in four families, one sub-layer each:
 | Operational | `aml.operational` | `#B2381B` | `#B44A2C` | `#8A3B27` |
 | Environmental | `aml.environmental` | `#2B7547` | `#3A7E52` | `#2E5C40` |
 | Seabed | `aml.seabed` | `#7A4B1F` | `#8A5A2E` | `#6B4A2B` |
+| Chart background | `aml.background` | `#4F5B66` | `#66717C` | `#48525C` |
+| Bathymetry (CLB) | `aml.bathymetry` | `#7A4B1F` at 55 % | `#8A5A2E` at 55 % | `#6B4A2B` at 55 % |
 
 All sub-layers are on `S98DisplayPlane.AdditionalMilitaryLayers` (45): above
 the chart and the weather overlays, below cautions, routes and alerts. Air
-draws on top, then operational, environmental and seabed.
+draws on top, then operational, environmental, seabed, chart background and
+bathymetry.
 
 ### Classes
 
-The built-in styles cover the Routes, Areas and Limits (RAL) product. The
-AML 3.0 air trials (FAI, MFI) use the same classes.
+The built-in styles cover the Routes, Areas and Limits (RAL) air and
+operational classes, Contour Line Bathymetry (CLB), Maritime Foundation &
+Facilities (MFF), and the AML 3.0 chart and land background (NCD, LND) and
+airfields. The AML 3.0 trials use the same classes.
 
 | Family | Class | Drawn as |
 |---|---|---|
@@ -90,13 +95,33 @@ AML 3.0 air trials (FAI, MFI) use the same classes.
 | Air | `airres` airspace restriction | Area with limits |
 | Air | `ctlasp` controlled airspace | Area with limits; line features as lines |
 | Air | `mexasp` military exercise airspace | Area with limits; line features as lines |
+| Air | `AIRARE`, `RUNWAY` airfield, runway | Framed airfield or runway glyph; areas ticked |
 | Operational | `MIPARE` military practice area | Area |
 | Operational | `qroute` Q-route leg | Heavier dash-dot with chevrons along the leg |
 | Operational | `turnpt` turning point | Framed ringed dot |
 | Operational | `patare` patrol area | Area |
 | Operational | `intwtr` internal waters | Area |
+| Operational | MFF platforms, production and fishing areas, traffic separation, routes, anchorages | Areas and lines; framed platform or fish glyph at a point |
+| Environmental | MFF tide and tidal-stream stations, magnetics, weed, ice, currents | Framed tide, needle or weed glyph; areas and lines |
+| Seabed | MFF cables and pipelines (`CBLSUB`, `PIPSOL`, `CBLARE`, `PIPARE`) | Lines and areas |
+| Chart background | Lights, buoys, beacons, light vessels | A chart-like glyph (flare, buoy, beacon) in the AML frame, no name |
+| Chart background | Landmarks, stations, harbour facilities, buildings | A chart-like glyph with the name |
+| Chart background | Coastline, roads, rivers, the AML 3.0 LND lines | Line |
+| Chart background | `LNDARE`, `SEAARE`, `txtbua` | The name only; an islet is a dot |
+| Chart background | Built-up, administration and harbour areas, LND sites | Area; points as a framed square |
+| Bathymetry | `DEPCNT` depth contour | Solid 0.7 px seabed brown at 55 %, its depth in small italic brown |
+| Bathymetry | `DEPARE` depth area | Nothing: no fill, its edges are the contours |
+| Bathymetry | `SOUNDG` sounding | Each sounding a small italic brown figure |
 
 Other classes aren't drawn yet, but are still features.
+
+**CLB (decision 22).** CLB is drawn in its own style, never the chart's:
+with S-101 portrayal its depth areas would look like the chart and bring a
+second safety contour. While CLB is drawn over an ENC, a host keeps the
+ENC's safety contour dominant by setting `RenderContext.SafetyContourHalo`
+(the S-101 and S-57 processors then add a halo under it) and shows the
+corner chip `ClbStyles.NotForDepthChecksChip`, "AML · CLB not used for depth
+checks". CLB depths never feed depth answers or route checks.
 
 **Standard classes.** A class that is also an IHO S-57 chart class, such as
 `MIPARE`, is marked `IsChartClass`. AML draws only its own signature, the

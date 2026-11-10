@@ -153,9 +153,9 @@ public sealed class AmlPortrayal
 
         return record switch
         {
-            S57PointFeature point => new AmlFeature(unique, record, objectClass, attributes, geometry.Points(point), [], []),
-            S57LineFeature line => new AmlFeature(unique, record, objectClass, attributes, [], geometry.Curves(line), []),
-            S57AreaFeature area => new AmlFeature(unique, record, objectClass, attributes, [], [], geometry.Surfaces(area)),
+            S57PointFeature point => new AmlFeature(unique, record, objectClass, attributes, geometry.Points(point), [], [], geometry.Soundings(point)),
+            S57LineFeature line => new AmlFeature(unique, record, objectClass, attributes, [], geometry.Curves(line), [], []),
+            S57AreaFeature area => new AmlFeature(unique, record, objectClass, attributes, [], [], geometry.Surfaces(area), []),
             _ => null,
         };
     }
