@@ -1,6 +1,4 @@
 using System.Text.Json;
-using EncDotNet.S100.Datasets.Pipelines.Query;
-using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 namespace EncDotNet.S100.Viewer.McpTools;
@@ -31,10 +29,6 @@ internal static class CreateRouteMcpAdapter
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="ListRoutesTool"/> as an <see cref="McpServerTool"/>.</summary>
@@ -60,10 +54,6 @@ internal static class ListRoutesMcpAdapter
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<ListRoutesResult> result)
-        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="GetRouteTool"/> as an <see cref="McpServerTool"/>.</summary>
@@ -93,10 +83,6 @@ internal static class GetRouteMcpAdapter
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="DeleteRouteTool"/> as an <see cref="McpServerTool"/>.</summary>
@@ -124,10 +110,6 @@ internal static class DeleteRouteMcpAdapter
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<DeleteRouteResult> result)
-        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="AppendWaypointTool"/> as an <see cref="McpServerTool"/>.</summary>
@@ -162,10 +144,6 @@ internal static class AppendWaypointMcpAdapter
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="InsertWaypointTool"/> as an <see cref="McpServerTool"/>.</summary>
@@ -202,10 +180,6 @@ internal static class InsertWaypointMcpAdapter
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="MoveWaypointTool"/> as an <see cref="McpServerTool"/>.</summary>
@@ -238,10 +212,6 @@ internal static class MoveWaypointMcpAdapter
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="DeleteWaypointTool"/> as an <see cref="McpServerTool"/>.</summary>
@@ -272,10 +242,6 @@ internal static class DeleteWaypointMcpAdapter
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="SetLegAttributesTool"/> as an <see cref="McpServerTool"/>.</summary>
@@ -337,10 +303,6 @@ internal static class SetLegAttributesMcpAdapter
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="SetRouteInfoTool"/> as an <see cref="McpServerTool"/>.</summary>
@@ -388,10 +350,6 @@ internal static class SetRouteInfoMcpAdapter
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="GetPassageTool"/> as an <see cref="McpServerTool"/>.</summary>
@@ -421,10 +379,6 @@ internal static class GetPassageMcpAdapter
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<GetPassageResult> result)
-        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="SetPassageTool"/> as an <see cref="McpServerTool"/>.</summary>
@@ -469,10 +423,6 @@ internal static class SetPassageMcpAdapter
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="UndoRouteEditTool"/> as an <see cref="McpServerTool"/>.</summary>
@@ -503,10 +453,6 @@ internal static class UndoRouteEditMcpAdapter
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="RedoRouteEditTool"/> as an <see cref="McpServerTool"/>.</summary>
@@ -536,10 +482,6 @@ internal static class RedoRouteEditMcpAdapter
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="SetRouteEditModeTool"/> as an <see cref="McpServerTool"/>.</summary>
@@ -568,10 +510,6 @@ internal static class SetRouteEditModeMcpAdapter
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<RouteEditModeResult> result)
-        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="SelectRouteItemTool"/> as an <see cref="McpServerTool"/>.</summary>
@@ -604,10 +542,6 @@ internal static class SelectRouteItemMcpAdapter
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<RouteDetail> result)
-        => McpAdapterShared.Translate(result);
 }
 
 /// <summary>Wraps <see cref="SetPassageCardTool"/> as an <see cref="McpServerTool"/>.</summary>
@@ -638,8 +572,4 @@ internal static class SetPassageCardMcpAdapter
             SerializerOptions = JsonOptions,
         });
     }
-
-    /// <summary>Test seam mirroring the production translation.</summary>
-    internal static CallToolResult TranslateResult(ToolResult<PassageCardResult> result)
-        => McpAdapterShared.Translate(result);
 }
