@@ -477,6 +477,7 @@ public static class S98DefaultRules
             NoDataValue = layer.NoDataValue,
             Georeferencer = layer.Georeferencer,
             SymbolScheme = layer.SymbolScheme,
+            ReliefShade = layer.ReliefShade,
         };
     }
 
