@@ -56,7 +56,7 @@ public static class LibraryToolResults
                 group.Title,
                 [.. group.Fields.Select(field => new LibraryDetailFieldInfo(field.Label, field.Value))]))],
             aml is null ? null : AmlReport.Drawn,
-            aml is null ? null : AmlReport.Status,
+            aml is null ? null : AmlReport.StatusOf(AmlReport.Drawn),
             aml is null ? null : AmlReport.From(aml));
     }
 

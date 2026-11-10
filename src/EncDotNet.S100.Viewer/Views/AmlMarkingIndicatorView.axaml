@@ -23,7 +23,7 @@
         <Style Selector="Button#AmlMarkingButton.elevated">
             <Setter Property="Background" Value="{DynamicResource ForegroundColor}" />
             <Setter Property="BorderBrush" Value="{DynamicResource ForegroundColor}" />
-            <Setter Property="Foreground" Value="{DynamicResource CardBackgroundColor}" />
+            <Setter Property="Foreground" Value="{DynamicResource WindowBackgroundColor}" />
         </Style>
         <Style Selector="Button#AmlMarkingButton.elevated:pointerover /template/ ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource ForegroundColor}" />
@@ -38,10 +38,10 @@
             <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
         </Style>
         <Style Selector="Button#AmlMarkingButton.elevated TextBlock">
-            <Setter Property="Foreground" Value="{DynamicResource CardBackgroundColor}" />
+            <Setter Property="Foreground" Value="{DynamicResource WindowBackgroundColor}" />
         </Style>
         <Style Selector="Button#AmlMarkingButton.elevated ic|FluentIcon">
-            <Setter Property="Foreground" Value="{DynamicResource CardBackgroundColor}" />
+            <Setter Property="Foreground" Value="{DynamicResource WindowBackgroundColor}" />
         </Style>
     </UserControl.Styles>
 
