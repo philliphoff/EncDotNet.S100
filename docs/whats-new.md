@@ -17,6 +17,18 @@ month. For package versions and release assets, see
   `s100 render --show-layer s102.relief` draws it. `ReliefShading` and
   `S102Relief` are the library types, and `StyledCoverageLayer.ReliefShade`
   carries the shading to the coverage renderers.
+- **Additional Military Layers portrayal.** The new
+  `EncDotNet.S100.Datasets.Aml` package draws NATO AML cells with
+  SoundCharts' own portrayal (not the restricted official one): dash-dot lines
+  on a halo, unfilled areas with inward ticks, framed point symbols and italic
+  labels, in air, operational, seabed and environmental colour families for
+  Day, Dusk and Night. It covers the RAL air and operational classes, which
+  the AML 3.0 air trials share; airspace shows its limits as a stacked
+  fraction. Styles are data in modules, and the legend is built from them. A
+  new S-98 plane, `S98DisplayPlane.AdditionalMilitaryLayers` (45), sits
+  between the chart overlays and the cautions. Text instructions gain
+  `FontSlant` for italic labels. See the
+  [Datasets.Aml README](../src/EncDotNet.S100.Datasets.Aml/README.md).
 - **S-412 Marine Weather Warnings (draft).** The new
   `EncDotNet.S100.Datasets.S412` package reads S-412 GML datasets (wind,
   significant wave height, restricted visibility, thunderstorm and ice

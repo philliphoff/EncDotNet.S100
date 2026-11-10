@@ -34,6 +34,14 @@ public interface IAmlPortrayal
     bool Draws { get; }
 
     /// <summary>
+    /// Whether this portrayal draws any of a cell's <paramref name="features"/>:
+    /// whether any of their classes has a style. A cell whose classes all lack
+    /// one stays "recognised, not drawn".
+    /// </summary>
+    /// <param name="features">The cell's features, as <see cref="AmlPortrayalInput.Features"/> holds them.</param>
+    bool DrawsAny(IReadOnlyList<Feature> features);
+
+    /// <summary>
     /// The drawing for an AML cell.
     /// </summary>
     /// <param name="cell">The cell: its AML facts, features and coverage.</param>
@@ -89,6 +97,9 @@ public sealed class AmlNotDrawnPortrayal : IAmlPortrayal
 
     /// <inheritdoc />
     public bool Draws => false;
+
+    /// <inheritdoc />
+    public bool DrawsAny(IReadOnlyList<Feature> features) => false;
 
     /// <inheritdoc />
     public Task<VectorPortrayalResult> PortrayAsync(AmlPortrayalInput cell, RenderContext? context, CancellationToken cancellationToken)

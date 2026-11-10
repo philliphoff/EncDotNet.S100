@@ -68,6 +68,8 @@
       href: EncDotNet.S100.Datasets.Cap/README.md
     - name: EncDotNet.S100.Datasets.TropicalCyclones
       href: EncDotNet.S100.Datasets.TropicalCyclones/README.md
+    - name: EncDotNet.S100.Datasets.Aml
+      href: EncDotNet.S100.Datasets.Aml/README.md
     - name: EncDotNet.S100.Datasets.Pipelines
       href: EncDotNet.S100.Datasets.Pipelines/README.md
     - name: EncDotNet.S100.Datasets.NetCdf

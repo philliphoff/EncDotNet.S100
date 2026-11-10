@@ -43,8 +43,9 @@ public static class DrawingInstructionSerializer
     /// v7: point and text instructions carry <see cref="PointInstruction.AreaPlacement"/>
     /// and <see cref="TextInstruction.AreaPlacement"/>.
     /// v8: the base fields carry <see cref="DrawingInstruction.AlertReference"/>.
+    /// v9: text instructions carry <see cref="TextInstruction.FontSlant"/>.
     /// </remarks>
-    public const int FormatVersion = 8;
+    public const int FormatVersion = 9;
 
     private const byte TagPoint = 1;
     private const byte TagLine = 2;
@@ -172,6 +173,7 @@ public static class DrawingInstructionSerializer
                 WriteString(w, t.HaloColor);
                 w.Write(t.HaloWidth);
                 w.Write((byte)t.AreaPlacement);
+                w.Write((byte)t.FontSlant);
                 break;
 
             default:
@@ -300,6 +302,7 @@ public static class DrawingInstructionSerializer
             HaloColor = ReadString(r),
             HaloWidth = r.ReadDouble(),
             AreaPlacement = (AreaPlacementMode)r.ReadByte(),
+            FontSlant = (TextFontSlant)r.ReadByte(),
         };
     }
 
