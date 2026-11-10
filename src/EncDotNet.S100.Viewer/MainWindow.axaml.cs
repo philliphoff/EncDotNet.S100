@@ -506,12 +506,10 @@ public partial class MainWindow : ShadUI.Window
             _viewModel.Layout);
 
         // Navigational warnings (#932): the no-sources state's Open Library.
-        if (_viewModel.NavigationalWarnings is { } warnings)
-        {
-            warnings.OpenLibraryRequested += (_, _) => _viewModel.Layout.SelectTab(LibraryImportCoordinator.LibraryPanelId);
-            // #959 E1: a finding's "Open in Navigational warnings" brings the panel forward.
-            warnings.RevealRequested += (_, _) => _viewModel.Layout.SelectTab("NavigationalWarnings");
-        }
+        var warnings = _viewModel.MapChrome.NavigationalWarnings;
+        warnings.OpenLibraryRequested += (_, _) => _viewModel.Layout.SelectTab(LibraryImportCoordinator.LibraryPanelId);
+        // #959 E1: a finding's "Open in Navigational warnings" brings the panel forward.
+        warnings.RevealRequested += (_, _) => _viewModel.Layout.SelectTab("NavigationalWarnings");
 
         // #959: a Warning card's "Crosses route · leg 3 → 4" brings the Routes panel's Findings forward.
         if (App.Services.GetService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>() is { } routeFindings)

@@ -71,7 +71,7 @@ public sealed class TilesServeDiskCacheTests : IDisposable
         // Room for three 1000-byte tiles (each counted with its overhead).
         long budget = 3 * (1000 + 512);
         using (var stale = new DiskTileCache(CacheRoot, FingerprintB, TileImageFormat.Png, budget))
-            stale.Add(Key(0), Tile(1000));
+            Add(stale, Key(0), Tile(1000));
         var staleFile = Path.Combine(CacheRoot, DiskTileCache.KindName, FingerprintB, "day", "3", "0", "1.png");
         File.SetLastAccessTimeUtc(staleFile, DateTime.UtcNow.AddHours(-1));
 

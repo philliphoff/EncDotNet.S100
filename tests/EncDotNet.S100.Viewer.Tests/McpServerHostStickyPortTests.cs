@@ -37,7 +37,7 @@ public class McpServerHostStickyPortTests
     public async Task Apply_with_port_zero_binds_and_persists_concrete_port()
     {
         var settings = NewSettings();
-        await using var host = new McpServerHost(new EmptyCatalog(), settings);
+        await using var host = TestMcpServerHost.Create(new EmptyCatalog(), settings);
 
         await host.Apply(TestContext.Current.CancellationToken);
 
@@ -71,7 +71,7 @@ public class McpServerHostStickyPortTests
             var settings = NewSettings();
             settings.McpPort = port;
 
-            await using var host = new McpServerHost(new EmptyCatalog(), settings);
+            await using var host = TestMcpServerHost.Create(new EmptyCatalog(), settings);
 
             int? conflictPort = null;
             host.McpPortConflict += (_, e) => conflictPort = e.Port;
@@ -106,7 +106,7 @@ public class McpServerHostStickyPortTests
             var settings = NewSettings();
             settings.McpPort = port;
 
-            await using var host = new McpServerHost(new EmptyCatalog(), settings);
+            await using var host = TestMcpServerHost.Create(new EmptyCatalog(), settings);
             await host.Apply(TestContext.Current.CancellationToken); // conflict, no server
             Assert.Null(host.Server);
 
@@ -132,7 +132,7 @@ public class McpServerHostStickyPortTests
     public async Task Apply_with_already_running_matching_port_is_idempotent()
     {
         var settings = NewSettings();
-        await using var host = new McpServerHost(new EmptyCatalog(), settings);
+        await using var host = TestMcpServerHost.Create(new EmptyCatalog(), settings);
 
         await host.Apply(TestContext.Current.CancellationToken);
         var firstPort = host.Server?.Port;
