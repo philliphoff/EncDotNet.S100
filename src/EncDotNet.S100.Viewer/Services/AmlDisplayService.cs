@@ -50,6 +50,7 @@ internal sealed class AmlDisplayService : IDisposable
     private readonly IMapViewportNotifier _viewport;
     private readonly Action<Action> _marshal;
     private readonly HashSet<DatasetEntry> _subscribed = [];
+    private readonly Dictionary<DatasetEntry, Cell> _seen = [];
     private List<Cell> _cells = [];
     private double _scale = double.NaN;
     private bool _disposed;
@@ -229,18 +230,27 @@ internal sealed class AmlDisplayService : IDisposable
         if (_disposed)
             return;
 
+        // A processor the loader doesn't hold right now isn't in its snapshot,
+        // so each cell's facts are kept from when it was last seen.
         var cells = new List<Cell>();
         using (var processors = _loader.AcquireProcessors())
         {
             foreach (var entry in _datasets.Entries)
             {
                 if (processors.TryGetValue(entry, out var processor) && processor is AmlDatasetProcessor aml)
-                    cells.Add(new Cell(entry, CodeOf(aml.Info), aml.Info.ScaleBand, aml.Coverage, aml.Drawn));
+                    _seen[entry] = new Cell(entry, CodeOf(aml.Info), aml.Info.ScaleBand, aml.Coverage, aml.Drawn);
+                if (_seen.TryGetValue(entry, out var cell))
+                    cells.Add(cell);
             }
         }
 
+        foreach (var removed in _seen.Keys.Where(e => !_datasets.Entries.Contains(e)).ToList())
+            _seen.Remove(removed);
+
         // Cells the row's eye hides take no part: they mustn't hide coarser ones.
         var shown = cells.Where(c => c.Entry.IsVisible).ToList();
+        foreach (var cell in cells)
+            cell.Window = AmlBandWindow.Always;
         var windows = AmlScaleBandVisibility.Resolve([.. shown.Select(c => new AmlBandCell(c.Code, c.ScaleBand, c.Coverage))]);
         for (var i = 0; i < shown.Count; i++)
             shown[i].Window = windows[i];

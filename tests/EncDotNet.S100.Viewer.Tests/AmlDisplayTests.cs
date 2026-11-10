@@ -1,5 +1,6 @@
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 using EncDotNet.S100.Datasets.Aml;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Query;
@@ -343,5 +344,16 @@ public sealed class AmlDisplayTests : IDisposable
         Assert.Equal(Strings.Tooltip_AmlDisplay_FollowScaleBands, AutomationProperties.GetHelpText(follow));
         var legend = host.Find<Button>("EcdisDisplayPanel.Aml.Legend");
         Assert.Equal(Strings.AmlDisplay_LegendTitle, AutomationProperties.GetName(legend));
+
+        // The Legend link opens the flyout: an entry per class the styles draw.
+        host.Click(legend);
+        var flyout = Assert.IsType<Flyout>(legend.Flyout);
+        Assert.True(flyout.IsOpen);
+        var content = Assert.IsAssignableFrom<Control>(flyout.Content);
+        var entries = content.GetVisualDescendants().OfType<Grid>()
+            .Where(p => AutomationProperties.GetAutomationId(p) == "EcdisDisplayPanel.Aml.LegendEntry")
+            .Select(AutomationProperties.GetName)
+            .ToList();
+        Assert.Equal(AmlStyleCatalog.Default.Classes.Select(c => c.LegendLabel), entries);
     }
 }

@@ -119,6 +119,37 @@ public class AmlScaleBandVisibilityTests
     }
 
     [Fact]
+    public void Cells_that_only_touch_dont_cover_each_other()
+    {
+        // The UKHO CLB samples: band-6 cells share edges with band-4 cells.
+        var windows = AmlScaleBandVisibility.Resolve(
+        [
+            new AmlBandCell("CLB", 4, Box(-10, 55, -5, 60)),
+            new AmlBandCell("CLB", 4, Box(-5, 55, 0, 60)),
+            new AmlBandCell("CLB", 6, Box(-5, 55.16, -4.73, 55.5)),
+            new AmlBandCell("CLB", 6, Box(-7, 56.5, -6.63, 57)),
+            new AmlBandCell("CLB", 6, Box(-7, 57.5, -6.5, 57.93)),
+        ]);
+
+        Assert.All(windows.Take(2), w => Assert.Null(w.CoveredAtOrBelow));
+        Assert.All(windows.Skip(2), w => Assert.Equal(125_000, w.ZoomOutLimit));
+    }
+
+    [Fact]
+    public void Finer_cells_that_meet_along_an_edge_cover_together()
+    {
+        var windows = AmlScaleBandVisibility.Resolve(
+        [
+            new AmlBandCell("CLB", 5, Box(0, 50, 2, 51)),
+            new AmlBandCell("CLB", 6, Box(0, 50, 1, 51)),
+            new AmlBandCell("CLB", 6, Box(1, 50, 2, 51)),
+            new AmlBandCell("CLB", 6, Box(2, 50, 3, 51)),
+        ]);
+
+        Assert.Equal(125_000, windows[0].CoveredAtOrBelow);
+    }
+
+    [Fact]
     public void An_unknown_scale_shows_everything()
     {
         var window = new AmlBandWindow(125_000, 25_000);

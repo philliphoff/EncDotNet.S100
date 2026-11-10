@@ -150,31 +150,37 @@
                                                             <ItemsControl ItemsSource="{Binding Entries}">
                                                                 <ItemsControl.ItemTemplate>
                                                                     <DataTemplate x:DataType="vm:LayerStackLegendItemViewModel">
-                                                                        <StackPanel Orientation="Horizontal"
-                                                                                    Spacing="8"
-                                                                                    Margin="0,1"
-                                                                                    AutomationProperties.AutomationId="EcdisDisplayPanel.Aml.LegendEntry"
-                                                                                    AutomationProperties.Name="{Binding Label}">
-                                                                            <Border Width="14"
+                                                                        <Grid ColumnDefinitions="40,*"
+                                                                              Margin="0,1"
+                                                                              AutomationProperties.AutomationId="EcdisDisplayPanel.Aml.LegendEntry"
+                                                                              AutomationProperties.Name="{Binding Label}">
+                                                                            <!-- A fixed glyph column keeps labels in line: line samples are wider than symbols. -->
+                                                                            <Border Grid.Column="0"
+                                                                                    Width="14"
                                                                                     Height="10"
                                                                                     CornerRadius="2"
                                                                                     BorderThickness="1"
                                                                                     BorderBrush="{DynamicResource BorderColor}"
                                                                                     Background="{Binding Swatch}"
                                                                                     IsVisible="{Binding IsSwatch}"
+                                                                                    HorizontalAlignment="Left"
                                                                                     VerticalAlignment="Center" />
-                                                                            <Image Source="{Binding Glyph}"
+                                                                            <Image Grid.Column="0"
+                                                                                   Source="{Binding Glyph}"
                                                                                    Width="{Binding GlyphWidth}"
                                                                                    Height="{Binding GlyphHeight}"
+                                                                                   MaxWidth="36"
                                                                                    IsVisible="{Binding HasGlyph}"
-                                                                                   Stretch="Fill"
+                                                                                   Stretch="Uniform"
+                                                                                   HorizontalAlignment="Left"
                                                                                    VerticalAlignment="Center"
                                                                                    AutomationProperties.AccessibilityView="Raw" />
-                                                                            <TextBlock Text="{Binding Label}"
+                                                                            <TextBlock Grid.Column="1"
+                                                                                       Text="{Binding Label}"
                                                                                        FontSize="12"
                                                                                        VerticalAlignment="Center"
                                                                                        TextTrimming="CharacterEllipsis" />
-                                                                        </StackPanel>
+                                                                        </Grid>
                                                                     </DataTemplate>
                                                                 </ItemsControl.ItemTemplate>
                                                             </ItemsControl>
@@ -206,6 +212,7 @@
                                 <DataTemplate x:DataType="vm:AmlProductRowViewModel">
                                     <Grid ColumnDefinitions="Auto,Auto,40,*,Auto"
                                           Margin="0,2"
+                                          Opacity="{Binding RowOpacity}"
                                           ToolTip.Tip="{Binding ToolTip}">
                                         <CheckBox Grid.Column="0"
                                                   IsChecked="{Binding IsVisible}"

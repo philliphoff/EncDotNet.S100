@@ -124,6 +124,9 @@ internal sealed class AmlProductRowViewModel : ViewModelBase
     /// <summary>Whether a cell of the product is loaded; a product that isn't shows "Not loaded" and no switch.</summary>
     public bool IsLoaded => _state.IsLoaded;
 
+    /// <summary>The row's opacity: a product that isn't loaded is dimmed (B4a).</summary>
+    public double RowOpacity => _state.IsLoaded ? 1.0 : 0.55;
+
     /// <summary>"1 cell", "2 cells", or "Not loaded".</summary>
     public string CountText => !_state.IsLoaded
         ? Strings.AmlDisplay_NotLoaded
@@ -154,6 +157,7 @@ internal sealed class AmlProductRowViewModel : ViewModelBase
             return;
         _state = state;
         OnPropertyChanged(nameof(IsLoaded));
+        OnPropertyChanged(nameof(RowOpacity));
         OnPropertyChanged(nameof(CountText));
         OnPropertyChanged(nameof(ToolTip));
         OnPropertyChanged(nameof(IsVisible));

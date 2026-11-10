@@ -125,16 +125,43 @@ public static class AmlScaleBandVisibility
         if (finer.Count == 0)
             return null;
 
-        Geometry? union = null;
-        foreach (var j in finer)
+        try
         {
-            var clipped = footprints[j]!.Intersection(own);
-            union = union is null ? clipped : union.Union(clipped);
-            if (union.Area >= own.Area * CoveredShare)
-                return Limit(cells[j].ScaleBand);
+            Geometry? union = null;
+            foreach (var j in finer)
+            {
+                // Cells that only touch give lines or points: keep the areas.
+                if (Polygonal(footprints[j]!.Intersection(own)) is not { } clipped)
+                    continue;
+                union = union is null ? clipped : Polygonal(union.Union(clipped)) ?? union;
+                if (union.Area >= own.Area * CoveredShare)
+                    return Limit(cells[j].ScaleBand);
+            }
+        }
+        catch (TopologyException)
+        {
+            // Coverage too broken to measure: the cell doesn't give way.
         }
 
         return null;
+    }
+
+    // The polygons of a geometry (an overlay may return a collection with
+    // lines and points too), or null when it has none.
+    private static Geometry? Polygonal(Geometry geometry)
+    {
+        if (geometry is Polygon or MultiPolygon)
+            return geometry.IsEmpty ? null : geometry;
+        var polygons = NetTopologySuite.Geometries.Utilities.PolygonExtracter.GetPolygons(geometry)
+            .OfType<Polygon>()
+            .Where(p => !p.IsEmpty)
+            .ToArray();
+        return polygons.Length switch
+        {
+            0 => null,
+            1 => polygons[0],
+            _ => Factory.CreateMultiPolygon(polygons).Union(),
+        };
     }
 
     private static Geometry? Footprint(IReadOnlyList<CoverageArea> areas)
