@@ -2,6 +2,7 @@ using System.ComponentModel;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Pipelines;
 
 namespace EncDotNet.S100.Mcp.Tools;
@@ -28,7 +29,8 @@ public sealed record DatasetSummary(
     [property: Description("Stable dataset identifier; pass back into other tools.")] DatasetId Id,
     [property: Description("Product specification (name and edition) the dataset declares.")] SpecRef Spec,
     [property: Description("Geographic extent of the dataset in decimal degrees, WGS-84.")] BoundingBox Bounds,
-    [property: Description("UTC time interval covered by the dataset; null for static products such as S-102.")] TimeRange? TimeRange);
+    [property: Description("UTC time interval covered by the dataset; null for static products such as S-102.")] TimeRange? TimeRange,
+    [property: Description("NATO Additional Military Layers facts when the dataset is AML (military overlay data, not a chart); otherwise null.")] AmlDatasetSummary? Aml = null);
 
 /// <summary>Result of <see cref="ListDatasetsTool"/>.</summary>
 /// <param name="Datasets">Page of dataset summaries, in catalog order.</param>
@@ -41,7 +43,8 @@ public sealed record ListDatasetsResult(
     [property: Description("Zero-based page index actually returned (post-clamp).")] int Page,
     [property: Description("Page size actually applied (post-clamp to 1..500).")] int PageSize,
     [property: Description("Total number of datasets matching the filter, across all pages.")] int TotalCount,
-    [property: Description("True when more pages exist beyond the one returned.")] bool HasMore);
+    [property: Description("True when more pages exist beyond the one returned.")] bool HasMore,
+    [property: Description("The highest protective marking of the AML datasets matching the filter (\"+N\" when others tie), or null when none is AML. Say it before describing the map.")] string? HighestMarking = null);
 
 /// <summary>
 /// Lists datasets currently loaded in an <see cref="IDatasetCatalog"/>,
@@ -86,7 +89,14 @@ public sealed class ListDatasetsTool
                 continue;
             }
 
-            filtered.Add(new DatasetSummary(dataset.Id, dataset.Spec, dataset.Bounds, dataset.TimeRange));
+            filtered.Add(new DatasetSummary(
+                dataset.Id,
+                dataset.Spec,
+                dataset.Bounds,
+                dataset.TimeRange,
+                dataset.Data is AmlDatasetData aml
+                    ? new AmlDatasetSummary(aml.Info.ProductCode, aml.Info.ProtectiveMarking, AmlReport.Drawn, AmlReport.Status)
+                    : null));
         }
 
         var totalCount = filtered.Count;
@@ -99,12 +109,14 @@ public sealed class ListDatasetsTool
         }
 
         var hasMore = skip + take < totalCount;
+        var highest = AmlProtectiveMarking.Highest(filtered.Select(d => d.Aml?.ProtectiveMarking));
         var result = new ListDatasetsResult(
             pageBuilder,
             page,
             pageSize,
             totalCount,
-            hasMore);
+            hasMore,
+            highest?.DisplayText);
 
         return Task.FromResult(ToolResult<ListDatasetsResult>.Ok(result));
     }

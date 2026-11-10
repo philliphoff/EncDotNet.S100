@@ -43,10 +43,18 @@ public static partial class SpecName
     public const string TropicalCyclone = "TC";
 
     /// <summary>
+    /// NATO Additional Military Layers, canonical name <c>"AML"</c>: S-57
+    /// encoded military overlay cells (<c>DSID</c> <c>PRSP</c> 51–57), whose
+    /// edition is the AML product specification edition (<c>1.0</c>,
+    /// <c>2.1</c>, <c>3.0</c>).
+    /// </summary>
+    public const string Aml = "AML";
+
+    /// <summary>
     /// The non-S-100 format names <see cref="Normalize"/> accepts, in their
     /// canonical casing. The set is closed: a new format is added here.
     /// </summary>
-    public static IReadOnlyList<string> NonS100Formats { get; } = [Grib2, NetCdf, Cap, Codsus, TropicalCyclone];
+    public static IReadOnlyList<string> NonS100Formats { get; } = [Grib2, NetCdf, Cap, Codsus, TropicalCyclone, Aml];
 
     /// <summary>
     /// Whether <paramref name="name"/> (trimmed, any casing) is one of the

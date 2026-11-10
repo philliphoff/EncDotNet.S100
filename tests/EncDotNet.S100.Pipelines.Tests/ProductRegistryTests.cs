@@ -110,7 +110,7 @@ public class ProductRegistryTests
         [
             "S-57", "S-101", "S-102", "S-104", "S-111", "S-122", "S-124",
             "S-125", "S-127", "S-128", "S-129", "S-131", "S-201", "S-401",
-            "S-411", "S-412", "S-421", "GRIB2", "NetCDF", "CAP", "CODSUS", "TC",
+            "S-411", "S-412", "S-421", "AML", "GRIB2", "NetCDF", "CAP", "CODSUS", "TC",
         ];
 
         var registry = S100Products.CreateDefaultRegistry();
@@ -121,9 +121,9 @@ public class ProductRegistryTests
     }
 
     [Fact]
-    public void AddAllS100Products_AndWeatherProducts_MatchDefaultRegistry()
+    public void AddAllS100Products_AmlAndWeatherProducts_MatchDefaultRegistry()
     {
-        var registry = new ProductRegistry().AddAllS100Products().AddWeatherProducts();
+        var registry = new ProductRegistry().AddAllS100Products().AddAmlProduct().AddWeatherProducts();
 
         Assert.Equal(
             S100Products.CreateDefaultRegistry().RegisteredSpecs.OrderBy(s => s),

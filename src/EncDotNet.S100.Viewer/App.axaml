@@ -281,6 +281,9 @@
         <!-- Generic ApplicationPanel control template (title bar + content). -->
         <StyleInclude Source="avares://SoundCharts/Views/ApplicationPanel.axaml" />
 
+        <!-- The AML tag and protective-marking chips (#1236). -->
+        <StyleInclude Source="avares://SoundCharts/Views/AmlChips.axaml" />
+
         <!--
           App-wide Slider accent colour. ShadUI's Slider template sets
           PART_DecreaseButton.Background and Thumb.Background as local

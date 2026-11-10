@@ -78,6 +78,14 @@ public enum S98DisplayPlane
     OtherChartOverlays = 40,
 
     /// <summary>
+    /// NATO Additional Military Layers (AML), drawn with SoundCharts' own
+    /// portrayal: above the chart, S-102 and the other chart overlays, below
+    /// cautions and warnings, routes and alerts. Not an S-98 plane: AML isn't
+    /// an S-100 product, so S-98 doesn't place it.
+    /// </summary>
+    AdditionalMilitaryLayers = 45,
+
+    /// <summary>
     /// Navigational warnings and notices to mariners (S-124).
     /// MSC.530(106)/Rev.1 §Appendix 2 layers 3-4 ("Notices to
     /// Mariners…", "Official-caution"); S-98 Main §9.2.1 layers
