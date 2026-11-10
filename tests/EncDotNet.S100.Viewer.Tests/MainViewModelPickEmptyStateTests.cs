@@ -79,8 +79,9 @@ public sealed class MainViewModelPickEmptyStateTests : IDisposable
         settings ??= new ViewerSettings { SettingsFilePath = _tempSettingsPath };
         var catalogues = new PortrayalCatalogueManager();
         var datasets = new DatasetsViewModel(new NoopLoader());
+        var timeline = new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
         return new MainViewModel(
-            settings,
+            layout: new ShellLayoutViewModel(settings, tabs ?? [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post),
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
@@ -88,7 +89,7 @@ public sealed class MainViewModelPickEmptyStateTests : IDisposable
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
             settingsViewModel: new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null),
             pickReport: pick ?? new PickReportViewModel(),
-            timeline: new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null),
+            timeline: timeline,
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
             textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
             displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
@@ -97,7 +98,6 @@ public sealed class MainViewModelPickEmptyStateTests : IDisposable
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
             notifications: Notifications.TestNotifications.Create(),
-            activityTabs: tabs,
             dialogManager: new ShadUI.DialogManager(),
             routes: new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System)),
             measure: new EncDotNet.S100.Viewer.Services.MeasureSession(settings: null));
@@ -122,10 +122,10 @@ public sealed class MainViewModelPickEmptyStateTests : IDisposable
         var vm = CreateViewModel(new IActivityTab[] { datasets, pickTab }, pickVm);
 
         Assert.False(pickVm.HasPick);
-        vm.IsRightDockOpen = true;
+        vm.Layout.IsRightDockOpen = true;
 
-        Assert.True(vm.IsRightDockOpen);
-        Assert.Same(pickTab, vm.SelectedRightTab);
-        Assert.Same(pickVm, vm.SelectedRightTab?.ViewModel);
+        Assert.True(vm.Layout.IsRightDockOpen);
+        Assert.Same(pickTab, vm.Layout.SelectedRightTab);
+        Assert.Same(pickVm, vm.Layout.SelectedRightTab?.ViewModel);
     }
 }

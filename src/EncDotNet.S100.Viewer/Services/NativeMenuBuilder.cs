@@ -64,34 +64,39 @@ internal sealed class NativeMenuBuilder
 
         var sideBarItem = BuildToggleItem(
             Strings.Menu_PrimarySideBar,
-            initiallyChecked: _viewModel.IsLeftDockOpen,
-            execute: () => _viewModel.TogglePrimarySideBarCommand.Execute(null),
-            propertyName: nameof(MainViewModel.IsLeftDockOpen),
-            checkedSelector: () => _viewModel.IsLeftDockOpen);
+            _viewModel.Layout,
+            initiallyChecked: _viewModel.Layout.IsLeftDockOpen,
+            execute: () => _viewModel.Layout.TogglePrimarySideBarCommand.Execute(null),
+            propertyName: nameof(ShellLayoutViewModel.IsLeftDockOpen),
+            checkedSelector: () => _viewModel.Layout.IsLeftDockOpen);
 
         var statusBarItem = BuildToggleItem(
             Strings.Menu_StatusBar,
-            initiallyChecked: _viewModel.IsStatusBarVisible,
-            execute: () => _viewModel.ToggleStatusBarCommand.Execute(null),
-            propertyName: nameof(MainViewModel.IsStatusBarVisible),
-            checkedSelector: () => _viewModel.IsStatusBarVisible);
+            _viewModel.Layout,
+            initiallyChecked: _viewModel.Layout.IsStatusBarVisible,
+            execute: () => _viewModel.Layout.ToggleStatusBarCommand.Execute(null),
+            propertyName: nameof(ShellLayoutViewModel.IsStatusBarVisible),
+            checkedSelector: () => _viewModel.Layout.IsStatusBarVisible);
 
         var timelineItem = BuildToggleItem(
             Strings.Menu_Timeline,
-            initiallyChecked: _viewModel.IsBottomDockOpen,
-            execute: () => _viewModel.ToggleTimelineCommand.Execute(null),
-            propertyName: nameof(MainViewModel.IsBottomDockOpen),
-            checkedSelector: () => _viewModel.IsBottomDockOpen);
+            _viewModel.Layout,
+            initiallyChecked: _viewModel.Layout.IsBottomDockOpen,
+            execute: () => _viewModel.Layout.ToggleTimelineCommand.Execute(null),
+            propertyName: nameof(ShellLayoutViewModel.IsBottomDockOpen),
+            checkedSelector: () => _viewModel.Layout.IsBottomDockOpen);
 
         var pickPanelItem = BuildToggleItem(
             Strings.Menu_PickReport,
-            initiallyChecked: _viewModel.IsRightDockOpen,
-            execute: () => _viewModel.TogglePickPanelCommand.Execute(null),
-            propertyName: nameof(MainViewModel.IsRightDockOpen),
-            checkedSelector: () => _viewModel.IsRightDockOpen);
+            _viewModel.Layout,
+            initiallyChecked: _viewModel.Layout.IsRightDockOpen,
+            execute: () => _viewModel.Layout.TogglePickPanelCommand.Execute(null),
+            propertyName: nameof(ShellLayoutViewModel.IsRightDockOpen),
+            checkedSelector: () => _viewModel.Layout.IsRightDockOpen);
 
         var pickModeItem = BuildToggleItem(
             Strings.Menu_PickMode,
+            _viewModel,
             initiallyChecked: _viewModel.IsPickModeActive,
             execute: () => _viewModel.TogglePickModeCommand.Execute(null),
             propertyName: nameof(MainViewModel.IsPickModeActive),
@@ -100,6 +105,7 @@ internal sealed class NativeMenuBuilder
 
         var measureModeItem = BuildToggleItem(
             Strings.Menu_MeasureMode,
+            _viewModel,
             initiallyChecked: _viewModel.IsMeasureModeActive,
             execute: () => _viewModel.ToggleMeasureModeCommand.Execute(null),
             propertyName: nameof(MainViewModel.IsMeasureModeActive),
@@ -108,6 +114,7 @@ internal sealed class NativeMenuBuilder
 
         var rangeBearingModeItem = BuildToggleItem(
             Strings.Menu_RangeBearingMode,
+            _viewModel,
             initiallyChecked: _viewModel.IsRangeBearingModeActive,
             execute: () => _viewModel.ToggleRangeBearingModeCommand.Execute(null),
             propertyName: nameof(MainViewModel.IsRangeBearingModeActive),
@@ -118,6 +125,7 @@ internal sealed class NativeMenuBuilder
         // shortcut must not fire while a text field has focus either.
         var routeEditModeItem = BuildToggleItem(
             Strings.Menu_RouteEditMode,
+            _viewModel,
             initiallyChecked: _viewModel.IsRouteEditModeActive,
             execute: () =>
             {
@@ -146,7 +154,7 @@ internal sealed class NativeMenuBuilder
         // On macOS the About item lives in the application menu (see
         // App.ConfigureMacApplicationMenu); elsewhere it belongs in Help.
         var showLogsItem = new NativeMenuItem(Strings.Menu_ShowLogs);
-        showLogsItem.Click += (_, _) => _viewModel.ShowLogsCommand.Execute(null);
+        showLogsItem.Click += (_, _) => _viewModel.Layout.ShowLogsCommand.Execute(null);
 
         var helpSubMenu = new NativeMenu { reportFeedbackItem, showLogsItem };
         if (!OperatingSystem.IsMacOS())
@@ -167,8 +175,9 @@ internal sealed class NativeMenuBuilder
         _recentFiles.Changed += RebuildOpenRecentMenu;
     }
 
-    private NativeMenuItem BuildToggleItem(
+    private static NativeMenuItem BuildToggleItem(
         string label,
+        System.ComponentModel.INotifyPropertyChanged source,
         bool initiallyChecked,
         Action execute,
         string propertyName,
@@ -184,7 +193,7 @@ internal sealed class NativeMenuBuilder
             item.Gesture = gesture;
         item.Click += (_, _) => execute();
 
-        _viewModel.PropertyChanged += (_, e) =>
+        source.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != propertyName) return;
             item.IsChecked = checkedSelector();

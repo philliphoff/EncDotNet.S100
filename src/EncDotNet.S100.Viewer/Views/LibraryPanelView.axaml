@@ -556,7 +556,7 @@
                           ResizeDirection="Rows"
                           ResizeBehavior="PreviousAndNext"
                           bh:HoverDelay.DelayMilliseconds="500"
-                          bh:SplitterPersistence.SavedFraction="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).CatalogInnerSplit, Mode=TwoWay}" />
+                          bh:SplitterPersistence.SavedFraction="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.CatalogInnerSplit, Mode=TwoWay}" />
 
             <!-- Datasets of the selected node -->
             <DockPanel Grid.Row="3">

@@ -75,7 +75,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
 
     private readonly IMapLayerCollection _layers;
     private readonly LibraryPanelViewModel _panel;
-    private readonly MainViewModel _main;
+    private readonly ShellLayoutViewModel _layout;
     private readonly IMapViewportNotifier _viewport;
     private readonly IMeasureOverlayAppearanceProvider _appearance;
     private readonly Func<IMapViewportController?> _viewportController;
@@ -88,7 +88,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
     public LibraryCoverageOverlayController(
         IMapLayerCollection layers,
         LibraryPanelViewModel panel,
-        MainViewModel main,
+        ShellLayoutViewModel layout,
         IMapViewportNotifier viewport,
         IMeasureOverlayAppearanceProvider appearance,
         Func<IMapViewportController?> viewportController,
@@ -96,7 +96,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
     {
         ArgumentNullException.ThrowIfNull(layers);
         ArgumentNullException.ThrowIfNull(panel);
-        ArgumentNullException.ThrowIfNull(main);
+        ArgumentNullException.ThrowIfNull(layout);
         ArgumentNullException.ThrowIfNull(viewport);
         ArgumentNullException.ThrowIfNull(appearance);
         ArgumentNullException.ThrowIfNull(viewportController);
@@ -104,7 +104,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
 
         _layers = layers;
         _panel = panel;
-        _main = main;
+        _layout = layout;
         _viewport = viewport;
         _appearance = appearance;
         _viewportController = viewportController;
@@ -114,7 +114,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         _panel.PropertyChanged += OnPanelChanged;
         _panel.ZoomRequested += OnZoomRequested;
         _panel.CenterRequested += OnCenterRequested;
-        _main.PropertyChanged += OnMainChanged;
+        _layout.PropertyChanged += OnLayoutChanged;
         _viewport.ViewportChanged += OnViewportChanged;
         _appearance.Changed += OnAppearanceChanged;
 
@@ -128,8 +128,8 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
     /// <summary>True when the Library tab is showing and its coverage toggle is on.</summary>
     public bool IsActive =>
         _panel.ShowCoverage
-        && _main.IsLeftDockOpen
-        && string.Equals(_main.SelectedLeftTabId, LibraryImportCoordinator.LibraryPanelId, StringComparison.Ordinal);
+        && _layout.IsLeftDockOpen
+        && string.Equals(_layout.SelectedLeftTabId, LibraryImportCoordinator.LibraryPanelId, StringComparison.Ordinal);
 
     /// <summary>The number of datasets outlined by the last redraw (for tests and diagnostics).</summary>
     public int OutlinedCount { get; private set; }
@@ -320,11 +320,11 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         }
     }
 
-    private void OnMainChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnLayoutChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(MainViewModel.SelectedLeftTab)
-            or nameof(MainViewModel.SelectedLeftTabId)
-            or nameof(MainViewModel.IsLeftDockOpen))
+        if (e.PropertyName is nameof(ShellLayoutViewModel.SelectedLeftTab)
+            or nameof(ShellLayoutViewModel.SelectedLeftTabId)
+            or nameof(ShellLayoutViewModel.IsLeftDockOpen))
         {
             ScheduleRebuild();
         }
@@ -581,7 +581,7 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         _panel.PropertyChanged -= OnPanelChanged;
         _panel.ZoomRequested -= OnZoomRequested;
         _panel.CenterRequested -= OnCenterRequested;
-        _main.PropertyChanged -= OnMainChanged;
+        _layout.PropertyChanged -= OnLayoutChanged;
         _viewport.ViewportChanged -= OnViewportChanged;
         _appearance.Changed -= OnAppearanceChanged;
 

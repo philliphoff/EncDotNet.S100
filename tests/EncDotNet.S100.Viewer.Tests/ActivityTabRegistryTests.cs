@@ -86,8 +86,9 @@ public sealed class ActivityTabRegistryTests : IDisposable
         settings ??= new ViewerSettings { SettingsFilePath = _tempSettingsPath };
         var catalogues = new PortrayalCatalogueManager();
         var datasets = new DatasetsViewModel(new NoopLoader());
+        var timeline = new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null);
         return new MainViewModel(
-            settings,
+            layout: new ShellLayoutViewModel(settings, tabs ?? [], timeline, EncDotNet.S100.Viewer.Services.UiThread.Post),
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
@@ -95,7 +96,7 @@ public sealed class ActivityTabRegistryTests : IDisposable
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
             settingsViewModel: new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null),
             pickReport: new PickReportViewModel(),
-            timeline: new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null),
+            timeline: timeline,
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
             textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
             displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
@@ -104,7 +105,6 @@ public sealed class ActivityTabRegistryTests : IDisposable
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
             notifications: Notifications.TestNotifications.Create(),
-            activityTabs: tabs,
             dialogManager: new ShadUI.DialogManager(),
             routes: new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System)),
             measure: new EncDotNet.S100.Viewer.Services.MeasureSession(settings: null));
@@ -123,9 +123,9 @@ public sealed class ActivityTabRegistryTests : IDisposable
 
         var vm = CreateViewModel(tabs);
 
-        Assert.Equal(new[] { "A", "B", "C", "Z" }, vm.Tabs.Select(t => t.Id));
-        Assert.Equal(new[] { "A", "B", "C" }, vm.LeftDockTopTabs.Select(t => t.Id));
-        Assert.Equal(new[] { "Z" }, vm.LeftDockBottomTabs.Select(t => t.Id));
+        Assert.Equal(new[] { "A", "B", "C", "Z" }, vm.Layout.Tabs.Select(t => t.Id));
+        Assert.Equal(new[] { "A", "B", "C" }, vm.Layout.LeftDockTopTabs.Select(t => t.Id));
+        Assert.Equal(new[] { "Z" }, vm.Layout.LeftDockBottomTabs.Select(t => t.Id));
     }
 
     [Fact]
@@ -135,10 +135,10 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var b = new FakeTab { Id = "B", Order = 20 };
         var vm = CreateViewModel(new IActivityTab[] { a, b });
 
-        vm.SelectTabCommand.Execute(b);
+        vm.Layout.SelectTabCommand.Execute(b);
 
-        Assert.Same(b, vm.SelectedLeftTab);
-        Assert.Equal("B", vm.SelectedLeftTabId);
+        Assert.Same(b, vm.Layout.SelectedLeftTab);
+        Assert.Equal("B", vm.Layout.SelectedLeftTabId);
     }
 
     [Fact]
@@ -150,13 +150,13 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var vm = CreateViewModel(new IActivityTab[] { datasets, a, b });
 
         // Startup defaults to Datasets.
-        Assert.Equal("Default", vm.LeftDockTitle);
+        Assert.Equal("Default", vm.Layout.LeftDockTitle);
 
-        vm.SelectTabCommand.Execute(a);
-        Assert.Equal("Alpha", vm.LeftDockTitle);
+        vm.Layout.SelectTabCommand.Execute(a);
+        Assert.Equal("Alpha", vm.Layout.LeftDockTitle);
 
-        vm.SelectTabCommand.Execute(b);
-        Assert.Equal("Beta", vm.LeftDockTitle);
+        vm.Layout.SelectTabCommand.Execute(b);
+        Assert.Equal("Beta", vm.Layout.LeftDockTitle);
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var other = new FakeTab { Id = "Search", Order = 60, PersistAsLastSelected = true };
         var vm = CreateViewModel(new IActivityTab[] { datasets, other }, settings);
 
-        vm.SelectTabCommand.Execute(other);
+        vm.Layout.SelectTabCommand.Execute(other);
 
         Assert.Equal("Search", settings.LastSelectedActivity);
     }
@@ -184,9 +184,9 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var settingsTab = new FakeTab { Id = "Settings", Order = 1000, PersistAsLastSelected = false };
         var vm = CreateViewModel(new IActivityTab[] { datasets, settingsTab }, settings);
 
-        vm.SelectTabCommand.Execute(settingsTab);
+        vm.Layout.SelectTabCommand.Execute(settingsTab);
 
-        Assert.Same(settingsTab, vm.SelectedLeftTab);
+        Assert.Same(settingsTab, vm.Layout.SelectedLeftTab);
         Assert.Equal("Datasets", settings.LastSelectedActivity);
     }
 
@@ -202,7 +202,7 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var search = new FakeTab { Id = "Search", Order = 60 };
         var vm = CreateViewModel(new IActivityTab[] { datasets, search }, settings);
 
-        Assert.Same(search, vm.SelectedLeftTab);
+        Assert.Same(search, vm.Layout.SelectedLeftTab);
         Assert.Equal("Search", settings.LastSelectedActivity);
     }
 
@@ -218,7 +218,7 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var search = new FakeTab { Id = "Search", Order = 60 };
         var vm = CreateViewModel(new IActivityTab[] { datasets, search }, settings);
 
-        Assert.Same(datasets, vm.SelectedLeftTab);
+        Assert.Same(datasets, vm.Layout.SelectedLeftTab);
     }
 
     [Fact]
@@ -229,7 +229,7 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var search = new FakeTab { Id = "Search", Order = 60 };
         var vm = CreateViewModel(new IActivityTab[] { datasets, search }, settings);
 
-        Assert.Same(datasets, vm.SelectedLeftTab);
+        Assert.Same(datasets, vm.Layout.SelectedLeftTab);
     }
 
     [Fact]
@@ -239,13 +239,13 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var datasets = new FakeTab { Id = "Datasets", Order = 30 };
         var vm = CreateViewModel(new IActivityTab[] { search, datasets });
 
-        vm.SelectTabCommand.Execute(search);
-        Assert.Same(search, vm.SelectedLeftTab);
+        vm.Layout.SelectTabCommand.Execute(search);
+        Assert.Same(search, vm.Layout.SelectedLeftTab);
 
-        vm.SelectDefaultTab();
+        vm.Layout.SelectDefaultTab();
 
-        Assert.Same(datasets, vm.SelectedLeftTab);
-        Assert.Equal("Datasets", vm.SelectedLeftTabId);
+        Assert.Same(datasets, vm.Layout.SelectedLeftTab);
+        Assert.Equal("Datasets", vm.Layout.SelectedLeftTabId);
     }
 
     [Fact]
@@ -256,12 +256,12 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var vm = CreateViewModel(new IActivityTab[] { alpha, beta });
 
         // Startup falls back to first tab when Datasets is absent.
-        Assert.Same(alpha, vm.SelectedLeftTab);
+        Assert.Same(alpha, vm.Layout.SelectedLeftTab);
 
-        vm.SelectTabCommand.Execute(beta);
-        vm.SelectDefaultTab();
+        vm.Layout.SelectTabCommand.Execute(beta);
+        vm.Layout.SelectDefaultTab();
 
-        Assert.Same(alpha, vm.SelectedLeftTab);
+        Assert.Same(alpha, vm.Layout.SelectedLeftTab);
     }
 
     [Fact]
@@ -270,15 +270,15 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var datasets = new FakeTab { Id = "Datasets", Order = 30 };
         var settingsTab = new FakeTab { Id = "Settings", Order = 1000, PersistAsLastSelected = false, FillsContent = true };
         var vm = CreateViewModel(new IActivityTab[] { datasets, settingsTab });
-        Assert.Same(datasets, vm.LeftDockContent);
+        Assert.Same(datasets, vm.Layout.LeftDockContent);
 
-        vm.SelectTabCommand.Execute(settingsTab);
+        vm.Layout.SelectTabCommand.Execute(settingsTab);
 
-        Assert.True(vm.IsContentPanelOpen);
-        Assert.False(vm.IsLeftDockShown);
-        Assert.Same(settingsTab, vm.ContentPanelTab);
-        Assert.Null(vm.LeftDockContent);
-        Assert.Equal("Settings", vm.SelectedLeftTabId);
+        Assert.True(vm.Layout.IsContentPanelOpen);
+        Assert.False(vm.Layout.IsLeftDockShown);
+        Assert.Same(settingsTab, vm.Layout.ContentPanelTab);
+        Assert.Null(vm.Layout.LeftDockContent);
+        Assert.Equal("Settings", vm.Layout.SelectedLeftTabId);
     }
 
     [Theory]
@@ -291,18 +291,18 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var search = new FakeTab { Id = "Search", Order = 60 };
         var settingsTab = new FakeTab { Id = "Settings", Order = 1000, PersistAsLastSelected = false, FillsContent = true };
         var vm = CreateViewModel(new IActivityTab[] { datasets, search, settingsTab }, settings);
-        vm.SelectTabCommand.Execute(search);
-        vm.IsLeftDockOpen = dockWasOpen;
+        vm.Layout.SelectTabCommand.Execute(search);
+        vm.Layout.IsLeftDockOpen = dockWasOpen;
 
-        vm.SelectTabCommand.Execute(settingsTab);
+        vm.Layout.SelectTabCommand.Execute(settingsTab);
         // A restart while Settings is open restores the covered panel's state.
         Assert.Equal(dockWasOpen, settings.IsLeftDockOpen);
-        vm.SelectTabCommand.Execute(settingsTab); // the activity bar toggles it closed
+        vm.Layout.SelectTabCommand.Execute(settingsTab); // the activity bar toggles it closed
 
-        Assert.False(vm.IsContentPanelOpen);
-        Assert.Same(search, vm.SelectedLeftTab);
-        Assert.Equal(dockWasOpen, vm.IsLeftDockOpen);
-        Assert.Equal(dockWasOpen, vm.IsLeftDockShown);
+        Assert.False(vm.Layout.IsContentPanelOpen);
+        Assert.Same(search, vm.Layout.SelectedLeftTab);
+        Assert.Equal(dockWasOpen, vm.Layout.IsLeftDockOpen);
+        Assert.Equal(dockWasOpen, vm.Layout.IsLeftDockShown);
         Assert.Equal(dockWasOpen, settings.IsLeftDockOpen);
     }
 
@@ -312,13 +312,13 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var datasets = new FakeTab { Id = "Datasets", Order = 30 };
         var settingsTab = new FakeTab { Id = "Settings", Order = 1000, PersistAsLastSelected = false, FillsContent = true };
         var vm = CreateViewModel(new IActivityTab[] { datasets, settingsTab });
-        vm.SelectTabCommand.Execute(settingsTab);
+        vm.Layout.SelectTabCommand.Execute(settingsTab);
 
-        vm.CloseDockCommand.Execute("Left");
+        vm.Layout.CloseDockCommand.Execute("Left");
 
-        Assert.Same(datasets, vm.SelectedLeftTab);
-        Assert.True(vm.IsLeftDockShown);
-        Assert.Same(datasets, vm.LeftDockContent);
+        Assert.Same(datasets, vm.Layout.SelectedLeftTab);
+        Assert.True(vm.Layout.IsLeftDockShown);
+        Assert.Same(datasets, vm.Layout.LeftDockContent);
     }
 
     [Fact]
@@ -328,12 +328,12 @@ public sealed class ActivityTabRegistryTests : IDisposable
         var search = new FakeTab { Id = "Search", Order = 60 };
         var settingsTab = new FakeTab { Id = "Settings", Order = 1000, PersistAsLastSelected = false, FillsContent = true };
         var vm = CreateViewModel(new IActivityTab[] { datasets, search, settingsTab });
-        vm.SelectTabCommand.Execute(settingsTab);
+        vm.Layout.SelectTabCommand.Execute(settingsTab);
 
-        vm.SelectTabCommand.Execute(search);
+        vm.Layout.SelectTabCommand.Execute(search);
 
-        Assert.False(vm.IsContentPanelOpen);
-        Assert.Same(search, vm.LeftDockContent);
-        Assert.True(vm.IsLeftDockShown);
+        Assert.False(vm.Layout.IsContentPanelOpen);
+        Assert.Same(search, vm.Layout.LeftDockContent);
+        Assert.True(vm.Layout.IsLeftDockShown);
     }
 }

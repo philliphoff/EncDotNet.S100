@@ -823,7 +823,7 @@ public partial class App : Application
         // The way from a SECOM certificate problem to Settings → Keys & certificates (#880).
         services.AddSingleton(sp => new Services.Secom.KeysNavigator(
             () => sp.GetRequiredService<SettingsViewModel>(),
-            () => sp.GetRequiredService<MainViewModel>()));
+            () => sp.GetRequiredService<ShellLayoutViewModel>()));
         // Reads SECOM sources again when the identity or trusted authorities change (#880).
         services.AddSingleton(sp => new EncDotNet.S100.Collections.Library.SecomTrustRefresh(
             sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
@@ -1484,7 +1484,7 @@ public partial class App : Application
                 new LibraryRouteOpener(
                     sp.GetRequiredService<Library.ILibraryLoader>(),
                     sp.GetRequiredService<ReceivedRoutesService>(),
-                    () => sp.GetRequiredService<MainViewModel>().SelectTab("Routes"),
+                    () => sp.GetRequiredService<ShellLayoutViewModel>().SelectTab("Routes"),
                     sp.GetService<INotificationService>()).Open(item);
                 return Task.CompletedTask;
             };
@@ -1658,6 +1658,12 @@ public partial class App : Application
             // #959 E3: the checked route's warnings, and the findings list's inline cards' navigator.
             RouteFindings = sp.GetService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>(),
         });
+        // The docks and activity tabs (#1203: split out of MainViewModel).
+        services.AddSingleton(sp => new ShellLayoutViewModel(
+            sp.GetRequiredService<ViewerSettings>(),
+            sp.GetServices<EncDotNet.S100.Viewer.ViewModels.Activities.IActivityTab>(),
+            sp.GetRequiredService<TimelineViewModel>(),
+            UiThread.Post));
         services.AddSingleton<MainViewModel>();
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.DateDependentDrawingService(
             sp.GetRequiredService<IDatasetLoaderService>(),
@@ -1830,7 +1836,7 @@ public partial class App : Application
             sp.GetService<ITimeFormatProvider>(),
             sp.GetService<IThemeService>()));
         services.AddActivityTab<ClearanceViewModel, ClearanceView>(
-            id: MainViewModel.ClearanceTabId,
+            id: ShellLayoutViewModel.ClearanceTabId,
             order: 20,
             title: Strings.Clearance_Title,
             name: Strings.Label_Activity_Clearance,
@@ -1851,7 +1857,7 @@ public partial class App : Application
             timeFormat: sp.GetService<ITimeFormatProvider>(),
             time: sp.GetRequiredService<TimeProvider>()));
         services.AddActivityTab<LogsViewModel, LogsView>(
-            id: MainViewModel.LogsTabId,
+            id: ShellLayoutViewModel.LogsTabId,
             order: 30,
             title: Strings.Pane_Logs,
             name: Strings.Label_Activity_Logs,

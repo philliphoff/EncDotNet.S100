@@ -129,7 +129,7 @@
                               ResizeDirection="Rows"
                               ResizeBehavior="PreviousAndNext"
                               bh:HoverDelay.DelayMilliseconds="500"
-                              bh:SplitterPersistence.SavedFraction="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).VesselsInnerSplit, Mode=TwoWay}" />
+                              bh:SplitterPersistence.SavedFraction="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.VesselsInnerSplit, Mode=TwoWay}" />
 
                 <!-- Properties sub-pane (detail) for the selected vessel. -->
                 <Border Grid.Row="2" ClipToBounds="True">
