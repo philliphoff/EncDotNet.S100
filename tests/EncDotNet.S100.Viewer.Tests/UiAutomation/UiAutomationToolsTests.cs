@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
-using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Viewer.McpTools;
+using EncDotNet.S100.Viewer.McpTools.Groups;
 using EncDotNet.S100.Viewer.Services;
 using ModelContextProtocol.Protocol;
 
@@ -21,8 +21,8 @@ public sealed class UiAutomationToolsTests
     {
         var automation = new RecordingAutomation();
 
-        var withoutHooks = Names(new McpServerHost(new EmptyCatalog(), new ViewerSettings(), uiAutomation: automation));
-        var withHooks = Names(new McpServerHost(new EmptyCatalog(), new ViewerSettings { McpTestHooks = true }, uiAutomation: automation));
+        var withoutHooks = Names(new TestHooksMcpToolGroup(new ViewerSettings(), testClock: null, uiAutomation: automation));
+        var withHooks = Names(new TestHooksMcpToolGroup(new ViewerSettings { McpTestHooks = true }, testClock: null, uiAutomation: automation));
 
         Assert.DoesNotContain(withoutHooks, name => name.StartsWith("ui_", StringComparison.Ordinal));
         Assert.Equal(AllToolNames.Order(), withHooks.Where(n => n.StartsWith("ui_", StringComparison.Ordinal)).Order());
@@ -176,18 +176,13 @@ public sealed class UiAutomationToolsTests
         Assert.Equal((new UiTarget("CatalogueScope.Option", null), UiAction.Toggle, "on"), automation.Calls.Single());
     }
 
-    private static IReadOnlyList<string> Names(McpServerHost host)
-        => (host.BuildAdditionalTools() ?? []).Select(t => t.ProtocolTool.Name).ToList();
+    private static IReadOnlyList<string> Names(TestHooksMcpToolGroup group)
+        => group.CreateTools().Select(t => t.ProtocolTool.Name).ToList();
 
     /// <summary>The JSON a client receives for <paramref name="result"/>.</summary>
     private static JsonObject Wire<T>(Datasets.Pipelines.Query.ToolResult<T> result)
         => JsonNode.Parse(((TextContentBlock)McpAdapterShared.Translate(result).Content[0]).Text)!.AsObject();
 
-    private sealed class EmptyCatalog : IDatasetCatalog
-    {
-        public IReadOnlyList<LoadedDataset> Datasets => [];
-        public event EventHandler<DatasetCatalogChangedEventArgs>? Changed { add { } remove { } }
-    }
 
     private sealed class RecordingAutomation : IViewerUiAutomation
     {
