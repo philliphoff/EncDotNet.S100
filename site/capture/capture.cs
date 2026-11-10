@@ -166,7 +166,8 @@ var carolinasBox = new Box(31.4, -81.4, 38.0, -71.4);
     // Offshore of the Cape Lookout and Diamond shoals, so no leg crosses the safety contour.
     // Clear of the 0.1 m obstruction off Hatteras (US3NC1BE) and the shoal depth areas
     // off Back Bay and Cape Henry, so only the weather check has anything to review.
-    (34.40, -76.00), (35.15, -74.85), (36.40, -75.25), (36.93, -75.55),
+    // and east of the Coastal Virginia Offshore Wind area, ending at the approaches.
+    (34.40, -76.00), (35.15, -74.85), (36.40, -75.05), (36.95, -75.05),
 ];
 // The band 2 NOAA cells (US2ATLN*/O*, 28.8–38.4°N, 76.8–67.2°W) cover the whole
 // frame, with Erin's track crossing it, at the Routes panel's map aspect.
@@ -994,11 +995,28 @@ async Task<byte[]> ErinClip(Viewer v)
     await v.Call("create_route", new() { ["name"] = "Cape Lookout to the Chesapeake" });
     foreach (var (lat, lon) in lookoutToChesapeake)
         await v.Call("append_waypoint", new() { ["lat"] = lat, ["lon"] = lon });
-    var first = erinRoute.Departure;
+    var first = erinRoute.Departure.AddHours(3);
     await v.Call("set_passage", new() { ["draftMeters"] = 9.0, ["speedKnots"] = 12.0, ["departure"] = first.ToString("O") });
 
-    // Departures every 30 min for 30 h from the run (arrivals stay inside its 48 h).
-    var scrub = Enumerable.Range(0, 61).Select(i => first.AddMinutes(30 * i)).ToList();
+    // Departures every 30 min for 21 h from 3 h into the run: from clear of Erin's
+    // wind field to inside its 34 kt radius (arrivals stay inside the run's 48 h).
+    var scrub = Enumerable.Range(0, 43).Select(i => first.AddMinutes(30 * i)).ToList();
+
+    // The view time goes to the closest approach, so Erin is drawn (track, radii,
+    // label) where it is when the ship is nearest, beside the CPA marker.
+    async Task<(string Title, double CpaNm, string Weather)> ShowClosestApproach()
+    {
+        var findings = (await v.Call("get_findings"))?["findings"]?.AsArray() ?? [];
+        var cpa = findings.FirstOrDefault(f => f!["code"]?.ToString() == "weather.tc_cpa");
+        var at = cpa?["details"]?["cyclone"]?["startTime"]?.ToString();
+        if (at is not null) await v.Call("set_view_time", new() { ["time"] = at });
+        var title = findings.FirstOrDefault()?["title"]?.ToString() ?? "";
+        var nm = cpa?["details"]?["cyclone"]?["closestNm"]?.GetValue<double>() ?? double.NaN;
+        var weather = string.Join(" · ", findings
+            .Where(f => f!["code"]?.ToString()?.StartsWith("weather.") == true)
+            .Select(f => $"{f!["code"]?.ToString()?.Replace("weather.", "")}: {f["title"]}"));
+        return (title, nm, weather);
+    }
 
     await v.Panel("Routes");
     await v.Call("set_map_legend", new() { ["open"] = false });
@@ -1023,23 +1041,26 @@ async Task<byte[]> ErinClip(Viewer v)
     }
     await v.Call("set_panel", new() { ["panel"] = "Clearance", ["visible"] = false });
     await v.Call("set_map_legend", new() { ["open"] = false });
-    await v.Call("set_follow_passage", new() { ["on"] = true });  // weather and storm at the vessel's ETA
-    Step("follow on");
+    await ShowClosestApproach();
+    Step("view at CPA");
     await clip.Frame(v, 2.0);
     Step("checked frame");
     string? lastTitle = null;
+    (double Nm, DateTimeOffset Departure) closest = (double.MaxValue, first);
     foreach (var departure in scrub)
     {
-        var state = await v.Call("set_departure", new() { ["departure"] = departure.ToString("O") });
-        var title = state?["verdictTitle"]?.ToString();
-        if (title != lastTitle) Console.WriteLine($"  {departure:u}: {title} · {state?["verdictSubtitle"]}");
+        await v.Call("set_departure", new() { ["departure"] = departure.ToString("O") });
+        var (title, nm, weather) = await ShowClosestApproach();
+        if (title != lastTitle) Console.WriteLine($"  {departure:u}: {title}");
         lastTitle = title;
-        var weather = ((await v.Call("get_findings"))?["findings"]?.AsArray() ?? [])
-            .Where(f => f!["code"]?.ToString()?.StartsWith("weather.") == true)
-            .Select(f => $"{f!["code"]?.ToString()?.Replace("weather.", "")}: {f["title"]}");
-        Step($"departure {departure:dd HH:mm} · {string.Join(" · ", weather)}");
+        if (nm < closest.Nm) closest = (nm, departure);
+        Step($"departure {departure:dd HH:mm} · {weather}");
         await clip.Frame(v, 0.15);
     }
+    // Hold on the departure that brings the ship nearest Erin.
+    await v.Call("set_departure", new() { ["departure"] = closest.Departure.ToString("O") });
+    await ShowClosestApproach();
+    Step($"poster: departure {closest.Departure:dd HH:mm}, CPA {closest.Nm:0} NM");
     var poster = await clip.Frame(v, 3.0);
     v.RenderIdleTimeoutMs = 120000;
     foreach (var f in (await v.Call("get_findings"))?["findings"]?.AsArray() ?? [])
