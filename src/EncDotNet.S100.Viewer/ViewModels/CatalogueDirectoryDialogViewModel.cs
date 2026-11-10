@@ -66,12 +66,11 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
         AddUrlCommand = new AsyncRelayCommand(AddUrlAsync, () => CanAddUrl);
         ShowAddByUrlCommand = new RelayCommand(ShowAddByUrl, () => CanAddByUrl);
 
-        // Reopened in the same app session: back to the last source and category (Q5).
-        // Read both before Rebuild selects, which records the new choice.
-        var lastSourceId = session?.LastSourceId;
+        // Reopened in the same app session: back to the last category and its source (Q5).
+        _lastSourceIds = session?.LastSourceIds ?? [];
         var lastCategory = session?.LastCategory;
-        Rebuild(selectId: lastSourceId);
-        if (lastCategory is { } category && category != _selectedCategory)
+        Rebuild(selectId: lastCategory is { } last ? _lastSourceIds.GetValueOrDefault(last) : null);
+        if (lastCategory is { } category)
             SelectCategory(category);
         _session = session;
         Remember();
@@ -79,13 +78,14 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
 
     private readonly CatalogueDirectorySession? _session;
 
-    /// <summary>Records the selection and open category for the next time the dialog opens.</summary>
+    /// <summary>The source last selected in each category (the session's, when there is one).</summary>
+    private readonly Dictionary<KnownCatalogueCategory, string> _lastSourceIds;
+
+    /// <summary>Records the open category for the next time the dialog opens.</summary>
     private void Remember()
     {
-        if (_session is null)
-            return;
-        _session.LastSourceId = _selected?.Source.Id;
-        _session.LastCategory = _selectedCategory;
+        if (_session is not null)
+            _session.LastCategory = _selectedCategory;
     }
 
     /// <summary>The categories in the order the sidebar lists them.</summary>
@@ -141,6 +141,7 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
                 _selected.IsSelected = false;
             _selected = value;
             _selected.IsSelected = true;
+            _lastSourceIds[value.Category] = value.Source.Id;
             OnPropertyChanged();
             OnPropertyChanged(nameof(CanContinueWithSelection));
             OnPropertyChanged(nameof(HasSelection));
@@ -160,6 +161,18 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
                 _ = ProbeAsync(value);
             Remember();
         }
+    }
+
+    /// <summary>Selects nothing, for a category with no sources (My sources before any is added).</summary>
+    private void ClearSelection()
+    {
+        if (_selected is null)
+            return;
+        _selected.IsSelected = false;
+        _selected = null;
+        OnPropertyChanged(nameof(SelectedEntry));
+        OnPropertyChanged(nameof(CanContinueWithSelection));
+        OnPropertyChanged(nameof(HasSelection));
     }
 
     /// <summary>
@@ -320,7 +333,8 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
     public IReadOnlyList<CatalogueCategoryViewModel> Categories { get; }
 
     /// <summary>
-    /// The open category. Choosing one clears the search; it follows
+    /// The open category. Choosing one clears the search and selects the
+    /// source last selected in it, or its first; it follows
     /// <see cref="SelectedEntry"/> so the choice is shown in its own category.
     /// </summary>
     public KnownCatalogueCategory SelectedCategory
@@ -336,6 +350,20 @@ internal sealed class CatalogueDirectoryDialogViewModel : ViewModelBase
         if (changed)
             OnPropertyChanged(nameof(SelectedCategory));
         Remember();
+
+        // The selection always belongs to the open category, so the details and
+        // Next never act on a source the list doesn't show.
+        if (_selected?.Category != category)
+        {
+            var inCategory = _entries.Where(e => e.Category == category).ToArray();
+            var next = _lastSourceIds.TryGetValue(category, out var lastId)
+                ? inCategory.FirstOrDefault(e => e.Source.Id == lastId) ?? inCategory.FirstOrDefault()
+                : inCategory.FirstOrDefault();
+            if (next is not null)
+                SelectedEntry = next;
+            else
+                ClearSelection();
+        }
         if (_searchText.Length > 0)
         {
             _searchText = string.Empty;

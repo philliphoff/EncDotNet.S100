@@ -51,6 +51,8 @@ public sealed class AddOnlineCatalogueWizardViewTests
 
         wizard.Directory.SearchText = "noaa";
         wizard.Directory.SelectedCategory = KnownCatalogueCategory.User;
+        Layout(window); // empty: nothing selected
+        wizard.Directory.SelectedCategory = KnownCatalogueCategory.Charts;
         Layout(window);
 
         wizard.NextCommand.Execute(null);
