@@ -1,5 +1,6 @@
 using System.Globalization;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
 using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
@@ -88,11 +89,18 @@ public sealed class AmlDrawing
     /// <param name="spec">The spec the host registers AML under.</param>
     /// <param name="sourceDatasetId">The dataset's id in the host.</param>
     /// <param name="context">The palette and scales; Day at scale 1 when <see langword="null"/>.</param>
-    /// <param name="contentHash">
-    /// A hash of the cell's content for the tile disk cache, or
-    /// <see langword="null"/> for no disk caching.
+    /// <param name="contentScope">
+    /// A stable scope for the cell's content, such as a hash of the file, for
+    /// the tile disk cache, or <see langword="null"/> for no disk caching. The
+    /// style's own scope (<see cref="AmlStyleCatalog.ContentScope"/>) is added.
     /// </param>
-    public VectorPortrayalResult ToVectorPortrayalResult(SpecRef spec, string sourceDatasetId, RenderContext? context = null, string? contentHash = null)
+    /// <param name="coverage">The cell's coverage areas, such as its <c>M_COVR</c>, or <see langword="null"/> for none.</param>
+    public VectorPortrayalResult ToVectorPortrayalResult(
+        SpecRef spec,
+        string sourceDatasetId,
+        RenderContext? context = null,
+        string? contentScope = null,
+        IReadOnlyList<CoverageArea>? coverage = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceDatasetId);
         var palette = context?.Palette ?? PaletteType.Day;
@@ -105,7 +113,7 @@ public sealed class AmlDrawing
             Product = spec.Name,
             Spec = spec,
             SourceDatasetId = sourceDatasetId,
-            ContentScope = contentHash is null ? null : $"ds:{contentHash}|{Catalog.ContentScope}",
+            ContentScope = contentScope is null ? null : $"{contentScope}|{Catalog.ContentScope}",
             Info = Info,
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
@@ -113,6 +121,7 @@ public sealed class AmlDrawing
             LineStyleProvider = Catalog.LineStyleProvider,
             LayerNames = [.. subLayers.Select(s => s.LayerKey)],
             GeographicExtent = Extent,
+            CoverageAreas = coverage ?? [],
         };
     }
 
