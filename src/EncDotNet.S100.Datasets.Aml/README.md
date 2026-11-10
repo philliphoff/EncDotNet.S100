@@ -72,15 +72,21 @@ The colours come in four families, one sub-layer each:
 | Operational | `aml.operational` | `#B2381B` | `#B44A2C` | `#8A3B27` |
 | Environmental | `aml.environmental` | `#2B7547` | `#3A7E52` | `#2E5C40` |
 | Seabed | `aml.seabed` | `#7A4B1F` | `#8A5A2E` | `#6B4A2B` |
+| Chart background | `aml.background` | `#4F5B66` | `#66717C` | `#48525C` |
+| Bathymetry (CLB) | `aml.bathymetry` | `#7A4B1F` at 55 % | `#8A5A2E` at 55 % | `#6B4A2B` at 55 % |
 
 All sub-layers are on `S98DisplayPlane.AdditionalMilitaryLayers` (45): above
 the chart and the weather overlays, below cautions, routes and alerts. Air
-draws on top, then operational, environmental and seabed.
+draws on top, then operational, environmental, seabed, chart background and
+bathymetry.
 
 ### Classes
 
-The built-in styles cover the Routes, Areas and Limits (RAL) product. The
-AML 3.0 air trials (FAI, MFI) use the same classes.
+The built-in styles cover the Routes, Areas and Limits (RAL) air and
+operational classes, Contour Line Bathymetry (CLB), Maritime Foundation &
+Facilities (MFF), Environment, Seabed and Beach (ESB), and the AML 3.0 chart
+and land background (NCD, LND) and airfields. The AML 3.0 trials, including
+the sediment (SED) trials, use the same classes.
 
 | Family | Class | Drawn as |
 |---|---|---|
@@ -90,11 +96,34 @@ AML 3.0 air trials (FAI, MFI) use the same classes.
 | Air | `airres` airspace restriction | Area with limits |
 | Air | `ctlasp` controlled airspace | Area with limits; line features as lines |
 | Air | `mexasp` military exercise airspace | Area with limits; line features as lines |
+| Air | `AIRARE`, `RUNWAY` airfield, runway | Framed airfield or runway glyph; areas ticked |
 | Operational | `MIPARE` military practice area | Area |
 | Operational | `qroute` Q-route leg | Heavier dash-dot with chevrons along the leg |
 | Operational | `turnpt` turning point | Framed ringed dot |
 | Operational | `patare` patrol area | Area |
 | Operational | `intwtr` internal waters | Area |
+| Operational | MFF platforms, production and fishing areas, traffic separation, routes, anchorages | Areas and lines; framed platform or fish glyph at a point |
+| Environmental | MFF tide and tidal-stream stations, magnetics, weed, ice, currents | Framed tide, needle or weed glyph; areas and lines |
+| Seabed | MFF cables and pipelines (`CBLSUB`, `PIPSOL`, `CBLARE`, `PIPARE`) | Lines and areas |
+| Chart background | Lights, buoys, beacons, light vessels | A chart-like glyph (flare, buoy, beacon) in the AML frame, no name |
+| Chart background | Landmarks, stations, harbour facilities, buildings | A chart-like glyph with the name |
+| Chart background | Coastline, roads, rivers, the AML 3.0 LND lines | Line |
+| Chart background | `LNDARE`, `SEAARE`, `txtbua` | The name only; an islet is a dot |
+| Chart background | Built-up, administration and harbour areas, LND sites | Area; points as a framed square |
+| Bathymetry | `DEPCNT` depth contour | Solid 0.7 px seabed brown at 55 %, its depth in small italic brown |
+| Bathymetry | `DEPARE` depth area | Nothing: no fill, its edges are the contours |
+| Bathymetry | `SOUNDG` sounding | Each sounding a small italic brown figure |
+| Environmental | `sedlay` geological layer | Sediment pattern over a 7 % wash (see below) |
+| Environmental | `botmft` bottom feature | Framed chevron; areas and lines in the signature |
+| Environmental | `twlscr` trawl scours | Short parallel strokes along the scour |
+| Environmental | `lndzne`, `lngare`, `lndste`, `lndstp`, `lndpnt`, `lndplc` landing zone, area, site, strip, point, place | Framed L |
+| Environmental | `drpzne` drop zone | Framed D |
+| Environmental | `bchext` beach exit | Solid line on a halo with chevrons, off the beach |
+| Environmental | `divloc`, `viewpt`, `resloc`, `shlloc` diving, viewpoint, resource, shelter | Framed wave and arrow, eye, crate, house |
+| Environmental | `icebrg` iceberg | Framed peaks over a waterline |
+| Environmental | `icemov` ice movement | Arrow turned to the drift (`icebdr`), "drift SE" |
+| Environmental | `icelin` ice line, `bchprf` beach profile | Line |
+| Environmental | ice leads, polynyas, sea ice, land ice, iceberg areas and the ESB zones | Area |
 | Seabed | `contct` contact (SBO) | Framed open circle; the framed mine when classified mine-like (MILCO) or identified as a mine |
 | Seabed | `mindev` mine (SBO) | Framed filled circle with four spikes, after the MIL-STD-2525C sea mine |
 | Seabed | `smalbo` small bottom object (AML 3.0) | As a contact, from its status |
@@ -103,7 +132,49 @@ AML 3.0 air trials (FAI, MFI) use the same classes.
 | Seabed | `WRECKS`, `OBSTRN`, `UWTROC` (LBO) | Chart classes: a dash-dot ring meaning "AML details on pick" |
 
 Seabed points carry no labels; their details are on pick. Other classes
-aren't drawn yet, but are still features.
+aren't drawn yet, but are still features. The IHO chart classes
+in ESB cells (lights, landmarks, coastline and the like) are left to the ENC.
+
+### Sediment
+
+Sediment is a pattern over a 7 % wash in the environmental ink, never a
+colour ramp, so it never competes with the chart's depth shading. Each
+`natsed` value is drawn with the marks of its kinds:
+
+| Kind | Mark | `natsed` |
+|---|---|---|
+| Sand | Dots | sand |
+| Mud | Short dashes | mud, silt, clays |
+| Gravel | Small rings | gravel, pebbles, stone |
+| Boulders | Large rings | cobbles, boulder |
+| Rock | Small crosses | rock, every bedrock type, lava; in AML 3.0 crystalline and sedimentary rock |
+| Shells | Small cups | shells, coral |
+| Till | Small open triangles | till, glaciofluvial drift (AML 3.0) |
+
+A Folk mixture draws its parts in one pattern: the main sediment with every
+mark, a qualifier ("sandy") with every other one, a trace ("slightly
+gravelly") with every fourth. A list of values such as `525,523,522` is drawn
+the same way, the first as the main sediment. Code 544 is gravelly muddy sand
+in AML 1.0 but crystalline rock in AML 3.0, so the cell's catalogue decides.
+Boundaries are a thin dash-dot with no halo or ticks, and areas have no
+label.
+
+The patterns are made on demand (`EsbSediment.ResolveTile`,
+`EsbSediment.ResolveFill`). With a content scope, the sub-layer carries a
+`PatternClipCacheKey`, so the renderer clips a cell's patterns once rather
+than for every tile.
+
+The renderer has no on-map legend box, so the sediment legend is the
+geological layer's own legend entries: one swatch per kind and one for a
+mixture, shown with the rest of the AML legend while ESB is drawn.
+
+**CLB (decision 22).** CLB is drawn in its own style, never the chart's:
+with S-101 portrayal its depth areas would look like the chart and bring a
+second safety contour. While CLB is drawn over an ENC, a host keeps the
+ENC's safety contour dominant by setting `RenderContext.SafetyContourHalo`
+(the S-101 and S-57 processors then add a halo under it) and shows the
+corner chip `ClbStyles.NotForDepthChecksChip`, "AML · CLB not used for depth
+checks". CLB depths never feed depth answers or route checks.
 
 **Standard classes.** A class that is also an IHO S-57 chart class, such as
 `MIPARE` or an LBO wreck, is marked `IsChartClass`. AML draws only its own
@@ -168,6 +239,13 @@ new AmlClassStyle("seddep", AmlFamily.Environmental, AmlClassKind.Area, "Sedimen
     Build = (feature, context) => [context.Boundary(), context.At(5).Area(feature.Id, "AMLENV", 0.93)],
 };
 ```
+
+When that drawing needs symbols, line styles or area fills of its own, the
+module brings them in its `Resources` (an `AmlStyleResources`): fixed symbols
+and line styles, and resolvers for families of symbols and fills made on
+demand. Name them after the family's symbol stem and an underscore, such as
+`AML_ENVIRONMENTAL_SCOUR`. A class whose legend needs more than one row sets
+`AmlClassStyle.Legend`. `Families/EsbEnvironmentalStyles.cs` uses both.
 
 ## Legend
 

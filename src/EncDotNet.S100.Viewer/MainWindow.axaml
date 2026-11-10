@@ -411,6 +411,11 @@
                     <views:DepthBasisIndicatorView x:Name="DepthBasisIndicator"
                                                    DataContext="{Binding StatusBar.DepthBasis}" />
 
+                    <!-- Protective marking (#1371): the highest marking of the AML
+                         data loaded, after DEPTHS and before MCP. -->
+                    <views:AmlMarkingIndicatorView x:Name="AmlMarkingIndicator"
+                                                   DataContext="{Binding StatusBar.AmlMarking}" />
+
                     <!-- MCP server -->
                     <Border Classes="StatusSeparator" IsVisible="{Binding StatusBar.IsMcpRunning}" />
                     <TextBlock Text="{Binding StatusBar.McpStatusText}"

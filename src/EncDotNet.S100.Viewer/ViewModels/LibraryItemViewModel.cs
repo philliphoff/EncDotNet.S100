@@ -2,6 +2,7 @@ using System.Globalization;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.Library;
+using EncDotNet.S100.Datasets.S57;
 using EncDotNet.S100.Viewer.Library;
 using EncDotNet.S100.Viewer.Resources;
 
@@ -117,7 +118,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// The dataset name (e.g. <c>US5AK1AM</c>). A community-list package
     /// (or its group, once unpacked) is named by its description instead.
     /// </summary>
-    public string Name => IsModelHeader ? Item.Name
+    public string Name => IsModelHeader || IsAmlSection ? Item.Name
         : IsStorm ? StormItemText.Name(Item)
         : IsPackageEntry || IsGroupHeader
         ? Item.Title is { } title ? PackageTitles.Clean(title) : Item.Name
@@ -184,7 +185,10 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         set
         {
             if (SetProperty(ref _groupCount, value))
+            {
                 OnPropertyChanged(nameof(Summary));
+                OnPropertyChanged(nameof(SectionHeader));
+            }
         }
     }
 
@@ -266,6 +270,85 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         header._isExpanded = isExpanded;
         return header;
     }
+
+    /// <summary>
+    /// Creates the header row of a source's NATO Additional Military Layers
+    /// cells (#1370, decision 5): "Additional Military Layers · 19", listed
+    /// below the source's charts and expandable to its cells.
+    /// </summary>
+    internal static LibraryItemViewModel ForAmlSection(
+        LibrarySource source, IReadOnlyList<LibraryItemViewModel> members, bool isExpanded, Action<LibraryItemViewModel> toggle, TimeProvider time)
+    {
+        var item = new CollectionItem
+        {
+            Key = AmlSectionKey,
+            ProductSpec = AmlDatasetInfo.SpecName,
+            Name = Strings.Aml_Heading,
+            Location = NoItemLocation.Instance,
+        };
+        LibraryItemViewModel? header = null;
+        header = new LibraryItemViewModel(item, source, null, null, null, null, time, null)
+        {
+            IsGroupHeader = true,
+            IsAmlSection = true,
+            GroupKey = (source.Id, AmlSectionKey),
+            ToggleCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(() => toggle(header!)),
+        };
+        header._members = members;
+        header._groupCount = members.Count;
+        header._isExpanded = isExpanded;
+        return header;
+    }
+
+    /// <summary>The key of a source's AML section header (never an item key: items have no colon prefix like it).</summary>
+    internal const string AmlSectionKey = "section:aml";
+
+    /// <summary>True for the header row of a source's AML cells.</summary>
+    public bool IsAmlSection { get; private init; }
+
+    /// <summary>For the AML section header: "ADDITIONAL MILITARY LAYERS · 19".</summary>
+    public string? SectionHeader => IsAmlSection
+        ? string.Format(CultureInfo.CurrentCulture, "{0} · {1:N0}", Item.Name.ToUpper(CultureInfo.CurrentCulture), GroupCount)
+        : null;
+
+    private AmlDatasetInfo? _aml;
+    private bool _amlRead;
+
+    /// <summary>The cell's AML facts, for a NATO Additional Military Layers item; otherwise <see langword="null"/>.</summary>
+    internal AmlDatasetInfo? Aml
+    {
+        get
+        {
+            if (!_amlRead)
+            {
+                _aml = IsGroupHeader ? null : AmlLibraryProperties.Read(Item.Properties, Item.Name);
+                _amlRead = true;
+            }
+
+            return _aml;
+        }
+    }
+
+    /// <summary>True for a NATO Additional Military Layers cell.</summary>
+    public bool IsAml => Aml is not null;
+
+    /// <summary>
+    /// The protective marking the row shows before its AML tag: only above
+    /// UNCLASSIFIED (decision 4), so the one that matters isn't buried.
+    /// </summary>
+    public string? AmlRowMarking => Aml is { IsMarkedAboveUnclassified: true } aml ? aml.ProtectiveMarking : null;
+
+    /// <summary>True when the row shows <see cref="AmlRowMarking"/>.</summary>
+    public bool HasAmlRowMarking => AmlRowMarking is not null;
+
+    /// <summary>
+    /// The note at the top of an AML item's details (decision 6), following
+    /// whether SoundCharts draws it; <see langword="null"/> for other items.
+    /// </summary>
+    public string? AmlNote => Aml is { } aml ? AmlLibraryRows.ItemNote(aml, AmlLibraryRows.IsDrawn(aml)) : null;
+
+    /// <summary>True when the details show <see cref="AmlNote"/>.</summary>
+    public bool HasAmlNote => AmlNote is not null;
 
     /// <summary>For a model row, its tiles (in the latest run listed).</summary>
     internal IReadOnlyList<LibraryItemViewModel> Members
@@ -488,6 +571,8 @@ internal sealed class LibraryItemViewModel : ViewModelBase
         {
             if (IsForecast)
                 return ForecastSummary();
+            if (IsAmlSection)
+                return string.Empty;
             if (IsGroupHeader)
             {
                 // "116 datasets · published 23.10.2025 15:17" — the package number is already in its name.
@@ -626,6 +711,9 @@ internal sealed class LibraryItemViewModel : ViewModelBase
                 return tags;
             }
 
+            if (IsAmlSection)
+                return [];
+
             if (IsGroupHeader)
             {
                 return
@@ -740,6 +828,15 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     {
         get
         {
+            if (IsAmlSection)
+            {
+                var source = new List<LibraryDetailField>();
+                if (!string.IsNullOrWhiteSpace(_collectionName))
+                    source.Add(new LibraryDetailField(Strings.Library_Field_Collection, _collectionName));
+                source.Add(new LibraryDetailField(Strings.Aml_Field_Cells, GroupCount.ToString("N0", CultureInfo.CurrentCulture)));
+                return [new LibraryDetailGroup(Strings.Aml_Heading, source)];
+            }
+
             if (IsGroupHeader && !IsModelHeader)
             {
                 // An unpacked package: where it came from and what it held.
@@ -762,5 +859,7 @@ internal sealed class LibraryItemViewModel : ViewModelBase
     /// True when the item matches a free-text filter (name, title, spec, or a
     /// property value such as a state code), case-insensitively.
     /// </summary>
-    public bool Matches(string filter) => State.Matches(filter);
+    /// <remarks>An AML cell also matches its tag ("AML 3.0 · CLB"), so "AML" or a product code finds it (decision 5).</remarks>
+    public bool Matches(string filter) =>
+        State.Matches(filter) || (Aml?.TagText.Contains(filter, StringComparison.OrdinalIgnoreCase) ?? false);
 }

@@ -46,6 +46,8 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<Guid, List<CollectionItem>> _downloadingBySource = [];
     private readonly HashSet<(Guid Source, string Package)> _expandedPackages = [];
     private readonly Dictionary<(Guid Source, string Package), LibraryItemViewModel> _packageHeaders = [];
+    private readonly HashSet<Guid> _collapsedAml = [];
+    private string? _amlFilter;
     private readonly Services.Notifications.INotificationService? _notifications;
     private readonly Action<Action> _dispatch;
 
@@ -137,6 +139,12 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         ChooseGroupsCommand = new AsyncRelayCommand(ChooseGroupsAsync, () => _selectedNode?.CanChooseGroups == true);
         AddCurrentsForAreaCommand = new AsyncRelayCommand(AddCurrentsForAreaAsync, () => CanAddCurrentsForArea);
         OpenSecomFixCommand = new RelayCommand<LibraryNodeViewModel>(OpenSecomFix);
+        SetAmlFilterCommand = new RelayCommand<string>(product => AmlFilter = product switch
+        {
+            null or AmlFilterOff => null,
+            AmlFilterAllProducts => string.Empty,
+            _ => product,
+        });
         RefreshCommand = new RelayCommand(Refresh);
         RefreshAllCommand = new RelayCommand(() => _library.Refresh());
         RenameCommand = new RelayCommand(BeginRename, () => _selectedNode?.CanRename == true);
@@ -515,6 +523,60 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     public bool IsStateUpdates { get => _stateFilter == LibraryStateFilter.Updates; set { if (value) StateFilter = LibraryStateFilter.Updates; } }
 
+    /// <summary><see cref="SetAmlFilterCommand"/>'s parameter that turns the AML filter off.</summary>
+    internal const string AmlFilterOff = "off";
+
+    /// <summary><see cref="SetAmlFilterCommand"/>'s parameter for every AML product.</summary>
+    internal const string AmlFilterAllProducts = "all";
+
+    /// <summary>
+    /// The AML filter (#1370, decision 5): <see langword="null"/> when off,
+    /// empty for every AML product, else a product code or
+    /// <see cref="AmlLibraryRows.Aml30"/>. While on, only AML cells are listed.
+    /// </summary>
+    internal string? AmlFilter
+    {
+        get => _amlFilter;
+        set
+        {
+            if (string.Equals(_amlFilter, value, StringComparison.Ordinal))
+                return;
+            _amlFilter = value;
+            RaiseAmlFilter();
+            EndTap();
+            ApplyFilter();
+        }
+    }
+
+    /// <summary>Sets the AML filter: <see cref="AmlFilterOff"/>, <see cref="AmlFilterAllProducts"/> or a product.</summary>
+    public ICommand SetAmlFilterCommand { get; }
+
+    /// <summary>True when the listed node holds AML cells, so the AML chip shows (decision 5).</summary>
+    public bool HasAml { get; private set; }
+
+    /// <summary>True while the AML filter narrows the list.</summary>
+    public bool IsAmlFilterActive => _amlFilter is not null;
+
+    /// <summary>The AML chip: "AML", or "AML · All products" / "AML · CLB" while it filters.</summary>
+    public string AmlFilterText => _amlFilter switch
+    {
+        null => Strings.Aml_Chip,
+        "" => $"{Strings.Aml_Chip} · {Strings.Aml_Filter_AllProducts}",
+        var product => $"{Strings.Aml_Chip} · {product}",
+    };
+
+    private void RaiseAmlFilter()
+    {
+        OnPropertyChanged(nameof(AmlFilter));
+        OnPropertyChanged(nameof(IsAmlFilterActive));
+        OnPropertyChanged(nameof(AmlFilterText));
+    }
+
+    /// <summary>Whether an item passes the AML filter (everything does while it is off).</summary>
+    private bool PassesAml(LibraryItemViewModel item) =>
+        _amlFilter is null
+        || (item.Aml is { } aml && AmlLibraryRows.MatchesProduct(aml, _amlFilter.Length == 0 ? null : _amlFilter));
+
     /// <summary>
     /// Lists only data valid at the Timeline's view time (#711, handoff G2):
     /// a toggle beside the filter box that narrows whichever segment is chosen.
@@ -577,6 +639,9 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(FilterText));
         _stateFilter = LibraryStateFilter.All;
         _atViewTime = false;
+        _amlFilter = null;
+        _collapsedAml.Remove(sourceId);
+        RaiseAmlFilter();
         OnPropertyChanged(nameof(StateFilter));
         OnPropertyChanged(nameof(IsStateAll));
         OnPropertyChanged(nameof(IsStateLocal));
@@ -953,7 +1018,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>True when the list is narrowed by text, state or a map tap.</summary>
-    private bool IsFiltered => _filterText.Trim().Length > 0 || _stateFilter != LibraryStateFilter.All || _location is not null;
+    private bool IsFiltered => _filterText.Trim().Length > 0 || _stateFilter != LibraryStateFilter.All || _location is not null || _amlFilter is not null;
 
     /// <summary>How many listed datasets can be downloaded.</summary>
     public int DownloadableCount => Downloadable().Count();
@@ -971,7 +1036,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// model's row (an unpacked package's rows are local already).
     /// </summary>
     private IEnumerable<LibraryItemViewModel> ListedDatasets() =>
-        _items.SelectMany(i => i.IsModelHeader ? i.Members : i.IsGroupHeader ? [] : [i]).Distinct();
+        _items.SelectMany(i => i.IsModelHeader || i.IsAmlSection ? i.Members : i.IsGroupHeader ? [] : [i]).Distinct();
 
     /// <summary>The listed forecast models with a newer run than the one downloaded (#685).</summary>
     private IReadOnlyList<string> NewRunModels() => ForecastModelsIn(LibraryAvailability.Outdated);
@@ -1686,6 +1751,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         var selected = _selectedItem;
         _itemsBasis = null;
         _allItems = position is { } p ? HitsAt(p) : BuildNodeItems(_selectedNode);
+        UpdateHasAml();
         ApplyFilter();
         SelectedItem = selected is null ? null : _items.FirstOrDefault(i => SameItem(i, selected));
     }
@@ -1754,6 +1820,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         _itemsBasis = basis;
         var selectedKey = _selectedItem is { } sel ? (sel.Source.Id, sel.Item.Key) : default;
         _allItems = BuildNodeItems(node);
+        UpdateHasAml();
         ApplyFilter();
 
         SelectedItem = selectedKey == default
@@ -1767,12 +1834,13 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         _textMatched = _allItems
             .Where(i => _showCancelled || !i.IsCancelled)
             .Where(i => filter.Length == 0 || i.Matches(filter))
+            .Where(PassesAml)
             .ToArray();
         var viewTime = ViewTime;
         _textFiltered = _atViewTime ? [.. _textMatched.Where(i => IsValidAt(i, viewTime))] : _textMatched;
         var listed = _textFiltered.Where(i => InState(i, _stateFilter)).ToArray();
         _listedDatasets = listed.Length;
-        Items = GroupPackages(listed, expandAll: filter.Length > 0);
+        Items = SectionAml(GroupPackages(listed, expandAll: filter.Length > 0), expandAll: filter.Length > 0);
         Recount();
         OnPropertyChanged(nameof(LocationHitCount));
         OnPropertyChanged(nameof(LocationHitsText));
@@ -1881,6 +1949,77 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Lists each source's NATO Additional Military Layers cells under a
+    /// header of their own, below the source's charts (#1370, decision 5), so
+    /// an ENC and an AML cell of the same area are never neighbours by
+    /// accident. Rows inside a package stay where they are.
+    /// </summary>
+    private IReadOnlyList<LibraryItemViewModel> SectionAml(IReadOnlyList<LibraryItemViewModel> rows, bool expandAll)
+    {
+        if (!rows.Any(IsSectionedAml))
+            return rows;
+
+        var result = new List<LibraryItemViewModel>(rows.Count + 1);
+        foreach (var bySource in rows.GroupBy(r => r.Source.Id))
+        {
+            var aml = bySource.Where(IsSectionedAml).ToArray();
+            result.AddRange(aml.Length == 0 ? bySource : bySource.Where(r => !IsSectionedAml(r)));
+            if (aml.Length == 0)
+                continue;
+
+            var key = (bySource.Key, LibraryItemViewModel.AmlSectionKey);
+            var expanded = expandAll || !_collapsedAml.Contains(bySource.Key);
+            if (!_packageHeaders.TryGetValue(key, out var header) || !ReferenceEquals(header.Source, aml[0].Source))
+            {
+                _packageHeaders[key] = header = LibraryItemViewModel.ForAmlSection(aml[0].Source, aml, expanded, ToggleAmlSection, _time);
+            }
+            else
+            {
+                header.GroupCount = aml.Length;
+                header.Members = aml;
+            }
+
+            header.IsExpanded = expanded;
+            result.Add(header);
+            if (expanded)
+                result.AddRange(aml);
+        }
+
+        return result;
+
+        static bool IsSectionedAml(LibraryItemViewModel row) => row.IsAml && !row.IsGroupChild;
+    }
+
+    /// <summary>
+    /// Shows the AML chip only while the listed datasets hold AML cells; with
+    /// none, its filter is turned off so it can't empty the list unseen.
+    /// </summary>
+    private void UpdateHasAml()
+    {
+        var hasAml = _allItems.Any(i => i.IsAml);
+        if (hasAml != HasAml)
+        {
+            HasAml = hasAml;
+            OnPropertyChanged(nameof(HasAml));
+        }
+
+        if (!hasAml && _amlFilter is not null)
+        {
+            _amlFilter = null;
+            RaiseAmlFilter();
+        }
+    }
+
+    private void ToggleAmlSection(LibraryItemViewModel header)
+    {
+        if (!_collapsedAml.Remove(header.Source.Id))
+            _collapsedAml.Add(header.Source.Id);
+        var selected = _selectedItem;
+        ApplyFilter();
+        SelectedItem = selected is null ? null : _items.FirstOrDefault(i => SameItem(i, selected));
     }
 
     /// <summary>

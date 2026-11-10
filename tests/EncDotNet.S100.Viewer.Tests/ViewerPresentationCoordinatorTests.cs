@@ -19,10 +19,10 @@ public class ViewerPresentationCoordinatorTests
         var ecdis = new EcdisDisplayState();
         var mariner = new StubMarinerSettingsProvider();
         var projection = new MapPresentationStateProjection(
-            settingsViewModel, ecdis, mariner, TimeProvider.System);
+            settingsViewModel, ecdis, mariner, TimeProvider.System, new FakeAmlClbPresence());
         var controller = new RecordingPresentationController();
         using var coordinator = new ViewerPresentationCoordinator(
-            settingsViewModel, ecdis, mariner, projection, controller, new FakeRequests());
+            settingsViewModel, ecdis, mariner, projection, controller, new FakeRequests(), new FakeAmlClbPresence());
 
         settingsViewModel.SelectedPalette = PaletteType.Night;
         settingsViewModel.SymbolScale = 1.25;
@@ -49,10 +49,10 @@ public class ViewerPresentationCoordinatorTests
         var ecdis = new EcdisDisplayState();
         var mariner = new StubMarinerSettingsProvider();
         var projection = new MapPresentationStateProjection(
-            settingsViewModel, ecdis, mariner, TimeProvider.System);
+            settingsViewModel, ecdis, mariner, TimeProvider.System, new FakeAmlClbPresence());
         var controller = new RecordingPresentationController();
         var coordinator = new ViewerPresentationCoordinator(
-            settingsViewModel, ecdis, mariner, projection, controller, new FakeRequests());
+            settingsViewModel, ecdis, mariner, projection, controller, new FakeRequests(), new FakeAmlClbPresence());
 
         coordinator.Dispose();
         settingsViewModel.SelectedPalette = PaletteType.Dusk;
@@ -71,11 +71,11 @@ public class ViewerPresentationCoordinatorTests
         var settingsViewModel = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         var ecdis = new EcdisDisplayState();
         var mariner = new StubMarinerSettingsProvider();
-        var projection = new MapPresentationStateProjection(settingsViewModel, ecdis, mariner, TimeProvider.System);
+        var projection = new MapPresentationStateProjection(settingsViewModel, ecdis, mariner, TimeProvider.System, new FakeAmlClbPresence());
         var controller = new RecordingPresentationController();
         var requests = new FakeRequests();
         using var coordinator = new ViewerPresentationCoordinator(
-            settingsViewModel, ecdis, mariner, projection, controller, requests);
+            settingsViewModel, ecdis, mariner, projection, controller, requests, new FakeAmlClbPresence());
 
         var adjustment = new FakeDepthAdjustment();
         requests.Request(adjustment);
@@ -88,6 +88,36 @@ public class ViewerPresentationCoordinatorTests
         // A full presentation change keeps the adjustment.
         settingsViewModel.SelectedPalette = PaletteType.Dusk;
         Assert.Same(adjustment, Assert.Single(controller.Presentations).DepthAdjustment);
+    }
+
+    [Fact]
+    public void Drawing_AML_CLB_gives_the_safety_contour_a_halo_on_the_depth_layers_only()
+    {
+        var settings = new ViewerSettings
+        {
+            SettingsFilePath = Path.Combine(
+                Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json"),
+        };
+        var settingsViewModel = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
+        var ecdis = new EcdisDisplayState();
+        var mariner = new StubMarinerSettingsProvider();
+        var clb = new FakeAmlClbPresence();
+        var projection = new MapPresentationStateProjection(settingsViewModel, ecdis, mariner, TimeProvider.System, clb);
+        var controller = new RecordingPresentationController();
+        using var coordinator = new ViewerPresentationCoordinator(
+            settingsViewModel, ecdis, mariner, projection, controller, new FakeRequests(), clb);
+
+        clb.Set(true);
+
+        // Like a water level, the halo re-draws only the depth layers.
+        Assert.True(Assert.Single(controller.DepthAdjustments).SafetyContourHalo);
+        Assert.Empty(controller.Presentations);
+
+        // Every later presentation keeps it while CLB is drawn, and drops it after.
+        settingsViewModel.SelectedPalette = PaletteType.Dusk;
+        Assert.True(Assert.Single(controller.Presentations).SafetyContourHalo);
+        clb.Set(false);
+        Assert.False(controller.DepthAdjustments[^1].SafetyContourHalo);
     }
 
     private sealed class FakeDepthAdjustment : IDepthAdjustment

@@ -843,4 +843,39 @@
   <data name="Library_Property_amlUpdate" xml:space="preserve">
     <value>AML update cell</value>
   </data>
+  <data name="Aml_ItemNoteDrawn" xml:space="preserve">
+    <value>Military overlay data, not a chart.</value>
+    <comment>Note at the top of an AML item's details once SoundCharts draws its product</comment>
+  </data>
+  <data name="Aml_Field_Producer" xml:space="preserve">
+    <value>Producer</value>
+    <comment>From the cell name: the producer nation code</comment>
+  </data>
+  <data name="Aml_FromName_MatchesFormat" xml:space="preserve">
+    <value>{0} · matches the header</value>
+    <comment>From the cell name: what a part of the name says, when the cell's header agrees</comment>
+  </data>
+  <data name="Aml_FromName_HeaderWinsFormat" xml:space="preserve">
+    <value>{0} · the header says {1}, which wins</value>
+    <comment>From the cell name: the name and the header disagree; {1} is the header's value, which is used</comment>
+  </data>
+  <data name="Aml_FromName_UsedFormat" xml:space="preserve">
+    <value>{0} · used, as the cell gives none</value>
+    <comment>From the cell name: the name's marking is used because the cell itself gives no marking</comment>
+  </data>
+  <data name="Aml_Filter_AllProducts" xml:space="preserve">
+    <value>All products</value>
+    <comment>AML filter menu: every AML product</comment>
+  </data>
+  <data name="Aml_Filter_Clear" xml:space="preserve">
+    <value>Show all data</value>
+    <comment>AML filter menu: turns the AML filter off</comment>
+  </data>
+  <data name="Aml_Filter_ToolTip" xml:space="preserve">
+    <value>Show only Additional Military Layers cells, by product</value>
+  </data>
+  <data name="Aml_Field_Cells" xml:space="preserve">
+    <value>Cells</value>
+    <comment>Details of the Additional Military Layers group header: how many cells it holds</comment>
+  </data>
 </root>

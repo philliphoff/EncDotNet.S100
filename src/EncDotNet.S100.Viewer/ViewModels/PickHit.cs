@@ -55,6 +55,13 @@ internal sealed class PickHit
     /// </summary>
     public bool NotForNavigation { get; init; }
 
+    /// <summary>
+    /// The provenance strip when the hit is a NATO Additional Military Layers
+    /// feature (AML tag, cell, marking, drawn state; #1372); <see langword="null"/>
+    /// for every other product.
+    /// </summary>
+    public AmlPickProvenance? Aml { get; init; }
+
     /// <summary>The data's credit from its Library source (#1075), "NOAA/NCEP GFS-Wave · Public domain"; null for none.</summary>
     public string? Credit { get; init; }
 

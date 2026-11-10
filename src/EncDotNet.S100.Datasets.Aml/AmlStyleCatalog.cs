@@ -19,12 +19,19 @@ public interface IAmlStyleModule
 
     /// <summary>The module's class styles.</summary>
     IReadOnlyList<AmlClassStyle> Classes { get; }
+
+    /// <summary>The extra symbols, line styles and area fills its classes draw with; none by default.</summary>
+    AmlStyleResources Resources => AmlStyleResources.Empty;
 }
 
 /// <summary>A module that is just a list of class styles.</summary>
 /// <param name="Name">The module's name.</param>
 /// <param name="Classes">The module's class styles.</param>
-public sealed record AmlStyleModule(string Name, IReadOnlyList<AmlClassStyle> Classes) : IAmlStyleModule;
+public sealed record AmlStyleModule(string Name, IReadOnlyList<AmlClassStyle> Classes) : IAmlStyleModule
+{
+    /// <inheritdoc/>
+    public AmlStyleResources Resources { get; init; } = AmlStyleResources.Empty;
+}
 
 /// <summary>A family's legend: its name and one entry per class, in module order.</summary>
 /// <param name="Family">The family.</param>
@@ -87,17 +94,26 @@ public sealed class AmlStyleCatalog
         Classes = classes;
         Families = [.. AmlFamily.All.Concat(classes.Select(c => c.Family)).Distinct().OrderBy(f => f.Order)];
         Palette = AmlPalette.Build(Families);
+        var resources = Modules.Select(m => m.Resources).ToList();
         Symbols = new AmlSymbols(
             Families,
-            classes.SelectMany(c => c.Glyphs.Select(g => (c.Family, g))).Distinct());
-        foreach (var style in Families.SelectMany(AmlSignature.LineStyles))
-            _lineStyles.Add(style.Name, style);
+            classes.SelectMany(c => c.Glyphs.Select(g => (c.Family, g))).Distinct(),
+            resources.SelectMany(r => r.Symbols),
+            [.. resources.Select(r => r.SymbolResolver).OfType<Func<string, string?>>()]);
+        foreach (var style in Families.SelectMany(AmlSignature.LineStyles).Concat(resources.SelectMany(r => r.LineStyles)))
+        {
+            if (!_lineStyles.TryAdd(style.Name, style))
+                throw new ArgumentException($"Two AML line styles are named '{style.Name}'.", nameof(modules));
+        }
+
+        var fillResolvers = resources.Select(r => r.AreaFillResolver).OfType<Func<string, AreaFill?>>().ToList();
         LineStyleProvider = name => _lineStyles.GetValueOrDefault(name);
+        AreaFillProvider = name => fillResolvers.Select(resolve => resolve(name)).FirstOrDefault(fill => fill is not null);
         ContentScope = ApplicationContentScope.For(StyleName, Version);
     }
 
-    /// <summary>The built-in modules: <see cref="RalAirStyles"/>, <see cref="RalOperationalStyles"/> and <see cref="SeabedStyles"/>.</summary>
-    public static IReadOnlyList<IAmlStyleModule> BuiltInModules { get; } = [RalAirStyles.Module, RalOperationalStyles.Module, SeabedStyles.SboModule, SeabedStyles.LboModule];
+    /// <summary>The built-in modules, such as <see cref="RalAirStyles"/>, <see cref="ClbStyles"/>, <see cref="EsbEnvironmentalStyles"/> and <see cref="SeabedStyles"/>.</summary>
+    public static IReadOnlyList<IAmlStyleModule> BuiltInModules { get; } = [RalAirStyles.Module, RalOperationalStyles.Module, ClbStyles.Module, MffStyles.Module, ChartBackgroundStyles.Module, AirfieldStyles.Module, EsbEnvironmentalStyles.Module, SeabedStyles.SboModule, SeabedStyles.LboModule];
 
     /// <summary>The catalogue of <see cref="BuiltInModules"/>.</summary>
     public static AmlStyleCatalog Default { get; } = new(BuiltInModules);
@@ -119,6 +135,9 @@ public sealed class AmlStyleCatalog
 
     /// <summary>The line styles by name, for a renderer's line-style provider.</summary>
     public Func<string, LineStyle?> LineStyleProvider { get; }
+
+    /// <summary>The modules' area fills by name (<see cref="AmlStyleResources.AreaFillResolver"/>), for a renderer's area fill provider.</summary>
+    public Func<string, AreaFill?> AreaFillProvider { get; }
 
     /// <summary>The tile disk-cache content scope of the style (<see cref="ApplicationContentScope"/>).</summary>
     public string ContentScope { get; }
@@ -145,16 +164,23 @@ public sealed class AmlStyleCatalog
     {
         ArgumentNullException.ThrowIfNull(family);
         var legend = new LegendBuilder(Palette, palette, Symbols.Provider);
-        return [.. Classes.Where(c => c.Family == family).Select(c => Entry(c, legend, palette))];
+        return [.. Classes.Where(c => c.Family == family).SelectMany(c => Entries(c, legend, palette))];
     }
 
-    /// <summary>The legend entry of one class in <paramref name="palette"/>.</summary>
+    /// <summary>The legend entry of one class in <paramref name="palette"/>: the first of its <see cref="AmlClassStyle.Legend"/> entries when it has its own.</summary>
     /// <param name="style">The class's style.</param>
     /// <param name="palette">The palette the sample is drawn in.</param>
     public LegendEntry BuildLegendEntry(AmlClassStyle style, PaletteType palette)
     {
         ArgumentNullException.ThrowIfNull(style);
-        return Entry(style, new LegendBuilder(Palette, palette, Symbols.Provider), palette);
+        return Entries(style, new LegendBuilder(Palette, palette, Symbols.Provider), palette).First();
+    }
+
+    private IEnumerable<LegendEntry> Entries(AmlClassStyle style, LegendBuilder legend, PaletteType palette)
+    {
+        if (style.Legend is { } own && own(this, palette) is { Count: > 0 } entries)
+            return entries;
+        return [Entry(style, legend, palette)];
     }
 
     private LegendEntry Entry(AmlClassStyle style, LegendBuilder legend, PaletteType palette)

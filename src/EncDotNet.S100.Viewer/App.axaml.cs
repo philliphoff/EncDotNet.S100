@@ -166,6 +166,7 @@ public partial class App : Application
         };
 
         _services = ConfigureServices();
+        _services.GetRequiredService<AmlClbPresence>().Attach(_services.GetRequiredService<IDatasetLoaderService>());
         _services.GetRequiredService<ViewerPresentationCoordinator>();
         _services.GetRequiredService<LayerTimeCoordinator>();
         _services.GetRequiredService<PresentationRevealCoordinator>();
@@ -269,6 +270,8 @@ public partial class App : Application
         // and has the map stamp say "Display Not Real Time" while they're loaded
         // and the view time is pinned (S-98 §12.7.2).
         _services.GetRequiredService<EncDotNet.S100.Viewer.Services.NavigationalWarningDrawingService>();
+        // AML (#1371): the MARKING pill and the first-open notification per set.
+        _services.GetRequiredService<EncDotNet.S100.Viewer.Services.Aml.AmlSessionService>();
         // S-101 features with date ranges count too (S-98 §12.8.2): their
         // drawing follows the view time as well.
         {
@@ -1574,6 +1577,8 @@ public partial class App : Application
         services.AddSingleton<MapPresentationStateProjection>();
         services.AddSingleton(sp =>
             sp.GetRequiredService<MapPresentationStateProjection>().CreateSnapshot());
+        services.AddSingleton<AmlClbPresence>();
+        services.AddSingleton<IAmlClbPresence>(sp => sp.GetRequiredService<AmlClbPresence>());
         services.AddSingleton<ViewerPresentationCoordinator>();
         services.AddSingleton<PresentationRevealCoordinator>();
         services.AddSingleton<ITimeFormatProvider, TimeFormatProvider>();
@@ -1655,6 +1660,23 @@ public partial class App : Application
         services.AddSingleton<EcdisDisplayPanelViewModel>();
         services.AddSingleton<HelmViewModel>();
         services.AddSingleton<RoutesPanelViewModel>();
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Aml.AmlNoticeStore(
+            sp.GetRequiredService<ViewerDataPaths>().AmlNoticesFilePath,
+            sp.GetRequiredService<ViewerSettings>().IsReadOnly,
+            sp.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Viewer.Services.Aml.AmlNoticeStore>>()));
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Aml.AmlSessionService(
+            sp.GetRequiredService<DatasetsViewModel>(),
+            sp.GetRequiredService<StatusBarViewModel>().AmlMarking,
+            sp.GetRequiredService<INotificationService>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Aml.AmlNoticeStore>(),
+            UiThread.Post,
+            Task.Delay,
+            (cell, header) => EncDotNet.S100.Viewer.Services.Aml.AmlNoticeDetails.Open(
+                cell,
+                header,
+                sp.GetRequiredService<LibraryPanelViewModel>(),
+                sp.GetRequiredService<DatasetsViewModel>(),
+                sp.GetRequiredService<ShellLayoutViewModel>())));
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(
             sp.GetRequiredService<ViewerDataPaths>().NavigationalWarningsFilePath,
             sp.GetRequiredService<ViewerSettings>().IsReadOnly,

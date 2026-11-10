@@ -1,4 +1,6 @@
 using System.Globalization;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Portrayals.Application;
 
@@ -86,6 +88,15 @@ public sealed record AmlClassStyle(string Acronym, AmlFamily Family, AmlClassKin
 
     /// <summary>Glyphs a custom <see cref="Build"/> draws other than <see cref="Glyph"/>, such as a contact's mine-like variant.</summary>
     public IReadOnlyList<AmlGlyph> OtherGlyphs { get; init; } = [];
+
+    /// <summary>
+    /// The class's own legend entries in a palette, in place of the one entry
+    /// its <see cref="Kind"/> gives, or <see langword="null"/> for that entry.
+    /// For a class whose <see cref="Build"/> draws something the kinds don't,
+    /// such as CLB's thin contours or sounding figures, or whose drawing needs
+    /// several rows, such as sediment's patterns.
+    /// </summary>
+    public Func<AmlStyleCatalog, PaletteType, IReadOnlyList<LegendEntry>>? Legend { get; init; }
 
     /// <summary>Checks the style is complete: a point class needs a glyph.</summary>
     internal void Validate()

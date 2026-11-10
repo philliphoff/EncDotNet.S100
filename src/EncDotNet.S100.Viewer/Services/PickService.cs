@@ -315,6 +315,7 @@ internal sealed class PickService : IPickService
             NavigationalWarning = info.NavigationalWarning,
             NotForNavigation = notForNavigation,
             Credit = credit,
+            Aml = processor is AmlDatasetProcessor aml ? AmlPickProvenance.From(aml, info) : null,
         };
     }
 
@@ -452,6 +453,9 @@ internal sealed class PickService : IPickService
         double latitude,
         double longitude)
     {
+        // AML never feeds depth answers (#1372, design decision 13): its
+        // features keep S-57 classes, but a CLB depth area must not reach the card.
+        hits = WithoutAml(hits);
         using var processors = _loader.AcquireProcessors();
         // The water level comes from the passage check's source for the same
         // loaded datasets, so the card and Check passage give one answer (#1132).
@@ -482,6 +486,12 @@ internal sealed class PickService : IPickService
             _timeFormat,
             _themeService);
     }
+
+    /// <summary>The hits that may feed the Depth card: every hit but those from AML cells.</summary>
+    internal static IReadOnlyList<PickHit> WithoutAml(IReadOnlyList<PickHit> hits) =>
+        hits.Any(h => h.Aml is not null || h.OwningProcessor is AmlDatasetProcessor)
+            ? hits.Where(h => h.Aml is null && h.OwningProcessor is not AmlDatasetProcessor).ToList()
+            : hits;
 
     private static bool Contains<T>(IReadOnlyList<T> list, T item)
     {

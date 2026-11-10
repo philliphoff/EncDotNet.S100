@@ -21,7 +21,7 @@ public sealed class AmlSeabedStylesTests
     [Fact]
     public void Every_SBO_and_LBO_class_with_a_style_draws_in_the_seabed_family()
     {
-        Assert.Equal(["viewpt"], Sbo.UndrawnClasses);
+        Assert.Equal(["watloc"], Sbo.UndrawnClasses);
         Assert.Equal(43, Sbo.DrawnFeatureCount);
         Assert.Empty(Lbo.UndrawnClasses);
         Assert.Equal(6, Lbo.DrawnFeatureCount);
@@ -142,7 +142,7 @@ public sealed class AmlSeabedStylesTests
     public void At_every_scale_each_point_draws_once_alone_or_in_one_bubble()
     {
         var members = BubbleMembers(Sbo);
-        var drawn = Sbo.Features.Where(f => f.FeatureType != "viewpt").Select(f => f.Id).ToHashSet();
+        var drawn = Sbo.Features.Where(f => f.FeatureType != "watloc").Select(f => f.Id).ToHashSet();
 
         foreach (var scale in Scales)
         {
@@ -230,10 +230,11 @@ public sealed class AmlSeabedStylesTests
     {
         var legend = Assert.Single(AmlStyleCatalog.Default.BuildLegend(PaletteType.Day), g => g.Family == AmlFamily.Seabed);
 
-        Assert.Equal(
-            ["Contact", "Mine or mine-like contact", "Small bottom object", "Sensor anomaly", "Impact scour", "Wreck: AML details on pick", "Obstruction: AML details on pick", "Rock: AML details on pick"],
-            legend.Entries.Select(e => e.Label));
-        Assert.All(legend.Entries, e => Assert.IsType<SymbolLegendEntry>(e));
+        // The SBO and LBO classes, after the seabed classes of earlier modules (MFF's cables).
+        string[] labels = ["Contact", "Mine or mine-like contact", "Small bottom object", "Sensor anomaly", "Impact scour", "Wreck: AML details on pick", "Obstruction: AML details on pick", "Rock: AML details on pick"];
+        var seabed = legend.Entries.SkipWhile(e => e.Label != labels[0]).ToList();
+        Assert.Equal(labels, seabed.Select(e => e.Label));
+        Assert.All(seabed, e => Assert.IsType<SymbolLegendEntry>(e));
     }
 
     private static AmlDrawing Draw(AmlCellBuilder builder) => new AmlPortrayal().Draw(builder.Build());
