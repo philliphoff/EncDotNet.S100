@@ -378,7 +378,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
         // product's category mapping and default-hidden VGs correctly.
         (context?.EcdisDisplay ?? UnfilteredEcdisDisplay).ApplyTo(s101Cat);
 
-        var (prepared, unfiltered, ruleKey) = await GetDisplayInstructionsAsync(mariner, fc, cancellationToken).ConfigureAwait(false);
+        var (prepared, unfiltered, ruleKey) = await GetDisplayInstructionsAsync(mariner, context?.SafetyContourHalo == true, fc, cancellationToken).ConfigureAwait(false);
 
         // Pattern-clip cache identity, as for S-101: the clip reads only the
         // visible area fills, so a display toggle that leaves them unchanged
@@ -479,10 +479,12 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// Returns the cell's drawing instructions under the catalogue's current
     /// ECDIS display state (already applied by the caller). The Lua rules run
     /// only when the mariner settings change; otherwise the cached rule output
-    /// is re-filtered. Call with <see cref="_renderGate"/> held.
+    /// is re-filtered, and the safety contour gets its halo when
+    /// <paramref name="safetyContourHalo"/> (<see cref="RenderContext.SafetyContourHalo"/>).
+    /// Call with <see cref="_renderGate"/> held.
     /// </summary>
     private async Task<(IReadOnlyList<DrawingInstruction> Visible, IReadOnlyList<DrawingInstruction> Unfiltered, string RuleKey)> GetDisplayInstructionsAsync(
-        MarinerSettings mariner, FeatureCatalogue fc, CancellationToken cancellationToken)
+        MarinerSettings mariner, bool safetyContourHalo, FeatureCatalogue fc, CancellationToken cancellationToken)
     {
         var s101Cat = _catalogue;
         var ruleKey = S101DatasetProcessor.BuildRuleOutputCacheKey(
@@ -506,7 +508,8 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             _cachedRuleKey = ruleKey;
         }
 
-        return (VectorPipeline.ApplyDisplayFilters(_cachedRuleOutput, s101Cat), _cachedRuleOutput, ruleKey);
+        var visible = VectorPipeline.ApplyDisplayFilters(_cachedRuleOutput, s101Cat);
+        return (safetyContourHalo ? SafetyContourHalo.Apply(visible) : visible, _cachedRuleOutput, ruleKey);
     }
 
     /// <summary>
@@ -880,7 +883,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             // portrayal, keyed on this cell's portrayal spec — see the core path.
             (context?.EcdisDisplay ?? UnfilteredEcdisDisplay).ApplyTo(s101Cat);
 
-            var (prepared, _, _) = await GetDisplayInstructionsAsync(mariner, fc, cancellationToken).ConfigureAwait(false);
+            var (prepared, _, _) = await GetDisplayInstructionsAsync(mariner, context?.SafetyContourHalo == true, fc, cancellationToken).ConfigureAwait(false);
 
             var geometryProvider = new FeatureGeometryProvider<Feature>(new S101VectorSource(_translatedDataset).GetFeatures());
 

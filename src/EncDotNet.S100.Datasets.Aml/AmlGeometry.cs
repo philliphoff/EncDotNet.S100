@@ -41,7 +41,11 @@ public sealed class AmlGeometry
         _arcTolerance = arcTolerance;
     }
 
-    /// <summary>The position of a point feature, or none when its node is missing.</summary>
+    /// <summary>
+    /// The positions of a point feature: its node's position, or the position
+    /// of each of its soundings (<see cref="Soundings"/>); none when its node
+    /// is missing.
+    /// </summary>
     /// <param name="feature">The feature.</param>
     public IReadOnlyList<GeoPosition> Points(S57PointFeature feature)
     {
@@ -51,9 +55,31 @@ public sealed class AmlGeometry
         {
             if (Node(reference.Name) is { } position)
                 points.Add(position);
+            else if (_chart.GetIsolatedNode(reference.Name) is { HasSoundings: true } node)
+                points.AddRange(node.Soundings.Select(s => Sounding(s).Position));
         }
 
         return points;
+    }
+
+    /// <summary>
+    /// The soundings of a point feature, such as a <c>SOUNDG</c>, whose
+    /// isolated node holds 3-D coordinates (<c>SG3D</c>): each position and
+    /// its depth in the cell's units, positive down. Empty for a feature
+    /// without soundings.
+    /// </summary>
+    /// <param name="feature">The feature.</param>
+    public IReadOnlyList<AmlSounding> Soundings(S57PointFeature feature)
+    {
+        ArgumentNullException.ThrowIfNull(feature);
+        List<AmlSounding>? soundings = null;
+        foreach (var reference in feature.SpatialReferences)
+        {
+            if (_chart.GetIsolatedNode(reference.Name) is { HasSoundings: true } node)
+                (soundings ??= []).AddRange(node.Soundings.Select(Sounding));
+        }
+
+        return soundings ?? (IReadOnlyList<AmlSounding>)[];
     }
 
     /// <summary>The curves of a line feature: its edges, joined where they meet.</summary>
@@ -172,6 +198,12 @@ public sealed class AmlGeometry
         if (_chart.GetIsolatedNode(name) is { Position: { } position })
             return Position(position);
         return null;
+    }
+
+    private AmlSounding Sounding(S57Sounding sounding)
+    {
+        var (longitude, latitude, depth) = _chart.ToDecimalValues(sounding);
+        return new AmlSounding(new GeoPosition(latitude, longitude), depth);
     }
 
     private GeoPosition Position(S57Coordinate2D coordinate)

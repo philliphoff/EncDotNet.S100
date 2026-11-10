@@ -22,6 +22,19 @@ public sealed record RenderContext
     /// </summary>
     public IDepthAdjustment? DepthAdjustment { get; init; }
 
+    /// <summary>
+    /// Whether the chart's safety contour gets a halo in the palette's
+    /// background, so it stays the strongest line while another product
+    /// draws many contours over the chart (AML CLB, AML design handoff
+    /// decision 22). The contour keeps its weight and draw order.
+    /// </summary>
+    /// <remarks>
+    /// Honoured by S-101 and S-57, which add the halo to the display list
+    /// after the portrayal rules (<see cref="EncDotNet.S100.Pipelines.Vector.SafetyContourHalo"/>), so it
+    /// never re-runs them. Other products ignore it.
+    /// </remarks>
+    public bool SafetyContourHalo { get; init; }
+
     /// <summary>The color palette (Day/Dusk/Night) to use for rendering.</summary>
     public PaletteType Palette { get; init; } = PaletteType.Day;
 
