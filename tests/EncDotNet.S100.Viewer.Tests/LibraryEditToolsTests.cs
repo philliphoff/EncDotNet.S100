@@ -27,7 +27,7 @@ public sealed class LibraryEditToolsTests : IDisposable
     {
         _library = _context.CreateService(CollectionIndexer.CreateDefault(feeds: [new RemoteIndexer()]));
         _library.Initialize();
-        _panel = new LibraryPanelViewModel(_library, new NoImporter(), _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System);
+        _panel = new LibraryPanelViewModel(_library, new NoImporter(), _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         var reader = new ViewerLibraryController(_panel, () => [], action => { action(); return Task.CompletedTask; });
         _editor = new ViewerLibraryEditor(_panel, _library, reader, new LibrarySourceAdder(Readers, userCatalogues: null, probe: null, time: TimeProvider.System), dispatch: work => work(), activity: new EncDotNet.S100.Collections.Library.LibraryActivityTracker());
     }

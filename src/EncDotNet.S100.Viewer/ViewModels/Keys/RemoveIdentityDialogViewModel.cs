@@ -51,10 +51,11 @@ internal sealed class RemoveIdentityDialogViewModel : ViewModelBase
     private readonly SecomIdentityReference _identity;
     private readonly IReadOnlyList<SecomIdentityUser> _users;
 
-    public RemoveIdentityDialogViewModel(SecomIdentityStore store, SecomIdentityReference identity, TimeProvider? time = null)
+    public RemoveIdentityDialogViewModel(SecomIdentityStore store, SecomIdentityReference identity, TimeProvider time)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(identity);
+        ArgumentNullException.ThrowIfNull(time);
         _store = store;
         _identity = identity;
         IsDefault = string.Equals(store.DefaultId, identity.Id, StringComparison.OrdinalIgnoreCase);
@@ -63,7 +64,7 @@ internal sealed class RemoveIdentityDialogViewModel : ViewModelBase
             : [];
 
         // F2: the other identities that can be the default (not revoked, not ended), then None; the first preselected.
-        var now = (time ?? TimeProvider.System).GetUtcNow();
+        var now = time.GetUtcNow();
         if (IsDefault)
         {
             var choices = store.Identities

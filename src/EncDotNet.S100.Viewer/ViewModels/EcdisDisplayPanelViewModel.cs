@@ -38,8 +38,8 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         PortrayalCatalogueManager catalogueManager,
         DatasetsViewModel datasets,
         EcdisLabelOverrideProvider labelOverrides,
-        DisplayModeToolbarViewModel? displayModeToolbar = null,
-        DisplayCombinationsViewModel? displayCombinations = null)
+        DisplayModeToolbarViewModel? displayModeToolbar,
+        DisplayCombinationsViewModel? displayCombinations)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(catalogueManager);

@@ -15,7 +15,7 @@ public class ViewerPresentationCoordinatorTests
             SettingsFilePath = Path.Combine(
                 Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json"),
         };
-        var settingsViewModel = new SettingsViewModel(settings);
+        var settingsViewModel = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         var ecdis = new EcdisDisplayState();
         var mariner = new StubMarinerSettingsProvider();
         var projection = new MapPresentationStateProjection(
@@ -45,7 +45,7 @@ public class ViewerPresentationCoordinatorTests
             SettingsFilePath = Path.Combine(
                 Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json"),
         };
-        var settingsViewModel = new SettingsViewModel(settings);
+        var settingsViewModel = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         var ecdis = new EcdisDisplayState();
         var mariner = new StubMarinerSettingsProvider();
         var projection = new MapPresentationStateProjection(
@@ -68,7 +68,7 @@ public class ViewerPresentationCoordinatorTests
             SettingsFilePath = Path.Combine(
                 Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json"),
         };
-        var settingsViewModel = new SettingsViewModel(settings);
+        var settingsViewModel = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         var ecdis = new EcdisDisplayState();
         var mariner = new StubMarinerSettingsProvider();
         var projection = new MapPresentationStateProjection(settingsViewModel, ecdis, mariner, TimeProvider.System);

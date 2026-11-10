@@ -75,7 +75,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             notifier,
             (entry, _) => { loaded.Add(entry); return Task.CompletedTask; },
             entry => unloaded.Add(entry),
-            options ?? new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero });
+            options ?? new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
     [Fact]
     public async Task InViewCell_IsLoaded()
@@ -188,7 +192,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 loaded.Add(entry);
             },
             entry => unloaded.Add(entry),
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         var cell = Cell("US5ZZ", 40, -75, 41, -74);
         coordinator.Register(new[] { cell });
@@ -223,7 +231,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 loaded.Add(entry);
             },
             entry => unloaded.Add(entry),
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         var cell = Cell("US5DD", 40, -75, 41, -74);
         coordinator.Register(new[] { cell });
@@ -357,7 +369,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 loaded.Add(entry);
             },
             entry => unloaded.Add(entry),
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         var cellA = Cell("US5GA", 40, -75, 41, -74);
         var cellB = Cell("US5GB", 40, -75, 41, -74);
@@ -408,7 +424,10 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 inMarshal.Value = true;
                 try { action(); }
                 finally { inMarshal.Value = false; }
-            });
+            },
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         coordinator.Register(new[] { Cell("US5MA", 40, -75, 41, -74) });
         await Task.Run(() => notifier.Publish(Viewport(40, -75, 41, -74)), TestContext.Current.CancellationToken);
@@ -435,7 +454,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 loaded.Add(entry);
             },
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         coordinator.Register(new[] { blocker, far });
 
@@ -473,7 +496,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             notifier,
             (entry, _) => { order.Enqueue(entry); return Task.CompletedTask; },
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         var corner = Cell("US5CORNER", 40.0, -75.0, 40.1, -74.9);
         var middle = Cell("US5MIDDLE", 40.4, -74.6, 40.6, -74.4);
@@ -500,7 +527,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 order.Enqueue(entry);
             },
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         // The blocker takes the only slot; the rest queue behind it.
         coordinator.Register(new[] { blocker });
@@ -535,7 +566,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 done.Add(entry);
             },
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 4 });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 4 },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         coordinator.Register(new[]
         {
@@ -578,7 +613,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 entry.IsLoaded = true;
             },
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         var ahead = Cell("US5AHD", 40.2, -73.8, 40.4, -73.6);
         coordinator.Register(new[] { ahead });
@@ -609,7 +648,10 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 ViewportDebounce = TimeSpan.Zero,
                 SpeculativeRetryDelay = TimeSpan.FromMilliseconds(20),
             },
-            hasVisibleTileWork: () => Volatile.Read(ref tilesBusy));
+            hasVisibleTileWork: () => Volatile.Read(ref tilesBusy),
+            marshal: null,
+            unloadMany: null,
+            planner: null);
 
         var visible = Cell("US5VIS", 40.4, -74.6, 40.6, -74.4);
         var ahead = Cell("US5AHD", 40.2, -73.8, 40.4, -73.6);
@@ -645,7 +687,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 }
             },
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         coordinator.Register(new[] { cell });
         notifier.Publish(Viewport(40, -75, 41, -74));
@@ -679,7 +725,10 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             (_, _) => Task.CompletedTask,
             single.Add,
             new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, RetentionBudget = 0 },
-            unloadMany: entries => batches.Enqueue(entries.ToArray()));
+            unloadMany: entries => batches.Enqueue(entries.ToArray()),
+            marshal: null,
+            hasVisibleTileWork: null,
+            planner: null);
 
         var cells = new[]
         {
@@ -759,7 +808,10 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 ViewportDebounce = TimeSpan.Zero,
                 SpeculativeRetryDelay = TimeSpan.FromMilliseconds(20),
             },
-            hasVisibleTileWork: tilesBusy);
+            hasVisibleTileWork: tilesBusy,
+            marshal: null,
+            unloadMany: null,
+            planner: null);
 
     [Fact]
     public async Task CoarseCellCoveredByFinerCells_WaitsForThem()
@@ -803,7 +855,11 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
                 order.Enqueue(entry);
             },
             _ => { },
-            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 4 });
+            new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 4 },
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null,
+            planner: null);
 
         coordinator.Register(new[] { coarse, west, east });
         notifier.Publish(Viewport(40, -75, 41, -74));
@@ -939,7 +995,10 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             },
             _ => { },
             new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
-            planner: planner);
+            planner: planner,
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null);
 
         var here = Cell("HERE", 47.55, -122.45, 47.65, -122.25);
         var there = Cell("THERE", 47.20, -122.55, 47.30, -122.35);
@@ -982,7 +1041,10 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             },
             _ => { },
             new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero, MaxConcurrency = 1 },
-            planner: planner);
+            planner: planner,
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null);
 
         coordinator.Register(new[]
         {
@@ -1010,7 +1072,10 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             (entry, _) => { loaded.Add(entry); return Task.CompletedTask; },
             _ => { },
             new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
-            planner: planner);
+            planner: planner,
+            marshal: null,
+            hasVisibleTileWork: null,
+            unloadMany: null);
 
         var cell = Cell("A", 40.0, -75.0, 40.5, -74.5);
         coordinator.Register(new[] { cell });
@@ -1042,7 +1107,9 @@ public sealed class ExchangeSetLazyLoadCoordinatorTests
             _ => { },
             new LazyLoadOptions { ViewportDebounce = TimeSpan.Zero },
             hasVisibleTileWork: () => false,
-            planner: planner);
+            planner: planner,
+            marshal: null,
+            unloadMany: null);
         coordinator.Register(new[] { coarse, west, east });
         notifier.Publish(Viewport(20, -60, 21, -59));
 

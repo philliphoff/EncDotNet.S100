@@ -122,9 +122,9 @@ public sealed class DepthBasisMcpToolTests
         var loader = new FakeDatasetLoaderService();
         using var service = new DepthBasisService(loader, null, new FixedViewTime(), NoWaterLevelAdjustment.Instance, post: _ => { }, scope: null, readDatum: Task.Run);
 
-        var state = Value(await new GetCheckStateTool(f.Routes, new InlineInvoker(), f.Check) { DepthBasis = service }
+        var state = Value(await new GetCheckStateTool(f.Routes, new InlineInvoker(), f.Check, findings: null) { DepthBasis = service }
             .InvokeAsync(false, TestContext.Current.CancellationToken));
-        var without = Value(await new GetCheckStateTool(f.Routes, new InlineInvoker(), f.Check)
+        var without = Value(await new GetCheckStateTool(f.Routes, new InlineInvoker(), f.Check, findings: null)
             .InvokeAsync(false, TestContext.Current.CancellationToken));
 
         Assert.NotNull(state.DepthBasis);

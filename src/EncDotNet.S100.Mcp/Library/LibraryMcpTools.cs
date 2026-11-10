@@ -40,7 +40,7 @@ public static class LibraryMcpTools
             tools.Add(LibraryEditMcpAdapters.Create(new SetLibrarySourceOptionsTool(editor)));
             tools.Add(LibraryEditMcpAdapters.Create(new AwaitLibraryIdleTool(editor)));
             if (secomTrust is not null)
-                tools.Add(LibraryMcpAdapters.Create(new SetSecomIdentityTool(secomTrust, references: secomIdentities)));
+                tools.Add(LibraryMcpAdapters.Create(new SetSecomIdentityTool(secomTrust, TimeProvider.System, secomIdentities)));
         }
 
         return tools;

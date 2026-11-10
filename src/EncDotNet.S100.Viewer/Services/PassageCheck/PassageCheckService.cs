@@ -165,9 +165,9 @@ internal sealed class PassageCheckService : IDisposable
         IRouteWeatherLimits weather,
         RouteCheckSourceCache sources,
         Func<IEnumerable<IRouteCheck>> checks,
-        PanelRouteWarningSource? warnings = null,
-        IMarinerSettingsProvider? mariner = null,
-        RouteCheckOptions? options = null,
+        PanelRouteWarningSource? warnings,
+        IMarinerSettingsProvider? mariner,
+        RouteCheckOptions? options,
         TimeSpan? debounce = null)
     {
         ArgumentNullException.ThrowIfNull(routes);

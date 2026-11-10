@@ -59,7 +59,7 @@ public class SampleCoverageToolS111StationSeriesTests
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S111Stations("dcf8", Synth()));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S111Spec, Latitude: 51.5, Longitude: -0.1), TestContext.Current.CancellationToken);
@@ -81,7 +81,7 @@ public class SampleCoverageToolS111StationSeriesTests
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S111Stations("dcf8", Synth()));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var requested = new DateTimeOffset(2023, 12, 1, 0, 0, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
@@ -100,7 +100,7 @@ public class SampleCoverageToolS111StationSeriesTests
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S111Stations("dcf8", Synth()));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var requested = new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
@@ -119,7 +119,7 @@ public class SampleCoverageToolS111StationSeriesTests
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S111Stations("dcf8", Synth()));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         // 01:40 → rounds to 02:00 (index 2).
         var requested = new DateTimeOffset(2024, 1, 1, 1, 40, 0, TimeSpan.Zero);
@@ -139,7 +139,7 @@ public class SampleCoverageToolS111StationSeriesTests
     {
         var catalog = new FakeDatasetCatalog();
         catalog.Add(LoadedDatasetFactory.S111Stations("dcf8", Synth()));
-        var tool = new SampleCoverageTool(catalog);
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
 
         var result = await tool.InvokeAsync(new SampleCoverageRequest(
             LoadedDatasetFactory.S111Spec, Latitude: -80.0, Longitude: 0.0), TestContext.Current.CancellationToken);

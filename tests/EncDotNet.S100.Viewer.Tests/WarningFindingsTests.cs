@@ -84,7 +84,7 @@ public sealed class WarningFindingsTests(WarningsScenarioFixture fixture) : ICla
     private Setup Create(bool withWarnings = true, DateTimeOffset? viewTime = null)
     {
         CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
-        var routes = new RoutesService(viewTime is { } at ? new ViewTime(at) : null);
+        var routes = new RoutesService(viewTime is { } at ? new ViewTime(at) : new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = RouteS421Mapping.FromS421(fixture.S421Route());
         route.SetPassageValue(RoutePassageField.Draft, null);
         route.SetDeparture(Departure);
@@ -97,8 +97,10 @@ public sealed class WarningFindingsTests(WarningsScenarioFixture fixture) : ICla
         var warnings = new NavigationalWarningsService(loader, datasets: null, sources: null, seen: new EncDotNet.S100.Viewer.Services.NavigationalWarningSeenStore(null), clock: TimeProvider.System, ownShip: null, activeRoute: null, classifications: new EncDotNet.S100.Viewer.Services.NavigationalWarningClassificationStore(null));
         var catalog = new PassageCheckFixture.FixedCatalog(fixture.Datasets);
         var check = new PassageCheckService(routes, catalog, warnings: new PanelRouteWarningSource(warnings),
-            checks: () => [new WarningCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: PassageCheckFixture.SerialPost, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources());
-        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(), warnings: warnings);
+            checks: () => [new WarningCheck(), new ClearanceCheck()], debounce: TimeSpan.Zero, post: PassageCheckFixture.SerialPost, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources(),
+            mariner: null,
+            options: null);
+        var findings = new RouteFindingsService(check, routes, catalog, null, timeFormat: new Utc(), warnings: warnings, mariner: null);
         return new Setup(routes, route, check, loader, warnings, findings);
     }
 

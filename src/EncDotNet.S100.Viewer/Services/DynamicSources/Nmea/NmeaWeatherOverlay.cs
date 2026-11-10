@@ -45,7 +45,7 @@ internal sealed class NmeaWeatherOverlay : IAsyncDisposable
     /// <param name="source">The source.</param>
     /// <param name="ownShip">The own-ship provider whose fixes place the feature; <see langword="null"/> to rely on the stream's RMC.</param>
     /// <param name="followOwnShip">Whether to forward the fixes now, i.e. whether own ship is shown; <see langword="null"/> for always.</param>
-    public NmeaWeatherOverlay(NmeaWeatherSource source, IOwnShipPositionProvider? ownShip, Func<bool>? followOwnShip = null)
+    public NmeaWeatherOverlay(NmeaWeatherSource source, IOwnShipPositionProvider? ownShip, Func<bool>? followOwnShip)
     {
         ArgumentNullException.ThrowIfNull(source);
         Source = source;

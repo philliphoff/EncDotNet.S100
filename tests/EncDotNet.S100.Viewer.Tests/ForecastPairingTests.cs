@@ -81,7 +81,7 @@ public sealed class ForecastPairingTests : IDisposable
         }
 
         await _library.WhenIdle();
-        var panel = new LibraryPanelViewModel(_library, _importer, new NullLoader(), _downloader, action => action(), time: _time, coalesce: action => action());
+        var panel = new LibraryPanelViewModel(_library, _importer, new NullLoader(), _downloader, action => action(), time: _time, coalesce: action => action(), feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         panel.Sync();
         return panel;
     }
@@ -245,7 +245,7 @@ public sealed class ForecastPairingTests : IDisposable
         Assert.StartsWith("Forecast ended " + new DateTime(2025, 12, 25).ToString("d"), vm.ForecastEndedNote, StringComparison.Ordinal);
         Assert.True(vm.CanContinueFromScope);
 
-        var entry = new CatalogueEntryViewModel(known, openUrl: null);
+        var entry = new CatalogueEntryViewModel(known, openUrl: null, remove: null, openFix: null, copyText: null);
         Assert.True(entry.IsPilot);
         Assert.Equal("S-104 · AWS", entry.FormatText);
     }

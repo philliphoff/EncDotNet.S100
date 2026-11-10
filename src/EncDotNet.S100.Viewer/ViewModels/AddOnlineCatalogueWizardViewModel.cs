@@ -122,8 +122,8 @@ internal sealed class AddOnlineCatalogueWizardViewModel : ViewModelBase
     public AddOnlineCatalogueWizardViewModel(
         CatalogueDirectoryDialogViewModel directory,
         Func<AddToLibraryDialogViewModel> scopeFactory,
-        Action<Keys.KeysTab>? openKeys = null,
-        Func<KnownCatalogueSource, Action<Keys.KeysTab>, Secom.SecomConnectionStepViewModel?>? connectionFactory = null)
+        Action<Keys.KeysTab>? openKeys,
+        Func<KnownCatalogueSource, Action<Keys.KeysTab>, Secom.SecomConnectionStepViewModel?>? connectionFactory)
     {
         _connectionFactory = connectionFactory;
         _openKeys = openKeys;

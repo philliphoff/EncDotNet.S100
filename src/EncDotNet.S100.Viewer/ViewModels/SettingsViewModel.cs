@@ -1242,10 +1242,10 @@ internal sealed class SettingsViewModel : ViewModelBase, Services.Depth.IWaterLe
 
     public SettingsViewModel(
         ViewerSettings settings,
-        IDataMaintenanceService? dataMaintenance = null,
-        IApplicationControlService? applicationControl = null,
-        DialogManager? dialogManager = null,
-        Keys.KeysAndCertificatesViewModel? keysAndCertificates = null)
+        IDataMaintenanceService? dataMaintenance,
+        IApplicationControlService? applicationControl,
+        DialogManager? dialogManager,
+        Keys.KeysAndCertificatesViewModel? keysAndCertificates)
     {
         _settings = settings;
         KeysAndCertificates = keysAndCertificates;

@@ -79,7 +79,7 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
 
         public FakeDatasetLoaderService Loader { get; } = new();
 
-        public RoutesService Routes { get; } = new();
+        public RoutesService Routes { get; } = new(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
 
         public ReceivedRoutesService Service { get; }
 
@@ -231,7 +231,7 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
         File.Copy(Fixture("RTE-TEST-GBASIC.s421.gml"), Path.Combine(basicFolder, "route.gml"));
         File.Copy(Fixture("RTE-TEST-GMIN.s421.gml"), Path.Combine(minFolder, "route.gml"));
         var loader = new FakeDatasetLoaderService();
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var service = new ReceivedRoutesService(loader, routes, checkSettings: new EncDotNet.S100.Viewer.Routing.Persistence.CheckSettingsStore(), closeDataset: null, notifications: null, follow: null, read: EncDotNet.S100.Viewer.Services.ReceivedRoutesService.ReadDataset);
         var datasets = new DatasetsViewModel(loader);
         using var basicSource = Core.FileSystemAssetSource.Create(basicFolder);
@@ -520,7 +520,7 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
     {
         var h = new Harness();
         h.Open(Fixture("RTE-TEST-GBASIC.s421.gml"));
-        var panel = new RoutesPanelViewModel(h.Routes);
+        var panel = new RoutesPanelViewModel(h.Routes, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null, exchange: null, dialogs: null);
 
         Assert.True(panel.IsActiveReadOnly);
         Assert.False(panel.CanEditActiveRoute);
@@ -555,7 +555,7 @@ public sealed class ReceivedRoutesTests(WarningsRouteScenarioFixture scenario) :
     {
         var h = new Harness();
         var entry = h.Open(Fixture("RTE-TEST-GBASIC.s421.gml"));
-        var panel = new RoutesPanelViewModel(h.Routes);
+        var panel = new RoutesPanelViewModel(h.Routes, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null, exchange: null, dialogs: null);
         panel.Passage.IsExpanded = true;
         using var host = ViewHost.Show(new RoutesView { DataContext = panel }, width: 420, height: 900);
 

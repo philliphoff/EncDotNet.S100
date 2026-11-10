@@ -241,14 +241,14 @@ public sealed class RouteCheckMapTests(WarningsScenarioFixture fixture) : IClass
     [AvaloniaFact]
     public void The_legend_folds_to_a_chip_from_its_header()
     {
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = new Route("r", "Test");
         route.AppendWaypoint(new GeoPosition(50, -1));
         route.AppendWaypoint(new GeoPosition(50, -0.9));
         routes.Routes.Add(route);
         routes.Routes.SetActiveRoute(route);
-        using var check = new PassageCheckService(routes, new PassageCheckFixture.FixedCatalog([]), PassageCheckFixture.SerialPost, debounce: TimeSpan.Zero, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources(), checks: EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService.BuiltInChecks);
-        var state = new RouteCheckLegendState();
+        using var check = new PassageCheckService(routes, new PassageCheckFixture.FixedCatalog([]), PassageCheckFixture.SerialPost, debounce: TimeSpan.Zero, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources(), checks: EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService.BuiltInChecks, warnings: null, mariner: null, options: null);
+        var state = new RouteCheckLegendState(settings: null);
         using var legend = new RouteCheckLegendViewModel(routes, check, null, state);
         using var host = ViewHost.Show(new RouteCheckLegendView { DataContext = legend }, width: 400, height: 400);
 
@@ -279,15 +279,15 @@ public sealed class RouteCheckMapTests(WarningsScenarioFixture fixture) : IClass
     [AvaloniaFact]
     public void The_legend_glyphs_sit_level_with_their_text()
     {
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = new Route("r", "Test");
         route.AppendWaypoint(new GeoPosition(50, -1));
         route.AppendWaypoint(new GeoPosition(50, -0.9));
         route.SetPassageValue(RoutePassageField.Draft, 5);
         routes.Routes.Add(route);
         routes.Routes.SetActiveRoute(route);
-        using var check = new PassageCheckService(routes, new PassageCheckFixture.FixedCatalog([]), PassageCheckFixture.SerialPost, debounce: TimeSpan.Zero, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources(), checks: EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService.BuiltInChecks);
-        using var legend = new RouteCheckLegendViewModel(routes, check, null, new RouteCheckLegendState());
+        using var check = new PassageCheckService(routes, new PassageCheckFixture.FixedCatalog([]), PassageCheckFixture.SerialPost, debounce: TimeSpan.Zero, weather: new FixedWeatherLimits(), sources: PassageCheckFixture.NewSources(), checks: EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService.BuiltInChecks, warnings: null, mariner: null, options: null);
+        using var legend = new RouteCheckLegendViewModel(routes, check, null, new RouteCheckLegendState(settings: null));
         using var host = ViewHost.Show(new RouteCheckLegendView { DataContext = legend }, width: 400, height: 400);
         routes.IsCheckModeActive = true;
         host.Settle();

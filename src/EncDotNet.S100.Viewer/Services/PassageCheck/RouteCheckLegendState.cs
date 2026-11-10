@@ -11,7 +11,7 @@ internal sealed class RouteCheckLegendState
     private bool _isOpen;
 
     /// <param name="settings">Where the state persists; <c>null</c> keeps it for the session only.</param>
-    public RouteCheckLegendState(ViewerSettings? settings = null)
+    public RouteCheckLegendState(ViewerSettings? settings)
     {
         _settings = settings;
         _isOpen = settings?.IsRouteCheckLegendOpen ?? true;

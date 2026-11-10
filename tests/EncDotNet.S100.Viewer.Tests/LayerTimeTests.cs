@@ -112,7 +112,7 @@ public sealed class LayerTimeTests
     {
         var service = new GlobalTimeService();
         var library = new StaticLibrary(new LibraryTimedEntry("feed:cbofs/111US00_CBOFS_US4MD1DD", "111US00_CBOFS_US4MD1DD", "S-111", Run, Run.AddHours(48), LibraryTimedState.Loaded) { Run = Run });
-        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(2))), action => action(), library: library);
+        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(2))), action => action(), library: library, refresher: null, progress: null, scope: null);
         var tile = LibraryTile();
         service.ApplySnapshot(new MapsuiMapTimeSnapshot
         {
@@ -224,7 +224,7 @@ public sealed class LayerTimeTests
         var service = new GlobalTimeService();
         var progress = new TimeRefreshProgress();
         var now = Run.AddHours(10);
-        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(now)), action => action(), null, progress);
+        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(now)), action => action(), null, progress, scope: null, library: null);
         var cbofs = Cbofs();
         var baltimore = Baltimore(Run, 100);
         var samples = cbofs.Samples.Concat(baltimore.Samples).Distinct().Order().ToArray();

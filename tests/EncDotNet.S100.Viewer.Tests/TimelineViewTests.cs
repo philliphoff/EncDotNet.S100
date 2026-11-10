@@ -30,7 +30,7 @@ public sealed class TimelineViewTests
     [AvaloniaFact]
     public void An_empty_timeline_binds_without_looping()
     {
-        var timeline = new TimelineViewModel(new GlobalTimeService(), null, new FakeTimeProvider(new DateTimeOffset(Run)), action => action());
+        var timeline = new TimelineViewModel(new GlobalTimeService(), null, new FakeTimeProvider(new DateTimeOffset(Run)), action => action(), refresher: null, progress: null, scope: null, library: null);
 
         Show(timeline);
 
@@ -41,7 +41,7 @@ public sealed class TimelineViewTests
     public void A_timeline_with_gaps_binds_and_lays_out()
     {
         var service = new GlobalTimeService();
-        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action());
+        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action(), refresher: null, progress: null, scope: null, library: null);
         var early = Enumerable.Range(0, 24).Select(h => Run.AddDays(-60).AddHours(h)).ToArray();
         var late = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
         var samples = early.Concat(late).ToArray();
@@ -70,7 +70,7 @@ public sealed class TimelineViewTests
     {
         var service = new GlobalTimeService();
         var scope = new InViewScope("m0", "m1");
-        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action(), scope: scope);
+        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action(), scope: scope, refresher: null, progress: null, library: null);
         var samples = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
         service.ApplySnapshot(new MapsuiMapTimeSnapshot
         {
@@ -99,7 +99,7 @@ public sealed class TimelineViewTests
     public void The_time_HUD_binds_and_drops_the_offset_then_the_pinned_label_on_narrow_maps()
     {
         var service = new GlobalTimeService();
-        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action());
+        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action(), refresher: null, progress: null, scope: null, library: null);
         var samples = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
         service.ApplySnapshot(new MapsuiMapTimeSnapshot
         {
@@ -150,7 +150,7 @@ public sealed class TimelineViewTests
         // step menu is as wide as its longest label, so ⏮ ‹ › ⏭ don't jump when
         // the time is pinned (Go live used to appear and push them ~80 px left).
         var service = new GlobalTimeService();
-        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action());
+        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action(), refresher: null, progress: null, scope: null, library: null);
         var samples = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
         service.ApplySnapshot(new MapsuiMapTimeSnapshot
         {

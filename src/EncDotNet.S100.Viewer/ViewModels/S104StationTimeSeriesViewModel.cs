@@ -24,8 +24,8 @@ internal sealed class S104StationTimeSeriesViewModel : StationTimeSeriesViewMode
     public S104StationTimeSeriesViewModel(
         StationTimeSeriesSnapshot snapshot,
         GlobalTimeService? globalTime,
-        ITimeFormatProvider? timeFormat = null,
-        IThemeService? themeService = null)
+        ITimeFormatProvider? timeFormat,
+        IThemeService? themeService)
         : base(snapshot, globalTime, timeFormat, themeService)
     {
         var channel = FindChannel(snapshot, "waterLevelHeight");

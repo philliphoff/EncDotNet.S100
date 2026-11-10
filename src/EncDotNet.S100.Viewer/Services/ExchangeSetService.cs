@@ -42,9 +42,9 @@ internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
     public ExchangeSetService(
         DatasetsViewModel datasets,
         INotificationService notifications,
-        LazyLoading.ExchangeSetLazyLoadCoordinator? lazyCoordinator = null,
-        IDatasetMetadataReader? metadataReader = null,
-        Caching.IS57CatalogCache? s57CatalogCache = null,
+        LazyLoading.ExchangeSetLazyLoadCoordinator? lazyCoordinator,
+        IDatasetMetadataReader? metadataReader,
+        Caching.IS57CatalogCache? s57CatalogCache,
         int? maxConcurrentLoads = null)
     {
         ArgumentNullException.ThrowIfNull(datasets);

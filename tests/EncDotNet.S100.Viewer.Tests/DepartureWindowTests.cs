@@ -29,7 +29,7 @@ public sealed class DepartureWindowTests : IDisposable
     private static DateTimeOffset At(int hour, int minute) => new(2024, 6, 1, hour, minute, 0, TimeSpan.Zero);
 
     private static PassageCheckViewModel Card(PassageCheckFixture f) =>
-        Assert.IsType<PassageCheckViewModel>(new RoutesPanelViewModel(f.Routes, timeFormat: new Utc(), check: f.Check).Check);
+        Assert.IsType<PassageCheckViewModel>(new RoutesPanelViewModel(f.Routes, timeFormat: new Utc(), check: f.Check, viewport: null, marinerSettings: null, findings: null, exchange: null, dialogs: null).Check);
 
     [Fact]
     public async Task Depart_06_40_moves_the_07_10_departure_into_the_window_and_it_meets_your_settings()
@@ -82,7 +82,7 @@ public sealed class DepartureWindowTests : IDisposable
     {
         // Water high all morning: every departure that arrives within the data meets your settings.
         var f = new PassageCheckFixture(tide: _ => 4f);
-        var clearance = new ClearanceViewModel(f.Check, timeFormat: new Utc());
+        var clearance = new ClearanceViewModel(f.Check, timeFormat: new Utc(), mariner: null, theme: null);
         await f.CheckAsync();
 
         var window = f.Check.Window!;
@@ -167,7 +167,7 @@ public sealed class DepartureWindowTests : IDisposable
     public async Task The_band_shows_the_runs_knob_and_labels_and_dragging_sets_the_departure_in_one_undo_step()
     {
         var f = new PassageCheckFixture(tide: PassageCheckFixture.TwoHighWaters);
-        var vm = new ClearanceViewModel(f.Check, timeFormat: new Utc());
+        var vm = new ClearanceViewModel(f.Check, timeFormat: new Utc(), mariner: null, theme: null);
         await f.CheckAsync();
 
         Assert.True(vm.HasBand);

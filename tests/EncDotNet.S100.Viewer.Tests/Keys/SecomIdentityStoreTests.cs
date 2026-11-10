@@ -290,7 +290,7 @@ public sealed class SecomIdentityStoreTests : IDisposable
         Assert.Equal(reference.Id, _keys.Identities.DefaultId);
         Assert.False((await tool.InvokeAsync("sc-ident:00000000", null, null, ct: ct)).TryGetValue(out _));
 
-        var withoutStore = new EncDotNet.S100.Mcp.Tools.Library.SetSecomIdentityTool(_keys.Trust, _keys.Time);
+        var withoutStore = new EncDotNet.S100.Mcp.Tools.Library.SetSecomIdentityTool(_keys.Trust, _keys.Time, references: null);
         Assert.False((await withoutStore.InvokeAsync(reference.Id, null, null, ct: ct)).TryGetValue(out _));
     }
 

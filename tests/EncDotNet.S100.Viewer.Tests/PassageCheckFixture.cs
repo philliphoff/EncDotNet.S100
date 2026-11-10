@@ -66,7 +66,7 @@ internal sealed class PassageCheckFixture
         if (extraDatasets is not null)
             datasets.AddRange(extraDatasets);
         Catalog = new FixedCatalog(datasets);
-        Routes = new RoutesService(viewTime);
+        Routes = new RoutesService(viewTime ?? new ClockViewTime(TimeProvider.System));
         Route = Routes.Routes.CreateRoute("Fixture");
         for (var i = 0; i < 9; i++)
             Route.AppendWaypoint(new GeoPosition(0, i * 0.02));
@@ -82,7 +82,10 @@ internal sealed class PassageCheckFixture
             debounce: debounce ?? TimeSpan.Zero,
             post: post ?? SerialPost,
             weather: Weather,
-            sources: PassageCheckFixture.NewSources());
+            sources: PassageCheckFixture.NewSources(),
+            warnings: null,
+            mariner: null,
+            options: null);
     }
 
     /// <summary>The mariner's weather limits the check reads; none until a test sets them.</summary>

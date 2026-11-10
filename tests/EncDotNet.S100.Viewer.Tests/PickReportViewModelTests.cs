@@ -309,7 +309,9 @@ public class PickReportViewModelTests
             4.4,
             DepthUnit.Metres,
             safetyDepthMetres: null,
-            globalTime: null);
+            globalTime: null,
+            timeFormat: null,
+            themeService: null);
     }
 
     [Fact]

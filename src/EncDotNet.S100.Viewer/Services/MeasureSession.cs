@@ -19,7 +19,7 @@ internal sealed class MeasureSession
 
     /// <param name="settings">Where the geometry persists (D3); <c>null</c>
     /// keeps it for the session only.</param>
-    public MeasureSession(ViewerSettings? settings = null)
+    public MeasureSession(ViewerSettings? settings)
     {
         _settings = settings;
         State.SetGeometry(ParseGeometry(settings?.MeasureGeometry));

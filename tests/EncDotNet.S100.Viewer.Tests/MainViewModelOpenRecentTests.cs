@@ -78,22 +78,22 @@ public class MainViewModelOpenRecentTests : IDisposable
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
-            layerStack: new LayerStackViewModel(loader),
+            layerStack: new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null),
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
-            settingsViewModel: new SettingsViewModel(settings),
+            settingsViewModel: new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null),
             pickReport: new PickReportViewModel(),
-            timeline: new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider()),
+            timeline: new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null),
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
             textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
             displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider()),
+            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null),
             themeService: new StubThemeService(),
             recentFiles: recent,
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
             notifications: notifications,
             dialogManager: new ShadUI.DialogManager(),
-            routes: new EncDotNet.S100.Viewer.Services.RoutesService(),
-            measure: new EncDotNet.S100.Viewer.Services.MeasureSession());
+            routes: new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System)),
+            measure: new EncDotNet.S100.Viewer.Services.MeasureSession(settings: null));
     }
 
     [Fact]

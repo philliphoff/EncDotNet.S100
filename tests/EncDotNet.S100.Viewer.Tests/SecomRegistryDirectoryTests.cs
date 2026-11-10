@@ -24,7 +24,11 @@ public sealed class SecomRegistryDirectoryTests
         Func<Uri, SecomProbeResult> probe, Func<SecomRegistryListing>? listing = null) =>
         new(KnownCatalogueSources.All,
             loadSecomRegistry: (_, _) => Task.FromResult((listing ?? Listing)()),
-            probeSecom: (uri, _) => Task.FromResult(probe(uri)));
+            probeSecom: (uri, _) => Task.FromResult(probe(uri)),
+            openUrl: null,
+            userCatalogues: null,
+            probe: null,
+            session: null);
 
     private static async Task SettleAsync(Func<bool> done)
     {
@@ -75,7 +79,12 @@ public sealed class SecomRegistryDirectoryTests
             {
                 refreshes.Add(refresh);
                 return Task.FromResult(Listing());
-            });
+            },
+            openUrl: null,
+            userCatalogues: null,
+            probe: null,
+            probeSecom: null,
+            session: null);
 
         // Not in any other category.
         Assert.DoesNotContain(directory.Rows, r => r.IsRegistryRow);
@@ -251,7 +260,7 @@ public sealed class SecomRegistryDirectoryTests
     {
         var folder = System.IO.Directory.CreateTempSubdirectory("secom-identity-").FullName;
         var trust = new SecomServerTrust();
-        var tool = new SetSecomIdentityTool(trust);
+        var tool = new SetSecomIdentityTool(trust, TimeProvider.System, references: null);
         var ct = TestContext.Current.CancellationToken;
 
         Assert.False(Ok(await tool.InvokeAsync(null, null, null, ct: ct)).Set);
@@ -322,7 +331,7 @@ public sealed class SecomRegistryDirectoryTests
         var directory = Directory(_ => result);
         KeysTab? opened = null;
         bool? closed = null;
-        var wizard = new AddOnlineCatalogueWizardViewModel(directory, () => throw new InvalidOperationException(), t => opened = t);
+        var wizard = new AddOnlineCatalogueWizardViewModel(directory, () => throw new InvalidOperationException(), t => opened = t, connectionFactory: null);
         wizard.Closed += (_, added) => closed = added;
         directory.ShowRegistryCommand.Execute(null);
         await SettleAsync(() => directory.IsRegistryLoaded);

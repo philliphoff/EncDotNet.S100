@@ -15,7 +15,8 @@ public sealed class DebouncedSettingsSaverTests
         using var fired = new ManualResetEventSlim();
         using var saver = new DebouncedSettingsSaver(
             () => { Interlocked.Increment(ref saves); fired.Set(); },
-            delayMilliseconds: 50);
+            delayMilliseconds: 50,
+            dispatch: null);
 
         saver.RequestSave();
 
@@ -33,7 +34,8 @@ public sealed class DebouncedSettingsSaverTests
         const int delayMilliseconds = 1000;
         using var saver = new DebouncedSettingsSaver(
             () => { Interlocked.Increment(ref saves); fired.Set(); },
-            delayMilliseconds: delayMilliseconds);
+            delayMilliseconds: delayMilliseconds,
+            dispatch: null);
 
         // Issue the requests as a rapid synchronous burst (no sleeps): each
         // RequestSave restarts the single debounce timer, so only the final
@@ -59,7 +61,7 @@ public sealed class DebouncedSettingsSaverTests
     public void Flush_WritesImmediatelyAndCancelsPendingTimer()
     {
         var saves = 0;
-        using var saver = new DebouncedSettingsSaver(() => Interlocked.Increment(ref saves), delayMilliseconds: 5000);
+        using var saver = new DebouncedSettingsSaver(() => Interlocked.Increment(ref saves), delayMilliseconds: 5000, dispatch: null);
 
         saver.RequestSave();
         saver.Flush();
@@ -74,7 +76,7 @@ public sealed class DebouncedSettingsSaverTests
     public void Flush_WithoutPendingSave_IsNoOp()
     {
         var saves = 0;
-        using var saver = new DebouncedSettingsSaver(() => Interlocked.Increment(ref saves), delayMilliseconds: 50);
+        using var saver = new DebouncedSettingsSaver(() => Interlocked.Increment(ref saves), delayMilliseconds: 50, dispatch: null);
 
         saver.Flush();
 
@@ -85,7 +87,7 @@ public sealed class DebouncedSettingsSaverTests
     public void Dispose_FlushesPendingSave()
     {
         var saves = 0;
-        var saver = new DebouncedSettingsSaver(() => Interlocked.Increment(ref saves), delayMilliseconds: 5000);
+        var saver = new DebouncedSettingsSaver(() => Interlocked.Increment(ref saves), delayMilliseconds: 5000, dispatch: null);
 
         saver.RequestSave();
         saver.Dispose();
@@ -96,7 +98,7 @@ public sealed class DebouncedSettingsSaverTests
     [Fact]
     public void RunSave_SwallowsExceptions()
     {
-        using var saver = new DebouncedSettingsSaver(() => throw new InvalidOperationException("boom"), delayMilliseconds: 5000);
+        using var saver = new DebouncedSettingsSaver(() => throw new InvalidOperationException("boom"), delayMilliseconds: 5000, dispatch: null);
 
         saver.RequestSave();
         var ex = Record.Exception(() => saver.Flush());

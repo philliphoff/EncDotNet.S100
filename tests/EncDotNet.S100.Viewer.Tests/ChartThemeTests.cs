@@ -142,7 +142,7 @@ public class ChartThemeTests
     [Fact]
     public void StationTimeSeriesViewModel_DefaultsToLightWhenNoThemeService()
     {
-        using var vm = new S104StationTimeSeriesViewModel(WaterLevelSnapshot(), globalTime: null);
+        using var vm = new S104StationTimeSeriesViewModel(WaterLevelSnapshot(), globalTime: null, timeFormat: null, themeService: null);
         Assert.Equal(ChartTheme.Resolve(false).SeriesPrimary, GetStrokeColor(vm.HeightSeries[0]));
     }
 

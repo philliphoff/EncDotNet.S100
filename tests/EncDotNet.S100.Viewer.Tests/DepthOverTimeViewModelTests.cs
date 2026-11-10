@@ -58,7 +58,9 @@ public sealed class DepthOverTimeViewModelTests
             4.4,
             DepthUnit.Metres,
             safetyDepthMetres: null,
-            globalTime: null);
+            globalTime: null,
+            timeFormat: null,
+            themeService: null);
 
         Assert.Single(vm.DepthSeries);
         Assert.False(vm.HasUncertainty);
@@ -74,7 +76,9 @@ public sealed class DepthOverTimeViewModelTests
             4.4,
             DepthUnit.Metres,
             safetyDepthMetres: null,
-            globalTime: null);
+            globalTime: null,
+            timeFormat: null,
+            themeService: null);
 
         Assert.Equal(3, vm.DepthSeries.Length);
         Assert.True(vm.HasUncertainty);
@@ -101,7 +105,9 @@ public sealed class DepthOverTimeViewModelTests
             UncertaintyMeters: null);
 
         var vm = new DepthOverTimeViewModel(
-            result, "loc", 51.9, 4.4, DepthUnit.Metres, safetyDepthMetres: null, globalTime: null);
+            result, "loc", 51.9, 4.4, DepthUnit.Metres, safetyDepthMetres: null, globalTime: null,
+            timeFormat: null,
+            themeService: null);
 
         var curve = Assert.IsType<LineSeries<DateTimePoint>>(vm.DepthSeries[^1]);
         var values = Assert.IsAssignableFrom<IEnumerable<DateTimePoint>>(curve.Values).ToList();
@@ -121,7 +127,9 @@ public sealed class DepthOverTimeViewModelTests
             4.4,
             DepthUnit.Metres,
             safetyDepthMetres: 8.0,
-            globalTime: null);
+            globalTime: null,
+            timeFormat: null,
+            themeService: null);
 
         var withoutSafety = new DepthOverTimeViewModel(
             Result(),
@@ -130,7 +138,9 @@ public sealed class DepthOverTimeViewModelTests
             4.4,
             DepthUnit.Metres,
             safetyDepthMetres: null,
-            globalTime: null);
+            globalTime: null,
+            timeFormat: null,
+            themeService: null);
 
         Assert.True(withSafety.HasSafetyDepth);
         Assert.False(withoutSafety.HasSafetyDepth);
@@ -148,7 +158,9 @@ public sealed class DepthOverTimeViewModelTests
             4.4,
             DepthUnit.Metres,
             safetyDepthMetres: null,
-            globalTime: null);
+            globalTime: null,
+            timeFormat: null,
+            themeService: null);
 
         Assert.True(vm.HasDatumNote);
         Assert.False(vm.HasTide);
@@ -169,7 +181,9 @@ public sealed class DepthOverTimeViewModelTests
     {
         var vm = new DepthOverTimeViewModel(
             Result(source: BaseDepthSource.Sounding, datumCode: null, waterLevelDatumCode: 23),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, null,
+            timeFormat: null,
+            themeService: null);
 
         Assert.True(vm.HasDatumNote);
         Assert.Equal(
@@ -183,7 +197,7 @@ public sealed class DepthOverTimeViewModelTests
     [Fact]
     public void No_refusal_when_datums_agree()
     {
-        var vm = new DepthOverTimeViewModel(Result(), "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+        var vm = new DepthOverTimeViewModel(Result(), "loc", 51.9, 4.4, DepthUnit.Metres, null, null, timeFormat: null, themeService: null);
 
         Assert.False(vm.HasDatumNote);
         Assert.Equal(string.Empty, vm.DatumNoteText);
@@ -195,7 +209,9 @@ public sealed class DepthOverTimeViewModelTests
         var globalTime = GlobalTimeOver(Times(3));
         var vm = new DepthOverTimeViewModel(
             Result(uncertaintyMetres: 0.5, waterLevelUncertainty: 0.3),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime);
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime,
+            timeFormat: null,
+            themeService: null);
 
         globalTime.SetCurrentTime(T0.AddHours(1));
 
@@ -216,7 +232,9 @@ public sealed class DepthOverTimeViewModelTests
         var globalTime = GlobalTimeOver(Times(3));
         var vm = new DepthOverTimeViewModel(
             Result(uncertaintyMetres: 0.5),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime);
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime,
+            timeFormat: null,
+            themeService: null);
 
         globalTime.SetCurrentTime(T0.AddHours(1));
 
@@ -228,7 +246,9 @@ public sealed class DepthOverTimeViewModelTests
     {
         var vm = new DepthOverTimeViewModel(
             Result(uncertaintyMetres: 0.4, waterLevelUncertainty: 0.3, depths: [10.0, 10.0, 10.0]),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, null,
+            timeFormat: null,
+            themeService: null);
 
         var upper = Assert.IsType<LineSeries<DateTimePoint>>(vm.DepthSeries[0]);
         var values = Assert.IsAssignableFrom<IEnumerable<DateTimePoint>>(upper.Values).ToList();
@@ -241,7 +261,9 @@ public sealed class DepthOverTimeViewModelTests
         var globalTime = GlobalTimeOver(Times(3));
         var vm = new DepthOverTimeViewModel(
             Result(baseMetres: 10.0, depths: [10.0, 12.0, 14.0]),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime);
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime,
+            timeFormat: null,
+            themeService: null);
 
         globalTime.SetCurrentTime(T0.AddMinutes(30));
 
@@ -254,7 +276,9 @@ public sealed class DepthOverTimeViewModelTests
     {
         var sounding = new DepthOverTimeViewModel(
             Result(source: BaseDepthSource.Sounding),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, null,
+            timeFormat: null,
+            themeService: null);
 
         Assert.Equal(EncDotNet.S100.Viewer.Resources.Strings.Pick_Depth_Source_Sounding, sounding.BaseSourceLabel);
     }
@@ -264,7 +288,9 @@ public sealed class DepthOverTimeViewModelTests
     {
         var vm = new DepthOverTimeViewModel(
             Result(baseSourceId: "102NL005_519N043E.H5"),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, null,
+            timeFormat: null,
+            themeService: null);
 
         Assert.Equal(
             string.Format(
@@ -279,7 +305,9 @@ public sealed class DepthOverTimeViewModelTests
     {
         var vm = new DepthOverTimeViewModel(
             Result(source: BaseDepthSource.Sounding, baseSourceId: null),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, null,
+            timeFormat: null,
+            themeService: null);
 
         Assert.Equal(vm.BaseSourceLabel, vm.BaseSourceTooltip);
     }
@@ -289,7 +317,9 @@ public sealed class DepthOverTimeViewModelTests
     {
         var vm = new DepthOverTimeViewModel(
             Result(withTide: true),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, null,
+            timeFormat: null,
+            themeService: null);
 
         Assert.Equal(
             string.Format(
@@ -304,7 +334,9 @@ public sealed class DepthOverTimeViewModelTests
     {
         var vm = new DepthOverTimeViewModel(
             Result(withTide: false, depths: new[] { double.NaN, double.NaN, double.NaN }),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, null,
+            timeFormat: null,
+            themeService: null);
 
         Assert.Equal(string.Empty, vm.TideSourceTooltip);
     }
@@ -314,7 +346,9 @@ public sealed class DepthOverTimeViewModelTests
     {
         var vm = new DepthOverTimeViewModel(
             Result(withTide: false, depths: new[] { double.NaN, double.NaN, double.NaN }),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, null,
+            timeFormat: null,
+            themeService: null);
 
         Assert.False(vm.HasTide);
     }
@@ -327,7 +361,9 @@ public sealed class DepthOverTimeViewModelTests
         var globalTime = GlobalTimeOver(Times(3));
 
         var vm = new DepthOverTimeViewModel(
-            result, "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime);
+            result, "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime,
+            timeFormat: null,
+            themeService: null);
 
         globalTime.SetCurrentTime(T0.AddHours(2));
 
@@ -344,7 +380,9 @@ public sealed class DepthOverTimeViewModelTests
         var globalTime = GlobalTimeOver(Times(3));
 
         var vm = new DepthOverTimeViewModel(
-            result, "loc", 51.9, 4.4, DepthUnit.Feet, null, globalTime);
+            result, "loc", 51.9, 4.4, DepthUnit.Feet, null, globalTime,
+            timeFormat: null,
+            themeService: null);
 
         globalTime.SetCurrentTime(T0.AddHours(1));
 
@@ -357,7 +395,9 @@ public sealed class DepthOverTimeViewModelTests
     {
         var vm = new DepthOverTimeViewModel(
             Result(),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime: null);
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime: null,
+            timeFormat: null,
+            themeService: null);
 
         Assert.Equal(EncDotNet.S100.Viewer.Resources.Strings.Pick_Depth_Value_Unavailable, vm.DepthNowText);
     }
@@ -366,7 +406,9 @@ public sealed class DepthOverTimeViewModelTests
     public void IsExpanded_DefaultsToTrue()
     {
         var vm = new DepthOverTimeViewModel(
-            Result(), "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+            Result(), "loc", 51.9, 4.4, DepthUnit.Metres, null, null,
+            timeFormat: null,
+            themeService: null);
 
         Assert.True(vm.IsExpanded);
 
@@ -378,10 +420,14 @@ public sealed class DepthOverTimeViewModelTests
     public void DepthNowLabel_ReflectsTidePresence()
     {
         var withTide = new DepthOverTimeViewModel(
-            Result(withTide: true), "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+            Result(withTide: true), "loc", 51.9, 4.4, DepthUnit.Metres, null, null,
+            timeFormat: null,
+            themeService: null);
         var noTide = new DepthOverTimeViewModel(
             Result(withTide: false, depths: new[] { double.NaN, double.NaN, double.NaN }),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, null,
+            timeFormat: null,
+            themeService: null);
 
         Assert.Equal(EncDotNet.S100.Viewer.Resources.Strings.Pick_Depth_Label_DepthNow, withTide.DepthNowLabel);
         Assert.Equal(EncDotNet.S100.Viewer.Resources.Strings.Pick_Depth_Label_DepthStatic, noTide.DepthNowLabel);
@@ -392,7 +438,9 @@ public sealed class DepthOverTimeViewModelTests
     {
         var vm = new DepthOverTimeViewModel(
             Result(baseMetres: 10.0, withTide: false, depths: new[] { double.NaN, double.NaN, double.NaN }),
-            "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+            "loc", 51.9, 4.4, DepthUnit.Metres, null, null,
+            timeFormat: null,
+            themeService: null);
 
         // Static readout mirrors the base depth regardless of the global clock.
         Assert.Equal(vm.BaseDepthText, vm.DisplayDepthText);
@@ -407,7 +455,9 @@ public sealed class DepthOverTimeViewModelTests
         var globalTime = GlobalTimeOver(Times(3));
 
         var vm = new DepthOverTimeViewModel(
-            result, "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime);
+            result, "loc", 51.9, 4.4, DepthUnit.Metres, null, globalTime,
+            timeFormat: null,
+            themeService: null);
 
         globalTime.SetCurrentTime(T0.AddHours(2));
 
@@ -428,7 +478,9 @@ public sealed class DepthOverTimeViewModelTests
         BaseDepthSource source, bool bathymetry, bool sounding, bool chartedArea)
     {
         var vm = new DepthOverTimeViewModel(
-            Result(source: source), "loc", 51.9, 4.4, DepthUnit.Metres, null, null);
+            Result(source: source), "loc", 51.9, 4.4, DepthUnit.Metres, null, null,
+            timeFormat: null,
+            themeService: null);
 
         Assert.Equal(bathymetry, vm.IsBathymetrySource);
         Assert.Equal(sounding, vm.IsSoundingSource);

@@ -1041,7 +1041,8 @@ public partial class App : Application
                         action();
                     else
                         Avalonia.Threading.Dispatcher.UIThread.Post(action);
-                }));
+                },
+                options: null));
         // Follow passage (#904): pins the view time to the ETA at the profile cursor.
         services.AddSingleton<EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService>(sp =>
             new EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService(
@@ -1101,7 +1102,8 @@ public partial class App : Application
                     : datasets.LoadFromPathAsync(path),
                 // As select_dataset finds a list_datasets id: by name, then by id.
                 findDataset: id => datasets.Entries.FirstOrDefault(e => string.Equals(e.DisplayName, id, StringComparison.Ordinal))
-                    ?? datasets.Entries.FirstOrDefault(e => string.Equals(e.Id.Value, id, StringComparison.Ordinal)));
+                    ?? datasets.Entries.FirstOrDefault(e => string.Equals(e.Id.Value, id, StringComparison.Ordinal)),
+                    formats: EncDotNet.S100.Viewer.Routing.Exchange.RouteFormatRegistry.Default);
         });
 
         // Phase 3 services: dataset orchestration, pick dispatch, file dialogs
@@ -1145,7 +1147,7 @@ public partial class App : Application
         services.AddSingleton<IS100ExaminerLinkBuilder>(
             sp => new S100ExaminerLinkBuilder(sp.GetRequiredService<ViewerSettings>()));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.Updates.IAppVersionProvider>(
-            _ => new EncDotNet.S100.Viewer.Services.Updates.AssemblyAppVersionProvider());
+            _ => new EncDotNet.S100.Viewer.Services.Updates.AssemblyAppVersionProvider(assembly: null));
         services.AddSingleton<EncDotNet.S100.Viewer.Services.Updates.IGitHubReleaseClient>(sp =>
             new EncDotNet.S100.Viewer.Services.Updates.GitHubReleaseClient(
                 new System.Net.Http.HttpClient(EncDotNet.S100.Collections.Net.HardenedTls.CreateHandler()) { Timeout = TimeSpan.FromSeconds(10) },
@@ -1206,7 +1208,8 @@ public partial class App : Application
                 hasVisibleTileWork: () =>
                     EncDotNet.S100.Rendering.Engine.S100VectorTileRenderer.HasVisibleTileWork,
                 unloadMany: loader.UnloadEntries,
-                planner: sp.GetRequiredService<EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner>());
+                planner: sp.GetRequiredService<EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner>(),
+                options: null);
         });
 
         // Own-ship dynamic source. The steerable driver dead-reckons a
@@ -1470,7 +1473,9 @@ public partial class App : Application
                 },
                 viewTime: sp.GetRequiredService<GlobalTimeService>(),
                 timeFormat: sp.GetService<ITimeFormatProvider>(),
-                sync: sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>());
+                sync: sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>(),
+                // Storm-advisory and unpack toasts.
+                notifications: sp.GetRequiredService<INotificationService>());
             panel.OpenKeys = sp.GetRequiredService<Services.Secom.KeysNavigator>().Open;
             panel.PortrayalWarm = sp.GetRequiredService<PortrayalWarmStatusViewModel>();
             // Open as route: with Import route…, the only way a dataset becomes a route.
@@ -1559,7 +1564,15 @@ public partial class App : Application
             Task.Run));
         services.AddSingleton<TimelineViewModel>(sp =>
         {
-            var timeline = Microsoft.Extensions.DependencyInjection.ActivatorUtilities.CreateInstance<TimelineViewModel>(sp);
+            var timeline = new TimelineViewModel(
+                sp.GetRequiredService<GlobalTimeService>(),
+                sp.GetRequiredService<ITimeFormatProvider>(),
+                sp.GetRequiredService<TimeProvider>(),
+                UiThread.RunOrPost,
+                sp.GetRequiredService<IForecastRunRefresher>(),
+                sp.GetRequiredService<TimeRefreshProgress>(),
+                sp.GetRequiredService<ITimelineMapScope>(),
+                sp.GetRequiredService<ILibraryTimeSource>());
             // Passage lanes and Follow passage (#904).
             timeline.AttachPassage(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>(),

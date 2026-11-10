@@ -34,7 +34,7 @@ public sealed class TimelineNowTests
     {
         var service = new GlobalTimeService();
         var clock = new FakeTimeProvider(new DateTimeOffset(now));
-        var timeline = new TimelineViewModel(service, timeFormat: null, clock, action => action(), refresher);
+        var timeline = new TimelineViewModel(service, timeFormat: null, clock, action => action(), refresher, progress: null, scope: null, library: null);
         return (service, timeline, clock);
     }
 

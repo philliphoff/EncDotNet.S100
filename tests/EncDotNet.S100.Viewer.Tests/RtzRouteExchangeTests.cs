@@ -51,12 +51,12 @@ public sealed class RtzRouteExchangeTests : IDisposable
         public Harness()
         {
             Received = new ReceivedRoutesService(Loader, Routes, read: e => S421Dataset.Open(e.FilePath), checkSettings: new EncDotNet.S100.Viewer.Routing.Persistence.CheckSettingsStore(), closeDataset: null, notifications: null, follow: null);
-            Exchange = new RouteExchangeService(Routes, Received, openDataset: OpenDataset);
+            Exchange = new RouteExchangeService(Routes, Received, openDataset: OpenDataset, formats: RouteFormatRegistry.Default, findDataset: null);
         }
 
         public FakeDatasetLoaderService Loader { get; } = new();
 
-        public RoutesService Routes { get; } = new();
+        public RoutesService Routes { get; } = new(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
 
         public ReceivedRoutesService Received { get; }
 
@@ -102,7 +102,7 @@ public sealed class RtzRouteExchangeTests : IDisposable
         Assert.Equal(["1.2", "1.1", "1.0"], rtz.Versions);
         Assert.False(rtz.OpensAsDataset);
         Assert.Contains("*.rtz", registry.FilePatterns);
-        Assert.Equal("RTZ", new RouteExchangeService(new RoutesService(), new ReceivedRoutesService(new FakeDatasetLoaderService(), new RoutesService(), checkSettings: new EncDotNet.S100.Viewer.Routing.Persistence.CheckSettingsStore(), closeDataset: null, notifications: null, follow: null, read: EncDotNet.S100.Viewer.Services.ReceivedRoutesService.ReadDataset)).LastExportFormat);
+        Assert.Equal("RTZ", new RouteExchangeService(new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System)), new ReceivedRoutesService(new FakeDatasetLoaderService(), new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System)), checkSettings: new EncDotNet.S100.Viewer.Routing.Persistence.CheckSettingsStore(), closeDataset: null, notifications: null, follow: null, read: EncDotNet.S100.Viewer.Services.ReceivedRoutesService.ReadDataset), formats: RouteFormatRegistry.Default, openDataset: null, findDataset: null).LastExportFormat);
     }
 
     [Theory]
@@ -429,9 +429,9 @@ public sealed class RtzRouteExchangeTests : IDisposable
         {
             var settings = new CheckSettingsStore(store);
             settings.Load();
-            var routes = new RoutesService();
+            var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
             var received = new ReceivedRoutesService(new FakeDatasetLoaderService(), routes, settings, closeDataset: null, notifications: null, follow: null, read: EncDotNet.S100.Viewer.Services.ReceivedRoutesService.ReadDataset);
-            return (routes, received, new RouteExchangeService(routes, received));
+            return (routes, received, new RouteExchangeService(routes, received, formats: RouteFormatRegistry.Default, openDataset: null, findDataset: null));
         }
 
         var first = Start();
@@ -530,7 +530,7 @@ public sealed class RtzRouteExchangeTests : IDisposable
         var received = await h.ImportAsync(Fixture("rtz-1.0-solent.rtz"));
         var path = Path.Combine(_temp, "dialog.rtz");
         var dialogs = new RecordingDialogs(exportPath: path);
-        var panel = new RoutesPanelViewModel(h.Routes, exchange: h.Exchange, dialogs: dialogs);
+        var panel = new RoutesPanelViewModel(h.Routes, exchange: h.Exchange, dialogs: dialogs, viewport: null, marinerSettings: null, timeFormat: null, check: null, findings: null);
 
         panel.ExportRouteCommand.Execute(panel.Routes.Single());
         var dialog = Assert.IsType<RouteExportDialogViewModel>(Assert.Single(dialogs.Shown));

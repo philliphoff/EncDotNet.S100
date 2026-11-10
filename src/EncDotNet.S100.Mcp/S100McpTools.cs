@@ -41,20 +41,21 @@ public static class S100McpTools
     public static IReadOnlyList<McpServerTool> Create(IDatasetCatalog catalog, IPassageRouteProvider? passageRoutes = null, RouteCheckSourceCache? routeCheckSources = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
-        routeCheckSources ??= new RouteCheckSourceCache(new ProjNetCrsTransformFactory());
+        var transforms = new ProjNetCrsTransformFactory();
+        routeCheckSources ??= new RouteCheckSourceCache(transforms);
 
         return S100McpServerToolFactory.CreateTools(
             new ListDatasetsTool(catalog),
             new DescribeFeatureTool(catalog),
             new DescribeFeatureTypeTool(),
-            new SampleCoverageTool(catalog),
+            new SampleCoverageTool(catalog, transforms),
             new FindAtTool(catalog),
             new IdentifyFeaturesTool(catalog),
             new NearestFeaturesTool(catalog),
             new QueryFeaturesTool(catalog),
             new CountFeaturesTool(catalog),
             new SearchFeaturesTool(catalog),
-            new SampleCoverageAlongTool(catalog),
+            new SampleCoverageAlongTool(catalog, transforms),
             new ListSpecsTool(catalog, EncDotNet.S100.Datasets.Pipelines.ProductRegistry.Default),
             new ListTimeStepsTool(catalog),
             new CheckRouteTool(catalog, passageRoutes, routeCheckSources, TimeProvider.System))

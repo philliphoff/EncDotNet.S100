@@ -28,7 +28,12 @@ public sealed class CatalogueDirectoryDialogViewTests
     public void Each_width_shows_its_layout(double width, bool pane, bool inline, bool sidebar, bool strip)
     {
         var directory = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
-            Task.FromResult(new CatalogueProbe(null, null, null)));
+            Task.FromResult(new CatalogueProbe(null, null, null)),
+            openUrl: null,
+            userCatalogues: null,
+            loadSecomRegistry: null,
+            probeSecom: null,
+            session: null);
         using var host = ViewHost.Show(new CatalogueDirectoryDialogView { DataContext = directory }, width: width, height: 560);
 
         Assert.Equal(pane, host.IsShown("Catalogues.Details"));
@@ -42,7 +47,7 @@ public sealed class CatalogueDirectoryDialogViewTests
     [AvaloniaFact]
     public void The_details_pane_states_limitations_only_when_there_are_some()
     {
-        var directory = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All);
+        var directory = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null);
         using var host = ViewHost.Show(new CatalogueDirectoryDialogView { DataContext = directory }, width: 920, height: 560);
         Assert.False(host.IsShown("Catalogues.Details.Limitations"));
 
@@ -57,7 +62,7 @@ public sealed class CatalogueDirectoryDialogViewTests
     [AvaloniaFact]
     public void Choosing_a_category_in_the_narrow_strip_opens_it()
     {
-        var directory = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All);
+        var directory = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, openUrl: null, userCatalogues: null, probe: null, loadSecomRegistry: null, probeSecom: null, session: null);
         using var host = ViewHost.Show(new CatalogueDirectoryDialogView { DataContext = directory }, width: 640, height: 560);
 
         host.Click(host.FindAll<Button>("Catalogues.StripCategory")[2]);
@@ -71,7 +76,12 @@ public sealed class CatalogueDirectoryDialogViewTests
     public void Add_by_url_opens_my_sources_and_focuses_the_form(double width)
     {
         var directory = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
-            Task.FromResult(new CatalogueProbe(null, null, null)));
+            Task.FromResult(new CatalogueProbe(null, null, null)),
+            openUrl: null,
+            userCatalogues: null,
+            loadSecomRegistry: null,
+            probeSecom: null,
+            session: null);
         using var host = ViewHost.Show(new CatalogueDirectoryDialogView { DataContext = directory }, width: width, height: 560);
         Assert.False(host.IsShown("Catalogues.Url"));
 
@@ -86,7 +96,12 @@ public sealed class CatalogueDirectoryDialogViewTests
     public void The_registry_action_is_a_row_in_secom_services_only()
     {
         var directory = new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All,
-            loadSecomRegistry: (_, _) => Task.FromException<Collections.Secom.SecomRegistryListing>(new HttpRequestException("offline")));
+            loadSecomRegistry: (_, _) => Task.FromException<Collections.Secom.SecomRegistryListing>(new HttpRequestException("offline")),
+            openUrl: null,
+            userCatalogues: null,
+            probe: null,
+            probeSecom: null,
+            session: null);
         using var host = ViewHost.Show(new CatalogueDirectoryDialogView { DataContext = directory }, width: 920, height: 560);
         Assert.False(host.IsShown("Catalogues.ShowRegistry"));
 

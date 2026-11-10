@@ -155,7 +155,7 @@ public class ViewerMcpCapabilityAdapterTests
     [Fact]
     public void Time_read_side_passes_through_the_global_service()
     {
-        var sut = new ViewerTimeController(new GlobalTimeService());
+        var sut = new ViewerTimeController(new GlobalTimeService(), action => { action(); return Task.CompletedTask; });
 
         // An unattached service reports no clock and no samples, which the tool
         // surfaces as host_not_ready.

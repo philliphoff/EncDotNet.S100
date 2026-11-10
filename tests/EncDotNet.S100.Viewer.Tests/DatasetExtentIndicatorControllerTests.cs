@@ -52,7 +52,7 @@ public class DatasetExtentIndicatorControllerTests
             SettingsFilePath = path,
             ShowOutOfScaleExtentIndicators = indicatorsOn,
         };
-        return new SettingsViewModel(settings);
+        return new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
     }
 
     private static DatasetEntry LoadedOutOfScaleEntry(DatasetsViewModel vm)

@@ -182,7 +182,7 @@ public sealed class WarningCardRouteRowTests(WarningsScenarioFixture fixture) : 
         using var s = WarningsRouteCheck.Create(fixture, Post);
         var pick = new PickReportViewModel();
         using var panel = new NavigationalWarningsViewModel(s.Warnings, pickReport: pick, timeFormat: new Utc(), pick: null, viewTime: null, viewport: null, loader: null, clock: TimeProvider.System) { RouteFindings = s.Findings };
-        var check = new PassageCheckViewModel(s.Check, s.Routes, () => DepthUnit.Metres, () => TimeFormat.Utc, s.Findings);
+        var check = new PassageCheckViewModel(s.Check, s.Routes, () => DepthUnit.Metres, () => TimeFormat.Utc, s.Findings, addDraft: null);
         Open(pick, Entry(s, 1));
         using var host = ViewHost.Show(new PickReportView { DataContext = pick }, width: 420, height: 900);
         Assert.False(host.IsShown("PickReport.WarningCard.RouteFinding"));

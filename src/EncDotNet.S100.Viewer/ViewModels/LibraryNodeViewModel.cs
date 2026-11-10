@@ -33,8 +33,8 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     private string _renameText = string.Empty;
 
     private LibraryNodeViewModel(
-        LibraryCollection collection, LibrarySource? source, Func<CollectionSource, FeedHealth?>? health, SourceIndexGroup? group = null,
-        Func<TimeFormat>? timeFormat = null)
+        LibraryCollection collection, LibrarySource? source, Func<CollectionSource, FeedHealth?>? health, SourceIndexGroup? group,
+        Func<TimeFormat>? timeFormat)
     {
         _collection = collection;
         _source = source;
@@ -51,9 +51,9 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
     /// <param name="timeFormat">The user's Local/UTC setting, for run times (#730); UTC when null.</param>
     public static LibraryNodeViewModel ForCollection(LibraryCollection collection, Func<CollectionSource, FeedHealth?>? health = null, Func<TimeFormat>? timeFormat = null)
     {
-        var node = new LibraryNodeViewModel(collection, null, health, timeFormat: timeFormat);
+        var node = new LibraryNodeViewModel(collection, null, health, timeFormat: timeFormat, group: null);
         foreach (var source in collection.Sources)
-            node.Children.Add(new LibraryNodeViewModel(collection, source, health, timeFormat: timeFormat));
+            node.Children.Add(new LibraryNodeViewModel(collection, source, health, timeFormat: timeFormat, group: null));
         return node;
     }
 
@@ -465,7 +465,7 @@ internal sealed class LibraryNodeViewModel : ViewModelBase
             var existing = Children.FirstOrDefault(c => c.Id == source.Id);
             if (existing is null)
             {
-                Children.Insert(i, new LibraryNodeViewModel(collection, source, _health, timeFormat: _timeFormat));
+                Children.Insert(i, new LibraryNodeViewModel(collection, source, _health, timeFormat: _timeFormat, group: null));
             }
             else
             {

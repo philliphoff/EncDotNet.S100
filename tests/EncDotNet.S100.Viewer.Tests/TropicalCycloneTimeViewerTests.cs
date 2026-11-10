@@ -44,7 +44,7 @@ public sealed class TropicalCycloneTimeViewerTests
     private static (GlobalTimeService Service, TimelineViewModel Timeline) Load(DateTime now, DateTime view)
     {
         var service = new GlobalTimeService();
-        var timeline = new TimelineViewModel(service, new UtcFormat(), new FakeTimeProvider(new DateTimeOffset(now)), action => action());
+        var timeline = new TimelineViewModel(service, new UtcFormat(), new FakeTimeProvider(new DateTimeOffset(now)), action => action(), refresher: null, progress: null, scope: null, library: null);
         var zelda = Zelda();
         service.ApplySnapshot(new MapsuiMapTimeSnapshot
         {

@@ -49,9 +49,9 @@ internal sealed class ClearanceViewModel : ViewModelBase
 
     public ClearanceViewModel(
         PassageCheckService check,
-        IMarinerSettingsProvider? mariner = null,
-        ITimeFormatProvider? timeFormat = null,
-        IThemeService? theme = null)
+        IMarinerSettingsProvider? mariner,
+        ITimeFormatProvider? timeFormat,
+        IThemeService? theme)
     {
         ArgumentNullException.ThrowIfNull(check);
         _check = check;

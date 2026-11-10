@@ -1,4 +1,3 @@
-using EncDotNet.S100.Crs.ProjNet;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Query;
 using EncDotNet.S100.Pipelines;
@@ -24,13 +23,13 @@ public sealed class SampleCoverageTool
     /// <param name="transforms">
     /// Factory used to reproject the WGS-84 request point into a coverage's
     /// native CRS before grid indexing — required for correct sampling of
-    /// projected S-102 tiles (e.g. UTM zone 31N). Defaults to
-    /// <see cref="ProjNetCrsTransformFactory"/> when not supplied.
+    /// projected S-102 tiles (e.g. UTM zone 31N).
     /// </param>
-    public SampleCoverageTool(IDatasetCatalog catalog, ICrsTransformFactory? transforms = null)
+    public SampleCoverageTool(IDatasetCatalog catalog, ICrsTransformFactory transforms)
     {
         ArgumentNullException.ThrowIfNull(catalog);
-        _service = new SampleCoverageService(catalog, transforms ?? new ProjNetCrsTransformFactory());
+        ArgumentNullException.ThrowIfNull(transforms);
+        _service = new SampleCoverageService(catalog, transforms);
     }
 
     /// <summary>Executes the tool by delegating to the shared service.</summary>

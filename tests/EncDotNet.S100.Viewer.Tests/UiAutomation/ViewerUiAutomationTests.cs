@@ -77,12 +77,19 @@ public sealed class ViewerUiAutomationTests
         library.Initialize();
         var wizard = new AddOnlineCatalogueWizardViewModel(
             new CatalogueDirectoryDialogViewModel(KnownCatalogueSources.All, probe: (_, _) =>
-                Task.FromResult(new CatalogueProbe(null, null, null))),
+                Task.FromResult(new CatalogueProbe(null, null, null)),
+                openUrl: null,
+                userCatalogues: null,
+                loadSecomRegistry: null,
+                probeSecom: null,
+                session: null),
             () => new AddToLibraryDialogViewModel(library, new LibraryCatalogueReaders
             {
                 NoaaEnc = (_, _) => Task.FromResult(NoaaEncProductCatalogReader.Read(
                     LibraryTestContext.RepoFile("tests", "EncDotNet.S100.Collections.Tests", "Fixtures", "noaa-enc-prodcat.xml"))),
-            }, timeProvider: TimeProvider.System));
+            }, timeProvider: TimeProvider.System),
+            openKeys: null,
+            connectionFactory: null);
         wizard.Start(null);
         using var host = ViewHost.Show(new AddOnlineCatalogueWizardView { DataContext = wizard }, width: 640, height: 760);
         var automation = Automation(host);
@@ -120,7 +127,12 @@ public sealed class ViewerUiAutomationTests
         library.AddCollection("Charts", [new ExchangeSetSource(Guid.NewGuid(), null, context.CreateS57ExchangeSet("Charts"))]);
         await library.WhenIdle();
         using var panel = new LibraryPanelViewModel(
-            library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System);
+            library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System,
+            feedHealth: null,
+            notifications: null,
+            viewTime: null,
+            timeFormat: null,
+            sync: null);
         using var host = ViewHost.Show(new LibraryPanelView { DataContext = panel }, width: 420, height: 900);
         var automation = Automation(host);
         var collection = panel.Nodes.Single();

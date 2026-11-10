@@ -37,7 +37,7 @@ internal sealed class TimelineLaneViewModel : ViewModelBase
     private IReadOnlyList<TimelineLaneMark> _marks = [];
     private IReadOnlyList<NormalizedGap> _gaps = [];
 
-    public TimelineLaneViewModel(string key, MapsuiMapTimedDataset? dataset, string spec, Color color, Action<DateTime> jump, ILibraryTimeSource? library = null)
+    public TimelineLaneViewModel(string key, MapsuiMapTimedDataset? dataset, string spec, Color color, Action<DateTime> jump, ILibraryTimeSource? library)
     {
         Key = key;
         _dataset = dataset;

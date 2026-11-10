@@ -88,23 +88,23 @@ public sealed class LayoutPersistenceTests : IDisposable
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
-            layerStack: new LayerStackViewModel(new NoopLoader()),
+            layerStack: new LayerStackViewModel(new NoopLoader(), dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null),
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
-            settingsViewModel: new SettingsViewModel(settings),
+            settingsViewModel: new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null),
             pickReport: new PickReportViewModel(),
-            timeline: new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider()),
+            timeline: new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null),
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
             textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
             displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider()),
+            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null),
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
             notifications: Notifications.TestNotifications.Create(),
             activityTabs: tabs,
-            routes: routes ?? new EncDotNet.S100.Viewer.Services.RoutesService(),
+            routes: routes ?? new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System)),
             dialogManager: new ShadUI.DialogManager(),
-            measure: new EncDotNet.S100.Viewer.Services.MeasureSession());
+            measure: new EncDotNet.S100.Viewer.Services.MeasureSession(settings: null));
     }
 
     private static IActivityTab[] StandardTabs() => new IActivityTab[]
@@ -117,7 +117,7 @@ public sealed class LayoutPersistenceTests : IDisposable
     [Fact]
     public void Check_passage_folds_object_information_to_its_edge_tab_and_restores_it()
     {
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var vm = CreateViewModel(StandardTabs(), routes: routes);
         vm.IsRightDockOpen = true;
         Assert.True(vm.IsRightDockShown);
@@ -149,16 +149,16 @@ public sealed class LayoutPersistenceTests : IDisposable
         new FakeTab { Id = "Datasets", Order = 30, Dock = TabDock.Left },
         new FakeTab { Id = "Pick", Order = 10, Dock = TabDock.Right },
         new ActivityTab<object, ContentControl>(
-            MainViewModel.TimelineTabId, 10, "Timeline", "Timeline", () => new ContentControl(), new object(), false, TabDock.Bottom),
+            MainViewModel.TimelineTabId, 10, "Timeline", "Timeline", () => new ContentControl(), new object(), false, visibility: null, TabDock.Bottom),
         new ActivityTab<object, ContentControl>(
-            MainViewModel.ClearanceTabId, 20, "Clearance", "Clearance", () => new ContentControl(), new object(), false, TabDock.Bottom,
-            visibility: new CheckModeVisibilitySource(routes)),
+            MainViewModel.ClearanceTabId, 20, "Clearance", "Clearance", () => new ContentControl(), new object(), false,
+            new CheckModeVisibilitySource(routes), TabDock.Bottom),
     ];
 
     // A two-waypoint route with a draft: Clearance shows only with one (#959, A2).
     private static RoutesService RoutesWithDraft(double? draft = 5)
     {
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = new EncDotNet.S100.Viewer.Routing.Route();
         route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(50.7, -1.3));
         route.AppendWaypoint(new EncDotNet.S100.DataModel.GeoPosition(50.8, -1.3));
@@ -237,7 +237,7 @@ public sealed class LayoutPersistenceTests : IDisposable
     [Fact]
     public void Check_passage_leaves_a_closed_object_information_dock_closed()
     {
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var vm = CreateViewModel(StandardTabs(), routes: routes);
         Assert.False(vm.IsRightDockOpen);
 

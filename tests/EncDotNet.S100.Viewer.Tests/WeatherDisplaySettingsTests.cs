@@ -25,7 +25,7 @@ public sealed class WeatherDisplaySettingsTests
     public void The_section_shows_only_while_a_weather_dataset_is_loaded()
     {
         var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
-        using var panel = new EcdisDisplayPanelViewModel(new EcdisDisplayState(), new PortrayalCatalogueManager(), datasets, labelOverrides: new EcdisLabelOverrideProvider());
+        using var panel = new EcdisDisplayPanelViewModel(new EcdisDisplayState(), new PortrayalCatalogueManager(), datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null);
         Assert.False(panel.HasWeatherData);
         Assert.True(panel.IsEmpty);
 
@@ -47,7 +47,7 @@ public sealed class WeatherDisplaySettingsTests
     public void Isobars_and_currents_are_on_and_the_wind_speed_fill_wave_arrows_and_both_isotherms_off_by_default()
     {
         var state = new EcdisDisplayState();
-        using var panel = new EcdisDisplayPanelViewModel(state, new PortrayalCatalogueManager(), new DatasetsViewModel(new FakeDatasetLoaderService()), labelOverrides: new EcdisLabelOverrideProvider());
+        using var panel = new EcdisDisplayPanelViewModel(state, new PortrayalCatalogueManager(), new DatasetsViewModel(new FakeDatasetLoaderService()), labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null);
 
         Assert.True(panel.IsIsobarsVisible);
         Assert.False(panel.IsWindSpeedFillVisible);
@@ -66,7 +66,7 @@ public sealed class WeatherDisplaySettingsTests
     public void A_switch_reaches_the_display_settings_and_re_renders()
     {
         var state = new EcdisDisplayState();
-        using var panel = new EcdisDisplayPanelViewModel(state, new PortrayalCatalogueManager(), new DatasetsViewModel(new FakeDatasetLoaderService()), labelOverrides: new EcdisLabelOverrideProvider());
+        using var panel = new EcdisDisplayPanelViewModel(state, new PortrayalCatalogueManager(), new DatasetsViewModel(new FakeDatasetLoaderService()), labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null);
         var changed = 0;
         state.Changed += () => changed++;
         var notified = new List<string?>();
@@ -105,7 +105,7 @@ public sealed class WeatherDisplaySettingsTests
     public void The_precipitation_thunderstorm_and_cloud_switches_turn_their_layers_on()
     {
         var state = new EcdisDisplayState();
-        using var panel = new EcdisDisplayPanelViewModel(state, new PortrayalCatalogueManager(), new DatasetsViewModel(new FakeDatasetLoaderService()), labelOverrides: new EcdisLabelOverrideProvider());
+        using var panel = new EcdisDisplayPanelViewModel(state, new PortrayalCatalogueManager(), new DatasetsViewModel(new FakeDatasetLoaderService()), labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null);
         var notified = new List<string?>();
         panel.PropertyChanged += (_, e) => notified.Add(e.PropertyName);
         Assert.False(new PrecipitationStyle().IsDrawnWith(state.Snapshot()));
@@ -130,7 +130,7 @@ public sealed class WeatherDisplaySettingsTests
     public async Task The_precipitation_thunderstorm_and_cloud_switches_are_read_and_set_through_MCP()
     {
         var state = new EcdisDisplayState();
-        using var panel = new EcdisDisplayPanelViewModel(state, new PortrayalCatalogueManager(), new DatasetsViewModel(new FakeDatasetLoaderService()), labelOverrides: new EcdisLabelOverrideProvider());
+        using var panel = new EcdisDisplayPanelViewModel(state, new PortrayalCatalogueManager(), new DatasetsViewModel(new FakeDatasetLoaderService()), labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null);
         var tools = new WeatherDisplayTools(panel, new ImmediateInvoker());
 
         var read = Assert.IsType<ToolResult<WeatherDisplayDto>.OkResult>(await tools.GetAsync(TestContext.Current.CancellationToken)).Value;
@@ -153,7 +153,7 @@ public sealed class WeatherDisplaySettingsTests
         var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
         datasets.Add("/data/gfs.grib2", WeatherProducts.Grib2.Spec);
         var state = new EcdisDisplayState();
-        using var panel = new EcdisDisplayPanelViewModel(state, new PortrayalCatalogueManager(), datasets, labelOverrides: new EcdisLabelOverrideProvider());
+        using var panel = new EcdisDisplayPanelViewModel(state, new PortrayalCatalogueManager(), datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null);
         using var host = ViewHost.Show(new EcdisDisplayPanelView { DataContext = panel }, width: 360, height: 1100);
 
         var precipitation = host.Find<ToggleSwitch>("EcdisDisplayPanel.Weather.Precipitation");
@@ -216,7 +216,7 @@ public sealed class WeatherDisplaySettingsTests
         var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
         datasets.Add("/data/gfs.grib2", WeatherProducts.Grib2.Spec);
         var state = new EcdisDisplayState();
-        using var panel = new EcdisDisplayPanelViewModel(state, new PortrayalCatalogueManager(), datasets, labelOverrides: new EcdisLabelOverrideProvider());
+        using var panel = new EcdisDisplayPanelViewModel(state, new PortrayalCatalogueManager(), datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null);
         using var host = ViewHost.Show(new EcdisDisplayPanelView { DataContext = panel }, width: 360, height: 900);
 
         var isobars = host.Find<ToggleSwitch>("EcdisDisplayPanel.Weather.Isobars");
@@ -244,7 +244,7 @@ public sealed class WeatherDisplaySettingsTests
     {
         var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
         datasets.Add("/data/US5SEAFL.000", "S-57");
-        using var panel = new EcdisDisplayPanelViewModel(new EcdisDisplayState(), new PortrayalCatalogueManager(), datasets, labelOverrides: new EcdisLabelOverrideProvider());
+        using var panel = new EcdisDisplayPanelViewModel(new EcdisDisplayState(), new PortrayalCatalogueManager(), datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null);
         using var host = ViewHost.Show(new EcdisDisplayPanelView { DataContext = panel }, width: 360, height: 900);
 
         Assert.False(host.IsShown("EcdisDisplayPanel.Weather.Isobars"));

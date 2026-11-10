@@ -52,8 +52,8 @@ internal sealed class PassageCheckViewModel : ViewModelBase
         RoutesService routes,
         Func<DepthUnit> depthUnit,
         Func<TimeFormat> timeFormat,
-        RouteFindingsService? findings = null,
-        Action? addDraft = null)
+        RouteFindingsService? findings,
+        Action? addDraft)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(routes);

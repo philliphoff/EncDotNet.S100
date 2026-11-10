@@ -14,9 +14,9 @@ public sealed partial class LiveAccessibleNameTests
         var loader = new FakeDatasetLoaderService();
         var datasets = new DatasetsViewModel(loader);
         datasets.Entries.Add(new DatasetEntry("/data/US5WA31M.000", "S-57") { IsLoaded = true });
-        using var service = new DisplayCombinationService(new EcdisDisplayState(), loader, datasets, new ViewerSettings { IsReadOnly = true });
+        using var service = new DisplayCombinationService(new EcdisDisplayState(), loader, datasets, new ViewerSettings { IsReadOnly = true }, post: null);
         service.SaveCurrent("Night approach");
-        using var combinations = new DisplayCombinationsViewModel(service);
+        using var combinations = new DisplayCombinationsViewModel(service, ui: null);
         using var host = ViewHost.Show(new DisplayCombinationsView { DataContext = combinations }, width: 380, height: 1000);
 
         await AssertRealNamesAsync(host, minimumRows: 0);

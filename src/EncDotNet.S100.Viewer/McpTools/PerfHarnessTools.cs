@@ -254,9 +254,9 @@ internal sealed class GetProcessMetricsTool(
     ProcessMetricsSampler sampler,
     IRenderActivityMonitor? renderMonitor,
     Func<PerfEnvironmentDto> environment,
-    Func<int>? tileCount = null,
-    Func<WorkSchedulerStats>? schedulerStats = null,
-    Func<EncDotNet.S100.Rendering.Engine.Prediction.PredictionStatsSnapshot>? predictionStats = null)
+    Func<int>? tileCount,
+    Func<WorkSchedulerStats>? schedulerStats,
+    Func<EncDotNet.S100.Rendering.Engine.Prediction.PredictionStatsSnapshot>? predictionStats)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "get_process_metrics";
@@ -484,7 +484,7 @@ internal sealed record FlingDto(
 /// Flings the map as releasing a drag at a velocity does (MCP <c>fling</c>,
 /// map rendering slice 9): the harness's fling scenario.
 /// </summary>
-internal sealed class FlingTool(ICapabilityAccessor<IMapViewportController> accessor, Action? onApplied = null)
+internal sealed class FlingTool(ICapabilityAccessor<IMapViewportController> accessor, Action? onApplied)
 {
     /// <summary>The MCP tool name.</summary>
     public const string Name = "fling";

@@ -277,8 +277,8 @@ public interface ISecomIdentityReferences
 /// <param name="references">The host's stored identities, for reference ids; <see langword="null"/> where there are none.</param>
 public sealed class SetSecomIdentityTool(
     EncDotNet.S100.Collections.Secom.SecomServerTrust trust,
-    TimeProvider? timeProvider = null,
-    ISecomIdentityReferences? references = null)
+    TimeProvider timeProvider,
+    ISecomIdentityReferences? references)
 {
     /// <summary>The prefix of a stored identity's reference id.</summary>
     public const string ReferencePrefix = "sc-ident:";
@@ -287,7 +287,7 @@ public sealed class SetSecomIdentityTool(
     public const string Name = "set_secom_identity";
 
     private readonly EncDotNet.S100.Collections.Secom.SecomServerTrust _trust = trust ?? throw new ArgumentNullException(nameof(trust));
-    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
+    private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     /// <summary>Loads the identity at <paramref name="path"/>, clears it, or (with neither) reports it.</summary>
     public Task<ToolResult<SecomIdentityDto>> InvokeAsync(

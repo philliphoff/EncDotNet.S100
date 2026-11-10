@@ -68,7 +68,7 @@ internal sealed class DisplayCombinationService : IDisposable
         IDatasetLoaderService loader,
         DatasetsViewModel datasets,
         ViewerSettings settings,
-        Action<Action>? post = null)
+        Action<Action>? post)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(loader);

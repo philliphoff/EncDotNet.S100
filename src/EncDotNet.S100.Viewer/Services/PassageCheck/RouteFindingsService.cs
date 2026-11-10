@@ -63,10 +63,10 @@ internal sealed class RouteFindingsService : IDisposable
         PassageCheckService check,
         RoutesService routes,
         IDatasetCatalog catalog,
-        ICapabilityAccessor<IMapViewportController>? viewport = null,
-        IMarinerSettingsProvider? mariner = null,
-        ITimeFormatProvider? timeFormat = null,
-        NavigationalWarningsService? warnings = null)
+        ICapabilityAccessor<IMapViewportController>? viewport,
+        IMarinerSettingsProvider? mariner,
+        ITimeFormatProvider? timeFormat,
+        NavigationalWarningsService? warnings)
     {
         ArgumentNullException.ThrowIfNull(check);
         ArgumentNullException.ThrowIfNull(routes);

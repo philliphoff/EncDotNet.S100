@@ -42,7 +42,7 @@ internal sealed class MapsuiMapHost :
         DatasetProcessorOwner processorOwner,
         MapsuiDatasetRenderer datasetRenderer,
         IInteroperabilityAuthorityProvider authorityProvider,
-        DemandPlanner? planner = null)
+        DemandPlanner? planner)
     {
         ArgumentNullException.ThrowIfNull(mapControl);
         ArgumentNullException.ThrowIfNull(processorOwner);

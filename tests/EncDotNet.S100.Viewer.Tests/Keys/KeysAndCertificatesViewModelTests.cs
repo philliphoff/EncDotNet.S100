@@ -224,7 +224,7 @@ public sealed class KeysAndCertificatesViewModelTests : IDisposable
     public void Settings_can_open_keys_and_certificates_on_a_tab()
     {
         using var page = _keys.Page();
-        var settings = new SettingsViewModel(_keys.Settings, keysAndCertificates: page);
+        var settings = new SettingsViewModel(_keys.Settings, keysAndCertificates: page, dataMaintenance: null, applicationControl: null, dialogManager: null);
 
         settings.ShowKeysAndCertificates(KeysTab.Authorities);
 

@@ -37,7 +37,7 @@ internal interface IRouteDialogs
 /// <param name="files">The native file pickers.</param>
 /// <param name="testPick">With <c>--mcp-test-hooks</c> only: the file to answer the import picker with.</param>
 /// <param name="testSave">With <c>--mcp-test-hooks</c> only: the file to answer the export picker with.</param>
-internal sealed class RouteDialogs(DialogManager dialogs, IFileDialogService files, Func<string?>? testPick = null, Func<string?>? testSave = null) : IRouteDialogs
+internal sealed class RouteDialogs(DialogManager dialogs, IFileDialogService files, Func<string?>? testPick, Func<string?>? testSave) : IRouteDialogs
 {
     /// <summary>The variable naming the file the export picker answers with under <c>--mcp-test-hooks</c>.</summary>
     public const string TestSaveVariable = "SOUNDCHARTS_TEST_SAVE_FILE";

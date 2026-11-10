@@ -75,13 +75,13 @@ public sealed class RouteCycloneCheckTests : IDisposable
 
     private static Setup Start()
     {
-        var routes = new RoutesService();
+        var routes = new RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System));
         var route = Through(routes);
         if (!routes.Routes.Routes.Contains(route))
             routes.Routes.Add(route);
         routes.Routes.SetActiveRoute(route);
         var limits = new FixedWeatherLimits();
-        var check = new PassageCheckService(routes, new PassageCheckFixture.FixedCatalog([Ian()]), PassageCheckFixture.SerialPost, limits, debounce: TimeSpan.Zero, sources: PassageCheckFixture.NewSources(), checks: EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService.BuiltInChecks);
+        var check = new PassageCheckService(routes, new PassageCheckFixture.FixedCatalog([Ian()]), PassageCheckFixture.SerialPost, limits, debounce: TimeSpan.Zero, sources: PassageCheckFixture.NewSources(), checks: EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService.BuiltInChecks, warnings: null, mariner: null, options: null);
         routes.IsCheckModeActive = true;
         return new Setup(routes, check, limits);
     }
@@ -153,14 +153,14 @@ public sealed class RouteCycloneCheckTests : IDisposable
         Assert.Equal("M", ghost.ClassLetter); // Ian was a major hurricane.
         Assert.StartsWith("at ETA ", ghost.Label, StringComparison.Ordinal);
         Assert.EndsWith(" NM", ghost.Label, StringComparison.Ordinal);
-        using (var legend = new RouteCheckLegendViewModel(s.Routes, s.Check, null, new RouteCheckLegendState()))
+        using (var legend = new RouteCheckLegendViewModel(s.Routes, s.Check, null, new RouteCheckLegendState(settings: null)))
             Assert.True(legend.HasStormAtEta);
 
         // Without the closest approach there's no ghost.
         s.Limits.Cyclones = TropicalCycloneCheckSettings.Default with { ReportClosestApproach = false };
         report = await Settled(s.Check);
         Assert.Empty(RouteCheckMap.Build(route, report.Findings, null, RouteCheckColors.For(PaletteType.Day), SKColors.Blue, PaletteType.Day, Synoptic, TimeFormat.Utc, 50).Storms);
-        using (var legend = new RouteCheckLegendViewModel(s.Routes, s.Check, null, new RouteCheckLegendState()))
+        using (var legend = new RouteCheckLegendViewModel(s.Routes, s.Check, null, new RouteCheckLegendState(settings: null)))
             Assert.False(legend.HasStormAtEta);
     }
 
@@ -168,7 +168,7 @@ public sealed class RouteCycloneCheckTests : IDisposable
     public void The_settings_keep_the_cyclone_rows_and_must_review_never_sits_outside_check_against()
     {
         var settings = new ViewerSettings { SettingsFilePath = _settingsFile };
-        var vm = new SettingsViewModel(settings);
+        var vm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         var raised = 0;
         vm.RouteWeatherLimitsChanged += () => raised++;
 
@@ -196,7 +196,7 @@ public sealed class RouteCycloneCheckTests : IDisposable
         Assert.Equal(3, raised);
         Assert.Equal(new TropicalCycloneCheckSettings { CheckAgainst = TropicalCycloneRadius.Knots64, ReportClosestApproach = false, MustReviewInside = null }, vm.Cyclones);
 
-        var reloaded = new SettingsViewModel(ViewerSettings.Load(_settingsFile));
+        var reloaded = new SettingsViewModel(ViewerSettings.Load(_settingsFile), dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         Assert.Equal(vm.Cyclones, reloaded.Cyclones);
 
         vm.CycloneCheckAgainstKnots = 34;
@@ -207,7 +207,7 @@ public sealed class RouteCycloneCheckTests : IDisposable
     [AvaloniaFact]
     public void The_settings_page_has_the_three_cyclone_rows()
     {
-        var vm = new SettingsViewModel(new ViewerSettings { SettingsFilePath = _settingsFile });
+        var vm = new SettingsViewModel(new ViewerSettings { SettingsFilePath = _settingsFile }, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         using var host = ViewHost.Show(new ChartSettingsPage { DataContext = vm }, width: 500, height: 2800);
 
         var against = host.Find<ComboBox>("Settings.CycloneCheckAgainst");
@@ -237,7 +237,7 @@ public sealed class RouteCycloneCheckTests : IDisposable
     public async Task The_mcp_tools_read_and_set_the_cyclone_settings()
     {
         var settings = new ViewerSettings { SettingsFilePath = _settingsFile };
-        var vm = new SettingsViewModel(settings);
+        var vm = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         var tools = new RouteWeatherSettingsTools(vm, new ImmediateInvoker());
         var ct = TestContext.Current.CancellationToken;
 

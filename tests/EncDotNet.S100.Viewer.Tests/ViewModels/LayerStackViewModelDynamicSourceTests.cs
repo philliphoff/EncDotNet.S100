@@ -20,7 +20,7 @@ public class LayerStackViewModelDynamicSourceTests
         loader.SetEntries(Entry("a.000", S98DisplayPlane.BaseChartUnder, 10));
         var registry = new FakeRegistry();
 
-        var vm = new LayerStackViewModel(loader, registry);
+        var vm = new LayerStackViewModel(loader, registry, timeFormat: null, displayCombinations: null, datasets: null);
 
         Assert.DoesNotContain(vm.Planes, p => p.Plane == S98DisplayPlane.DynamicArrows);
     }
@@ -34,7 +34,7 @@ public class LayerStackViewModelDynamicSourceTests
         registry.Add(new DynamicSourceRegistrationInfo("ownship", "Own Ship", null));
         registry.Add(new DynamicSourceRegistrationInfo("ais", "AIS", "Other vessels"));
 
-        var vm = new LayerStackViewModel(loader, registry);
+        var vm = new LayerStackViewModel(loader, registry, timeFormat: null, displayCombinations: null, datasets: null);
 
         var plane = vm.Planes.Single(p => p.Plane == S98DisplayPlane.DynamicArrows);
         var dyn = plane.Children.OfType<LayerStackDynamicEntryViewModel>().ToList();
@@ -54,7 +54,7 @@ public class LayerStackViewModelDynamicSourceTests
             WithinPlanePriority = 100,
         });
 
-        var vm = new LayerStackViewModel(loader, registry);
+        var vm = new LayerStackViewModel(loader, registry, timeFormat: null, displayCombinations: null, datasets: null);
 
         var overlays = vm.Planes.Single(p => p.Plane == S98DisplayPlane.OtherChartOverlays);
         var ndbc = Assert.Single(overlays.Children.OfType<LayerStackDynamicEntryViewModel>());
@@ -71,7 +71,7 @@ public class LayerStackViewModelDynamicSourceTests
         var registry = new FakeRegistry();
         registry.Add(new DynamicSourceRegistrationInfo("ownship", "Own Ship", null));
 
-        var vm = new LayerStackViewModel(loader, registry);
+        var vm = new LayerStackViewModel(loader, registry, timeFormat: null, displayCombinations: null, datasets: null);
         var entry = vm.Planes.Single(p => p.Plane == S98DisplayPlane.DynamicArrows)
             .Children.OfType<LayerStackDynamicEntryViewModel>().Single();
 
@@ -86,7 +86,7 @@ public class LayerStackViewModelDynamicSourceTests
     {
         var loader = new ControllableLoader();
         var registry = new FakeRegistry();
-        var vm = new LayerStackViewModel(loader, registry);
+        var vm = new LayerStackViewModel(loader, registry, timeFormat: null, displayCombinations: null, datasets: null);
 
         Assert.DoesNotContain(vm.Planes, p => p.Plane == S98DisplayPlane.DynamicArrows);
 
@@ -102,7 +102,7 @@ public class LayerStackViewModelDynamicSourceTests
         var loader = new ControllableLoader();
         var registry = new FakeRegistry();
         registry.Add(new DynamicSourceRegistrationInfo("ownship", "Own Ship", null));
-        var vm = new LayerStackViewModel(loader, registry);
+        var vm = new LayerStackViewModel(loader, registry, timeFormat: null, displayCombinations: null, datasets: null);
 
         registry.RemoveAt(0);
 
@@ -117,7 +117,7 @@ public class LayerStackViewModelDynamicSourceTests
         var registry = new FakeRegistry();
         registry.Add(new DynamicSourceRegistrationInfo("ownship", "Own Ship", null));
 
-        var vm = new LayerStackViewModel(loader, registry);
+        var vm = new LayerStackViewModel(loader, registry, timeFormat: null, displayCombinations: null, datasets: null);
         var plane = vm.Planes.Single(p => p.Plane == S98DisplayPlane.DynamicArrows);
 
         Assert.Equal(2, plane.Children.Count);

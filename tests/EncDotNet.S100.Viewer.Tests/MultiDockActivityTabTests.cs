@@ -194,23 +194,23 @@ public sealed class MultiDockActivityTabTests : IDisposable
             featureCatalogues: new FeatureCataloguesViewModel(settings),
             portrayalCatalogues: new PortrayalCataloguesViewModel(settings, catalogues),
             datasets: datasets,
-            layerStack: new LayerStackViewModel(new NoopLoader()),
+            layerStack: new LayerStackViewModel(new NoopLoader(), dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null),
             search: new FeatureSearchViewModel(new StubFeatureSearchService(), new StubPickService()),
-            settingsViewModel: new SettingsViewModel(settings),
+            settingsViewModel: new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null),
             pickReport: new PickReportViewModel(),
-            timeline: timeline ?? new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider()),
+            timeline: timeline ?? new TimelineViewModel(new GlobalTimeService(), null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), dispatch: EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, refresher: null, progress: null, scope: null, library: null),
             displayToolbar: new DisplayToolbarViewModel(new EcdisDisplayState()),
             textToolbar: new TextGroupToolbarViewModel(new EcdisDisplayState(), catalogues, datasets),
             displayModeToolbar: new DisplayModeToolbarViewModel(new EcdisDisplayState(), new FakeDatasetLoaderService()),
-            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider()),
+            ecdisDisplayPanel: new EcdisDisplayPanelViewModel(new EcdisDisplayState(), catalogues, datasets, labelOverrides: new EcdisLabelOverrideProvider(), displayModeToolbar: null, displayCombinations: null),
             themeService: new StubThemeService(),
             recentFiles: new StubRecentFilesService(),
             measureAppearance: new StubMeasureOverlayAppearanceProvider(),
             notifications: Notifications.TestNotifications.Create(),
             activityTabs: tabs,
             dialogManager: new ShadUI.DialogManager(),
-            routes: new EncDotNet.S100.Viewer.Services.RoutesService(),
-            measure: new EncDotNet.S100.Viewer.Services.MeasureSession());
+            routes: new EncDotNet.S100.Viewer.Services.RoutesService(new EncDotNet.S100.Viewer.Services.ClockViewTime(TimeProvider.System)),
+            measure: new EncDotNet.S100.Viewer.Services.MeasureSession(settings: null));
     }
 
     [Fact]
@@ -252,7 +252,7 @@ public sealed class MultiDockActivityTabTests : IDisposable
     {
         // #712 F5: the dock no longer opens by itself; the HUD stands in for it.
         var time = new GlobalTimeService();
-        var timeline = new TimelineViewModel(time, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), action => action());
+        var timeline = new TimelineViewModel(time, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), action => action(), refresher: null, progress: null, scope: null, library: null);
         var vm = CreateViewModel(new IActivityTab[] { new FakeTab { Id = "Timeline", Order = 10, Dock = TabDock.Bottom } }, timeline: timeline);
         vm.WindowWidth = 1200;
         Assert.False(vm.IsTimeHudVisible);
@@ -290,7 +290,7 @@ public sealed class MultiDockActivityTabTests : IDisposable
         // Design note time-overlays D1: the stamp while the Timeline tab is
         // shown, the HUD otherwise, never both (the Logs tab used to show both).
         var time = new GlobalTimeService();
-        var timeline = new TimelineViewModel(time, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), action => action());
+        var timeline = new TimelineViewModel(time, null, new Microsoft.Extensions.Time.Testing.FakeTimeProvider(), action => action(), refresher: null, progress: null, scope: null, library: null);
         var timelineTab = new FakeTab { Id = "Timeline", Order = 10, Dock = TabDock.Bottom };
         var logsTab = new FakeTab { Id = "Logs", Order = 20, Dock = TabDock.Bottom };
         var vm = CreateViewModel(new IActivityTab[] { timelineTab, logsTab }, timeline: timeline);
@@ -454,7 +454,7 @@ public sealed class MultiDockActivityTabTests : IDisposable
         using var logs = new LogsViewModel(buffer, post: action => action(), showFeedback: null, timeFormat: null, time: TimeProvider.System);
         var timeline = new FakeTab { Id = MainViewModel.TimelineTabId, Order = 10, Dock = TabDock.Bottom };
         var logsTab = new ActivityTab<LogsViewModel, ContentControl>(
-            MainViewModel.LogsTabId, 30, "Logs", "Logs", () => new ContentControl(), logs, false, TabDock.Bottom);
+            MainViewModel.LogsTabId, 30, "Logs", "Logs", () => new ContentControl(), logs, false, visibility: null, TabDock.Bottom);
         var vm = CreateViewModel(new IActivityTab[] { timeline, logsTab });
         vm.WindowWidth = 1200;
         Assert.False(vm.IsBottomDockOpen);
@@ -487,7 +487,7 @@ public sealed class MultiDockActivityTabTests : IDisposable
         using var buffer = new EncDotNet.S100.Viewer.Diagnostics.LogBuffer(timeProvider: TimeProvider.System);
         using var logs = new LogsViewModel(buffer, post: action => action(), showFeedback: null, timeFormat: null, time: TimeProvider.System);
         using var logsTab = new ActivityTab<LogsViewModel, ContentControl>(
-            MainViewModel.LogsTabId, 30, "Logs", "Logs", () => new ContentControl(), logs, false, TabDock.Bottom);
+            MainViewModel.LogsTabId, 30, "Logs", "Logs", () => new ContentControl(), logs, false, visibility: null, TabDock.Bottom);
 
         buffer.Add(Microsoft.Extensions.Logging.LogLevel.Error, "EncDotNet.S100.Viewer.App", "boom");
         buffer.Flush();

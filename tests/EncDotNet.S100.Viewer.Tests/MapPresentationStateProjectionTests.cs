@@ -16,7 +16,7 @@ public class MapPresentationStateProjectionTests
             SettingsFilePath = Path.Combine(
                 Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json"),
         };
-        var settingsViewModel = new SettingsViewModel(settings);
+        var settingsViewModel = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         var ecdis = new EcdisDisplayState();
         var mariner = new StubMarinerSettingsProvider();
         var projection = new MapPresentationStateProjection(
@@ -44,7 +44,7 @@ public class MapPresentationStateProjectionTests
             SettingsFilePath = Path.Combine(
                 Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json"),
         };
-        var settingsViewModel = new SettingsViewModel(settings);
+        var settingsViewModel = new SettingsViewModel(settings, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         var zone = TimeZoneInfo.CreateCustomTimeZone("Test+3", TimeSpan.FromHours(3), "Test+3", "Test+3");
         var projection = new MapPresentationStateProjection(
             settingsViewModel, new EcdisDisplayState(), new StubMarinerSettingsProvider(), new ZoneClock(zone));

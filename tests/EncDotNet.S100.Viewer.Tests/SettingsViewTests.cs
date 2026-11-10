@@ -23,7 +23,7 @@ public sealed class SettingsViewTests : IDisposable
     [AvaloniaFact]
     public void Clicking_a_category_shows_its_page()
     {
-        var vm = new SettingsViewModel(new ViewerSettings { SettingsFilePath = _settingsPath });
+        var vm = new SettingsViewModel(new ViewerSettings { SettingsFilePath = _settingsPath }, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         using var host = ViewHost.Show(new SettingsView { DataContext = vm });
         Assert.True(host.IsShown("Settings.DistanceUnit"));
         Assert.False(host.IsShown("Settings.AisEnabled"));
@@ -38,7 +38,7 @@ public sealed class SettingsViewTests : IDisposable
     [AvaloniaFact]
     public void Setting_the_category_selects_its_tab()
     {
-        var vm = new SettingsViewModel(new ViewerSettings { SettingsFilePath = _settingsPath });
+        var vm = new SettingsViewModel(new ViewerSettings { SettingsFilePath = _settingsPath }, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         using var host = ViewHost.Show(new SettingsView { DataContext = vm });
 
         vm.SelectedCategory = SettingsCategory.Advanced;
@@ -51,7 +51,7 @@ public sealed class SettingsViewTests : IDisposable
     [AvaloniaFact]
     public void Every_setting_is_on_exactly_one_category_page()
     {
-        var vm = new SettingsViewModel(new ViewerSettings { SettingsFilePath = _settingsPath });
+        var vm = new SettingsViewModel(new ViewerSettings { SettingsFilePath = _settingsPath }, dataMaintenance: null, applicationControl: null, dialogManager: null, keysAndCertificates: null);
         using var host = ViewHost.Show(new SettingsView { DataContext = vm });
         var pages = new Dictionary<string, List<SettingsCategory>>();
 
