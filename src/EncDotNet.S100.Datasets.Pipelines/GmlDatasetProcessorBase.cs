@@ -246,6 +246,24 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
         Task.FromResult<SupplementalPortrayal?>(null);
 
     /// <summary>
+    /// Builds the sub-layer's legend (<see cref="VectorSubLayer.Legend"/>) from
+    /// the catalogue's assets, in the palette the sub-layer is drawn in, or
+    /// returns <see langword="null"/> (the default) for no legend. Called under
+    /// the render gate after the portrayal, so the catalogue's display mode and
+    /// palette are the ones just drawn with.
+    /// </summary>
+    /// <param name="instructions">The drawing instructions just emitted.</param>
+    /// <param name="legend">A legend builder over the catalogue's palette, symbols and line styles.</param>
+    protected virtual IReadOnlyList<LegendEntry>? BuildLegend(
+        IReadOnlyList<DrawingInstruction> instructions, CatalogueLegendBuilder legend) => null;
+
+    /// <summary>
+    /// The one-line caption shown with the legend, or <see langword="null"/>
+    /// (the default) for none.
+    /// </summary>
+    protected virtual string? LegendCaption => null;
+
+    /// <summary>
     /// Drawing instructions and their pre-resolved assets from a supplemental
     /// portrayal source (see <see cref="BuildSupplementalPortrayalAsync"/>).
     /// </summary>
@@ -389,6 +407,8 @@ public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVe
                 // default-plane authority via the injected provider.
                 Plane = _authorityProvider.Current.GetDefaultPlane(Spec.Name),
                 WithinPlanePriority = 0,
+                Legend = BuildLegend(instructions, new CatalogueLegendBuilder(output.Palette, output.SymbolSvg, output.LineStyle)),
+                LegendCaption = LegendCaption,
             };
 
             return new VectorPortrayalResult

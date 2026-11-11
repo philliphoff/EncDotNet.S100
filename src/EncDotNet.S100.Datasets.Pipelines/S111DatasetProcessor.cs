@@ -424,6 +424,7 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         // arrow renderer's SymbolProvider lambda reads from a memory dict.
         // The symbol set is small (one entry per S-111 speed band).
         var symbolSvgs = await PreWarmProviderSymbolsAsync(provider, cancellationToken).ConfigureAwait(false);
+        var legend = SpeedLegend(catalogue, context, symbolSvgs);
 
         var geoId = _dataset.GeographicIdentifier ?? _fileName;
         var timeInfo = source.AvailableTimes.Count > 1
@@ -466,6 +467,8 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                         viewport.MinLatitude,
                         viewport.MaxLongitude,
                         viewport.MaxLatitude),
+                    Legend = legend,
+                    LegendCaption = S111PortrayalCatalogue.LegendCaption,
                 },
             },
             Spec = Spec,
@@ -711,6 +714,9 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     WithinPlanePriority = 10,
                     SourceFeatureType = "s111.stations",
                     Glyphs = glyphs,
+                    Legend = new CatalogueLegendBuilder(catalogue.ActivePalette, name => prewarmedSvgs.TryGetValue(name, out var svg) ? svg : null)
+                        .SymbolBands(symbolScheme),
+                    LegendCaption = S111PortrayalCatalogue.LegendCaption,
                     Extent = extent,
                     // Point-by-point thinning (S-111 §9.3.2, allowed for
                     // ungeorectified grids by §9.3.3) with the same arrow
@@ -1197,6 +1203,15 @@ public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             RulesEvaluated: rulesEvaluated,
             RulesWithFindings: findings.Select(finding => finding.RuleId).Distinct(StringComparer.Ordinal).Count());
     }
+
+    /// <summary>
+    /// The speed band legend: one arrow per band of the catalogue's
+    /// <c>select_arrow.xsl</c> table, slowest first, in the catalogue's active palette.
+    /// </summary>
+    private static IReadOnlyList<LegendEntry> SpeedLegend(
+        S111PortrayalCatalogue catalogue, RenderContext? context, Dictionary<string, string> symbolSvgs) =>
+        new CatalogueLegendBuilder(catalogue.ActivePalette, name => symbolSvgs.TryGetValue(name, out var svg) ? svg : null)
+            .SymbolBands(catalogue.ResolveSymbolScheme(context?.Mariner ?? MarinerSettings.Default));
 
     /// <summary>
     /// Pre-warms every symbol declared by the given portrayal catalogue
