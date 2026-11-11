@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <Sdk Name="Aspire.AppHost.Sdk" Version="13.4.6" />
+  <Sdk Name="Aspire.AppHost.Sdk" Version="13.6.5" />
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -16,9 +16,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.4.6" />
-    <!-- Aspire 13.4.6 brings MessagePack 2.5.302 (GHSA-qhrr-8q5h-9q3h); pin the fixed version until Aspire does. -->
-    <PackageReference Include="MessagePack" Version="2.5.303" />
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="13.6.5" />
   </ItemGroup>
 
   <ItemGroup>
