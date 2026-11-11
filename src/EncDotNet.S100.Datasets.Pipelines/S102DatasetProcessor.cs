@@ -286,6 +286,8 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
                     cancellationToken: cancellationToken)
                     .ConfigureAwait(false);
                 var styledLayer = (StyledCoverageLayer)layer;
+                var mariner = context?.Mariner ?? MarinerSettings.Default;
+                var depthLegend = styledLayer.ColorScheme is { } scheme ? S102PortrayalCatalogue.BuildDepthLegend(scheme) : null;
                 var nativeToWgs84 = NativeToWgs84(crs);
                 string? adjustmentKey = null;
                 if (context?.DepthAdjustment is { } adjustment)
@@ -304,7 +306,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
                     styledLayer = S102Relief.Apply(styledLayer, nativeToWgs84, ReliefShading.Default);
 
                 var depthLines = BuildDepthLineSubLayers(
-                    styledLayer, context?.Mariner ?? MarinerSettings.Default, crs, nativeToWgs84, adjustmentKey);
+                    styledLayer, mariner, crs, nativeToWgs84, adjustmentKey);
 
                 var geoId = _dataset.GeographicIdentifier ?? _fileName;
                 var info = $"{geoId} — {metadata.GridMetadata.NumColumns}×{metadata.GridMetadata.NumRows} grid, CRS: EPSG:{crs}";
@@ -325,6 +327,8 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
                             WithinPlanePriority = 0,
                             Coverage = styledLayer,
                             Viewport = viewport,
+                            Legend = depthLegend,
+                            LegendCaption = S102PortrayalCatalogue.SafetyContourCaption(mariner),
                         },
                         depthLines.SafetyContour,
                         depthLines.CoverageLimit,
@@ -378,6 +382,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
 
         var safety = _catalogue.SafetyContourStyle(mariner);
         var limit = _catalogue.CoverageLimitStyle;
+        double[] limitDashes = [.. limit.DashPattern!.Select(d => (double)d)];
         var grid = layer.Coverage.Metadata;
         var key = new DepthLineKey(
             _source.SelectedOverviewLevel, crs, grid.OriginLongitude, grid.OriginLatitude,
@@ -396,6 +401,7 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
                 LabelHalo = halo,
                 LineWidth = safety.LineWidth,
                 DashPattern = [],
+                Legend = [new LineLegendEntry(LegendLineSample.FromPixels(RgbaColor.FromHex(safety.Color), safety.LineWidth, []), "Safety contour")],
             },
             new IsolineCoverageSubLayer
             {
@@ -409,7 +415,8 @@ public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
                 Ink = RgbaColor.FromHex(limit.Color),
                 LabelHalo = halo,
                 LineWidth = limit.LineWidth,
-                DashPattern = limit.DashPattern!.Select(d => (double)d).ToArray(),
+                DashPattern = limitDashes,
+                Legend = [new LineLegendEntry(LegendLineSample.FromPixels(RgbaColor.FromHex(limit.Color), limit.LineWidth, limitDashes), "Limit of S-102 data")],
             });
     }
 

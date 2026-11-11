@@ -352,7 +352,7 @@ internal sealed class LayerStackEntryViewModel : ViewModelBase
 
     /// <summary>
     /// The legend of a sub-layer that carries one, row by row: the colour
-    /// bands of a weather fill (<see cref="GridCoverageSubLayer.Legend"/>,
+    /// bands of a weather fill (<see cref="CoverageSubLayerBase.Legend"/>,
     /// #1072), or the symbol, line and area rows of a vector overlay
     /// (<see cref="VectorSubLayer.Legend"/>, #1293); empty otherwise. The
     /// colours are those of the palette the sub-layer was last drawn in.

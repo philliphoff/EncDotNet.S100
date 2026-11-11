@@ -386,6 +386,9 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
         // Labels follow the mariner's text scale, as S-101 labels do.
         double textScale = context?.TextScale ?? 1.0;
         var isolines = _isolinesByStep.GetOrAdd(step, s => TraceIsolines(dataset, s, cancellationToken));
+        var ink = S104CoverageStyle.Palette.Resolve(S104CoverageStyle.InkToken, palette);
+        const double lineWidth = 1.1;
+        double[] dashPattern = [6, 3];
 
         return new IsolineCoverageSubLayer
         {
@@ -396,10 +399,19 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
             SourceFeatureType = IsolineLayerKey,
             Isolines = isolines,
             Extent = GridMercatorExtent(),
-            Ink = S104CoverageStyle.Palette.Resolve(S104CoverageStyle.InkToken, palette),
+            Ink = ink,
             LabelHalo = S104CoverageStyle.Palette.Resolve(S104CoverageStyle.IsolineLabelHaloToken, palette),
+            LineWidth = lineWidth,
+            DashPattern = dashPattern,
             LabelFontSize = 10 * textScale,
             LabelHaloWidth = 3 * textScale,
+            Legend =
+            [
+                new LineLegendEntry(
+                    LegendLineSample.FromPixels(ink, lineWidth, dashPattern),
+                    S104CoverageStyle.IsolineLegendLabel(_isolineRange!.Value.Interval)),
+            ],
+            LegendCaption = S104CoverageStyle.LegendCaption,
         };
     }
 
@@ -630,6 +642,8 @@ public sealed class S104DatasetProcessor : IDatasetProcessor, ICoveragePortrayal
                     TextScale = context?.TextScale ?? 1.0,
                     Product = "S-104",
                     Extent = extent,
+                    Legend = S104CoverageStyle.BuildStationLegend(palette),
+                    LegendCaption = S104CoverageStyle.LegendCaption,
                 },
             },
             Spec = Spec,

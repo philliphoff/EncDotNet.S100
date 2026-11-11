@@ -3,6 +3,7 @@ using System.Globalization;
 using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Catalog;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.S411;
 using EncDotNet.S100.Datasets.S411.DataModel;
 using EncDotNet.S100.Datasets.S411.Validation;
@@ -279,5 +280,60 @@ public sealed class S411DatasetProcessor :
             return $"S-411 Sea Ice — {FileName}\nHidden (snapshot at {issued:u} is after slider time {t:u})";
         }
         return null;
+    }
+
+    /// <summary>
+    /// The ice key for the active display mode: one swatch per WMO colour of
+    /// the total concentration or stage of development table
+    /// (<see cref="S411IceColours"/>), labelled from the feature catalogue's
+    /// definitions of its codes. The provisional navigational mode has no
+    /// catalogue colours, so it has no legend.
+    /// </summary>
+    /// <param name="instructions">The drawing instructions just emitted (unused: the key shows the whole table).</param>
+    /// <param name="legend">The legend builder over the catalogue's assets.</param>
+    protected override IReadOnlyList<LegendEntry>? BuildLegend(
+        IReadOnlyList<DrawingInstruction> instructions, CatalogueLegendBuilder legend) =>
+        BuildIceLegend(Catalogue.DisplayModes.ActiveDisplayModeId, Decoder, legend);
+
+    /// <inheritdoc />
+    protected override string? LegendCaption => IceLegendCaption(Catalogue.DisplayModes.ActiveDisplayModeId);
+
+    /// <summary>
+    /// The S-411 key for <paramref name="modeId"/> (see <see cref="BuildLegend"/>),
+    /// or <see langword="null"/> for the navigational mode.
+    /// </summary>
+    /// <param name="modeId">The active display mode id, or <see langword="null"/> for the default (concentration).</param>
+    /// <param name="decoder">The S-411 feature catalogue, for the labels; codes are shown bare without it.</param>
+    /// <param name="legend">The legend builder.</param>
+    internal static IReadOnlyList<LegendEntry>? BuildIceLegend(
+        string? modeId, FeatureCatalogueDecoder? decoder, CatalogueLegendBuilder legend)
+    {
+        var (table, attribute) = Table(modeId) ?? default;
+        if (table is null)
+            return null;
+
+        return [.. table.Select(c => (LegendEntry)legend.Swatch(
+            c.Color,
+            S411IceColours.Label(c.Codes, code => decoder?.ResolveListedValueDefinition(attribute!, code.ToString(CultureInfo.InvariantCulture))),
+            S411IceColours.FillTransparency))];
+    }
+
+    /// <summary>The caption naming the ice key's WMO table, or <see langword="null"/> for the navigational mode.</summary>
+    /// <param name="modeId">The active display mode id, or <see langword="null"/> for the default.</param>
+    internal static string? IceLegendCaption(string? modeId) =>
+        Table(modeId) is { Attribute: var attribute }
+            ? attribute == StageOfDevelopmentAttribute ? "Stage of development (WMO colour code)" : "Total concentration (WMO colour code)"
+            : null;
+
+    private const string ConcentrationAttribute = "totalConcentration";
+    private const string StageOfDevelopmentAttribute = "iceStageofDevelopment";
+
+    private static (IReadOnlyList<S411IceColours.ColourClass> Table, string Attribute)? Table(string? modeId)
+    {
+        if (S411DisplayModes.IsProvisional(modeId))
+            return null;
+        return string.Equals(modeId, S411DisplayModes.StageOfDevelopmentModeId, StringComparison.OrdinalIgnoreCase)
+            ? (S411IceColours.StageOfDevelopment, StageOfDevelopmentAttribute)
+            : (S411IceColours.Concentration, ConcentrationAttribute);
     }
 }

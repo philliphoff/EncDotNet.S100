@@ -27,6 +27,22 @@ public abstract class CoverageSubLayerBase
 
     /// <summary>Optional feature-type code for S-98 rules; null for whole-layer entries.</summary>
     public string? SourceFeatureType { get; init; }
+
+    /// <summary>
+    /// The sub-layer's legend, for a viewer's Legend tab: for a colour fill,
+    /// one swatch per band, lowest first; for symbols and lines, one row each
+    /// (see <see cref="LegendEntry"/>), resolved against the palette the
+    /// sub-layer was drawn in. <see langword="null"/> (the default) for no
+    /// legend. Renderers ignore it.
+    /// </summary>
+    public IReadOnlyList<LegendEntry>? Legend { get; init; }
+
+    /// <summary>
+    /// A one-line caption shown with <see cref="Legend"/> where the rows need
+    /// a unit or a rule, e.g. <c>"Speed, kn · longer arrow = faster"</c>, or
+    /// <see langword="null"/> (the default) for none.
+    /// </summary>
+    public string? LegendCaption { get; init; }
 }
 
 /// <summary>
@@ -76,15 +92,6 @@ public sealed class GridCoverageSubLayer : CoverageSubLayerBase
     public bool ClipToWater { get; init; }
 
     /// <summary>
-    /// The fill's legend, for a viewer to show under the layer stack entry:
-    /// for a colour fill, one swatch per band, lowest first;
-    /// <see langword="null"/> (the default) for no legend. Set by the weather
-    /// fills (issue #1072, design note weather-sources.md §4.3). Renderers
-    /// ignore it.
-    /// </summary>
-    public IReadOnlyList<LegendEntry>? Legend { get; init; }
-
-    /// <summary>
     /// Returns a copy of this sub-layer with <see cref="LandAreaMask"/> replaced.
     /// Used by the S-98 water-area clip rule, which attaches the S-101 land
     /// geometry it discovers to the (processor-produced) S-104 surface sub-layer.
@@ -104,6 +111,7 @@ public sealed class GridCoverageSubLayer : CoverageSubLayerBase
             Opacity = Opacity,
             ClipToWater = ClipToWater,
             Legend = Legend,
+            LegendCaption = LegendCaption,
         };
 }
 
@@ -158,6 +166,14 @@ public sealed class IsolineCoverageSubLayer : CoverageSubLayerBase
     public IReadOnlyList<FeatureGeometry>? LandAreaMask { get; init; }
 
     /// <summary>
+    /// A sample of the isolines' line for a legend row: <see cref="Ink"/>,
+    /// <see cref="LineWidth"/> and <see cref="DashPattern"/> converted from
+    /// device-independent pixels to millimetres (one pixel is 0.32 mm, the
+    /// S-100 display pixel).
+    /// </summary>
+    public LegendLineSample LegendLine() => LegendLineSample.FromPixels(Ink, LineWidth, DashPattern);
+
+    /// <summary>
     /// Returns a copy of this sub-layer with <see cref="LandAreaMask"/> replaced.
     /// </summary>
     /// <param name="landAreaMask">The land-area surfaces to clip out, or null.</param>
@@ -179,6 +195,8 @@ public sealed class IsolineCoverageSubLayer : CoverageSubLayerBase
             LabelHaloWidth = LabelHaloWidth,
             LabelSpacing = LabelSpacing,
             LandAreaMask = landAreaMask,
+            Legend = Legend,
+            LegendCaption = LegendCaption,
         };
 }
 
@@ -258,6 +276,8 @@ public sealed class ArrowCoverageSubLayer : CoverageSubLayerBase
             SymbolProvider = SymbolProvider,
             FallbackExtent = FallbackExtent,
             YieldsToS111 = YieldsToS111,
+            Legend = Legend,
+            LegendCaption = LegendCaption,
         };
 }
 

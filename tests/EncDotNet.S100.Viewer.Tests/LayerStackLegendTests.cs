@@ -19,7 +19,7 @@ namespace EncDotNet.S100.Viewer.Tests;
 
 /// <summary>
 /// The legend under a Layer Stack entry: the colour legend of a weather fill
-/// (#1072), read from <see cref="GridCoverageSubLayer.Legend"/>, shown as a
+/// (#1072), read from <see cref="CoverageSubLayerBase.Legend"/>, shown as a
 /// named swatch and label per band; and the glyph rows of a vector overlay
 /// (#1293), read from <see cref="VectorSubLayer.Legend"/>, shown as a drawn
 /// symbol, line sample or outlined area and label per row.

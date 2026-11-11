@@ -71,6 +71,12 @@ public sealed class VectorSubLayer
     public IReadOnlyList<LegendEntry>? Legend { get; init; }
 
     /// <summary>
+    /// A one-line caption shown with <see cref="Legend"/> where the rows need
+    /// a unit or a rule, or <see langword="null"/> (the default) for none.
+    /// </summary>
+    public string? LegendCaption { get; init; }
+
+    /// <summary>
     /// The opacity the sub-layer is drawn at, 0 (invisible) to 1 (opaque, the
     /// default), on top of the dataset's own: for data a processor draws as
     /// old, such as a stale surface analysis at half opacity
