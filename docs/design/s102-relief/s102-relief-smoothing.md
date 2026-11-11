@@ -1,6 +1,7 @@
 # S-102 relief shading: options for the zoomed-out view
 
-Status: options note, nothing built. Follows the relief shading brief
+Status: closed, option 1 (leave it). Option 2 was built and dropped; see
+"Outcome" at the end. Follows the relief shading brief
 ([s102-relief-brief.md](s102-relief-brief.md)) and its "known engineering
 limits".
 
@@ -59,7 +60,7 @@ Sheets: `05-smoothing-variants.png` (A–E) and `06-zoom-boost.png` (A, D, E, F)
 
 1. **Leave it (A).** Relief is a close-up aid; zoomed out it fades out
    gracefully. No work.
-2. **Zoom-aware shading with a moderate boost (F). Recommended.**
+2. **Zoom-aware shading with a moderate boost (F).**
    - Build a small pyramid of shaded images per cell: full resolution,
      1/4 and 1/16. Each level is shaded from the depth surface averaged to
      that level, with exaggeration × ⁴√(cells per pixel).
@@ -76,15 +77,6 @@ Sheets: `05-smoothing-variants.png` (A–E) and `06-zoom-boost.png` (A, D, E, F)
    brief's question 2. It doesn't fix the zoomed-out fade on its own, because
    a strength that suits the zoomed-out view is too strong close up.
 
-## Questions for you
-
-1. Go with option 2 (zoom-aware, ⁴√ boost), or leave the zoomed-out view as
-   it is?
-2. Should the boost curve be fixed, or tied to a strength control if the
-   design pass adds one?
-3. Is a small jump at level changes acceptable for a first slice, with
-   cross-fading as a follow-up?
-
 ## Not covered
 
 - The 5 m Rotterdam cell (102NL005_518N044E) fits on screen at 4 cells per
@@ -93,3 +85,21 @@ Sheets: `05-smoothing-variants.png` (A–E) and `06-zoom-boost.png` (A, D, E, F)
 - The headless renderer (`s100 render`) draws through
   `CoverageHeadlessRenderer`, not the Mapsui raster path, so it needs its own
   decision if option 2 goes ahead.
+
+## Outcome (2026-11-11)
+
+Option 2 was built and checked in the viewer, then dropped: it has no
+visible effect there.
+
+- The harness ignored the viewer's grid display limit (`GridDisplayScale`).
+  The viewer hides a grid once one nominal 0.28 mm pixel covers 4 grid
+  nodes, about 1:14 300 for a 1 m cell.
+- On a Retina display that is at most about 2 cells per device pixel. The
+  13–16 cells per pixel drawn in the sheets above never happen.
+- At 1:14 000 on 102DE00KG45 the cell spans about 1 100 device pixels for
+  2 330 cells, so the 1/4 image (about 580 px) is never chosen, and the
+  relief already reads well with the full-resolution image and mipmaps.
+
+The zoomed-out fade only matters if relief should stay visible beyond the
+grid display limit. That limit keeps panning fast with many cells loaded,
+so changing it is a separate decision.
