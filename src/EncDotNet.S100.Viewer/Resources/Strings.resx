@@ -2399,6 +2399,14 @@
   <data name="Tooltip_DisplaySettings" xml:space="preserve">
     <value>Display settings (category, text, palette)</value>
   </data>
+  <data name="Label_MapLegend" xml:space="preserve">
+    <value>Legend</value>
+    <comment>Accessible name of the map's Legend button (overlay column, legends D15)</comment>
+  </data>
+  <data name="Tooltip_MapLegend" xml:space="preserve">
+    <value>Legend: what the map draws</value>
+    <comment>Tooltip of the map's Legend button; it shows or hides the Legend tab in the right dock</comment>
+  </data>
   <data name="Tooltip_CloseDisplaySettings" xml:space="preserve">
     <value>Close display settings</value>
   </data>

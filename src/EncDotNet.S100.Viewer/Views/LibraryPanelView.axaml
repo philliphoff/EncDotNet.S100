@@ -326,72 +326,72 @@
              grouped by where the data is. -->
         <MenuFlyout x:Key="AddMenu" Placement="BottomEdgeAlignedLeft">
             <MenuItem Header="{x:Static loc:Strings.Library_AddMenu_ThisComputer}" Classes="libraryMenuHeader" IsEnabled="False"  AutomationProperties.AutomationId="Library.AddMenu.ThisComputer"/>
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryFolder}" Command="{Binding AddFolderCommand}"  AutomationProperties.AutomationId="Library.AddMenu.Folder"/>
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryExchangeSetZip}" Command="{Binding AddExchangeSetZipCommand}"  AutomationProperties.AutomationId="Library.AddMenu.ExchangeSet"/>
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryS128}" Command="{Binding AddS128CatalogueCommand}"  AutomationProperties.AutomationId="Library.AddMenu.S128Catalogue"/>
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryManifest}" Command="{Binding AddCollectionManifestCommand}"  AutomationProperties.AutomationId="Library.AddMenu.Manifest"/>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryFolder}" Command="{Binding Tree.AddFolderCommand}"  AutomationProperties.AutomationId="Library.AddMenu.Folder"/>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryExchangeSetZip}" Command="{Binding Tree.AddExchangeSetZipCommand}"  AutomationProperties.AutomationId="Library.AddMenu.ExchangeSet"/>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryS128}" Command="{Binding Tree.AddS128CatalogueCommand}"  AutomationProperties.AutomationId="Library.AddMenu.S128Catalogue"/>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryManifest}" Command="{Binding Tree.AddCollectionManifestCommand}"  AutomationProperties.AutomationId="Library.AddMenu.Manifest"/>
             <Separator />
             <MenuItem Header="{x:Static loc:Strings.Library_AddMenu_Online}" Classes="libraryMenuHeader" IsEnabled="False"  AutomationProperties.AutomationId="Library.AddMenu.Online"/>
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryOnlineCatalogue}" Command="{Binding AddOnlineCatalogueCommand}"  AutomationProperties.AutomationId="Library.AddMenu.OnlineCatalogue"/>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibraryOnlineCatalogue}" Command="{Binding Tree.AddOnlineCatalogueCommand}"  AutomationProperties.AutomationId="Library.AddMenu.OnlineCatalogue"/>
             <Separator />
             <MenuItem Header="{x:Static loc:Strings.Library_AddMenu_AnotherComputer}" Classes="libraryMenuHeader" IsEnabled="False"  AutomationProperties.AutomationId="Library.AddMenu.AnotherComputer"/>
-            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibrarySharedFeed}" Command="{Binding AddSharedFeedCommand}"  AutomationProperties.AutomationId="Library.AddMenu.SharedFeed"/>
+            <MenuItem Header="{x:Static loc:Strings.Menu_AddLibrarySharedFeed}" Command="{Binding Tree.AddSharedFeedCommand}"  AutomationProperties.AutomationId="Library.AddMenu.SharedFeed"/>
         </MenuFlyout>
 
         <!-- Rarely used, destructive actions live here rather than on the toolbar. -->
         <MenuFlyout x:Key="MoreMenu" Placement="BottomEdgeAlignedRight">
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRefreshAll}" Command="{Binding RefreshAllCommand}"  AutomationProperties.AutomationId="Library.MoreMenu.RefreshAll"/>
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRename}" Command="{Binding RenameCommand}"  AutomationProperties.AutomationId="Library.MoreMenu.Rename"/>
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRefreshAll}" Command="{Binding Tree.RefreshAllCommand}"  AutomationProperties.AutomationId="Library.MoreMenu.RefreshAll"/>
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRename}" Command="{Binding Tree.RenameCommand}"  AutomationProperties.AutomationId="Library.MoreMenu.Rename"/>
             <Separator />
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRemove}" Command="{Binding RemoveCommand}"  AutomationProperties.AutomationId="Library.MoreMenu.Remove"/>
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRemove}" Command="{Binding Tree.RemoveCommand}"  AutomationProperties.AutomationId="Library.MoreMenu.Remove"/>
         </MenuFlyout>
 
         <!-- The tree's context menu acts on the selected node; the tree selects a node on right-press, so that is the one right-clicked. -->
         <ContextMenu x:Key="NodeMenu">
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryKeep}" Command="{Binding KeepInLibraryCommand}"
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryKeep}" Command="{Binding Tree.KeepInLibraryCommand}"
                       AutomationProperties.AutomationId="Library.NodeMenu.Keep"
-                      IsVisible="{Binding SelectedNode.CanKeep, FallbackValue=False}" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRefresh}" Command="{Binding RefreshCommand}"
+                      IsVisible="{Binding Tree.SelectedNode.CanKeep, FallbackValue=False}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRefresh}" Command="{Binding Tree.RefreshCommand}"
                       AutomationProperties.AutomationId="Library.NodeMenu.Refresh"
-                      IsVisible="{Binding !SelectedNode.IsGroup, FallbackValue=True}" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRefreshSource}" Command="{Binding RefreshCommand}"
+                      IsVisible="{Binding !Tree.SelectedNode.IsGroup, FallbackValue=True}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRefreshSource}" Command="{Binding Tree.RefreshCommand}"
                       AutomationProperties.AutomationId="Library.NodeMenu.RefreshSource"
-                      IsVisible="{Binding SelectedNode.IsGroup, FallbackValue=False}" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryChooseGroups}" Command="{Binding ChooseGroupsCommand}"
+                      IsVisible="{Binding Tree.SelectedNode.IsGroup, FallbackValue=False}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryChooseGroups}" Command="{Binding Tree.ChooseGroupsCommand}"
                       AutomationProperties.AutomationId="Library.NodeMenu.ChooseGroups"
-                      IsVisible="{Binding SelectedNode.CanChooseGroups, FallbackValue=False}" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryAddCurrents}" Command="{Binding AddCurrentsForAreaCommand}"
+                      IsVisible="{Binding Tree.SelectedNode.CanChooseGroups, FallbackValue=False}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryAddCurrents}" Command="{Binding Tree.AddCurrentsForAreaCommand}"
                       AutomationProperties.AutomationId="Library.NodeMenu.AddCurrents"
-                      IsVisible="{Binding CanAddCurrentsForArea}" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryKeepDownloaded}" Command="{Binding ToggleSyncCommand}"
-                      ToggleType="CheckBox" IsChecked="{Binding SelectedSyncs, Mode=OneWay}"
+                      IsVisible="{Binding Tree.CanAddCurrentsForArea}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryKeepDownloaded}" Command="{Binding Tree.ToggleSyncCommand}"
+                      ToggleType="CheckBox" IsChecked="{Binding Tree.SelectedSyncs, Mode=OneWay}"
                       AutomationProperties.AutomationId="Library.NodeMenu.KeepDownloaded"
-                      IsVisible="{Binding CanSyncSelected}" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryShowOnMap}" Command="{Binding ToggleShowOnMapCommand}"
-                      ToggleType="CheckBox" IsChecked="{Binding SelectedShowsOnMap, Mode=OneWay}"
+                      IsVisible="{Binding Tree.CanSyncSelected}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryShowOnMap}" Command="{Binding Tree.ToggleShowOnMapCommand}"
+                      ToggleType="CheckBox" IsChecked="{Binding Tree.SelectedShowsOnMap, Mode=OneWay}"
                       AutomationProperties.AutomationId="Library.NodeMenu.ShowOnMap"
-                      IsVisible="{Binding CanShowOnMap}" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRename}" Command="{Binding RenameCommand}"
+                      IsVisible="{Binding Tree.CanShowOnMap}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRename}" Command="{Binding Tree.RenameCommand}"
                       AutomationProperties.AutomationId="Library.NodeMenu.Rename"
-                      IsVisible="{Binding !SelectedNode.IsGroup, FallbackValue=True}" />
+                      IsVisible="{Binding !Tree.SelectedNode.IsGroup, FallbackValue=True}" />
             <MenuItem Header="{x:Static loc:Strings.Menu_LibraryCopyUrl}" Click="OnCopySourceUrl"
                       AutomationProperties.AutomationId="Library.NodeMenu.CopyUrl"
-                      IsVisible="{Binding SelectedNode.HasSourceUrl, FallbackValue=False}" />
-            <Separator IsVisible="{Binding !SelectedNode.IsGroup, FallbackValue=True}" />
-            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRemove}" Command="{Binding RemoveCommand}"
+                      IsVisible="{Binding Tree.SelectedNode.HasSourceUrl, FallbackValue=False}" />
+            <Separator IsVisible="{Binding !Tree.SelectedNode.IsGroup, FallbackValue=True}" />
+            <MenuItem Header="{x:Static loc:Strings.Menu_LibraryRemove}" Command="{Binding Tree.RemoveCommand}"
                       AutomationProperties.AutomationId="Library.NodeMenu.Remove"
-                      IsVisible="{Binding !SelectedNode.IsGroup, FallbackValue=True}" />
+                      IsVisible="{Binding !Tree.SelectedNode.IsGroup, FallbackValue=True}" />
         </ContextMenu>
     </UserControl.Resources>
 
     <Panel>
         <!-- Empty state: the most common ways in, as large targets. -->
-        <StackPanel IsVisible="{Binding IsEmpty}" VerticalAlignment="Center" Spacing="10" Margin="16,0">
+        <StackPanel IsVisible="{Binding Tree.IsEmpty}" VerticalAlignment="Center" Spacing="10" Margin="16,0">
             <TextBlock Text="{x:Static loc:Strings.Library_EmptyTitle}" FontSize="15" FontWeight="SemiBold"
                        HorizontalAlignment="Center" />
             <TextBlock Text="{x:Static loc:Strings.Library_EmptyDescription}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.7"
                        TextWrapping="Wrap" TextAlignment="Center" Margin="0,0,0,6" />
-            <Button Classes="Outline libraryQuickAction" Command="{Binding AddFolderCommand}"
+            <Button Classes="Outline libraryQuickAction" Command="{Binding Tree.AddFolderCommand}"
                     AutomationProperties.Name="{x:Static loc:Strings.Library_Quick_Folder}"
                     AutomationProperties.HelpText="{x:Static loc:Strings.Library_Quick_FolderSub}"
                     AutomationProperties.AutomationId="Library.Quick.Folder">
@@ -403,7 +403,7 @@
                     </StackPanel>
                 </Grid>
             </Button>
-            <Button Classes="Outline libraryQuickAction" Command="{Binding AddOnlineCatalogueCommand}"
+            <Button Classes="Outline libraryQuickAction" Command="{Binding Tree.AddOnlineCatalogueCommand}"
                     AutomationProperties.Name="{x:Static loc:Strings.Library_Quick_Online}"
                     AutomationProperties.HelpText="{x:Static loc:Strings.Library_Quick_OnlineSub}"
                     AutomationProperties.AutomationId="Library.Quick.Online">
@@ -415,7 +415,7 @@
                     </StackPanel>
                 </Grid>
             </Button>
-            <Button Classes="Outline libraryQuickAction" Command="{Binding AddSharedFeedCommand}"
+            <Button Classes="Outline libraryQuickAction" Command="{Binding Tree.AddSharedFeedCommand}"
                     AutomationProperties.Name="{x:Static loc:Strings.Library_Quick_Feed}"
                     AutomationProperties.HelpText="{x:Static loc:Strings.Library_Quick_FeedSub}"
                     AutomationProperties.AutomationId="Library.Quick.Feed">
@@ -427,7 +427,7 @@
                     </StackPanel>
                 </Grid>
             </Button>
-            <Button Classes="Outline libraryQuickAction" Command="{Binding AddCollectionManifestCommand}"
+            <Button Classes="Outline libraryQuickAction" Command="{Binding Tree.AddCollectionManifestCommand}"
                     AutomationProperties.Name="{x:Static loc:Strings.Library_Quick_Manifest}"
                     AutomationProperties.HelpText="{x:Static loc:Strings.Library_Quick_ManifestSub}"
                     AutomationProperties.AutomationId="Library.Quick.Manifest">
@@ -443,7 +443,7 @@
                        HorizontalAlignment="Center" Margin="0,4,0,0" />
         </StackPanel>
 
-        <Grid x:Name="PanelGrid" IsVisible="{Binding !IsEmpty}">
+        <Grid x:Name="PanelGrid" IsVisible="{Binding !Tree.IsEmpty}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" MinHeight="60" />
@@ -460,7 +460,7 @@
                     <Button Classes="Icon libraryIcon"
                             AutomationProperties.AutomationId="Library.Refresh"
                             AutomationProperties.Name="{x:Static loc:Strings.Tooltip_RefreshLibrary}"
-                            Command="{Binding RefreshCommand}"
+                            Command="{Binding Tree.RefreshCommand}"
                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_RefreshLibrary}">
                         <ic:FluentIcon Icon="ArrowSync" FontSize="16" />
                     </Button>
@@ -501,8 +501,8 @@
                       AutomationProperties.AutomationId="Library.Tree"
                       Classes="accentTree libraryTree"
                       Margin="4,0"
-                      ItemsSource="{Binding Nodes}"
-                      SelectedItem="{Binding SelectedNode, Mode=TwoWay}"
+                      ItemsSource="{Binding Tree.Nodes}"
+                      SelectedItem="{Binding Tree.SelectedNode, Mode=TwoWay}"
                       ContextMenu="{StaticResource NodeMenu}"
                       Background="Transparent"
                       BorderThickness="0">
@@ -535,9 +535,9 @@
                                      AttachedToVisualTree="OnRenameBoxAttached">
                                 <TextBox.KeyBindings>
                                     <KeyBinding Gesture="Enter"
-                                                Command="{Binding $parent[TreeView].((vm:LibraryPanelViewModel)DataContext).CommitRenameCommand}" />
+                                                Command="{Binding $parent[TreeView].((vm:LibraryPanelViewModel)DataContext).Tree.CommitRenameCommand}" />
                                     <KeyBinding Gesture="Escape"
-                                                Command="{Binding $parent[TreeView].((vm:LibraryPanelViewModel)DataContext).CancelRenameCommand}" />
+                                                Command="{Binding $parent[TreeView].((vm:LibraryPanelViewModel)DataContext).Tree.CancelRenameCommand}" />
                                 </TextBox.KeyBindings>
                             </TextBox>
                             <TextBlock Grid.Column="2" Text="{Binding Status}"
@@ -569,7 +569,7 @@
                                     AutomationProperties.Name="{Binding SecomFixText}"
                                     AutomationProperties.HelpText="{x:Static loc:Strings.Keys_Fix_Help}"
                                     ToolTip.Tip="{x:Static loc:Strings.Keys_Fix_Help}"
-                                    Command="{Binding $parent[TreeView].((vm:LibraryPanelViewModel)DataContext).OpenSecomFixCommand}"
+                                    Command="{Binding $parent[TreeView].((vm:LibraryPanelViewModel)DataContext).Tree.OpenSecomFixCommand}"
                                     CommandParameter="{Binding}" />
                         </Grid>
                     </TreeDataTemplate>
@@ -761,7 +761,7 @@
                                         AutomationProperties.AutomationId="Library.Bulk.CheckForRuns"
                                         IsVisible="{Binding IsCheckForRuns}"
                                         Content="{x:Static loc:Strings.Library_BulkCheckForRuns}"
-                                        Command="{Binding RefreshCommand}" />
+                                        Command="{Binding Tree.RefreshCommand}" />
                                 <Button Classes="Primary libraryCompact" IsEnabled="False"
                                         AutomationProperties.AutomationId="Library.Bulk.Update"
                                         IsVisible="{Binding IsBulkOffline}"
@@ -1050,7 +1050,7 @@
                 <ScrollViewer IsVisible="{Binding ShowsSecomDetails}"
                               HorizontalScrollBarVisibility="Disabled"
                               VerticalScrollBarVisibility="Auto">
-                    <StackPanel Spacing="10" Margin="8,0,8,8" DataContext="{Binding SecomDetails}"
+                    <StackPanel Spacing="10" Margin="8,0,8,8" DataContext="{Binding Tree.SecomDetails}"
                                 x:DataType="svm:SecomSourceDetailsViewModel"
                                 AutomationProperties.AutomationId="Library.SourceDetails"
                                 AutomationProperties.Name="{x:Static loc:Strings.Secom_Details_Connection}"

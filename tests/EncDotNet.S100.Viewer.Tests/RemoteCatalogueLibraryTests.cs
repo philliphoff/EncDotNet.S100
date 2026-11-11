@@ -66,12 +66,12 @@ public sealed class RemoteCatalogueLibraryTests : IDisposable
             viewTime: null,
             timeFormat: null,
             sync: null);
-        panel.Sync();
-        panel.SelectedNode = Source(panel);
+        panel.Tree.Sync();
+        panel.Tree.SelectedNode = Source(panel);
         return panel;
     }
 
-    private static LibraryNodeViewModel Source(LibraryPanelViewModel panel) => Assert.Single(Assert.Single(panel.Nodes).Children);
+    private static LibraryNodeViewModel Source(LibraryPanelViewModel panel) => Assert.Single(Assert.Single(panel.Tree.Nodes).Children);
 
     [Fact]
     public async Task The_source_counts_what_is_local_and_what_has_updates()
@@ -94,7 +94,7 @@ public sealed class RemoteCatalogueLibraryTests : IDisposable
         Assert.Equal(LibraryNodeStatusKind.Warning, source.StatusKind);
 
         // A one-source collection shows its source's line.
-        Assert.Equal(source.StatusLine, Assert.Single(panel.Nodes).StatusLine);
+        Assert.Equal(source.StatusLine, Assert.Single(panel.Tree.Nodes).StatusLine);
     }
 
     [Fact]
@@ -187,7 +187,7 @@ public sealed class RemoteCatalogueLibraryTests : IDisposable
 
         panel.SelectArea(source.Id, "Southeast/Wilmington");
 
-        Assert.Same(source.Children.Single(c => c.GroupId == "Southeast/Wilmington"), panel.SelectedNode);
+        Assert.Same(source.Children.Single(c => c.GroupId == "Southeast/Wilmington"), panel.Tree.SelectedNode);
         Assert.True(source.IsExpanded);
         Assert.Equal(2, panel.Items.Count);
     }

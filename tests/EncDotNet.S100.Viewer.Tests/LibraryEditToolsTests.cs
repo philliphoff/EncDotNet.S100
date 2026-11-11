@@ -25,7 +25,7 @@ public sealed class LibraryEditToolsTests : IDisposable
     private readonly ViewerLibraryEditor _editor;
 
     private ViewerLibraryController Reader() =>
-        new(_panel, _workflows.Rows, () => [], action => { action(); return Task.CompletedTask; });
+        new(_panel.Tree, _workflows.Rows, new EncDotNet.S100.Viewer.Services.GlobalTimeService(), () => [], action => { action(); return Task.CompletedTask; });
 
     public LibraryEditToolsTests()
     {

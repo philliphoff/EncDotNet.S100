@@ -149,13 +149,13 @@ public partial class LibraryPanelView : UserControl
             box.LostFocus += (_, _) =>
             {
                 if (box.IsVisible && DataContext is LibraryPanelViewModel vm)
-                    vm.CommitRenameCommand.Execute(null);
+                    vm.Tree.CommitRenameCommand.Execute(null);
             };
         }
     }
 
     private void OnCopySourceUrl(object? sender, RoutedEventArgs e) =>
-        CopyToClipboard((DataContext as LibraryPanelViewModel)?.SelectedNode?.SourceUrl?.AbsoluteUri);
+        CopyToClipboard((DataContext as LibraryPanelViewModel)?.Tree.SelectedNode?.SourceUrl?.AbsoluteUri);
 
     private void CopyToClipboard(string? text)
     {

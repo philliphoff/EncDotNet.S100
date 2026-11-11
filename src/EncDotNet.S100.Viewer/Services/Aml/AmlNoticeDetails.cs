@@ -41,7 +41,7 @@ internal static class AmlNoticeDetails
     internal static (Guid SourceId, string Key)? FindLibraryItem(LibraryPanelViewModel library, string cell)
     {
         var stem = Path.GetFileNameWithoutExtension(cell);
-        foreach (var (item, source) in library.Nodes.SelectMany(n => n.EnumerateItems()))
+        foreach (var (item, source) in library.Tree.Nodes.SelectMany(n => n.EnumerateItems()))
         {
             if (!string.Equals(item.ProductSpec, AmlDatasetInfo.SpecName, StringComparison.OrdinalIgnoreCase))
                 continue;

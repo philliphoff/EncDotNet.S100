@@ -1516,8 +1516,9 @@ public partial class App : Application
                 action => Avalonia.Threading.Dispatcher.UIThread.Post(action, Avalonia.Threading.DispatcherPriority.Send))));
         services.AddSingleton<McpTools.PortrayalPrewarmOverride>();
         services.AddSingleton(sp => new ViewerLibraryController(
-            sp.GetRequiredService<LibraryPanelViewModel>(),
+            sp.GetRequiredService<LibraryTreeViewModel>(),
             sp.GetRequiredService<Library.LibraryRows>(),
+            sp.GetRequiredService<GlobalTimeService>(),
             () => sp.GetRequiredService<Library.UserCatalogueStore>().Sources,
             UiThread.InvokeAsync));
 
@@ -1534,9 +1535,38 @@ public partial class App : Application
             var feeds = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100FeedIndexer>();
             var catalogues = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100CatalogueFeedIndexer>();
             var forecasts = sp.GetRequiredService<EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer>();
-            var panel = new LibraryPanelViewModel(
+            return new LibraryNodeStatus(
+                sp.GetRequiredService<Library.ILibraryDownloader>(),
+                sp.GetRequiredService<Library.DownloadLibraryItemsWorkflow>(),
+                sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>(),
+                source => source switch
+                {
+                    EncDotNet.S100.Collections.S100FeedSource feed => feeds.HealthOf(feed.FeedUri),
+                    EncDotNet.S100.Collections.S100CatalogueFeedSource catalogue => catalogues.HealthOf(catalogue.CatalogUri),
+                    EncDotNet.S100.Collections.S100ForecastFeedSource forecast => forecasts.HealthOf(forecast),
+                    _ => null,
+                },
+                sp.GetRequiredService<TimeProvider>());
+        });
+        services.AddSingleton(sp =>
+        {
+            var tree = new LibraryTreeViewModel(
                 sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
                 sp.GetRequiredService<ILibraryImporter>(),
+                sp.GetRequiredService<LibraryNodeStatus>(),
+                sp.GetService<ITimeFormatProvider>(),
+                UiThread.RunOrPost,
+                sp.GetRequiredService<TimeProvider>());
+            tree.OpenKeys = sp.GetRequiredService<Services.Secom.KeysNavigator>().Open;
+            // SECOM rows name their identity; a selected source's details choose it (#883).
+            tree.Identities = sp.GetRequiredService<Services.Secom.SecomIdentityDirectory>();
+            return tree;
+        });
+        services.AddSingleton(sp =>
+        {
+            var panel = new LibraryPanelViewModel(
+                sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
+                sp.GetRequiredService<LibraryTreeViewModel>(),
                 sp.GetRequiredService<Library.ILibraryLoader>(),
                 sp.GetRequiredService<Library.ILibraryDownloader>(),
                 sp.GetRequiredService<Library.LibraryRows>(),
@@ -1548,20 +1578,9 @@ public partial class App : Application
                 UiThread.RunOrPost,
                 UiThread.Post,
                 sp.GetRequiredService<TimeProvider>(),
-                source => source switch
-                {
-                    EncDotNet.S100.Collections.S100FeedSource feed => feeds.HealthOf(feed.FeedUri),
-                    EncDotNet.S100.Collections.S100CatalogueFeedSource catalogue => catalogues.HealthOf(catalogue.CatalogUri),
-                    EncDotNet.S100.Collections.S100ForecastFeedSource forecast => forecasts.HealthOf(forecast),
-                    _ => null,
-                },
                 viewTime: sp.GetRequiredService<GlobalTimeService>(),
-                timeFormat: sp.GetService<ITimeFormatProvider>(),
-                sync: sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>());
-            panel.OpenKeys = sp.GetRequiredService<Services.Secom.KeysNavigator>().Open;
+                timeFormat: sp.GetService<ITimeFormatProvider>());
             panel.PortrayalWarm = sp.GetRequiredService<PortrayalWarmStatusViewModel>();
-            // SECOM rows name their identity; a selected source's details choose it (#883).
-            panel.Identities = sp.GetRequiredService<Services.Secom.SecomIdentityDirectory>();
             return panel;
         });
         // The Library's rows and workflows (#1394): the panel, the Timeline and

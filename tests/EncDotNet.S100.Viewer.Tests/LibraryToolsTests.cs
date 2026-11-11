@@ -43,7 +43,7 @@ public sealed class LibraryToolsTests : IDisposable
         await _library.WhenIdle();
         var library = new TestLibrary(_library, _loader, _downloader);
         var panel = library.CreatePanel(new StubImporter(), action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, viewTime: null, timeFormat: null, sync: null);
-        return (panel, new ViewerLibraryController(panel, library.Rows, () => _userCatalogues, Immediate));
+        return (panel, new ViewerLibraryController(panel.Tree, library.Rows, new EncDotNet.S100.Viewer.Services.GlobalTimeService(), () => _userCatalogues, Immediate));
     }
 
     private static QueryLibraryItemsRequest Query(
