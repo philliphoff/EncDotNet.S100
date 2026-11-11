@@ -16,7 +16,9 @@ month. For package versions and release assets, see
   the `get_bathymetry_display` and `set_bathymetry_display` MCP tools.
   `s100 render --show-layer s102.relief` draws it. `ReliefShading` and
   `S102Relief` are the library types, and `StyledCoverageLayer.ReliefShade`
-  carries the shading to the coverage renderers.
+  carries the shading to the coverage renderers. Zoomed out, SoundCharts draws
+  the shaded surface with mipmaps (`SmoothRasterStyle`), so the shading
+  averages out smoothly instead of turning into a speckled pattern.
 - **Additional Military Layers portrayal.** The new
   `EncDotNet.S100.Datasets.Aml` package draws NATO AML cells with
   SoundCharts' own portrayal (not the restricted official one): dash-dot lines
