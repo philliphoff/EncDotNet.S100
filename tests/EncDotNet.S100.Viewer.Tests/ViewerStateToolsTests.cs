@@ -1,0 +1,479 @@
+using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Validation;
+using EncDotNet.S100.Viewer.McpTools;
+using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.Notifications;
+using EncDotNet.S100.Viewer.Tests.Notifications;
+using EncDotNet.S100.Viewer.ViewModels;
+using Microsoft.Extensions.Time.Testing;
+
+namespace EncDotNet.S100.Viewer.Tests;
+
+/// <summary>The viewer-state MCP tools and their controllers (#715 slice 1).</summary>
+public sealed class ViewerStateToolsTests
+{
+    private static readonly DateTime Run = new(2026, 9, 30, 12, 0, 0, DateTimeKind.Utc);
+
+    private static Task Immediate(Action action)
+    {
+        action();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>A cbofs run: hourly steps for 48 h.</summary>
+    private static MapsuiMapTimeSnapshot RunSnapshot()
+    {
+        var samples = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
+        return new MapsuiMapTimeSnapshot
+        {
+            Minimum = samples[0],
+            Maximum = samples[^1],
+            Current = samples[0],
+            Samples = samples,
+            CoverageSegments = [new MapsuiMapTimeSegment(samples[0], samples[^1])],
+            Datasets = [new MapsuiMapTimedDataset("111US00_CBOFS_20260930T12Z_US4VA1DD", samples[0], samples[^1])],
+        };
+    }
+
+    private static (GlobalTimeService Time, ViewerTimelineController Controller, FakeTimeProvider Clock) Timeline(DateTime now)
+    {
+        var time = new GlobalTimeService();
+        var clock = new FakeTimeProvider(new DateTimeOffset(now));
+        var timeline = new TimelineViewModel(time, timeFormat: null, clock, action => action(), refresher: null, progress: null, scope: null, library: null);
+        var controller = new ViewerTimelineController(
+            time, timeline, new DatasetsViewModel(new FakeDatasetLoaderService()), clock, Immediate);
+        return (time, controller, clock);
+    }
+
+    // ── set_view_time / get_timeline_state ─────────────────────────────
+
+    [Fact]
+    public async Task Now_follows_and_reports_live()
+    {
+        var (time, controller, _) = Timeline(Run.AddHours(9).AddMinutes(10));
+        time.ApplySnapshot(RunSnapshot());
+        var tool = new SetViewTimeTool(controller);
+        Assert.True((await tool.InvokeAsync(new SetViewTimeRequest("+2h", null), TestContext.Current.CancellationToken)).TryGetValue(out var pinned));
+        Assert.Equal("pinned", pinned!.Mode);
+
+        var result = await tool.InvokeAsync(new SetViewTimeRequest("now", null), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var state));
+        Assert.Equal("live", state!.Mode);
+        Assert.Equal(Run.AddHours(9).AddMinutes(10), state.ViewTime);
+        Assert.Equal("now", state.Offset);
+        Assert.Equal(["cbofs 12:00Z"], state.Runs);
+    }
+
+    [Fact]
+    public async Task Exact_times_are_kept_and_nearest_snaps_to_a_sample()
+    {
+        var (time, controller, _) = Timeline(Run.AddHours(9));
+        time.ApplySnapshot(RunSnapshot());
+        var tool = new SetViewTimeTool(controller);
+
+        Assert.True((await tool.InvokeAsync(new SetViewTimeRequest("2026-09-30T15:20:00Z", null), TestContext.Current.CancellationToken)).TryGetValue(out var exact));
+        Assert.Equal(Run.AddHours(3).AddMinutes(20), exact!.ViewTime);
+        Assert.Equal("pinned", exact.Mode);
+
+        Assert.True((await tool.InvokeAsync(new SetViewTimeRequest("+25m", "nearest"), TestContext.Current.CancellationToken)).TryGetValue(out var nearest));
+        Assert.Equal(Run.AddHours(4), nearest!.ViewTime);
+    }
+
+    [Fact]
+    public async Task Now_past_every_window_goes_live_and_says_the_forecast_ended()
+    {
+        var (time, controller, _) = Timeline(Run.AddDays(5));
+        time.ApplySnapshot(RunSnapshot());
+
+        var result = await new SetViewTimeTool(controller).InvokeAsync(new SetViewTimeRequest("now", null), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var state));
+        Assert.Equal("live", state!.Mode);
+        Assert.Equal(Run.AddDays(5), state.ViewTime);
+        Assert.Equal("now", state.Offset);
+        Assert.StartsWith("Every forecast ended", state.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Nothing_loaded_is_not_applied()
+    {
+        var (_, controller, _) = Timeline(Run);
+
+        var result = await new SetViewTimeTool(controller).InvokeAsync(new SetViewTimeRequest("now", null), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetError(out var error));
+        Assert.Equal("view_time_not_applied", error!.Code);
+    }
+
+    [Theory]
+    [InlineData("tomorrow", null, "time")]
+    [InlineData("now", "closest", "snap")]
+    public async Task Bad_arguments_are_rejected(string time, string? snap, string parameter)
+    {
+        var (_, controller, _) = Timeline(Run);
+
+        var result = await new SetViewTimeTool(controller).InvokeAsync(new SetViewTimeRequest(time, snap), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetError(out var error));
+        Assert.Equal(parameter, Assert.IsType<InvalidArgument>(error).Parameter);
+    }
+
+    [Theory]
+    [InlineData("+6h", 6 * 60)]
+    [InlineData("-30m", -30)]
+    [InlineData("+1d", 24 * 60)]
+    [InlineData("+1.5h", 90)]
+    public void Offsets_parse(string text, int minutes)
+    {
+        Assert.True(SetViewTimeTool.TryParseOffset(text, out var offset));
+        Assert.Equal(TimeSpan.FromMinutes(minutes), offset);
+    }
+
+    [Fact]
+    public async Task A_hidden_layer_reports_drawnTime_as_an_explicit_null()
+    {
+        var (time, controller, _) = Timeline(Run.AddHours(9));
+        time.ApplySnapshot(RunSnapshot());
+        var tool = new GetTimelineStateTool(controller);
+        Assert.True((await tool.InvokeAsync(TestContext.Current.CancellationToken)).TryGetValue(out var state));
+        var layer = new TimelineLayerDto("levels.h5", "S-104", true, null, null, null, 0, null, false, false);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(state! with { Layers = [layer] }, McpAdapterShared.Options);
+
+        Assert.Contains("\"drawnTime\":null", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("previousSample", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Step_time_steps_by_a_unit_and_reports_the_step()
+    {
+        var (time, controller, _) = Timeline(Run.AddDays(10));
+        time.ApplySnapshot(RunSnapshot());
+        var tool = new StepTimeTool(controller);
+
+        Assert.True((await tool.InvokeAsync(new StepTimeRequest("next", "6h", 2), TestContext.Current.CancellationToken)).TryGetValue(out var stepped));
+        Assert.Equal(Run.AddHours(12), stepped!.ViewTime);
+        Assert.Equal("pinned", stepped.Mode);
+        Assert.Equal("hour", stepped.Step);
+
+        Assert.True((await tool.InvokeAsync(new StepTimeRequest("previous", "boundary", null), TestContext.Current.CancellationToken)).TryGetValue(out var boundary));
+        Assert.Equal(Run, boundary!.ViewTime);
+        Assert.True((await tool.InvokeAsync(new StepTimeRequest("previous", "boundary", null), TestContext.Current.CancellationToken)).TryGetError(out var none));
+        Assert.Equal("view_time_not_applied", none!.Code);
+        Assert.True((await tool.InvokeAsync(new StepTimeRequest("sideways", null, null), TestContext.Current.CancellationToken)).TryGetError(out var bad));
+        Assert.Equal("direction", Assert.IsType<InvalidArgument>(bad).Parameter);
+    }
+
+    [Fact]
+    public async Task Set_timeline_view_zooms_and_reports_the_window()
+    {
+        var (time, controller, _) = Timeline(Run.AddHours(9));
+        time.ApplySnapshot(RunSnapshot());
+        var tool = new SetTimelineViewTool(controller);
+
+        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest("now_6h", null, null, null), TestContext.Current.CancellationToken)).TryGetValue(out var zoomed));
+        Assert.Equal("Now ± 6 h", zoomed!.Preset);
+        Assert.Equal(new TimeWindowDto(Run.AddHours(3), Run.AddHours(15)), zoomed.Window);
+
+        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest(null, null, "2026-09-30T12:00:00Z", "2026-10-01T00:00:00Z"), TestContext.Current.CancellationToken)).TryGetValue(out var custom));
+        Assert.Equal("Custom", custom!.Preset);
+
+        Assert.True((await tool.InvokeAsync(new SetTimelineViewRequest("all_loaded", "in", null, null), TestContext.Current.CancellationToken)).TryGetError(out var both));
+        Assert.Equal("preset", Assert.IsType<InvalidArgument>(both).Parameter);
+    }
+
+    // ── set_dataset_state ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task Dataset_state_reports_the_dataset_s_own_viewing_groups()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var entry = new DatasetEntry("/data/route.gml", "S-421");
+        datasets.Entries.Add(entry);
+        var tool = new SetDatasetStateTool(new ViewerDatasetStateController(datasets, Immediate));
+
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(entry.DisplayName, null, null), TestContext.Current.CancellationToken)).TryGetValue(out var none));
+        Assert.Null(none!.ViewingGroups);
+
+        entry.ViewingGroups = ViewingGroupFilter.ShowOnly([52270]);
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(entry.DisplayName, null, null), TestContext.Current.CancellationToken)).TryGetValue(out var only));
+        Assert.Equal([52270], only!.ViewingGroups!.ShownOnly);
+        Assert.Empty(only.ViewingGroups.Hidden);
+        Assert.False(only.Changed);
+    }
+
+    [Fact]
+    public async Task Dataset_state_shows_a_hidden_dataset_and_reports_the_change()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var entry = new DatasetEntry("/data/104US004SC1BO_20251217T12Z.h5", "S-104") { IsVisible = false };
+        datasets.Entries.Add(entry);
+        var tool = new SetDatasetStateTool(new ViewerDatasetStateController(datasets, Immediate));
+
+        var result = await tool.InvokeAsync(new SetDatasetStateRequest(entry.DisplayName, true, 0.5), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var state));
+        Assert.True(state!.Visible);
+        Assert.False(state.PreviousVisible);
+        Assert.Equal(0.5, state.Opacity);
+        Assert.True(state.Changed);
+        Assert.True(entry.IsVisible);
+    }
+
+    [Fact]
+    public async Task Dataset_state_rejects_unknown_ids_and_bad_opacity()
+    {
+        var tool = new SetDatasetStateTool(new ViewerDatasetStateController(
+            new DatasetsViewModel(new FakeDatasetLoaderService()), Immediate));
+
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest("missing.h5", true, null), TestContext.Current.CancellationToken)).TryGetError(out var missing));
+        Assert.Equal("dataset_not_found", missing!.Code);
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest("missing.h5", null, 1.5), TestContext.Current.CancellationToken)).TryGetError(out var opacity));
+        Assert.Equal("opacity", Assert.IsType<InvalidArgument>(opacity).Parameter);
+    }
+
+    [Fact]
+    public async Task Dataset_state_moves_a_dataset_in_the_draw_order()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var top = new DatasetEntry("/data/101US00ABCDEF.000", "S-101");
+        var middle = new DatasetEntry("/data/102US00_SURFACE.h5", "S-102");
+        var bottom = new DatasetEntry("/data/104US004SC1BO_20251217T12Z.h5", "S-104");
+        datasets.Entries.Add(top);
+        datasets.Entries.Add(middle);
+        datasets.Entries.Add(bottom);
+        var tool = new SetDatasetStateTool(new ViewerDatasetStateController(datasets, Immediate));
+
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(bottom.DisplayName, null, null, "Front"), TestContext.Current.CancellationToken)).TryGetValue(out var front));
+        Assert.Equal((0, 2, true), (front!.Position, front.PreviousPosition, front.Changed));
+        Assert.Equal([bottom, top, middle], datasets.Entries);
+
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(bottom.DisplayName, null, null, "down"), TestContext.Current.CancellationToken)).TryGetValue(out var down));
+        Assert.Equal((1, 0), (down!.Position, down.PreviousPosition));
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(top.DisplayName, null, null, "back"), TestContext.Current.CancellationToken)).TryGetValue(out _));
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(middle.DisplayName, null, null, "up"), TestContext.Current.CancellationToken)).TryGetValue(out _));
+        Assert.Equal([middle, bottom, top], datasets.Entries);
+
+        // Already on top: reported, not changed.
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(middle.DisplayName, null, null, "up"), TestContext.Current.CancellationToken)).TryGetValue(out var noop));
+        Assert.False(noop!.Changed);
+
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(middle.DisplayName, null, null, "sideways"), TestContext.Current.CancellationToken)).TryGetError(out var bad));
+        Assert.Equal("order", Assert.IsType<InvalidArgument>(bad).Parameter);
+        Assert.True((await tool.InvokeAsync(new SetDatasetStateRequest(middle.DisplayName, null, null, "2"), TestContext.Current.CancellationToken)).TryGetError(out _));
+    }
+
+    // ── select_dataset ────────────────────────────────────────────────
+
+    private static ValidationReport ReportOf(params ValidationFinding[] findings) =>
+        new(findings, RulesEvaluated: findings.Length, RulesWithFindings: findings.Length);
+
+    [Fact]
+    public async Task Select_dataset_selects_the_row_switches_the_tab_and_summarises_validation()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var other = datasets.Add("/data/US5OTHER.000", "S-57");
+        var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
+        cell.IsLoaded = true;
+        cell.SetValidationReport(ReportOf(
+            new ValidationFinding { RuleId = "R1", Severity = ValidationSeverity.Error, Message = "a", Point = new EncDotNet.S100.DataModel.GeoPosition(25.0, -80.0) },
+            new ValidationFinding { RuleId = "R2", Severity = ValidationSeverity.Warning, Message = "b" },
+            new ValidationFinding { RuleId = "R3", Severity = ValidationSeverity.Warning, Message = "c" }));
+        datasets.SelectDataset(other);
+        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
+
+        var result = await tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, "Validation", null), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var selection));
+        Assert.Equal(cell.DisplayName, selection!.Id);
+        Assert.Equal(other.DisplayName, selection.PreviousId);
+        Assert.Equal("validation", selection.Tab);
+        Assert.Equal("ready", selection.Validation.State);
+        Assert.Equal(3, selection.Validation.Total);
+        Assert.Equal(1, selection.Validation.Errors);
+        Assert.Equal(2, selection.Validation.Warnings);
+        Assert.Equal(1, selection.Validation.Located);
+        Assert.Equal(cell.ValidationCountsSummary, selection.Validation.Message);
+        Assert.Same(cell, datasets.SelectedEntry);
+        Assert.Equal(DatasetInspectorTab.Validation, datasets.InspectorTab);
+        Assert.Equal(DatasetsViewModel.DatasetsTabIndex, datasets.ActiveTabIndex);
+    }
+
+    [Fact]
+    public async Task Select_dataset_leaves_the_tab_when_omitted_and_reports_the_empty_state()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var grid = datasets.Add("/data/102CA0047600.h5", "S-102");
+        grid.IsLoaded = true;
+        datasets.InspectorTab = DatasetInspectorTab.Layers;
+        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
+
+        var result = await tool.InvokeAsync(new SelectDatasetRequest(grid.DisplayName, null, null), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var selection));
+        Assert.Equal("layers", selection!.Tab);
+        Assert.Null(selection.PreviousId);
+        Assert.Equal("no_rule_pack", selection.Validation.State);
+        Assert.Equal(grid.ValidationEmptyStateMessage, selection.Validation.Message);
+    }
+
+    [Fact]
+    public async Task Select_dataset_waits_for_a_loading_dataset_to_validate()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
+        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
+
+        var pending = tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, "validation", 30_000), TestContext.Current.CancellationToken);
+        Assert.False(pending.IsCompleted);
+        cell.IsLoaded = true;
+        cell.SetValidationReport(ReportOf(new ValidationFinding { RuleId = "R1", Severity = ValidationSeverity.Info, Message = "i" }));
+
+        Assert.True((await pending).TryGetValue(out var selection));
+        Assert.Equal("ready", selection!.Validation.State);
+        Assert.Equal(1, selection.Validation.Infos);
+    }
+
+    [Fact]
+    public async Task Select_dataset_reports_not_loaded_after_the_timeout()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
+        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
+
+        var result = await tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, null, 0), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var selection));
+        Assert.Equal("not_loaded", selection!.Validation.State);
+        Assert.Null(selection.Validation.Message);
+        Assert.Same(cell, datasets.SelectedEntry);
+    }
+
+    [Fact]
+    public async Task Select_dataset_rejects_unknown_ids_and_tabs()
+    {
+        var datasets = new DatasetsViewModel(new FakeDatasetLoaderService());
+        var cell = datasets.Add("/data/US5SEAFL.000", "S-57");
+        var tool = new SelectDatasetTool(new ViewerDatasetStateController(datasets, Immediate));
+
+        Assert.True((await tool.InvokeAsync(new SelectDatasetRequest("missing.000", null, null), TestContext.Current.CancellationToken)).TryGetError(out var missing));
+        Assert.Equal("dataset_not_found", missing!.Code);
+        Assert.True((await tool.InvokeAsync(new SelectDatasetRequest(cell.DisplayName, "findings", null), TestContext.Current.CancellationToken)).TryGetError(out var tab));
+        Assert.Equal("tab", Assert.IsType<InvalidArgument>(tab).Parameter);
+        Assert.True((await tool.InvokeAsync(new SelectDatasetRequest(" ", null, null), TestContext.Current.CancellationToken)).TryGetError(out var blank));
+        Assert.Equal("datasetId", Assert.IsType<InvalidArgument>(blank).Parameter);
+        Assert.Null(datasets.SelectedEntry);
+    }
+
+    // ── list_notifications / dismiss_notification ──────────────────────
+
+    [Fact]
+    public async Task Notifications_are_listed_and_dismissed()
+    {
+        var service = TestNotifications.Create();
+        service.Create("Viewer recovered").WithSeverity(NotificationSeverity.Warning).Persistent().Show();
+        service.Create("Downloaded 3 tiles").Show();
+        var controller = new ViewerNotificationController(service, Immediate);
+
+        Assert.True((await new ListNotificationsTool(controller).InvokeAsync(TestContext.Current.CancellationToken)).TryGetValue(out var listed));
+        Assert.Equal(["Viewer recovered", "Downloaded 3 tiles"], listed!.Notifications.Select(n => n.Title));
+        Assert.Equal("warning", listed.Notifications[0].Severity);
+
+        var dismiss = new DismissNotificationTool(controller);
+        Assert.True((await dismiss.InvokeAsync(new DismissNotificationRequest(listed.Notifications[0].Id.ToString()), TestContext.Current.CancellationToken)).TryGetValue(out var one));
+        Assert.Single(one!.Dismissed);
+        Assert.Single(service.Active);
+
+        Assert.True((await dismiss.InvokeAsync(new DismissNotificationRequest(null), TestContext.Current.CancellationToken)).TryGetValue(out _));
+        Assert.Empty(service.Active);
+
+        Assert.True((await dismiss.InvokeAsync(new DismissNotificationRequest(Guid.NewGuid().ToString()), TestContext.Current.CancellationToken)).TryGetError(out var missing));
+        Assert.Equal("notification_not_found", missing!.Code);
+    }
+
+    // ── set_test_clock / AdjustableTimeProvider ────────────────────────
+
+    [Fact]
+    public void Test_clock_moves_freezes_and_resets()
+    {
+        var real = new FakeTimeProvider(new DateTimeOffset(Run));
+        var clock = new AdjustableTimeProvider(real);
+        var tool = new SetTestClockTool(clock);
+
+        Assert.True(tool.Invoke(new SetTestClockRequest(null, "+1h", null, null)).TryGetValue(out var advanced));
+        Assert.Equal(new DateTimeOffset(Run.AddHours(1)), advanced!.Now);
+
+        Assert.True(tool.Invoke(new SetTestClockRequest("2026-10-02T06:00:00Z", null, true, null)).TryGetValue(out var frozen));
+        Assert.True(frozen!.Frozen);
+        real.Advance(TimeSpan.FromHours(3));
+        Assert.Equal(new DateTimeOffset(2026, 10, 2, 6, 0, 0, TimeSpan.Zero), clock.GetUtcNow());
+
+        Assert.True(tool.Invoke(new SetTestClockRequest(null, null, null, true)).TryGetValue(out var reset));
+        Assert.Equal(real.GetUtcNow(), reset!.Now);
+
+        Assert.True(tool.Invoke(new SetTestClockRequest("2026-10-02T06:00:00Z", "+1h", null, null)).TryGetError(out var both));
+        Assert.IsType<InvalidArgument>(both);
+    }
+
+    [Fact]
+    public void Adjusting_the_clock_fires_periodic_timers_but_not_one_shot_ones()
+    {
+        var clock = new AdjustableTimeProvider(new FakeTimeProvider(new DateTimeOffset(Run)));
+        var ticks = 0;
+        var oneShots = 0;
+        using var minute = clock.CreateTimer(_ => ticks++, null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+        using var once = clock.CreateTimer(_ => oneShots++, null, TimeSpan.FromMinutes(5), Timeout.InfiniteTimeSpan);
+
+        clock.Advance(TimeSpan.FromHours(1));
+        Assert.Equal(1, ticks);
+        Assert.Equal(0, oneShots);
+
+        minute.Dispose();
+        clock.Reset();
+        Assert.Equal(1, ticks);
+    }
+
+    [Fact]
+    public void Moving_the_test_clock_moves_a_live_timeline_at_once()
+    {
+        var time = new GlobalTimeService();
+        var clock = new AdjustableTimeProvider(new FakeTimeProvider(new DateTimeOffset(Run.AddHours(9))));
+        _ = new TimelineViewModel(time, timeFormat: null, clock, action => action(), refresher: null, progress: null, scope: null, library: null);
+        time.ApplySnapshot(RunSnapshot());
+        Assert.Equal(TimeMode.Live, time.Mode);
+
+        new SetTestClockTool(clock).Invoke(new SetTestClockRequest(null, "+3h", null, null));
+
+        Assert.Equal(Run.AddHours(12), time.CurrentTime);
+    }
+
+    // ── adapters ───────────────────────────────────────────────────────
+
+    [Fact]
+    public void Every_adapter_builds_its_tool()
+    {
+        var (_, timeline, _) = Timeline(Run);
+        var notifications = new ViewerNotificationController(TestNotifications.Create(), Immediate);
+        var tools = new[]
+        {
+            ViewerStateMcpAdapters.Create(new GetTimelineStateTool(timeline)),
+            ViewerStateMcpAdapters.Create(new SetViewTimeTool(timeline)),
+            ViewerStateMcpAdapters.Create(new StepTimeTool(timeline)),
+            ViewerStateMcpAdapters.Create(new SetTimelineViewTool(timeline)),
+            ViewerStateMcpAdapters.Create(new SetDatasetStateTool(new ViewerDatasetStateController(
+                new DatasetsViewModel(new FakeDatasetLoaderService()), Immediate))),
+            ViewerStateMcpAdapters.Create(new SelectDatasetTool(new ViewerDatasetStateController(
+                new DatasetsViewModel(new FakeDatasetLoaderService()), Immediate))),
+            ViewerStateMcpAdapters.Create(new ListNotificationsTool(notifications)),
+            ViewerStateMcpAdapters.Create(new DismissNotificationTool(notifications)),
+            ViewerStateMcpAdapters.Create(new SetTestClockTool(new AdjustableTimeProvider(inner: TimeProvider.System))),
+        };
+
+        Assert.Equal(
+            ["get_timeline_state", "set_view_time", "step_time", "set_timeline_view", "set_dataset_state", "select_dataset", "list_notifications", "dismiss_notification", "set_test_clock"],
+            tools.Select(tool => tool.ProtocolTool.Name));
+    }
+}

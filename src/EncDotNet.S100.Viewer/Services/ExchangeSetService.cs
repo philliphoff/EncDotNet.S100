@@ -1,0 +1,1581 @@
+using System.Collections.Specialized;
+using System.Diagnostics;
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.S57;
+using EncDotNet.S100.ExchangeSets;
+using EncDotNet.S100.Viewer.Diagnostics;
+using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Services.Notifications;
+using EncDotNet.S100.Viewer.ViewModels;
+
+namespace EncDotNet.S100.Viewer.Services;
+
+/// <summary>
+/// Default <see cref="IExchangeSetService"/> implementation. Detects
+/// folder-vs-ZIP from <paramref name="folderOrZipPath"/>, opens the
+/// matching <see cref="IAssetSource"/>, parses <c>CATALOG.XML</c>,
+/// and dispatches every catalogued dataset through
+/// <see cref="DatasetsViewModel.AddFromExchangeSet"/> +
+/// <see cref="DatasetsViewModel.RequestLoad"/>.
+/// </summary>
+/// <remarks>
+/// Lifetime: this service keeps each opened <see cref="ExchangeSet"/>
+/// (and its underlying <see cref="IAssetSource"/>) alive for as long
+/// as any of the dispatched <see cref="DatasetEntry"/>s remains in
+/// <see cref="DatasetsViewModel.Entries"/>. When the last entry from
+/// a given exchange set is removed, the set is disposed. Disposing
+/// the service eagerly disposes any still-tracked sets.
+/// </remarks>
+internal sealed class ExchangeSetService : IExchangeSetService, IDisposable
+{
+    private readonly DatasetsViewModel _datasets;
+    private readonly INotificationService _notifications;
+    private readonly LazyLoading.ExchangeSetLazyLoadCoordinator? _lazyCoordinator;
+    private readonly IDatasetMetadataReader? _metadataReader;
+    private readonly Caching.IS57CatalogCache? _s57CatalogCache;
+    private readonly int _maxConcurrentLoads;
+    private readonly List<TrackedExchangeSet> _tracked = new();
+    private bool _subscribed;
+    private bool _disposed;
+
+    public ExchangeSetService(
+        DatasetsViewModel datasets,
+        INotificationService notifications,
+        LazyLoading.ExchangeSetLazyLoadCoordinator? lazyCoordinator,
+        IDatasetMetadataReader? metadataReader,
+        Caching.IS57CatalogCache? s57CatalogCache,
+        int? maxConcurrentLoads = null)
+    {
+        ArgumentNullException.ThrowIfNull(datasets);
+        ArgumentNullException.ThrowIfNull(notifications);
+        _datasets = datasets;
+        _notifications = notifications;
+        _lazyCoordinator = lazyCoordinator;
+        _metadataReader = metadataReader;
+        _s57CatalogCache = s57CatalogCache;
+        _maxConcurrentLoads = maxConcurrentLoads switch
+        {
+            > 0 => maxConcurrentLoads.Value,
+            null => Math.Clamp(Environment.ProcessorCount / 4, 1, 4),
+            _ => throw new ArgumentOutOfRangeException(nameof(maxConcurrentLoads)),
+        };
+    }
+
+    private async Task LoadEntryAsync(DatasetEntry entry, SemaphoreSlim gate)
+    {
+        await gate.WaitAsync().ConfigureAwait(true);
+        try
+        {
+            await _datasets.RequestLoadAsync(entry).ConfigureAwait(true);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Drives the caller-supplied progress notification to a terminal state
+    /// (clearing the progress bar and any actions and scheduling auto-dismiss),
+    /// or surfaces a fresh notification when no handle was supplied.
+    /// </summary>
+    private void Terminal(
+        INotificationHandle? notification,
+        NotificationSeverity severity,
+        string title,
+        string message)
+    {
+        if (notification is not null && !notification.IsDismissed)
+        {
+            notification.ClearProgress();
+            notification.SetActions();
+            notification.Update(title: title, message: message, severity: severity);
+            notification.ScheduleAutoDismiss(NotificationService.DefaultDelayFor(severity));
+        }
+        else
+        {
+            _notifications.Create(title)
+                .WithSeverity(severity)
+                .WithContent(message)
+                .Show();
+        }
+    }
+
+    public async Task<ExchangeSetOpenResult> OpenAsync(
+        string folderOrZipPath,
+        IProgress<ExchangeSetProgress>? progress = null,
+        CancellationToken cancellationToken = default,
+        INotificationHandle? notification = null,
+        Action<BoundingBox>? onFramingReady = null)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(folderOrZipPath);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        EnsureCollectionSubscription();
+
+        // An S-57 / S-63 exchange set (CATALOG.031) is structurally different
+        // from an S-100 one (CATALOG.XML) and is directory-rooted, so it has its
+        // own loader. S-100 sets fall through to the logic below.
+        if (ExchangeSetDetection.LooksLikeS57ExchangeSet(folderOrZipPath))
+        {
+            return await OpenS57Async(folderOrZipPath, progress, cancellationToken, notification, onFramingReady)
+                .ConfigureAwait(true);
+        }
+
+        // A catalogue-less folder of loose ENC cells (a base ….000 plus its
+        // sequential updates, with no CATALOG.XML/CATALOG.031) is not an
+        // exchange set but is still loadable: scan for base cells and apply
+        // their in-folder updates. S-57 Ed 3.1 App B.1 / S-100 Part 10a.
+        if (ExchangeSetDetection.LooksLikeLooseCellFolder(folderOrZipPath))
+        {
+            return await OpenLooseCellFolderAsync(
+                    folderOrZipPath, progress, cancellationToken, notification, onFramingReady)
+                .ConfigureAwait(true);
+        }
+
+        // s100.exchangeset.open child span sits under whatever
+        // s100.viewer.command span the caller (MainWindow) opened.
+        using var activity = Telemetry.ActivitySource.StartActivity(
+            "s100.exchangeset.open", System.Diagnostics.ActivityKind.Internal);
+        var openStart = System.Diagnostics.Stopwatch.GetTimestamp();
+        var sourceKind = ResolveSourceKind(folderOrZipPath);
+        activity?.SetTag("s100.exchangeset.source.kind", sourceKind);
+        activity?.SetTag("s100.exchangeset.source.path", folderOrZipPath);
+
+        IAssetSource? source = null;
+        ExchangeSet? exchangeSet = null;
+        try
+        {
+            source = OpenSource(folderOrZipPath, atExchangeSetRoot: true);
+            try
+            {
+                // Most producers use the canonical CATALOG.XML (S-100
+                // Part 17), but some — notably JCOMM/IHO S-411 sample
+                // sets — name it catalogue.xml. Resolve the actual name
+                // so the asset source opens the right entry.
+                var catalogueName = ResolveCatalogueName(folderOrZipPath);
+                exchangeSet = await ExchangeSet.OpenAsync(source, catalogueName, cancellationToken)
+                    .ConfigureAwait(true);
+            }
+            catch (FileNotFoundException)
+            {
+                var msg = string.Format(Strings.Status_ExchangeSetCatalogNotFound, folderOrZipPath);
+                Terminal(notification, NotificationSeverity.Warning, Strings.Toast_ExchangeSetFailed, msg);
+                source.Dispose();
+                activity?.SetStatus(ActivityStatusCode.Error, "catalogue not found");
+                return new ExchangeSetOpenResult
+                {
+                    SourcePath = folderOrZipPath,
+                    CatalogueNotFound = true,
+                    FailureMessage = string.Format(Strings.Status_ExchangeSetCatalogNotFound, folderOrZipPath),
+                };
+            }
+
+            var datasets = exchangeSet.Catalogue.CurrentDatasets;
+            activity?.SetTag("s100.exchangeset.dataset.count", datasets.Count);
+            activity?.SetTag(
+                "s100.exchangeset.producer",
+                exchangeSet.Catalogue.Contact?.Organization);
+            activity?.SetTag(
+                "s100.exchangeset.product",
+                exchangeSet.Catalogue.ProductSpecification?.ProductIdentifier);
+
+            if (datasets.Count == 0 && exchangeSet.Catalogue.DatasetDiscoveryMetadata.Count > 0)
+            {
+                // Every record withdraws a cancelled dataset (e.g. a SECOM
+                // navigational-warning set with no warnings in force).
+                var withdrawnMsg = string.Format(Strings.Status_ExchangeSetOnlyWithdrawals, folderOrZipPath);
+                Terminal(notification, NotificationSeverity.Info, Strings.Toast_Info, withdrawnMsg);
+                exchangeSet.Dispose();
+                exchangeSet = null;
+                return new ExchangeSetOpenResult
+                {
+                    SourcePath = folderOrZipPath,
+                    FailureMessage = withdrawnMsg,
+                };
+            }
+
+            if (datasets.Count == 0)
+            {
+                var emptyMsg = string.Format(Strings.Status_ExchangeSetCatalogNotFound, folderOrZipPath);
+                Terminal(notification, NotificationSeverity.Warning, Strings.Toast_ExchangeSetFailed, emptyMsg);
+                exchangeSet.Dispose();
+                exchangeSet = null;
+                activity?.SetStatus(ActivityStatusCode.Error, "empty catalogue");
+                return new ExchangeSetOpenResult
+                {
+                    SourcePath = folderOrZipPath,
+                    CatalogueNotFound = true,
+                    FailureMessage = string.Format(Strings.Status_ExchangeSetCatalogNotFound, folderOrZipPath),
+                };
+            }
+
+            // Group S-101 base cells with their in-set sequential updates
+            // (….001/.002/…) so each cell loads as a single up-to-date
+            // dataset rather than one entry per file. Non-S-101 datasets
+            // and S-101 cells with no in-set updates are unaffected.
+            // S-101 / S-100 Part 10a.
+            var plan = S101ExchangeSetUpdatePlan.Build(datasets);
+            activity?.SetTag("s100.exchangeset.plan.count", plan.Count);
+
+            progress?.Report(new ExchangeSetProgress(folderOrZipPath, plan.Count, 0, 0, null));
+
+            // Frame the viewport as soon as the union bounding box is known —
+            // before any dataset finishes loading — so incremental per-dataset
+            // paints land in the correctly-framed view rather than off-screen
+            // (issue #448). The same value is returned below on the result, so
+            // the caller can skip the redundant end-of-load reframe.
+            var unionBoundingBox = ComputeUnionBoundingBox(datasets);
+            if (unionBoundingBox is { } framingBox && onFramingReady is not null)
+            {
+                var elapsedMs = System.Diagnostics.Stopwatch.GetElapsedTime(openStart).TotalMilliseconds;
+                activity?.SetTag("s100.exchangeset.framing.emitted_ms", elapsedMs);
+                onFramingReady(framingBox);
+            }
+
+            var assetSource = exchangeSet.Source;
+            var catalogue = exchangeSet.Catalogue;
+            var tracked = new TrackedExchangeSet(
+                folderOrZipPath,
+                assetSource,
+                owner: exchangeSet,
+                verifier: ct => new ExchangeSetVerifier().VerifyAsync(
+                    assetSource,
+                    catalogue,
+                    new TrustAnchorOptions { AllowUntrustedCertificates = true },
+                    ct));
+            _tracked.Add(tracked);
+            // From this point on, lifetime ownership transfers to the tracked
+            // entry — do not dispose `exchangeSet` / `source` directly below.
+            var producer = catalogue.Contact?.Organization;
+            var issueDate = ResolveLatestIssueDate(datasets);
+
+            tracked.Header = _datasets.RegisterExchangeSetHeader(
+                assetSource,
+                folderOrZipPath,
+                producer,
+                issueDate,
+                plan.Count,
+                closeAction: CloseExchangeSetFromHeader);
+            exchangeSet = null;
+            source = null;
+
+            var dispatched = 0;
+            var skipped = 0;
+            var completedLoads = 0;
+            var skipMessages = new List<string>();
+            var cancelled = false;
+            var loadTasks = new List<Task>();
+            using var loadGate = new SemaphoreSlim(_maxConcurrentLoads);
+
+            foreach (var item in plan)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    cancelled = true;
+                    break;
+                }
+
+                var metadata = item.Base;
+                var relativePath = metadata.RelativePath;
+
+                // An S-101 update with no base cell in this exchange set
+                // cannot be applied on its own. Per the best-effort policy
+                // we skip it with a warning rather than failing the load.
+                if (item.Kind == S101LoadItemKind.OrphanUpdate)
+                {
+                    var orphanMsg = string.Format(Strings.Status_ExchangeSetOrphanUpdate, relativePath);
+                    _notifications.Create(Strings.Toast_Warning)
+                        .WithSeverity(NotificationSeverity.Warning)
+                        .WithContent(orphanMsg)
+                        .Show();
+                    skipMessages.Add(orphanMsg);
+                    skipped++;
+                    progress?.Report(new ExchangeSetProgress(
+                        folderOrZipPath, plan.Count, completedLoads + skipped, skipped, relativePath));
+                    continue;
+                }
+
+                var spec = DatasetPipelineFactory.MapProductSpecificationToSpec(
+                    metadata.ProductSpecification)
+                    ?? await DatasetPipelineFactory.DetectProductSpecFromSourceAsync(
+                        tracked.Source, relativePath, cancellationToken)
+                        .ConfigureAwait(true);
+                if (spec is null)
+                {
+                    var msg = string.Format(
+                        Strings.Status_ExchangeSetUnsupportedSpec,
+                        relativePath,
+                        metadata.ProductSpecification?.ProductIdentifier
+                            ?? metadata.ProductSpecification?.Name
+                            ?? string.Empty);
+                    _notifications.Create(Strings.Toast_Warning)
+                        .WithSeverity(NotificationSeverity.Warning)
+                        .WithContent(msg)
+                        .Show();
+                    skipMessages.Add(msg);
+                    skipped++;
+                    progress?.Report(new ExchangeSetProgress(
+                        folderOrZipPath, plan.Count, completedLoads + skipped, skipped, relativePath));
+                    continue;
+                }
+
+                var updateRelativePaths = item.Updates.Count == 0
+                    ? (IReadOnlyList<string>)Array.Empty<string>()
+                    : item.Updates.Select(u => u.RelativePath).ToList();
+
+                var entry = _datasets.AddFromExchangeSet(
+                    tracked.Source,
+                    relativePath,
+                    spec,
+                    displayName: Path.GetFileName(relativePath),
+                    updateRelativePaths: updateRelativePaths,
+                    minimumDisplayScale: metadata.ResolveMinimumDisplayScale(),
+                    maximumDisplayScale: metadata.ResolveMaximumDisplayScale(),
+                    notForNavigation: metadata.NotForNavigation);
+                tracked.Entries.Add(entry);
+                loadTasks.Add(LoadEntryAsync(entry, loadGate));
+                dispatched++;
+            }
+
+            // Report progress on actual load completions rather than dispatch:
+            // the loop above queues every cell almost instantly, so advancing the
+            // bar there would race it to 100% before any cell had parsed. Each
+            // cell load runs concurrently (the loader offloads parse/render to the
+            // thread pool); as one finishes we bump the determinate fraction.
+            foreach (var loadTask in loadTasks)
+            {
+                _ = loadTask.ContinueWith(
+                    _ =>
+                    {
+                        var done = Interlocked.Increment(ref completedLoads);
+                        progress?.Report(new ExchangeSetProgress(
+                            folderOrZipPath, plan.Count, done + skipped, skipped, null));
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            }
+
+            // Await the dispatched per-cell loads so the aggregate "loaded"
+            // outcome reflects datasets that have actually parsed and added
+            // their layers — not merely been queued. The loader surfaces any
+            // per-cell failure on its own and never throws, so this completes
+            // even when an individual cell fails.
+            await Task.WhenAll(loadTasks).ConfigureAwait(true);
+
+            ExchangeSetTerminalInfo? pendingTerminal = null;
+            var sourceLabel = Notifications.NotificationFormat.ShortenPath(folderOrZipPath);
+            if (cancelled)
+            {
+                var cancelledMsg = string.Format(
+                    Strings.Status_ExchangeSetCancelled,
+                    dispatched, plan.Count, sourceLabel);
+                Terminal(notification, NotificationSeverity.Info, Strings.Toast_Info, cancelledMsg);
+            }
+            else if (skipped == 0)
+            {
+                var loadedMsg = string.Format(
+                    Strings.Status_ExchangeSetLoaded, dispatched, sourceLabel);
+                pendingTerminal = new ExchangeSetTerminalInfo(
+                    NotificationSeverity.Success, Strings.Toast_ExchangeSetLoaded, loadedMsg);
+            }
+            else
+            {
+                var partialMsg = string.Format(
+                    Strings.Status_ExchangeSetLoadedWithErrors,
+                    dispatched, plan.Count, sourceLabel, skipped);
+                pendingTerminal = new ExchangeSetTerminalInfo(
+                    NotificationSeverity.Warning, Strings.Toast_ExchangeSetLoaded, partialMsg);
+            }
+
+            activity?.SetTag("s100.exchangeset.dataset.loaded", dispatched);
+            activity?.SetTag("s100.exchangeset.dataset.skipped", skipped);
+            activity?.SetTag("s100.exchangeset.cancelled", cancelled);
+            activity?.SetStatus(
+                cancelled ? ActivityStatusCode.Error : ActivityStatusCode.Ok,
+                cancelled ? "cancelled" : null);
+
+            // Update the header now that we know the loaded/unsupported
+            // split; the header was registered with conservative defaults
+            // before the dispatch loop ran so progress UI had something
+            // to show.
+            if (tracked.Header is { } trackedHeader)
+            {
+                trackedHeader.LoadedCount = dispatched;
+                trackedHeader.UnsupportedCount = skipped;
+            }
+
+            // If every dataset was skipped (unsupported product specs),
+            // there will be no entries to keep the set alive — release it
+            // immediately so the file handle / archive is not leaked.
+            if (tracked.Entries.Count == 0)
+            {
+                if (tracked.Header is { } orphanHeader)
+                {
+                    _datasets.RemoveExchangeSetHeader(orphanHeader);
+                    tracked.Header = null;
+                }
+                tracked.Owner.Dispose();
+                _tracked.Remove(tracked);
+            }
+            else
+            {
+                // Fire-and-forget: verify exchange set signatures in the
+                // background. The result is surfaced as a non-blocking badge
+                // on the header — we never refuse to load unsigned data.
+                _ = VerifySignaturesAsync(tracked);
+            }
+
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderOrZipPath,
+                Total = plan.Count,
+                Loaded = dispatched,
+                SkippedUnsupported = skipped,
+                Cancelled = cancelled,
+                SkipMessages = skipMessages,
+                UnionBoundingBox = unionBoundingBox,
+                PendingTerminal = pendingTerminal,
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            exchangeSet?.Dispose();
+            source?.Dispose();
+            activity?.SetStatus(ActivityStatusCode.Error, "cancelled");
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderOrZipPath,
+                Cancelled = true,
+            };
+        }
+        catch (Exception ex)
+        {
+            var failedMsg = string.Format(Strings.Status_ExchangeSetFailed, folderOrZipPath, ex.Message);
+            Terminal(notification, NotificationSeverity.Error, Strings.Toast_ExchangeSetFailed, failedMsg);
+            exchangeSet?.Dispose();
+            source?.Dispose();
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderOrZipPath,
+                FailureMessage = ex.Message,
+            };
+        }
+    }
+
+    /// <summary>
+    /// Opens an S-57 / S-63 exchange set (<c>CATALOG.031</c>). Unlike the S-100
+    /// path, the S-57 model is directory-rooted: cells are enumerated from the
+    /// catalogue via <see cref="S57ExchangeSetCatalog"/>, a
+    /// <see cref="FileSystemAssetSource"/> is rooted at the exchange-set
+    /// directory, and each base cell (with its in-set sequential updates) is
+    /// dispatched as an <c>"S-57"</c> entry — flowing through the same
+    /// <c>S57DatasetProcessor</c> as a single dropped <c>.000</c> file.
+    /// Integrity/signature status reuses the shared header badge, driven by the
+    /// PR #265 <see cref="S57ExchangeSetVerification"/> adapter.
+    /// </summary>
+    private async Task<ExchangeSetOpenResult> OpenS57Async(
+        string folderOrCataloguePath,
+        IProgress<ExchangeSetProgress>? progress,
+        CancellationToken cancellationToken,
+        INotificationHandle? notification,
+        Action<BoundingBox>? onFramingReady = null)
+    {
+        using var activity = Telemetry.ActivitySource.StartActivity(
+            "s57.exchangeset.open", System.Diagnostics.ActivityKind.Internal);
+        var openStart = System.Diagnostics.Stopwatch.GetTimestamp();
+        activity?.SetTag("s57.exchangeset.source.path", folderOrCataloguePath);
+
+        IAssetSource? source = null;
+        try
+        {
+            string root;
+            IReadOnlyList<S57ExchangeSetCell> cells;
+            try
+            {
+                root = ExchangeSetDetection.ResolveS57Root(folderOrCataloguePath);
+                cells = ReadBaseCellsCached(root);
+            }
+            catch (FileNotFoundException)
+            {
+                var msg = string.Format(
+                    Strings.Status_ExchangeSetCatalogNotFound, folderOrCataloguePath);
+                Terminal(notification, NotificationSeverity.Warning, Strings.Toast_ExchangeSetFailed, msg);
+                activity?.SetStatus(ActivityStatusCode.Error, "catalogue not found");
+                return new ExchangeSetOpenResult
+                {
+                    SourcePath = folderOrCataloguePath,
+                    CatalogueNotFound = true,
+                    FailureMessage = msg,
+                };
+            }
+
+            activity?.SetTag("s57.exchangeset.cell.count", cells.Count);
+
+            if (cells.Count == 0)
+            {
+                var emptyMsg = string.Format(
+                    Strings.Status_S57ExchangeSetNoCells, folderOrCataloguePath);
+                Terminal(notification, NotificationSeverity.Warning, Strings.Toast_ExchangeSetFailed, emptyMsg);
+                activity?.SetStatus(ActivityStatusCode.Error, "no cells");
+                return new ExchangeSetOpenResult
+                {
+                    SourcePath = folderOrCataloguePath,
+                    CatalogueNotFound = true,
+                    FailureMessage = emptyMsg,
+                };
+            }
+
+            progress?.Report(new ExchangeSetProgress(folderOrCataloguePath, cells.Count, 0, 0, null));
+
+            // Frame the viewport up front from the cell union — mirrors the
+            // S-100 path so early per-cell paints land in the correctly-framed
+            // view (issue #448). Reused on the result below to let the caller
+            // skip the redundant end-of-load reframe.
+            var unionBoundingBox = S57ExchangeSetCatalog.UnionBoundingBox(cells);
+            if (unionBoundingBox is { } framingBox && onFramingReady is not null)
+            {
+                var elapsedMs = System.Diagnostics.Stopwatch.GetElapsedTime(openStart).TotalMilliseconds;
+                activity?.SetTag("s57.exchangeset.framing.emitted_ms", elapsedMs);
+                onFramingReady(framingBox);
+            }
+
+            source = FileSystemAssetSource.Create(root);
+            var tracked = new TrackedExchangeSet(
+                folderOrCataloguePath,
+                source,
+                owner: source,
+                verifier: ct => S57ExchangeSetVerification.VerifyAsync(
+                    root, allowUntrustedCertificates: true, ct));
+            _tracked.Add(tracked);
+            // Lifetime ownership has transferred to the tracked entry; do not
+            // dispose `source` directly below.
+            source = null;
+
+            tracked.Header = _datasets.RegisterExchangeSetHeader(
+                tracked.Source,
+                // Use the resolved root directory (not a dropped CATALOG.031
+                // file path) so the header's display name is the set folder.
+                root,
+                producer: null,
+                issueDate: null,
+                cells.Count,
+                closeAction: CloseExchangeSetFromHeader);
+
+            // CATALOG.031 doesn't say which product a cell is; AML cells are
+            // S-57 encoded too, so their DSID tells them apart (#1236).
+            var cellSpecs = S57CellSpecs(tracked.Source, cells);
+
+            // Above the lazy-load threshold, register every cell without
+            // loading its bytes and hand them to the viewport-driven
+            // coordinator, which loads only the cells that are actually in view
+            // at a relevant scale. This keeps a 7,000-cell set from freezing the
+            // UI thread and exhausting memory (issue #458). Small sets still load
+            // eagerly for immediacy.
+            var deferLoads = _lazyCoordinator is not null
+                && cells.Count > _lazyCoordinator.Options.CellThreshold;
+
+            var dispatched = 0;
+            var completedLoads = 0;
+            var loadTasks = new List<Task>();
+
+            if (deferLoads)
+            {
+                // Build every cell's registration descriptor and add them in a
+                // single batch so the grouping / extent-overlay subscribers
+                // rebuild once, not once per cell (O(N) instead of O(N²)).
+                var specs = new List<ViewModels.ExchangeSetCellRegistration>(cells.Count);
+                foreach (var cell in cells)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    IReadOnlyList<string> updates = cell.UpdateRelativePaths.Count == 0
+                        ? Array.Empty<string>()
+                        : cell.UpdateRelativePaths;
+                    specs.Add(new ViewModels.ExchangeSetCellRegistration(
+                        Source: tracked.Source,
+                        RelativePath: cell.RelativePath,
+                        ProductSpec: cellSpecs(cell),
+                        DisplayName: cell.CellName,
+                        UpdateRelativePaths: updates,
+                        GeographicBounds: cell.BoundingBox));
+                }
+
+                // The batch insert raises a collection Reset; keep the
+                // still-empty tracked set from being released by it.
+                tracked.IsRegistering = true;
+                IReadOnlyList<DatasetEntry> entries;
+                try
+                {
+                    entries = _datasets.AddRangeFromExchangeSet(specs);
+                    tracked.Entries.AddRange(entries);
+                }
+                finally
+                {
+                    tracked.IsRegistering = false;
+                }
+                dispatched = entries.Count;
+
+                // The registered entries appear immediately (dimmed, with extent
+                // outlines); the coordinator loads the in-view ones on the next
+                // viewport tick. Nothing to await, so the open completes at once
+                // and the UI stays responsive.
+                _lazyCoordinator!.Register(entries);
+
+                var registeredMsg = string.Format(
+                    Strings.Status_ExchangeSetRegistered, dispatched,
+                    Notifications.NotificationFormat.ShortenPath(folderOrCataloguePath));
+                var deferredTerminal = new ExchangeSetTerminalInfo(
+                    NotificationSeverity.Success, Strings.Toast_ExchangeSetRegistered, registeredMsg);
+
+                if (tracked.Header is { } deferredHeader)
+                {
+                    deferredHeader.LoadedCount = dispatched;
+                    deferredHeader.UnsupportedCount = 0;
+                }
+
+                _ = VerifySignaturesAsync(tracked);
+                activity?.SetTag("s57.exchangeset.dataset.deferred", dispatched);
+                activity?.SetStatus(ActivityStatusCode.Ok);
+
+                return new ExchangeSetOpenResult
+                {
+                    SourcePath = folderOrCataloguePath,
+                    Total = cells.Count,
+                    // Deferred path: report the registered-cell count so the
+                    // open is treated as a success (no bytes are dispatched
+                    // yet). See ExchangeSetOpenResult.Loaded and issue #458.
+                    Loaded = dispatched,
+                    SkippedUnsupported = 0,
+                    Cancelled = false,
+                    SkipMessages = Array.Empty<string>(),
+                    UnionBoundingBox = unionBoundingBox,
+                    PendingTerminal = deferredTerminal,
+                };
+            }
+
+            // Eager path: build every cell entry and queue its byte load.
+            foreach (var cell in cells)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                IReadOnlyList<string> updateRelativePaths = cell.UpdateRelativePaths.Count == 0
+                    ? Array.Empty<string>()
+                    : cell.UpdateRelativePaths;
+
+                var entry = _datasets.AddFromExchangeSet(
+                    tracked.Source,
+                    cell.RelativePath,
+                    cellSpecs(cell),
+                    displayName: cell.CellName,
+                    updateRelativePaths: updateRelativePaths,
+                    geographicBounds: cell.BoundingBox);
+                tracked.Entries.Add(entry);
+                loadTasks.Add(_datasets.RequestLoadAsync(entry));
+                dispatched++;
+            }
+
+            // Report progress on actual load completions rather than dispatch
+            // (see the S-100 path for rationale): the loop queues every cell
+            // almost instantly, so the bar stays indeterminate until a cell
+            // truly finishes, then fills as each one lands.
+            foreach (var loadTask in loadTasks)
+            {
+                _ = loadTask.ContinueWith(
+                    _ =>
+                    {
+                        var done = Interlocked.Increment(ref completedLoads);
+                        progress?.Report(new ExchangeSetProgress(
+                            folderOrCataloguePath, cells.Count, done, 0, null));
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            }
+
+            // Await the dispatched per-cell loads so "loaded" reflects cells
+            // that have actually parsed and added their layers (see the S-100
+            // path for rationale). The loader never throws.
+            await Task.WhenAll(loadTasks).ConfigureAwait(true);
+
+            var loadedMsg = string.Format(
+                Strings.Status_ExchangeSetLoaded, dispatched,
+                Notifications.NotificationFormat.ShortenPath(folderOrCataloguePath));
+            var pendingTerminal = new ExchangeSetTerminalInfo(
+                NotificationSeverity.Success, Strings.Toast_ExchangeSetLoaded, loadedMsg);
+
+            activity?.SetTag("s57.exchangeset.dataset.loaded", dispatched);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+
+            if (tracked.Header is { } trackedHeader)
+            {
+                trackedHeader.LoadedCount = dispatched;
+                trackedHeader.UnsupportedCount = 0;
+            }
+
+            // Fire-and-forget integrity/signature verification — surfaced as a
+            // non-blocking header badge; we never refuse to load unsigned data.
+            _ = VerifySignaturesAsync(tracked);
+
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderOrCataloguePath,
+                Total = cells.Count,
+                Loaded = dispatched,
+                SkippedUnsupported = 0,
+                Cancelled = false,
+                SkipMessages = Array.Empty<string>(),
+                UnionBoundingBox = unionBoundingBox,
+                PendingTerminal = pendingTerminal,
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            source?.Dispose();
+            activity?.SetStatus(ActivityStatusCode.Error, "cancelled");
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderOrCataloguePath,
+                Cancelled = true,
+            };
+        }
+        catch (Exception ex)
+        {
+            var failedMsg = string.Format(Strings.Status_ExchangeSetFailed, folderOrCataloguePath, ex.Message);
+            Terminal(notification, NotificationSeverity.Error, Strings.Toast_ExchangeSetFailed, failedMsg);
+            source?.Dispose();
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderOrCataloguePath,
+                FailureMessage = ex.Message,
+            };
+        }
+    }
+
+    /// <summary>
+    /// Opens a catalogue-less folder of loose ENC cells. Each top-level
+    /// base cell (<c>….000</c>) is dispatched with its sibling sequential
+    /// updates (<c>….001</c>, <c>….002</c>, …) applied, mirroring a single
+    /// dropped <c>.000</c> so a folder-of-cells and a lone cell behave
+    /// consistently. Cells are told apart as S-57 vs S-101 by the same
+    /// content sniff the single-file loader uses
+    /// (<see cref="DatasetPipelineFactory.DetectProductSpec"/>); a
+    /// <see cref="FileSystemAssetSource"/> rooted at the folder backs every
+    /// entry and its updates. S-57 Ed 3.1 App B.1 / S-100 Part 10a.
+    /// </summary>
+    private async Task<ExchangeSetOpenResult> OpenLooseCellFolderAsync(
+        string folderPath,
+        IProgress<ExchangeSetProgress>? progress,
+        CancellationToken cancellationToken,
+        INotificationHandle? notification,
+        Action<BoundingBox>? onFramingReady = null)
+    {
+        using var activity = Telemetry.ActivitySource.StartActivity(
+            "loosecells.folder.open", System.Diagnostics.ActivityKind.Internal);
+        activity?.SetTag("loosecells.source.path", folderPath);
+
+        IAssetSource? source = null;
+        try
+        {
+            var baseCells = ExchangeSetDetection.EnumerateLooseBaseCells(folderPath);
+            activity?.SetTag("loosecells.cell.count", baseCells.Count);
+
+            if (baseCells.Count == 0)
+            {
+                var emptyMsg = string.Format(
+                    Strings.Status_LooseCellFolderNoCells, folderPath);
+                Terminal(notification, NotificationSeverity.Warning, Strings.Toast_ExchangeSetFailed, emptyMsg);
+                activity?.SetStatus(ActivityStatusCode.Error, "no cells");
+                return new ExchangeSetOpenResult
+                {
+                    SourcePath = folderPath,
+                    CatalogueNotFound = true,
+                    FailureMessage = emptyMsg,
+                };
+            }
+
+            progress?.Report(new ExchangeSetProgress(folderPath, baseCells.Count, 0, 0, null));
+
+            // Frame the viewport up front from a cheap per-cell metadata probe
+            // (cross-session cached) so a loose folder frames as soon as its
+            // union extent is known — parity with the catalogued S-100 / S-57
+            // branches — instead of waiting for every cell's full load
+            // (issue #467 WS3). A null union (no probeable cell) preserves the
+            // legacy "frame by unioning loaded layer extents" fallback. The
+            // probe runs on a worker thread: on a first-open cache miss it
+            // parses each cell's metadata, which must not block the UI thread
+            // that OpenAsync is dispatched on.
+            var unionBoundingBox = _metadataReader is null
+                ? null
+                : await Task.Run(
+                    () => ComputeLooseCellUnion(baseCells, _metadataReader),
+                    cancellationToken).ConfigureAwait(true);
+            if (unionBoundingBox is { } framingBox && onFramingReady is not null)
+                onFramingReady(framingBox);
+
+            source = FileSystemAssetSource.Create(folderPath);
+            var tracked = new TrackedExchangeSet(
+                folderPath,
+                source,
+                owner: source,
+                verifier: null);
+            _tracked.Add(tracked);
+            // Lifetime ownership has transferred to the tracked entry; do not
+            // dispose `source` directly below.
+            source = null;
+
+            tracked.Header = _datasets.RegisterExchangeSetHeader(
+                tracked.Source,
+                folderPath,
+                producer: null,
+                issueDate: null,
+                baseCells.Count,
+                closeAction: CloseExchangeSetFromHeader);
+
+            var dispatched = 0;
+            var completedLoads = 0;
+            var loadTasks = new List<Task>();
+            foreach (var baseCell in baseCells)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var spec = DatasetPipelineFactory.DetectProductSpec(baseCell);
+                if (spec is null) continue;
+
+                // Discover the sibling updates on disk and pass them as
+                // folder-relative names so they resolve through the same
+                // FileSystemAssetSource as the base cell.
+                var updateRelativePaths = S101FilesystemUpdateDiscovery
+                    .FindSequentialUpdates(baseCell)
+                    .Select(Path.GetFileName)
+                    .OfType<string>()
+                    .ToList();
+
+                var entry = _datasets.AddFromExchangeSet(
+                    tracked.Source,
+                    Path.GetFileName(baseCell),
+                    spec,
+                    displayName: Path.GetFileName(baseCell),
+                    updateRelativePaths: updateRelativePaths);
+                tracked.Entries.Add(entry);
+                loadTasks.Add(_datasets.RequestLoadAsync(entry));
+                dispatched++;
+            }
+
+            // Report progress on actual load completions rather than dispatch
+            // (see the S-100 path for rationale).
+            foreach (var loadTask in loadTasks)
+            {
+                _ = loadTask.ContinueWith(
+                    _ =>
+                    {
+                        var done = Interlocked.Increment(ref completedLoads);
+                        progress?.Report(new ExchangeSetProgress(
+                            folderPath, baseCells.Count, done, 0, null));
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            }
+
+            await Task.WhenAll(loadTasks).ConfigureAwait(true);
+
+            // Every base cell failed the content sniff (e.g. not actually an
+            // ENC .000) — release the tracked source so the folder handle is
+            // not leaked, and surface a warning instead of an empty group.
+            if (dispatched == 0)
+            {
+                if (tracked.Header is { } orphanHeader)
+                {
+                    _datasets.RemoveExchangeSetHeader(orphanHeader);
+                    tracked.Header = null;
+                }
+                tracked.Owner.Dispose();
+                _tracked.Remove(tracked);
+
+                var noneMsg = string.Format(
+                    Strings.Status_LooseCellFolderNoCells, folderPath);
+                Terminal(notification, NotificationSeverity.Warning, Strings.Toast_ExchangeSetFailed, noneMsg);
+                activity?.SetStatus(ActivityStatusCode.Error, "no loadable cells");
+                return new ExchangeSetOpenResult
+                {
+                    SourcePath = folderPath,
+                    CatalogueNotFound = true,
+                    FailureMessage = noneMsg,
+                };
+            }
+
+            var loadedMsg = string.Format(
+                Strings.Status_ExchangeSetLoaded, dispatched,
+                Notifications.NotificationFormat.ShortenPath(folderPath));
+            var pendingTerminal = new ExchangeSetTerminalInfo(
+                NotificationSeverity.Success, Strings.Toast_ExchangeSetLoaded, loadedMsg);
+
+            activity?.SetTag("loosecells.dataset.loaded", dispatched);
+            activity?.SetStatus(ActivityStatusCode.Ok);
+
+            if (tracked.Header is { } trackedHeader)
+            {
+                trackedHeader.LoadedCount = dispatched;
+                trackedHeader.UnsupportedCount = 0;
+            }
+
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderPath,
+                Total = baseCells.Count,
+                Loaded = dispatched,
+                SkippedUnsupported = 0,
+                Cancelled = false,
+                SkipMessages = Array.Empty<string>(),
+                // Loose cells now frame up front from the cheap metadata
+                // probe when one is available (issue #467 WS3); the drop
+                // handler still unions loaded layer extents when the probe
+                // yielded nothing (unionBoundingBox is null).
+                UnionBoundingBox = unionBoundingBox,
+                PendingTerminal = pendingTerminal,
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            source?.Dispose();
+            activity?.SetStatus(ActivityStatusCode.Error, "cancelled");
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderPath,
+                Cancelled = true,
+            };
+        }
+        catch (Exception ex)
+        {
+            var failedMsg = string.Format(Strings.Status_ExchangeSetFailed, folderPath, ex.Message);
+            Terminal(notification, NotificationSeverity.Error, Strings.Toast_ExchangeSetFailed, failedMsg);
+            source?.Dispose();
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            return new ExchangeSetOpenResult
+            {
+                SourcePath = folderPath,
+                FailureMessage = ex.Message,
+            };
+        }
+    }
+
+    /// <summary>
+    /// Computes the EPSG:4326 union of every dataset's bounding box,
+    /// ignoring entries that lack one. Returns <c>null</c> if no
+    /// dataset declared a bounding box.
+    /// </summary>
+    /// <remarks>
+    /// Antimeridian-spanning catalogues are not handled here — if a
+    /// producer ever ships one, this will return an over-wide box.
+    /// Exposed as <c>internal</c> for unit testing.
+    /// </remarks>
+    internal static BoundingBox? ComputeUnionBoundingBox(
+        IReadOnlyList<DatasetDiscoveryMetadata> datasets)
+    {
+        double? west = null, east = null, south = null, north = null;
+        foreach (var d in datasets)
+        {
+            var b = d.BoundingBox;
+            if (b is null) continue;
+            west = west is null ? b.WestBoundLongitude : Math.Min(west.Value, b.WestBoundLongitude);
+            east = east is null ? b.EastBoundLongitude : Math.Max(east.Value, b.EastBoundLongitude);
+            south = south is null ? b.SouthBoundLatitude : Math.Min(south.Value, b.SouthBoundLatitude);
+            north = north is null ? b.NorthBoundLatitude : Math.Max(north.Value, b.NorthBoundLatitude);
+        }
+        if (west is null) return null;
+        return new BoundingBox
+        {
+            WestBoundLongitude = west.Value,
+            EastBoundLongitude = east!.Value,
+            SouthBoundLatitude = south!.Value,
+            NorthBoundLatitude = north!.Value,
+        };
+    }
+
+    /// <summary>
+    /// Computes the EPSG:4326 union of the extents obtained by probing each
+    /// loose base cell's cheap metadata via <paramref name="reader"/>,
+    /// ignoring cells whose product is not probeable or that report no
+    /// extent. Returns <c>null</c> when no cell yielded an extent (the caller
+    /// then keeps the legacy "frame from loaded layers" fallback).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The probe reads the same files the subsequent full loads will read,
+    /// but skips portrayal, so it is cheap; the reader is expected to cache
+    /// across sessions. Extents come from the reader as WGS-84
+    /// <see cref="EncDotNet.S100.Pipelines.BoundingBox"/> (south / west /
+    /// north / east) and are mapped onto the exchange-set
+    /// <see cref="BoundingBox"/> (west / east / south / north) the framing
+    /// callback expects. Antimeridian-spanning folders are not handled (they
+    /// would yield an over-wide box), mirroring
+    /// <see cref="ComputeUnionBoundingBox"/>. Exposed as <c>internal</c> for
+    /// unit testing.
+    /// </para>
+    /// </remarks>
+    internal static BoundingBox? ComputeLooseCellUnion(
+        IReadOnlyList<string> baseCells,
+        IDatasetMetadataReader reader)
+    {
+        ArgumentNullException.ThrowIfNull(baseCells);
+        ArgumentNullException.ThrowIfNull(reader);
+
+        double? west = null, east = null, south = null, north = null;
+        foreach (var cell in baseCells)
+        {
+            if (reader.TryRead(cell)?.Extent is not { } ext)
+                continue;
+
+            west = west is null ? ext.WestLongitude : Math.Min(west.Value, ext.WestLongitude);
+            east = east is null ? ext.EastLongitude : Math.Max(east.Value, ext.EastLongitude);
+            south = south is null ? ext.SouthLatitude : Math.Min(south.Value, ext.SouthLatitude);
+            north = north is null ? ext.NorthLatitude : Math.Max(north.Value, ext.NorthLatitude);
+        }
+
+        if (west is null) return null;
+        return new BoundingBox
+        {
+            WestBoundLongitude = west.Value,
+            EastBoundLongitude = east!.Value,
+            SouthBoundLatitude = south!.Value,
+            NorthBoundLatitude = north!.Value,
+        };
+    }
+
+    /// <summary>
+    /// Reads the S-57 / S-63 base cells for the exchange set rooted at
+    /// <paramref name="root"/>, serving them from the cross-session catalogue
+    /// sidecar cache when a valid entry exists (issue #467 WS3 Slice 2), so a
+    /// large set re-opens without re-parsing the binary <c>CATALOG.031</c>.
+    /// Falls back to a direct read when no cache is configured.
+    /// </summary>
+    /// <param name="root">The resolved exchange-set root directory.</param>
+    /// <returns>The catalogue's base cells.</returns>
+    /// <exception cref="FileNotFoundException">No <c>CATALOG.031</c> was found under <paramref name="root"/>.</exception>
+    public async Task<IReadOnlyList<DatasetEntry>> OpenSubsetAsync(
+        ExchangeSetSubsetRequest request,
+        bool defer,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        EnsureCollectionSubscription();
+
+        var tracked = FindTracked(request.RootPath)
+            ?? await OpenTrackedForSubsetAsync(request, cancellationToken).ConfigureAwait(true);
+        var isZip = ExchangeSetDetection.IsZipPath(request.RootPath);
+
+        // Reuse entries already registered for the same relative path; register
+        // the rest in one batch.
+        var result = new DatasetEntry?[request.Items.Count];
+        var registrations = new List<(int Index, ExchangeSetCellRegistration Registration)>();
+        for (var i = 0; i < request.Items.Count; i++)
+        {
+            var item = request.Items[i];
+            var relative = ToSourcePath(item.RelativePath, isZip);
+            var existing = tracked.Entries.FirstOrDefault(e =>
+                string.Equals(e.RelativePath, relative, StringComparison.OrdinalIgnoreCase));
+            if (existing is not null)
+            {
+                result[i] = existing;
+                continue;
+            }
+
+            registrations.Add((i, new ExchangeSetCellRegistration(
+                tracked.Source,
+                relative,
+                item.ProductSpec,
+                item.DisplayName,
+                item.UpdateRelativePaths.Select(u => ToSourcePath(u, isZip)).ToArray(),
+                item.MinimumDisplayScale,
+                item.MaximumDisplayScale,
+                item.GeographicBounds,
+                item.NotForNavigation,
+                item.CompilationScale,
+                LazyLoading.CoveredCellGate.FromCatalogueCoverage(item.Coverage))));
+        }
+
+        if (registrations.Count > 0)
+        {
+            // The batch insert raises a collection Reset; keep the tracked set
+            // (possibly still empty) from being released by it.
+            tracked.IsRegistering = true;
+            try
+            {
+                var added = _datasets.AddRangeFromExchangeSet(registrations.Select(r => r.Registration).ToList());
+                for (var i = 0; i < added.Count; i++)
+                    result[registrations[i].Index] = added[i];
+                tracked.Entries.AddRange(added);
+            }
+            finally
+            {
+                tracked.IsRegistering = false;
+            }
+        }
+
+        var entries = result.OfType<DatasetEntry>().ToArray();
+        if (tracked.Header is { } header)
+            header.LoadedCount = LoadedCountOf(header);
+
+        if (defer && _lazyCoordinator is not null)
+        {
+            _lazyCoordinator.Register(entries.Where(e => !e.IsLoaded));
+        }
+        else
+        {
+            // Batch registration marks entries deferred; an explicit load takes
+            // them out of the lazy loader's hands, including ones it already
+            // loaded as you panned, so they aren't unloaded when you pan away.
+            var toLoad = entries.Where(e => !e.IsLoaded).ToArray();
+            _lazyCoordinator?.Unregister(entries.Where(e => e.IsLoaded));
+            _lazyCoordinator?.Unregister(toLoad);
+            foreach (var entry in toLoad)
+                entry.IsDeferred = false;
+
+            using var gate = new SemaphoreSlim(_maxConcurrentLoads);
+            await Task.WhenAll(toLoad.Select(e => LoadEntryAsync(e, gate))).ConfigureAwait(true);
+        }
+
+        return entries;
+    }
+
+    /// <inheritdoc/>
+    public void CloseEntries(IReadOnlyList<DatasetEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        _lazyCoordinator?.Unregister(entries);
+        // One at a time: the loader releases a dataset on its Remove event.
+        foreach (var entry in entries)
+            _datasets.Entries.Remove(entry);
+    }
+
+    /// <summary>The entries of every set under <paramref name="header"/> (a Library source's header holds several, #809).</summary>
+    private int LoadedCountOf(ExchangeSetHeader header) =>
+        _tracked.Where(t => ReferenceEquals(t.Header, header)).Sum(t => t.Entries.Count);
+
+    /// <summary>
+    /// Finds an already-open tracked set rooted at <paramref name="rootPath"/>
+    /// (whether opened from the File menu or a previous subset open).
+    /// </summary>
+    private TrackedExchangeSet? FindTracked(string rootPath)
+    {
+        var root = NormalizeRoot(rootPath);
+        return _tracked.FirstOrDefault(t => string.Equals(NormalizeRoot(t.SourcePath), root, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Opens a new tracked set for a subset: the asset source plus, where the
+    /// catalogue can be read, its signature verifier and header metadata. A
+    /// catalogue that cannot be read strictly (e.g. malformed signatures) still
+    /// yields a usable set, just without verification.
+    /// </summary>
+    private async Task<TrackedExchangeSet> OpenTrackedForSubsetAsync(
+        ExchangeSetSubsetRequest request, CancellationToken cancellationToken)
+    {
+        var root = request.RootPath;
+        var source = OpenSource(root);
+        IDisposable owner = source;
+        Func<CancellationToken, Task<ExchangeSetVerificationResult>>? verifier = null;
+        string? producer = null;
+        string? issueDate = null;
+
+        var catalogue = request.CatalogueRelativePath;
+        if (catalogue is not null && EncDotNet.S100.Collections.ExchangeSetLayout.IsS100CatalogueName(Path.GetFileName(catalogue)))
+        {
+            try
+            {
+                var exchangeSet = await ExchangeSet.OpenAsync(source, catalogue, cancellationToken).ConfigureAwait(true);
+                owner = exchangeSet;
+                // The catalogue's file names are relative to its own folder, which
+                // isn't the source root when the set sits under one, as in an
+                // S-100 Part 17 S100_ROOT layout.
+                var folder = CatalogueFolder(catalogue);
+                IAssetSource assetSource = folder.Length == 0
+                    ? exchangeSet.Source
+                    : new SubfolderAssetSource(exchangeSet.Source, folder);
+                var parsed = exchangeSet.Catalogue;
+                verifier = ct => new ExchangeSetVerifier().VerifyAsync(
+                    assetSource, parsed, new TrustAnchorOptions { AllowUntrustedCertificates = true }, ct);
+                producer = parsed.Contact?.Organization;
+                issueDate = ResolveLatestIssueDate(parsed.DatasetDiscoveryMetadata);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Fall back to the bare source: the datasets are still loadable.
+            }
+        }
+        else if (catalogue is not null
+            && EncDotNet.S100.Collections.ExchangeSetLayout.IsS57CatalogueName(Path.GetFileName(catalogue))
+            && Directory.Exists(root))
+        {
+            var s57Root = Path.GetDirectoryName(Path.Combine(root, catalogue.Replace('/', Path.DirectorySeparatorChar)))!;
+            verifier = ct => S57ExchangeSetVerification.VerifyAsync(s57Root, allowUntrustedCertificates: true, ct);
+        }
+
+        var tracked = new TrackedExchangeSet(root, source, owner, verifier);
+        _tracked.Add(tracked);
+        tracked.Header = _datasets.RegisterExchangeSetHeader(
+            tracked.Source,
+            root,
+            producer,
+            issueDate,
+            request.Items.Count,
+            closeAction: CloseExchangeSetFromHeader,
+            librarySource: request.LibrarySource);
+        _ = VerifySignaturesAsync(tracked);
+        return tracked;
+    }
+
+    /// <summary>The folder part of a catalogue path, with a trailing <c>/</c>, or empty.</summary>
+    private static string CatalogueFolder(string cataloguePath)
+    {
+        var normalized = cataloguePath.Replace('\\', '/');
+        var slash = normalized.LastIndexOf('/');
+        return slash < 0 ? string.Empty : normalized[..(slash + 1)];
+    }
+
+    /// <summary>
+    /// Reads a subfolder of another source, which it doesn't own: disposing
+    /// it leaves the other source open.
+    /// </summary>
+    private sealed class SubfolderAssetSource(IAssetSource inner, string folder) : IAssetSource
+    {
+        public Task<Stream> OpenAsync(string relativePath, CancellationToken cancellationToken = default) =>
+            inner.OpenAsync(folder + relativePath.Replace('\\', '/').TrimStart('/'), cancellationToken);
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private static string ToSourcePath(string relativePath, bool isZip) =>
+        isZip ? relativePath.Replace('\\', '/') : relativePath.Replace('/', Path.DirectorySeparatorChar);
+
+    private static string NormalizeRoot(string path)
+    {
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        // A dropped CATALOG.031 file is tracked by its path; its root is the folder.
+        return EncDotNet.S100.Collections.ExchangeSetLayout.IsS57CatalogueName(Path.GetFileName(full))
+            ? Path.GetDirectoryName(full)!
+            : full;
+    }
+
+    private IReadOnlyList<S57ExchangeSetCell> ReadBaseCellsCached(string root)
+    {
+        if (_s57CatalogCache is null)
+            return S57ExchangeSetCatalog.ReadBaseCells(root);
+
+        // Key the cache on the resolved CATALOG.031 file (mtime + size).
+        // ResolveCataloguePath throws FileNotFoundException when no catalogue
+        // exists — the same exception ReadBaseCells would throw — so the
+        // caller's catalogue-not-found handling is unchanged.
+        var cataloguePath = S57ExchangeSetCatalog.ResolveCataloguePath(root);
+        return _s57CatalogCache.GetOrRead(
+            cataloguePath, _ => S57ExchangeSetCatalog.ReadBaseCells(root));
+    }
+
+    private static string ResolveSourceKind(string path)
+    {
+        if (Directory.Exists(path)) return "folder";
+        if (File.Exists(path) &&
+            string.Equals(Path.GetExtension(path), ".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            return "zip";
+        }
+        return "unknown";
+    }
+
+    /// <summary>
+    /// Opens the folder or ZIP at <paramref name="path"/>. With
+    /// <paramref name="atExchangeSetRoot"/>, the source is rooted where the
+    /// catalogue is, so an S-100 Part 17 <c>S100_ROOT</c> layout reads like a
+    /// top-level one; otherwise it's rooted at the folder or archive itself.
+    /// </summary>
+    private static IAssetSource OpenSource(string path, bool atExchangeSetRoot = false)
+    {
+        if (Directory.Exists(path))
+        {
+            var root = atExchangeSetRoot ? ExchangeSetDetection.ResolveFolderRoot(path)?.BasePath : null;
+            return FileSystemAssetSource.Create(root ?? path);
+        }
+        if (File.Exists(path) &&
+            string.Equals(Path.GetExtension(path), ".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            // ZipAssetSource.Create(string) opens the file with read-share,
+            // so the archive can stay open for as long as the service holds it.
+            var basePath = atExchangeSetRoot ? ExchangeSetDetection.ResolveZipRoot(path)?.BasePath : null;
+            return ZipAssetSource.Create(path, basePath ?? string.Empty);
+        }
+        throw new FileNotFoundException(
+            $"Exchange set source not found or not a folder/.zip: {path}", path);
+    }
+
+    /// <summary>
+    /// Resolves the catalogue name to open within the source
+    /// <see cref="OpenSource"/> roots at the exchange set. Folders and ZIP archives may use the
+    /// canonical <c>CATALOG.XML</c> or the S-411 <c>catalogue.xml</c>
+    /// spelling; the discovered name (preserving casing) is returned so
+    /// the asset source opens the correct entry. Falls back to
+    /// <c>CATALOG.XML</c> when nothing is found, letting the subsequent
+    /// open surface the standard "catalogue not found" message.
+    /// </summary>
+    private static string ResolveCatalogueName(string path)
+    {
+        if (Directory.Exists(path))
+        {
+            return ExchangeSetDetection.ResolveFolderCatalogueName(path) ?? "CATALOG.XML";
+        }
+        if (ExchangeSetDetection.IsZipPath(path))
+        {
+            return ExchangeSetDetection.ResolveZipCatalogueEntry(path) ?? "CATALOG.XML";
+        }
+        return "CATALOG.XML";
+    }
+
+    private void EnsureCollectionSubscription()
+    {
+        if (_subscribed) return;
+        _subscribed = true;
+        _datasets.Entries.CollectionChanged += OnEntriesChanged;
+    }
+
+    private void OnEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        // Only Remove and Reset can drop entries the service is tracking.
+        if (e.Action is not (NotifyCollectionChangedAction.Remove or
+            NotifyCollectionChangedAction.Replace or
+            NotifyCollectionChangedAction.Reset))
+        {
+            return;
+        }
+
+        // Walk a snapshot so we can dispose+remove tracked sets safely.
+        for (var i = _tracked.Count - 1; i >= 0; i--)
+        {
+            var tracked = _tracked[i];
+            if (tracked.IsRegistering)
+                continue;
+            for (var j = tracked.Entries.Count - 1; j >= 0; j--)
+            {
+                if (!_datasets.Entries.Contains(tracked.Entries[j]))
+                {
+                    tracked.Entries.RemoveAt(j);
+                }
+            }
+
+            if (tracked.Entries.Count == 0)
+            {
+                _tracked.RemoveAt(i);
+                if (tracked.Header is { } header)
+                {
+                    // A Library source's header outlives its other sets (#809).
+                    _datasets.ReleaseExchangeSetHeader(header, tracked.Source);
+                    tracked.Header = null;
+                    if (_datasets.ExchangeSetHeaders.Contains(header))
+                    {
+                        header.LoadedCount = LoadedCountOf(header);
+                        UpdateHeaderSignature(header);
+                    }
+                }
+                tracked.Owner.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Removes every <see cref="DatasetEntry"/> that came from the
+    /// supplied header's exchange set. The collection-changed listener
+    /// then disposes the underlying <see cref="ExchangeSet"/> and
+    /// unregisters the header in the same pass.
+    /// </summary>
+    private void CloseExchangeSetFromHeader(ExchangeSetHeader header)
+    {
+        // Every set under the header: one, or a Library source's several (#809).
+        // Snapshot the entries: removing from `_datasets.Entries`
+        // mutates `tracked.Entries` indirectly via OnEntriesChanged.
+        var entriesToRemove = _tracked.Where(t => ReferenceEquals(t.Header, header)).SelectMany(t => t.Entries).ToArray();
+        if (entriesToRemove.Length == 0) return;
+        _lazyCoordinator?.Unregister(entriesToRemove);
+        foreach (var entry in entriesToRemove)
+        {
+            _datasets.Entries.Remove(entry);
+        }
+    }
+
+    /// <summary>
+    /// Returns the lexically-greatest non-null
+    /// <see cref="DatasetDiscoveryMetadata.IssueDate"/> across the
+    /// catalogue, or <c>null</c> if no dataset declared one. ISO-8601
+    /// date strings sort correctly under ordinal comparison, so no
+    /// parsing is needed for the common case.
+    /// </summary>
+    private static string? ResolveLatestIssueDate(
+        IReadOnlyList<DatasetDiscoveryMetadata> datasets)
+    {
+        string? latest = null;
+        foreach (var d in datasets)
+        {
+            var s = d.IssueDate;
+            if (string.IsNullOrEmpty(s)) continue;
+            if (latest is null || string.CompareOrdinal(s, latest) > 0)
+                latest = s;
+        }
+        return latest;
+    }
+
+    /// <summary>
+    /// Runs signature verification in the background and updates the
+    /// exchange set header with the result. Non-blocking — errors are
+    /// swallowed and surfaced as <see cref="SignatureStatus.Error"/>.
+    /// </summary>
+    private async Task VerifySignaturesAsync(TrackedExchangeSet tracked)
+    {
+        if (tracked.Header is null) return;
+        if (tracked.Verifier is null) return;
+
+        tracked.Signature = (SignatureStatus.Checking, Strings.Tooltip_SignatureChecking);
+        UpdateHeaderSignature(tracked.Header);
+
+        try
+        {
+            var result = await tracked.Verifier(CancellationToken.None).ConfigureAwait(true);
+            tracked.Signature = SignatureOf(result);
+        }
+        catch (Exception)
+        {
+            tracked.Signature = (SignatureStatus.Error, Strings.Tooltip_SignatureError);
+        }
+
+        if (tracked.Header is { } header)
+            UpdateHeaderSignature(header);
+    }
+
+    /// <summary>
+    /// Sets a header's badge from its sets' verification: their common result,
+    /// "checking" while any is, else "mixed" (a Library source's header holds several sets, #809).
+    /// </summary>
+    private void UpdateHeaderSignature(ExchangeSetHeader header)
+    {
+        var results = _tracked.Where(t => ReferenceEquals(t.Header, header) && t.Signature is not null)
+            .Select(t => t.Signature!.Value)
+            .ToArray();
+        if (results.Length == 0)
+            return;
+
+        var (status, tooltip) = results.Select(r => r.Status).Distinct().Count() == 1 ? results[0]
+            : results.Any(r => r.Status == SignatureStatus.Checking) ? (SignatureStatus.Checking, Strings.Tooltip_SignatureChecking)
+            : (SignatureStatus.Mixed, Strings.Tooltip_SignatureMixed);
+        header.SignatureStatus = status;
+        header.SignatureTooltip = tooltip;
+    }
+
+    /// <summary>
+    /// Maps an <see cref="ExchangeSetVerificationResult"/> onto the header's
+    /// signature badge. Shared by the S-100 and S-57 exchange-set paths so both
+    /// surface identical integrity/signature semantics.
+    /// </summary>
+    private static (SignatureStatus Status, string Tooltip) SignatureOf(ExchangeSetVerificationResult result) =>
+        result.IsUnsigned ? (SignatureStatus.Unsigned, Strings.Tooltip_SignatureUnsigned)
+        : result.AllValid ? (SignatureStatus.Verified, Strings.Tooltip_SignatureVerified)
+        : result.HasInvalidSignatures ? (SignatureStatus.Invalid, Strings.Tooltip_SignatureInvalid)
+        // Some files ok, some not — e.g. certificate issues
+        : (SignatureStatus.Mixed, Strings.Tooltip_SignatureMixed);
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        if (_subscribed)
+        {
+            _datasets.Entries.CollectionChanged -= OnEntriesChanged;
+            _subscribed = false;
+        }
+
+        foreach (var tracked in _tracked)
+        {
+            try { tracked.Owner.Dispose(); } catch { /* swallow on shutdown */ }
+        }
+        _tracked.Clear();
+    }
+
+    /// <summary>
+    /// The product spec of each S-57 exchange-set cell: <c>AML</c> for a NATO
+    /// Additional Military Layers cell, otherwise <c>S-57</c>. Only the first
+    /// cell's header is read unless it's AML: a large ENC set isn't slowed by
+    /// reading every header. A cell missed this way is still opened as AML by
+    /// the processor factory, never translated.
+    /// </summary>
+    private static Func<S57ExchangeSetCell, string> S57CellSpecs(IAssetSource source, IReadOnlyList<S57ExchangeSetCell> cells)
+    {
+        if (cells.Count == 0 || !IsAmlCell(source, cells[0].RelativePath))
+            return static _ => "S-57";
+
+        var specs = cells.ToDictionary(
+            c => c.RelativePath,
+            c => IsAmlCell(source, c.RelativePath) ? AmlDatasetInfo.SpecName : "S-57",
+            StringComparer.Ordinal);
+        return cell => specs.GetValueOrDefault(cell.RelativePath, "S-57");
+    }
+
+    private static bool IsAmlCell(IAssetSource source, string relativePath)
+    {
+        try
+        {
+            // The header reader only reads forward, so any stream will do.
+            using var stream = source.OpenAsync(relativePath).GetAwaiter().GetResult();
+            return S57DatasetHeader.Read(stream, Path.GetFileName(relativePath))?.Aml is not null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private sealed class TrackedExchangeSet
+    {
+        public string SourcePath { get; }
+
+        /// <summary>The asset source backing the set; matched against
+        /// <see cref="DatasetEntry.Source"/> for lifetime tracking.</summary>
+        public IAssetSource Source { get; }
+
+        /// <summary>The object whose disposal releases the set's underlying
+        /// resources — the S-100 <see cref="ExchangeSet"/> for S-100 sets, or the
+        /// <see cref="IAssetSource"/> itself for S-57 sets.</summary>
+        public IDisposable Owner { get; }
+
+        /// <summary>Produces the integrity/signature verification result for the
+        /// header badge, or <c>null</c> when verification is not applicable.</summary>
+        public Func<CancellationToken, Task<ExchangeSetVerificationResult>>? Verifier { get; }
+
+        public List<DatasetEntry> Entries { get; } = new();
+        public ExchangeSetHeader? Header { get; set; }
+
+        /// <summary>The set's own verification result, merged into its header's badge.</summary>
+        public (SignatureStatus Status, string Tooltip)? Signature { get; set; }
+
+        /// <summary>
+        /// True while entries are being batch-registered: the batch insert
+        /// raises a collection Reset before <see cref="Entries"/> is filled, and
+        /// the set must not be mistaken for an emptied one and released.
+        /// </summary>
+        public bool IsRegistering { get; set; }
+
+        public TrackedExchangeSet(
+            string sourcePath,
+            IAssetSource source,
+            IDisposable owner,
+            Func<CancellationToken, Task<ExchangeSetVerificationResult>>? verifier)
+        {
+            SourcePath = sourcePath;
+            Source = source;
+            Owner = owner;
+            Verifier = verifier;
+        }
+    }
+}

@@ -1,0 +1,421 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<S100XC:S100_ExchangeCatalogue xmlns:S100XC="http://www.iho.int/s100/xc" xmlns:S111XC="http://www.iho.int/s111/1.0/xc" xmlns:cit="http://standards.iso.org/iso/19115/-3/cit/2.0" xmlns:gco="http://standards.iso.org/iso/19115/-3/gco/1.0" xmlns:gcx="http://standards.iso.org/iso/19115/-3/gcx/1.0" xmlns:gex="http://standards.iso.org/iso/19115/-3/gex/1.0" xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:lan="http://standards.iso.org/iso/19115/-3/lan/1.0" xmlns:mco="http://standards.iso.org/iso/19115/-3/mco/1.0" xmlns:mri="http://standards.iso.org/iso/19115/-3/mri/1.0" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.iho.int/s111/1.0/xc ../../../../../schemas/S111/1.0.0/XC/20190422/S111_ExchangeCatalogue.xsd">
+<S100XC:identifier>
+<S100XC:identifier>US_111_20260930180000_01</S100XC:identifier>
+<S100XC:editionNumber>010000</S100XC:editionNumber>
+<S100XC:date>2026-09-30</S100XC:date>
+</S100XC:identifier>
+<S100XC:contact>
+<S100XC:organization>NOAA Office of Coast Survey</S100XC:organization>
+<S100XC:phone>
+<cit:number>
+<gco:CharacterString>18889906622</gco:CharacterString>
+</cit:number>
+<cit:numberType>
+<cit:CI_TelephoneTypeCode codeList="https://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#CI_TelephoneTypeCode" codeListValue="voice">voice</cit:CI_TelephoneTypeCode>
+</cit:numberType>
+</S100XC:phone>
+<S100XC:address>
+<cit:deliveryPoint>
+<gco:CharacterString>1315 East West Highway</gco:CharacterString>
+</cit:deliveryPoint>
+<cit:city>
+<gco:CharacterString>Silver Spring</gco:CharacterString>
+</cit:city>
+<cit:administrativeArea>
+<gco:CharacterString>Maryland</gco:CharacterString>
+</cit:administrativeArea>
+<cit:postalCode>
+<gco:CharacterString>20910</gco:CharacterString>
+</cit:postalCode>
+<cit:country>
+<gco:CharacterString>United States</gco:CharacterString>
+</cit:country>
+<cit:electronicMailAddress>
+<gco:CharacterString>https://nauticalcharts.noaa.gov/customer-service/assist/index.html</gco:CharacterString>
+</cit:electronicMailAddress>
+</S100XC:address>
+</S100XC:contact>
+<S100XC:productSpecification>
+<S100XC:name>S-111</S100XC:name>
+<S100XC:version>010000</S100XC:version>
+<S100XC:date>2018-12-21</S100XC:date>
+<S100XC:number>111</S100XC:number>
+</S100XC:productSpecification>
+<S100XC:metadataLanguage>English</S100XC:metadataLanguage>
+<S100XC:exchangeCatalogueName>CATALOG.xml</S100XC:exchangeCatalogueName>
+<S100XC:exchangeCatalogueDescription>This exchange catalogue contains forecast guidance of  surface water currents that have been generated from NOAA operational oceanographic forecast systems.  The information has been repackaged into IHO S-111 compliant data sets for distribution to navigation systems.</S100XC:exchangeCatalogueDescription>
+<S100XC:exchangeCatalogueComment>This Exchange Set Catalogue was created for testing purposes</S100XC:exchangeCatalogueComment>
+<S100XC:compressionFlag>true</S100XC:compressionFlag>
+<S100XC:sourceMedia>Internet download</S100XC:sourceMedia>
+<S100XC:replacedData>false</S100XC:replacedData>
+<S100XC:datasetDiscoveryMetadata>
+<S111XC:S111_DatasetDiscoveryMetadata>
+<S100XC:fileName>111US00_CBOFS_20260930T18Z_US4VA1DD.h5</S100XC:fileName>
+<S100XC:filePath>2026/09/30/18/dcf2/tiles/</S100XC:filePath>
+<S100XC:description>Chesapeake_Bay</S100XC:description>
+<S100XC:dataProtection>true</S100XC:dataProtection>
+<S100XC:protectionScheme>S100p154.0.0</S100XC:protectionScheme>
+<S100XC:digitalSignatureReference>dsa</S100XC:digitalSignatureReference>
+<S100XC:digitalSignatureValue>
+<S100XC:signedPublicKey id="noaa" rootKey="IHO">MIIBtjCCASsGByqGSM44BAEwggEeAoGBAMwvcLfFri7k1qxaTwztsWCgcYqOhNpKx7vIzstyiVM+xZlfgljKDToRQito0AIy9nkfXCOXA1QzuUhMNoLim8s1oudLOeiDwjHq7fnm/HNQVLNKG9XFxOSChBz8AaknPTPnSRuTv1JiTKzH17CAGhkCFzqf7kK+AexqttT05skhAhUApHDc0AdnfLvcB6lQco/biZ7cv2UCgYBDWl36giFV2j4R2B7AxDmwwylcif7KiEeU9T+rrzQbQfIMCJeRLHVmNe0uO/L9YStBWNd+7vUIHQVzRNRmcODHlQTbojm8FSofNyOKc3LbQraAlMG/dcrDX7XafgFpdeCcyNyntD+7nd076zATYec5Ad4RJeo1Bq/UphJPYBSpNgOBhAACgYAIb5BNjP4YJOw/y7dcUS2k7aLt3YaWEM8sIyhOAGo4Z8bpzdDRkj5NYSYSzqKzHBTVRxPna4YKf7XvTQwflhWDDCo+yCuYirLFsmMJv5Mp8wL8+MXZNr4IA1k/xgTBCZfZPdbAaGpoQ4nmgt0tQyJBxck+M2jUjGbQ2VCECIsNQQ==</S100XC:signedPublicKey>
+<S100XC:digitalSignature>None</S100XC:digitalSignature>
+</S100XC:digitalSignatureValue>
+<S100XC:copyright>
+<mco:MD_RestrictionCode codeList="https://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#MD_RestrictionCode" codeListValue="unrestricted">unrestricted</mco:MD_RestrictionCode>
+</S100XC:copyright>
+<S100XC:classification>
+<mco:MD_ClassificationCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#MD_ClassificationCode" codeListValue="unclassified">unclassified</mco:MD_ClassificationCode>
+</S100XC:classification>
+<S100XC:purpose>new edition</S100XC:purpose>
+<S100XC:specificUsage>
+<mri:MD_Usage>
+<mri:specificUsage>
+<gco:CharacterString>Coastal Navigation</gco:CharacterString>
+</mri:specificUsage>
+</mri:MD_Usage>
+</S100XC:specificUsage>
+<S100XC:editionNumber>1</S100XC:editionNumber>
+<S100XC:issueDate>2026-09-30</S100XC:issueDate>
+<S100XC:issueTime>19:46:18.424182+00:00</S100XC:issueTime>
+<S100XC:productSpecification>
+<S100XC:name>S-111</S100XC:name>
+<S100XC:version>010000</S100XC:version>
+<S100XC:date>2018-12-21</S100XC:date>
+<S100XC:number>111</S100XC:number>
+</S100XC:productSpecification>
+<S100XC:producingAgency>
+<cit:CI_Responsibility>
+<cit:role>
+<cit:CI_RoleCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#CI_RoleCode" codeListValue="publisher">publisher</cit:CI_RoleCode>
+</cit:role>
+<cit:party>
+<cit:CI_Organisation>
+<cit:name>
+<gco:CharacterString>NOAA</gco:CharacterString>
+</cit:name>
+</cit:CI_Organisation>
+</cit:party>
+</cit:CI_Responsibility>
+</S100XC:producingAgency>
+<S100XC:horizontalDatumReference>EPSG</S100XC:horizontalDatumReference>
+<S100XC:horizontalDatumValue>4326</S100XC:horizontalDatumValue>
+<S100XC:dataType>HDF5</S100XC:dataType>
+<S100XC:dataTypeVersion>011006</S100XC:dataTypeVersion>
+<S100XC:dataCoverage>
+<S100XC:ID>309607</S100XC:ID>
+<S100XC:boundingBox>
+<gex:westBoundLongitude>
+<gco:Decimal>-76.80000305175781</gco:Decimal>
+</gex:westBoundLongitude>
+<gex:eastBoundLongitude>
+<gco:Decimal>-76.5</gco:Decimal>
+</gex:eastBoundLongitude>
+<gex:southBoundLatitude>
+<gco:Decimal>37.5</gco:Decimal>
+</gex:southBoundLatitude>
+<gex:northBoundLatitude>
+<gco:Decimal>37.80000305175781</gco:Decimal>
+</gex:northBoundLatitude>
+</S100XC:boundingBox>
+<S100XC:boundingPolygon>
+<gex:polygon>
+<gml:Polygon gml:id="ID_309478" srsName="EPSG:4326">
+<gml:exterior>
+<gml:LinearRing>
+<gml:pos>-76.80000305175781 37.</gml:pos>
+<gml:pos>-76.5 37.</gml:pos>
+<gml:pos>-76.5 37.8000030517578</gml:pos>
+<gml:pos>-76.80000305175781 37.8000030517578</gml:pos>
+<gml:pos>-76.80000305175781 37.5</gml:pos>
+</gml:LinearRing>
+</gml:exterior>
+</gml:Polygon>
+</gex:polygon>
+</S100XC:boundingPolygon>
+</S100XC:dataCoverage>
+<S100XC:comment>None</S100XC:comment>
+<S100XC:layerID>[]</S100XC:layerID>
+<S100XC:defaultLocale>
+<lan:PT_Locale>
+<lan:language>
+<lan:LanguageCode codeList="http://www.iho.int/S100/4.0.0/resources/Codelists/cat/codelists.xml#S100_MD_LanguageCode" codeListValue="english">english</lan:LanguageCode>
+</lan:language>
+<lan:characterEncoding>
+<lan:MD_CharacterSetCode codeList="http://www.iho.int/S100/4.0.0/resources/Codelists/cat/codelists.xml#S100_MD_CharacterSetCode" codeListValue="UTF-8">UTF-8</lan:MD_CharacterSetCode>
+</lan:characterEncoding>
+</lan:PT_Locale>
+</S100XC:defaultLocale>
+<S100XC:metadataFileIdentifier>111US00_CBOFS_20260930T18Z_US4VA1DD.0001</S100XC:metadataFileIdentifier>
+<S100XC:metadataPointOfContact>
+<cit:CI_Responsibility>
+<cit:role>
+<cit:CI_RoleCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#CI_RoleCode" codeListValue="publisher">publisher</cit:CI_RoleCode>
+</cit:role>
+<cit:party>
+<cit:CI_Organisation>
+<cit:name>
+<gco:CharacterString>NOAA</gco:CharacterString>
+</cit:name>
+</cit:CI_Organisation>
+</cit:party>
+</cit:CI_Responsibility>
+</S100XC:metadataPointOfContact>
+<S100XC:metadataDateStamp>2026-09-30</S100XC:metadataDateStamp>
+<S100XC:metadataLanguage>English</S100XC:metadataLanguage>
+<S100XC:S100_19115DatasetMetadata>
+<gcx:FileName src="MD_111US00_CBOFS_20260930T18Z_US4VA1DD.XML">MD_111US00_CBOFS_20260930T18Z_US4VA1DD.XML</gcx:FileName>
+</S100XC:S100_19115DatasetMetadata>
+<S111XC:typeOfCurrentData>hydrodynamicModelForecast</S111XC:typeOfCurrentData>
+<S111XC:dataCodingFormat>regularGrid</S111XC:dataCodingFormat>
+<S111XC:methodCurrentsProduct>ROMS_Hydrodynamic_Model_Forecasts</S111XC:methodCurrentsProduct>
+<S111XC:minDatasetCurrentSpeed>0.0</S111XC:minDatasetCurrentSpeed>
+<S111XC:maxDatasetCurrentSpeed>0.95</S111XC:maxDatasetCurrentSpeed>
+</S111XC:S111_DatasetDiscoveryMetadata>
+<S111XC:S111_DatasetDiscoveryMetadata>
+<S100XC:fileName>111US00_CBOFS_20260930T18Z_US4VA1DE.h5</S100XC:fileName>
+<S100XC:filePath>2026/09/30/18/dcf2/tiles/</S100XC:filePath>
+<S100XC:description>Chesapeake_Bay</S100XC:description>
+<S100XC:dataProtection>true</S100XC:dataProtection>
+<S100XC:protectionScheme>S100p154.0.0</S100XC:protectionScheme>
+<S100XC:digitalSignatureReference>dsa</S100XC:digitalSignatureReference>
+<S100XC:digitalSignatureValue>
+<S100XC:signedPublicKey id="noaa" rootKey="IHO">MIIBtjCCASsGByqGSM44BAEwggEeAoGBAMwvcLfFri7k1qxaTwztsWCgcYqOhNpKx7vIzstyiVM+xZlfgljKDToRQito0AIy9nkfXCOXA1QzuUhMNoLim8s1oudLOeiDwjHq7fnm/HNQVLNKG9XFxOSChBz8AaknPTPnSRuTv1JiTKzH17CAGhkCFzqf7kK+AexqttT05skhAhUApHDc0AdnfLvcB6lQco/biZ7cv2UCgYBDWl36giFV2j4R2B7AxDmwwylcif7KiEeU9T+rrzQbQfIMCJeRLHVmNe0uO/L9YStBWNd+7vUIHQVzRNRmcODHlQTbojm8FSofNyOKc3LbQraAlMG/dcrDX7XafgFpdeCcyNyntD+7nd076zATYec5Ad4RJeo1Bq/UphJPYBSpNgOBhAACgYAIb5BNjP4YJOw/y7dcUS2k7aLt3YaWEM8sIyhOAGo4Z8bpzdDRkj5NYSYSzqKzHBTVRxPna4YKf7XvTQwflhWDDCo+yCuYirLFsmMJv5Mp8wL8+MXZNr4IA1k/xgTBCZfZPdbAaGpoQ4nmgt0tQyJBxck+M2jUjGbQ2VCECIsNQQ==</S100XC:signedPublicKey>
+<S100XC:digitalSignature>None</S100XC:digitalSignature>
+</S100XC:digitalSignatureValue>
+<S100XC:copyright>
+<mco:MD_RestrictionCode codeList="https://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#MD_RestrictionCode" codeListValue="unrestricted">unrestricted</mco:MD_RestrictionCode>
+</S100XC:copyright>
+<S100XC:classification>
+<mco:MD_ClassificationCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#MD_ClassificationCode" codeListValue="unclassified">unclassified</mco:MD_ClassificationCode>
+</S100XC:classification>
+<S100XC:purpose>new edition</S100XC:purpose>
+<S100XC:specificUsage>
+<mri:MD_Usage>
+<mri:specificUsage>
+<gco:CharacterString>Coastal Navigation</gco:CharacterString>
+</mri:specificUsage>
+</mri:MD_Usage>
+</S100XC:specificUsage>
+<S100XC:editionNumber>1</S100XC:editionNumber>
+<S100XC:issueDate>2026-09-30</S100XC:issueDate>
+<S100XC:issueTime>19:46:18.429416+00:00</S100XC:issueTime>
+<S100XC:productSpecification>
+<S100XC:name>S-111</S100XC:name>
+<S100XC:version>010000</S100XC:version>
+<S100XC:date>2018-12-21</S100XC:date>
+<S100XC:number>111</S100XC:number>
+</S100XC:productSpecification>
+<S100XC:producingAgency>
+<cit:CI_Responsibility>
+<cit:role>
+<cit:CI_RoleCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#CI_RoleCode" codeListValue="publisher">publisher</cit:CI_RoleCode>
+</cit:role>
+<cit:party>
+<cit:CI_Organisation>
+<cit:name>
+<gco:CharacterString>NOAA</gco:CharacterString>
+</cit:name>
+</cit:CI_Organisation>
+</cit:party>
+</cit:CI_Responsibility>
+</S100XC:producingAgency>
+<S100XC:horizontalDatumReference>EPSG</S100XC:horizontalDatumReference>
+<S100XC:horizontalDatumValue>4326</S100XC:horizontalDatumValue>
+<S100XC:dataType>HDF5</S100XC:dataType>
+<S100XC:dataTypeVersion>011006</S100XC:dataTypeVersion>
+<S100XC:dataCoverage>
+<S100XC:ID>309613</S100XC:ID>
+<S100XC:boundingBox>
+<gex:westBoundLongitude>
+<gco:Decimal>-76.5</gco:Decimal>
+</gex:westBoundLongitude>
+<gex:eastBoundLongitude>
+<gco:Decimal>-76.19999694824219</gco:Decimal>
+</gex:eastBoundLongitude>
+<gex:southBoundLatitude>
+<gco:Decimal>37.5</gco:Decimal>
+</gex:southBoundLatitude>
+<gex:northBoundLatitude>
+<gco:Decimal>37.80000305175781</gco:Decimal>
+</gex:northBoundLatitude>
+</S100XC:boundingBox>
+<S100XC:boundingPolygon>
+<gex:polygon>
+<gml:Polygon gml:id="ID_309484" srsName="EPSG:4326">
+<gml:exterior>
+<gml:LinearRing>
+<gml:pos>-76.5 37.</gml:pos>
+<gml:pos>-76.19999694824219 37.</gml:pos>
+<gml:pos>-76.19999694824219 37.8000030517578</gml:pos>
+<gml:pos>-76.5 37.8000030517578</gml:pos>
+<gml:pos>-76.5 37.5</gml:pos>
+</gml:LinearRing>
+</gml:exterior>
+</gml:Polygon>
+</gex:polygon>
+</S100XC:boundingPolygon>
+</S100XC:dataCoverage>
+<S100XC:comment>None</S100XC:comment>
+<S100XC:layerID>[]</S100XC:layerID>
+<S100XC:defaultLocale>
+<lan:PT_Locale>
+<lan:language>
+<lan:LanguageCode codeList="http://www.iho.int/S100/4.0.0/resources/Codelists/cat/codelists.xml#S100_MD_LanguageCode" codeListValue="english">english</lan:LanguageCode>
+</lan:language>
+<lan:characterEncoding>
+<lan:MD_CharacterSetCode codeList="http://www.iho.int/S100/4.0.0/resources/Codelists/cat/codelists.xml#S100_MD_CharacterSetCode" codeListValue="UTF-8">UTF-8</lan:MD_CharacterSetCode>
+</lan:characterEncoding>
+</lan:PT_Locale>
+</S100XC:defaultLocale>
+<S100XC:metadataFileIdentifier>111US00_CBOFS_20260930T18Z_US4VA1DE.0001</S100XC:metadataFileIdentifier>
+<S100XC:metadataPointOfContact>
+<cit:CI_Responsibility>
+<cit:role>
+<cit:CI_RoleCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#CI_RoleCode" codeListValue="publisher">publisher</cit:CI_RoleCode>
+</cit:role>
+<cit:party>
+<cit:CI_Organisation>
+<cit:name>
+<gco:CharacterString>NOAA</gco:CharacterString>
+</cit:name>
+</cit:CI_Organisation>
+</cit:party>
+</cit:CI_Responsibility>
+</S100XC:metadataPointOfContact>
+<S100XC:metadataDateStamp>2026-09-30</S100XC:metadataDateStamp>
+<S100XC:metadataLanguage>English</S100XC:metadataLanguage>
+<S100XC:S100_19115DatasetMetadata>
+<gcx:FileName src="MD_111US00_CBOFS_20260930T18Z_US4VA1DE.XML">MD_111US00_CBOFS_20260930T18Z_US4VA1DE.XML</gcx:FileName>
+</S100XC:S100_19115DatasetMetadata>
+<S111XC:typeOfCurrentData>hydrodynamicModelForecast</S111XC:typeOfCurrentData>
+<S111XC:dataCodingFormat>regularGrid</S111XC:dataCodingFormat>
+<S111XC:methodCurrentsProduct>ROMS_Hydrodynamic_Model_Forecasts</S111XC:methodCurrentsProduct>
+<S111XC:minDatasetCurrentSpeed>0.0</S111XC:minDatasetCurrentSpeed>
+<S111XC:maxDatasetCurrentSpeed>1.22</S111XC:maxDatasetCurrentSpeed>
+</S111XC:S111_DatasetDiscoveryMetadata>
+<S111XC:S111_DatasetDiscoveryMetadata>
+<S100XC:fileName>111US00_CBOFS_20260930T18Z_US4MD1AE.h5</S100XC:fileName>
+<S100XC:filePath>2026/09/30/18/dcf2/tiles/</S100XC:filePath>
+<S100XC:description>Chesapeake_Bay</S100XC:description>
+<S100XC:dataProtection>true</S100XC:dataProtection>
+<S100XC:protectionScheme>S100p154.0.0</S100XC:protectionScheme>
+<S100XC:digitalSignatureReference>dsa</S100XC:digitalSignatureReference>
+<S100XC:digitalSignatureValue>
+<S100XC:signedPublicKey id="noaa" rootKey="IHO">MIIBtjCCASsGByqGSM44BAEwggEeAoGBAMwvcLfFri7k1qxaTwztsWCgcYqOhNpKx7vIzstyiVM+xZlfgljKDToRQito0AIy9nkfXCOXA1QzuUhMNoLim8s1oudLOeiDwjHq7fnm/HNQVLNKG9XFxOSChBz8AaknPTPnSRuTv1JiTKzH17CAGhkCFzqf7kK+AexqttT05skhAhUApHDc0AdnfLvcB6lQco/biZ7cv2UCgYBDWl36giFV2j4R2B7AxDmwwylcif7KiEeU9T+rrzQbQfIMCJeRLHVmNe0uO/L9YStBWNd+7vUIHQVzRNRmcODHlQTbojm8FSofNyOKc3LbQraAlMG/dcrDX7XafgFpdeCcyNyntD+7nd076zATYec5Ad4RJeo1Bq/UphJPYBSpNgOBhAACgYAIb5BNjP4YJOw/y7dcUS2k7aLt3YaWEM8sIyhOAGo4Z8bpzdDRkj5NYSYSzqKzHBTVRxPna4YKf7XvTQwflhWDDCo+yCuYirLFsmMJv5Mp8wL8+MXZNr4IA1k/xgTBCZfZPdbAaGpoQ4nmgt0tQyJBxck+M2jUjGbQ2VCECIsNQQ==</S100XC:signedPublicKey>
+<S100XC:digitalSignature>None</S100XC:digitalSignature>
+</S100XC:digitalSignatureValue>
+<S100XC:copyright>
+<mco:MD_RestrictionCode codeList="https://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#MD_RestrictionCode" codeListValue="unrestricted">unrestricted</mco:MD_RestrictionCode>
+</S100XC:copyright>
+<S100XC:classification>
+<mco:MD_ClassificationCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#MD_ClassificationCode" codeListValue="unclassified">unclassified</mco:MD_ClassificationCode>
+</S100XC:classification>
+<S100XC:purpose>new edition</S100XC:purpose>
+<S100XC:specificUsage>
+<mri:MD_Usage>
+<mri:specificUsage>
+<gco:CharacterString>Coastal Navigation</gco:CharacterString>
+</mri:specificUsage>
+</mri:MD_Usage>
+</S100XC:specificUsage>
+<S100XC:editionNumber>1</S100XC:editionNumber>
+<S100XC:issueDate>2026-09-30</S100XC:issueDate>
+<S100XC:issueTime>19:46:18.499989+00:00</S100XC:issueTime>
+<S100XC:productSpecification>
+<S100XC:name>S-111</S100XC:name>
+<S100XC:version>010000</S100XC:version>
+<S100XC:date>2018-12-21</S100XC:date>
+<S100XC:number>111</S100XC:number>
+</S100XC:productSpecification>
+<S100XC:producingAgency>
+<cit:CI_Responsibility>
+<cit:role>
+<cit:CI_RoleCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#CI_RoleCode" codeListValue="publisher">publisher</cit:CI_RoleCode>
+</cit:role>
+<cit:party>
+<cit:CI_Organisation>
+<cit:name>
+<gco:CharacterString>NOAA</gco:CharacterString>
+</cit:name>
+</cit:CI_Organisation>
+</cit:party>
+</cit:CI_Responsibility>
+</S100XC:producingAgency>
+<S100XC:horizontalDatumReference>EPSG</S100XC:horizontalDatumReference>
+<S100XC:horizontalDatumValue>4326</S100XC:horizontalDatumValue>
+<S100XC:dataType>HDF5</S100XC:dataType>
+<S100XC:dataTypeVersion>011006</S100XC:dataTypeVersion>
+<S100XC:dataCoverage>
+<S100XC:ID>309616</S100XC:ID>
+<S100XC:boundingBox>
+<gex:westBoundLongitude>
+<gco:Decimal>-76.19999694824219</gco:Decimal>
+</gex:westBoundLongitude>
+<gex:eastBoundLongitude>
+<gco:Decimal>-75.9000015258789</gco:Decimal>
+</gex:eastBoundLongitude>
+<gex:southBoundLatitude>
+<gco:Decimal>37.79999542236328</gco:Decimal>
+</gex:southBoundLatitude>
+<gex:northBoundLatitude>
+<gco:Decimal>38.099998474121094</gco:Decimal>
+</gex:northBoundLatitude>
+</S100XC:boundingBox>
+<S100XC:boundingPolygon>
+<gex:polygon>
+<gml:Polygon gml:id="ID_309487" srsName="EPSG:4326">
+<gml:exterior>
+<gml:LinearRing>
+<gml:pos>-76.19999694824219 37.7999954223632</gml:pos>
+<gml:pos>-75.9000015258789 37.7999954223632</gml:pos>
+<gml:pos>-75.9000015258789 38.09999847412109</gml:pos>
+<gml:pos>-76.19999694824219 38.09999847412109</gml:pos>
+<gml:pos>-76.19999694824219 37.79999542236328</gml:pos>
+</gml:LinearRing>
+</gml:exterior>
+</gml:Polygon>
+</gex:polygon>
+</S100XC:boundingPolygon>
+</S100XC:dataCoverage>
+<S100XC:comment>None</S100XC:comment>
+<S100XC:layerID>[]</S100XC:layerID>
+<S100XC:defaultLocale>
+<lan:PT_Locale>
+<lan:language>
+<lan:LanguageCode codeList="http://www.iho.int/S100/4.0.0/resources/Codelists/cat/codelists.xml#S100_MD_LanguageCode" codeListValue="english">english</lan:LanguageCode>
+</lan:language>
+<lan:characterEncoding>
+<lan:MD_CharacterSetCode codeList="http://www.iho.int/S100/4.0.0/resources/Codelists/cat/codelists.xml#S100_MD_CharacterSetCode" codeListValue="UTF-8">UTF-8</lan:MD_CharacterSetCode>
+</lan:characterEncoding>
+</lan:PT_Locale>
+</S100XC:defaultLocale>
+<S100XC:metadataFileIdentifier>111US00_CBOFS_20260930T18Z_US4MD1AE.0001</S100XC:metadataFileIdentifier>
+<S100XC:metadataPointOfContact>
+<cit:CI_Responsibility>
+<cit:role>
+<cit:CI_RoleCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#CI_RoleCode" codeListValue="publisher">publisher</cit:CI_RoleCode>
+</cit:role>
+<cit:party>
+<cit:CI_Organisation>
+<cit:name>
+<gco:CharacterString>NOAA</gco:CharacterString>
+</cit:name>
+</cit:CI_Organisation>
+</cit:party>
+</cit:CI_Responsibility>
+</S100XC:metadataPointOfContact>
+<S100XC:metadataDateStamp>2026-09-30</S100XC:metadataDateStamp>
+<S100XC:metadataLanguage>English</S100XC:metadataLanguage>
+<S100XC:S100_19115DatasetMetadata>
+<gcx:FileName src="MD_111US00_CBOFS_20260930T18Z_US4MD1AE.XML">MD_111US00_CBOFS_20260930T18Z_US4MD1AE.XML</gcx:FileName>
+</S100XC:S100_19115DatasetMetadata>
+<S111XC:typeOfCurrentData>hydrodynamicModelForecast</S111XC:typeOfCurrentData>
+<S111XC:dataCodingFormat>regularGrid</S111XC:dataCodingFormat>
+<S111XC:methodCurrentsProduct>ROMS_Hydrodynamic_Model_Forecasts</S111XC:methodCurrentsProduct>
+<S111XC:minDatasetCurrentSpeed>0.0</S111XC:minDatasetCurrentSpeed>
+<S111XC:maxDatasetCurrentSpeed>1.64</S111XC:maxDatasetCurrentSpeed>
+</S111XC:S111_DatasetDiscoveryMetadata>
+</S100XC:datasetDiscoveryMetadata>
+</S100XC:S100_ExchangeCatalogue>
+

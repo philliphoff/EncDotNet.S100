@@ -1,0 +1,307 @@
+namespace EncDotNet.S100.Datasets.S57;
+
+/// <summary>
+/// Identifies a specific S-57 attribute drop, distinguishing the owning S-57
+/// object class from the attribute code so a corpus-wide audit can tell whether
+/// an unmapped attribute matters (a critical attribute on a common feature) or
+/// is incidental (an attribute the S-101 destination class never carries).
+/// </summary>
+/// <param name="ObjectClass">S-57 numeric object class (OBJL) that owned the attribute.</param>
+/// <param name="AttributeCode">S-57 numeric attribute code (ATTL) that was dropped.</param>
+public readonly record struct S57AttributeDrop(ushort ObjectClass, ushort AttributeCode);
+
+/// <summary>
+/// Identifies an S-101 enumerated value that was dropped during translation
+/// because the destination S-101 Feature Catalogue does not list it as an
+/// allowable code for the target attribute (see
+/// <see cref="S101AllowedEnumValues"/>).
+/// </summary>
+/// <param name="S101Attribute">Target S-101 simple-attribute code.</param>
+/// <param name="Value">The (already remapped) value that the FC rejected.</param>
+public readonly record struct S57EnumValueDrop(string S101Attribute, string Value);
+
+/// <summary>
+/// Identifies an S-57 master/slave pair the translator couldn't convert to a
+/// <c>StructureEquipment</c> association, because the destination Feature
+/// Catalogue doesn't let the structure's class carry the equipment's class.
+/// </summary>
+/// <param name="Structure">The S-101 class of the master (<c>theStructure</c>).</param>
+/// <param name="Equipment">The S-101 class of the slave (<c>theEquipment</c>).</param>
+public readonly record struct S57StructureEquipmentPair(string Structure, string Equipment);
+
+/// <summary>
+/// Optional, opt-in diagnostics collector for
+/// <see cref="S57ToS101Translator.Translate(EncDotNet.S57.S57Document, S57TranslationDiagnostics?)"/>.
+/// It records — as compact aggregate counters rather than per-instance events —
+/// exactly what the translator dropped and why, so a caller (e.g. a corpus-wide
+/// conversion audit) can quantify coverage gaps in the embedded
+/// <see cref="S57S101Mapping"/> without re-deriving the translator's logic
+/// externally.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A fresh instance is created per translation. Passing <c>null</c> to the
+/// translator disables collection entirely (the default parameterless
+/// <see cref="S57ToS101Translator.Translate(EncDotNet.S57.S57Document)"/>
+/// overload does exactly that), so there is no cost on the normal render path.
+/// </para>
+/// <para>
+/// The counters distinguish the two conversion-guidance outcomes that both
+/// manifest as "the feature/attribute is absent from the S-101 output":
+/// a genuine <em>gap</em> (no rule exists — see
+/// <see cref="UnmappedObjectClasses"/> / <see cref="UnmappedAttributes"/>) versus
+/// a <em>by-design drop</em> (a rule exists but resolves to nothing — see
+/// <see cref="RuleDroppedObjectClasses"/> / <see cref="RuleDroppedAttributes"/>).
+/// </para>
+/// </remarks>
+public sealed class S57TranslationDiagnostics
+{
+    private readonly Dictionary<ushort, int> _unmappedObjl = new();
+    private readonly Dictionary<ushort, int> _ruleDroppedObjl = new();
+    private readonly Dictionary<string, int> _noGeometry = new(StringComparer.Ordinal);
+    private readonly Dictionary<S57AttributeDrop, int> _unmappedAttributes = new();
+    private readonly Dictionary<ushort, int> _ruleDroppedAttributes = new();
+    private readonly Dictionary<S57EnumValueDrop, int> _droppedEnumValues = new();
+    private readonly Dictionary<S57StructureEquipmentPair, int> _unboundStructureEquipment = new();
+
+    /// <summary>
+    /// Number of non-sounding S-57 feature records the translator iterated,
+    /// including records later absorbed, deferred, dropped, or unmapped.
+    /// </summary>
+    public int FeatureRecordsRead { get; internal set; }
+
+    /// <summary>
+    /// Number of S-101 feature records emitted from non-sounding S-57 features
+    /// (i.e. features that resolved to an S-101 class <em>and</em> produced
+    /// geometry).
+    /// </summary>
+    public int FeaturesEmitted { get; internal set; }
+
+    /// <summary>Number of S-57 SOUNDG (OBJL=129) feature records seen.</summary>
+    public int SoundingFeaturesRead { get; internal set; }
+
+    /// <summary>
+    /// Number of co-located S-57 sector-light (<c>LIGHTS</c> with
+    /// <c>SECTR1</c>/<c>SECTR2</c>) feature records absorbed into a neighbouring
+    /// sector light at the same spatial node during the sector-light merge pass.
+    /// An absorbed record produces no S-101 feature of its own, so it is counted
+    /// here <em>instead of</em> in <see cref="FeaturesEmitted"/>. It usually adds
+    /// a <c>sectorCharacteristics</c> instance to the surviving
+    /// <c>LightSectored</c> feature, but members with missing or FC-rejected
+    /// <c>LITCHR</c> contribute no instance and have their diverted sector inputs
+    /// dropped to match the single-feature path. This counter therefore reflects
+    /// records absorbed, which may exceed the instances actually added.
+    /// </summary>
+    public int SectorLightsMerged { get; internal set; }
+
+    /// <summary>
+    /// Number of S-57 <c>TOPMAR</c> (topmark/daymark, OBJL 144) feature records
+    /// absorbed by a master buoy/beacon during the topmark-fold pass. S-101 models
+    /// the topmark as an attribute of the parent structure (reached via the S-57
+    /// master/slave feature-to-feature relationship) rather than a standalone
+    /// feature, so an absorbed TOPMAR produces no S-101 feature of its own and is
+    /// counted here <em>instead of</em> under <see cref="UnmappedObjectClasses"/>.
+    /// This counts every TOPMAR consumed by a topmark-binding master; the parent's
+    /// <c>topmark</c> complex instance may still be dropped afterward (for example
+    /// a missing or FC-rejected <c>TOPSHP</c>), so an absorbed TOPMAR does not
+    /// guarantee an emitted <c>topmark</c> instance. A TOPMAR referenced by no
+    /// topmark-binding master is still recorded as unmapped (IHO S-57→S-101
+    /// Conversion Guidance: TOPMAR → parent attribute).
+    /// </summary>
+    public int TopmarksAbsorbed { get; internal set; }
+
+    /// <summary>
+    /// Number of <c>NauticalInformation</c> information-type records emitted by
+    /// the S-57→S-101 conversion. One is created per feature that carries any of
+    /// the textual attributes <c>INFORM</c>/<c>TXTDSC</c>/<c>NINFOM</c>/
+    /// <c>NTXTDS</c>, bound to that feature through an
+    /// <c>AdditionalInformation</c> association (IHO S-57→S-101 Conversion
+    /// Guidance §2.3 "fuller path"). Equals the number of
+    /// <c>AdditionalInformation</c> associations emitted.
+    /// </summary>
+    public int NauticalInformationTypesEmitted { get; internal set; }
+
+    /// <summary>
+    /// Number of synthesised <c>RangeSystem</c> collection features emitted by
+    /// the S-57→S-101 conversion. S-101 has no generic collection object; an
+    /// S-57 <c>C_AGGR</c> whose members are navigational tracks plus the
+    /// navigation aids that define them is mapped to a geometry-less
+    /// <c>RangeSystem</c> feature linked to each member by a
+    /// <c>RangeSystemAggregation</c> association in the member's
+    /// <c>theComponent</c> role (S-101 FC Ed 1.x). C_AGGR groupings that do not
+    /// match this pattern (and all <c>C_ASSO</c>) have no S-101 home and are
+    /// counted under <see cref="UnmappedObjectClasses"/> instead.
+    /// </summary>
+    public int RangeSystemsEmitted { get; internal set; }
+
+    /// <summary>
+    /// Number of S-401 <c>TimeScheduleInGeneral</c> information records
+    /// emitted, one per IENC time schedule (<c>tisdge</c>) that at least one
+    /// translated feature carries through <c>AdditionalInformation</c>.
+    /// </summary>
+    public int TimeSchedulesEmitted { get; internal set; }
+
+    /// <summary>
+    /// Number of <c>SpanFixed</c> / <c>SpanOpening</c> component features
+    /// synthesised from S-57 <c>BRIDGE</c> objects (S-65 Annex B §4.8.10). A
+    /// BRIDGE carrying the clearance its span class requires (<c>VERCLR</c> for
+    /// a fixed span, <c>VERCCL</c> for an opening one) yields one span that
+    /// shares its geometry and carries the clearance attributes, linked from
+    /// the <c>Bridge</c> by a <c>BridgeAggregation</c> association. Spans are
+    /// counted here, not in <see cref="FeaturesEmitted"/>.
+    /// </summary>
+    public int BridgeSpansEmitted { get; internal set; }
+
+    /// <summary>
+    /// Number of S-101 features given a derived feature object identifier
+    /// because they come from the same S-57 object as an earlier feature (for
+    /// example the span of a <c>BRIDGE</c>, which follows its <c>Bridge</c>):
+    /// each keeps the agency and <c>FIDN</c> and takes the next unused
+    /// <c>FIDS</c>, so FOIDs stay unique within the dataset.
+    /// </summary>
+    public int DerivedFeatureIdentifiersAssigned { get; internal set; }
+
+    /// <summary>
+    /// Number of aggregated <c>Bridge</c> features emitted for S-57
+    /// <c>C_AGGR</c> collections of <c>BRIDGE</c> objects (plus any
+    /// <c>PYLONS</c> / <c>PONTON</c>, lights and other members) (S-65 Annex B §4.8.10). Each replaces the
+    /// per-member Bridge features — its member BRIDGE objects emit only their
+    /// spans — and links every emitted span, pylon and pontoon as a
+    /// <c>BridgeAggregation</c> component. Counted here, not in
+    /// <see cref="FeaturesEmitted"/>.
+    /// </summary>
+    public int BridgeAggregationsEmitted { get; internal set; }
+
+    /// <summary>
+    /// Number of lights and signal stations (warning and traffic) linked to a <c>Bridge</c>
+    /// as <c>theEquipment</c> of a <c>StructureEquipment</c> association: the
+    /// ones an S-57 bridge <c>C_AGGR</c> collects, where the target Feature
+    /// Catalogue binds that class on <c>Bridge</c>. One listed by two
+    /// collections is linked (and counted) once.
+    /// </summary>
+    public int BridgeEquipmentLinked { get; internal set; }
+
+    /// <summary>
+    /// Number of S-57 bridge <c>C_AGGR</c> collections whose <c>BRIDGE</c>
+    /// members mix curves and surfaces, which no one <c>Bridge</c> geometry can
+    /// hold. Their members convert one by one, each piece of equipment linked to the nearest
+    /// member <c>Bridge</c>, and the collection itself is not converted.
+    /// Members that merely do not join give a multi-part <c>Bridge</c>.
+    /// </summary>
+    public int BridgeCollectionsUnjoined { get; internal set; }
+
+    /// <summary>
+    /// Number of S-57 master/slave relationships (a master's <c>FFPT</c> with
+    /// the slave relationship indicator, S-57 UOC 12.1.1) converted to
+    /// <c>StructureEquipment</c> associations: a buoy, beacon or other
+    /// structure and its light, fog signal, radar reflector and so on.
+    /// </summary>
+    public int StructureEquipmentLinked { get; internal set; }
+
+    /// <summary>
+    /// Number of coverage-available M_COVR objects cut into several Data
+    /// Coverage features by the M_CSCL objects over them (S-65 Annex B
+    /// §2.2.6), each piece with its own optimum display scale.
+    /// </summary>
+    public int DataCoverageCuts { get; internal set; }
+
+    /// <summary>
+    /// Number of coverage-available M_COVR objects with an M_CSCL over them
+    /// that were not cut, because the M_COVR and M_CSCL edges don't form
+    /// faces covering the M_COVR (an edge crossing another between nodes).
+    /// Such a Data Coverage keeps the cell's compilation scale throughout.
+    /// </summary>
+    public int DataCoverageNotCut { get; internal set; }
+
+    /// <summary>
+    /// S-57 master/slave pairs not converted because the target Feature
+    /// Catalogue doesn't bind the slave's class as <c>theEquipment</c> of the
+    /// master's class, keyed by the S-101 pair → occurrence count.
+    /// </summary>
+    public IReadOnlyDictionary<S57StructureEquipmentPair, int> UnboundStructureEquipment => _unboundStructureEquipment;
+
+    /// <summary>
+    /// Number of S-101 <c>Sounding</c> features emitted (a SOUNDG feature with at
+    /// least one depth triple yields exactly one).
+    /// </summary>
+    public int SoundingFeaturesEmitted { get; internal set; }
+
+    /// <summary>Total number of depth points emitted across all soundings.</summary>
+    public int SoundingPointsEmitted { get; internal set; }
+
+    /// <summary>
+    /// Number of SOUNDG feature records dropped because no resolvable depth
+    /// triples were found on their referenced vector records.
+    /// </summary>
+    public int SoundingFeaturesWithoutPoints { get; internal set; }
+
+    /// <summary>
+    /// S-57 object classes (OBJL → occurrence count) that were dropped because
+    /// the mapping has <em>no rule</em> for them (a coverage gap).
+    /// </summary>
+    public IReadOnlyDictionary<ushort, int> UnmappedObjectClasses => _unmappedObjl;
+
+    /// <summary>
+    /// S-57 object classes (OBJL → occurrence count) that <em>have</em> a rule
+    /// which resolved to no S-101 class — either an intentional drop
+    /// (<c>DefaultS101Code == null</c>) or a redirect that did not match the
+    /// instance's attributes.
+    /// </summary>
+    public IReadOnlyDictionary<ushort, int> RuleDroppedObjectClasses => _ruleDroppedObjl;
+
+    /// <summary>
+    /// Resolved S-101 feature classes (code → occurrence count) whose instances
+    /// were dropped because translation produced zero spatial associations
+    /// (e.g. unresolved <c>VRPT</c>/<c>FSPT</c> pointers or a degenerate ring).
+    /// </summary>
+    public IReadOnlyDictionary<string, int> FeaturesDroppedForNoGeometry => _noGeometry;
+
+    /// <summary>
+    /// S-57 attributes dropped because the mapping has no attribute rule for the
+    /// ATTL, keyed by (owning OBJL, ATTL) → occurrence count. Textual-info
+    /// attributes (INFORM/NINFOM/TXTDSC/NTXTDS), which are transformed into the
+    /// S-101 <c>information</c> complex attribute rather than dropped, are
+    /// excluded.
+    /// </summary>
+    public IReadOnlyDictionary<S57AttributeDrop, int> UnmappedAttributes => _unmappedAttributes;
+
+    /// <summary>
+    /// S-57 attributes (ATTL → occurrence count) that had a rule but were not
+    /// emitted. Either the rule (or a feature-level override) maps the value to
+    /// <c>null</c>, an intentional value-level drop, or the rule's target is not
+    /// bound by the resolved feature class in the target Feature Catalogue
+    /// (e.g. <c>WATLEV</c> on a <c>Pile</c>).
+    /// </summary>
+    public IReadOnlyDictionary<ushort, int> RuleDroppedAttributes => _ruleDroppedAttributes;
+
+    /// <summary>
+    /// S-101 enumerated values dropped because the destination Feature Catalogue
+    /// does not list them as allowable, keyed by (S-101 attribute, value) →
+    /// occurrence count. A high count here often signals a defective value
+    /// remap (targeting a code the FC rejects) rather than a genuine
+    /// no-equivalent value.
+    /// </summary>
+    public IReadOnlyDictionary<S57EnumValueDrop, int> DroppedEnumValues => _droppedEnumValues;
+
+    internal void RecordUnmappedObjectClass(ushort objl) => Increment(_unmappedObjl, objl);
+
+    internal void RecordRuleDroppedObjectClass(ushort objl) => Increment(_ruleDroppedObjl, objl);
+
+    internal void RecordFeatureWithoutGeometry(string s101Code) => Increment(_noGeometry, s101Code);
+
+    internal void RecordDataCoverageNotCut() => DataCoverageNotCut++;
+
+    internal void RecordUnmappedAttribute(ushort objl, ushort attl)
+        => Increment(_unmappedAttributes, new S57AttributeDrop(objl, attl));
+
+    internal void RecordRuleDroppedAttribute(ushort attl) => Increment(_ruleDroppedAttributes, attl);
+
+    internal void RecordDroppedEnumValue(string s101Attribute, string value)
+        => Increment(_droppedEnumValues, new S57EnumValueDrop(s101Attribute, value));
+
+    internal void RecordUnboundStructureEquipment(string structure, string equipment)
+        => Increment(_unboundStructureEquipment, new S57StructureEquipmentPair(structure, equipment));
+
+    private static void Increment<TKey>(Dictionary<TKey, int> map, TKey key) where TKey : notnull
+        => map[key] = map.TryGetValue(key, out var n) ? n + 1 : 1;
+}

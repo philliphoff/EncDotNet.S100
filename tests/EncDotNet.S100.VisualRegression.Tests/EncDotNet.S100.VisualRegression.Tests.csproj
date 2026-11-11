@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+    <!-- See Directory.Build.targets: ship the NoDependencies Skia native on Linux (issue #23). -->
+    <UseSkiaSharpLinuxNoDependencies>true</UseSkiaSharpLinuxNoDependencies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Verify.XunitV3" />
+    <PackageReference Include="SkiaSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\_shared\NetCdfFixtures.cs" Link="TestSupport\NetCdfFixtures.cs" />
+    <Compile Include="..\_shared\TestLuaEngine.cs" Link="TestSupport\TestLuaEngine.cs" />
+    <Compile Include="..\_shared\GribFixtures.cs" Link="TestSupport\GribFixtures.cs" />
+    <Compile Include="..\_shared\CapFixtures.cs" Link="TestSupport\CapFixtures.cs" />
+    <Compile Include="..\_shared\FrontPipFixtures.cs" Link="TestSupport\FrontPipFixtures.cs" />
+    <Compile Include="..\_shared\CodsusFixtures.cs" Link="TestSupport\CodsusFixtures.cs" />
+    <Compile Include="..\_shared\TropicalCycloneFixtures.cs" Link="TestSupport\TropicalCycloneFixtures.cs" />
+    <Compile Include="..\_shared\AmlFixtures.cs" Link="TestSupport\AmlFixtures.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.VisualRegression\EncDotNet.S100.VisualRegression.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Testing.Scenarios\EncDotNet.S100.Testing.Scenarios.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.Weather\EncDotNet.S100.Datasets.Weather.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.Aml\EncDotNet.S100.Datasets.Aml.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Snapshots\**\*.verified.png" CopyToOutputDirectory="Never" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- NHC's archived GIS zips for Hurricane Ian, advisory 20 (issues #1294, #1296); see tests/datasets/TC/README.md. -->
+    <Content Include="..\datasets\TC\**\*.zip" CopyToOutputDirectory="PreserveNewest" Link="TestData\TC\%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- NOAA GFS and GFS-Wave subsets (issue #1074); see tests/datasets/GRIB2/README.md. -->
+    <Content Include="..\datasets\GRIB2\*.grib2" CopyToOutputDirectory="PreserveNewest" Link="TestData\GRIB2\%(Filename)%(Extension)" />
+    <!-- WPC coded surface bulletins (issues #1295, #1300); see tests/datasets/CODSUS/README.md. -->
+    <Content Include="..\datasets\CODSUS\*.txt" CopyToOutputDirectory="PreserveNewest" Link="TestData\CODSUS\%(Filename)%(Extension)" />
+    <!-- NWS marine CAP alerts and a hand-written circle alert (issue #1069); see tests/datasets/CAP/README.md. -->
+    <Content Include="..\datasets\CAP\*.*" Exclude="..\datasets\CAP\*.md" CopyToOutputDirectory="PreserveNewest" Link="TestData\CAP\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

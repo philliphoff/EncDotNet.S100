@@ -1,0 +1,486 @@
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Datasets.S102;
+using EncDotNet.S100.Datasets.S104;
+using EncDotNet.S100.Datasets.S111;
+using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
+
+namespace EncDotNet.S100.Mcp.Tools.Tests;
+
+public class SampleCoverageToolTests
+{
+    [Fact]
+    public async Task Returns_depth_sample_inside_bounds()
+    {
+        var catalog = new FakeDatasetCatalog();
+        var dataset = S102Synth.Dataset(originLat: 0, originLon: 0, spacingLat: 0.01, spacingLon: 0.01,
+            numRows: 4, numCols: 4, depth: 25.0f, uncertainty: 0.5f);
+        catalog.Add(LoadedDatasetFactory.S102(
+            "s102-1",
+            bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
+            source: new S102CoverageSource(dataset)));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S102Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(new DatasetId("s102-1"), value.DatasetId);
+        var depth = Assert.IsType<DepthSample>(value.Value);
+        Assert.Equal(25.0, depth.DepthMeters);
+        Assert.Equal(0.5, depth.UncertaintyMeters);
+    }
+
+    [Fact]
+    public async Task Returns_NoDatasetCoversPoint_when_point_outside_bounds()
+    {
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S102("s102-1", bounds: LoadedDatasetFactory.Box(0, 0, 1, 1)));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S102Spec, Latitude: 50, Longitude: 50), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetError(out var error));
+        var miss = Assert.IsType<NoDatasetCoversPoint>(error);
+        Assert.Equal(50, miss.Latitude);
+        Assert.Equal(50, miss.Longitude);
+    }
+
+    [Fact]
+    public async Task Returns_depth_for_projected_utm_tile_by_reprojecting_click()
+    {
+        // A projected S-102 tile (UTM zone 31N, EPSG:32631) stores grid
+        // georeferencing in native metres. The tool must reproject the WGS-84
+        // request point into the grid CRS before indexing — otherwise the
+        // Rotterdam UTM tile reports no_dataset_covers_point (issue #479).
+        const double originNorthing = 5_750_000.0;
+        const double originEasting = 592_000.0;
+        const double spacing = 100.0;
+        const int count = 5;
+
+        // Encode the cell index into the depth so we can assert the exact hit.
+        var dataset = S102Synth.Dataset(
+            originLat: originNorthing, originLon: originEasting,
+            spacingLat: spacing, spacingLon: spacing,
+            numRows: count, numCols: count,
+            horizontalCrs: 32631,
+            depthAt: (r, c) => r * 10 + c);
+
+        var factory = new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory();
+
+        // Reproject the native SW/NE corners to build the WGS-84 catalog bounds
+        // exactly as the viewer catalog now does (CoverageExtent).
+        var toWgs84 = factory.Create("EPSG:32631", "EPSG:4326");
+        var (swLon, swLat) = toWgs84.Transform(originEasting, originNorthing);
+        var (neLon, neLat) = toWgs84.Transform(
+            originEasting + (count - 1) * spacing, originNorthing + (count - 1) * spacing);
+        var bounds = LoadedDatasetFactory.Box(
+            Math.Min(swLat, neLat), Math.Min(swLon, neLon),
+            Math.Max(swLat, neLat), Math.Max(swLon, neLon));
+
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S102("s102-utm", bounds: bounds,
+            source: new S102CoverageSource(dataset)));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        // Aim at the interior of cell (row 2, col 3) in native metres — offset
+        // half a cell past the node so the floor-based indexing shared with the
+        // viewer's coverage-pick path (CoveragePickHelper.ToGrid) resolves
+        // deterministically to (2, 3) without fp boundary ambiguity.
+        var (lon, lat) = toWgs84.Transform(
+            originEasting + 3.5 * spacing, originNorthing + 2.5 * spacing);
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S102Spec, Latitude: lat, Longitude: lon), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(new DatasetId("s102-utm"), value.DatasetId);
+        var depth = Assert.IsType<DepthSample>(value.Value);
+        Assert.Equal(2 * 10 + 3, depth.DepthMeters);
+    }
+
+    [Fact]
+    public async Task Falls_through_to_second_overlapping_S102_when_first_envelope_misses_native_grid()
+    {
+        // Regression: an S-102 tile's WGS-84 bounds are an axis-aligned envelope,
+        // so a point can be inside the envelope yet outside the native grid. When
+        // datasets overlap, the first envelope hit must not mask a later tile that
+        // actually covers the point (issue #479 review follow-up).
+        var catalog = new FakeDatasetCatalog();
+
+        // Tile A: tiny 2x2 grid near the origin but an inflated envelope covering
+        // the whole unit square, so (0.5, 0.5) is inside bounds but outside grid.
+        var tileA = S102Synth.Dataset(originLat: 0, originLon: 0, spacingLat: 0.01, spacingLon: 0.01,
+            numRows: 2, numCols: 2, depth: 11.0f, uncertainty: 0.1f);
+        catalog.Add(LoadedDatasetFactory.S102(
+            "s102-a",
+            bounds: LoadedDatasetFactory.Box(0, 0, 1, 1),
+            source: new S102CoverageSource(tileA)));
+
+        // Tile B: grid that genuinely covers (0.5, 0.5).
+        var tileB = S102Synth.Dataset(originLat: 0.49, originLon: 0.49, spacingLat: 0.01, spacingLon: 0.01,
+            numRows: 4, numCols: 4, depth: 42.0f, uncertainty: 0.4f);
+        catalog.Add(LoadedDatasetFactory.S102(
+            "s102-b",
+            bounds: LoadedDatasetFactory.Box(0.49, 0.49, 0.52, 0.52),
+            source: new S102CoverageSource(tileB)));
+
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S102Spec, Latitude: 0.5, Longitude: 0.5), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(new DatasetId("s102-b"), value.DatasetId);
+        var depth = Assert.IsType<DepthSample>(value.Value);
+        Assert.Equal(42.0, depth.DepthMeters);
+    }
+
+    [Fact]
+    public async Task Skips_S102_tile_with_unsupported_crs_instead_of_throwing()
+    {
+        // A tile declaring an unsupported horizontal CRS cannot be reprojected;
+        // sampling must degrade to a structured NoDatasetCoversPoint rather than
+        // letting ProjNet's NotSupportedException abort the tool.
+        var catalog = new FakeDatasetCatalog();
+        var badCrs = S102Synth.Dataset(originLat: 0, originLon: 0, spacingLat: 0.01, spacingLon: 0.01,
+            numRows: 4, numCols: 4, depth: 25.0f, horizontalCrs: 9999);
+        catalog.Add(LoadedDatasetFactory.S102(
+            "s102-badcrs",
+            bounds: LoadedDatasetFactory.Box(0, 0, 1, 1),
+            source: new S102CoverageSource(badCrs)));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S102Spec, Latitude: 0.5, Longitude: 0.5), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetError(out var error));
+        Assert.IsType<NoDatasetCoversPoint>(error);
+    }
+
+    [Fact]
+    public async Task Falls_through_to_valid_S102_when_earlier_tile_has_unsupported_crs()
+    {
+        // An unsupported-CRS tile must not mask a later overlapping tile that
+        // can be sampled.
+        var catalog = new FakeDatasetCatalog();
+        var badCrs = S102Synth.Dataset(originLat: 0, originLon: 0, spacingLat: 0.01, spacingLon: 0.01,
+            numRows: 4, numCols: 4, depth: 25.0f, horizontalCrs: 9999);
+        catalog.Add(LoadedDatasetFactory.S102(
+            "s102-badcrs",
+            bounds: LoadedDatasetFactory.Box(0, 0, 1, 1),
+            source: new S102CoverageSource(badCrs)));
+
+        var good = S102Synth.Dataset(originLat: 0.49, originLon: 0.49, spacingLat: 0.01, spacingLon: 0.01,
+            numRows: 4, numCols: 4, depth: 42.0f);
+        catalog.Add(LoadedDatasetFactory.S102(
+            "s102-good",
+            bounds: LoadedDatasetFactory.Box(0.49, 0.49, 0.52, 0.52),
+            source: new S102CoverageSource(good)));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S102Spec, Latitude: 0.5, Longitude: 0.5), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(new DatasetId("s102-good"), value.DatasetId);
+        var depth = Assert.IsType<DepthSample>(value.Value);
+        Assert.Equal(42.0, depth.DepthMeters);
+    }
+
+    [Fact]
+    public async Task Returns_NoDatasetCoversPoint_when_no_S102_loaded()
+    {
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S124("vector-only"));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S102Spec, Latitude: 0, Longitude: 0), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetError(out var error));
+        Assert.IsType<NoDatasetCoversPoint>(error);
+    }
+
+    [Fact]
+    public async Task S104_returns_water_level_sample_at_first_time_step_by_default()
+    {
+        var catalog = new FakeDatasetCatalog();
+        var times = new[]
+        {
+            new DateTime(2024, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2024, 6, 1, 1, 0, 0, DateTimeKind.Utc),
+            new DateTime(2024, 6, 1, 2, 0, 0, DateTimeKind.Utc),
+        };
+        var dataset = S104Synth.Dataset(originLat: 0, originLon: 0, height: 1.5f, trend: 2, times: times);
+        catalog.Add(LoadedDatasetFactory.S104(
+            "wl-1",
+            bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
+            source: new S104CoverageSource(dataset)));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        var sample = Assert.IsType<WaterLevelSample>(value.Value);
+        Assert.Equal(1.5, sample.WaterLevelHeight, 5);
+        Assert.Equal("increasing", sample.Trend);
+        Assert.Equal(times[0], sample.SampleTime);
+        Assert.Null(sample.RequestedTime);
+    }
+
+    [Fact]
+    public async Task S104_nearest_policy_samples_last_step_when_requested_time_is_after_dataset()
+    {
+        var catalog = new FakeDatasetCatalog();
+        var times = new[]
+        {
+            new DateTime(2024, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2024, 6, 1, 1, 0, 0, DateTimeKind.Utc),
+            new DateTime(2024, 6, 1, 2, 0, 0, DateTimeKind.Utc),
+        };
+        var dataset = S104Synth.Dataset(times: times);
+        catalog.Add(LoadedDatasetFactory.S104(
+            "wl-clamp-late",
+            bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
+            source: new S104CoverageSource(dataset)));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        var requested = new DateTimeOffset(2024, 12, 1, 0, 0, 0, TimeSpan.Zero);
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02, Time: requested, OutOfRange: TimeOutOfRangePolicy.Nearest), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(SampleTimeStatus.AfterEnd, value.TimeStatus);
+        var sample = Assert.IsType<WaterLevelSample>(value.Value);
+        Assert.Equal(times[^1], sample.SampleTime);
+        Assert.Equal(requested, sample.RequestedTime);
+    }
+
+    [Fact]
+    public async Task S104_nearest_policy_samples_first_step_when_requested_time_is_before_dataset()
+    {
+        var catalog = new FakeDatasetCatalog();
+        var times = new[]
+        {
+            new DateTime(2024, 6, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2024, 6, 1, 1, 0, 0, DateTimeKind.Utc),
+        };
+        var dataset = S104Synth.Dataset(times: times);
+        catalog.Add(LoadedDatasetFactory.S104(
+            "wl-clamp-early",
+            bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
+            source: new S104CoverageSource(dataset)));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        var requested = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02, Time: requested, OutOfRange: TimeOutOfRangePolicy.Nearest), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal(SampleTimeStatus.BeforeStart, value.TimeStatus);
+        var sample = Assert.IsType<WaterLevelSample>(value.Value);
+        Assert.Equal(times[0], sample.SampleTime);
+    }
+
+    [Fact]
+    public async Task S104_returns_OutOfBounds_when_point_outside_loaded_S104_bounds()
+    {
+        var catalog = new FakeDatasetCatalog();
+        var dataset = S104Synth.Dataset();
+        catalog.Add(LoadedDatasetFactory.S104(
+            "wl-oob",
+            bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
+            source: new S104CoverageSource(dataset)));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S104Spec, Latitude: 50, Longitude: 50), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetError(out var error));
+        var oob = Assert.IsType<OutOfBounds>(error);
+        Assert.Equal("S-104", oob.Spec.Name);
+    }
+
+    [Fact]
+    public async Task S104_returns_NoDatasetCoversPoint_when_no_S104_loaded()
+    {
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S124("v"));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S104Spec, Latitude: 0, Longitude: 0), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetError(out var error));
+        Assert.IsType<NoDatasetCoversPoint>(error);
+    }
+
+    [Fact]
+    public async Task S104_returns_NotSupportedYet_for_non_regular_grid()
+    {
+        var catalog = new FakeDatasetCatalog();
+        var dataset = S104Synth.Dataset(dataCodingFormat: 8);
+        catalog.Add(LoadedDatasetFactory.S104(
+            "wl-dcf8",
+            bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
+            source: new S104CoverageSource(dataset)));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetError(out var error));
+        var nsy = Assert.IsType<NotSupportedYet>(error);
+        Assert.Equal("S-104", nsy.Spec.Name);
+        Assert.Equal(SampleCoverageTool.Name, nsy.Tool);
+    }
+
+    [Fact]
+    public async Task S104_returns_NoDataAtPoint_when_cell_is_fill_value()
+    {
+        var catalog = new FakeDatasetCatalog();
+        var dataset = S104Synth.Dataset(height: S104CoverageSource.FillValue);
+        catalog.Add(LoadedDatasetFactory.S104(
+            "wl-nodata",
+            bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
+            source: new S104CoverageSource(dataset)));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S104Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetError(out var error));
+        Assert.IsType<NoDataAtPoint>(error);
+    }
+
+    [Fact]
+    public async Task S111_returns_surface_current_sample_with_metres_per_second_and_knots()
+    {
+        var catalog = new FakeDatasetCatalog();
+        var dataset = S111Synth.Dataset(speed: 1.0f, direction: 45.0f);
+        catalog.Add(LoadedDatasetFactory.S111(
+            "sc-1",
+            bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
+            source: new S111CoverageSource(dataset)));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        var sample = Assert.IsType<SurfaceCurrentSample>(value.Value);
+        // S-111 encodes speeds in knots: 1.0 kn ≈ 0.514444 m/s.
+        Assert.Equal(1.0, sample.SpeedKnots, 5);
+        Assert.Equal(0.514444, sample.SpeedMetresPerSecond, 5);
+        Assert.Equal(45.0, sample.DirectionDegreesTrue, 5);
+    }
+
+    [Fact]
+    public async Task S111_nearest_policy_samples_end_steps_outside_range()
+    {
+        var catalog = new FakeDatasetCatalog();
+        var times = new[]
+        {
+            new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2024, 1, 1, 1, 0, 0, DateTimeKind.Utc),
+        };
+        var dataset = S111Synth.Dataset(times: times);
+        catalog.Add(LoadedDatasetFactory.S111(
+            "sc-clamp",
+            bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
+            source: new S111CoverageSource(dataset)));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        var before = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var beforeResult = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02, Time: before, OutOfRange: TimeOutOfRangePolicy.Nearest), TestContext.Current.CancellationToken);
+        Assert.True(beforeResult.TryGetValue(out var bv));
+        Assert.Equal(SampleTimeStatus.BeforeStart, bv.TimeStatus);
+        Assert.Equal(times[0], Assert.IsType<SurfaceCurrentSample>(bv.Value).SampleTime);
+
+        var after = new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var afterResult = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02, Time: after, OutOfRange: TimeOutOfRangePolicy.Nearest), TestContext.Current.CancellationToken);
+        Assert.True(afterResult.TryGetValue(out var av));
+        Assert.Equal(SampleTimeStatus.AfterEnd, av.TimeStatus);
+        Assert.Equal(times[^1], Assert.IsType<SurfaceCurrentSample>(av.Value).SampleTime);
+    }
+
+    [Fact]
+    public async Task S111_returns_NotSupportedYet_for_non_regular_grid()
+    {
+        var catalog = new FakeDatasetCatalog();
+        var dataset = S111Synth.Dataset(dataCodingFormat: 3);
+        catalog.Add(LoadedDatasetFactory.S111(
+            "sc-dcf3",
+            bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
+            source: new S111CoverageSource(dataset)));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S111Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetError(out var error));
+        var nsy = Assert.IsType<NotSupportedYet>(error);
+        Assert.Equal("S-111", nsy.Spec.Name);
+    }
+
+    [Fact]
+    public async Task S111_returns_OutOfBounds_when_point_outside_loaded_S111_bounds()
+    {
+        var catalog = new FakeDatasetCatalog();
+        var dataset = S111Synth.Dataset();
+        catalog.Add(LoadedDatasetFactory.S111(
+            "sc-oob",
+            bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04),
+            source: new S111CoverageSource(dataset)));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S111Spec, Latitude: -50, Longitude: -50), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetError(out var error));
+        Assert.IsType<OutOfBounds>(error);
+    }
+
+    [Fact]
+    public async Task Returns_DatasetClosedDuringQuery_when_handle_disposed()
+    {
+        var catalog = new FakeDatasetCatalog();
+        var dataset = S102Synth.Dataset();
+        var source = new DisposableS102CoverageSource(dataset);
+        catalog.Add(LoadedDatasetFactory.S102("ds", bounds: LoadedDatasetFactory.Box(0, 0, 0.04, 0.04), source: source));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+        source.Dispose();
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S102Spec, Latitude: 0.02, Longitude: 0.02), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetError(out var error));
+        var closed = Assert.IsType<DatasetClosedDuringQuery>(error);
+        Assert.Equal(new DatasetId("ds"), closed.Id);
+    }
+
+    [Fact]
+    public async Task Nearest_cell_clamps_to_grid_when_point_on_boundary()
+    {
+        var catalog = new FakeDatasetCatalog();
+        // Cell-centred grid where the bounds include the grid origin corner exactly.
+        var dataset = S102Synth.Dataset(originLat: 10, originLon: 20, depth: 7.0f, uncertainty: 0.0f);
+        catalog.Add(LoadedDatasetFactory.S102(
+            "edge",
+            bounds: LoadedDatasetFactory.Box(10, 20, 10.04, 20.04),
+            source: new S102CoverageSource(dataset)));
+        var tool = new SampleCoverageTool(catalog, transforms: new EncDotNet.S100.Crs.ProjNet.ProjNetCrsTransformFactory());
+
+        var result = await tool.InvokeAsync(new SampleCoverageRequest(
+            LoadedDatasetFactory.S102Spec, Latitude: 10.0, Longitude: 20.0), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        var depth = Assert.IsType<DepthSample>(value.Value);
+        Assert.Equal(7.0, depth.DepthMeters);
+    }
+}

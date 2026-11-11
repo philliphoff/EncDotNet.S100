@@ -1,0 +1,65 @@
+namespace EncDotNet.S100.Datasets.Pipelines;
+
+/// <summary>
+/// Capability implemented by dataset processors whose portrayal varies over a
+/// discrete set of forecast / observation time steps (S-104 water levels,
+/// S-111 surface currents, and S-411 sea ice). Lets callers (e.g. the CLI)
+/// map a user-supplied time-step index to a concrete <see cref="DateTime"/>
+/// without reflecting over concrete processor types.
+/// </summary>
+/// <remarks>
+/// A static product may implement it with an empty <see cref="AvailableTimes"/>
+/// just to report <see cref="IssueTime"/> (S-102); callers treat a dataset with
+/// no time steps as untimed.
+/// </remarks>
+public interface ITimeAwareDatasetProcessor
+{
+    /// <summary>
+    /// The ordered, distinct set of time steps available in the dataset.
+    /// Empty when the dataset carries no temporal dimension.
+    /// </summary>
+    IReadOnlyList<DateTime> AvailableTimes { get; }
+
+    /// <summary>
+    /// When the producer issued the dataset (UTC), from its <c>issueDate</c> and
+    /// <c>issueTime</c> (see <see cref="S100IssueTime"/>); <see langword="null"/>
+    /// when the dataset does not say. For a forecast this is usually some time
+    /// after the model run it carries.
+    /// </summary>
+    DateTime? IssueTime => null;
+
+    /// <summary>
+    /// When the producer is next expected to issue a newer dataset (UTC), such
+    /// as NHC's next regular advisory; <see langword="null"/> (the default)
+    /// when it doesn't say. A host marks it on the timeline (V14).
+    /// </summary>
+    DateTime? NextIssueTime => null;
+
+    /// <summary>
+    /// A short name for the dataset on a host's timeline, such as a storm's
+    /// name (<c>IAN</c>); <see langword="null"/> (the default) for the host's
+    /// own label from the dataset's name or run.
+    /// </summary>
+    string? TimelineLabel => null;
+
+    /// <summary>
+    /// A few words a host's timeline shows after <see cref="TimelineLabel"/>,
+    /// such as a storm's advisory (<c>adv 20</c>); <see langword="null"/> (the
+    /// default) for none.
+    /// </summary>
+    string? TimelineDetail => null;
+
+    /// <summary>
+    /// What the time steps are, which one is drawn between steps, and how long
+    /// a step stays valid. Defaults to <see cref="TimeSemantics.Default"/>:
+    /// forecast steps, nearest within the typical step.
+    /// </summary>
+    TimeSemantics TimeSemantics => TimeSemantics.Default;
+
+    /// <summary>
+    /// The model run this dataset belongs to, or <see langword="null"/> (the
+    /// default) when it is not a forecast run. A host uses it to name the run
+    /// and to treat the timeline as a forecast.
+    /// </summary>
+    DatasetForecastRun? ForecastRun => null;
+}

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>EncDotNet.S100.Samples.Ais</RootNamespace>
+    <AssemblyName>EncDotNet.S100.Samples.Ais</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.DynamicSources.Ais\EncDotNet.S100.DynamicSources.Ais.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo\EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.csproj" />
+  </ItemGroup>
+
+</Project>

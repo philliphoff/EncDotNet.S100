@@ -1,0 +1,749 @@
+using EncDotNet.S100.Core;
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Diagnostics;
+using EncDotNet.S100.Datasets.Pipelines.Geometry;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Features;
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Renderers.Skia.Scene;
+using EncDotNet.S100.Rendering.Scene;
+using EncDotNet.S100.Validation;
+using SkiaSharp;
+
+namespace EncDotNet.S100.Datasets.Pipelines;
+
+/// <summary>
+/// Abstract base class for GML-based dataset processors that share the
+/// standard S-100 Part 9 vector portrayal pipeline template: parse →
+/// catalogue setup → FeatureXML projection → XSLT pipeline → Mapsui
+/// display-list rendering.
+/// </summary>
+/// <remarks>
+/// Subclasses provide the spec-specific pieces (dataset parsing, catalogue
+/// creation, feature XML source) via abstract/virtual members. The base
+/// handles the shared pipeline orchestration, feature-info construction,
+/// enumeration, and extent computation.
+/// </remarks>
+/// <typeparam name="TFeature">
+/// The concrete feature type constrained to <see cref="IS100Feature"/>.
+/// </typeparam>
+public abstract class GmlDatasetProcessorBase<TFeature> : IDatasetProcessor, IVectorPortrayalSource, IHeadlessImageRenderer, IDisplayModeAwareDatasetProcessor, ILoadedDatasetProjection
+    where TFeature : IS100Feature
+{
+    private readonly GmlPortrayalCatalogueBase _catalogue;
+    private readonly FeatureCatalogueDecoder? _decoder;
+    private readonly string _fileName;
+    private string? _contentHash;
+    private readonly IDisplayPlaneAuthorityProvider _authorityProvider;
+
+    // Serializes portrayal builds for this processor. The build mutates
+    // shared catalogue state (palette switch, ECDIS apply) and the asset
+    // pre-warm, so concurrent renders (e.g. Day/Night while a tile request
+    // is in flight) must not interleave. Mirrors the S-101 render gate.
+    private readonly SemaphoreSlim _renderGate = new(1, 1);
+
+    // Memoized raw (unpadded) WGS-84 envelope of all features, computed once
+    // on first access. Features are immutable for this processor's lifetime,
+    // so both the padded render extent (ComputeGeographicExtent) and the raw
+    // Metadata.Extent derive from this single scan rather than re-walking
+    // every coordinate on each render (issue #467, WS1).
+    private RawEnvelope? _rawEnvelope;
+    private DatasetMetadata? _metadata;
+
+    /// <summary>
+    /// Initializes the shared processor state. Called by subclass constructors
+    /// after parsing the dataset and creating the catalogue.
+    /// </summary>
+    /// <param name="catalogue">Portrayal catalogue used by the XSLT pipeline.</param>
+    /// <param name="decoder">Optional feature-catalogue decoder for attribute decoding.</param>
+    /// <param name="fileName">Dataset file name (used in feature info).</param>
+    /// <param name="authorityProvider">
+    /// Resolves the default S-98 display plane for this dataset's content.
+    /// Required — processors receive the provider via DI rather than reaching
+    /// for a static singleton. The Mapsui-typed cross-dataset sort authority
+    /// lives in the renderer package; the processor only needs the plane.
+    /// </param>
+    /// <param name="specName">Product specification name, e.g. <c>"S-124"</c>.</param>
+    protected GmlDatasetProcessorBase(
+        GmlPortrayalCatalogueBase catalogue,
+        FeatureCatalogueDecoder? decoder,
+        string fileName,
+        IDisplayPlaneAuthorityProvider authorityProvider,
+        string specName)
+    {
+        ArgumentNullException.ThrowIfNull(catalogue);
+        ArgumentNullException.ThrowIfNull(authorityProvider);
+        ArgumentException.ThrowIfNullOrWhiteSpace(specName);
+        _catalogue = catalogue;
+        _decoder = decoder;
+        _fileName = fileName;
+        _authorityProvider = authorityProvider;
+
+        // Seed the spec with its canonical name and an unknown edition; the
+        // declared edition is refined by SetDeclaredEdition once the subclass
+        // has parsed the dataset. Catalogue-resolution telemetry is emitted
+        // there too, so it reflects the declared edition.
+        Spec = new SpecRef(specName, default);
+    }
+
+    /// <inheritdoc/>
+    public SpecRef Spec { get; private set; }
+
+    /// <inheritdoc/>
+    public SpecVersionAssessment? VersionAssessment { get; private set; }
+
+    /// <inheritdoc/>
+    public AxisOrderAssessment? AxisOrder { get; private set; }
+
+    /// <summary>
+    /// Records the axis-order assessment the reader attached to the parsed
+    /// dataset (issue #650). Subclasses call this once, from their
+    /// constructor, after parsing the dataset.
+    /// </summary>
+    protected void SetAxisOrder(AxisOrderAssessment? axisOrder) => AxisOrder = axisOrder;
+
+    /// <summary>
+    /// Records the hash of the dataset's raw bytes (see
+    /// <see cref="DatasetContentHash"/>), from which
+    /// <see cref="VectorPortrayalResult.ContentScope"/> is built. Subclasses
+    /// call this once, from their constructor, before parsing the dataset.
+    /// Until it is called the dataset reports no content scope, so its layers
+    /// bypass the warm tile disk cache.
+    /// </summary>
+    protected void SetContentHash(string contentHash) => _contentHash = contentHash;
+
+    private string? ContentScope => _contentHash is null
+        ? null
+        : $"ds:{_contentHash}|spec:{Spec}|pc:{_catalogue.CatalogueRef}";
+
+    /// <summary>
+    /// Records the dataset's declared product-spec edition (parsed from the
+    /// GML <c>productEdition</c> / application-schema namespace) and computes
+    /// the <see cref="VersionAssessment"/> against the edition this build
+    /// implements. Subclasses call this once, from their constructor, after
+    /// parsing the dataset. Also emits the one-shot catalogue-resolution
+    /// telemetry for this processor instance.
+    /// </summary>
+    /// <param name="declaredEdition">
+    /// The declared edition string (e.g. <c>"2.0.0"</c>), or <c>null</c> when
+    /// the dataset declares none.
+    /// </param>
+    protected void SetDeclaredEdition(string? declaredEdition)
+    {
+        if (!string.IsNullOrWhiteSpace(declaredEdition)
+            && SpecVersion.TryParse(declaredEdition, out var edition))
+        {
+            Spec = new SpecRef(Spec.Name, edition);
+        }
+
+        VersionAssessment = SupportedSpecEditions.Assess(Spec, _catalogue.CatalogueRef);
+        CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
+    }
+
+    /// <summary>
+    /// Human-readable product description for info strings (e.g.
+    /// "Navigational Warnings", "Marine Aids to Navigation").
+    /// </summary>
+    protected abstract string ProductDescription { get; }
+
+    /// <summary>The parsed features from the dataset.</summary>
+    protected abstract IReadOnlyList<TFeature> Features { get; }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Each GML subclass wraps its resident, already-parsed model in the
+    /// matching <see cref="LoadedDatasetData"/> variant (e.g.
+    /// <c>new S125DatasetData(_dataset)</c>) — no second parse.
+    /// </remarks>
+    public abstract LoadedDatasetData CreateLoadedData();
+
+    /// <summary>Creates the spec-appropriate feature XML source.</summary>
+    protected abstract IFeatureXmlSource CreateFeatureXmlSource();
+
+    /// <summary>
+    /// Creates the feature XML source for one render. The default ignores
+    /// <paramref name="context"/> and calls <see cref="CreateFeatureXmlSource()"/>;
+    /// S-124 overrides it to leave out <see cref="RenderContext.HiddenFeatures"/>.
+    /// Called under the render gate.
+    /// </summary>
+    /// <param name="context">The render context, if any.</param>
+    protected virtual IFeatureXmlSource CreateFeatureXmlSource(RenderContext? context) => CreateFeatureXmlSource();
+
+    /// <summary>
+    /// Whether <see cref="HitTestFeatures"/> may report <paramref name="feature"/>.
+    /// The default is <c>true</c>; S-124 returns <c>false</c> for features its
+    /// last portrayal left out, so what isn't drawn isn't picked.
+    /// </summary>
+    /// <param name="feature">The feature hit.</param>
+    protected virtual bool IsPickable(TFeature feature) => true;
+
+    /// <summary>
+    /// Minimum extent padding in degrees. Default is 0.01; override for
+    /// specs that need wider padding (e.g. S-421 uses 0.05).
+    /// </summary>
+    protected virtual double MinExtentPadding => 0.01;
+
+    /// <summary>
+    /// Whether this product's datasets are sparse overlays a renderer may draw
+    /// directly every frame (<see cref="VectorPortrayalResult.PreferLiveDrawing"/>).
+    /// Off by default; a product turns it on only when every dataset it can
+    /// produce is small.
+    /// </summary>
+    protected virtual bool PreferLiveDrawing => false;
+
+    /// <summary>
+    /// Builds feature references for the pick UI. Override to expose
+    /// xlink/information references as navigable links.
+    /// </summary>
+    protected virtual IReadOnlyList<FeatureReference> BuildFeatureReferences(TFeature feature) => [];
+
+    /// <summary>
+    /// Builds the WMO / SIGRID-3 ice "egg code" projection for a feature, when
+    /// the product supports it. Returns <c>null</c> by default; S-411 overrides
+    /// this to project sea-ice / lake-ice concentration, stage, and form
+    /// attributes into an <see cref="IceEggCode"/> for the pick report.
+    /// </summary>
+    protected virtual IceEggCode? BuildEggCode(TFeature feature) => null;
+
+    /// <summary>
+    /// Builds the navigational warning message for a feature, when the
+    /// product carries warnings. Returns <c>null</c> by default; S-124
+    /// overrides this for <c>NavwarnPart</c> features.
+    /// </summary>
+    protected virtual NavigationalWarningInfo? BuildNavigationalWarning(TFeature feature) => null;
+
+    /// <summary>
+    /// Called before the pipeline runs. Return a non-null info string to
+    /// suppress rendering (the dataset contributes no portrayal for this
+    /// context, e.g. S-411 hides when the time slider is before the issue
+    /// date); the returned text becomes the dataset's status line.
+    /// </summary>
+    protected virtual string? GetSuppressionInfo(RenderContext? context) => null;
+
+    /// <summary>
+    /// Post-processes drawing instructions after the pipeline runs. Override
+    /// to apply fallback fills or other transformations (e.g. S-129 area
+    /// fill fallback).
+    /// </summary>
+    protected virtual IReadOnlyList<DrawingInstruction> PostProcessInstructions(
+        IReadOnlyList<DrawingInstruction> instructions) => instructions;
+
+    /// <summary>
+    /// Builds portrayal from a second, non-XSLT source that is merged with the
+    /// product's own XSLT output — e.g. S-125, whose own catalogue portrays
+    /// only AtoN status indications, supplements it with the S-101 AtoN rules.
+    /// Returns <see langword="null"/> (the default) when the product has no
+    /// supplemental portrayal. Called under the render gate.
+    /// </summary>
+    /// <param name="context">The render context (palette, mariner settings, ECDIS display state).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    protected virtual Task<SupplementalPortrayal?> BuildSupplementalPortrayalAsync(
+        RenderContext? context, CancellationToken cancellationToken) =>
+        Task.FromResult<SupplementalPortrayal?>(null);
+
+    /// <summary>
+    /// Builds the sub-layer's legend (<see cref="VectorSubLayer.Legend"/>) from
+    /// the catalogue's assets, in the palette the sub-layer is drawn in, or
+    /// returns <see langword="null"/> (the default) for no legend. Called under
+    /// the render gate after the portrayal, so the catalogue's display mode and
+    /// palette are the ones just drawn with.
+    /// </summary>
+    /// <param name="instructions">The drawing instructions just emitted.</param>
+    /// <param name="legend">A legend builder over the catalogue's palette, symbols and line styles.</param>
+    protected virtual IReadOnlyList<LegendEntry>? BuildLegend(
+        IReadOnlyList<DrawingInstruction> instructions, CatalogueLegendBuilder legend) => null;
+
+    /// <summary>
+    /// The one-line caption shown with the legend, or <see langword="null"/>
+    /// (the default) for none.
+    /// </summary>
+    protected virtual string? LegendCaption => null;
+
+    /// <summary>
+    /// Drawing instructions and their pre-resolved assets from a supplemental
+    /// portrayal source (see <see cref="BuildSupplementalPortrayalAsync"/>).
+    /// </summary>
+    /// <param name="Instructions">
+    /// Instructions referencing this dataset's features; drawn before the
+    /// product's own XSLT instructions (drawing priority still orders them).
+    /// </param>
+    /// <param name="Palette">
+    /// Colour palette resolving the supplemental instructions' colour tokens;
+    /// it replaces the product palette, so it must also cover the tokens the
+    /// product's own instructions use.
+    /// </param>
+    /// <param name="SymbolSvg">Resolves a supplemental symbol name to SVG, or <see langword="null"/>.</param>
+    /// <param name="LineStyle">Resolves a supplemental line-style name, or <see langword="null"/>.</param>
+    /// <param name="AreaFill">Resolves a supplemental area-fill name, or <see langword="null"/>.</param>
+    /// <param name="Info">Optional extra status line for the dataset info string.</param>
+    protected sealed record SupplementalPortrayal(
+        IReadOnlyList<DrawingInstruction> Instructions,
+        ColorPalette Palette,
+        Func<string, string?> SymbolSvg,
+        Func<string, LineStyle?> LineStyle,
+        Func<string, AreaFill?> AreaFill,
+        string? Info = null);
+
+    /// <summary>
+    /// Runs the XSLT pipeline and any supplemental portrayal, returning the
+    /// merged instructions and asset resolvers. The product's own catalogue
+    /// wins asset-name lookups; the supplemental source fills the rest.
+    /// </summary>
+    private async Task<PortrayalOutput> PortrayAsync(RenderContext? context, CancellationToken cancellationToken)
+    {
+        var catalogue = _catalogue;
+        context?.EcdisDisplay?.ApplyTo(catalogue);
+        catalogue.ViewingGroups.SetDatasetFilter(context?.ViewingGroups);
+        ApplyDisplayMode(catalogue, context);
+        await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
+
+        var featureSource = CreateFeatureXmlSource(context);
+        var pipeline = new PortrayalPipeline();
+        var portrayalLayer = await pipeline.ProcessAsync(featureSource, catalogue, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        var instructions = PostProcessInstructions(((IVectorLayer)portrayalLayer).Instructions);
+
+        var prewarm = await CataloguePreWarm.ForInstructionsAsync(catalogue, instructions, cancellationToken).ConfigureAwait(false);
+
+        var supplemental = await BuildSupplementalPortrayalAsync(context, cancellationToken).ConfigureAwait(false);
+        if (supplemental is null)
+        {
+            return new PortrayalOutput(
+                instructions,
+                catalogue.ActivePalette,
+                prewarm.ResolveSymbolSvg,
+                prewarm.ResolveLineStyle,
+                prewarm.ResolveAreaFill,
+                featureSource.FeatureTypesPresent,
+                null);
+        }
+
+        var merged = new List<DrawingInstruction>(supplemental.Instructions.Count + instructions.Count);
+        merged.AddRange(supplemental.Instructions);
+        merged.AddRange(instructions);
+        return new PortrayalOutput(
+            merged,
+            supplemental.Palette,
+            name => prewarm.ResolveSymbolSvg(name) ?? supplemental.SymbolSvg(name),
+            name => prewarm.ResolveLineStyle(name) ?? supplemental.LineStyle(name),
+            name => prewarm.ResolveAreaFill(name) ?? supplemental.AreaFill(name),
+            featureSource.FeatureTypesPresent,
+            supplemental.Info);
+    }
+
+    private sealed record PortrayalOutput(
+        IReadOnlyList<DrawingInstruction> Instructions,
+        ColorPalette Palette,
+        Func<string, string?> SymbolSvg,
+        Func<string, LineStyle?> LineStyle,
+        Func<string, AreaFill?> AreaFill,
+        IEnumerable<string> FeatureTypes,
+        string? SupplementalInfo);
+
+    /// <summary>
+    /// Appends spec-specific lines to the info string. Override to add
+    /// counts like "Information types: N".
+    /// </summary>
+    protected virtual string BuildInfoSuffix() => string.Empty;
+
+    /// <summary>The portrayal catalogue for this processor.</summary>
+    protected GmlPortrayalCatalogueBase Catalogue => _catalogue;
+
+    /// <summary>The feature catalogue decoder, if available.</summary>
+    protected FeatureCatalogueDecoder? Decoder => _decoder;
+
+    /// <summary>The dataset file name.</summary>
+    protected string FileName => _fileName;
+
+    /// <inheritdoc/>
+    public async Task<VectorPortrayalResult> BuildVectorPortrayalAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var suppressedInfo = GetSuppressionInfo(context);
+            if (suppressedInfo is not null)
+            {
+                return new VectorPortrayalResult
+                {
+                    SubLayers = Array.Empty<VectorSubLayer>(),
+                    Palette = _catalogue.ActivePalette,
+                    GeometryProvider = new FeatureGeometryProvider<TFeature>(Features),
+                    Product = Spec.Name,
+                    Spec = Spec,
+                    SourceDatasetId = _fileName,
+                    Info = suppressedInfo,
+                    GeographicExtent = ComputeGeographicExtent(),
+                };
+            }
+
+            var output = await PortrayAsync(context, cancellationToken).ConfigureAwait(false);
+            var instructions = output.Instructions;
+
+            Console.WriteLine($"[{Spec.Name.Replace("-", "")}] {_fileName}: {Features.Count} features, "
+                + $"{instructions.Count} drawing instructions");
+
+            var suffix = BuildInfoSuffix();
+            var info = $"{Spec.Name} {ProductDescription} — {_fileName}\n"
+                + $"Features: {Features.Count} ({string.Join(", ", output.FeatureTypes)})\n"
+                + (suffix.Length > 0 ? suffix + "\n" : "")
+                + (output.SupplementalInfo is { Length: > 0 } extra ? extra + "\n" : "")
+                + $"Drawing instructions: {instructions.Count}";
+
+            var subLayer = new VectorSubLayer
+            {
+                LayerKey = Spec.Name,
+                LayerName = $"{Spec.Name}: {_fileName}",
+                Instructions = instructions,
+                // S-98 cross-dataset plane assignment per design note §3 / §4.2.
+                // PR-L1 ships default planes only — no IC override, no per-feature
+                // filter (TBD-5). The plane is resolved through the active
+                // default-plane authority via the injected provider.
+                Plane = _authorityProvider.Current.GetDefaultPlane(Spec.Name),
+                WithinPlanePriority = 0,
+                Legend = BuildLegend(instructions, new CatalogueLegendBuilder(output.Palette, output.SymbolSvg, output.LineStyle)),
+                LegendCaption = LegendCaption,
+            };
+
+            return new VectorPortrayalResult
+            {
+                SubLayers = new[] { subLayer },
+                Palette = output.Palette,
+                GeometryProvider = new FeatureGeometryProvider<TFeature>(Features),
+                Product = Spec.Name,
+                Spec = Spec,
+                SourceDatasetId = _fileName,
+                ContentScope = ContentScope,
+                Info = info,
+                SymbolScale = context?.SymbolScale ?? 1.0,
+                TextScale = context?.TextScale ?? 1.0,
+                SymbolProvider = output.SymbolSvg,
+                AreaFillProvider = output.AreaFill,
+                LineStyleProvider = output.LineStyle,
+                GeographicExtent = ComputeGeographicExtent(),
+                PreferLiveDrawing = PreferLiveDrawing,
+            };
+        }
+        finally
+        {
+            _renderGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Renders this dataset to a standalone <see cref="SKBitmap"/> through the
+    /// headless, backend-agnostic Skia vector core
+    /// (<see cref="VectorSceneBuilder"/> → <see cref="SkiaDisplayListRenderer"/>),
+    /// bypassing Mapsui entirely. This is the vector analogue of the direct-Skia
+    /// coverage renderer and the basis for a headless tile-serving API.
+    /// </summary>
+    /// <param name="widthPixels">Output bitmap width in pixels.</param>
+    /// <param name="heightPixels">Output bitmap height in pixels.</param>
+    /// <param name="context">Optional render context (palette, symbol/text scale, ECDIS display settings).</param>
+    /// <param name="background">Optional background fill; defaults to opaque white.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A newly allocated bitmap owned by the caller.</returns>
+    /// <remarks>
+    /// Tiled-symbol pattern area-fills are rasterised through
+    /// <see cref="EncDotNet.S100.Renderers.Skia.SkiaSvgRasterizer.RasterizePatternTile"/> and tiled across
+    /// the polygon, anchored to a global world-space origin so adjacent
+    /// polygons sharing a pattern align seamlessly. Unlike the Mapsui path,
+    /// the headless renderer does not perform NetTopologySuite
+    /// priority-clipping of overlapping patterns or land-occlusion, so
+    /// patterns may visibly bleed across opaque overlay fills. The viewport
+    /// is auto-fitted to the dataset extent and padded to the output aspect
+    /// ratio.
+    /// </remarks>
+    public async Task<SKBitmap> RenderHeadlessAsync(
+        int widthPixels,
+        int heightPixels,
+        RenderContext? context = null,
+        RgbaColor? background = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widthPixels);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var bg = background ?? new RgbaColor(255, 255, 255, 255);
+
+        // Honour the same pre-render gate as the Mapsui path (e.g. S-411
+        // time-window suppression). When the gate fires, the dataset
+        // contributes no portrayal for this context, so emit a blank
+        // background-filled bitmap rather than rendering stale content.
+        if (GetSuppressionInfo(context) is not null)
+            return HeadlessVectorRenderer.RenderBlank(widthPixels, heightPixels, bg);
+
+        var output = await PortrayAsync(context, cancellationToken).ConfigureAwait(false);
+
+        var geometryProvider = new FeatureGeometryProvider<TFeature>(Features);
+
+        return HeadlessVectorRenderer.Render(
+            output.Instructions,
+            geometryProvider,
+            output.Palette,
+            symbolProvider: output.SymbolSvg,
+            lineStyleProvider: output.LineStyle,
+            symbolScale: context?.SymbolScale ?? 1.0,
+            textScale: context?.TextScale ?? 1.0,
+            widthPixels: widthPixels,
+            heightPixels: heightPixels,
+            background: bg,
+            areaFillProvider: output.AreaFill,
+            hiddenCategories: context?.HiddenInstructionCategories
+                ?? DrawingInstructionCategory.None,
+            basemap: context?.Basemap ?? BasemapKind.None,
+            viewport: context?.Viewport);
+    }
+
+    /// <summary>
+    /// Applies the context's explicit S-100 Part 9 §11.7 display-mode
+    /// selection to the catalogue, when set and declared. Called after
+    /// <see cref="EcdisDisplayExtensions.ApplyTo"/> so an explicit spec-native
+    /// mode id (e.g. an S-411 concentration / stage-of-development /
+    /// navigational selection) wins over the ECDIS-category-derived mode. A
+    /// null or undeclared id leaves the catalogue's current mode untouched.
+    /// </summary>
+    private void ApplyDisplayMode(GmlPortrayalCatalogueBase catalogue, RenderContext? context)
+    {
+        var modeId = context?.DisplayModeId;
+        if (string.IsNullOrEmpty(modeId))
+            return;
+
+        var canonical = catalogue.DisplayModes.DeclaredModeIds
+            .FirstOrDefault(id => string.Equals(id, modeId, StringComparison.OrdinalIgnoreCase));
+        if (canonical is not null)
+            catalogue.DisplayModes.SetActive(canonical);
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyCollection<string> DeclaredDisplayModeIds => _catalogue.DisplayModes.DeclaredModeIds;
+
+    /// <inheritdoc/>
+    public FeatureInfo? GetFeatureInfo(string featureRef)
+    {
+        var feature = Features.FirstOrDefault(f =>
+            string.Equals(f.Id, featureRef, StringComparison.OrdinalIgnoreCase));
+        return feature is null ? null : BuildFeatureInfo(feature);
+    }
+
+    /// <inheritdoc/>
+    public FeatureInfo? GetFeatureInfoAt(int ordinal)
+    {
+        if (ordinal < 0 || ordinal >= Features.Count)
+            return null;
+        return BuildFeatureInfo(Features[ordinal]);
+    }
+
+    /// <inheritdoc/>
+    public S100FeatureGeometry? GetFeatureGeometryAt(int ordinal)
+    {
+        if (ordinal < 0 || ordinal >= Features.Count)
+            return null;
+        var feature = Features[ordinal];
+        return new S100FeatureGeometry
+        {
+            Primitive = feature.GeometryType,
+            Points = feature.Points,
+            Curves = feature.Curves,
+            ExteriorRing = feature.ExteriorRing,
+            InteriorRings = feature.InteriorRings,
+        };
+    }
+
+    /// <inheritdoc/>
+    public virtual NavigationalWarningInfo? GetNavigationalWarningMessage() => null;
+
+    /// <inheritdoc/>
+    public IReadOnlyList<NavigationalWarningFeature> GetNavigationalWarnings()
+    {
+        List<NavigationalWarningFeature>? warnings = null;
+        for (int i = 0; i < Features.Count; i++)
+        {
+            var feature = Features[i];
+            if (BuildNavigationalWarning(feature) is { } warning)
+                (warnings ??= []).Add(new NavigationalWarningFeature(feature.Id, i, warning));
+        }
+        return warnings ?? [];
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<FeatureGeometryHit> HitTestFeatures(
+        double latitude, double longitude, double radiusMeters)
+    {
+        var hits = FeatureHitTester.HitTest(Features, latitude, longitude, radiusMeters);
+        if (hits.Count == 0 || hits.All(hit => IsPickable(Features[hit.Ordinal])))
+            return hits;
+        return [.. hits.Where(hit => IsPickable(Features[hit.Ordinal]))];
+    }
+
+    /// <inheritdoc/>
+    public IEnumerable<FeatureSummary> EnumerateFeatures()
+    {
+        for (int i = 0; i < Features.Count; i++)
+        {
+            var feature = Features[i];
+            yield return new FeatureSummary
+            {
+                FeatureRef = feature.Id,
+                Ordinal = i,
+                FeatureType = feature.FeatureType,
+                FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+            };
+        }
+    }
+
+    /// <summary>
+    /// Runs the product's normative rule pack
+    /// (<see cref="ValidateDataset"/>) and appends the axis-order finding
+    /// (<see cref="AxisOrderFindings"/>) for <see cref="AxisOrder"/>. The
+    /// report is computed once and cached. Returns <c>null</c> when the
+    /// product has no rule pack and the reader ran no axis-order check.
+    /// </summary>
+    public ValidationReport? Validate()
+    {
+        if (!_validationCached)
+        {
+            _validationReport = AxisOrderFindings.Append(ValidateDataset(), AxisOrder, Spec.Name);
+            _validationCached = true;
+        }
+
+        return _validationReport;
+    }
+
+    private bool _validationCached;
+    private ValidationReport? _validationReport;
+
+    /// <summary>
+    /// Runs the product's rule pack, or returns <c>null</c> when the product
+    /// has none. Called once by <see cref="Validate"/>, which caches the
+    /// result.
+    /// </summary>
+    /// <remarks>
+    /// Overrides should typically delegate to
+    /// <c>ValidationRunner.Run(...)</c> so that an
+    /// <see cref="System.InvalidOperationException"/> from the typed
+    /// projection (e.g. an empty dataset) surfaces as an empty report rather
+    /// than propagating out of <see cref="Validate"/>.
+    /// </remarks>
+    protected virtual ValidationReport? ValidateDataset() => null;
+
+    private FeatureInfo BuildFeatureInfo(TFeature feature)
+    {
+        var attributes = FeatureInfoBuilder.Build(
+            feature.Attributes,
+            feature.ComplexAttributes.Select(c =>
+                new FeatureInfoBuilder.ComplexAttributeRow(c.Code, c.SubAttributes)),
+            _decoder);
+
+        var references = BuildFeatureReferences(feature);
+
+        return new FeatureInfo
+        {
+            FeatureRef = feature.Id,
+            FeatureType = feature.FeatureType,
+            FeatureTypeName = _decoder?.ResolveFeatureTypeName(feature.FeatureType),
+            Attributes = attributes,
+            References = references,
+            EggCode = BuildEggCode(feature),
+            NavigationalWarning = BuildNavigationalWarning(feature),
+        };
+    }
+
+    /// <summary>
+    /// Computes the padded geographic extent (lat / lon degrees) of all
+    /// features. The Mapsui renderer projects this to Spherical Mercator;
+    /// keeping it Mapsui-free lets the headless path share the same bounds.
+    /// Derives from the memoized raw envelope, so repeated renders do not
+    /// re-scan every coordinate (issue #467, WS1).
+    /// </summary>
+    protected GeographicBounds ComputeGeographicExtent()
+    {
+        var env = _rawEnvelope ??= ComputeRawEnvelope();
+        if (!env.Any) return new GeographicBounds(0, 0, 0, 0);
+
+        var pad = MinExtentPadding;
+        var latPad = Math.Max(pad, (env.MaxLat - env.MinLat) * 0.1);
+        var lonPad = Math.Max(pad, (env.MaxLon - env.MinLon) * 0.1);
+        return new GeographicBounds(
+            env.MinLon - lonPad,
+            env.MinLat - latPad,
+            env.MaxLon + lonPad,
+            env.MaxLat + latPad);
+    }
+
+    /// <inheritdoc/>
+    public DatasetMetadata Metadata => _metadata ??= BuildMetadata();
+
+    /// <summary>
+    /// Builds the lightweight <see cref="DatasetMetadata"/> for this dataset
+    /// from the already-parsed features — declared spec plus the raw
+    /// (unpadded) geographic envelope. Shares the single feature scan with
+    /// <see cref="ComputeGeographicExtent"/> so no extra parse or coordinate
+    /// walk is incurred (issue #467, WS1).
+    /// </summary>
+    private DatasetMetadata BuildMetadata()
+    {
+        var env = _rawEnvelope ??= ComputeRawEnvelope();
+        return new DatasetMetadata
+        {
+            Spec = Spec,
+            Extent = env.Any
+                ? new BoundingBox(env.MinLat, env.MinLon, env.MaxLat, env.MaxLon)
+                : null,
+            TimeCoverage = TimeCoverage,
+        };
+    }
+
+    /// <summary>
+    /// The time the dataset's content covers, for <see cref="Metadata"/>, or
+    /// <c>null</c> (the default) for none. S-412 reports its warnings' span.
+    /// </summary>
+    protected virtual TimeCoverage? TimeCoverage => null;
+
+    /// <summary>
+    /// Scans every feature's coordinates once to produce the raw (unpadded)
+    /// WGS-84 envelope. Memoized by callers into <see cref="_rawEnvelope"/>.
+    /// </summary>
+    private RawEnvelope ComputeRawEnvelope()
+    {
+        double minLon = double.MaxValue, minLat = double.MaxValue;
+        double maxLon = double.MinValue, maxLat = double.MinValue;
+        bool any = false;
+
+        void Expand(double lat, double lon)
+        {
+            any = true;
+            if (lat < minLat) minLat = lat;
+            if (lat > maxLat) maxLat = lat;
+            if (lon < minLon) minLon = lon;
+            if (lon > maxLon) maxLon = lon;
+        }
+
+        foreach (var feature in Features)
+        {
+            foreach (var (lat, lon) in feature.Points) Expand(lat, lon);
+            foreach (var curve in feature.Curves)
+                foreach (var (lat, lon) in curve) Expand(lat, lon);
+            foreach (var (lat, lon) in feature.ExteriorRing) Expand(lat, lon);
+        }
+
+        return new RawEnvelope(minLat, minLon, maxLat, maxLon, any);
+    }
+
+    /// <summary>
+    /// Raw (unpadded) WGS-84 envelope of a dataset's features. <see cref="Any"/>
+    /// is <see langword="false"/> when no feature carried coordinates. A
+    /// reference type so the unsynchronized <c>??=</c> memoization publishes it
+    /// via an atomic reference write — concurrent readers never observe a torn
+    /// multi-field value (issue #467, WS1).
+    /// </summary>
+    private sealed record RawEnvelope(
+        double MinLat, double MinLon, double MaxLat, double MaxLon, bool Any);
+}

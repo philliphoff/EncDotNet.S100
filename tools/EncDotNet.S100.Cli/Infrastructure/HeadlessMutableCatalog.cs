@@ -1,0 +1,453 @@
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Hdf5;
+using EncDotNet.S100.Pipelines;
+
+namespace EncDotNet.S100.Cli.Infrastructure;
+
+/// <summary>
+/// The CLI's in-process <see cref="IMutableDatasetCatalog"/>: the single source
+/// of truth for the datasets a <c>s100 mcp serve</c> session holds. Each dataset
+/// is parsed <b>once</b> into a resident <see cref="IDatasetProcessor"/> (built
+/// from a single shared <see cref="IDatasetProcessorFactory"/> so the catalogue
+/// parse caches are shared across datasets too), and that one processor feeds
+/// both the read-only query tools — via a <see cref="LoadedDataset"/> projected
+/// from it without a second parse — and the headless renderer, which composites
+/// the resident processors directly (see <see cref="RenderProcessors"/>).
+/// Loading and removing keep the projection and the processor in step and
+/// publish <see cref="Changed"/>.
+/// </summary>
+/// <remarks>
+/// The composite renderer re-reads nothing per render (it paints the resident
+/// processors), but any extracted exchange-set resources are still held for the
+/// whole session and released only on <see cref="Dispose"/>, because a processor
+/// may lazily re-read its source bytes.
+/// </remarks>
+internal sealed class HeadlessMutableCatalog : IMutableDatasetCatalog, IDisposable
+{
+    private readonly ICrsTransformFactory? _transforms;
+    private readonly IDatasetProcessorFactory _factory;
+    private readonly object _gate = new();
+    private readonly List<Entry> _entries = [];
+    private readonly HashSet<string> _usedIds = new(StringComparer.Ordinal);
+    private readonly List<IDisposable> _resolutions = [];
+
+    // Serialises render use of the resident processors against their disposal, so
+    // a close_dataset / close_all_datasets cannot dispose a processor a render is
+    // using mid-flight (which would surface as an internal_error). Renders run
+    // one at a time; disposal waits for the in-flight render.
+    private readonly SemaphoreSlim _renderGate = new(1, 1);
+
+    private IReadOnlyList<LoadedDataset> _snapshot = [];
+
+    // Volatile so a dispose on one thread is observed by the ObjectDisposedException
+    // guards on the mutation / render entry points, letting a post-dispose call
+    // fail fast rather than doing pointless work against a torn-down catalog. The
+    // guards are best-effort — a dispose racing an in-flight call may still slip
+    // past the check — consistent with HeadlessS100Session.
+    private volatile bool _disposed;
+
+    private sealed record Entry(LoadedDataset Loaded, IDatasetProcessor Processor);
+
+    /// <summary>Creates the catalog.</summary>
+    /// <param name="transforms">
+    /// CRS transform factory used to reproject projected-CRS coverage extents into
+    /// the WGS-84 bounds the query tools expect; may be <c>null</c>.
+    /// </param>
+    /// <param name="factory">
+    /// Shared processor factory the session builds every dataset processor from,
+    /// so the bundled feature / portrayal catalogue parse caches are reused across
+    /// datasets (the CLI passes a <see cref="BundledDatasetProcessorFactory"/>).
+    /// The caller owns it and disposes it after this catalog.
+    /// </param>
+    public HeadlessMutableCatalog(ICrsTransformFactory? transforms, IDatasetProcessorFactory factory)
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+        _transforms = transforms;
+        _factory = factory;
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<LoadedDataset> Datasets => Volatile.Read(ref _snapshot);
+
+    /// <inheritdoc />
+    public event EventHandler<DatasetCatalogChangedEventArgs>? Changed;
+
+    /// <summary>The resident processors for the currently-loaded datasets.</summary>
+    public IReadOnlyList<IDatasetProcessor> RenderProcessors
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _entries.Select(e => e.Processor).ToList();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Runs <paramref name="render"/> against a snapshot of the current resident
+    /// processors while holding the render gate, so none of those processors can
+    /// be disposed by a concurrent <see cref="Remove"/> / <see cref="RemoveAll"/>
+    /// until the render completes. Renders are serialised with respect to each
+    /// other and to disposal.
+    /// </summary>
+    public async Task<byte[]?> RenderAsync(
+        Func<IReadOnlyList<IDatasetProcessor>, CancellationToken, Task<byte[]?>> render,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(render);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            IReadOnlyList<IDatasetProcessor> processors;
+            lock (_gate)
+            {
+                processors = _entries.Select(e => e.Processor).ToList();
+            }
+            return await render(processors, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _renderGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Disposes already-removed resident processors while holding the render gate,
+    /// so an in-flight render can never use one mid-disposal. The wait blocks only
+    /// until whoever holds the permit returns it — an in-flight render, or
+    /// <see cref="Dispose"/>'s teardown — and both always release it (Dispose does
+    /// not hold it forever, nor dispose the semaphore), so this always acquires the
+    /// gate and disposal here always runs under it.
+    /// </summary>
+    private void DisposeProcessorsUnderGate(IEnumerable<IDatasetProcessor> processors)
+    {
+        // Hold the render gate across disposal so an in-flight render can never use
+        // a processor mid-disposal. This Wait() blocks only until whoever holds the
+        // permit returns it — a render (for its duration) or Dispose() (for its
+        // teardown) — and both always release it: Dispose() does not hold it forever,
+        // nor dispose the semaphore, so this cannot deadlock shutdown. The disposal
+        // therefore always runs while genuinely holding the gate: safe, never
+        // best-effort.
+        _renderGate.Wait();
+        try
+        {
+            foreach (var processor in processors)
+            {
+                (processor as IDisposable)?.Dispose();
+            }
+        }
+        finally
+        {
+            _renderGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Seeds the catalog with datasets resolved up front. Takes ownership of
+    /// <paramref name="resolution"/> (e.g. an exchange-set temp extraction),
+    /// disposing it with the catalog.
+    /// </summary>
+    public void Seed(IEnumerable<FileDatasetInput> inputs, IDisposable? resolution)
+    {
+        ArgumentNullException.ThrowIfNull(inputs);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        bool changed;
+        bool retainedResolution;
+        lock (_gate)
+        {
+            var added = AddInputsLocked(inputs);
+            changed = added.Count > 0;
+            // Only keep the extraction alive if it actually contributed a
+            // dataset; otherwise release it now instead of holding it for the
+            // whole session.
+            retainedResolution = changed && resolution is not null;
+            if (retainedResolution)
+            {
+                _resolutions.Add(resolution!);
+            }
+            if (changed)
+            {
+                UpdateSnapshotLocked();
+            }
+        }
+
+        if (!retainedResolution)
+        {
+            resolution?.Dispose();
+        }
+        if (changed)
+        {
+            RaiseChanged(DatasetCatalogChangeKind.Batch, id: null);
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<DatasetLoadOutcome> LoadAsync(
+        string path, string? specHint = null, CancellationToken cancellationToken = default)
+    {
+        // Fail fast before any exchange-set resolution / processor construction.
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // specHint forces the product spec for a single-file load (ignored for
+        // exchange sets); the resolver otherwise auto-detects.
+        var warnings = new List<string>();
+        var inputs = DatasetInputResolver.Resolve(
+            path, [], exchangeSet: null, only: null, warnings, out var resolution, specHint);
+
+        foreach (var warning in warnings)
+        {
+            Console.Error.WriteLine(warning);
+        }
+
+        var kind = ExchangeSetInput.LooksLikeExchangeSet(path) ? DatasetSourceKind.ExchangeSet
+            : Directory.Exists(path) ? DatasetSourceKind.Folder
+            : DatasetSourceKind.File;
+
+        List<DatasetId> added;
+        bool retainedResolution;
+        lock (_gate)
+        {
+            added = AddInputsLocked(inputs, warnings);
+            // Only keep the extraction alive if it actually contributed a
+            // dataset; a failed / empty load must not leak temp resources for
+            // the whole session.
+            retainedResolution = added.Count > 0 && resolution is not null;
+            if (retainedResolution)
+            {
+                _resolutions.Add(resolution!);
+            }
+            if (added.Count > 0)
+            {
+                UpdateSnapshotLocked();
+            }
+        }
+
+        if (!retainedResolution)
+        {
+            resolution?.Dispose();
+        }
+        if (added.Count > 0)
+        {
+            RaiseChanged(DatasetCatalogChangeKind.Batch, id: null);
+        }
+
+        return Task.FromResult(new DatasetLoadOutcome(path, kind, added, TimedOut: false, warnings));
+    }
+
+    /// <inheritdoc />
+    public bool Remove(DatasetId id)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        Entry entry;
+        lock (_gate)
+        {
+            var index = _entries.FindIndex(e => e.Loaded.Id.Equals(id));
+            if (index < 0)
+            {
+                return false;
+            }
+
+            entry = _entries[index];
+            _entries.RemoveAt(index);
+            _usedIds.Remove(id.Value);
+            UpdateSnapshotLocked();
+        }
+
+        DisposeProcessorsUnderGate([entry.Processor]);
+        RaiseChanged(DatasetCatalogChangeKind.Removed, id);
+        return true;
+    }
+
+    /// <inheritdoc />
+    public int RemoveAll()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        List<Entry> removed;
+        lock (_gate)
+        {
+            if (_entries.Count == 0)
+            {
+                return 0;
+            }
+
+            removed = [.. _entries];
+            _entries.Clear();
+            _usedIds.Clear();
+            UpdateSnapshotLocked();
+        }
+
+        DisposeProcessorsUnderGate(removed.Select(e => e.Processor));
+        RaiseChanged(DatasetCatalogChangeKind.Batch, id: null);
+        return removed.Count;
+    }
+
+    private List<DatasetId> AddInputsLocked(IEnumerable<FileDatasetInput> inputs, List<string>? problems = null)
+    {
+        // Skipped inputs are logged and, for a LoadAsync, also returned as the
+        // outcome's problems so open_dataset can say why nothing loaded.
+        void Skip(string message)
+        {
+            Console.Error.WriteLine(message);
+            problems?.Add(message);
+        }
+
+        var added = new List<DatasetId>();
+        foreach (var input in inputs)
+        {
+            if (input is null || string.IsNullOrEmpty(input.Path) || (!File.Exists(input.Path) && !Directory.Exists(input.Path)))
+            {
+                continue;
+            }
+
+            var id = new DatasetId(UniqueIdLocked(input.Id.Value));
+
+            IDatasetProcessor processor;
+            try
+            {
+                // Honour the resolved product spec (a --spec / specHint for a
+                // single file, or an exchange-set catalogue spec) so a dataset
+                // whose product cannot be sniffed from its bytes still loads with
+                // the correct processor. A factory that can map a declared spec
+                // (the bundled factory, or a decorator forwarding to it) does so;
+                // any other factory's default falls back to file detection.
+                processor = _factory.CreateProcessor(input.Path, input.Spec);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                or InvalidOperationException or FormatException or NotSupportedException
+                or ArgumentException or S100DatasetSchemaException)
+            {
+                Skip($"Skipped unreadable dataset '{input.Path}': {ex.Message}");
+                _usedIds.Remove(id.Value);
+                continue;
+            }
+
+            // Every catalog dataset must be renderable: the resident processor is
+            // the render source, so a processor that portrays neither vector nor
+            // coverage content would make open_dataset succeed while the dataset
+            // is silently absent from render_to_image. Reject it up front.
+            if (processor is not (IVectorPortrayalSource or ICoveragePortrayalSource))
+            {
+                Skip($"Skipped dataset '{input.Path}' (not renderable: {processor.Spec.Name}).");
+                (processor as IDisposable)?.Dispose();
+                _usedIds.Remove(id.Value);
+                continue;
+            }
+
+            LoadedDataset? projected;
+            try
+            {
+                // Parse-free projection from the resident processor; the query
+                // tools and the renderer share this single parse.
+                projected = LoadedDatasetProjector.Project(
+                    id, processor, input.ExternalTextResolver, _transforms);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                or InvalidOperationException or FormatException or NotSupportedException
+                or S100DatasetSchemaException)
+            {
+                Skip($"Skipped unreadable dataset '{input.Path}': {ex.Message}");
+                (processor as IDisposable)?.Dispose();
+                _usedIds.Remove(id.Value);
+                continue;
+            }
+
+            if (projected is null)
+            {
+                Skip($"Skipped unsupported dataset (no catalog projection): {input.Path}");
+                (processor as IDisposable)?.Dispose();
+                _usedIds.Remove(id.Value);
+                continue;
+            }
+
+            _entries.Add(new Entry(projected, processor));
+            added.Add(id);
+        }
+
+        return added;
+    }
+
+    private string UniqueIdLocked(string candidate)
+    {
+        var id = string.IsNullOrEmpty(candidate) ? "dataset" : candidate;
+        if (_usedIds.Add(id))
+        {
+            return id;
+        }
+        for (var i = 2; ; i++)
+        {
+            var next = $"{id}#{i}";
+            if (_usedIds.Add(next))
+            {
+                return next;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Refreshes the published <see cref="Datasets"/> snapshot from the current
+    /// entries. Call under <see cref="_gate"/>; raise <see cref="Changed"/> with
+    /// <see cref="RaiseChanged"/> after releasing the lock.
+    /// </summary>
+    private void UpdateSnapshotLocked()
+    {
+        Volatile.Write(ref _snapshot, _entries.Select(e => e.Loaded).ToList());
+    }
+
+    /// <summary>
+    /// Raises <see cref="Changed"/>. Invoked <b>outside</b> <see cref="_gate"/>
+    /// so a subscriber that re-enters the catalog cannot deadlock.
+    /// </summary>
+    private void RaiseChanged(DatasetCatalogChangeKind kind, DatasetId? id)
+    {
+        Changed?.Invoke(this, new DatasetCatalogChangedEventArgs { Kind = kind, DatasetId = id });
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        // Drain any in-flight render (acquire the gate) before disposing the
+        // processors it may be using, then RELEASE the gate in the finally.
+        // Releasing — rather than holding the permit forever — lets a
+        // Remove/RemoveAll that raced past the disposed guard still acquire the
+        // gate and dispose its already-removed processor safely (the render is
+        // drained), instead of blocking forever behind a permit that never comes
+        // back. The SemaphoreSlim itself is deliberately left undisposed: we never
+        // access its AvailableWaitHandle, so it holds no unmanaged wait handle to
+        // release and skipping Dispose() leaks nothing — whereas disposing it would
+        // mark it disposed and make a racing straggler's Wait()/Release() throw
+        // ObjectDisposedException. Leaving it usable is the point.
+        _renderGate.Wait();
+        try
+        {
+            lock (_gate)
+            {
+                foreach (var entry in _entries)
+                {
+                    (entry.Processor as IDisposable)?.Dispose();
+                }
+                _entries.Clear();
+
+                foreach (var resolution in _resolutions)
+                {
+                    resolution.Dispose();
+                }
+                _resolutions.Clear();
+            }
+        }
+        finally
+        {
+            _renderGate.Release();
+        }
+    }
+}

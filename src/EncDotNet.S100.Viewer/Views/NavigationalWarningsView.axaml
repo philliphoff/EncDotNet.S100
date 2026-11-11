@@ -1,0 +1,519 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             xmlns:svc="using:EncDotNet.S100.Viewer.Services"
+             x:Class="EncDotNet.S100.Viewer.Views.NavigationalWarningsView"
+             x:DataType="vm:NavigationalWarningsViewModel">
+
+    <UserControl.Resources>
+        <!-- A source that didn't answer: the Warning card's amber. -->
+        <SolidColorBrush x:Key="DepthWarningSubtleBrush" Color="{DynamicResource WarningColor}" Opacity="0.12" />
+        <SolidColorBrush x:Key="DepthWarningBrush" Color="{DynamicResource WarningColor}" />
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <!-- Now / View time: the Library's segment look. -->
+        <Style Selector="Border.navwarnSegments">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="2" />
+        </Style>
+        <Style Selector="RadioButton.navwarnSegment">
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Name="PART_Segment" CornerRadius="4" MinHeight="24" Padding="8,0" Background="Transparent">
+                        <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Foreground="{TemplateBinding Foreground}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="RadioButton.navwarnSegment:checked /template/ Border#PART_Segment">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundColor}" />
+            <Setter Property="BoxShadow" Value="0 1 2 0 #22000000" />
+        </Style>
+        <Style Selector="RadioButton.navwarnSegment:not(:checked)">
+            <Setter Property="Opacity" Value="0.7" />
+        </Style>
+        <!-- The summary's text-only count reads as a link. -->
+        <Style Selector="ToggleButton.navwarnLink">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Content="{TemplateBinding Content}" Background="Transparent" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="ToggleButton.navwarnLink TextBlock">
+            <Setter Property="TextDecorations" Value="Underline" />
+        </Style>
+        <Style Selector="ToggleButton.navwarnLink:checked TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+    </UserControl.Styles>
+
+    <DockPanel LastChildFill="True">
+
+        <!-- Summary, search, sort and time filter. -->
+        <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="12,6,12,8">
+            <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding HasSummary}">
+                <TextBlock Text="{Binding InForceText}" FontSize="11" Opacity="0.7" VerticalAlignment="Center" />
+                <TextBlock Text="·" FontSize="11" Opacity="0.7" VerticalAlignment="Center" />
+                <ToggleButton Classes="navwarnLink"
+                              AutomationProperties.AutomationId="NavigationalWarnings.TextOnlyFilter"
+                              AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_TextOnly}"
+                              AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_NavWarnings_TextOnly}"
+                              ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_TextOnly}"
+                              IsChecked="{Binding IsTextOnlyFilter, Mode=TwoWay}">
+                    <TextBlock Text="{Binding TextOnlyText}" FontSize="11" Opacity="0.85" />
+                </ToggleButton>
+                <TextBlock Text="·" FontSize="11" Opacity="0.7" VerticalAlignment="Center" IsVisible="{Binding HasNew}" />
+                <TextBlock Text="{Binding NewText}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"
+                           Foreground="{DynamicResource AccentBrush}"
+                           IsVisible="{Binding HasNew}"
+                           AutomationProperties.AutomationId="NavigationalWarnings.NewCount"
+                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_New}" />
+            </StackPanel>
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="4">
+                <TextBox Grid.Column="0"
+                         AutomationProperties.AutomationId="NavigationalWarnings.Search"
+                         AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_Search}"
+                         AutomationProperties.HelpText="{x:Static loc:Strings.NavWarnings_SearchPlaceholder}"
+                         Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         PlaceholderText="{x:Static loc:Strings.NavWarnings_SearchPlaceholder}"
+                         VerticalContentAlignment="Center"
+                         Padding="8,4">
+                    <TextBox.InnerLeftContent>
+                        <ic:FluentIcon Icon="Search" FontSize="13" Opacity="0.6" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </TextBox.InnerLeftContent>
+                    <TextBox.InnerRightContent>
+                        <Button Classes="Icon"
+                                Padding="4"
+                                Margin="0,0,4,0"
+                                AutomationProperties.AutomationId="NavigationalWarnings.ClearSearch"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_ClearSearch}"
+                                ToolTip.Tip="{x:Static loc:Strings.Label_NavWarnings_ClearSearch}"
+                                Command="{Binding ClearQueryCommand}"
+                                IsVisible="{Binding Query, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                            <ic:FluentIcon Icon="Dismiss" FontSize="12" />
+                        </Button>
+                    </TextBox.InnerRightContent>
+                </TextBox>
+                <ComboBox Grid.Column="1"
+                          AutomationProperties.AutomationId="NavigationalWarnings.Sort"
+                          AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_Sort}"
+                          ToolTip.Tip="{x:Static loc:Strings.Label_NavWarnings_Sort}"
+                          SelectedIndex="{Binding SortIndex, Mode=TwoWay}"
+                          FontSize="12"
+                          MinWidth="96">
+                    <ComboBoxItem Content="{x:Static loc:Strings.NavWarnings_SortNumber}" />
+                    <ComboBoxItem Content="{x:Static loc:Strings.NavWarnings_SortPublished}" />
+                    <ComboBoxItem Content="{x:Static loc:Strings.NavWarnings_SortClassification}" />
+                </ComboBox>
+                <!-- Reads the SECOM services and feeds that supplied the warnings again (#932). -->
+                <Button Grid.Column="2"
+                        Classes="Icon"
+                        Padding="6"
+                        VerticalAlignment="Center"
+                        AutomationProperties.AutomationId="NavigationalWarnings.Refresh"
+                        AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_Refresh}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_NavWarnings_Refresh}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_Refresh}"
+                        ToolTip.ShowOnDisabled="True"
+                        Command="{Binding RefreshCommand}">
+                    <ic:FluentIcon Icon="ArrowClockwise" FontSize="14" />
+                </Button>
+                <!-- When NEW shows (S-98 §12.12.1 item 4) and the watch-handover reset (#997). -->
+                <Button Grid.Column="3"
+                        Classes="Icon"
+                        Padding="6"
+                        VerticalAlignment="Center"
+                        IsVisible="{Binding NewOptions, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        AutomationProperties.AutomationId="NavigationalWarnings.NewOptions"
+                        AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_NewOptions}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_NavWarnings_NewOptions}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_NewOptions}">
+                    <Button.Flyout>
+                        <Flyout Placement="BottomEdgeAlignedRight">
+                            <StackPanel Spacing="8" MaxWidth="300" DataContext="{Binding NewOptions}" x:DataType="vm:NavigationalWarningNewOptionsViewModel">
+                                <TextBlock Text="{x:Static loc:Strings.NavWarnings_NewOptionsTitle}" FontWeight="SemiBold" FontSize="12" />
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <CheckBox IsChecked="{Binding IsWithinHoursEnabled, Mode=TwoWay}"
+                                              AutomationProperties.AutomationId="NavigationalWarnings.NewOptions.WithinHours"
+                                              Content="{x:Static loc:Strings.Label_NavWarnings_NewWithinHours}"
+                                              FontSize="12" />
+                                    <NumericUpDown Value="{Binding WithinHours, Mode=TwoWay}"
+                                                   AutomationProperties.AutomationId="NavigationalWarnings.NewOptions.WithinHoursValue"
+                                                   AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_NewWithinHoursValue}"
+                                                   IsEnabled="{Binding IsWithinHoursEnabled}"
+                                                   Minimum="1" Maximum="24" Increment="1" FormatString="0"
+                                                   MinWidth="96" FontSize="12" />
+                                    <TextBlock Text="{x:Static loc:Strings.NavWarnings_HoursUnit}" FontSize="12" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <CheckBox IsChecked="{Binding IsWithinNmEnabled, Mode=TwoWay}"
+                                              AutomationProperties.AutomationId="NavigationalWarnings.NewOptions.WithinNm"
+                                              Content="{x:Static loc:Strings.Label_NavWarnings_NewWithinNm}"
+                                              FontSize="12" />
+                                    <NumericUpDown Value="{Binding WithinNm, Mode=TwoWay}"
+                                                   AutomationProperties.AutomationId="NavigationalWarnings.NewOptions.WithinNmValue"
+                                                   AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_NewWithinNmValue}"
+                                                   IsEnabled="{Binding IsWithinNmEnabled}"
+                                                   Minimum="1" Maximum="2000" Increment="5" FormatString="0"
+                                                   MinWidth="96" FontSize="12" />
+                                    <TextBlock Text="{x:Static loc:Strings.NavWarnings_NmOfShipOrRoute}" FontSize="12" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <TextBlock Text="{x:Static loc:Strings.NavWarnings_NewOptionsNote}" FontSize="11" Opacity="0.7" TextWrapping="Wrap" />
+                                <Separator />
+                                <TextBlock Text="{x:Static loc:Strings.NavWarnings_MarkSinceTitle}" FontWeight="SemiBold" FontSize="12" />
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="{x:Static loc:Strings.Label_NavWarnings_MarkSince}" FontSize="12" VerticalAlignment="Center" />
+                                    <ComboBox ItemsSource="{Binding MarkSinceChoices}"
+                                              SelectedIndex="{Binding MarkSinceIndex, Mode=TwoWay}"
+                                              AutomationProperties.AutomationId="NavigationalWarnings.NewOptions.MarkSince"
+                                              AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_MarkSince}"
+                                              FontSize="12" MinWidth="96" />
+                                    <Button Classes="Outline"
+                                            Content="{x:Static loc:Strings.Label_NavWarnings_MarkNew}"
+                                            AutomationProperties.AutomationId="NavigationalWarnings.NewOptions.MarkNew"
+                                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_NavWarnings_MarkNew}"
+                                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_MarkNew}"
+                                            Command="{Binding MarkNewSinceCommand}"
+                                            FontSize="12" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding MarkedText}" FontSize="11" Opacity="0.7"
+                                           IsVisible="{Binding MarkedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
+                    <Panel>
+                        <ic:FluentIcon Icon="Filter" FontSize="14" />
+                        <!-- A filter is on: a dot, so suppressed NEW markers aren't a surprise. -->
+                        <Ellipse Width="6" Height="6" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-2,-2,0"
+                                 Fill="{DynamicResource AccentBrush}"
+                                 IsVisible="{Binding NewOptions.IsFiltering, FallbackValue=False}" />
+                    </Panel>
+                </Button>
+            </Grid>
+            <!-- #959 E3: while Check route is on, every warning or only those on the route. -->
+            <Border Classes="navwarnSegments" IsVisible="{Binding IsRouteScopeAvailable}">
+                <Grid ColumnDefinitions="*,1.6*">
+                    <RadioButton Grid.Column="0"
+                                 Classes="navwarnSegment" GroupName="NavWarningsScope"
+                                 HorizontalAlignment="Stretch"
+                                 AutomationProperties.AutomationId="NavigationalWarnings.Scope.All"
+                                 AutomationProperties.Name="{Binding AllScopeText}"
+                                 AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_NavWarnings_ScopeAll}"
+                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_ScopeAll}"
+                                 IsChecked="{Binding IsAllScope, Mode=TwoWay}">
+                        <TextBlock Text="{Binding AllScopeText}" TextTrimming="CharacterEllipsis" />
+                    </RadioButton>
+                    <RadioButton Grid.Column="1"
+                                 Classes="navwarnSegment" GroupName="NavWarningsScope"
+                                 HorizontalAlignment="Stretch"
+                                 AutomationProperties.AutomationId="NavigationalWarnings.Scope.Route"
+                                 AutomationProperties.Name="{Binding RouteScopeText}"
+                                 AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_NavWarnings_ScopeRoute}"
+                                 ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_ScopeRoute}"
+                                 IsChecked="{Binding IsRouteScope, Mode=TwoWay}">
+                        <TextBlock Text="{Binding RouteScopeText}" TextTrimming="CharacterEllipsis" />
+                    </RadioButton>
+                </Grid>
+            </Border>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Border Classes="navwarnSegments">
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton Classes="navwarnSegment" GroupName="NavWarningsTime"
+                                     AutomationProperties.AutomationId="NavigationalWarnings.Now"
+                                     AutomationProperties.Name="{x:Static loc:Strings.NavWarnings_FilterNow}"
+                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_FilterNow}"
+                                     Content="{x:Static loc:Strings.NavWarnings_FilterNow}"
+                                     IsChecked="{Binding IsNowFilter, Mode=TwoWay}" />
+                        <RadioButton Classes="navwarnSegment" GroupName="NavWarningsTime"
+                                     AutomationProperties.AutomationId="NavigationalWarnings.ViewTime"
+                                     AutomationProperties.Name="{x:Static loc:Strings.NavWarnings_FilterViewTime}"
+                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_FilterViewTime}"
+                                     Content="{x:Static loc:Strings.NavWarnings_FilterViewTime}"
+                                     IsChecked="{Binding IsViewTimeFilter, Mode=TwoWay}" />
+                    </StackPanel>
+                </Border>
+                <TextBlock Text="{Binding ViewTimeText}"
+                           FontFamily="{StaticResource MonoFontFamily}"
+                           FontSize="11"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+        </StackPanel>
+
+        <Grid>
+            <!-- Loading: skeleton rows. -->
+            <StackPanel IsVisible="{Binding IsLoadingState}" Margin="16,12" Spacing="10"
+                        AutomationProperties.AutomationId="NavigationalWarnings.Loading"
+                        AutomationProperties.Name="{x:Static loc:Strings.NavWarnings_Loading}">
+                <TextBlock Text="{x:Static loc:Strings.NavWarnings_Loading}" FontSize="11" Opacity="0.6" />
+                <Border Height="10" Width="190" HorizontalAlignment="Left" CornerRadius="4" Background="{DynamicResource MutedBackgroundColor}" />
+                <Border Height="10" Width="150" HorizontalAlignment="Left" CornerRadius="4" Background="{DynamicResource MutedBackgroundColor}" />
+                <Border Height="10" Width="210" HorizontalAlignment="Left" CornerRadius="4" Background="{DynamicResource MutedBackgroundColor}" />
+            </StackPanel>
+
+            <!-- No sources: nothing to list, point at the Library. -->
+            <StackPanel IsVisible="{Binding IsNoSourcesState}" VerticalAlignment="Center" Spacing="8" Margin="16,0">
+                <views:PlaceholderView Icon="Warning"
+                                       Header="{x:Static loc:Strings.NavWarnings_NoSourcesTitle}"
+                                       Description="{x:Static loc:Strings.NavWarnings_NoSourcesDescription}" />
+                <Button HorizontalAlignment="Center"
+                        Classes="Outline"
+                        AutomationProperties.AutomationId="NavigationalWarnings.OpenLibrary"
+                        Content="{x:Static loc:Strings.NavWarnings_OpenLibrary}"
+                        Command="{Binding OpenLibraryCommand}" />
+            </StackPanel>
+
+            <views:PlaceholderView IsVisible="{Binding IsEmptyState}"
+                                   Icon="Warning"
+                                   Header="{x:Static loc:Strings.NavWarnings_EmptyTitle}"
+                                   Description="{x:Static loc:Strings.NavWarnings_EmptyDescription}" />
+
+            <DockPanel LastChildFill="True">
+                <!-- The Display controls switch draws no warning (#995); the list still works. -->
+                <Border DockPanel.Dock="Top"
+                        IsVisible="{Binding IsSwitchedOff}"
+                        AutomationProperties.AutomationId="NavigationalWarnings.SwitchedOff"
+                        Margin="12,4,12,4"
+                        Padding="10,8"
+                        CornerRadius="6"
+                        Background="{DynamicResource MutedBackgroundColor}">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                        <ic:FluentIcon Grid.Column="0" Icon="EyeOff" FontSize="14" VerticalAlignment="Center" Opacity="0.7" />
+                        <TextBlock Grid.Column="1" Text="{x:Static loc:Strings.NavWarnings_SwitchedOff}"
+                                   FontSize="11.5" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        <Button Grid.Column="2"
+                                Classes="Outline"
+                                Padding="8,2"
+                                VerticalAlignment="Center"
+                                AutomationProperties.AutomationId="NavigationalWarnings.TurnOnDrawing"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_TurnOnDrawing}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_NavWarnings_TurnOnDrawing}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_TurnOnDrawing}"
+                                Content="{x:Static loc:Strings.Label_NavWarnings_TurnOnDrawing}"
+                                Command="{Binding TurnOnDrawingCommand}" />
+                    </Grid>
+                </Border>
+                <!-- None in force at the panel's time. -->
+                <Border DockPanel.Dock="Top"
+                        IsVisible="{Binding IsNoneInForceState}"
+                        Margin="12,4,12,4"
+                        Padding="10,8"
+                        CornerRadius="6"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource BorderColor}">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="{Binding NoneInForceText}" FontSize="12" TextWrapping="Wrap" />
+                        <Button HorizontalAlignment="Left"
+                                Classes="Outline"
+                                Padding="8,2"
+                                AutomationProperties.AutomationId="NavigationalWarnings.ShowNotInForce"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_ShowNotInForce}"
+                                Content="{Binding ShowNotInForceText}"
+                                Command="{Binding ShowNotInForceCommand}" />
+                    </StackPanel>
+                </Border>
+                <TextBlock DockPanel.Dock="Top"
+                           IsVisible="{Binding IsNoneOnRouteState}"
+                           AutomationProperties.AutomationId="NavigationalWarnings.NoneOnRoute"
+                           Text="{x:Static loc:Strings.NavWarnings_NoneOnRoute}"
+                           Margin="16,8"
+                           FontSize="12"
+                           Opacity="0.7"
+                           TextWrapping="Wrap" />
+                <TextBlock DockPanel.Dock="Top"
+                           IsVisible="{Binding IsNoMatchesState}"
+                           Text="{x:Static loc:Strings.NavWarnings_NoMatches}"
+                           Margin="16,8"
+                           FontSize="12"
+                           Opacity="0.7"
+                           TextWrapping="Wrap" />
+
+                <ListBox ItemsSource="{Binding Items}"
+                         IsVisible="{Binding HasList}"
+                         AutomationProperties.AutomationId="NavigationalWarnings.List"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                         SelectionMode="Single"
+                         Classes="accentList"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         Padding="4,0,4,8">
+                    <ListBox.Styles>
+                        <Style Selector="ListBoxItem" x:DataType="vm:NavigationalWarningListItem">
+                            <Setter Property="AutomationProperties.Name" Value="{Binding AccessibleName}" />
+                            <Setter Property="MinHeight" Value="{Binding ContainerMinHeight}" />
+                            <Setter Property="Padding" Value="8,3" />
+                        </Style>
+                    </ListBox.Styles>
+                    <ListBox.DataTemplates>
+                        <DataTemplate DataType="vm:NavigationalWarningGroupItem">
+                            <Panel Margin="-4,4,0,0">
+                                <!-- A series header: name, count, source; then what its in-force bulletin lists but isn't loaded (§9.2.2). -->
+                                <StackPanel IsVisible="{Binding IsSeries}" Spacing="2">
+                                    <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6"
+                                          Background="Transparent" IsHitTestVisible="False">
+                                        <ic:FluentIcon Grid.Column="0" Icon="ChevronDown" FontSize="12" Opacity="0.55" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="2" Text="{Binding Count}" FontSize="11" Opacity="0.6" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="3" Text="{Binding Source}" FontSize="10.5" Opacity="0.6" VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="160"
+                                                   IsVisible="{Binding !IsStale}" />
+                                        <TextBlock Grid.Column="3" Text="{Binding Source}" FontSize="10.5" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource DepthWarningBrush}"
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="160"
+                                                   IsVisible="{Binding IsStale}" />
+                                    </Grid>
+                                    <TextBlock IsVisible="{Binding HasNotReceived}"
+                                               AutomationProperties.AutomationId="NavigationalWarnings.NotReceived"
+                                               Text="{Binding NotReceivedText}"
+                                               Margin="18,0,0,2"
+                                               FontSize="10.5"
+                                               Foreground="{StaticResource DepthWarningBrush}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                                <!-- The dimmed "Not in force" group opens and closes. -->
+                                <Button IsVisible="{Binding IsNotInForce}"
+                                        Classes="Ghost"
+                                        Padding="0"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Left"
+                                        AutomationProperties.AutomationId="NavigationalWarnings.NotInForceGroup"
+                                        AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_NotInForce}"
+                                        Command="{Binding ToggleCommand}">
+                                    <StackPanel Spacing="1" Opacity="0.7">
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <Panel VerticalAlignment="Center">
+                                                <ic:FluentIcon Icon="ChevronDown" FontSize="12" IsVisible="{Binding IsExpanded}" />
+                                                <ic:FluentIcon Icon="ChevronRight" FontSize="12" IsVisible="{Binding !IsExpanded}" />
+                                            </Panel>
+                                            <TextBlock Text="{Binding Name}" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                            <TextBlock Text="{Binding Count}" FontSize="11" Opacity="0.75" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                        <!-- Whether the map draws them (#993). -->
+                                        <TextBlock Text="{Binding Source}" FontSize="10.5" Margin="18,0,0,0"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.AutomationId="NavigationalWarnings.NotInForceNote"
+                                                   IsVisible="{Binding Source, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                    </StackPanel>
+                                </Button>
+                            </Panel>
+                        </DataTemplate>
+                        <!-- A source that didn't answer its latest refresh, with Retry. -->
+                        <DataTemplate DataType="vm:NavigationalWarningStaleItem">
+                            <Border Margin="-4,4,0,0"
+                                    Padding="8,6"
+                                    CornerRadius="6"
+                                    Background="{StaticResource DepthWarningSubtleBrush}">
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                                    <ic:FluentIcon Grid.Column="0" Icon="Warning" FontSize="14" VerticalAlignment="Top" Margin="0,1,0,0"
+                                                   Foreground="{StaticResource DepthWarningBrush}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Text}" FontSize="11.5" TextWrapping="Wrap" VerticalAlignment="Center" />
+                                    <Button Grid.Column="2"
+                                            Classes="Outline"
+                                            Padding="8,2"
+                                            VerticalAlignment="Center"
+                                            AutomationProperties.AutomationId="NavigationalWarnings.Retry"
+                                            AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_Retry}"
+                                            Content="{x:Static loc:Strings.Label_NavWarnings_Retry}"
+                                            Command="{Binding RetryCommand}" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                        <DataTemplate DataType="vm:NavigationalWarningRowItem">
+                            <Grid ColumnDefinitions="16,*,Auto" ColumnSpacing="9" Background="Transparent" Opacity="{Binding RowOpacity}">
+                                <Panel Grid.Column="0" VerticalAlignment="Center" ToolTip.Tip="{Binding GlyphTip}">
+                                    <ic:FluentIcon Icon="{Binding Glyph}" FontSize="14"
+                                                   Foreground="{DynamicResource MutedColor}"
+                                                   IsVisible="{Binding IsTextOnly}" />
+                                    <ic:FluentIcon Icon="{Binding Glyph}" FontSize="14"
+                                                   Foreground="{DynamicResource AccentBrush}"
+                                                   IsVisible="{Binding !IsTextOnly}" />
+                                </Panel>
+                                <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                        <TextBlock Text="{Binding Number}" Classes="accentListTitle"
+                                                   FontFamily="{StaticResource MonoFontFamily}"
+                                                   FontSize="11.5" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding TypeText}" FontSize="12" FontWeight="Medium"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock IsVisible="{Binding IsNew}"
+                                                   Text="{x:Static loc:Strings.NavWarnings_New}"
+                                                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_New}"
+                                                   Foreground="{DynamicResource AccentBrush}"
+                                                   FontSize="10"
+                                                   FontWeight="Bold"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding SubText}" FontSize="10.5" Opacity="0.65"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock IsVisible="{Binding HasRouteText}"
+                                               AutomationProperties.AutomationId="NavigationalWarnings.Row.Route"
+                                               Text="{Binding RouteText}"
+                                               FontSize="10.5"
+                                               FontWeight="Medium"
+                                               Foreground="{DynamicResource AccentBrush}"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <!-- On chart / Off chart / Information (S-98 §12.12.2; #996): a glyph, and a menu to change it. -->
+                                <Button Grid.Column="2"
+                                        Classes="Icon"
+                                        Padding="4"
+                                        VerticalAlignment="Center"
+                                        AutomationProperties.AutomationId="NavigationalWarnings.Row.Classification"
+                                        AutomationProperties.Name="{Binding ClassificationName}"
+                                        AutomationProperties.HelpText="{Binding ClassificationTip}"
+                                        ToolTip.Tip="{Binding ClassificationTip}">
+                                    <Panel>
+                                        <ic:FluentIcon Icon="{Binding ClassificationGlyph}" FontSize="14" Opacity="0.35"
+                                                       IsVisible="{Binding !IsClassifiedOff}" />
+                                        <ic:FluentIcon Icon="{Binding ClassificationGlyph}" FontSize="14"
+                                                       Foreground="{StaticResource DepthWarningBrush}"
+                                                       IsVisible="{Binding IsClassifiedOff}" />
+                                    </Panel>
+                                    <Button.Flyout>
+                                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                            <MenuItem Header="{x:Static loc:Strings.NavWarnings_ClassOnChart}"
+                                                      AutomationProperties.AutomationId="NavigationalWarnings.Row.OnChart"
+                                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_ClassOnChart}"
+                                                      ToggleType="Radio" IsChecked="{Binding IsOnChart, Mode=OneWay}"
+                                                      Command="{Binding ClassifyCommand}"
+                                                      CommandParameter="{x:Static svc:NavigationalWarningClassification.OnChart}" />
+                                            <MenuItem Header="{x:Static loc:Strings.NavWarnings_ClassOffChart}"
+                                                      AutomationProperties.AutomationId="NavigationalWarnings.Row.OffChart"
+                                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_ClassOffChart}"
+                                                      ToggleType="Radio" IsChecked="{Binding IsOffChart, Mode=OneWay}"
+                                                      Command="{Binding ClassifyCommand}"
+                                                      CommandParameter="{x:Static svc:NavigationalWarningClassification.OffChart}" />
+                                            <MenuItem Header="{x:Static loc:Strings.NavWarnings_ClassInformation}"
+                                                      AutomationProperties.AutomationId="NavigationalWarnings.Row.Information"
+                                                      ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_ClassInformation}"
+                                                      ToggleType="Radio" IsChecked="{Binding IsInformation, Mode=OneWay}"
+                                                      Command="{Binding ClassifyCommand}"
+                                                      CommandParameter="{x:Static svc:NavigationalWarningClassification.Information}" />
+                                        </MenuFlyout>
+                                    </Button.Flyout>
+                                </Button>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.DataTemplates>
+                </ListBox>
+            </DockPanel>
+        </Grid>
+    </DockPanel>
+
+</UserControl>

@@ -1,0 +1,90 @@
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Features;
+
+namespace EncDotNet.S100.Pipelines.Vector;
+
+/// <summary>
+/// Generic geometry provider for S-100 vector datasets.
+/// </summary>
+/// <remarks>
+/// Replaces the identical per-spec <c>S{NNN}FeatureGeometryProvider</c>
+/// classes that each implemented the same surface → curve → point preference
+/// logic. Serves both the GML-encoded products and the ISO 8211-encoded
+/// S-101 path (whose pipeline <see cref="Feature"/> records implement
+/// <see cref="IS100Feature"/>). When a feature exposes multiple geometry
+/// kinds the provider prefers, in order: surface (with interior rings), the
+/// first curve, then points.
+/// </remarks>
+/// <typeparam name="TFeature">
+/// The concrete feature type, constrained to <see cref="IS100Feature"/>.
+/// </typeparam>
+public sealed class FeatureGeometryProvider<TFeature> : IFeatureGeometryProvider
+    where TFeature : IS100Feature
+{
+    private readonly Dictionary<string, FeatureGeometry> _byId;
+
+    /// <summary>Builds a provider over the supplied features.</summary>
+    public FeatureGeometryProvider(IReadOnlyList<TFeature> features)
+    {
+        ArgumentNullException.ThrowIfNull(features);
+        _byId = new Dictionary<string, FeatureGeometry>(StringComparer.OrdinalIgnoreCase);
+        foreach (var f in features)
+        {
+            if (string.IsNullOrEmpty(f.Id)) continue;
+            var geometry = BuildGeometry(f);
+            if (geometry is not null)
+                _byId[f.Id] = geometry;
+        }
+    }
+
+    /// <inheritdoc />
+    public FeatureGeometry? GetGeometry(string featureReference) =>
+        _byId.TryGetValue(featureReference, out var g) ? g : null;
+
+    private static FeatureGeometry? BuildGeometry(TFeature feature)
+    {
+        if (feature.ExteriorRing.Count > 0)
+        {
+            var holes = feature.InteriorRings.Count == 0
+                ? Array.Empty<IReadOnlyList<GeoPosition>>()
+                : feature.InteriorRings.Select(r => (IReadOnlyList<GeoPosition>)r.ToArray()).ToArray();
+
+            // Feature carries its surfaces directly; reading them through
+            // IS100Feature.Surfaces would allocate one per single-surface feature.
+            var surfaces = feature is Feature vectorFeature ? vectorFeature.SurfaceParts : feature.Surfaces;
+            return new FeatureGeometry
+            {
+                Type = GeometryType.Surface,
+                Coordinates = feature.ExteriorRing.ToArray(),
+                InteriorRings = holes,
+                Parts = surfaces.Count > 1 ? surfaces.Select(s => s.ExteriorRing).ToArray() : [],
+                PartInteriorRings = surfaces.Count > 1 ? surfaces.Select(s => s.InteriorRings).ToArray() : [],
+            };
+        }
+
+        if (feature.Curves.Count > 0)
+        {
+            var coords = new List<GeoPosition>();
+            foreach (var curve in feature.Curves)
+                coords.AddRange(curve);
+            var parts = CurveParts.Join(feature.Curves);
+            return new FeatureGeometry
+            {
+                Type = GeometryType.Curve,
+                Coordinates = coords,
+                Parts = parts.Count > 1 ? parts : [],
+            };
+        }
+
+        if (feature.Points.Count > 0)
+        {
+            return new FeatureGeometry
+            {
+                Type = GeometryType.Point,
+                Coordinates = feature.Points.ToArray(),
+            };
+        }
+
+        return null;
+    }
+}

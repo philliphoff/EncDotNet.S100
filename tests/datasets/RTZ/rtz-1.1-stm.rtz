@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic RTZ 1.1 test fixture with an STM-style route info extension, written by hand from the STM extended Annex S schema. Not for navigation. -->
+<route xmlns="http://www.cirm.org/RTZ/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:stm="http://stmvalidation.eu/STM/1/0/0" version="1.1">
+  <routeInfo routeName="Solent eastbound" routeAuthor="Test Planner" routeStatus="7" vesselName="Synthetic Trader"
+             vesselMMSI="235000001" vesselCargo="8000" vesselServiceMax="16.5">
+    <extensions>
+      <extension xsi:type="stm:RouteInfoExtension" manufacturer="STM" name="RouteInfoEx" version="1.0.0"
+                 routeStatusEnum="7" depPort="GBSOU" arrPort="GBPME"/>
+    </extensions>
+  </routeInfo>
+  <waypoints>
+    <waypoint id="10" revision="2" name="Southampton" radius="0.2">
+      <position lat="50.89000" lon="-1.39000"/>
+    </waypoint>
+    <waypoint id="11" revision="2" name="Calshot" radius="0.4">
+      <position lat="50.81500" lon="-1.30000"/>
+      <leg starboardXTD="0.12" portsideXTD="0.12" draughtForward="7.8" draughtAft="8.4" staticUKC="1.2"
+           masthead="38.5" legInfo="VTS channel 12" geometryType="Loxodrome"/>
+    </waypoint>
+    <waypoint id="12" revision="1" name="Cowes" radius="0.4">
+      <position lat="50.77000" lon="-1.29000"/>
+      <leg starboardXTD="0.12" portsideXTD="0.12" draughtForward="8.4" draughtAft="8.4" staticUKC="1.2" legNote1="Arrive on the flood"/>
+    </waypoint>
+    <waypoint id="13" revision="1" name="Spithead">
+      <position lat="50.75000" lon="-1.10000"/>
+      <leg starboardXTD="0.25" portsideXTD="0.25" draughtForward="8.4" draughtAft="8.4" staticUKC="1.2"/>
+    </waypoint>
+  </waypoints>
+  <schedules>
+    <schedule id="1" name="Plan A">
+      <manual>
+        <scheduleElement waypointId="10" etd="2026-11-02T10:00:00Z" etdWindowAfter="PT1H"/>
+        <scheduleElement waypointId="11" speed="10"/>
+        <scheduleElement waypointId="12" speed="10"/>
+        <scheduleElement waypointId="13" speed="12"/>
+      </manual>
+      <calculated>
+        <scheduleElement waypointId="10" etd="2026-11-02T10:00:00Z"/>
+        <scheduleElement waypointId="11" eta="2026-11-02T10:38:00Z" etd="2026-11-02T10:38:00Z" speed="10" windSpeed="7.5" windDirection="225"/>
+        <scheduleElement waypointId="12" eta="2026-11-02T10:55:00Z" etd="2026-11-02T10:55:00Z" speed="10"/>
+        <scheduleElement waypointId="13" eta="2026-11-02T11:56:00Z" speed="12" fuel="1.4"/>
+      </calculated>
+    </schedule>
+    <schedule id="2" name="Plan B (late tide)">
+      <manual>
+        <scheduleElement waypointId="10" etd="2026-11-02T13:00:00Z"/>
+        <scheduleElement waypointId="13" eta="2026-11-02T15:00:00Z"/>
+      </manual>
+    </schedule>
+  </schedules>
+</route>

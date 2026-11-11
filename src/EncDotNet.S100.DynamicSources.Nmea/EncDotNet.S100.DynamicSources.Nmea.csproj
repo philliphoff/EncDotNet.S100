@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <Description>Own-ship wind, water and air temperature and pressure from an NMEA 0183 stream as a dynamic feature source: one feature at own ship, true wind as a WMO barb next to the own-ship symbol (from MWD, derived from apparent wind and the vessel's motion, or MWV true), relative wind labelled as such when true wind can't be had, and a pick report with units. Built on EncDotNet.S100.Nmea. Not for navigation.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.DynamicSources.Nmea.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Nmea\EncDotNet.S100.Nmea.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Portrayals\EncDotNet.S100.Portrayals.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.Weather\EncDotNet.S100.Datasets.Weather.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The station ring the barb grows from, served by OwnShipWeatherPortrayal.Symbols. -->
+    <EmbeddedResource Include="Symbols\*.svg" LogicalName="EncDotNet.S100.DynamicSources.Nmea.Symbols.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

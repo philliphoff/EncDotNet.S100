@@ -1,0 +1,249 @@
+namespace EncDotNet.S100.Viewer.Services;
+
+/// <summary>
+/// Reads and drives the viewer's Timeline for agents (MCP
+/// <c>get_timeline_state</c> / <c>set_view_time</c>, #715). Goes through the
+/// same <see cref="GlobalTimeService"/> and Timeline commands the panel uses,
+/// marshalled to the UI thread.
+/// </summary>
+internal interface IViewerTimelineController
+{
+    /// <summary>Snapshots the Timeline and the time each time-aware layer draws.</summary>
+    /// <param name="ct">A cancellation token.</param>
+    /// <returns>The current Timeline state.</returns>
+    Task<ViewerTimelineState> GetStateAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Moves the view time to now (as the Timeline's Go live does, which
+    /// then follows now) or to <paramref name="time"/>, which pins it.
+    /// </summary>
+    /// <param name="time">The time to show; <see langword="null"/> for now.</param>
+    /// <param name="snapToNearestSample">
+    /// When true, moves to the loaded sample nearest <paramref name="time"/>
+    /// rather than to the exact time.
+    /// </param>
+    /// <param name="ct">A cancellation token.</param>
+    /// <returns>Whether the time was applied, why not, and the resulting state.</returns>
+    Task<ViewTimeOutcome> SetViewTimeAsync(DateTime? time, bool snapToNearestSample, CancellationToken ct = default);
+
+    /// <summary>
+    /// Steps <paramref name="count"/> times by <paramref name="kind"/> (the
+    /// Timeline's current step when null) in <paramref name="direction"/>, as
+    /// ‹ › and the arrow keys do; it pins the time.
+    /// </summary>
+    Task<ViewTimeOutcome> StepAsync(TimelineStepKind? kind, int direction, int count, CancellationToken ct = default);
+
+    /// <summary>
+    /// Changes what the axis shows (a preset, a zoom step, or a window) and,
+    /// independently, the In map view filter and lanes vs strip (#710).
+    /// </summary>
+    Task<ViewTimeOutcome> SetViewAsync(TimelineViewChange change, CancellationToken ct = default);
+}
+
+/// <summary>A change to the Timeline's window (#708 C5): at most one of the members is set.</summary>
+/// <param name="Preset">A preset to apply.</param>
+/// <param name="Zoom">+1 zooms in (half the span), −1 out (double), around the view time.</param>
+/// <param name="Window">A window to show.</param>
+internal sealed record TimelineViewChange(
+    EncDotNet.S100.Viewer.ViewModels.TimelinePreset? Preset,
+    int? Zoom,
+    (DateTime Start, DateTime End)? Window)
+{
+    /// <summary>Turns the In map view filter on or off (#710 E4); null leaves it.</summary>
+    public bool? InMapView { get; init; }
+
+    /// <summary>True collapses the dock to the strip, false shows the lanes (#710 E6); null leaves it.</summary>
+    public bool? CollapsedToStrip { get; init; }
+
+    /// <summary>Turns Show online on or off (#711 E2); null leaves it.</summary>
+    public bool? ShowOnline { get; init; }
+}
+
+/// <summary>The Timeline as the user sees it, plus the time each layer draws.</summary>
+/// <param name="Active">True when at least one time-aware dataset is loaded.</param>
+/// <param name="Now">The viewer's current time (UTC); moved by the test clock when enabled.</param>
+/// <param name="ViewTime">The time the map shows (UTC), or null when inactive.</param>
+/// <param name="FollowingNow">True while the view time follows now (Live).</param>
+/// <param name="Minimum">The earliest loaded sample (UTC).</param>
+/// <param name="Maximum">The latest loaded sample (UTC).</param>
+/// <param name="SampleCount">The number of distinct loaded samples.</param>
+/// <param name="Coverage">The merged windows in which some layer draws.</param>
+/// <param name="Runs">The forecast runs loaded, e.g. "cbofs 12:00Z".</param>
+/// <param name="NowInCoverage">True when now lies inside a loaded window, so Now can be applied.</param>
+/// <param name="ForecastEnded">True when every loaded forecast has ended.</param>
+/// <param name="Readout">The Timeline's time readout as displayed.</param>
+/// <param name="Summary">The Timeline's range summary as displayed.</param>
+/// <param name="Layers">The time-aware layers, in Datasets-list order.</param>
+internal sealed record ViewerTimelineState(
+    bool Active,
+    DateTime Now,
+    DateTime? ViewTime,
+    bool FollowingNow,
+    DateTime? Minimum,
+    DateTime? Maximum,
+    int SampleCount,
+    IReadOnlyList<CoverageSegment> Coverage,
+    IReadOnlyList<string> Runs,
+    bool NowInCoverage,
+    bool ForecastEnded,
+    string Readout,
+    string Summary,
+    IReadOnlyList<TimelineLayerState> Layers)
+{
+    /// <summary>The view time's offset from now as displayed: "now", "in 11 h 30", "5 h ago".</summary>
+    public string Offset { get; init; } = string.Empty;
+
+    /// <summary>The status line's message, or null when all is well.</summary>
+    public string? Message { get; init; }
+
+    /// <summary>The message's action as displayed ("Check for new runs", "Next data ›", …), or null.</summary>
+    public string? MessageAction { get; init; }
+
+    /// <summary>The first time on the axis.</summary>
+    public DateTime? WindowStart { get; init; }
+
+    /// <summary>The last time on the axis.</summary>
+    public DateTime? WindowEnd { get; init; }
+
+    /// <summary>The window's preset as displayed ("All loaded", "Now ± 6 h", "Custom").</summary>
+    public string Preset { get; init; } = string.Empty;
+
+    /// <summary>What ‹ › step by.</summary>
+    public TimelineStepKind Step { get; init; }
+
+    /// <summary>The layer "Sample of" follows (and whose ticks show), or null.</summary>
+    public string? StepDriver { get; init; }
+
+    /// <summary>The collapsed gaps on the axis.</summary>
+    public IReadOnlyList<AxisGap> Gaps { get; init; } = [];
+
+    /// <summary>True while the In map view filter is on (#710).</summary>
+    public bool InMapView { get; init; }
+
+    /// <summary>True when the dock shows the strip rather than lanes.</summary>
+    public bool CollapsedToStrip { get; init; }
+
+    /// <summary>True while the lanes show what the Library knows but has not loaded (#711).</summary>
+    public bool ShowOnline { get; init; }
+
+    /// <summary>The lanes: those listed, then those folded outside the map view.</summary>
+    public IReadOnlyList<TimelineLaneState> Lanes { get; init; } = [];
+
+    /// <summary>The passage lanes (#904), or null when they don't show.</summary>
+    public TimelinePassageState? Passage { get; init; }
+
+    /// <summary>True while Follow passage pins the view time to the passage (#904).</summary>
+    public bool FollowPassage { get; init; }
+}
+
+/// <summary>The Timeline's passage and departure-window lanes (#904).</summary>
+/// <param name="Departure">The checked departure.</param>
+/// <param name="Arrival">The arrival.</param>
+/// <param name="MinimumTime">The ETA of the minimum UKC, or null.</param>
+/// <param name="Verdict">The verdict.</param>
+/// <param name="Stale">True while the check is recomputing.</param>
+/// <param name="PassageStart">Departure on the axis, 0–1.</param>
+/// <param name="PassageEnd">Arrival on the axis, 0–1.</param>
+/// <param name="MinimumPosition">The min-UKC tick on the axis, 0–1, or null.</param>
+/// <param name="CanFollow">True when Follow passage can be turned on.</param>
+internal sealed record TimelinePassageState(
+    DateTimeOffset Departure,
+    DateTimeOffset Arrival,
+    DateTimeOffset? MinimumTime,
+    EncDotNet.S100.Navigation.PassageVerdict Verdict,
+    bool Stale,
+    double PassageStart,
+    double PassageEnd,
+    double? MinimumPosition,
+    bool CanFollow)
+{
+    /// <summary>The departure tick on the axis, 0–1, or null without a window.</summary>
+    public double? DeparturePosition { get; init; }
+
+    /// <summary>The window lane's label, e.g. "06:00–06:40", or null without a window.</summary>
+    public string? Windows { get; init; }
+
+    /// <summary>The window lane's runs, positioned on the axis; empty without a window.</summary>
+    public IReadOnlyList<EncDotNet.S100.Viewer.ViewModels.DepartureBandSegment> Segments { get; init; } = [];
+}
+
+/// <summary>One lane of the Timeline (#710).</summary>
+/// <param name="Id">The dataset id, as <c>list_datasets</c> reports it (else the dataset name).</param>
+/// <param name="Label">The lane's code, e.g. "cbofs".</param>
+/// <param name="Group">The product group, e.g. "S-111 Surface currents".</param>
+/// <param name="Listed">True when listed; false when folded outside the map view.</param>
+/// <param name="InMapView">Whether its footprint intersects the map view; null when unknown.</param>
+/// <param name="Expired">True for a forecast that has ended.</param>
+/// <param name="Time">The layer time as the lane shows it.</param>
+internal sealed record TimelineLaneState(string Id, string Label, string Group, bool Listed, bool? InMapView, bool Expired, string Time)
+{
+    /// <summary>True for a lane of Library data that is not loaded (#711).</summary>
+    public bool Library { get; init; }
+
+    /// <summary>True when a newer run is online ("New run").</summary>
+    public bool NewRun { get; init; }
+
+    /// <summary>The Library's windows for the lane.</summary>
+    public IReadOnlyList<TimelineLibraryWindow> Windows { get; init; } = [];
+
+    /// <summary>The lane's sub line, e.g. "adv 20 · 6 h".</summary>
+    public string Sub { get; init; } = string.Empty;
+
+    /// <summary>When the dataset was issued, the lane's solid diamond (V14); null when not marked.</summary>
+    public DateTime? Issued { get; init; }
+
+    /// <summary>When the next is expected, the lane's hollow diamond (V14); null when not marked.</summary>
+    public DateTime? NextIssue { get; init; }
+
+    /// <summary>How many step ticks the lane draws (a storm's forecast points, V14).</summary>
+    public int StepTicks { get; init; }
+}
+
+/// <summary>A window of data the Library knows for a lane (#711).</summary>
+/// <param name="ItemId">The Library item id, as the Library MCP tools use it.</param>
+/// <param name="State">Online, on disk or loaded.</param>
+/// <param name="Start">Start (UTC).</param>
+/// <param name="End">End (UTC).</param>
+/// <param name="Run">The forecast run, if any.</param>
+/// <param name="NewRun">True for a newer run than the copy on disk.</param>
+/// <param name="Expired">True when the copy on disk has ended.</param>
+internal sealed record TimelineLibraryWindow(string ItemId, LibraryTimedState State, DateTime Start, DateTime End, DateTime? Run, bool NewRun, bool Expired);
+
+/// <summary>What one time-aware layer draws at the view time.</summary>
+/// <param name="Id">The dataset id, as <c>list_datasets</c> reports it.</param>
+/// <param name="Spec">The product specification, e.g. "S-111".</param>
+/// <param name="Visible">True when the user has the layer switched on.</param>
+/// <param name="DrawnTime">The sample the layer draws, or null when it has no data at the view time and hides.</param>
+/// <param name="PreviousSample">The latest sample at or before the view time, or null.</param>
+/// <param name="NextSample">The earliest sample after the view time, or null.</param>
+/// <param name="SampleCount">The number of samples in the layer.</param>
+internal sealed record TimelineLayerState(
+    string Id,
+    string Spec,
+    bool Visible,
+    DateTime? DrawnTime,
+    DateTime? PreviousSample,
+    DateTime? NextSample,
+    int SampleCount)
+{
+    /// <summary>The layer time as its row shows it, or null.</summary>
+    public string? Time { get; init; }
+
+    /// <summary>True when the layer has no data near the view time and hides.</summary>
+    public bool Hidden { get; init; }
+
+    /// <summary>True while the layer is drawing the view time.</summary>
+    public bool Drawing { get; init; }
+
+    /// <summary>For a layer drawing stale data (its row's Stale tag), the data's age to the nearest hour; otherwise null.</summary>
+    public int? StaleHours { get; init; }
+
+    /// <summary>The row's warning tag: "Hidden" for a hidden layer, or "Beyond forecast" or "Before track" for a storm outside its range; otherwise null.</summary>
+    public string? Tag { get; init; }
+}
+
+/// <summary>The outcome of <see cref="IViewerTimelineController.SetViewTimeAsync"/>.</summary>
+/// <param name="Applied">True when the view time was changed or already matched.</param>
+/// <param name="Reason">Why it was not applied, or null.</param>
+/// <param name="State">The Timeline state afterwards.</param>
+internal sealed record ViewTimeOutcome(bool Applied, string? Reason, ViewerTimelineState State);

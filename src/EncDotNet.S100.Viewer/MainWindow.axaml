@@ -1,0 +1,1410 @@
+<shadui:Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
+        xmlns:mapsui="clr-namespace:Mapsui.UI.Avalonia;assembly=Mapsui.UI.Avalonia"
+        xmlns:ic="using:FluentIcons.Avalonia"
+        xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+        xmlns:activities="using:EncDotNet.S100.Viewer.ViewModels.Activities"
+        xmlns:pp="using:EncDotNet.S100.Datasets.Pipelines"
+        xmlns:views="using:EncDotNet.S100.Viewer.Views"
+        xmlns:notify="using:EncDotNet.S100.Viewer.Views.Notifications"
+        xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+        xmlns:diag="using:EncDotNet.S100.Viewer.Diagnostics"
+        xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
+        xmlns:conv="using:EncDotNet.S100.Viewer"
+        xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+        x:Class="EncDotNet.S100.Viewer.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="{x:Static loc:Strings.Window_Title}"
+        Icon="avares://SoundCharts/Branding/AppIcon.png"
+        Width="1100" Height="700"
+        MinWidth="800" MinHeight="560"
+        IsTitleBarVisible="True"
+        ShowBottomBorder="True">
+
+    <shadui:Window.LogoContent>
+        <ic:FluentIcon Icon="Map" IconVariant="Regular" FontSize="14"
+                       Margin="8,0,0,0" />
+    </shadui:Window.LogoContent>
+
+    <shadui:Window.Resources>
+        <SolidColorBrush x:Key="AccentBrush" Color="#007ACC" />
+        <SolidColorBrush x:Key="AccentSubtleBrush" Color="#33007ACC" />
+    </shadui:Window.Resources>
+
+    <shadui:Window.DataTemplates>
+        <!--
+          Single IDataTemplate that materialises any IActivityTab into its
+          UserControl (DataContext = tab.ViewModel). Adding a new tab is a
+          DI-only change in App.axaml.cs — no XAML edits needed here.
+        -->
+        <activities:ActivityTabViewTemplate />
+    </shadui:Window.DataTemplates>
+
+    <shadui:Window.KeyBindings>
+        <!-- Esc exits the active map tool (pick or measure). -->
+        <KeyBinding Gesture="Escape" Command="{Binding MapTools.ExitPickModeCommand}" />
+        <!-- Cmd+M / Ctrl+M toggles Measure Mode. -->
+        <KeyBinding Gesture="Cmd+M" Command="{Binding MapTools.ToggleMeasureModeCommand}" />
+        <KeyBinding Gesture="Ctrl+M" Command="{Binding MapTools.ToggleMeasureModeCommand}" />
+        <!-- Cmd+R / Ctrl+R toggles Range & bearing (#1130 D11). -->
+        <KeyBinding Gesture="Cmd+R" Command="{Binding MapTools.ToggleRangeBearingModeCommand}" />
+        <KeyBinding Gesture="Ctrl+R" Command="{Binding MapTools.ToggleRangeBearingModeCommand}" />
+        <!-- View › Legend (legends D3). -->
+        <KeyBinding Gesture="Ctrl+Shift+L" Command="{Binding Layout.ToggleLegendCommand}" />
+        <!-- Enter / Backspace are tool actions while a tool is active. -->
+        <KeyBinding Gesture="Enter" Command="{Binding MapTools.ToolCommitCommand}" />
+        <KeyBinding Gesture="Back" Command="{Binding MapTools.ToolBackstepCommand}" />
+    </shadui:Window.KeyBindings>
+
+    <shadui:Window.Styles>
+        <!-- The Clearance tab's Distance / Time switch (#902 D1). -->
+        <Style Selector="ToggleButton.dockSegment">
+            <Setter Property="Height" Value="22" />
+            <Setter Property="MinHeight" Value="22" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="Background" Value="{DynamicResource BackgroundColor}" />
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+            <Setter Property="CornerRadius" Value="6,0,0,6" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="ToggleButton.dockSegment.last">
+            <Setter Property="CornerRadius" Value="0,6,6,0" />
+            <Setter Property="Margin" Value="-1,0,0,0" />
+        </Style>
+        <Style Selector="ToggleButton.dockSegment:checked">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="ToggleButton.dockSegment:disabled">
+            <Setter Property="Opacity" Value="0.45" />
+        </Style>
+        <!-- Activity bar toggle buttons: no fill, muted icon, primary on hover/selected -->
+        <Style Selector="ToggleButton.ActivityIcon">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Content="{TemplateBinding Content}"
+                                      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                      Padding="{TemplateBinding Padding}"
+                                      Background="Transparent" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="ToggleButton.ActivityIcon:pointerover">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryColor}" />
+        </Style>
+        <Style Selector="ToggleButton.ActivityIcon:checked">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryColor}" />
+        </Style>
+        <!-- Inherit foreground into the FluentIcon inside -->
+        <Style Selector="ToggleButton.ActivityIcon ic|FluentIcon">
+            <Setter Property="Foreground" Value="{Binding $parent[ToggleButton].Foreground}" />
+        </Style>
+
+        <!--
+          Shared GridSplitter look-and-feel. Apply via Classes="PaneSplitter"
+          to every splitter in the viewer (main pane, pick panel, catalog
+          details). The splitter itself stays transparent at rest so it
+          blends with its surroundings; the accent color appears only on
+          hover or while the user is actively dragging.
+        -->
+        <!--
+          The splitter is transparent at rest. The shared `HoverDelay`
+          attached behavior (set on each splitter individually) waits
+          500ms after pointer-enter before adding the `hovered` class,
+          so a quick pass-through never reveals the accent. Exit is
+          immediate. While dragging, `:pressed` keeps the accent
+          regardless of pointer position.
+        -->
+        <Style Selector="GridSplitter.PaneSplitter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="GridSplitter.PaneSplitter.hovered">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="GridSplitter.PaneSplitter:pressed">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+
+        <!--
+          Map overlay buttons (Pick Mode, Zoom In/Out/Extent) sit on top
+          of the map. The default ShadUI Icon foreground uses MutedColor
+          which is hard to read against the chart canvas — bump these
+          buttons to the full ForegroundColor at rest so the icons are
+          legible. (Background is left at the ShadUI default to avoid
+          the hover-overlay shimmer that occurs when the resting fill
+          and the GhostColor hover overlay differ.)
+        -->
+        <Style Selector="Button.MapOverlay">
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+        </Style>
+        <Style Selector="Button.MapOverlay ic|FluentIcon">
+            <Setter Property="Foreground" Value="{Binding $parent[Button].Foreground}" />
+        </Style>
+
+    </shadui:Window.Styles>
+
+    <shadui:Window.RightWindowTitleBarContent>
+        <StackPanel Orientation="Horizontal" Spacing="0">
+            <Button Command="{Binding AppCommands.ShowFeedbackCommand}"
+                    AutomationProperties.AutomationId="MainWindow.Feedback"
+                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ReportFeedback}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ReportFeedback}"
+                    Width="32" Height="28"
+                    Padding="0"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
+                    Background="Transparent"
+                    BorderThickness="0">
+                <ic:FluentIcon Icon="PersonFeedback" IconVariant="Regular" FontSize="16"
+                               Foreground="{DynamicResource ForegroundColor}" />
+            </Button>
+            <Button Command="{Binding AppCommands.ToggleThemeCommand}"
+                    AutomationProperties.AutomationId="MainWindow.ToggleTheme"
+                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ToggleTheme}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ToggleTheme}"
+                    Width="32" Height="28"
+                    Padding="0"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
+                    Background="Transparent"
+                    BorderThickness="0">
+                <Panel>
+                    <!-- Sun icon (shown in dark mode, click to go light) -->
+                    <ic:FluentIcon Icon="WeatherSunny" IconVariant="Regular" FontSize="16"
+                                   Foreground="{DynamicResource ForegroundColor}"
+                                   IsVisible="{Binding AppCommands.IsDarkTheme}" />
+                    <!-- Moon icon (shown in light mode, click to go dark) -->
+                    <ic:FluentIcon Icon="WeatherMoon" IconVariant="Regular" FontSize="16"
+                                   Foreground="{DynamicResource ForegroundColor}"
+                                   IsVisible="{Binding !AppCommands.IsDarkTheme}" />
+                </Panel>
+            </Button>
+        </StackPanel>
+    </shadui:Window.RightWindowTitleBarContent>
+
+    <shadui:Window.Hosts>
+        <!-- Hosts ShadUI modal dialogs (e.g. Report Feedback). -->
+        <shadui:DialogHost Manager="{Binding AppCommands.DialogManager}" x:Name="PART_DialogHost" />
+    </shadui:Window.Hosts>
+
+    <Panel>
+    <DockPanel>
+        <!--
+          In-window menu bar. On macOS this control is invisible and the
+          NativeMenu (set in NativeMenuBuilder) is exported to the system
+          menu bar; on Windows and Linux it renders the same menu inline at
+          the top of the window so the File/View menus are reachable there.
+        -->
+        <NativeMenuBar DockPanel.Dock="Top"
+                       IsVisible="{OnPlatform true, macOS=false}" />
+
+        <!-- Status bar at bottom -->
+        <Border DockPanel.Dock="Bottom"
+                Background="{DynamicResource BackgroundColor}"
+                BorderBrush="{DynamicResource BorderColor}"
+                BorderThickness="0,1,0,0"
+                Padding="8,4"
+                Height="30"
+                IsVisible="{Binding Layout.IsStatusBarVisible}">
+            <DockPanel x:Name="StatusBarDock" LastChildFill="False">
+                <DockPanel.Styles>
+                    <!-- Shared vertical divider between status-bar items. Each
+                         item carries a *leading* separator bound to the same
+                         visibility as the item, so the row always reads as
+                         evenly divided cells with no dangling or missing
+                         dividers regardless of which items are currently shown. -->
+                    <Style Selector="Border.StatusSeparator">
+                        <Setter Property="Width" Value="1" />
+                        <Setter Property="Height" Value="15" />
+                        <Setter Property="Margin" Value="12,0" />
+                        <Setter Property="VerticalAlignment" Value="Center" />
+                        <Setter Property="Background" Value="{DynamicResource BorderColor}" />
+                    </Style>
+                </DockPanel.Styles>
+
+                <!-- Right-aligned status items, in a single cluster so the
+                     separators between them stay consistent. Scale (with its
+                     overscale pill) and the MCP readout sit to the right of the
+                     cursor lat/lon so they don't shift when the cursor leaves
+                     the map. -->
+                <StackPanel x:Name="StatusRightCluster"
+                            DockPanel.Dock="Right"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+
+                    <!-- Measure / route-edit tool summary -->
+                    <Border Classes="StatusSeparator" IsVisible="{Binding MapTools.IsToolSummaryVisible}" />
+                    <TextBlock Text="{Binding MapTools.MeasureSummary}"
+                               IsVisible="{Binding MapTools.IsToolSummaryVisible}"
+                               FontSize="12"
+                               FontFeatures="+tnum"
+                               Opacity="0.85"
+                               VerticalAlignment="Center" />
+
+                    <!-- Cursor latitude / longitude -->
+                    <Border Classes="StatusSeparator" IsVisible="{Binding StatusBar.IsMouseLatLonVisible}" />
+                    <ic:FluentIcon Icon="MyLocation" IconVariant="Regular" FontSize="14"
+                                   Opacity="0.6"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,6,0"
+                                   IsVisible="{Binding StatusBar.IsMouseLatLonVisible}"
+                                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
+                    <TextBlock Text="{Binding StatusBar.MouseLatText}"
+                               IsVisible="{Binding StatusBar.IsMouseLatLonVisible}"
+                               FontSize="12"
+                               FontFeatures="+tnum"
+                               Opacity="0.75"
+                               MinWidth="74"
+                               TextAlignment="Right"
+                               VerticalAlignment="Center"
+                               ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
+                    <TextBlock Text="{Binding StatusBar.MouseLonText}"
+                               IsVisible="{Binding StatusBar.IsMouseLatLonVisible}"
+                               FontSize="12"
+                               FontFeatures="+tnum"
+                               Opacity="0.75"
+                               MinWidth="80"
+                               TextAlignment="Right"
+                               VerticalAlignment="Center"
+                               Margin="10,0,0,0"
+                               ToolTip.Tip="{x:Static loc:Strings.Tooltip_MouseLatLon}" />
+
+                    <!-- Map scale, with the overscale pill immediately after -->
+                    <Border Classes="StatusSeparator" IsVisible="{Binding StatusBar.IsMapScaleVisible}" />
+                    <TextBlock Text="{x:Static loc:Strings.Status_ScaleLabel}"
+                               FontSize="12"
+                               Opacity="0.5"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding StatusBar.IsMapScaleVisible}"
+                               Margin="0,0,6,0"
+                               ToolTip.Tip="{x:Static loc:Strings.Tooltip_MapScale}" />
+                    <TextBlock Text="{Binding StatusBar.MapScaleText}"
+                               FontSize="12"
+                               FontFeatures="+tnum"
+                               Opacity="0.75"
+                               MinWidth="92"
+                               TextAlignment="Right"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding StatusBar.IsMapScaleVisible}"
+                               ToolTip.Tip="{x:Static loc:Strings.Tooltip_MapScale}" />
+                    <Button x:Name="OverscaleButton"
+                            AutomationProperties.AutomationId="Map.Overscale"
+                            AutomationProperties.Name="{x:Static loc:Strings.Label_Overscale}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_Overscale}"
+                            VerticalAlignment="Center"
+                            Margin="10,0,0,0"
+                            Padding="8,1"
+                            CornerRadius="10"
+                            BorderThickness="1"
+                            Background="#26D97706"
+                            BorderBrush="#80D97706"
+                            Foreground="#B45309"
+                            IsVisible="{Binding StatusBar.IsOverscaleVisible}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_Overscale}">
+                        <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                            <ic:FluentIcon Icon="Warning" IconVariant="Filled" FontSize="13"
+                                           Foreground="{Binding $parent[Button].Foreground}"
+                                           VerticalAlignment="Center" />
+                            <TextBlock Text="{x:Static loc:Strings.Status_OverscaleLabel}"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       LetterSpacing="0.5"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding StatusBar.OverscaleFactorText}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       FontFeatures="+tnum"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                        <Button.Flyout>
+                            <Flyout Placement="Top">
+                                <Border Padding="14,12">
+                                    <StackPanel MinWidth="220" Spacing="8">
+                                        <TextBlock Text="{x:Static loc:Strings.Status_OverscalePopupHeader}"
+                                                   FontSize="11"
+                                                   FontWeight="SemiBold"
+                                                   LetterSpacing="0.8"
+                                                   Opacity="0.7" />
+                                        <ItemsControl ItemsSource="{Binding StatusBar.OverscaleCells}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                                                        <TextBlock Grid.Column="0"
+                                                                   Text="{Binding Name}"
+                                                                   FontSize="13"
+                                                                   VerticalAlignment="Center"
+                                                                   Margin="0,0,24,0" />
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{Binding FactorText}"
+                                                                   FontSize="13"
+                                                                   FontWeight="SemiBold"
+                                                                   FontFeatures="+tnum"
+                                                                   Foreground="#B45309"
+                                                                   VerticalAlignment="Center" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+
+                    <!-- Depth basis (#1191): what the chart's depths are relative
+                         to. Never hidden while depths are drawn; steps down to a
+                         shorter whole form when the status bar is narrow. -->
+                    <views:DepthBasisIndicatorView x:Name="DepthBasisIndicator"
+                                                   DataContext="{Binding StatusBar.DepthBasis}" />
+
+                    <!-- Protective marking (#1371): the highest marking of the AML
+                         data loaded, after DEPTHS and before MCP. -->
+                    <views:AmlMarkingIndicatorView x:Name="AmlMarkingIndicator"
+                                                   DataContext="{Binding StatusBar.AmlMarking}" />
+
+                    <!-- MCP server -->
+                    <Border Classes="StatusSeparator" IsVisible="{Binding StatusBar.IsMcpRunning}" />
+                    <TextBlock Text="{Binding StatusBar.McpStatusText}"
+                               IsVisible="{Binding StatusBar.IsMcpRunning}"
+                               FontSize="12"
+                               FontFeatures="+tnum"
+                               Opacity="0.7"
+                               VerticalAlignment="Center"
+                               ToolTip.Tip="{Binding StatusBar.McpTooltipText}" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Activity bar (narrow icon strip on far left) -->
+        <Border DockPanel.Dock="Left"
+                Background="{DynamicResource BackgroundColor}"
+                BorderBrush="{DynamicResource BorderColor}"
+                BorderThickness="0,0,1,0"
+                Width="48"
+                Padding="0">
+            <DockPanel>
+                <!--
+                  Activity-tab items. The set of tabs is the IActivityTab
+                  registry; the same ItemTemplate is used for both the
+                  pinned-bottom (Settings) and top groups. Adding a tab is
+                  a DI-only change in App.axaml.cs.
+                -->
+                <ItemsControl DockPanel.Dock="Bottom"
+                              Margin="0,4"
+                              ItemsSource="{Binding Layout.LeftDockBottomTabs}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Spacing="2" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="activities:IActivityTab">
+                            <Grid IsVisible="{Binding IsVisible}">
+                                <Border Width="3" HorizontalAlignment="Left"
+                                        Background="{DynamicResource AccentBrush}">
+                                    <Border.IsVisible>
+                                        <MultiBinding Converter="{x:Static activities:ActiveTabConverter.Instance}">
+                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.SelectedLeftTabId" />
+                                            <Binding Path="Id" />
+                                        </MultiBinding>
+                                    </Border.IsVisible>
+                                </Border>
+                                <ToggleButton Classes="ActivityIcon"
+                                              AutomationProperties.AutomationId="{Binding Id, StringFormat=ActivityBar.{0}}"
+                                              AutomationProperties.Name="{Binding Name}"
+                                              AutomationProperties.HelpText="{Binding Tooltip}"
+                                              Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.SelectTabCommand}"
+                                              CommandParameter="{Binding}"
+                                              ToolTip.Tip="{Binding Tooltip}"
+                                              Content="{Binding CreateIcon, Converter={x:Static activities:IconFactoryConverter.Instance}}"
+                                              Height="48"
+                                              Padding="0"
+                                              HorizontalContentAlignment="Center"
+                                              VerticalContentAlignment="Center">
+                                    <ToggleButton.IsChecked>
+                                        <MultiBinding Mode="OneWay" Converter="{x:Static activities:ActiveTabConverter.Instance}">
+                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.SelectedLeftTabId" />
+                                            <Binding Path="Id" />
+                                        </MultiBinding>
+                                    </ToggleButton.IsChecked>
+                                </ToggleButton>
+                                <!-- A count badge, e.g. new navigational warnings (#932). -->
+                                <Border IsVisible="{Binding HasBadge}"
+                                        IsHitTestVisible="False"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Top"
+                                        Margin="0,7,6,0"
+                                        MinWidth="16"
+                                        Height="16"
+                                        Padding="4,0"
+                                        CornerRadius="8"
+                                        Background="{DynamicResource AccentBrush}"
+                                        AutomationProperties.AutomationId="{Binding Id, StringFormat=ActivityBar.{0}Badge}"
+                                        AutomationProperties.Name="{Binding BadgeName}">
+                                    <TextBlock Text="{Binding BadgeCount}"
+                                               FontSize="10"
+                                               FontWeight="SemiBold"
+                                               Foreground="White"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                </Border>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <ItemsControl DockPanel.Dock="Top"
+                              Margin="0,4"
+                              ItemsSource="{Binding Layout.LeftDockTopTabs}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Spacing="2" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="activities:IActivityTab">
+                            <Grid IsVisible="{Binding IsVisible}">
+                                <Border Width="3" HorizontalAlignment="Left"
+                                        Background="{DynamicResource AccentBrush}">
+                                    <Border.IsVisible>
+                                        <MultiBinding Converter="{x:Static activities:ActiveTabConverter.Instance}">
+                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.SelectedLeftTabId" />
+                                            <Binding Path="Id" />
+                                        </MultiBinding>
+                                    </Border.IsVisible>
+                                </Border>
+                                <ToggleButton Classes="ActivityIcon"
+                                              AutomationProperties.AutomationId="{Binding Id, StringFormat=ActivityBar.{0}}"
+                                              AutomationProperties.Name="{Binding Name}"
+                                              AutomationProperties.HelpText="{Binding Tooltip}"
+                                              Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.SelectTabCommand}"
+                                              CommandParameter="{Binding}"
+                                              ToolTip.Tip="{Binding Tooltip}"
+                                              Content="{Binding CreateIcon, Converter={x:Static activities:IconFactoryConverter.Instance}}"
+                                              Height="48"
+                                              Padding="0"
+                                              HorizontalContentAlignment="Center"
+                                              VerticalContentAlignment="Center">
+                                    <ToggleButton.IsChecked>
+                                        <MultiBinding Mode="OneWay" Converter="{x:Static activities:ActiveTabConverter.Instance}">
+                                            <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.SelectedLeftTabId" />
+                                            <Binding Path="Id" />
+                                        </MultiBinding>
+                                    </ToggleButton.IsChecked>
+                                </ToggleButton>
+                                <!-- A count badge, e.g. new navigational warnings (#932). -->
+                                <Border IsVisible="{Binding HasBadge}"
+                                        IsHitTestVisible="False"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Top"
+                                        Margin="0,7,6,0"
+                                        MinWidth="16"
+                                        Height="16"
+                                        Padding="4,0"
+                                        CornerRadius="8"
+                                        Background="{DynamicResource AccentBrush}"
+                                        AutomationProperties.AutomationId="{Binding Id, StringFormat=ActivityBar.{0}Badge}"
+                                        AutomationProperties.Name="{Binding BadgeName}">
+                                    <TextBlock Text="{Binding BadgeCount}"
+                                               FontSize="10"
+                                               FontWeight="SemiBold"
+                                               Foreground="White"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center" />
+                                </Border>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </DockPanel>
+        </Border>
+
+        <!-- Activity pane + splitter + map + pick panel in a resizable grid -->
+        <Grid x:Name="ContentGrid">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="320" MinWidth="200" MaxWidth="600"
+                                  bh:CollapsibleColumn.IsVisible="{Binding Layout.IsLeftDockShown}"
+                                  bh:CollapsibleColumn.ExpandedWidth="320"
+                                  bh:CollapsibleColumn.MinWidthWhenVisible="200"
+                                  bh:CollapsibleColumn.MaxWidthWhenVisible="600"
+                                  bh:CollapsibleColumn.SavedWidth="{Binding Layout.LeftDockSavedWidth, Mode=TwoWay}" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="360" MinWidth="240" MaxWidth="600"
+                                  bh:CollapsibleColumn.IsVisible="{Binding Layout.IsRightDockShown}"
+                                  bh:CollapsibleColumn.ExpandedWidth="360"
+                                  bh:CollapsibleColumn.MinWidthWhenVisible="240"
+                                  bh:CollapsibleColumn.MaxWidthWhenVisible="600"
+                                  bh:CollapsibleColumn.SavedWidth="{Binding Layout.RightDockSavedWidth, Mode=TwoWay}" />
+                <!-- The folded Object Information edge tab (#901). -->
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left dock pane (activity tabs: Datasets, FCs, PCs, etc.).
+                 No close button — content swaps via the activity bar. -->
+            <views:ApplicationPanel Grid.Column="0"
+                                    x:Name="LeftDockPanel"
+                                    Title="{Binding Layout.LeftDockTitle}"
+                                    Content="{Binding Layout.LeftDockContent}"
+                                    IsVisible="{Binding Layout.IsLeftDockShown}" />
+
+            <!-- Resize grip between pane and map -->
+            <GridSplitter Grid.Column="1"
+                          Classes="PaneSplitter"
+                          Width="4"
+                          ResizeDirection="Columns"
+                          IsVisible="{Binding Layout.IsLeftDockShown}"
+                          bh:HoverDelay.DelayMilliseconds="500"
+                          Name="PaneSplitter" />
+
+            <!-- Map control fills remaining space, with zoom buttons overlaid -->
+            <!-- Map column wrapped in a row-grid so a timeline panel can dock at the bottom -->
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" MinHeight="100" />
+                    <RowDefinition Height="Auto" />
+                    <!-- 260: room for a few Timeline lanes (#710); a saved height wins. -->
+                    <RowDefinition Height="260" MinHeight="120"
+                                   bh:CollapsibleRow.IsVisible="{Binding Layout.IsBottomDockShown}"
+                                   bh:CollapsibleRow.ExpandedHeight="260"
+                                   bh:CollapsibleRow.MinHeightWhenVisible="120"
+                                   bh:CollapsibleRow.SavedHeight="{Binding Layout.BottomDockSavedHeight, Mode=TwoWay}" />
+                </Grid.RowDefinitions>
+                <!--
+                    ClipToBounds keeps the map overlays (scale bar, pick/
+                    measure/zoom buttons, compass rose) confined to the map
+                    row. Without it, the top-anchored overlay stack overflows
+                    downward into the timeline / bottom dock when the map row
+                    shrinks.
+                -->
+                <Grid x:Name="MapArea" Grid.Row="0" DragDrop.AllowDrop="True" ClipToBounds="True">
+                <diag:InstrumentedMapControl x:Name="MapControl" />
+                <diag:GpuAccelerationProbe />
+                <views:ScaleBarView x:Name="ScaleBar"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Top"
+                                    Margin="0,4,0,0" />
+                <!-- Time HUD (#712, handoff Part F): the Timeline's controls at the
+                     bottom centre of the map while the Timeline tab isn't shown
+                     (dock closed, on another tab, or the window too narrow). -->
+                <views:TimeHudView DataContext="{Binding Timeline}"
+                                   IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).Layout.IsTimeHudVisible}"
+                                   DockCommand="{Binding $parent[Window].((vm:MainViewModel)DataContext).Layout.ToggleTimelineDockCommand}"
+                                   IsDockOpen="{Binding $parent[Window].((vm:MainViewModel)DataContext).Layout.IsBottomDockShown}"
+                                   IsDockAvailable="{Binding !$parent[Window].((vm:MainViewModel)DataContext).Layout.IsWindowNarrow}"
+                                   MapWidth="{Binding $parent[Window].((vm:MainViewModel)DataContext).Layout.MapWidth}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Bottom"
+                                   Margin="0,0,0,14" />
+                <!-- Check route map legend (#959, handoff C8), at the bottom
+                     left clear of the Time HUD; the finding chip sits above it. -->
+                <views:RouteCheckLegendView x:Name="RouteCheckLegend"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Bottom"
+                                            Margin="12,0,0,60" />
+                <!-- AML CLB chip (#1374, AML handoff decision 23): while CLB contours
+                     are drawn, say they're not used for depth checks. Bottom right,
+                     clear of the Check route legend (bottom left) and the Time HUD
+                     (bottom centre). DataContext is the AML display section, set in
+                     code-behind. -->
+                <Border x:Name="AmlClbChip"
+                        x:DataType="vm:AmlDisplaySectionViewModel"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Bottom"
+                        Margin="0,0,12,14"
+                        IsHitTestVisible="False"
+                        IsVisible="{Binding IsClbChipShown, FallbackValue=False}"
+                        AutomationProperties.AutomationId="Map.AmlClbChip"
+                        AutomationProperties.Name="{Binding ClbChipText, FallbackValue={x:Null}}"
+                        Background="{DynamicResource MapOverlaySurfaceBrush}"
+                        BorderBrush="#52525B"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="8,4">
+                    <TextBlock Text="{Binding ClbChipText, FallbackValue={x:Null}}"
+                               FontSize="11.5"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource ForegroundColor}"
+                               ToolTip.Tip="{x:Static loc:Strings.Aml_NoDepthChecks}" />
+                </Border>
+                <!-- Map stamp (#713 B4): the view time over the map while the
+                     Timeline tab is shown in the dock, so the map (and any
+                     screenshot of it) says which time it shows; the Time HUD
+                     takes over otherwise, never both (design note
+                     time-overlays D1). Green dot Live, accent Pinned. With
+                     date-dependent data loaded and the time pinned it starts
+                     "Display Not Real Time" (S-98 §12.7.2; #993), as the HUD
+                     does. -->
+                <Panel HorizontalAlignment="Left"
+                       VerticalAlignment="Top"
+                       Margin="12,12,0,0"
+                       IsHitTestVisible="False"
+                       AutomationProperties.AutomationId="Map.TimeStamp"
+                       IsVisible="{Binding Layout.IsMapStampVisible}">
+                    <Border Background="{DynamicResource MapOverlaySurfaceBrush}"
+                            CornerRadius="6" />
+                    <StackPanel Orientation="Horizontal"
+                                Spacing="6"
+                                Margin="8,4">
+                        <Panel VerticalAlignment="Center">
+                            <Ellipse Width="7" Height="7"
+                                     IsVisible="{Binding Timeline.IsLive}"
+                                     Fill="{DynamicResource SuccessColor}" />
+                            <Ellipse Width="7" Height="7"
+                                     IsVisible="{Binding !Timeline.IsLive}"
+                                     Fill="{DynamicResource AccentBrush}" />
+                            <!-- Grey while the map is still drawing the new time (#709). -->
+                            <Ellipse Width="7" Height="7"
+                                     IsVisible="{Binding Timeline.IsDrawing}"
+                                     Fill="#A1A1AA" />
+                        </Panel>
+                        <TextBlock Text="{Binding Timeline.StampText}"
+                                   FontFamily="{StaticResource MonoFontFamily}"
+                                   FontSize="11.5"
+                                   Foreground="{DynamicResource ForegroundColor}"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Panel>
+                <!-- The tool cards (#1130 D13) take the slot under the time stamp;
+                     the warning note moves down below them (D19). The measure card
+                     goes first, then Range & bearing. -->
+                <StackPanel x:Name="MapTopLeftStack"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            Margin="12,44,64,0"
+                            Spacing="8">
+                <!-- Measure card (#1130, D1). -->
+                <views:MeasureCardView DataContext="{Binding MapTools.MeasureCard}"
+                                       IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).MapTools.IsMeasureModeActive}"
+                                       HorizontalAlignment="Left" />
+                <views:RangeBearingCardView DataContext="{Binding MapTools.RangeBearing}"
+                                            IsVisible="{Binding IsActive}" />
+                <!-- Navigational warning note (#932): while a warning opened from
+                     the panel draws nothing (no location) or isn't framed (not in
+                     force), say why. In the page, so captures include it. -->
+                <Border HorizontalAlignment="Left"
+                        VerticalAlignment="Top"
+                        MaxWidth="300"
+                        IsHitTestVisible="False"
+                        AutomationProperties.AutomationId="Map.WarningNote"
+                        IsVisible="{Binding MapChrome.NavigationalWarnings.HasMapNote, FallbackValue=False}"
+                        Background="{DynamicResource MapOverlaySurfaceBrush}"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Padding="11,7">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <ic:FluentIcon Grid.Column="0"
+                                       Icon="Document"
+                                       FontSize="15"
+                                       Margin="0,0,8,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource MutedColor}"
+                                       IsVisible="{Binding MapChrome.NavigationalWarnings.IsMapNoteTextOnly, FallbackValue=False}" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding MapChrome.NavigationalWarnings.MapNote, FallbackValue={x:Null}}"
+                                   FontSize="11.5"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource ForegroundColor}"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+                </StackPanel>
+                <!-- Route editing chip (#896, handoff A6), below the scale bar and
+                     clear of the map buttons so it never covers them. -->
+                <Border HorizontalAlignment="Left"
+                        VerticalAlignment="Top"
+                        Margin="12,44,64,0"
+                        IsHitTestVisible="False"
+                        AutomationProperties.AutomationId="Map.RouteEditChip"
+                        IsVisible="{Binding MapTools.IsRouteEditModeActive}"
+                        Background="{DynamicResource MapOverlaySurfaceBrush}"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="8,4">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Ellipse Width="7" Height="7"
+                                 VerticalAlignment="Center"
+                                 Fill="{DynamicResource AccentBrush}" />
+                        <TextBlock Text="{x:Static loc:Strings.Map_RouteEditChipTitle}"
+                                   FontSize="11.5"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource ForegroundColor}"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="{x:Static loc:Strings.Map_RouteEditChipHint}"
+                                   FontSize="11.5"
+                                   Foreground="{DynamicResource MutedColor}"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+                <!-- View pill (#1192): the active display combination, left
+                     of the map tools. Its flyout lists the combinations (built-ins,
+                     then the mariner's own), with Reapply, Save as and Manage. -->
+                <Button x:Name="DisplayCombinationButton"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Margin="0,14,60,0"
+                        Padding="10,4"
+                        CornerRadius="14"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        Background="{DynamicResource MapOverlaySurfaceBrush}"
+                        Foreground="{DynamicResource ForegroundColor}"
+                        IsVisible="{Binding MapChrome.DisplayCombinations, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        AutomationProperties.AutomationId="Map.View"
+                        AutomationProperties.Name="{x:Static loc:Strings.Label_DisplayCombination_Pill}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayCombination_Pill}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayCombination_Pill}">
+                    <TextBlock Text="{Binding MapChrome.DisplayCombinations.PillLabel, FallbackValue=''}"
+                               FontSize="12"
+                               FontWeight="Medium"
+                               MaxWidth="260"
+                               TextTrimming="CharacterEllipsis" />
+                    <Button.Flyout>
+                        <Flyout Placement="BottomEdgeAlignedRight">
+                            <Border Padding="14,12,14,12" Background="Transparent">
+                                <StackPanel Width="340" Spacing="8">
+                                    <views:DisplayCombinationsView DataContext="{Binding MapChrome.DisplayCombinations}" />
+                                    <Button Classes="Ghost"
+                                            HorizontalAlignment="Left"
+                                            Padding="8,4"
+                                            AutomationProperties.AutomationId="Map.View.Manage"
+                                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayCombination_Manage}"
+                                            Content="{x:Static loc:Strings.DisplayCombination_Manage}"
+                                            Command="{Binding MapChrome.DisplayCombinations.ManageCommand, FallbackValue={x:Null}}"
+                                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayCombination_Manage}" />
+                                </StackPanel>
+                            </Border>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+                <StackPanel Orientation="Vertical"
+                            Spacing="2"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Margin="0,12,12,0">
+                    <Button x:Name="PickModeButton"
+                            AutomationProperties.AutomationId="Map.PickMode"
+                            AutomationProperties.Name="{x:Static loc:Strings.Label_PickMode}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_PickMode}"
+                            AutomationProperties.AcceleratorKey="I"
+                            Classes="Icon MapOverlay"
+                            Classes.pickActive="{Binding MapTools.IsPickModeActive}"
+                            Command="{Binding MapTools.TogglePickModeCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_PickMode}">
+                        <Button.Styles>
+                            <!--
+                              When pick mode is active we add the "pickActive"
+                              class from code-behind; this fills the button with
+                              the accent color so the user can tell at a glance.
+                              Using Button (not ToggleButton) lets us keep the
+                              exact resting appearance of the adjacent zoom
+                              buttons — ShadUI's `Classes="Icon"` only styles
+                              Button, not ToggleButton.
+                            -->
+                            <Style Selector="Button#PickModeButton.pickActive">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#PickModeButton.pickActive /template/ ContentPresenter">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Style>
+                            <!--
+                              Force the FluentIcon child to inherit the
+                              button's Foreground so the toggled-on state
+                              actually paints the icon white. (The default
+                              FluentIcon Foreground is bound to the theme
+                              text color and would otherwise stay dark.)
+                            -->
+                            <Style Selector="Button#PickModeButton.pickActive ic|FluentIcon">
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <!--
+                              ShadUI's Button.Icon template stacks a separate
+                              Border#HoverBackground on top of the base whose
+                              Background is bound to ButtonAssist.HoverBackground
+                              (default GhostColor). Override it so the active
+                              fill stays accent-colored on hover.
+                            -->
+                            <Style Selector="Button#PickModeButton.pickActive /template/ Border#HoverBackground">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <!--
+                                  Pin opacity to 1 so the 0→1 fade-in transition
+                                  doesn't briefly blend with the base layer when
+                                  the cursor enters the button.
+                                -->
+                                <Setter Property="Opacity" Value="1" />
+                            </Style>
+                        </Button.Styles>
+                        <ic:FluentIcon Icon="CursorClick" IconVariant="Regular" FontSize="16" />
+                    </Button>
+                    <!--
+                      Measure Mode toggle button. Same accent-fill pattern
+                      as PickModeButton above; ruler icon distinguishes the
+                      two. Cmd/Ctrl+M is the keyboard accelerator (see the
+                      Window.KeyBindings block at the top of this file).
+                    -->
+                    <Button x:Name="MeasureModeButton"
+                            AutomationProperties.AutomationId="Map.MeasureMode"
+                            AutomationProperties.Name="{x:Static loc:Strings.Label_MeasureMode}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_MeasureMode}"
+                            Classes="Icon MapOverlay"
+                            Classes.measureActive="{Binding MapTools.IsMeasureModeActive}"
+                            Command="{Binding MapTools.ToggleMeasureModeCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_MeasureMode}">
+                        <Button.Styles>
+                            <Style Selector="Button#MeasureModeButton.measureActive">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#MeasureModeButton.measureActive /template/ ContentPresenter">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Style>
+                            <Style Selector="Button#MeasureModeButton.measureActive ic|FluentIcon">
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#MeasureModeButton.measureActive /template/ Border#HoverBackground">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Opacity" Value="1" />
+                            </Style>
+                        </Button.Styles>
+                        <ic:FluentIcon Icon="Ruler" IconVariant="Regular" FontSize="16" />
+                    </Button>
+                    <!--
+                      Range & bearing toggle button (#1130 D11): an EBL/VRM
+                      pair from a chosen origin. Same accent-fill pattern as
+                      the Measure button; Cmd/Ctrl+R toggles it.
+                    -->
+                    <Button x:Name="RangeBearingModeButton"
+                            AutomationProperties.AutomationId="Map.RangeBearingMode"
+                            AutomationProperties.Name="{x:Static loc:Strings.Label_RangeBearingMode}"
+                            AutomationProperties.HelpText="{Binding MapTools.RangeBearingModeTooltip}"
+                            Classes="Icon MapOverlay"
+                            Classes.rangeBearingActive="{Binding MapTools.IsRangeBearingModeActive}"
+                            Command="{Binding MapTools.ToggleRangeBearingModeCommand}"
+                            ToolTip.Tip="{Binding MapTools.RangeBearingModeTooltip}">
+                        <Button.Styles>
+                            <Style Selector="Button#RangeBearingModeButton.rangeBearingActive">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#RangeBearingModeButton.rangeBearingActive /template/ ContentPresenter">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Style>
+                            <Style Selector="Button#RangeBearingModeButton.rangeBearingActive ic|FluentIcon">
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#RangeBearingModeButton.rangeBearingActive /template/ Border#HoverBackground">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Opacity" Value="1" />
+                            </Style>
+                        </Button.Styles>
+                        <ic:FluentIcon Icon="CompassNorthwest" IconVariant="Regular" FontSize="16" />
+                    </Button>
+                    <!--
+                      Route Edit Mode toggle button. Mirrors the Measure
+                      button's accent-fill pattern; the route icon
+                      distinguishes it. Clicking enters the interactive
+                      route editor (click to add waypoints, drag to move);
+                      Ctrl+E (⌘E) toggles it too (Tools/RouteEditorKeys).
+                    -->
+                    <Button x:Name="RouteEditModeButton"
+                            AutomationProperties.AutomationId="Map.RouteEditMode"
+                            AutomationProperties.Name="{x:Static loc:Strings.Label_RouteEditMode}"
+                            AutomationProperties.HelpText="{Binding MapTools.RouteEditModeTooltip}"
+                            Classes="Icon MapOverlay"
+                            Classes.routeActive="{Binding MapTools.IsRouteEditModeActive}"
+                            Command="{Binding MapTools.ToggleRouteEditModeCommand}"
+                            ToolTip.Tip="{Binding MapTools.RouteEditModeTooltip}">
+                        <Button.Styles>
+                            <Style Selector="Button#RouteEditModeButton.routeActive">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#RouteEditModeButton.routeActive /template/ ContentPresenter">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Style>
+                            <Style Selector="Button#RouteEditModeButton.routeActive ic|FluentIcon">
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#RouteEditModeButton.routeActive /template/ Border#HoverBackground">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Opacity" Value="1" />
+                            </Style>
+                        </Button.Styles>
+                        <ic:FluentIcon Icon="Flow" IconVariant="Regular" FontSize="16" />
+                    </Button>
+                    <!--
+                      Consolidated display-settings button. Replaces the
+                      former Display category / Text / Palette pills with a
+                      single overlay panel that exposes all three as
+                      segmented toggles (see the segmented-control styles in
+                      App.axaml). The button adopts the accent fill while its
+                      flyout is open (:flyout-open), matching the Pick and
+                      Measure mode buttons above.
+                    -->
+                    <Button x:Name="DisplaySettingsButton"
+                            AutomationProperties.AutomationId="Map.DisplaySettings"
+                            AutomationProperties.Name="{x:Static loc:Strings.DisplaySettings_Title}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplaySettings}"
+                            Classes="Icon MapOverlay"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplaySettings}">
+                        <Button.Styles>
+                            <Style Selector="Button#DisplaySettingsButton:flyout-open">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#DisplaySettingsButton:flyout-open /template/ ContentPresenter">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                            </Style>
+                            <Style Selector="Button#DisplaySettingsButton:flyout-open ic|FluentIcon">
+                                <Setter Property="Foreground" Value="White" />
+                            </Style>
+                            <Style Selector="Button#DisplaySettingsButton:flyout-open /template/ Border#HoverBackground">
+                                <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                <Setter Property="Opacity" Value="1" />
+                            </Style>
+                        </Button.Styles>
+                        <ic:FluentIcon Icon="Options" IconVariant="Regular" FontSize="16" />
+                        <Button.Flyout>
+                            <Flyout Placement="Left">
+                                <!-- Fixed-width content inside a padded border:
+                                     the explicit Width keeps the panel from
+                                     nudging wider when a segment's label turns
+                                     semibold on selection, and the Border gives
+                                     the card breathing room on all edges. -->
+                                <Border Padding="16,14,16,16" Background="Transparent">
+                                <StackPanel Width="340" Spacing="14">
+                                    <!-- Header -->
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0"
+                                                   Text="{x:Static loc:Strings.DisplaySettings_Title}"
+                                                   FontSize="11"
+                                                   FontWeight="SemiBold"
+                                                   LetterSpacing="0.8"
+                                                   Opacity="0.7"
+                                                   VerticalAlignment="Center" />
+                                        <Button Grid.Column="1"
+                                                AutomationProperties.AutomationId="DisplaySettings.Close"
+                                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_CloseDisplaySettings}"
+                                                Classes="Icon"
+                                                Width="28"
+                                                Height="28"
+                                                Padding="0"
+                                                Click="OnCloseDisplaySettings"
+                                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_CloseDisplaySettings}">
+                                            <ic:FluentIcon Icon="Dismiss"
+                                                           IconVariant="Regular"
+                                                           FontSize="16"
+                                                           Foreground="{DynamicResource ForegroundColor}" />
+                                        </Button>
+                                    </Grid>
+
+                                    <!-- Display base -->
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="{x:Static loc:Strings.DisplaySettings_DisplayBaseHeader}"
+                                                   FontSize="12"
+                                                   FontWeight="Medium"
+                                                   Opacity="0.8" />
+                                        <Border Classes="segmentTrack">
+                                            <UniformGrid Rows="1">
+                                                <RadioButton Classes="segment"
+                                                             AutomationProperties.AutomationId="DisplaySettings.Category.Base"
+                                                             GroupName="DisplaySettingsCategory"
+                                                             Content="{x:Static loc:Strings.Segment_DisplayBase}"
+                                                             IsChecked="{Binding MapChrome.DisplayToolbar.IsDisplayBase, Mode=OneWay}"
+                                                             Command="{Binding MapChrome.DisplayToolbar.SetDisplayBaseCommand}" />
+                                                <RadioButton Classes="segment"
+                                                             AutomationProperties.AutomationId="DisplaySettings.Category.Standard"
+                                                             GroupName="DisplaySettingsCategory"
+                                                             Content="{x:Static loc:Strings.DisplayCategory_Standard}"
+                                                             IsChecked="{Binding MapChrome.DisplayToolbar.IsStandard, Mode=OneWay}"
+                                                             Command="{Binding MapChrome.DisplayToolbar.SetStandardCommand}" />
+                                                <RadioButton Classes="segment"
+                                                             AutomationProperties.AutomationId="DisplaySettings.Category.Other"
+                                                             GroupName="DisplaySettingsCategory"
+                                                             Content="{x:Static loc:Strings.Segment_DisplayOther}"
+                                                             IsChecked="{Binding MapChrome.DisplayToolbar.IsOtherInformation, Mode=OneWay}"
+                                                             Command="{Binding MapChrome.DisplayToolbar.SetOtherInformationCommand}" />
+                                                <RadioButton Classes="segment"
+                                                             AutomationProperties.AutomationId="DisplaySettings.Category.All"
+                                                             GroupName="DisplaySettingsCategory"
+                                                             Content="{x:Static loc:Strings.DisplayCategory_All}"
+                                                             IsChecked="{Binding MapChrome.DisplayToolbar.IsAll, Mode=OneWay}"
+                                                             Command="{Binding MapChrome.DisplayToolbar.SetAllCommand}" />
+                                            </UniformGrid>
+                                        </Border>
+                                    </StackPanel>
+
+                                    <!-- Text viewing groups -->
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="{x:Static loc:Strings.DisplaySettings_TextHeader}"
+                                                   FontSize="12"
+                                                   FontWeight="Medium"
+                                                   Opacity="0.8" />
+                                        <Border Classes="segmentTrack"
+                                                IsEnabled="{Binding MapChrome.TextToolbar.IsEnabled}">
+                                            <UniformGrid Rows="1">
+                                                <ToggleButton Classes="segment"
+                                                              AutomationProperties.AutomationId="DisplaySettings.Text.Important"
+                                                              Content="{x:Static loc:Strings.Segment_TextImportant}"
+                                                              IsChecked="{Binding MapChrome.TextToolbar.IsImportantVisible, Mode=OneWay}"
+                                                              Command="{Binding MapChrome.TextToolbar.ToggleImportantCommand}" />
+                                                <ToggleButton Classes="segment"
+                                                              AutomationProperties.AutomationId="DisplaySettings.Text.Other"
+                                                              Content="{x:Static loc:Strings.Segment_TextOther}"
+                                                              IsChecked="{Binding MapChrome.TextToolbar.IsOtherVisible, Mode=OneWay}"
+                                                              Command="{Binding MapChrome.TextToolbar.ToggleOtherCommand}" />
+                                                <ToggleButton Classes="segment"
+                                                              AutomationProperties.AutomationId="DisplaySettings.Text.All"
+                                                              Content="{x:Static loc:Strings.Segment_TextAll}"
+                                                              IsChecked="{Binding MapChrome.TextToolbar.IsAllVisible, Mode=OneWay}"
+                                                              Command="{Binding MapChrome.TextToolbar.ToggleAllCommand}" />
+                                            </UniformGrid>
+                                        </Border>
+                                    </StackPanel>
+
+                                    <!--
+                                      S-100 map palette (PR-N1) — Day/Dusk/Night
+                                      switch for the chart S-100 colour profile.
+                                      Bound to SettingsViewModel.SelectedPalette
+                                      which already triggers a re-render through
+                                      DatasetLoaderService.
+                                    -->
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="{x:Static loc:Strings.DisplaySettings_PaletteHeader}"
+                                                   FontSize="12"
+                                                   FontWeight="Medium"
+                                                   Opacity="0.8" />
+                                        <Border Classes="segmentTrack">
+                                            <UniformGrid Rows="1">
+                                                <RadioButton Classes="segment"
+                                                             AutomationProperties.AutomationId="DisplaySettings.Palette.Day"
+                                                             GroupName="DisplaySettingsPalette"
+                                                             Content="{x:Static loc:Strings.Palette_Day}"
+                                                             IsChecked="{Binding Settings.IsPaletteDay, Mode=OneWay}"
+                                                             Command="{Binding Settings.SetPaletteDayCommand}" />
+                                                <RadioButton Classes="segment"
+                                                             AutomationProperties.AutomationId="DisplaySettings.Palette.Dusk"
+                                                             GroupName="DisplaySettingsPalette"
+                                                             Content="{x:Static loc:Strings.Palette_Dusk}"
+                                                             IsChecked="{Binding Settings.IsPaletteDusk, Mode=OneWay}"
+                                                             Command="{Binding Settings.SetPaletteDuskCommand}" />
+                                                <RadioButton Classes="segment"
+                                                             AutomationProperties.AutomationId="DisplaySettings.Palette.Night"
+                                                             GroupName="DisplaySettingsPalette"
+                                                             Content="{x:Static loc:Strings.Palette_Night}"
+                                                             IsChecked="{Binding Settings.IsPaletteNight, Mode=OneWay}"
+                                                             Command="{Binding Settings.SetPaletteNightCommand}" />
+                                            </UniformGrid>
+                                        </Border>
+                                    </StackPanel>
+
+                                    <!--
+                                      S-124 navigational warnings (#993): the map
+                                      draws only warnings in force at the view
+                                      time; this also draws those not yet in
+                                      force (S-98 §12.12.2). Shown while S-124
+                                      data is loaded.
+                                    -->
+                                    <StackPanel Spacing="6"
+                                                IsVisible="{Binding Timeline.HasDateDependentData}">
+                                        <TextBlock Text="{x:Static loc:Strings.DisplaySettings_WarningsHeader}"
+                                                   FontSize="12"
+                                                   FontWeight="Medium"
+                                                   Opacity="0.8" />
+                                        <CheckBox AutomationProperties.AutomationId="DisplaySettings.ShowWarningsNotYetInForce"
+                                                  Content="{x:Static loc:Strings.DisplaySettings_ShowWarningsNotYetInForce}"
+                                                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_ShowWarningsNotYetInForce}"
+                                                  IsChecked="{Binding MapChrome.NavigationalWarningDrawing.ShowNotYetInForce, FallbackValue=False}"
+                                                  IsEnabled="{Binding MapChrome.NavigationalWarningDrawing.ShowNavigationalWarnings, FallbackValue=True}" />
+                                    </StackPanel>
+
+                                    <!--
+                                      S-411 sea-ice display mode (issue #416) —
+                                      a SEPARATE axis from the ECDIS display base
+                                      above, placed last. The reusable selector
+                                      is shared (same view model instance) with
+                                      the docked ECDIS Display Controls panel and
+                                      self-hides unless a loaded dataset declares
+                                      more than one mode (S-411 today).
+                                    -->
+                                    <views:DisplayModeSelectorView DataContext="{Binding MapChrome.DisplayModeToolbar}" />
+                                </StackPanel>
+                                </Border>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+
+                    <!--
+                      StackPanel with vertical margin gives the cluster its
+                      own visual grouping (separated from the Pick Mode
+                      button above and the compass rose below).
+                    -->
+                    <StackPanel Orientation="Vertical" Spacing="2" Margin="0,16,0,16">
+                        <Button x:Name="ZoomInButton"
+                                AutomationProperties.AutomationId="Map.ZoomIn"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ZoomIn}"
+                                Classes="Icon MapOverlay"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomIn}">
+                            <ic:FluentIcon Icon="ZoomIn" IconVariant="Regular" FontSize="16" />
+                        </Button>
+                        <Button x:Name="ZoomOutButton"
+                                AutomationProperties.AutomationId="Map.ZoomOut"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ZoomOut}"
+                                Classes="Icon MapOverlay"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomOut}">
+                            <ic:FluentIcon Icon="ZoomOut" IconVariant="Regular" FontSize="16" />
+                        </Button>
+                        <Button x:Name="ZoomToExtentButton"
+                                AutomationProperties.AutomationId="Map.ZoomToExtent"
+                                AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ZoomToExtent}"
+                                Classes="Icon MapOverlay"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToExtent}">
+                            <ic:FluentIcon Icon="ZoomFit" IconVariant="Regular" FontSize="16" />
+                        </Button>
+                    </StackPanel>
+                    <views:CompassRoseView x:Name="CompassRose"
+                                           Margin="0,4,0,0"
+                                           Width="{Binding Bounds.Width, ElementName=ZoomInButton}"
+                                           Height="{Binding Bounds.Width, ElementName=ZoomInButton}" />
+                </StackPanel>
+                </Grid>
+
+                <!-- Resize grip between map and bottom dock -->
+                <GridSplitter Grid.Row="1"
+                              Classes="PaneSplitter"
+                              Height="4"
+                              ResizeDirection="Rows"
+                              IsVisible="{Binding Layout.IsBottomDockShown}"
+                              bh:HoverDelay.DelayMilliseconds="500"
+                              Name="TimelineSplitter" />
+
+                <!--
+                    Bottom dock (PR-M4). Hosts whichever activity tab is
+                    registered with Dock=Bottom (currently Timeline only).
+                    ApplicationPanel owns the title + close button; its content
+                    resolves to the tab's View via ActivityTabViewTemplate.
+                -->
+                <views:ApplicationPanel Grid.Row="2"
+                                        x:Name="TimelinePanel"
+                                        Title="{Binding Layout.BottomDockTitle}"
+                                        Content="{Binding Layout.SelectedBottomTab}"
+                                        ShowCloseButton="True"
+                                        CloseCommand="{Binding Layout.CloseDockCommand}"
+                                        CloseCommandParameter="Bottom"
+                                        CloseButtonToolTip="{x:Static loc:Strings.Tooltip_CloseTimelinePanel}"
+                                        IsVisible="{Binding Layout.IsBottomDockShown}">
+                    <!-- #902 D1: TIMELINE | CLEARANCE while Check passage adds the
+                         Clearance tab; the plain title otherwise. -->
+                    <views:ApplicationPanel.TitleContent>
+                        <Panel>
+                            <TextBlock Text="{Binding Layout.BottomDockTitle, Converter={x:Static conv:ToUpperConverter.Instance}}"
+                                       IsVisible="{Binding !Layout.HasBottomDockTabs}"
+                                       FontSize="11"
+                                       LetterSpacing="1"
+                                       VerticalAlignment="Center" />
+                            <views:DockTabStrip Tabs="{Binding Layout.VisibleBottomTabs}"
+                                                SelectedTabId="{Binding Layout.SelectedBottomTabId}"
+                                                SelectCommand="{Binding Layout.SelectTabCommand}"
+                                                IsVisible="{Binding Layout.HasBottomDockTabs}" />
+                        </Panel>
+                    </views:ApplicationPanel.TitleContent>
+                    <views:ApplicationPanel.HeaderContent>
+                        <Panel>
+                            <!-- #710 E6: lanes or the strip, remembered. -->
+                            <Panel IsVisible="{Binding Layout.IsTimelineTabSelected}">
+                            <Button Classes="Ghost"
+                                    AutomationProperties.AutomationId="Timeline.ToggleStrip"
+                                    x:DataType="vm:TimelineViewModel"
+                                    DataContext="{Binding $parent[Window].((vm:MainViewModel)DataContext).Timeline}"
+                                    IsVisible="{Binding IsActive}"
+                                    Command="{Binding ToggleStripCommand}"
+                                    Content="{Binding StripToggleLabel}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineCollapseToStrip}"
+                                    Height="22" MinHeight="0" Padding="6,0"
+                                    FontSize="11.5" />
+                            </Panel>
+                            <!-- #902 D1: the Clearance tab's Distance / Time switch and Sources. -->
+                            <StackPanel Orientation="Horizontal"
+                                        Spacing="10"
+                                        x:DataType="vm:ClearanceViewModel"
+                                        DataContext="{Binding $parent[Window].((vm:MainViewModel)DataContext).Layout.Clearance}"
+                                        IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).Layout.IsClearanceTabSelected}">
+                                <TabControl Classes="pillTabs compact"
+                                            AutomationProperties.AutomationId="Clearance.Axis"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Center"
+                                            SelectedIndex="{Binding AxisIndex, Mode=TwoWay}">
+                                    <TabItem AutomationProperties.AutomationId="Clearance.AxisDistance"
+                                             Header="{x:Static loc:Strings.Clearance_Distance}"
+                                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClearanceDistance}" />
+                                    <TabItem AutomationProperties.AutomationId="Clearance.AxisTime"
+                                             Header="{x:Static loc:Strings.Clearance_Time}"
+                                             ToolTip.Tip="{Binding TimeTooltip}"
+                                             ToolTip.ShowOnDisabled="True"
+                                             IsEnabled="{Binding CanShowTime}" />
+                                </TabControl>
+                                <ToggleButton Classes="Ghost"
+                                              AutomationProperties.AutomationId="Clearance.SourcesToggle"
+                                              AutomationProperties.Name="{x:Static loc:Strings.Clearance_Sources}"
+                                              ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClearanceSources}"
+                                              IsChecked="{Binding IsSourcesOpen, Mode=TwoWay}"
+                                              Height="22" MinHeight="0" Padding="6,0">
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <ic:FluentIcon Icon="Info" IconVariant="Regular" FontSize="13" VerticalAlignment="Center" />
+                                        <TextBlock Text="{x:Static loc:Strings.Clearance_Sources}" FontSize="11.5" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </ToggleButton>
+                            </StackPanel>
+                        </Panel>
+                    </views:ApplicationPanel.HeaderContent>
+                </views:ApplicationPanel>
+            </Grid>
+            <GridSplitter Grid.Column="3"
+                          Classes="PaneSplitter"
+                          Width="4"
+                          ResizeDirection="Columns"
+                          IsVisible="{Binding Layout.IsRightDockShown}"
+                          bh:HoverDelay.DelayMilliseconds="500"
+                          Name="PickPanelSplitter" />
+
+            <!--
+                Right dock (PR-M4). Hosts whichever activity tab is
+                registered with Dock=Right (currently Pick Report only).
+                ApplicationPanel owns the title + close button; its content
+                resolves to the tab's View via ActivityTabViewTemplate. Pick
+                Report stays open with an empty-state watermark when there is
+                no active pick.
+            -->
+            <views:ApplicationPanel Grid.Column="4"
+                                    x:Name="RightDockPanel"
+                                    Title="{Binding Layout.RightDockTitle}"
+                                    Content="{Binding Layout.SelectedRightTab}"
+                                    ShowCloseButton="True"
+                                    CloseCommand="{Binding Layout.CloseDockCommand}"
+                                    CloseCommandParameter="Right"
+                                    CloseButtonToolTip="{x:Static loc:Strings.Tooltip_ClosePickPanel}"
+                                    IsVisible="{Binding Layout.IsRightDockShown}">
+                <!-- Legends D2: OBJECT INFORMATION · LEGEND, icons only when the
+                     dock is too narrow for the labels (D13, D21). -->
+                <views:ApplicationPanel.TitleContent>
+                    <Panel>
+                        <TextBlock Text="{Binding Layout.RightDockTitle, Converter={x:Static conv:ToUpperConverter.Instance}}"
+                                   IsVisible="{Binding !Layout.HasRightDockTabs}"
+                                   FontSize="11"
+                                   LetterSpacing="1"
+                                   VerticalAlignment="Center" />
+                        <views:DockTabStrip x:Name="RightDockTabs"
+                                            Tabs="{Binding Layout.VisibleRightTabs}"
+                                            SelectedTabId="{Binding Layout.SelectedRightTabId}"
+                                            SelectCommand="{Binding Layout.SelectTabCommand}"
+                                            IsVisible="{Binding Layout.HasRightDockTabs}" />
+                    </Panel>
+                </views:ApplicationPanel.TitleContent>
+            </views:ApplicationPanel>
+
+            <!-- Check passage folds the Object Information dock to a 26 px
+                 edge tab with a vertical label (#901, C1); clicking it, or
+                 turning the mode off, restores the dock. -->
+            <Button Grid.Column="5"
+                    AutomationProperties.AutomationId="Dock.ObjectInformationEdge"
+                    AutomationProperties.Name="{Binding Layout.RightDockEdgeTooltip}"
+                    ToolTip.Tip="{Binding Layout.RightDockEdgeTooltip}"
+                    IsVisible="{Binding Layout.IsRightDockEdgeTabVisible}"
+                    Command="{Binding Layout.UnfoldRightDockCommand}"
+                    Width="26"
+                    MinWidth="26"
+                    Padding="0"
+                    CornerRadius="0"
+                    VerticalAlignment="Stretch"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Top"
+                    BorderThickness="1,0,0,0"
+                    BorderBrush="{DynamicResource BorderColor}"
+                    Background="Transparent">
+                <LayoutTransformControl Margin="0,12,0,0">
+                    <LayoutTransformControl.LayoutTransform>
+                        <RotateTransform Angle="90" />
+                    </LayoutTransformControl.LayoutTransform>
+                    <TextBlock Text="{Binding Layout.RightDockTitle, Converter={x:Static conv:ToUpperConverter.Instance}}"
+                               FontSize="10.5"
+                               FontWeight="SemiBold"
+                               LetterSpacing="1"
+                               Opacity="0.7" />
+                </LayoutTransformControl>
+            </Button>
+
+            <!--
+                Full-content panel (#845): a left-dock tab that fills the
+                content area (Settings) is shown here, over the map and the
+                docks, instead of in the left dock's column. The map stays
+                alive underneath. Closing it returns to the side panel it
+                covered.
+            -->
+            <Border Grid.Column="0"
+                    x:Name="ContentPanelHost"
+                    Grid.ColumnSpan="6"
+                    ZIndex="10"
+                    IsVisible="{Binding Layout.IsContentPanelOpen}">
+                <Border.Background>
+                    <SolidColorBrush Color="{DynamicResource WindowBackgroundColor}" />
+                </Border.Background>
+                <views:ApplicationPanel Title="{Binding Layout.LeftDockTitle}"
+                                        Content="{Binding Layout.ContentPanelTab}"
+                                        ShowCloseButton="True"
+                                        CloseCommand="{Binding Layout.CloseDockCommand}"
+                                        CloseCommandParameter="Left"
+                                        CloseButtonToolTip="{x:Static loc:Strings.Tooltip_CloseSettings}" />
+            </Border>
+        </Grid>
+    </DockPanel>
+    <notify:NotificationHost x:Name="NotificationHost"
+                             HorizontalAlignment="Right"
+                             VerticalAlignment="Bottom"
+                             Margin="0,0,16,30" />
+    </Panel>
+</shadui:Window>

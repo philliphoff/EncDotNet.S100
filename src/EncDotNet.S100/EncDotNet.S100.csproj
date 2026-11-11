@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Description>Open an IHO S-100 dataset, read its features and render it to an image using the bundled feature and portrayal catalogues. Wraps EncDotNet.S100.Specifications and EncDotNet.S100.Datasets.Pipelines behind a small, format-agnostic API; the underlying readers and catalogues remain available for custom wiring.</Description>
+    <PackageTags>S-100;S-101;S-102;ENC;nautical;hydrography;IHO;ECDIS</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Crs.ProjNet\EncDotNet.S100.Crs.ProjNet.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.Pipelines\EncDotNet.S100.Datasets.Pipelines.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.ExchangeSets\EncDotNet.S100.ExchangeSets.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Features\EncDotNet.S100.Features.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Portrayals\EncDotNet.S100.Portrayals.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Rendering.Engine\EncDotNet.S100.Rendering.Engine.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Scripting.LuaCSharp\EncDotNet.S100.Scripting.LuaCSharp.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Scripting.MoonSharp\EncDotNet.S100.Scripting.MoonSharp.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Specifications\EncDotNet.S100.Specifications.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.Tests" />
+  </ItemGroup>
+
+</Project>

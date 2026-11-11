@@ -1,0 +1,283 @@
+using EncDotNet.S100.Hdf5.PureHdf;
+using EncDotNet.S100.Testing.Scenarios.Hdf5;
+
+namespace EncDotNet.S100.Datasets.S104.Tests;
+
+/// <summary>
+/// Reader-hardening tests (PR-A): tolerant numeric attribute reads,
+/// compound-member name mapping, and NULLPAD string handling. The
+/// fixtures are synthetic and built on the fly so the test suite has
+/// no dependency on real producer files.
+/// </summary>
+public class S104DatasetReaderHardeningTests
+{
+    /// <summary>
+    /// Grid-georef attributes are spec-allowed to be either F32 or F64.
+    /// The reader must accept both and return identical double values.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Read_AcceptsBothF32AndF64GridAttrs(bool useF64)
+    {
+        var path = Path.GetTempFileName() + ".h5";
+        try
+        {
+            var values = new[] { new S104FixtureBuilder.SpecRow { WaterLevelHeight = 1.5f, WaterLevelTrend = 2 } };
+            S104FixtureBuilder.WriteFile(path, values, 1, 1, useF64GridAttrs: useF64, useUnsignedCounts: false);
+
+            using var file = PureHdfFile.Open(path);
+            var dataset = S104DatasetReader.Read(file);
+
+            var coverage = Assert.Single(dataset.Coverages);
+            Assert.Equal(50.0, coverage.OriginLatitude, precision: 6);
+            Assert.Equal(-1.0, coverage.OriginLongitude, precision: 6);
+            Assert.Equal(0.01, coverage.SpacingLatitudinal, precision: 6);
+        }
+        finally { File.Delete(path); }
+    }
+
+    /// <summary>
+    /// Count attributes (numPointsLatitudinal / numPointsLongitudinal) are
+    /// spec-allowed to be either signed or unsigned. The reader must accept
+    /// both widths.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Read_AcceptsBothSignedAndUnsignedCountAttrs(bool unsigned)
+    {
+        var path = Path.GetTempFileName() + ".h5";
+        try
+        {
+            var values = new[] { new S104FixtureBuilder.SpecRow { WaterLevelHeight = 1.5f, WaterLevelTrend = 2 } };
+            S104FixtureBuilder.WriteFile(path, values, 1, 1, useF64GridAttrs: false, useUnsignedCounts: unsigned);
+
+            using var file = PureHdfFile.Open(path);
+            var dataset = S104DatasetReader.Read(file);
+
+            var coverage = Assert.Single(dataset.Coverages);
+            Assert.Equal(1, coverage.NumPointsLatitudinal);
+            Assert.Equal(1, coverage.NumPointsLongitudinal);
+        }
+        finally { File.Delete(path); }
+    }
+
+    /// <summary>
+    /// The S-104 Feature Catalogue names compound members
+    /// <c>waterLevelHeight</c> and <c>waterLevelTrend</c>. The reader
+    /// must accept those exact names (no positional fallback required).
+    /// </summary>
+    [Fact]
+    public void Read_AcceptsSpecMemberNames()
+    {
+        var path = Path.GetTempFileName() + ".h5";
+        try
+        {
+            var values = new[]
+            {
+                new S104FixtureBuilder.SpecRow { WaterLevelHeight = 2.5f, WaterLevelTrend = 1 },
+                new S104FixtureBuilder.SpecRow { WaterLevelHeight = -1.25f, WaterLevelTrend = 3 },
+            };
+            S104FixtureBuilder.WriteFile(path, values, 1, 2, useF64GridAttrs: true, useUnsignedCounts: false);
+
+            using var file = PureHdfFile.Open(path);
+            var dataset = S104DatasetReader.Read(file);
+            var coverage = Assert.Single(dataset.Coverages);
+
+            Assert.Equal(2, coverage.Values.Length);
+            Assert.Equal(2.5f, coverage.Values[0].Height);
+            Assert.Equal((byte)1, coverage.Values[0].Trend);
+            Assert.Equal(-1.25f, coverage.Values[1].Height);
+            Assert.Equal((byte)3, coverage.Values[1].Trend);
+        }
+        finally { File.Delete(path); }
+    }
+
+    /// <summary>
+    /// UKHO production dcf2 files use <c>surfaceHeight</c> and <c>trend</c>
+    /// as the compound member names. The reader must accept that variant.
+    /// </summary>
+    [Fact]
+    public void Read_AcceptsUkhoMemberNames()
+    {
+        var path = Path.GetTempFileName() + ".h5";
+        try
+        {
+            var values = new[]
+            {
+                new S104FixtureBuilder.UkhoRow { SurfaceHeight = 3.25f, Trend = 2.0f },
+            };
+            S104FixtureBuilder.WriteFile(path, values, 1, 1, useF64GridAttrs: true, useUnsignedCounts: false);
+
+            using var file = PureHdfFile.Open(path);
+            var dataset = S104DatasetReader.Read(file);
+            var coverage = Assert.Single(dataset.Coverages);
+
+            Assert.Single(coverage.Values);
+            Assert.Equal(3.25f, coverage.Values[0].Height);
+            // UKHO stores trend as f32; the reader rounds to the nearest enum byte.
+            Assert.Equal((byte)2, coverage.Values[0].Trend);
+        }
+        finally { File.Delete(path); }
+    }
+
+    /// <summary>
+    /// Existing in-tree synthetic fixtures (and the real NOAA file via
+    /// PureHDF's positional fallback) use the C# names <c>Height</c> and
+    /// <c>Trend</c>. The reader must continue to accept them.
+    /// </summary>
+    [Fact]
+    public void Read_AcceptsLegacyMemberNames()
+    {
+        var path = Path.GetTempFileName() + ".h5";
+        try
+        {
+            var values = new[]
+            {
+                new S104FixtureBuilder.LegacyRow { Height = 1.0f, Trend = 1 },
+            };
+            S104FixtureBuilder.WriteFile(path, values, 1, 1, useF64GridAttrs: false, useUnsignedCounts: false);
+
+            using var file = PureHdfFile.Open(path);
+            var dataset = S104DatasetReader.Read(file);
+            var coverage = Assert.Single(dataset.Coverages);
+
+            Assert.Single(coverage.Values);
+            Assert.Equal(1.0f, coverage.Values[0].Height);
+            Assert.Equal((byte)1, coverage.Values[0].Trend);
+        }
+        finally { File.Delete(path); }
+    }
+
+    /// <summary>
+    /// Near-UKHO end-to-end fixture combining F64 grid attrs, the
+    /// <c>surfaceHeight</c> / <c>trend</c> compound shape with trend as
+    /// f32, and a fixed-length nullpad timePoint. The reader must open it
+    /// cleanly and round-trip values.
+    /// </summary>
+    [Fact]
+    public void Read_NearUkhoFixture_RoundTripsCleanly()
+    {
+        var path = Path.GetTempFileName() + ".h5";
+        try
+        {
+            var values = new[]
+            {
+                new S104FixtureBuilder.UkhoRow { SurfaceHeight = 0.75f, Trend = 3.0f },
+                new S104FixtureBuilder.UkhoRow { SurfaceHeight = -0.5f, Trend = 1.0f },
+            };
+            S104FixtureBuilder.WriteFile(path, values, 1, 2,
+                useF64GridAttrs: true,
+                useUnsignedCounts: false,
+                timePoint: "20210401T000000Z");
+
+            using var file = PureHdfFile.Open(path);
+            var dataset = S104DatasetReader.Read(file);
+            var coverage = Assert.Single(dataset.Coverages);
+
+            Assert.Equal(new DateTime(2021, 4, 1, 0, 0, 0, DateTimeKind.Utc), coverage.TimePoint);
+            Assert.Equal(2, coverage.Values.Length);
+            Assert.Equal(0.75f, coverage.Values[0].Height);
+            Assert.Equal((byte)3, coverage.Values[0].Trend);
+            Assert.Equal(-0.5f, coverage.Values[1].Height);
+            Assert.Equal((byte)1, coverage.Values[1].Trend);
+        }
+        finally { File.Delete(path); }
+    }
+
+    /// <summary>
+    /// IC-ENC NL dcf2 files encode <c>waterLevelTrend</c> as <c>Int16</c>
+    /// (issue #254). The reader must decode the Int16 trend rather than
+    /// aborting the whole read, so the renderable height grid still draws
+    /// and the trend value round-trips to the correct enum byte.
+    /// </summary>
+    [Fact]
+    public void Read_AcceptsInt16Trend()
+    {
+        var path = Path.GetTempFileName() + ".h5";
+        try
+        {
+            var values = new[]
+            {
+                new S104FixtureBuilder.Int16TrendRow { WaterLevelHeight = 1.5f, WaterLevelTrend = 2 },
+                new S104FixtureBuilder.Int16TrendRow { WaterLevelHeight = -0.75f, WaterLevelTrend = 1 },
+                new S104FixtureBuilder.Int16TrendRow { WaterLevelHeight = 0.25f, WaterLevelTrend = 3 },
+            };
+            S104FixtureBuilder.WriteFile(path, values, 1, 3, useF64GridAttrs: true, useUnsignedCounts: false);
+
+            using var file = PureHdfFile.Open(path);
+            var dataset = S104DatasetReader.Read(file);
+            var coverage = Assert.Single(dataset.Coverages);
+
+            Assert.Equal(3, coverage.Values.Length);
+            Assert.Equal(1.5f, coverage.Values[0].Height);
+            Assert.Equal((byte)2, coverage.Values[0].Trend);
+            Assert.Equal(-0.75f, coverage.Values[1].Height);
+            Assert.Equal((byte)1, coverage.Values[1].Trend);
+            Assert.Equal(0.25f, coverage.Values[2].Height);
+            Assert.Equal((byte)3, coverage.Values[2].Trend);
+        }
+        finally { File.Delete(path); }
+    }
+
+    /// <summary>
+    /// <c>timePoint</c> follows the same ISO 8601 grammar as the validator
+    /// (<c>Iso8601Text</c>, #738): basic, extended and mixed forms, offsets,
+    /// fractional seconds, and no zone (taken as UTC).
+    /// </summary>
+    [Theory]
+    [InlineData("20260902T105406Z", "2026-09-02T10:54:06")]
+    [InlineData("20260902T105406+0000", "2026-09-02T10:54:06")]
+    [InlineData("2026-09-02T05:54:06-05:00", "2026-09-02T10:54:06")]
+    [InlineData("20260902T125406+02", "2026-09-02T10:54:06")]
+    [InlineData("20260902T10:54:06Z", "2026-09-02T10:54:06")]
+    [InlineData("2026-09-02T10:54:06.25Z", "2026-09-02T10:54:06.25")]
+    [InlineData("20260902T105406", "2026-09-02T10:54:06")]
+    public void Read_TimePoint_AcceptsIso8601Forms(string timePoint, string expectedUtc)
+    {
+        var path = Path.GetTempFileName() + ".h5";
+        try
+        {
+            S104FixtureBuilder.WriteFile(path, new[] { new S104FixtureBuilder.SpecRow { WaterLevelHeight = 1.5f, WaterLevelTrend = 1 } }, 1, 1,
+                useF64GridAttrs: true,
+                useUnsignedCounts: false,
+                timePoint: timePoint);
+
+            using var file = PureHdfFile.Open(path);
+            var coverage = Assert.Single(S104DatasetReader.Read(file).Coverages);
+
+            var expected = DateTime.SpecifyKind(
+                DateTime.Parse(expectedUtc, System.Globalization.CultureInfo.InvariantCulture), DateTimeKind.Utc);
+            Assert.Equal(expected, coverage.TimePoint);
+            Assert.Equal(DateTimeKind.Utc, coverage.TimePoint.Kind);
+        }
+        finally { File.Delete(path); }
+    }
+
+    /// <summary>A malformed <c>timePoint</c> is a schema error naming the attribute and group.</summary>
+    [Theory]
+    [InlineData("not-a-time")]
+    [InlineData("20230229T000000Z")]
+    [InlineData("20260902T250000Z")]
+    public void Read_MalformedTimePoint_ThrowsSchemaException(string timePoint)
+    {
+        var path = Path.GetTempFileName() + ".h5";
+        try
+        {
+            S104FixtureBuilder.WriteFile(path, new[] { new S104FixtureBuilder.SpecRow { WaterLevelHeight = 1.5f, WaterLevelTrend = 1 } }, 1, 1,
+                useF64GridAttrs: true,
+                useUnsignedCounts: false,
+                timePoint: timePoint);
+
+            using var file = PureHdfFile.Open(path);
+            var ex = Assert.Throws<EncDotNet.S100.Hdf5.S100DatasetSchemaException>(() => S104DatasetReader.Read(file));
+
+            Assert.Equal("S-104", ex.Product);
+            Assert.Equal("timePoint", ex.AttributeOrDataset);
+            Assert.EndsWith("/Group_001", ex.GroupPath, StringComparison.Ordinal);
+            Assert.Contains(timePoint, ex.Message, StringComparison.Ordinal);
+        }
+        finally { File.Delete(path); }
+    }
+}

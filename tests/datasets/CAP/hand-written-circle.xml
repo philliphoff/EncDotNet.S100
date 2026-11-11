@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Hand-written test fixture (issue #1069), not an NWS product: a CAP 1.2
+     alert with a <circle> area, and a second area with only zone codes, one
+     of which (ANZ999) is not a real zone. -->
+<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">
+    <identifier>encdotnet-s100-fixture-circle-1</identifier>
+    <sender>fixtures@encdotnet-s100.invalid</sender>
+    <sent>2026-08-28T14:30:00-00:00</sent>
+    <status>Exercise</status>
+    <msgType>Alert</msgType>
+    <scope>Public</scope>
+    <note>Test fixture. Not a real warning.</note>
+    <info>
+        <language>en-US</language>
+        <category>Met</category>
+        <event>Hazardous Seas Warning</event>
+        <responseType>Avoid</responseType>
+        <urgency>Immediate</urgency>
+        <severity>Extreme</severity>
+        <certainty>Observed</certainty>
+        <effective>2026-08-28T14:30:00-00:00</effective>
+        <onset>2026-08-28T15:00:00-00:00</onset>
+        <expires>2026-08-28T18:00:00-00:00</expires>
+        <senderName>EncDotNet.S100 test fixtures</senderName>
+        <headline>Hazardous Seas Warning (exercise) within 30 km of 38.5N 74.5W until 6 PM UTC</headline>
+        <description>Test fixture. Seas 12 to 16 ft within 30 km of 38.5N 74.5W.</description>
+        <instruction>Test fixture. No action is required.</instruction>
+        <area>
+            <areaDesc>Within 30 km of 38.5N 74.5W</areaDesc>
+            <circle>38.5,-74.5 30</circle>
+        </area>
+        <area>
+            <areaDesc>Coastal waters from Sandy Hook to Manasquan Inlet NJ out 20 nm; a zone that does not exist</areaDesc>
+            <geocode>
+                <valueName>UGC</valueName>
+                <value>ANZ450</value>
+            </geocode>
+            <geocode>
+                <valueName>UGC</valueName>
+                <value>ANZ999</value>
+            </geocode>
+        </area>
+    </info>
+</alert>

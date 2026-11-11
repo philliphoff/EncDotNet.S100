@@ -1,0 +1,575 @@
+using System.Text.Json;
+using ModelContextProtocol.Server;
+
+namespace EncDotNet.S100.Viewer.McpTools;
+
+/// <summary>Wraps <see cref="CreateRouteTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class CreateRouteMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Creates a new, empty editable route in the live viewer and makes it the active route. " +
+        "Returns the new route's full state. Add waypoints with append_waypoint. Viewer-injected tool.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(CreateRouteTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("Optional route name.")] string? name = null,
+            [System.ComponentModel.Description("Optional stable route id; a GUID is generated when omitted. Must be unique.")] string? id = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new CreateRouteRequest(name, id), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = CreateRouteTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+}
+
+/// <summary>Wraps <see cref="ListRoutesTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class ListRoutesMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Lists every editable route in the live viewer with its id, name, waypoint/leg counts, " +
+        "total distance, and whether it is the active route. Viewer-injected tool.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(ListRoutesTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new ListRoutesRequest(), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = ListRoutesTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+}
+
+/// <summary>Wraps <see cref="GetRouteTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class GetRouteMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Returns the full state of one route in the live viewer: identity, metadata, passage values, " +
+        "ordered waypoints, and legs with computed distance/bearing. Each leg reports 'effective' passage " +
+        "values (its override, else the route's passage value) and its 'overrides'. Omit routeId to read " +
+        "the active route. Viewer-injected tool.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(GetRouteTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("Id of the route to return; omit to use the active route.")] string? routeId = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new GetRouteRequest(routeId), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = GetRouteTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+}
+
+/// <summary>Wraps <see cref="DeleteRouteTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class DeleteRouteMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Removes a route from the live viewer's collection. Omit routeId to delete the active route. " +
+        "Returns the new active route id. Viewer-injected tool — mutates live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(DeleteRouteTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("Id of the route to delete; omit to delete the active route.")] string? routeId = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new DeleteRouteRequest(routeId), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = DeleteRouteTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+}
+
+/// <summary>Wraps <see cref="AppendWaypointTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class AppendWaypointMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Appends a waypoint to the end of a route in the live viewer. Omit routeId to use the active " +
+        "route. Returns the route's full updated state. Viewer-injected tool — mutates live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(AppendWaypointTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("WGS-84 latitude in decimal degrees [-90, 90].")] double lat,
+            [System.ComponentModel.Description("WGS-84 longitude in decimal degrees [-180, 180].")] double lon,
+            [System.ComponentModel.Description("Id of the route to append to; omit to use the active route.")] string? routeId = null,
+            [System.ComponentModel.Description("Optional author-assigned ordinal (S-421 routeWaypointID).")] int? number = null,
+            [System.ComponentModel.Description("Optional waypoint name.")] string? name = null,
+            [System.ComponentModel.Description("Optional flag pinning the waypoint so it must not be moved.")] bool? @fixed = null,
+            [System.ComponentModel.Description("Optional planned turn radius at the waypoint, in nautical miles.")] double? turnRadiusNm = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
+                new AppendWaypointRequest(lat, lon, routeId, number, name, @fixed, turnRadiusNm), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = AppendWaypointTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+}
+
+/// <summary>Wraps <see cref="InsertWaypointTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class InsertWaypointMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Inserts a waypoint at a given index of a route in the live viewer, splitting the affected " +
+        "leg. Index 0 prepends; waypointCount appends. Omit routeId to use the active route. Returns " +
+        "the route's full updated state. Viewer-injected tool — mutates live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(InsertWaypointTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("Insertion index in [0, waypointCount]; 0 prepends, waypointCount appends.")] int index,
+            [System.ComponentModel.Description("WGS-84 latitude in decimal degrees [-90, 90].")] double lat,
+            [System.ComponentModel.Description("WGS-84 longitude in decimal degrees [-180, 180].")] double lon,
+            [System.ComponentModel.Description("Id of the route to insert into; omit to use the active route.")] string? routeId = null,
+            [System.ComponentModel.Description("Optional author-assigned ordinal (S-421 routeWaypointID).")] int? number = null,
+            [System.ComponentModel.Description("Optional waypoint name.")] string? name = null,
+            [System.ComponentModel.Description("Optional flag pinning the waypoint so it must not be moved.")] bool? @fixed = null,
+            [System.ComponentModel.Description("Optional planned turn radius at the waypoint, in nautical miles.")] double? turnRadiusNm = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
+                new InsertWaypointRequest(index, lat, lon, routeId, number, name, @fixed, turnRadiusNm), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = InsertWaypointTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+}
+
+/// <summary>Wraps <see cref="MoveWaypointTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class MoveWaypointMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Moves an existing waypoint of a route in the live viewer to a new position. Omit routeId to " +
+        "use the active route. Returns the route's full updated state. Viewer-injected tool — mutates " +
+        "live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(MoveWaypointTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("Index of the waypoint to move in [0, waypointCount).")] int index,
+            [System.ComponentModel.Description("New WGS-84 latitude in decimal degrees [-90, 90].")] double lat,
+            [System.ComponentModel.Description("New WGS-84 longitude in decimal degrees [-180, 180].")] double lon,
+            [System.ComponentModel.Description("Id of the route to edit; omit to use the active route.")] string? routeId = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
+                new MoveWaypointRequest(index, lat, lon, routeId), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = MoveWaypointTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+}
+
+/// <summary>Wraps <see cref="DeleteWaypointTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class DeleteWaypointMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Removes a waypoint from a route in the live viewer, merging the adjacent legs. Omit routeId " +
+        "to use the active route. Returns the route's full updated state. Viewer-injected tool — " +
+        "mutates live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(DeleteWaypointTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("Index of the waypoint to remove in [0, waypointCount).")] int index,
+            [System.ComponentModel.Description("Id of the route to edit; omit to use the active route.")] string? routeId = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
+                new DeleteWaypointRequest(index, routeId), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = DeleteWaypointTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+}
+
+/// <summary>Wraps <see cref="SetLegAttributesTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class SetLegAttributesMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Updates one leg of a route in the live viewer: its geometry type (loxodrome|geodesic), its passage " +
+        "overrides (speedKnots, draftMeters, port/starboard cross-track limits, staticUnderKeelClearanceMeters) " +
+        "and the rest of its navigational envelope (channel limits, safety contour/depth, SOG/STW limits, " +
+        "dynamic UKC, safety margin, note). All attributes optional; supplied values overwrite, omitted values " +
+        "are unchanged. An override equal to the route's passage value is not stored. List parameter names in " +
+        "'clear' to unset them; clearing an override resets the leg to inherit the passage value. Omit routeId " +
+        "to use the active route. Viewer-injected tool — mutates live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(SetLegAttributesTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("Index of the leg to edit in [0, legCount); leg i joins waypoint i to waypoint i+1.")] int legIndex,
+            [System.ComponentModel.Description("Id of the route to edit; omit to use the active route.")] string? routeId = null,
+            [System.ComponentModel.Description("Leg path geometry: \"loxodrome\" (rhumb line) or \"geodesic\" (great circle).")] string? geometryType = null,
+            [System.ComponentModel.Description("Override: starboard cross-track distance limit in metres.")] double? starboardCrossTrackDistanceLimitMeters = null,
+            [System.ComponentModel.Description("Override: port cross-track distance limit in metres.")] double? portCrossTrackDistanceLimitMeters = null,
+            [System.ComponentModel.Description("Starboard channel limit in metres.")] double? starboardChannelLimitMeters = null,
+            [System.ComponentModel.Description("Port channel limit in metres.")] double? portChannelLimitMeters = null,
+            [System.ComponentModel.Description("Safety contour for the leg in metres.")] double? safetyContourMeters = null,
+            [System.ComponentModel.Description("Safety depth for the leg in metres.")] double? safetyDepthMeters = null,
+            [System.ComponentModel.Description("Minimum speed over ground in knots.")] double? speedOverGroundMinKnots = null,
+            [System.ComponentModel.Description("Maximum speed over ground in knots.")] double? speedOverGroundMaxKnots = null,
+            [System.ComponentModel.Description("Minimum speed through water in knots.")] double? speedThroughWaterMinKnots = null,
+            [System.ComponentModel.Description("Maximum speed through water in knots.")] double? speedThroughWaterMaxKnots = null,
+            [System.ComponentModel.Description("Override: draft for the leg in metres.")] double? draftMeters = null,
+            [System.ComponentModel.Description("Override: required static under-keel clearance in metres.")] double? staticUnderKeelClearanceMeters = null,
+            [System.ComponentModel.Description("Dynamic under-keel clearance in metres.")] double? dynamicUnderKeelClearanceMeters = null,
+            [System.ComponentModel.Description("Safety margin in metres.")] double? safetyMarginMeters = null,
+            [System.ComponentModel.Description("Free-text note for the leg.")] string? note = null,
+            [System.ComponentModel.Description("Override: planned speed over ground for the leg in knots (> 0).")] double? speedKnots = null,
+            [System.ComponentModel.Description("Names of attributes to unset, using this tool's parameter names (for example \"speedKnots\", \"draftMeters\", \"note\"). Unsetting an override resets the leg to inherit the passage value.")] string[]? clear = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
+                new SetLegAttributesRequest(
+                    legIndex, routeId, geometryType,
+                    starboardCrossTrackDistanceLimitMeters, portCrossTrackDistanceLimitMeters,
+                    starboardChannelLimitMeters, portChannelLimitMeters,
+                    safetyContourMeters, safetyDepthMeters,
+                    speedOverGroundMinKnots, speedOverGroundMaxKnots,
+                    speedThroughWaterMinKnots, speedThroughWaterMaxKnots,
+                    draftMeters, staticUnderKeelClearanceMeters, dynamicUnderKeelClearanceMeters,
+                    safetyMarginMeters, note, speedKnots, clear),
+                ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SetLegAttributesTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+}
+
+/// <summary>Wraps <see cref="SetRouteInfoTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class SetRouteInfoMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Updates a route's metadata in the live viewer (name, author, description, departure/arrival " +
+        "ports, validity window) and vessel particulars (name, MMSI, IMO, call sign, length, beam). " +
+        "All fields optional; supplied values overwrite. Omit routeId to use the active route. " +
+        "Viewer-injected tool — mutates live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(SetRouteInfoTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("Id of the route to edit; omit to use the active route.")] string? routeId = null,
+            [System.ComponentModel.Description("Route name.")] string? name = null,
+            [System.ComponentModel.Description("Route author / originator.")] string? author = null,
+            [System.ComponentModel.Description("Free-text route description.")] string? description = null,
+            [System.ComponentModel.Description("Departure port identifier.")] string? departurePortId = null,
+            [System.ComponentModel.Description("Arrival port identifier.")] string? arrivalPortId = null,
+            [System.ComponentModel.Description("Planned start of validity (UTC ISO-8601).")] DateTimeOffset? validityStart = null,
+            [System.ComponentModel.Description("Planned end of validity (UTC ISO-8601).")] DateTimeOffset? validityEnd = null,
+            [System.ComponentModel.Description("Vessel name (creates the vessel block when supplied).")] string? vesselName = null,
+            [System.ComponentModel.Description("Vessel MMSI (creates the vessel block when supplied).")] string? vesselMmsi = null,
+            [System.ComponentModel.Description("Vessel IMO number (creates the vessel block when supplied).")] string? vesselImo = null,
+            [System.ComponentModel.Description("Vessel call sign (creates the vessel block when supplied).")] string? vesselCallsign = null,
+            [System.ComponentModel.Description("Vessel overall length in metres (creates the vessel block when supplied).")] double? vesselLengthMeters = null,
+            [System.ComponentModel.Description("Vessel beam in metres (creates the vessel block when supplied).")] double? vesselBeamMeters = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
+                new SetRouteInfoRequest(
+                    routeId, name, author, description, departurePortId, arrivalPortId,
+                    validityStart, validityEnd,
+                    vesselName, vesselMmsi, vesselImo, vesselCallsign, vesselLengthMeters, vesselBeamMeters),
+                ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SetRouteInfoTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+}
+
+/// <summary>Wraps <see cref="GetPassageTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class GetPassageMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Returns a route's passage values in the live viewer: draftMeters, squatMeters, speedKnots, " +
+        "departure (absent means ETAs use the view time), requiredUkcMeters, port/starboard cross-track " +
+        "limits and the vessel. Every value is optional; legs inherit them unless they override them. " +
+        "Omit routeId to read the active route. Viewer-injected tool.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(GetPassageTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("Id of the route to read; omit to use the active route.")] string? routeId = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new GetPassageRequest(routeId), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = GetPassageTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+}
+
+/// <summary>Wraps <see cref="SetPassageTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class SetPassageMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Updates a route's passage values in the live viewer: draft, squat allowance, speed (SOG), " +
+        "departure, required static UKC and cross-track limits. Legs inherit each value unless they " +
+        "override it (set_leg_attributes), so a change reaches only the inheriting legs. All values " +
+        "optional; supplied values overwrite, omitted values are unchanged, names in 'clear' are unset. " +
+        "Set the vessel with set_route_info. Returns the updated route. Omit routeId to use the active " +
+        "route. Viewer-injected tool — mutates live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(SetPassageTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("Id of the route to edit; omit to use the active route.")] string? routeId = null,
+            [System.ComponentModel.Description("Draft in metres (>= 0).")] double? draftMeters = null,
+            [System.ComponentModel.Description("Fixed squat allowance in metres (>= 0).")] double? squatMeters = null,
+            [System.ComponentModel.Description("Planned speed over ground in knots (> 0).")] double? speedKnots = null,
+            [System.ComponentModel.Description("Planned departure (ISO-8601). Unset means ETAs use the view time.")] DateTimeOffset? departure = null,
+            [System.ComponentModel.Description("Required static under-keel clearance in metres (>= 0).")] double? requiredUkcMeters = null,
+            [System.ComponentModel.Description("Cross-track distance limit in metres for both sides (>= 0). Don't combine with portCrossTrackMeters or starboardCrossTrackMeters.")] double? crossTrackMeters = null,
+            [System.ComponentModel.Description("Port cross-track distance limit in metres (>= 0).")] double? portCrossTrackMeters = null,
+            [System.ComponentModel.Description("Starboard cross-track distance limit in metres (>= 0).")] double? starboardCrossTrackMeters = null,
+            [System.ComponentModel.Description("Names of values to unset: draftMeters, squatMeters, speedKnots, departure, requiredUkcMeters, crossTrackMeters (both sides), portCrossTrackMeters, starboardCrossTrackMeters.")] string[]? clear = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(
+                new SetPassageRequest(
+                    routeId, draftMeters, squatMeters, speedKnots, departure, requiredUkcMeters,
+                    crossTrackMeters, portCrossTrackMeters, starboardCrossTrackMeters, clear),
+                ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SetPassageTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+}
+
+/// <summary>Wraps <see cref="UndoRouteEditTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class UndoRouteEditMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Undoes the most recent edit to a route in the live viewer: the same per-route history as " +
+        "Ctrl+Z in the viewer, recording edits made there and through the route tools alike. Omit " +
+        "routeId to use the active route. Returns the route's full updated state; canUndo / undoLabel " +
+        "on it say what can be undone next. Errors with route_history_empty when there is nothing to " +
+        "undo. Viewer-injected tool — mutates live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(UndoRouteEditTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("Id of the route; omit to use the active route.")] string? routeId = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new RouteHistoryRequest(routeId), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = UndoRouteEditTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+}
+
+/// <summary>Wraps <see cref="RedoRouteEditTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class RedoRouteEditMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Redoes the most recently undone edit to a route in the live viewer (Ctrl+Shift+Z in the " +
+        "viewer). Omit routeId to use the active route. Returns the route's full updated state. Errors " +
+        "with route_history_empty when there is nothing to redo; any new edit clears the redo history. " +
+        "Viewer-injected tool — mutates live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(RedoRouteEditTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("Id of the route; omit to use the active route.")] string? routeId = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new RouteHistoryRequest(routeId), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = RedoRouteEditTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+}
+
+/// <summary>Wraps <see cref="SetRouteEditModeTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class SetRouteEditModeMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Turns the live viewer's interactive route editor on or off, as the Routes panel's Edit toggle " +
+        "and Ctrl+E do. While it is on, map clicks add waypoints to the active route. Read the current " +
+        "mode from list_routes (editMode). Viewer-injected tool — mutates live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(SetRouteEditModeTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("True to turn route edit mode on; false to turn it off.")] bool enabled,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetRouteEditModeRequest(enabled), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SetRouteEditModeTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+}
+
+/// <summary>Wraps <see cref="SelectRouteItemTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class SelectRouteItemMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Selects a waypoint (waypointIndex) or a leg (legIndex) of a route in the live viewer, as clicking " +
+        "its row in the Routes panel does, or clears the selection when given neither. The map highlights " +
+        "the selected waypoint, or haloes the selected leg and always shows its label. Selecting makes the " +
+        "route active. Returns the route; selectedWaypointIndex and selectedLegIndex report the selection. " +
+        "Viewer-injected tool — mutates live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(SelectRouteItemTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("Id of the route; omit to use the active route.")] string? routeId = null,
+            [System.ComponentModel.Description("Index of the waypoint to select; give this or legIndex, or neither to clear.")] int? waypointIndex = null,
+            [System.ComponentModel.Description("Index of the leg to select; leg i joins waypoint i to i+1.")] int? legIndex = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SelectRouteItemRequest(routeId, waypointIndex, legIndex), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SelectRouteItemTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+}
+
+/// <summary>Wraps <see cref="SetPassageCardTool"/> as an <see cref="McpServerTool"/>.</summary>
+internal static class SetPassageCardMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Expands or collapses the live viewer's Passage card in the Routes panel, as clicking its header does. " +
+        "Collapsed, it shows one line: a prompt to add draft and speed, or a summary of the values. Switching " +
+        "the active route sets it again (expanded when the route has passage values). Read the state from " +
+        "list_routes (passageCardExpanded). Open a leg's detail with select_route_item legIndex. " +
+        "Viewer-injected tool — mutates live state.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(SetPassageCardTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [System.ComponentModel.Description("True to expand the Passage card, false to collapse it.")] bool expanded,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetPassageCardRequest(expanded), ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SetPassageCardTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+}

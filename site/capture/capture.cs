@@ -1,0 +1,2132 @@
+#!/usr/bin/env dotnet
+// Captures the soundcharts.app screenshots (see ../shot-list.md) by driving
+// the SoundCharts viewer over MCP. Public-domain NOAA / USACE data only.
+//
+//   dotnet build -c Release src/EncDotNet.S100.Viewer      (once)
+//   dotnet run site/capture/capture.cs                     (all shots)
+//   dotnet run site/capture/capture.cs -- --only H1,F4     (some shots)
+//
+// Options: --only <ids>, --out <dir>, --viewer <exe>, --ienc <dir>, --chs <dir>, --keep-open, --two-shades,
+// --theme light (the themed window shots again with Light chrome, as <ID>.light.png),
+// --no-clone (run the build in place instead of a cached clone),
+// --manifest-only (run the recipes and update the manifest, keeping the existing images),
+// --gfs-run yyyyMMddHH (W1: that GFS run instead of the latest; the other weather shots pin their own).
+// Data is downloaded once into site/capture/.cache/ (gitignored).
+#:package ModelContextProtocol
+#:package SkiaSharp
+#:property PublishAot=false
+
+using System.Diagnostics;
+using System.IO.Compression;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
+using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
+using SkiaSharp;
+
+// Transcript text and console output use invariant (en-US style) numbers.
+System.Globalization.CultureInfo.DefaultThreadCurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+
+var scriptDir = AppContext.GetData("EntryPointFileDirectoryPath") as string
+    ?? Path.Combine(Directory.GetCurrentDirectory(), "site", "capture");
+var repoRoot = Path.GetFullPath(Path.Combine(scriptDir, "..", ".."));
+
+string? Option(string name) => Array.IndexOf(args, name) is var i and >= 0 && i + 1 < args.Length ? args[i + 1] : null;
+var only = Option("--only")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet(StringComparer.OrdinalIgnoreCase);
+var outDir = Path.GetFullPath(Option("--out") ?? Path.Combine(repoRoot, "site", "src", "assets", "shots"));
+var viewerExe = Option("--viewer") ?? Path.Combine(repoRoot, "src", "EncDotNet.S100.Viewer", "bin", "Release", "net10.0", "osx-arm64", "SoundCharts");
+var chsDir = Option("--chs") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "Unencrypted_S100_DatasetsNov2025 (1)", "COMBINED");
+var iencDir = Option("--ienc") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "SynologyDrive", "Charts", "Inland S-57 ENCs");
+var keepOpen = args.Contains("--keep-open");
+var gfsRun = Option("--gfs-run") is { } pinnedRun
+    ? DateTime.SpecifyKind(DateTime.ParseExact(pinnedRun, "yyyyMMddHH", System.Globalization.CultureInfo.InvariantCulture), DateTimeKind.Utc)
+    : (DateTime?)null;
+var manifestOnly = args.Contains("--manifest-only");
+ShotManifest.RepoRoot = repoRoot;
+Viewer.FourShades = !args.Contains("--two-shades");
+var theme = Option("--theme")?.ToLowerInvariant() switch
+{
+    null or "dark" => "Dark",
+    "light" => "Light",
+    var t => throw new ArgumentException($"--theme must be light or dark, not {t}"),
+};
+Viewer.ChromeTheme = theme;
+// Light shots sit beside the dark ones as <ID>.light.png (manifest key <ID>.light).
+var suffix = theme == "Light" ? ".light" : "";
+
+var data = new Data(Path.Combine(scriptDir, ".cache"));
+
+// Run a clone of the build from the cache. Other agent sessions clean up with
+// name-based kills such as `pkill -f "osx-arm64/SoundCharts"`; a different
+// path keeps this run's viewer out of their way.
+if (!args.Contains("--no-clone"))
+{
+    var cloneDir = Path.Combine(scriptDir, ".cache", "viewer");
+    if (Directory.Exists(cloneDir)) Directory.Delete(cloneDir, recursive: true);
+    Directory.CreateDirectory(Path.GetDirectoryName(cloneDir)!);
+    using (var cp = Process.Start("cp", ["-cR", Path.GetDirectoryName(viewerExe)!, cloneDir]))
+        await cp.WaitForExitAsync();
+    viewerExe = Path.Combine(cloneDir, Path.GetFileName(viewerExe));
+}
+Directory.CreateDirectory(outDir);
+
+// ── Places ──────────────────────────────────────────────────────────────
+// NOAA's rescheme cells (US5SEA**, 0.075° squares) and the band-4 cells
+// around them. S-102 tiles share the same names.
+string[] seattleEnc = ["US4WA1GJ", "US4WA1GK", .. Grid("US5SEA", "EFG", "IJKL")];
+string[] seattleS102 = [.. Grid("102US005SEA", "EFG", "IJKL"), "102US004WA1GJ", "102US004WA1GK"];
+// S-101 feature types (as S-57 cells translate) carried into derived S-125 / S-131
+// datasets; the names match the target catalogues.
+string[] s125Types = ["LateralBuoy", "LateralBeacon", "SpecialPurposeGeneralBuoy", "SpecialPurposeGeneralBeacon",
+    "LightAllAround", "LightSectored", "Daymark", "FogSignal", "Landmark", "MooringBuoy", "NavigationLine"];
+string[] s131Types = ["Berth", "Dolphin", "MooringBuoy", "HarbourFacility", "DryDock", "FloatingDock", "AnchorageArea"];
+// (Derived files are cached in .cache/derived; delete them to re-derive.)
+var derivedBox = new Box(47.585, -122.425, 47.640, -122.335);
+var elliottBay = new Box(47.540, -122.560, 47.680, -122.320);
+// F4 and the Check route shots: Colman Dock round West Point to Shilshole Bay
+// Marina. The leg past West Point clips the shoal there, so the check has a
+// real Must review finding.
+(double Lat, double Lon)[] colmanToShilshole =
+[
+    (47.6020, -122.3415), (47.6080, -122.3620), (47.6250, -122.4120),
+    (47.6520, -122.4420), (47.6700, -122.4330), (47.6795, -122.4105),
+];
+var passageBox = new Box(47.590, -122.500, 47.690, -122.320);
+// The Check route shots (F10–F12): a deep-draft ship from the Fort Sumter Range,
+// inside the jetties, up the federal channel to the Wando River Turning Basin
+// (Wando Welch Terminal). The turns are where the reaches' dredged-area
+// centrelines meet. Harbour-scale cells only: every view is framed at harbour
+// scale, where the band-4 cells add nothing. NOAA's S-104 pilot tile
+// 104US004SC1CO covers the whole route, so there is no tile seam on it.
+string[] charlestonEnc = ["US5CHSDD", "US5CHSDE", "US5CHSDF", "US5CHSED", "US5CHSEE", "US5CHSCE", "US5CHSCF"];
+(double Lat, double Lon)[] fortSumterToWando =
+[
+    (32.7229, -79.8110), (32.7398, -79.8464), (32.7582, -79.8660), (32.7720, -79.8875), (32.7818, -79.9106),
+    (32.7871, -79.9174), (32.8120, -79.9146), (32.8266, -79.8980), (32.8335, -79.8950),
+];
+// Rebellion Range round the 201 dredging area, close enough for the 1:12 000
+// cells to draw (they don't at the whole-route scale).
+var rebellionBox = new Box(32.754, -79.890, 32.778, -79.864);
+// They depart at 08:30 Eastern on a falling tide inside the S-104 run, with the
+// clock pinned there, so ETAs, water levels and warning status come out the same
+// on every run. At 14.5 m the shoalest stretch of Hog Island Reach dips below the
+// 1 m required UKC for a few minutes; departing two hours earlier clears it.
+var checkDeparture = new DateTimeOffset(2025, 12, 18, 13, 30, 0, TimeSpan.Zero);
+// W1: the coast from Cape Lookout past Cape Hatteras to the Chesapeake Bay
+// entrance and the Gulf Stream offshore, where GFS-Wave's Atlantic grid has its
+// steepest gradients near the coast. The west and south edges sit just inside
+// US2ATLOC, the band-2 cell that draws at this scale (the band-3 cells don't),
+// so the chart reaches the edges of the view.
+var hatterasBox = new Box(33.62, -76.75, 37.8, -71.0);
+// The Weather section (W2–W9). Weather is drawn over NOAA's charts (bands 1–3,
+// downloaded by the Library), so the scenes are in US waters, framed so the
+// weather sits inside the charts. Each shot pins its own moment, so it reproduces
+// without live weather; all data is NOAA's (public domain) or NASA JPL's MUR
+// analysis via NOAA ERDDAP (free and open).
+// W2: the Gulf Stream through the Florida Straits, past the Keys and Miami.
+var floridaStraitsBox = new Box(23.3, -83.6, 28.2, -76.4);
+var floridaStraitsDay = new DateTime(2025, 2, 10, 0, 0, 0, DateTimeKind.Utc);
+// W3: freezing spray round Kodiak Island and Shelikof Strait as an Arctic outbreak
+// blew off the Alaska Peninsula on 15 Dec 2025.
+var kodiakBox = new Box(54.6, -160.0, 60.6, -147.5);
+var kodiakRun = new DateTime(2025, 12, 15, 0, 0, 0, DateTimeKind.Utc);
+// W4: Hurricane Erin passing north of the Virgin Islands and Puerto Rico. NHC
+// advisory 22 was issued at 21Z on 16 Aug 2025.
+var erin = (Storm: "al052025", Advisory: 22, Issued: new DateTimeOffset(2025, 8, 16, 21, 0, 0, TimeSpan.Zero));
+var puertoRicoBox = new Box(17.4, -68.0, 21.4, -62.8);
+// NOAA's Puerto Rico cells are band 3 only, drawn from about 1:1 400 000 in, and end
+// near 19° N, so the shot is framed at that scale with the radii over the charts.
+var erinFrame = (Lat: 19.3, Lon: -65.0, Scale: 1_400_000);
+// W5: the WPC analysis for 00Z on 28 Oct 2025 with the GFS analysis isobars at
+// the same time: a low off South Carolina with its cold front running out to
+// sea, framed so the band 2/3 charts of the coast still draw.
+var atlanticAnalysis = new DateTime(2025, 10, 28, 0, 0, 0, DateTimeKind.Utc);
+var southeastBox = new Box(29.6, -82.2, 36.4, -71.8);
+string[] southeastStates = ["FL", "GA", "SC", "NC"];
+// W7: the Library over the East Coast.
+var eastCoastBox = new Box(29.5, -82.5, 46.5, -59.5);
+// W6: Charleston to the Chesapeake Bay entrance at 12 kn, departing at 12Z on
+// 20 Aug 2025 as Erin passed offshore, checked against the GFS and GFS-Wave run
+// at departure, every 3 h, and Erin's latest advisory then, 36 (09Z on 20 Aug):
+// legs 4 → 6 off Cape Hatteras fall inside its 34 kt wind radius.
+(double Lat, double Lon)[] charlestonToChesapeake =
+[
+    (32.70, -79.70), (33.30, -78.60), (33.75, -77.70), (34.55, -76.40), (35.20, -75.30), (36.40, -75.50), (36.95, -75.95),
+];
+var erinRoute = (Departure: new DateTimeOffset(2025, 8, 20, 12, 0, 0, TimeSpan.Zero), Advisory: 36);
+var carolinasBox = new Box(31.4, -81.4, 38.0, -71.4);
+// W8: sea fog off eastern Maine and in the Bay of Fundy on a June morning. The minis are map renders
+// at 1280 × 720 logical pixels, so the band 3 charts still draw at their scale.
+var gulfOfMaineBox = new Box(43.4, -69.6, 45.0, -66.4);
+var gulfOfMaineRun = new DateTime(2025, 6, 20, 12, 0, 0, DateTimeKind.Utc);
+// W9: an afternoon of thunderstorms over south Florida.
+var floridaBox = new Box(24.9, -83.8, 28.5, -79.4);
+var floridaRun = new DateTime(2025, 8, 10, 18, 0, 0, DateTimeKind.Utc);
+
+var shots = new List<Shot>
+{
+    // H: hero, the same view in each palette, with the Datasets panel open.
+    new("H1", v => Hero(v, "Day"), Themed: true),
+    new("H3", v => Hero(v, "Dusk"), Chrome: "S100Dusk"),
+    new("H2", v => Hero(v, "Night"), Chrome: "S100Night"),
+
+    // F1: the same view as layers are added (chart → + depths).
+    // F1: the same view at the Chesapeake Bay entrance as layers are added:
+    // NOAA chart → + S-102 depths → + S-111 currents (cbofs, latest run).
+    new("F1a", v => Layers(v, depths: false, currents: false), Themed: true),
+    new("F1b", v => Layers(v, depths: true, currents: false), Themed: true),
+    new("F1c", v => Layers(v, depths: true, currents: true), Themed: true),
+
+    // F3: Object Information for the lateral buoy nearest the middle of Elliott Bay.
+    new("F3", async v =>
+    {
+        await v.Reset();
+        await v.OpenAll(await data.Enc(seattleEnc));
+        var (lat, lon) = await v.Nearest(47.600, -122.370, "LateralBuoy", "BOYLAT");
+        await v.Frame(new Box(lat - 0.012, lon - 0.030, lat + 0.012, lon + 0.012));
+        await v.Call("pick_features", new() { ["latitude"] = lat, ["longitude"] = lon, ["select"] = true });
+        await v.Panel("PickReport");
+        return await v.Window();
+    }, Themed: true),
+
+    // F4: a route from Colman Dock round West Point to Shilshole Bay Marina.
+    new("F4", async v =>
+    {
+        await v.Reset();
+        await v.OpenAll(await data.Enc(seattleEnc));
+        await PlanRoute(v);
+        await v.Panel("Routes");
+        await v.Frame(passageBox);
+        return await v.Window();
+    }, Themed: true),
+
+    // F10: Check route into Charleston with S-104 water levels, the verdict card,
+    // the Clearance profile, and the map legend open. The selected finding is the
+    // worst below-UKC stretch, and the map is zoomed to it. Times read in Eastern, as a
+    // planner in Charleston would see them.
+    new("F10", v => CheckRoute(v, "Day"), Themed: true, TimeZone: "America/New_York"),
+
+    // F11: the Navigational warnings panel scoped to the checked route, with the
+    // dredging warning's card open in Object Information.
+    new("F11", async v =>
+    {
+        await OpenRouteWarning(v);
+        await v.Frame(rebellionBox);
+        return await v.Window();
+    }, Themed: true, TimeZone: "America/New_York"),
+
+    // F12: the same card, cropped around its "Crosses route · leg 3 → 4" row.
+    new("F12", async v =>
+    {
+        await OpenRouteWarning(v);
+        await v.Frame(rebellionBox);
+        return await v.WindowCrop("PickReport.WarningCard.RouteFinding", "PickReport.WarningCard");
+    }, Themed: true, TimeZone: "America/New_York"),
+
+    // F2: the currents forecast on the Timeline, Live, with the clock pinned
+    // nine hours into the latest cbofs run so the shot is repeatable.
+    new("F2", async v =>
+    {
+        await v.Reset(category: "DisplayBase");
+        string[] entrance = ["US4VA1BE", "US4VA1BF"];
+        await v.OpenAll(await data.Enc(entrance));
+        foreach (var tile in entrance)
+            await v.OpenAll([await data.S111("cbofs", tile)]);
+        var first = DateTimeOffset.Parse((await v.Call("get_timeline_state"))!["minimum"]!.GetValue<string>());
+        await v.Call("set_test_clock", new() { ["now"] = first.AddHours(9).ToString("O"), ["freeze"] = true });
+        await v.Call("set_view_time", new() { ["time"] = "now" });
+        await v.Call("set_timeline_view", new() { ["preset"] = "this_run" });
+        await v.Panel("Timeline");
+        await v.Frame(new Box(36.940, -76.460, 37.160, -75.900));
+        return await v.Window();
+    }, Themed: true),
+
+    // F5: the Library with NOAA's Washington S-102 areas and ENCs, the Seattle
+    // items downloaded, over Puget Sound so online and local tiles both show.
+    new("F5", async v =>
+    {
+        await v.Reset();
+        var preview = await v.Call("add_library_source", new() { ["knownSourceId"] = "noaa-s102", ["preview"] = true });
+        var washington = preview!["choices"]!.AsArray()
+            .SelectMany(g => g!["options"]!.AsArray())
+            .Select(o => o!["value"]!.GetValue<string>())
+            .Where(value => value.StartsWith("Washington/", StringComparison.Ordinal))
+            .ToArray();
+        await v.Call("add_library_source", new() { ["knownSourceId"] = "noaa-s102", ["choices"] = washington });
+        await v.Call("add_library_source", new() { ["knownSourceId"] = "noaa-enc", ["choices"] = new[] { "WA" } });
+        await v.Call("await_library_idle", new() { ["timeoutMs"] = 120000 });
+        var seattle = new Dictionary<string, object?> { ["south"] = 47.55, ["west"] = -122.45, ["north"] = 47.65, ["east"] = -122.32 };
+        await v.Call("library_action", new(seattle) { ["action"] = "download", ["spec"] = "S-102", ["maxBytes"] = 100_000_000L });
+        await v.Call("library_action", new(seattle) { ["action"] = "download", ["spec"] = "S-57", ["maxBytes"] = 50_000_000L });
+        await v.Call("await_library_idle", new() { ["timeoutMs"] = 300000 });
+        await v.WaitForLoads();
+        await v.Panel("Library");
+        await v.Frame(new Box(47.40, -122.75, 47.80, -122.10));
+        return await v.Window();
+    }, Themed: true),
+
+    // F8: the Validation tab for whichever candidate has the most located
+    // findings, over the NOAA chart at the Chesapeake Bay entrance: the S-125 AtoN
+    // fixture (synthetic) and NOAA's own S-111 currents (a few 360° directions,
+    // which the spec's [0, 360) range rejects). NOAA's ENCs now validate clean.
+    new("F8", async v =>
+    {
+        await v.Reset();
+        await v.OpenAll(await data.Enc(["US4VA1BF"]));
+        var candidates = new List<(string Id, Box Bounds)>();
+        foreach (var file in new[] { Fixture("S125/aton_chesapeake.gml"), await data.S111("cbofs", "US4VA1BF") })
+        {
+            v.ClearOpened();
+            foreach (var id in await v.OpenAll([file])) candidates.Add((id, v.Opened!));
+        }
+        await v.Panel("Datasets");
+        (string Id, Box Bounds, int Located, int Total)? best = null;
+        foreach (var (id, bounds) in candidates)
+        {
+            var summary = (await v.Call("select_dataset", new() { ["datasetId"] = id, ["tab"] = "validation" }))?["validation"];
+            var located = summary?["located"]?.GetValue<int>() ?? 0;
+            var total = summary?["total"]?.GetValue<int>() ?? 0;
+            Console.WriteLine($"  {id}: {summary?["state"]} {total} findings, {located} located");
+            if (best is null || (located, total).CompareTo((best.Value.Located, best.Value.Total)) > 0) best = (id, bounds, located, total);
+        }
+        // Keep the map readable: close the other candidates, then show the winner.
+        foreach (var (id, _) in candidates.Where(c => c.Id != best!.Value.Id))
+            await v.Call("close_dataset", new() { ["id"] = id });
+        await v.Call("select_dataset", new() { ["datasetId"] = best!.Value.Id, ["tab"] = "validation" });
+        await v.Frame(best.Value.Bounds);
+        return await v.Window();
+    }, Themed: true),
+
+    // F9: the ECDIS display controls beside Shilshole Bay and the approach to the
+    // Ballard Locks, where the safety contour and four-shade depths show.
+    new("F9", async v =>
+    {
+        await v.Reset();
+        await v.OpenAll(await data.Enc(seattleEnc));
+        await v.OpenAll(await data.S102(seattleS102));
+        await v.Panel("EcdisDisplay");
+        await v.Frame(new Box(47.655, -122.440, 47.700, -122.370));
+        return await v.Window();
+    }, Themed: true),
+
+    // F13: the Add online catalogue directory, its known catalogues grouped by
+    // region, over a world view, with EuRIS (Europe's inland waterways) selected
+    // so the European catalogues show. It opens from the empty Library's quick
+    // button, so no data is needed.
+    new("F13", async v =>
+    {
+        await v.Reset();
+        await v.Panel("Library");
+        await v.Frame(new Box(-50, -170, 70, 170));
+        await v.Call("ui_invoke", new() { ["id"] = "Library.Quick.Online" });
+        await v.Call("ui_select", new() { ["ref"] = await CatalogueRow(v, "EuRIS") });
+        return await v.Window();
+    }, Themed: true),
+
+    // W1: wind and waves over the chart off Cape Hatteras: NOAA GFS-Wave
+    // significant wave height (the Atlantic 0.16° grid) and the GFS 10 m wind and
+    // sea level pressure, six hours into the latest run on AWS (public domain), or
+    // into the run --gfs-run names (the committed shot: Hurricane Erin, 2025082100),
+    // over the NOAA coastal charts the Library downloads. Display controls is
+    // open on its Weather switches (isobars on, wind speed fill and wave arrows
+    // off, the defaults).
+    new("W1", async v =>
+    {
+        await v.Reset(category: "DisplayBase");
+        await CoastalCharts(v, ["NC"], hatterasBox);
+        const int hour = 6;
+        var run = gfsRun ?? await data.LatestGfsRun(hour);
+        await v.OpenAll([await data.GfsWave(run, "atlocn.0p16", hour, ["HTSGW:surface", "PERPW:surface", "DIRPW:surface"])]);
+        await v.OpenAll([await data.Gfs(run, hour, ["UGRD:10 m above ground", "VGRD:10 m above ground", "PRMSL:mean sea level"])]);
+        await v.Call("set_view_time", new() { ["time"] = run.AddHours(hour).ToString("O"), ["snap"] = "nearest" });
+        await v.Panel("EcdisDisplay");
+        await v.Frame(hatterasBox);
+        return await v.Window();
+    }, Themed: true),
+
+    // W2: the ocean. NASA JPL's MUR sea surface temperature analysis and NOAA
+    // AOML's geostrophic currents from altimetry for the same day, both from
+    // NOAA ERDDAP, over the NOAA charts of the Florida Straits, isotherms on.
+    new("W2", async v =>
+    {
+        await v.Reset(category: "DisplayBase");
+        await CoastalCharts(v, ["FL"], floridaStraitsBox);
+        await v.OpenAll([await data.Erddap(Data.CoastWatch, "jplMURSST41", ["analysed_sst"], floridaStraitsDay.AddHours(9), floridaStraitsBox, stride: 2)]);
+        // Two daily steps, so the 09Z SST time falls within the first.
+        await v.OpenAll([await data.Erddap(Data.Aoml, "miamicurrents", ["u_current", "v_current"], floridaStraitsDay, floridaStraitsBox, stride: 1, until: floridaStraitsDay.AddDays(1))]);
+        await v.Call("set_weather_display", new() { ["isotherms"] = true, ["currents"] = true });
+        await v.Call("set_view_time", new() { ["time"] = floridaStraitsDay.AddHours(9).ToString("O") });
+        await v.Frame(floridaStraitsBox);
+        return await v.Window();
+    }, Themed: true, TimeZone: "UTC"),
+
+    // W3: hazards. Freezing spray worked out from the GFS 10 m wind, 2 m air
+    // temperature and surface temperature, with the air isotherms and isobars,
+    // round Kodiak Island, over the NOAA charts.
+    new("W3", async v =>
+    {
+        await v.Reset(category: "DisplayBase");
+        await CoastalCharts(v, ["AK"], kodiakBox);
+        await v.OpenAll([await data.Gfs(kodiakRun, 0,
+            ["UGRD:10 m above ground", "VGRD:10 m above ground", "TMP:2 m above ground", "TMP:surface", "LAND:surface", "PRMSL:mean sea level"])]);
+        await v.Call("set_weather_display", new() { ["airTemperature"] = true, ["isobars"] = true });
+        await v.Call("set_view_time", new() { ["time"] = kodiakRun.ToString("O"), ["snap"] = "nearest" });
+        await v.Frame(kodiakBox);
+        return await v.Window();
+    }, Themed: true, TimeZone: "UTC"),
+
+    // W4: tropical cyclones. Hurricane Erin's NHC advisory 22 (from NHC's GIS
+    // archive) with the cone, track, wind radii and best track over the NOAA
+    // charts of Puerto Rico and the Virgin Islands, the clock pinned an hour
+    // after the advisory and the view time three hours on, so the storm is drawn
+    // where it's estimated to be between forecast points (the map's time stamp
+    // shows it). The Timeline panel stays closed: it would halve the map, and the
+    // band 3 cells, the largest NOAA has here, only draw at this frame's scale.
+    new("W4", async v =>
+    {
+        await v.Reset(category: "DisplayBase");
+        await CoastalCharts(v, ["PR"], puertoRicoBox);
+        await v.OpenAll([await data.NhcAdvisory(erin.Storm, erin.Advisory)]);
+        await v.Call("set_test_clock", new() { ["now"] = erin.Issued.AddHours(1).ToString("O"), ["freeze"] = true });
+        await v.Call("set_view_time", new() { ["time"] = erin.Issued.AddHours(3).ToString("O") });
+        await v.Call("set_viewport", new() { ["centerLat"] = erinFrame.Lat, ["centerLon"] = erinFrame.Lon, ["scaleDenominator"] = erinFrame.Scale });
+        await v.Settle();
+        return await v.Window();
+    }, Themed: true, TimeZone: "UTC"),
+
+    // W5: a surface analysis. WPC's high-resolution coded analysis for 00Z on
+    // 28 Oct 2025 (NWS bulletin ASUS02, from the Iowa Environmental Mesonet's
+    // archive of NWS text products) with the GFS analysis isobars for the same
+    // time, over the NOAA charts of the Southeast coast, the clock pinned an hour later.
+    new("W5", async v =>
+    {
+        await v.Reset(category: "DisplayBase");
+        await CoastalCharts(v, southeastStates, southeastBox);
+        await v.OpenAll([await data.WpcBulletin("ASUS02", atlanticAnalysis)]);
+        await v.OpenAll([await data.Gfs(atlanticAnalysis, 0, ["PRMSL:mean sea level"])]);
+        await v.Call("set_test_clock", new() { ["now"] = atlanticAnalysis.AddHours(1).ToString("O"), ["freeze"] = true });
+        await v.Call("set_view_time", new() { ["time"] = atlanticAnalysis.ToString("O"), ["snap"] = "nearest" });
+        await v.Frame(southeastBox);
+        return await v.Window();
+    }, Themed: true, TimeZone: "UTC"),
+
+    // W6: weather on a route. Charleston to the Chesapeake Bay entrance as Erin
+    // passed offshore, checked against GFS wind and GFS-Wave wave height every 3 h
+    // from the run at departure, with 25 kn and 3.5 m limits, over the NOAA charts.
+    // The check also tests the route against Erin's advisory (#1299). The findings
+    // list is on its Weather filter, with the strongest radius finding selected.
+    new("W6", v => WeatherRoute(v), Themed: true, TimeZone: "UTC"),
+
+    // W7: the Library's weather sources: GFS on AWS, SST from ERDDAP, NHC's
+    // active storms and WPC's surface analysis. Live sources, like F5: the runs
+    // listed are the ones on the day of capture.
+    new("W7", async v =>
+    {
+        await v.Reset();
+        foreach (var source in new[] { "noaa-aws-gfs", "noaa-erddap-sst", "noaa-nhc-storms", "noaa-wpc-surface" })
+            await v.Call("add_library_source", new() { ["knownSourceId"] = source });
+        await v.Call("await_library_idle", new() { ["timeoutMs"] = 180000 });
+        await v.Panel("Library");
+        await v.Frame(eastCoastBox);
+        return await v.Window();
+    }, Themed: true, TimeZone: "UTC"),
+
+    // W8: restricted visibility. GFS surface visibility over the Gulf of Maine on
+    // a June morning, with sea fog over the NOAA charts. Map only.
+    new("W8", async v =>
+    {
+        await v.Reset(category: "DisplayBase");
+        await CoastalCharts(v, ["MA", "NH", "ME"], gulfOfMaineBox);
+        await v.OpenAll([await data.Gfs(gulfOfMaineRun, 0, ["VIS:surface"])]);
+        await v.Call("set_view_time", new() { ["time"] = gulfOfMaineRun.ToString("O"), ["snap"] = "nearest" });
+        await v.Frame(gulfOfMaineBox);
+        return await v.Map(2560, 1440);
+    }, TimeZone: "UTC"),
+
+    // W9: rain and thunderstorms. GFS precipitation rate and CAPE three hours
+    // into the 18Z run, over the NOAA charts of south Florida, with
+    // the Precipitation and Thunderstorm risk switches on. Map only.
+    new("W9", async v =>
+    {
+        await v.Reset(category: "DisplayBase");
+        await CoastalCharts(v, ["FL"], floridaBox);
+        const int hour = 3;
+        await v.OpenAll([await data.Gfs(floridaRun, hour, ["PRATE:surface", "CAPE:surface", "PRMSL:mean sea level"])]);
+        await v.Call("set_weather_display", new() { ["precipitation"] = true, ["thunderstormRisk"] = true });
+        await v.Call("set_view_time", new() { ["time"] = floridaRun.AddHours(hour).ToString("O"), ["snap"] = "nearest" });
+        await v.Frame(floridaBox);
+        return await v.Map(2560, 1440);
+    }, TimeZone: "UTC"),
+
+    // D2: an agent planning and checking a route over MCP. Every call and result
+    // in the transcript is real; the frames are window captures after each step,
+    // encoded to site/public/clips/D2.{mp4,webm}. The returned PNG is the poster.
+    new("D2", v => AgentClip(v)),
+
+    // F7: one harbour crop in each palette (window captures: render_to_image ignores the palette).
+    new("F7-day", v => Palette(v, "Day"), Themed: true),
+    new("F7-dusk", v => Palette(v, "Dusk"), Chrome: "S100Dusk"),
+    new("F7-night", v => Palette(v, "Night"), Chrome: "S100Night"),
+
+    // P: square product tiles, map only.
+    // P01: real S-101 from the Canadian Hydrographic Service's S-100 sample
+    // package (Nov 2025): Quebec City harbour at the cell's optimum scale. CHS
+    // licence: non-commercial use with the CHS notice (in the page footer); the
+    // data itself is never committed, so it's read from --chs (a local copy).
+    new("P01", async v =>
+    {
+        var cell = Directory.Exists(chsDir)
+            ? Directory.GetFiles(chsDir, "101CA00P468N0712W.000", SearchOption.AllDirectories).FirstOrDefault()
+            : null;
+        if (cell is null) throw new SkipShot($"CHS sample package not found under {chsDir} (pass --chs)");
+        await v.Reset();
+        await v.OpenAll([cell]);
+        await v.Call("set_viewport", new() { ["centerLat"] = 46.835, ["centerLon"] = -71.170, ["scaleDenominator"] = 12000 });
+        return await v.Map(1200, 1200);
+    }),
+    new("P02", async v =>
+    {
+        await v.Reset();
+        await v.OpenAll(await data.Enc(seattleEnc));
+        await v.Frame(new Box(47.590, -122.365, 47.615, -122.330));
+        return await v.Map(1200, 1200);
+    }),
+    new("P03", async v =>
+    {
+        // S-102 over the NOAA chart at Display Base: land and coastline come from
+        // the chart (the offline Natural Earth land is far too coarse at harbour
+        // scale), and four-shade depth zones give the spec's fullest gradation.
+        await v.Reset(category: "DisplayBase");
+        await v.OpenAll(await data.Enc(seattleEnc));
+        await v.OpenAll(await data.S102(seattleS102));
+        await v.Frame(new Box(47.520, -122.560, 47.660, -122.330));
+        return await v.Map(1200, 1200);
+    }),
+    // P04: NOAA's S-104 water-level pilot at Charleston (repo fixture, Dec 2025 run).
+    // The gridded tiles load hidden, and the run is in the past, so switch them
+    // on and move the Timeline to their data. The NOAA chart sits underneath at
+    // Display Base; S-98 puts the S-104 band over its fills, under its line work.
+    new("P04", async v =>
+    {
+        await v.Reset(category: "DisplayBase");
+        await v.OpenAll(await data.Enc(["US4SC1BO", "US4SC1BP", "US4SC1CO", "US4SC1CP"]));
+        var levels = await v.OpenAll(Directory.GetFiles(Fixture("S104"), "104US004SC1*.h5"));
+        foreach (var id in levels)
+            await v.Call("set_dataset_state", new() { ["datasetId"] = id, ["visible"] = true });
+        var first = DateTimeOffset.Parse((await v.Call("get_timeline_state"))!["minimum"]!.GetValue<string>());
+        await v.Call("set_view_time", new() { ["time"] = first.AddHours(6).ToString("O"), ["snap"] = "nearest" });
+        await v.Frame(new Box(32.640, -80.000, 32.800, -79.800));
+        return await v.Map(1200, 1200);
+    }),
+    new("P05", v => Currents(v, data.S111("cbofs", "US4VA1BF"))),
+    // P06, P08–P10: repo fixtures for the GML products, framed on their data.
+    new("P06", v => Tile(v, [Fixture("S124/navwarn_mixed.gml")])),
+    // P07: S-125 aids to navigation derived from NOAA's Elliott Bay ENCs (public
+    // domain), drawn over the chart.
+    // S-125 now portrays AtoNs with the S-101 rules (#750), which sit in the
+    // Standard display category, so this tile can't use Display Base.
+    new("P07", async v => await DerivedTile(v, "S-125", "S125", s125Types, category: "Standard")),
+    // P08: US National Weather Service sea-ice analysis for Alaska (public
+    // domain), via the BSH/BSIS S-411 Ice Portal, framed on the Beaufort and
+    // Chukchi ice edge.
+    new("P08", async v =>
+    {
+        await v.Reset();
+        await v.OpenAll([await data.S411Latest("S411_NWS_full_")]);
+        // NWS publishes Alaska in a continuous longitude frame across the
+        // antimeridian (≈175°E–225°E), so frame it in that frame: 190–220 = 170°W–140°W.
+        await v.Call("set_viewport", new() { ["centerLat"] = 72.0, ["centerLon"] = 180.0, ["scaleDenominator"] = 10_000_000 });
+        return await v.Map(1200, 1200);
+    }),
+    new("P09", v => Tile(v, [Fixture("S421/RTE-TEST-GFULL.s421.gml")])),
+    new("P10", v => Tile(v, [Fixture("S129/12900MCTDS200TS.gml")])),
+    // P12: S-131 harbour infrastructure derived from the same NOAA cells.
+    new("P12", async v => await DerivedTile(v, "S-131", "S131", s131Types)),
+    new("P11", async v =>
+    {
+        // USACE inland ENC: the Upper Mississippi and Missouri cells at St. Louis (local corpus).
+        var cells = new[] { "U37UM155", "U37MO000" }
+            .Select(c => Path.Combine(iencDir, c, $"{c}.000"))
+            .Where(File.Exists)
+            .ToArray();
+        if (cells.Length == 0) throw new SkipShot($"no USACE IENC cells under {iencDir} (pass --ienc)");
+        await v.Reset();
+        await v.OpenAll(cells);
+        await v.Frame(new Box(38.605, -90.205, 38.645, -90.165));
+        return await v.Map(1200, 1200);
+    }),
+};
+
+// ── Run ────────────────────────────────────────────────────────────────
+var selected = shots.Where(s => (only is null || only.Contains(s.Id)) && (theme == "Dark" || s.Themed)).ToList();
+if (selected.Count == 0)
+{
+    Console.Error.WriteLine($"No shots match --only{(theme == "Dark" ? "" : " and --theme")}. Known: {string.Join(", ", shots.Where(s => theme == "Dark" || s.Themed).Select(s => s.Id))}");
+    return 1;
+}
+
+// The chrome theme and time zone are startup settings, so a shot that needs others gets a fresh viewer.
+Viewer.ChromeTheme = selected[0].Chrome ?? theme;
+Viewer.TimeZone = selected[0].TimeZone;
+var viewer = await Viewer.StartAsync(viewerExe, keepOpen);
+var failures = 0;
+try
+{
+    foreach (var shot in selected)
+    {
+        if ((shot.Chrome ?? theme) != Viewer.ChromeTheme || shot.TimeZone != Viewer.TimeZone)
+        {
+            await viewer.DisposeAsync();
+            Viewer.ChromeTheme = shot.Chrome ?? theme;
+            Viewer.TimeZone = shot.TimeZone;
+            viewer = await Viewer.StartAsync(viewerExe, keepOpen);
+        }
+        for (var attempt = 1; ; attempt++)
+        {
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                viewer.BeginShot();
+                var png = await shot.Capture(viewer);
+                var path = Path.Combine(outDir, $"{shot.Id}{suffix}.png");
+                var keepImage = manifestOnly && File.Exists(path);
+                if (keepImage)
+                {
+                    Console.WriteLine($"= {shot.Id + suffix,-15} manifest only (image kept)");
+                }
+                else
+                {
+                    await File.WriteAllBytesAsync(path, png);
+                    Console.WriteLine($"✓ {shot.Id + suffix,-15} {png.Length / 1024,6} KB  {sw.Elapsed.TotalSeconds,5:0.0}s  {Path.GetRelativePath(repoRoot, path)}");
+                }
+                await ShotManifest.RecordAsync(Path.Combine(outDir, "manifest.json"), shot.Id + suffix, viewer, path, repoRoot, recapturedImage: !keepImage);
+            }
+            catch (SkipShot e)
+            {
+                Console.WriteLine($"- {shot.Id + suffix,-15} skipped: {e.Message}");
+            }
+            catch (Exception e) when (attempt < 4 && viewer.Died())
+            {
+                // Another process can take the viewer down (e.g. a name-based kill
+                // from a parallel session); start a fresh one and retry the shot.
+                Console.WriteLine($"  viewer died during {shot.Id} ({e.Message}); restarting");
+                await viewer.DisposeAsync();
+                viewer = await Viewer.StartAsync(viewerExe, keepOpen);
+                continue;
+            }
+            catch (Exception e)
+            {
+                failures++;
+                Console.WriteLine($"✗ {shot.Id + suffix,-15} {e.Message}");
+            }
+            break;
+        }
+    }
+}
+finally
+{
+    await viewer.DisposeAsync();
+}
+return failures == 0 ? 0 : 1;
+
+// ── Shot recipes ───────────────────────────────────────────────────────
+// ── D2: agent clip ──────────────────────────────────────────────────────
+async Task<byte[]> AgentClip(Viewer v)
+{
+    await v.Reset();
+    await v.OpenAll(await data.Enc(seattleEnc));
+    await v.OpenAll(await data.S102(seattleS102));
+    await v.Panel("Routes");
+    await v.Frame(new Box(47.590, -122.500, 47.690, -122.320));
+
+    var clip = new AgentClipBuilder();
+    clip.Say("user", "Plan a route from Colman Dock to Shilshole Bay Marina, and check the depths along it.");
+    await clip.Frame(v, 2.5);
+
+    const string name = "Colman Dock to Shilshole";
+    var created = await v.Call("create_route", new() { ["name"] = name });
+    clip.Call($"create_route {{ name: \"{name}\" }}", $"route {created!["routeId"]!.GetValue<string>()[..8]}…, 0 waypoints");
+    await clip.Frame(v, 1.2);
+
+    (double Lat, double Lon)[] waypoints =
+    [
+        (47.6020, -122.3415), (47.6080, -122.3620), (47.6250, -122.4120),
+        (47.6520, -122.4420), (47.6700, -122.4330), (47.6795, -122.4105),
+    ];
+    foreach (var (lat, lon) in waypoints)
+    {
+        var route = await v.Call("append_waypoint", new() { ["lat"] = lat, ["lon"] = lon });
+        var count = route!["waypoints"]!.AsArray().Count;
+        var total = route["totalDistanceNm"]!.GetValue<double>();
+        clip.Call($"append_waypoint {{ lat: {lat:0.0000}, lon: {lon:0.0000} }}", $"{count} waypoint{(count == 1 ? "" : "s")} · {total:0.0} NM");
+        await clip.Frame(v, 0.7);
+    }
+
+    // Check depths along the track, densified (~150 m) so the S-102 sampling
+    // follows the legs, not just the turns. Samples within ~300 m of either end
+    // (the berths) are left out of the least depth.
+    async Task<(double Depth, double Lat, double Lon, int Count, int Points)> LeastDepth((double Lat, double Lon)[] route)
+    {
+        var track = new JsonArray();
+        for (var i = 0; i < route.Length - 1; i++)
+        {
+            var (a, b) = (route[i], route[i + 1]);
+            var metres = Math.Sqrt(Math.Pow((b.Lat - a.Lat) * 111_320, 2) + Math.Pow((b.Lon - a.Lon) * 111_320 * Math.Cos(a.Lat * Math.PI / 180), 2));
+            var steps = Math.Max(1, (int)(metres / 150));
+            for (var k = 0; k < steps; k++)
+                track.Add(new JsonArray(a.Lat + (b.Lat - a.Lat) * k / steps, a.Lon + (b.Lon - a.Lon) * k / steps));
+        }
+        track.Add(new JsonArray(route[^1].Lat, route[^1].Lon));
+        var points = track.Count;
+        // The tool takes the polyline as a JSON string: {"vertices":[[lat,lon],...]}.
+        var along = await v.Call("sample_coverage_along", new() { ["spec"] = "S-102", ["polyline"] = new JsonObject { ["vertices"] = track }.ToJsonString() });
+        var samples = along!["samples"]!.AsArray();
+        var found = samples
+            .Select((sample, i) => (Depth: sample?["result"]?["value"]?["depthMeters"]?.GetValue<double>(), Index: i, Sample: sample))
+            .Where(x => x.Depth is not null).ToList();
+        var least = found.Where(x => x.Index >= 2 && x.Index < samples.Count - 2).MinBy(x => x.Depth!.Value);
+        return (least.Depth!.Value, least.Sample!["latitude"]!.GetValue<double>(), least.Sample!["longitude"]!.GetValue<double>(), found.Count, points);
+    }
+
+    var first = await LeastDepth(waypoints);
+    clip.Call($"sample_coverage_along {{ spec: \"S-102\", {first.Points} points }}",
+        $"{first.Count} depths · least {first.Depth:0.0} m at {first.Lat:0.000}, {first.Lon:0.000}");
+    await clip.Frame(v, 1.6);
+
+    // The first track clips the West Point shoal; move waypoints 4 and 5 into deeper water.
+    (double Lat, double Lon)[] offshore = [(47.6520, -122.4500), (47.6700, -122.4420)];
+    clip.Say("assistant", $"That leg crosses the shoal off West Point ({first.Depth:0.0} m). Moving waypoints 4 and 5 into deeper water.");
+    for (var i = 0; i < offshore.Length; i++)
+    {
+        var (lat, lon) = offshore[i];
+        await v.Call("move_waypoint", new() { ["index"] = 3 + i, ["lat"] = lat, ["lon"] = lon });
+        waypoints[3 + i] = (lat, lon);
+        clip.Call($"move_waypoint {{ index: {3 + i}, lat: {lat:0.0000}, lon: {lon:0.0000} }}", "moved");
+        await clip.Frame(v, 1.0);
+    }
+
+    var second = await LeastDepth(waypoints);
+    clip.Call($"sample_coverage_along {{ spec: \"S-102\", {second.Points} points }}", $"{second.Count} depths · least {second.Depth:0.0} m");
+    await clip.Frame(v, 1.4);
+
+    var length = (await v.Call("get_route"))!["totalDistanceNm"]!.GetValue<double>();
+    clip.Say("assistant", $"Done: {waypoints.Length} waypoints, {length:0.0} NM. Away from the berths, the least depth along the track is now {second.Depth:0.0} m (NOAA S-102).");
+    var poster = await clip.Frame(v, 3.5);
+
+    var clipsDir = Path.Combine(repoRoot, "site", "public", "clips");
+    if (!manifestOnly) await clip.EncodeAsync(clipsDir, "D2");
+    return poster;
+}
+
+// A product tile from a dataset derived from the NOAA Elliott Bay cells.
+async Task<byte[]> DerivedTile(Viewer v, string spec, string prefix, string[] types, string category = "DisplayBase", bool showChart = true)
+{
+    await v.Reset(category: category);
+    // The ENCs are needed to derive the data; hide them for an S-xxx-only tile.
+    var cells = await v.OpenAll(await data.Enc(seattleEnc));
+    var path = Path.Combine(scriptDir, ".cache", "derived", $"{prefix}_ElliottBay.gml");
+    if (!File.Exists(path))
+    {
+        Console.WriteLine($"  deriving {spec} from the NOAA cells");
+        await GmlDeriver.WriteAsync(v, spec, prefix, types, derivedBox, path);
+    }
+    if (!showChart)
+        foreach (var cell in cells)
+            await v.Call("set_dataset_state", new() { ["datasetId"] = cell, ["visible"] = false });
+    await v.OpenAll([path]);
+    await v.Frame(derivedBox);
+    return await v.Map(1200, 1200);
+}
+
+// A product tile: open the files (optionally over NOAA chart cells at Display
+// Base) and frame their combined bounds with a little margin.
+async Task<byte[]> Tile(Viewer v, IEnumerable<string> files, string[]? enc = null)
+{
+    await v.Reset(category: enc is null ? "Standard" : "DisplayBase");
+    if (enc is not null) await v.OpenAll(await data.Enc(enc));
+    v.ClearOpened();
+    await v.OpenAll(files);
+    var b = v.Opened ?? throw new InvalidOperationException("nothing opened");
+    double padLat = Math.Max((b.North - b.South) * 0.08, 0.002), padLon = Math.Max((b.East - b.West) * 0.08, 0.002);
+    await v.Frame(new Box(b.South - padLat, b.West - padLon, b.North + padLat, b.East + padLon));
+    return await v.Map(1200, 1200);
+}
+
+string Fixture(string relative) => Path.Combine(repoRoot, "tests", "datasets", relative);
+
+async Task<byte[]> Hero(Viewer v, string palette)
+{
+    await v.Reset(palette);
+    await v.OpenAll(await data.Enc(seattleEnc));
+    await v.OpenAll(await data.S102(seattleS102));
+    await v.Frame(elliottBay);
+    return await v.Window();
+}
+
+async Task<byte[]> Layers(Viewer v, bool depths, bool currents)
+{
+    string[] tiles = ["US4VA1BE", "US4VA1BF"];
+    await v.Reset();
+    await v.OpenAll(await data.Enc(tiles));
+    if (depths) await v.OpenAll(await data.S102(["102US004VA1BE", "102US004VA1BF"]));
+    if (currents)
+        foreach (var tile in tiles)
+            await v.OpenAll([await data.S111("cbofs", tile)]);
+    await v.Frame(new Box(36.935, -76.120, 37.075, -75.960));
+    return await v.Window();
+}
+
+// Chesapeake Bay entrance: the model's strongest currents, over the matching
+// chart at Display Base so the arrows lead.
+async Task<byte[]> Currents(Viewer v, Task<string> currents)
+{
+    await v.Reset(category: "DisplayBase");
+    await v.OpenAll(await data.Enc(["US4VA1BF"]));
+    await v.OpenAll([await currents]);
+    await v.Frame(new Box(36.935, -76.120, 37.075, -75.960));
+    return await v.Map(1200, 1200);
+}
+
+async Task<byte[]> Palette(Viewer v, string palette)
+{
+    await v.Reset(palette);
+    await v.OpenAll(await data.Enc(seattleEnc));
+    await v.Frame(new Box(47.596, -122.360, 47.616, -122.330));
+    return await v.Window();
+}
+
+async Task PlanRoute(Viewer v)
+{
+    await v.Call("create_route", new() { ["name"] = "Colman Dock to Shilshole" });
+    foreach (var (lat, lon) in colmanToShilshole)
+        await v.Call("append_waypoint", new() { ["lat"] = lat, ["lon"] = lon });
+}
+
+// F10–F12: the Charleston charts, NOAA's S-104 water levels and the synthetic
+// warnings, the Fort Sumter to Wando route for a 14.5 m draft at 10 kn departing
+// at the pinned clock, and Check route on.
+async Task CheckedRoute(Viewer v, string palette)
+{
+    await v.Reset(palette);
+    await v.OpenAll(await data.Enc(charlestonEnc));
+    // Loaded hidden (as P04 notes), which keeps the chart clean; the check reads it anyway.
+    await v.OpenAll(Directory.GetFiles(Fixture("S104"), "104US004SC1CO*.h5"));
+    await v.OpenAll(SyntheticWarnings.Write(Path.Combine(scriptDir, ".cache", "synthetic"), checkDeparture));
+    await v.Call("set_test_clock", new() { ["now"] = checkDeparture.ToString("O"), ["freeze"] = true });
+    // The S-104 makes the map time-aware and starts it at the run's first step.
+    await v.Call("set_view_time", new() { ["time"] = "now" });
+    await v.Call("create_route", new() { ["name"] = "Fort Sumter Range to Wando" });
+    foreach (var (lat, lon) in fortSumterToWando)
+        await v.Call("append_waypoint", new() { ["lat"] = lat, ["lon"] = lon });
+    await v.Call("set_passage", new()
+    {
+        ["draftMeters"] = 14.5, ["requiredUkcMeters"] = 1.0, ["speedKnots"] = 10.0, ["departure"] = checkDeparture.ToString("O"),
+    });
+    await v.Call("set_check_mode", new() { ["on"] = true });
+}
+
+// The synthetic warning that crosses leg 3 → 4, as the route check relates it.
+async Task<(string DatasetId, string FeatureId, string FindingId)> CrossingWarning(Viewer v)
+{
+    var warnings = (await v.Call("list_navigational_warnings"))?["warnings"]?.AsArray() ?? [];
+    var crossing = warnings.FirstOrDefault(w =>
+            w?["route"]?["relation"]?.GetValue<string>() == "crosses" && w["route"]!["legIndex"]?.GetValue<int>() == 2)
+        ?? throw new InvalidOperationException("no warning crosses leg 3 → 4; check SyntheticWarnings against the route");
+    return (crossing["datasetId"]!.GetValue<string>(), crossing["featureId"]!.GetValue<string>(),
+        crossing["route"]!["findingId"]!.GetValue<string>());
+}
+
+async Task<byte[]> CheckRoute(Viewer v, string palette)
+{
+    await CheckedRoute(v, palette);
+    await v.Panel("Routes");
+    await v.Call("ui_select", new() { ["id"] = "Routes.Check.FindingsTab" });
+    // The first below-UKC stretch (the list runs by distance), so the profile
+    // cursor sits there and the Clearance readout shows the S-104 water level at
+    // the ETA.
+    var findings = (await v.Call("get_findings"))?["findings"]?.AsArray() ?? [];
+    var below = findings.FirstOrDefault(f => f?["code"]?.GetValue<string>() == "clearance.below_setting")
+        ?? throw new InvalidOperationException("no clearance.below_setting finding; check the draft and departure against the S-104 run");
+    // Zoomed to it, as clicking the row does: the harbour cells draw at that scale,
+    // and the profile below still shows the whole passage.
+    await v.Call("select_finding", new() { ["id"] = below["id"]!.GetValue<string>() });
+    await v.Call("set_map_legend", new() { ["open"] = true });
+    return await v.Window();
+}
+
+// F11/F12: the warnings panel showing only the route's warnings, and the
+// crossing warning selected so its card (with the route row) opens.
+async Task OpenRouteWarning(Viewer v)
+{
+    await CheckedRoute(v, "Day");
+    await v.Panel("NavigationalWarnings");
+    await v.Call("list_navigational_warnings", new() { ["scope"] = "route" });
+    var (datasetId, featureId, _) = await CrossingWarning(v);
+    await v.Call("select_navigational_warning", new() { ["datasetId"] = datasetId, ["featureId"] = featureId });
+    // Selecting doesn't reopen Object Information once Reset has hidden it, and
+    // Check route folds it to an edge tab, which a reused viewer may have unfolded.
+    await v.Panel("PickReport");
+    try { await v.Call("ui_invoke", new() { ["id"] = "Dock.ObjectInformationEdge" }); }
+    catch (InvalidOperationException e) when (e.Message.Contains("ui_element_not_found")) { }
+    // Check route opens the map legend and the Clearance dock; neither is about
+    // warnings, and the dock squeezes the profile under a narrower map.
+    await v.Call("set_map_legend", new() { ["open"] = false });
+    foreach (var panel in (string[])["Clearance", "Timeline"])
+        await v.Call("set_panel", new() { ["panel"] = panel, ["visible"] = false });
+}
+
+// The NOAA ENC cells of usage bands 2 and 3 (general and coastal) over a box,
+// downloaded and opened by the Library from its NOAA ENC source for one state.
+// Bands 4 and 5 add nothing at the scale of a weather view, so they're left out.
+async Task CoastalCharts(Viewer v, string[] states, Box box, string bands = "23")
+{
+    await v.Call("add_library_source", new() { ["knownSourceId"] = "noaa-enc", ["choices"] = states });
+    await v.Call("await_library_idle", new() { ["timeoutMs"] = 120000 });
+    var items = (await v.Call("query_library_items", new()
+    {
+        ["spec"] = "S-57", ["south"] = box.South, ["west"] = box.West, ["north"] = box.North, ["east"] = box.East, ["pageSize"] = 500,
+    }))?["items"]?.AsArray() ?? [];
+    var coastal = items
+        .Select(i => i!["id"]!.GetValue<string>())
+        .Where(id => Regex.IsMatch(id, $@"US[{bands}][A-Z0-9]{{5,6}}$"))
+        .ToArray();
+    if (coastal.Length == 0)
+        throw new InvalidOperationException($"no band {bands} NOAA ENC cells over the box among {items.Count} Library items");
+    await v.Call("library_action", new() { ["action"] = "download", ["itemIds"] = coastal, ["maxBytes"] = 50_000_000L });
+    await v.Call("await_library_idle", new() { ["timeoutMs"] = 300000 });
+    // Cells an earlier shot downloaded are already on disk, so the download leaves
+    // them alone; load them too. Wait only for these cells: other cells of the
+    // same states (another shot's bands) stay on disk unloaded.
+    await v.Call("library_action", new() { ["action"] = "load", ["itemIds"] = coastal });
+    for (var i = 0; ; i++)
+    {
+        var waiting = ((await v.Call("query_library_items", new() { ["states"] = new[] { "local" }, ["pageSize"] = 500 }))?["items"]?.AsArray() ?? [])
+            .Count(item => coastal.Contains(item!["id"]!.GetValue<string>()));
+        if (waiting == 0) return;
+        if (i == 120) throw new TimeoutException($"{waiting} chart cells did not load within 5 minutes.");
+        await Task.Delay(2500);
+    }
+}
+
+// W6: Charleston to the Chesapeake Bay entrance at 12 kn over the NOAA charts,
+// checked against the GFS wind and GFS-Wave wave height (every 3 h for 36 h of
+// the run at departure), with wind and wave limits set, Erin's advisory loaded,
+// the clock pinned at departure, and the findings list on its Weather filter
+// with the strongest cyclone radius finding selected (#1299).
+async Task<byte[]> WeatherRoute(Viewer v)
+{
+    await v.Reset(category: "DisplayBase");
+    await CoastalCharts(v, ["SC", "NC", "VA"], carolinasBox);
+    var run = erinRoute.Departure.UtcDateTime;
+    int[] hours = [.. Enumerable.Range(0, 13).Select(i => i * 3)];
+    await v.OpenAll([await data.GfsWaveHours(run, "atlocn.0p16", hours, ["HTSGW:surface", "PERPW:surface", "DIRPW:surface"])]);
+    await v.OpenAll([await data.GfsHours(run, hours, ["UGRD:10 m above ground", "VGRD:10 m above ground", "PRMSL:mean sea level"])]);
+    await v.OpenAll([await data.NhcAdvisory(erin.Storm, erinRoute.Advisory)]);
+    await v.Call("set_test_clock", new() { ["now"] = erinRoute.Departure.ToString("O"), ["freeze"] = true });
+    await v.Call("set_route_weather_settings", new()
+    {
+        ["maxWindKnots"] = 25.0, ["maxWaveHeightMeters"] = 3.5,
+        ["cycloneCheckAgainstKnots"] = 34, ["cycloneReportClosestApproach"] = true, ["cycloneMustReviewInsideKnots"] = 50,
+    });
+    await v.Call("create_route", new() { ["name"] = "Charleston to the Chesapeake" });
+    foreach (var (lat, lon) in charlestonToChesapeake)
+        await v.Call("append_waypoint", new() { ["lat"] = lat, ["lon"] = lon });
+    await v.Call("set_passage", new() { ["draftMeters"] = 9.0, ["speedKnots"] = 12.0, ["departure"] = erinRoute.Departure.ToString("O") });
+    await v.Call("set_check_mode", new() { ["on"] = true });
+    await v.Panel("Routes");
+    await v.Call("ui_select", new() { ["id"] = "Routes.Check.FindingsTab" });
+    await v.Call("set_findings_view", new() { ["filter"] = "weather" });
+    var findings = (await v.Call("get_findings"))?["findings"]?.AsArray() ?? [];
+    // The strongest cyclone radius the route enters, else the first wind or wave stretch.
+    string[] preferred = ["weather.tc_radius_64", "weather.tc_radius_50", "weather.tc_radius_34", "weather.tc_cone", "weather.wind_above_limit", "weather.waves_above_limit"];
+    var weather = preferred.Select(code => findings.FirstOrDefault(f => f?["code"]?.GetValue<string>() == code)).FirstOrDefault(f => f is not null)
+        ?? throw new InvalidOperationException($"no weather finding on the route; codes: {string.Join(", ", findings.Select(f => f?["code"]?.GetValue<string>()).Distinct())}");
+    await v.Call("select_finding", new() { ["id"] = weather["id"]!.GetValue<string>(), ["zoom"] = false });
+    // The weather is the story here, not the clearance profile or the UKC legend.
+    await v.Call("set_panel", new() { ["panel"] = "Clearance", ["visible"] = false });
+    await v.Call("set_map_legend", new() { ["open"] = false });
+    await v.Frame(carolinasBox);
+    return await v.Window();
+}
+
+static IEnumerable<string> Grid(string prefix, string rows, string cols) =>
+    from r in rows from c in cols select $"{prefix}{r}{c}";
+
+// The ref of the catalogue directory's row whose name contains <name>. The list
+// is virtualised, so it scrolls down until the row has been realised.
+async Task<string> CatalogueRow(Viewer v, string name)
+{
+    for (var offset = 0; offset <= 5000; offset += 200)
+    {
+        var list = (await v.Call("ui_tree", new() { ["root"] = "Catalogues.List", ["depth"] = 2 }))!["roots"]![0]!["element"]!;
+        var rows = list["children"]?.AsArray() ?? [];
+        if (rows.FirstOrDefault(r => r?["role"]?.GetValue<string>() == "listItem"
+                && r["name"]?.GetValue<string>().Contains(name, StringComparison.Ordinal) == true) is { } row)
+            return row["ref"]!.GetValue<string>();
+        var scrollBar = rows.First(r => r?["role"]?.GetValue<string>() == "scrollBar")!["ref"]!.GetValue<string>();
+        await v.Call("ui_set_value", new() { ["ref"] = scrollBar, ["value"] = (offset + 200).ToString(System.Globalization.CultureInfo.InvariantCulture) });
+    }
+    throw new InvalidOperationException($"no catalogue row named like {name}");
+}
+
+// ── Types ──────────────────────────────────────────────────────────────
+record Box(double South, double West, double North, double East);
+
+// Themed: a window shot in the Day palette, which --theme light also captures
+// with Light chrome. Chrome: a fixed chrome theme whatever --theme says (the Dusk
+// and Night shots use the matching S-100 chrome). Map-only tiles have no chrome.
+// TimeZone: an IANA zone the viewer runs in (it shows times in the machine's
+// zone), for shots of a place far from this machine; null keeps the machine's.
+record Shot(string Id, Func<Viewer, Task<byte[]>> Capture, bool Themed = false, string? Chrome = null, string? TimeZone = null);
+
+sealed class SkipShot(string message) : Exception(message);
+
+/// <summary>Downloads public NOAA data on first use into a local cache.</summary>
+sealed class Data(string cacheDir)
+{
+    private static readonly HttpClient Http = new(new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.All })
+    {
+        Timeout = TimeSpan.FromMinutes(10),
+    };
+    private Dictionary<string, string>? _s102Index;
+
+    /// <summary>NOAA ENC cells (S-57), from charts.noaa.gov. Returns the .000 paths.</summary>
+    public async Task<string[]> Enc(IEnumerable<string> cells)
+    {
+        var paths = new List<string>();
+        foreach (var cell in cells)
+        {
+            var dir = Path.Combine(cacheDir, "enc", cell);
+            var cellFile = Path.Combine(dir, "ENC_ROOT", cell, $"{cell}.000");
+            if (!File.Exists(cellFile))
+            {
+                Console.WriteLine($"  downloading ENC {cell}");
+                var zip = await Http.GetByteArrayAsync($"https://charts.noaa.gov/ENCs/{cell}.zip");
+                Directory.CreateDirectory(dir);
+                ZipFile.ExtractToDirectory(new MemoryStream(zip), dir, overwriteFiles: true);
+            }
+            paths.Add(cellFile);
+        }
+        return [.. paths];
+    }
+
+    /// <summary>NOAA S-102 tiles by cell name (the edition suffix is looked up in the catalogue).</summary>
+    public async Task<string[]> S102(IEnumerable<string> cells)
+    {
+        _s102Index ??= await LoadS102IndexAsync();
+        var paths = new List<string>();
+        foreach (var cell in cells)
+        {
+            if (!_s102Index.TryGetValue(cell, out var rel)) throw new InvalidOperationException($"S-102 tile {cell} is not in NOAA's catalogue");
+            paths.Add(await DownloadAsync($"https://noaa-s102-pds.s3.amazonaws.com/ed3.0.0/{rel}", Path.Combine("s102", Path.GetFileName(rel))));
+        }
+        return [.. paths];
+    }
+
+    /// <summary>The latest run of one NOAA S-111 model's tile (e.g. cbofs, US4VA1DD).</summary>
+    public async Task<string> S111(string model, string tile)
+    {
+        var root = $"https://noaa-s111-pds.s3.amazonaws.com/ed1.0.1/model_forecast_guidance/{model}/";
+        var catalogue = await Http.GetStringAsync(root + "CATALOG.XML");
+        // Each entry lists fileName then filePath (directory) for the run.
+        var match = Regex.Matches(catalogue, @"fileName>\s*([^<]*?)\s*</[^>]*fileName>\s*<[^>]*filePath>\s*([^<]*?)\s*</")
+            .FirstOrDefault(m => m.Groups[1].Value.EndsWith($"_{tile}.h5", StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException($"{model} has no tile {tile} in its latest run");
+        var fileName = match.Groups[1].Value;
+        return await DownloadAsync(root + match.Groups[2].Value.TrimEnd('/') + "/" + fileName, Path.Combine("s111", model, fileName));
+    }
+
+    /// <summary>
+    /// The newest S-411 chart whose name starts with <paramref name="prefix"/> from the
+    /// BSIS Ice Portal (https://www.bsis-ice.de/IcePortal/), or the newest cached one.
+    /// </summary>
+    public async Task<string> S411Latest(string prefix)
+    {
+        var dir = Path.Combine(cacheDir, "s411");
+        string? name = null;
+        try
+        {
+            var page = await Http.GetStringAsync("https://www.bsis-ice.de/IcePortal/");
+            name = Regex.Matches(page, $@"S411/({Regex.Escape(prefix)}[\w-]+)\.zip").Select(m => m.Groups[1].Value).OrderBy(n => n).LastOrDefault();
+        }
+        catch (HttpRequestException) { }
+        name ??= Directory.Exists(dir)
+            ? Directory.GetDirectories(dir, prefix + "*").Select(Path.GetFileName).OrderBy(n => n).LastOrDefault()
+            : null;
+        if (name is null) throw new InvalidOperationException($"no {prefix}* chart on the BSIS Ice Portal or in the cache");
+
+        var gml = Path.Combine(dir, name, name, "data", name + ".gml");
+        if (!File.Exists(gml))
+        {
+            Console.WriteLine($"  downloading {name}.zip");
+            var zip = await Http.GetByteArrayAsync($"https://www.bsis-ice.de/IcePortal/S411/{name}.zip");
+            ZipFile.ExtractToDirectory(new MemoryStream(zip), Path.Combine(dir, name), overwriteFiles: true);
+        }
+        return gml;
+    }
+
+    /// <summary>The latest run of one NOAA S-111 model's whole-domain file (dcf2 grid or dcf3 mesh).</summary>
+    public async Task<string> S111Regional(string model, string encoding)
+    {
+        var root = $"https://noaa-s111-pds.s3.amazonaws.com/ed1.0.1/model_forecast_guidance/{model}/";
+        var catalogue = await Http.GetStringAsync(root + "CATALOG.XML");
+        // Tiles are named 111US00_<MODEL>_<run>_<tile>.h5 under <run dir>/dcf2/tiles/;
+        // the regional file drops the tile suffix and sits under <run dir>/<encoding>/regional/.
+        var tile = Regex.Match(catalogue, @"fileName>\s*(111US00_\w+?_\d{8}T\d{2}Z)_\w+\.h5\s*</[^>]*fileName>\s*<[^>]*filePath>\s*(\d{4}/\d{2}/\d{2}/\d{2})/");
+        if (!tile.Success) throw new InvalidOperationException($"{model}'s catalogue lists no run");
+        var fileName = tile.Groups[1].Value + ".h5";
+        var url = $"{root}{tile.Groups[2].Value}/{encoding}/regional/{fileName}";
+        return await DownloadAsync(url, Path.Combine("s111", model, encoding, fileName));
+    }
+
+    private const string GfsBucket = "https://noaa-gfs-bdp-pds.s3.amazonaws.com/";
+
+    /// <summary>
+    /// The newest GFS run on AWS (noaa-gfs-bdp-pds, public domain) whose GFS and
+    /// GFS-Wave files for forecast hour <paramref name="hour"/> are both published.
+    /// </summary>
+    public async Task<DateTime> LatestGfsRun(int hour)
+    {
+        for (var day = DateTime.UtcNow.Date; day > DateTime.UtcNow.Date.AddDays(-3); day = day.AddDays(-1))
+        {
+            foreach (var cycle in new[] { 18, 12, 6, 0 })
+            {
+                var run = day.AddHours(cycle);
+                if (run > DateTime.UtcNow) continue;
+                if (await Exists(GfsUrl(run, hour) + ".idx") && await Exists(GfsWaveUrl(run, "atlocn.0p16", hour) + ".idx"))
+                    return run;
+            }
+        }
+        throw new InvalidOperationException("no GFS run with both files in the last three days on noaa-gfs-bdp-pds");
+    }
+
+    /// <summary>Fields of a GFS 0.25° file (by their .idx names, e.g. "UGRD:10 m above ground"), cut by byte range.</summary>
+    public Task<string> Gfs(DateTime run, int hour, string[] fields) =>
+        Fields(GfsUrl(run, hour), $"gfs_{run:yyyyMMdd'T'HH'Z'}_f{hour:000}.grib2", fields);
+
+    /// <summary>Fields of a GFS-Wave file on one of its grids (e.g. atlocn.0p16), cut by byte range.</summary>
+    public Task<string> GfsWave(DateTime run, string grid, int hour, string[] fields) =>
+        Fields(GfsWaveUrl(run, grid, hour), $"gfswave_{run:yyyyMMdd'T'HH'Z'}_{grid}_f{hour:000}.grib2", fields);
+
+    private static string GfsUrl(DateTime run, int hour) =>
+        $"{GfsBucket}gfs.{run:yyyyMMdd}/{run:HH}/atmos/gfs.t{run:HH}z.pgrb2.0p25.f{hour:000}";
+
+    private static string GfsWaveUrl(DateTime run, string grid, int hour) =>
+        $"{GfsBucket}gfs.{run:yyyyMMdd}/{run:HH}/wave/gridded/gfswave.t{run:HH}z.{grid}.f{hour:000}.grib2";
+
+    // The messages of a GRIB2 file named in its .idx ("n:offset:d=…:VAR:LEVEL:…"),
+    // read with HTTP ranges and appended into one file, as a NOMADS GRIB
+    // filter request returns them.
+    private async Task<string> Fields(string url, string name, string[] fields)
+    {
+        var path = Path.Combine(cacheDir, "gfs", name);
+        if (File.Exists(path)) return path;
+        Console.WriteLine($"  downloading {string.Join(", ", fields)} from {url[GfsBucket.Length..]}");
+        var lines = (await Http.GetStringAsync(url + ".idx")).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var offsets = lines.Select(l => long.Parse(l.Split(':')[1], System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+        using var output = new MemoryStream();
+        foreach (var field in fields)
+        {
+            var index = Array.FindIndex(lines, l => l.Split(':') is var parts && parts.Length > 4 && $"{parts[3]}:{parts[4]}" == field);
+            if (index < 0) throw new InvalidOperationException($"{url} has no {field}");
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(offsets[index], index + 1 < offsets.Length ? offsets[index + 1] - 1 : null);
+            using var response = await Http.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            await (await response.Content.ReadAsStreamAsync()).CopyToAsync(output);
+        }
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllBytesAsync(path + ".part", output.ToArray());
+        File.Move(path + ".part", path, overwrite: true);
+        return path;
+    }
+
+    /// <summary>Fields of several GFS forecast hours, appended into one file (the GRIB2 reader takes them as one run).</summary>
+    public async Task<string> GfsHours(DateTime run, int[] hours, string[] fields) =>
+        await Append($"gfs_{run:yyyyMMdd'T'HH'Z'}_f{hours[0]:000}-f{hours[^1]:000}.grib2",
+            await Task.WhenAll(hours.Select(h => Gfs(run, h, fields))));
+
+    /// <summary>Fields of several GFS-Wave forecast hours on one grid, appended into one file.</summary>
+    public async Task<string> GfsWaveHours(DateTime run, string grid, int[] hours, string[] fields) =>
+        await Append($"gfswave_{run:yyyyMMdd'T'HH'Z'}_{grid}_f{hours[0]:000}-f{hours[^1]:000}.grib2",
+            await Task.WhenAll(hours.Select(h => GfsWave(run, grid, h, fields))));
+
+    private async Task<string> Append(string name, string[] parts)
+    {
+        var path = Path.Combine(cacheDir, "gfs", name);
+        if (File.Exists(path)) return path;
+        await using (var output = File.Create(path + ".part"))
+            foreach (var part in parts)
+                await using (var input = File.OpenRead(part))
+                    await input.CopyToAsync(output);
+        File.Move(path + ".part", path, overwrite: true);
+        return path;
+    }
+
+    public const string CoastWatch = "https://coastwatch.pfeg.noaa.gov/erddap/";
+    public const string Aoml = "https://cwcgom.aoml.noaa.gov/erddap/";
+
+    /// <summary>
+    /// A NetCDF-3 subset of an ERDDAP griddap dataset for one time (the nearest
+    /// the dataset has) over a box, taking every <paramref name="stride"/>th point.
+    /// </summary>
+    public Task<string> Erddap(string server, string dataset, string[] variables, DateTime time, Box box, int stride, DateTime? until = null)
+    {
+        string T(DateTime d) => d.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture);
+        var t = until is { } end ? $"{T(time)}):1:({T(end)}" : T(time);
+        string I(double d) => d.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var query = string.Join(",", variables.Select(name =>
+            $"{name}[({t})][({I(box.South)}):{stride}:({I(box.North)})][({I(box.West)}):{stride}:({I(box.East)})]"));
+        var url = $"{server}griddap/{dataset}.nc?{Uri.EscapeDataString(query).Replace("%2C", ",")}";
+        return DownloadAsync(url, Path.Combine("erddap", $"{dataset}_{time:yyyyMMdd'T'HH'Z'}{(until is { } e ? $"-{e:yyyyMMdd'T'HH'Z'}" : "")}_{I(box.South)}_{I(box.West)}_{I(box.North)}_{I(box.East)}.nc"));
+    }
+
+    /// <summary>
+    /// One NHC advisory from NHC's GIS archive: the 5-day cone, track and points,
+    /// the forecast wind radii and the storm's best track, side by side in a
+    /// folder of their own, which SoundCharts opens as one storm.
+    /// </summary>
+    public async Task<string> NhcAdvisory(string storm, int advisory)
+    {
+        var dir = Path.Combine(cacheDir, "nhc", $"{storm}_{advisory:000}");
+        foreach (var url in new[]
+        {
+            $"https://www.nhc.noaa.gov/gis/forecast/archive/{storm}_5day_{advisory:000}.zip",
+            $"https://www.nhc.noaa.gov/gis/forecast/archive/{storm}_fcst_{advisory:000}.zip",
+            $"https://www.nhc.noaa.gov/gis/best_track/{storm}_best_track.zip",
+        })
+            await DownloadAsync(url, Path.Combine("nhc", Path.GetFileName(dir), Path.GetFileName(url)));
+        // The 5-day zip opens the advisory; the reader finds its siblings beside it.
+        return Path.Combine(dir, $"{storm}_5day_{advisory:000}.zip");
+    }
+
+    /// <summary>
+    /// A WPC coded surface bulletin (ASUS02 is the high-resolution analysis) valid at
+    /// <paramref name="valid"/>, from the Iowa Environmental Mesonet's archive of NWS
+    /// text products. The product itself is the NWS's (public domain).
+    /// </summary>
+    public async Task<string> WpcBulletin(string header, DateTime valid)
+    {
+        var path = Path.Combine(cacheDir, "wpc", $"{header}_{valid:yyyyMMdd'T'HH'Z'}.txt");
+        if (File.Exists(path)) return path;
+        var url = $"https://mesonet.agron.iastate.edu/cgi-bin/afos/retrieve.py?pil=CODSUS&sdate={valid:yyyy-MM-dd}&edate={valid.AddDays(2):yyyy-MM-dd}&limit=60&fmt=text&order=asc";
+        Console.WriteLine($"  downloading WPC CODSUS bulletins for {valid:yyyy-MM-dd}");
+        var text = await Http.GetStringAsync(url);
+        // Products are separated by control characters; pick the one with this
+        // WMO header whose VALID line is the analysis time.
+        var product = text.Split(['\u0001', '\u0003'], StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(p => p.Contains($"{header} KWBC", StringComparison.Ordinal) && p.Contains($"VALID {valid:MMddHH}Z", StringComparison.Ordinal))
+            ?? throw new InvalidOperationException($"no {header} CODSUS valid {valid:MMddHH}Z in the IEM archive");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        // Drop the archive's sequence number line, so the file starts at the WMO header.
+        await File.WriteAllTextAsync(path, product[product.IndexOf($"{header} KWBC", StringComparison.Ordinal)..].Trim() + "\n");
+        return path;
+    }
+
+    private static async Task<bool> Exists(string url)
+    {
+        using var response = await Http.SendAsync(new HttpRequestMessage(HttpMethod.Head, url));
+        return response.IsSuccessStatusCode;
+    }
+
+    private async Task<Dictionary<string, string>> LoadS102IndexAsync()
+    {
+        Console.WriteLine("  reading NOAA S-102 catalogue");
+        var xml = await Http.GetStringAsync("https://noaa-s102-pds.s3.amazonaws.com/ed3.0.0/S100_ROOT/CATALOG.XML");
+        var index = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (Match m in Regex.Matches(xml, @"file:\.\./([^<\s]*?/(102US\w{8})\w*\.h5)"))
+            index[m.Groups[2].Value] = m.Groups[1].Value;
+        return index;
+    }
+
+    private async Task<string> DownloadAsync(string url, string relative)
+    {
+        var path = Path.Combine(cacheDir, relative);
+        if (File.Exists(path)) return path;
+        Console.WriteLine($"  downloading {Path.GetFileName(path)}");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var bytes = await Http.GetByteArrayAsync(url);
+        await File.WriteAllBytesAsync(path + ".part", bytes);
+        File.Move(path + ".part", path, overwrite: true);
+        return path;
+    }
+}
+
+/// <summary>A SoundCharts process in a throwaway data folder, driven over MCP.</summary>
+sealed class Viewer : IAsyncDisposable
+{
+    private readonly Process _process;
+    private readonly McpClient _client;
+    private readonly string _dataDir;
+    private readonly bool _keepOpen;
+
+    private Viewer(Process process, McpClient client, string dataDir, bool keepOpen) =>
+        (_process, _client, _dataDir, _keepOpen) = (process, client, dataDir, keepOpen);
+
+    /// <summary>Whether to use the mariner's four-shade depth zones (default; --two-shades turns them off).</summary>
+    public static bool FourShades { get; set; }
+
+    /// <summary>The chrome theme for the next start: Dark (default), Light (--theme light), or a shot's own S100Dusk / S100Night.</summary>
+    public static string ChromeTheme { get; set; } = "Dark";
+
+    /// <summary>The IANA time zone for the next start (the TZ variable), or null for the machine's.</summary>
+    public static string? TimeZone { get; set; }
+
+    public static async Task<Viewer> StartAsync(string exe, bool keepOpen)
+    {
+        if (!File.Exists(exe)) throw new FileNotFoundException("Build the viewer first: dotnet build -c Release src/EncDotNet.S100.Viewer", exe);
+
+        var dataDir = Directory.CreateTempSubdirectory("soundcharts-capture-").FullName;
+        var settings = Path.Combine(dataDir, "settings.json");
+        // The chosen chrome (Dark by default), no update prompt or status bar, docks closed until a shot opens one.
+        // S-101 viewing groups 90020/90021 (the INFORM01 "additional information"
+        // markers) are hidden, as a mariner would, so harbour views stay readable;
+        // the out-of-scale extent outlines are off for the same reason, and a
+        // small-craft 10 m safety contour keeps isolated-danger marks to real hazards.
+        await File.WriteAllTextAsync(settings, $$"""
+            {
+              "ChromeTheme": "{{ChromeTheme}}", "UpdateCheckEnabled": false, "IsStatusBarVisible": false,
+              "IsLeftDockOpen": false, "IsRightDockOpen": false, "IsBottomDockOpen": false,
+              "EcdisHiddenViewingGroups": { "S-101": "90020,90021", "S-57": "90020,90021" },
+              "ShowOutOfScaleExtentIndicators": false,
+              "SafetyContour": 10, "SafetyDepth": 10,
+              "FourShades": {{FourShades.ToString().ToLowerInvariant()}}
+            }
+            """);
+        var portFile = Path.Combine(dataDir, "mcp.url");
+        var startInfo = new ProcessStartInfo(exe)
+        {
+            ArgumentList =
+            {
+                "--data-dir", dataDir, "--settings", settings, "--mcp-test-hooks", "--mcp-port-file", portFile,
+                "--basemap", "Offline", "--crash-log", Path.Combine(dataDir, "crash.log"),
+            },
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            // Site captures use en-US number and date formats whatever this machine's locale.
+            Environment = { ["LANG"] = "en_US.UTF-8", ["LC_ALL"] = "en_US.UTF-8" },
+        };
+        if (TimeZone is not null)
+            startInfo.Environment["TZ"] = TimeZone;
+        var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Could not start the viewer.");
+        // Keep the viewer's console output next to its crash log for diagnosis.
+        var log = TextWriter.Synchronized(new StreamWriter(Path.Combine(dataDir, "viewer.log")) { AutoFlush = true });
+        process.OutputDataReceived += (_, e) => { if (e.Data is not null) log.WriteLine(e.Data); };
+        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) log.WriteLine(e.Data); };
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        var deadline = DateTime.UtcNow.AddSeconds(60);
+        while (!File.Exists(portFile) || new FileInfo(portFile).Length == 0)
+        {
+            if (process.HasExited) throw new InvalidOperationException($"The viewer exited during startup (code {process.ExitCode}).");
+            if (DateTime.UtcNow > deadline) throw new TimeoutException("The viewer did not start its MCP server within 60 s.");
+            await Task.Delay(250);
+        }
+        var endpoint = new Uri((await File.ReadAllTextAsync(portFile)).Trim());
+        // A route check or a long forecast can take more than HttpClient's default 100 s.
+        var client = await McpClient.CreateAsync(new HttpClientTransport(new HttpClientTransportOptions
+        {
+            Endpoint = endpoint,
+            TransportMode = HttpTransportMode.StreamableHttp,
+            Name = "soundcharts-capture",
+        }, new HttpClient { Timeout = TimeSpan.FromMinutes(10) }, ownsHttpClient: true));
+        Console.WriteLine($"Viewer pid {process.Id}, MCP {endpoint}");
+        var viewer = new Viewer(process, client, dataDir, keepOpen);
+
+        // The MCP server starts before the map is attached; wait until the
+        // presentation tools stop answering host_not_ready.
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                await viewer.Call("set_palette", new() { ["palette"] = "Day" });
+                return viewer;
+            }
+            catch (InvalidOperationException e) when (e.Message.Contains("host_not_ready") && attempt < 120)
+            {
+                await Task.Delay(500);
+            }
+        }
+    }
+
+    /// <summary>Whether the viewer process has exited (waiting briefly for a kill to land).</summary>
+    public bool Died() => _process.WaitForExit(TimeSpan.FromSeconds(3));
+
+    // Tools whose calls change what a shot shows; recorded per shot for the manifest.
+    private static readonly HashSet<string> Recorded =
+    [
+        "open_dataset", "close_dataset", "set_viewport", "set_palette", "set_display_category", "set_panel",
+        "set_dataset_state", "set_test_clock", "set_view_time", "set_timeline_view", "select_dataset", "pick_features",
+        "create_route", "append_waypoint", "move_waypoint", "add_library_source", "library_action", "sample_coverage_along",
+        "set_passage", "set_check_mode", "select_finding", "set_map_legend", "list_navigational_warnings",
+        "select_navigational_warning", "ui_select",
+    ];
+    private bool _quiet;
+
+    /// <summary>The recorded calls of the current shot, in order (see <see cref="BeginShot"/>).</summary>
+    public JsonArray Steps { get; private set; } = [];
+
+    /// <summary>Source file of every dataset opened by path, by dataset id.</summary>
+    public Dictionary<string, string> Paths { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>How the current shot's image was taken.</summary>
+    public string? CaptureMode { get; private set; }
+
+    public void BeginShot()
+    {
+        Steps = [];
+        CaptureMode = null;
+    }
+
+    public async Task<JsonNode?> Call(string tool, Dictionary<string, object?>? arguments = null)
+    {
+        var result = await _client.CallToolAsync(tool, arguments ?? []);
+        var text = result.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text;
+        if (result.IsError == true) throw new InvalidOperationException($"{tool}: {text ?? "failed"}");
+        if (!_quiet && Recorded.Contains(tool))
+            Steps.Add(new JsonObject { ["tool"] = tool, ["args"] = ShotManifest.Arguments(arguments) });
+        return text is null ? null : JsonNode.Parse(text);
+    }
+
+    /// <summary>Back to a clean slate: no data, no panels, the given palette, no notifications.</summary>
+    public async Task Reset(string palette = "Day", string category = "Standard")
+    {
+        Steps.Add(new JsonObject { ["tool"] = "reset", ["args"] = new JsonObject { ["palette"] = palette, ["displayCategory"] = category } });
+        _quiet = true;
+        try { await ResetCore(palette, category); }
+        finally { _quiet = false; }
+    }
+
+    private async Task ResetCore(string palette, string category)
+    {
+        Opened = null;
+        await Call("close_all_datasets");
+        await Call("set_palette", new() { ["palette"] = palette });
+        await Call("set_display_category", new() { ["displayCategory"] = category });
+        var panels = (await Call("list_panels"))?["panels"]?.AsArray() ?? [];
+        foreach (var p in panels.Where(p => p?["showing"]?.GetValue<bool>() == true))
+            await Call("set_panel", new() { ["panel"] = p!["id"]!.GetValue<string>(), ["visible"] = false });
+        foreach (var r in (await Call("list_routes"))?["routes"]?.AsArray() ?? [])
+            await Call("delete_route", new() { ["routeId"] = r!["routeId"]!.GetValue<string>() });
+        foreach (var collection in (await Call("list_library_sources"))?["collections"]?.AsArray() ?? [])
+            await Call("remove_library_source", new() { ["id"] = collection!["id"]!.GetValue<string>(), ["confirm"] = true });
+        await Call("set_test_clock", new() { ["reset"] = true });
+        // The weather switches and route weather limits are kept settings, so put
+        // them back to their defaults for the next shot.
+        await Call("set_weather_display", new()
+        {
+            ["isobars"] = true, ["windSpeedFill"] = false, ["waveArrows"] = false, ["isotherms"] = false, ["currents"] = true,
+            ["airTemperature"] = false, ["precipitation"] = false, ["thunderstormRisk"] = false, ["cloudCover"] = false,
+            ["windRadii"] = true, ["pastTrack"] = true, ["forecastTimes"] = true,
+        });
+        await Call("set_route_weather_settings", new()
+        {
+            ["clear"] = new[] { "maxWindKnots", "maxWaveHeightMeters" },
+            ["cycloneCheckAgainstKnots"] = 34, ["cycloneReportClosestApproach"] = true, ["cycloneMustReviewInsideKnots"] = 50,
+        });
+    }
+
+    /// <summary>Forgets the bounds collected by <see cref="OpenAll"/>.</summary>
+    public void ClearOpened() => Opened = null;
+
+    /// <summary>Union of the bounds of every dataset opened since the last <see cref="Reset"/>.</summary>
+    public Box? Opened { get; private set; }
+
+    public async Task<IReadOnlyList<string>> OpenAll(IEnumerable<string> paths, bool tolerateFailures = false)
+    {
+        var ids = new List<string>();
+        foreach (var path in paths)
+        {
+            try
+            {
+                var result = await Call("open_dataset", new() { ["path"] = path });
+                foreach (var d in result?["datasets"]?.AsArray() ?? [])
+                {
+                    ids.Add(d!["id"]!.GetValue<string>());
+                    Paths[d["id"]!.GetValue<string>()] = path;
+                    var b = new Box(d["southLatitude"]!.GetValue<double>(), d["westLongitude"]!.GetValue<double>(),
+                        d["northLatitude"]!.GetValue<double>(), d["eastLongitude"]!.GetValue<double>());
+                    Opened = Opened is { } o
+                        ? new Box(Math.Min(o.South, b.South), Math.Min(o.West, b.West), Math.Max(o.North, b.North), Math.Max(o.East, b.East))
+                        : b;
+                }
+            }
+            catch (InvalidOperationException) when (tolerateFailures)
+            {
+            }
+            catch (InvalidOperationException e)
+            {
+                throw new InvalidOperationException($"{Path.GetFileName(path)}: {e.Message}", e);
+            }
+        }
+        return ids;
+    }
+
+    /// <summary>Waits until every downloaded Library item is open (downloads load after they finish).</summary>
+    public async Task WaitForLoads()
+    {
+        for (var i = 0; i < 120; i++)
+        {
+            var waiting = (await Call("query_library_items", new() { ["states"] = new[] { "local" } }))?["total"]?.GetValue<int>() ?? 0;
+            if (waiting == 0) return;
+            await Task.Delay(2500);
+        }
+        throw new TimeoutException("Library downloads did not finish loading within 5 minutes.");
+    }
+
+    public Task Panel(string id) => Call("set_panel", new() { ["panel"] = id, ["visible"] = true });
+
+    /// <summary>The nearest point of the closest feature of any of the given types.</summary>
+    public async Task<(double Lat, double Lon)> Nearest(double lat, double lon, params string[] featureTypes)
+    {
+        foreach (var type in featureTypes)
+        {
+            var hit = (await Call("nearest_features", new() { ["latitude"] = lat, ["longitude"] = lon, ["featureType"] = type, ["limit"] = 1 }))
+                ?["features"]?.AsArray().FirstOrDefault();
+            if (hit is not null)
+                return (hit["nearestLatitude"]!.GetValue<double>(), hit["nearestLongitude"]!.GetValue<double>());
+        }
+        throw new InvalidOperationException($"no {string.Join("/", featureTypes)} near {lat}, {lon}");
+    }
+
+    public async Task Frame(Box box)
+    {
+        await Call("set_viewport", new() { ["south"] = box.South, ["west"] = box.West, ["north"] = box.North, ["east"] = box.East });
+        await Settle();
+    }
+
+    public async Task Settle()
+    {
+        await Call("await_render_idle", new() { ["quietPeriodMs"] = 1500, ["timeoutMs"] = 120000 });
+        await Call("dismiss_notification");
+    }
+
+    public async Task<byte[]> Window()
+    {
+        await Settle();
+        CaptureMode = "window (capture_app_screenshot, scale 2)";
+        return await Image("capture_app_screenshot", new() { ["scale"] = 2.0 });
+    }
+
+    /// <summary>
+    /// A window capture cropped to 16:9: as wide as the element <paramref name="widthId"/>
+    /// plus a margin, from its top, or lower if needed to keep the element
+    /// <paramref name="focusId"/> in the frame.
+    /// </summary>
+    public async Task<byte[]> WindowCrop(string focusId, string widthId)
+    {
+        // 3× rather than 2×: the crop fills a half-width card on the site.
+        const double scale = 3, margin = 12;
+        await Settle();
+        var png = await Image("capture_app_screenshot", new() { ["scale"] = scale });
+        var focus = await BoundsOf(focusId);
+        var frame = await BoundsOf(widthId);
+        using var bitmap = SKBitmap.Decode(png);
+        var width = (int)Math.Min((frame.Width + 2 * margin) * scale, bitmap.Width);
+        var height = Math.Min(width * 9 / 16, bitmap.Height);
+        var left = (int)Math.Clamp((frame.X - margin) * scale, 0, bitmap.Width - width);
+        var top = (int)Math.Clamp(Math.Max((frame.Y - margin) * scale, (focus.Y + focus.Height + margin) * scale - height),
+            0, bitmap.Height - height);
+        using var cropped = new SKBitmap();
+        if (!bitmap.ExtractSubset(cropped, SKRectI.Create(left, top, width, height)))
+            throw new InvalidOperationException($"could not crop the window around {focusId}");
+        using var image = SKImage.FromBitmap(cropped);
+        using var encoded = image.Encode(SKEncodedImageFormat.Png, 100);
+        CaptureMode = $"window crop around {focusId} (capture_app_screenshot, scale {scale})";
+        return encoded.ToArray();
+    }
+
+    /// <summary>An element's bounds in the window, in logical pixels, from ui_tree.</summary>
+    private async Task<(double X, double Y, double Width, double Height)> BoundsOf(string id)
+    {
+        var tree = await Call("ui_tree", new() { ["root"] = id, ["depth"] = 1 });
+        static JsonNode? Find(JsonNode? node, string id) => node switch
+        {
+            JsonObject o when o["id"]?.GetValue<string>() == id && o["bounds"] is not null => o["bounds"],
+            JsonObject o => o.Select(kv => Find(kv.Value, id)).FirstOrDefault(b => b is not null),
+            JsonArray a => a.Select(n => Find(n, id)).FirstOrDefault(b => b is not null),
+            _ => null,
+        };
+        var b = Find(tree, id) ?? throw new InvalidOperationException($"{id} is not on screen");
+        return (b["x"]!.GetValue<double>(), b["y"]!.GetValue<double>(), b["width"]!.GetValue<double>(), b["height"]!.GetValue<double>());
+    }
+
+    public async Task<byte[]> Map(int width, int height)
+    {
+        await Settle();
+        // Logical size at 2× density, so symbols and text keep their on-screen size.
+        CaptureMode = $"map (render_to_image {width / 2}×{height / 2}, pixel density 2)";
+        var png = await Image("render_to_image", new() { ["width"] = width / 2, ["height"] = height / 2, ["pixelDensity"] = 2.0 });
+        // Don't overwrite a stand-in with an empty map. (Draw-call counts can't tell:
+        // a fully drawn tiled map composites to a single call.)
+        using (var bitmap = SKBitmap.Decode(png))
+        {
+            var colours = new HashSet<SKColor>();
+            for (var y = 0; y < bitmap.Height; y += bitmap.Height / 40)
+                for (var x = 0; x < bitmap.Width; x += bitmap.Width / 40)
+                    colours.Add(bitmap.GetPixel(x, y));
+            if (colours.Count < 3) throw new SkipShot("the map is empty (nothing drew)");
+        }
+        return png;
+    }
+
+    private async Task<byte[]> Image(string tool, Dictionary<string, object?>? arguments = null)
+    {
+        var result = await _client.CallToolAsync(tool, arguments ?? []);
+        if (result.IsError == true)
+            throw new InvalidOperationException($"{tool}: {result.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text ?? "failed"}");
+        var image = result.Content.OfType<ImageContentBlock>().FirstOrDefault()
+            ?? throw new InvalidOperationException($"{tool} returned no image");
+        var bytes = image.Data.ToArray();
+        // The block carries base64 text; tolerate SDKs that hand back raw bytes.
+        return bytes is [0x89, (byte)'P', (byte)'N', (byte)'G', ..] ? bytes : Convert.FromBase64String(System.Text.Encoding.ASCII.GetString(bytes));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _client.DisposeAsync();
+        if (_keepOpen)
+        {
+            Console.WriteLine($"Viewer left running (pid {_process.Id}, data {_dataDir}).");
+            return;
+        }
+        if (_process.HasExited)
+        {
+            // It died on its own: keep the logs.
+            Console.WriteLine($"Viewer exited unexpectedly (code {_process.ExitCode}); logs kept in {_dataDir}.");
+            return;
+        }
+        _process.Kill();
+        await _process.WaitForExitAsync();
+        try { Directory.Delete(_dataDir, recursive: true); } catch (IOException) { }
+    }
+}
+
+/// <summary>Builds the D2 clip: a transcript panel beside window captures, encoded with ffmpeg.</summary>
+sealed class AgentClipBuilder
+{
+    private const int Width = 1920, Height = 1080, PanelWidth = 560, Margin = 40;
+    private readonly List<(string Kind, string Text, string? Detail)> _entries = [];
+    private readonly List<(byte[] Png, double Seconds)> _frames = [];
+    private static readonly SKTypeface Sans = SKTypeface.FromFile("/System/Library/Fonts/SFNS.ttf") ?? SKTypeface.Default;
+    private static readonly SKTypeface Mono = SKTypeface.FromFile("/System/Library/Fonts/SFNSMono.ttf") ?? SKTypeface.Default;
+
+    public void Say(string role, string text) => _entries.Add((role, text, null));
+
+    public void Call(string call, string result) => _entries.Add(("tool", call, result));
+
+    /// <summary>Captures the window, composes a frame and holds it for <paramref name="seconds"/>.</summary>
+    public async Task<byte[]> Frame(Viewer v, double seconds)
+    {
+        using var window = SKBitmap.Decode(await v.Window());
+        using var surface = SKSurface.Create(new SKImageInfo(Width, Height));
+        var canvas = surface.Canvas;
+        canvas.Clear(new SKColor(0x0b, 0x12, 0x1b));
+
+        // Viewer on the right, scaled to fit.
+        var right = new SKRect(PanelWidth + Margin * 2, Margin, Width - Margin, Height - Margin);
+        var scale = Math.Min(right.Width / window.Width, right.Height / window.Height);
+        var dest = SKRect.Create(right.Left, right.MidY - window.Height * scale / 2, window.Width * scale, window.Height * scale);
+        using (var image = SKImage.FromBitmap(window))
+            canvas.DrawImage(image, dest, new SKSamplingOptions(SKCubicResampler.Mitchell));
+
+        DrawTranscript(canvas, new SKRect(Margin, dest.Top, Margin + PanelWidth, dest.Bottom));
+
+        using var snapshot = surface.Snapshot();
+        var png = snapshot.Encode(SKEncodedImageFormat.Png, 100).ToArray();
+        _frames.Add((png, seconds));
+        return png;
+    }
+
+    private void DrawTranscript(SKCanvas canvas, SKRect area)
+    {
+        using var label = new SKFont(Sans, 15) { Edging = SKFontEdging.Antialias };
+        using var prose = new SKFont(Sans, 20) { Edging = SKFontEdging.Antialias };
+        using var mono = new SKFont(Mono, 15) { Edging = SKFontEdging.Antialias };
+        using var paint = new SKPaint { IsAntialias = true };
+
+        // Lay out bottom-up so the latest entries stay visible.
+        var blocks = new List<(float Height, Action<float> Draw)>();
+        foreach (var (kind, text, detail) in _entries)
+        {
+            if (kind == "tool")
+            {
+                var lines = Wrap(text, mono, area.Width - 28);
+                var results = Wrap("→ " + detail, mono, area.Width - 28);
+                var h = (lines.Count + results.Count) * 21 + 16;
+                blocks.Add((h, top =>
+                {
+                    paint.Color = new SKColor(0x7f, 0xe0, 0xd4);
+                    for (var i = 0; i < lines.Count; i++) canvas.DrawText(lines[i], area.Left + 14, top + 18 + i * 21, mono, paint);
+                    paint.Color = new SKColor(0x9f, 0xb6, 0xc9);
+                    for (var i = 0; i < results.Count; i++) canvas.DrawText(results[i], area.Left + 14, top + 18 + (lines.Count + i) * 21, mono, paint);
+                }));
+            }
+            else
+            {
+                var lines = Wrap(text, prose, area.Width - 36);
+                var h = lines.Count * 27 + 50;
+                var user = kind == "user";
+                blocks.Add((h, top =>
+                {
+                    paint.Color = user ? new SKColor(0x1d, 0x2c, 0x3d) : new SKColor(0x13, 0x22, 0x2a);
+                    canvas.DrawRoundRect(SKRect.Create(area.Left, top, area.Width, h - 12), 12, 12, paint);
+                    paint.Color = new SKColor(0x7f, 0x9a, 0xb0);
+                    canvas.DrawText(user ? "YOU" : "AGENT", area.Left + 18, top + 24, label, paint);
+                    paint.Color = SKColors.White;
+                    for (var i = 0; i < lines.Count; i++) canvas.DrawText(lines[i], area.Left + 18, top + 50 + i * 27, prose, paint);
+                }));
+            }
+        }
+
+        canvas.Save();
+        canvas.ClipRect(area);
+        var total = blocks.Sum(b => b.Height);
+        var y = total > area.Height ? area.Bottom - total : area.Top;
+        foreach (var (height, draw) in blocks)
+        {
+            draw(y);
+            y += height;
+        }
+        canvas.Restore();
+    }
+
+    private static List<string> Wrap(string text, SKFont font, float width)
+    {
+        var lines = new List<string>();
+        var line = "";
+        foreach (var word in text.Split(' '))
+        {
+            var candidate = line.Length == 0 ? word : line + " " + word;
+            if (font.MeasureText(candidate) > width && line.Length > 0)
+            {
+                lines.Add(line);
+                line = word;
+            }
+            else line = candidate;
+        }
+        if (line.Length > 0) lines.Add(line);
+        return lines;
+    }
+
+    /// <summary>Writes <c>name.mp4</c> and <c>name.webm</c> (silent, looping-friendly) with ffmpeg.</summary>
+    public async Task EncodeAsync(string directory, string name)
+    {
+        Directory.CreateDirectory(directory);
+        var work = Directory.CreateTempSubdirectory("soundcharts-clip-").FullName;
+        var list = new System.Text.StringBuilder();
+        for (var i = 0; i < _frames.Count; i++)
+        {
+            var file = Path.Combine(work, $"f{i:000}.png");
+            await File.WriteAllBytesAsync(file, _frames[i].Png);
+            list.AppendLine($"file '{file}'").AppendLine($"duration {_frames[i].Seconds.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+        }
+        // The concat demuxer ignores the last duration unless the last file is repeated.
+        list.AppendLine($"file '{Path.Combine(work, $"f{_frames.Count - 1:000}.png")}'");
+        var listFile = Path.Combine(work, "frames.txt");
+        await File.WriteAllTextAsync(listFile, list.ToString());
+
+        await Ffmpeg("-y", "-f", "concat", "-safe", "0", "-i", listFile, "-vf", "fps=30,format=yuv420p",
+            "-c:v", "libx264", "-crf", "23", "-preset", "slow", "-movflags", "+faststart", "-an", Path.Combine(directory, name + ".mp4"));
+        await Ffmpeg("-y", "-f", "concat", "-safe", "0", "-i", listFile, "-vf", "fps=30,format=yuv420p",
+            "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "36", "-an", Path.Combine(directory, name + ".webm"));
+        Directory.Delete(work, recursive: true);
+    }
+
+    private static async Task Ffmpeg(params string[] arguments)
+    {
+        var start = new ProcessStartInfo("ffmpeg") { RedirectStandardError = true, RedirectStandardOutput = true };
+        foreach (var a in arguments) start.ArgumentList.Add(a);
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("ffmpeg not found (brew install ffmpeg)");
+        var stderr = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        if (process.ExitCode != 0) throw new InvalidOperationException($"ffmpeg failed: {(await stderr)[^Math.Min(400, (await stderr).Length)..]}");
+    }
+}
+
+/// <summary>
+/// Writes an S-125 or S-131 GML dataset from the S-57 features loaded in the viewer
+/// (public-domain NOAA ENCs, translated to the S-101 model), using describe_feature
+/// for geometry and attributes and describe_feature_type for the target bindings.
+/// </summary>
+static class GmlDeriver
+{
+    public static async Task WriteAsync(Viewer v, string spec, string prefix, string[] types, Box box, string path)
+    {
+        var ns = prefix == "S125" ? "http://www.iho.int/S125/1.0" : "http://www.iho.int/S131/1.0";
+        var xml = new System.Text.StringBuilder();
+        xml.AppendLine("""<?xml version="1.0" encoding="UTF-8"?>""");
+        xml.AppendLine($"<!-- Derived by site/capture/capture.cs from NOAA ENC cells (public domain) for the soundcharts.app {spec} tile. Not for navigation. -->");
+        xml.AppendLine($"""<{prefix}:Dataset xmlns:{prefix}="{ns}" xmlns:S100="http://www.iho.int/s100gml/5.0" xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:xlink="http://www.w3.org/1999/xlink" gml:id="DS_{prefix}_ElliottBay">""");
+        xml.AppendLine($"  <S100:DatasetIdentificationInformation><S100:productIdentifier>{spec}</S100:productIdentifier><S100:datasetTitle>Elliott Bay (derived from NOAA ENC)</S100:datasetTitle></S100:DatasetIdentificationInformation>");
+        var open = prefix == "S125" ? "" : $"  <{prefix}:members>\n";
+        xml.Append(open);
+        Member(xml, prefix, $"""<{prefix}:DataCoverage gml:id="coverage"><{prefix}:geometry>{Surface("cov", [(box.South, box.West), (box.South, box.East), (box.North, box.East), (box.North, box.West)])}</{prefix}:geometry></{prefix}:DataCoverage>""");
+
+        var seen = new HashSet<string>();
+        var n = 0;
+        foreach (var type in types)
+        {
+            var bindings = await Bindings(v, spec, type);
+            if (bindings is null) continue;
+            var query = new JsonObject { ["kind"] = "box", ["south"] = box.South, ["west"] = box.West, ["north"] = box.North, ["east"] = box.East };
+            var matches = (await v.Call("query_features", new() { ["query"] = query.ToJsonString(), ["featureType"] = type, ["pageSize"] = 500 }))?["features"]?.AsArray() ?? [];
+            foreach (var match in matches)
+            {
+                var d = (await v.Call("describe_feature", new() { ["datasetId"] = match!["datasetId"]!.GetValue<string>(), ["featureId"] = match["featureId"]!.GetValue<string>() }))?["attributes"];
+                if (d is null) continue;
+                var foid = d["foid"]?.ToJsonString() ?? Guid.NewGuid().ToString();
+                if (!seen.Add(type + foid)) continue; // the same feature in overlapping cells
+                var geometry = Geometry($"g{++n}", d["geometry"]?["primitive"]?.GetValue<string>() ?? d["geometryPrimitive"]?.GetValue<string>(), d["geometry"]?["coordinates"]?.AsArray(), bindings.Value.Primitives);
+                if (geometry is null) continue;
+                var body = new System.Text.StringBuilder();
+                body.Append($"<{prefix}:{type} gml:id=\"f{n}\"><{prefix}:geometry>{geometry}</{prefix}:geometry>");
+                var attributes = d["attributes"]?.AsArray() ?? [];
+                for (var i = 0; i < attributes.Count; i++)
+                {
+                    var code = attributes[i]!["acronym"]?.GetValue<string>() ?? "";
+                    var value = attributes[i]!["value"]?.GetValue<string>() ?? "";
+                    if (code == "featureName" && bindings.Value.Complex.Contains("featureName"))
+                    {
+                        string? name = null, language = null;
+                        for (var j = i + 1; j < attributes.Count && j <= i + 2; j++)
+                        {
+                            var sub = attributes[j]!["acronym"]?.GetValue<string>();
+                            if (sub == "name") name = attributes[j]!["value"]?.GetValue<string>();
+                            else if (sub == "language") language = attributes[j]!["value"]?.GetValue<string>();
+                        }
+                        if (!string.IsNullOrWhiteSpace(name))
+                            body.Append($"<{prefix}:featureName><{prefix}:name>{System.Security.SecurityElement.Escape(name)}</{prefix}:name>{(language is null ? "" : $"<{prefix}:language>{language}</{prefix}:language>")}</{prefix}:featureName>");
+                    }
+                    else if (value.Length > 0 && bindings.Value.Simple.Contains(code))
+                    {
+                        body.Append($"<{prefix}:{code}>{System.Security.SecurityElement.Escape(value)}</{prefix}:{code}>");
+                    }
+                }
+                body.Append($"</{prefix}:{type}>");
+                Member(xml, prefix, body.ToString());
+            }
+        }
+        if (prefix != "S125") xml.AppendLine($"  </{prefix}:members>");
+        xml.AppendLine($"</{prefix}:Dataset>");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllTextAsync(path, xml.ToString());
+        Console.WriteLine($"  wrote {seen.Count} features to {Path.GetFileName(path)}");
+    }
+
+    private static void Member(System.Text.StringBuilder xml, string prefix, string feature) =>
+        xml.AppendLine(prefix == "S125" ? $"  <{prefix}:member>{feature}</{prefix}:member>" : $"    {feature}");
+
+    /// <summary>Simple and complex attribute codes bound to a type, including its supertypes.</summary>
+    private static async Task<(HashSet<string> Simple, HashSet<string> Complex, HashSet<string> Primitives)?> Bindings(Viewer v, string spec, string type)
+    {
+        var simple = new HashSet<string>();
+        var complex = new HashSet<string>();
+        HashSet<string>? primitives = null;
+        for (string? current = type; current is not null;)
+        {
+            JsonNode? t;
+            try { t = (await v.Call("describe_feature_type", new() { ["spec"] = spec, ["featureType"] = current, ["includeListedValues"] = false }))?["featureTypes"]?[0]; }
+            catch (InvalidOperationException) { return primitives is null ? null : (simple, complex, primitives); }
+            if (t is null) break;
+            primitives ??= t["permittedPrimitives"]?.AsArray().Select(p => p!.GetValue<string>()).ToHashSet() ?? [];
+            foreach (var a in t["attributes"]?.AsArray() ?? [])
+                (a!["isComplex"]?.GetValue<bool>() == true ? complex : simple).Add(a["code"]!.GetValue<string>());
+            current = t["superType"]?.GetValue<string>();
+        }
+        return primitives is null ? null : (simple, complex, primitives);
+    }
+
+    private static string? Geometry(string id, string? primitive, JsonArray? coordinates, HashSet<string> permitted)
+    {
+        if (coordinates is null || coordinates.Count == 0) return null;
+        var points = coordinates.Select(c => (c![0]!.GetValue<double>(), c[1]!.GetValue<double>())).ToList();
+        switch (primitive?.ToLowerInvariant())
+        {
+            case "point" when permitted.Contains("point"):
+                return $"""<S100:pointProperty><gml:Point gml:id="{id}" srsName="EPSG:4326"><gml:pos>{points[0].Item1:0.0000000} {points[0].Item2:0.0000000}</gml:pos></gml:Point></S100:pointProperty>""";
+            case "curve" when permitted.Contains("curve") && points.Count > 1:
+                return $"""<S100:curveProperty><gml:Curve gml:id="{id}" srsName="EPSG:4326"><gml:segments><gml:LineStringSegment><gml:posList>{PosList(points)}</gml:posList></gml:LineStringSegment></gml:segments></gml:Curve></S100:curveProperty>""";
+            case "surface" when permitted.Contains("surface") && points.Count > 2:
+                return Surface(id, points);
+            default:
+                return null;
+        }
+    }
+
+    private static string Surface(string id, IReadOnlyList<(double Lat, double Lon)> ring)
+    {
+        var closed = ring.ToList();
+        if (closed[0] != closed[^1]) closed.Add(closed[0]);
+        return $"""<S100:surfaceProperty><gml:Surface gml:id="{id}" srsName="EPSG:4326"><gml:patches><gml:PolygonPatch><gml:exterior><gml:LinearRing><gml:posList>{PosList(closed)}</gml:posList></gml:LinearRing></gml:exterior></gml:PolygonPatch></gml:patches></gml:Surface></S100:surfaceProperty>""";
+    }
+
+    private static string PosList(IEnumerable<(double Lat, double Lon)> points) =>
+        string.Join(" ", points.Select(p => $"{p.Lat:0.0000000} {p.Lon:0.0000000}"));
+}
+
+/// <summary>
+/// Maintains <c>manifest.json</c> beside the shots: for each shot, the datasets on
+/// screen (file, product, source, licence, edition or forecast run), the recorded
+/// viewer calls (viewport, palette, category, panels, clock, …) and when the image
+/// and the record were made. Shared viewer settings are stored once.
+/// </summary>
+/// <summary>
+/// Writes fictitious S-124 Ed 2.0 warnings along F4's route for the Check route
+/// shots, one dataset per warning, dated around the departure: a dredging area
+/// across leg 3 → 4 and a cable line across leg 5 → 6 (both in force), a log
+/// adrift near leg 2 → 3, and a regatta off West Point that starts later.
+/// </summary>
+static class SyntheticWarnings
+{
+    private record Warning(
+        int Number, string Title, int GeneralCode, string General, int DetailsCode, string Details,
+        string Locality, string Text, int StartDays, int? EndDays, string Kind, (double Lat, double Lon)[] Points);
+
+    // Placed on the Fort Sumter to Wando route: 201 across leg 3 → 4 and 203 across
+    // leg 6 → 7 (Must review), 202 near leg 2 → 3 (Check), 204 across leg 1 → 2 but
+    // starting four days after the departure (Info).
+    private static readonly Warning[] Warnings =
+    [
+        new(201, "Dredging operations", 19, "Works", 89, "Dredging Operation", "Rebellion Reach",
+            "DREDGING OPERATIONS IN PROGRESS IN AREA BOUNDED BY 32-45.82N 79-52.74W, 32-46.00N 79-52.74W, 32-46.00N 79-52.47W AND 32-45.82N 79-52.47W. "
+            + "MARINERS ARE REQUESTED TO GIVE A WIDE BERTH. FICTITIOUS, FOR ILLUSTRATION.",
+            StartDays: -2, EndDays: null, "surface",
+            [(32.7636, -79.8790), (32.7666, -79.8790), (32.7666, -79.8745), (32.7636, -79.8745), (32.7636, -79.8790)]),
+        new(202, "Log adrift", 3, "Drifting Hazards", 179, "Log Adrift", "Mount Pleasant Reach",
+            "LARGE LOG ADRIFT IN VICINITY 32-45.07N 79-51.22W. FICTITIOUS, FOR ILLUSTRATION.",
+            StartDays: -1, EndDays: null, "point", [(32.7512, -79.8536)]),
+        new(203, "Cable laying", 19, "Works", 64, "Cable Laying Operation", "Hog Island Reach",
+            "CABLE LAYING OPERATIONS ALONG LINE JOINING 32-48.00N 79-55.29W AND 32-47.94N 79-54.51W. "
+            + "VESSEL RESTRICTED IN ABILITY TO MANOEUVRE. FICTITIOUS, FOR ILLUSTRATION.",
+            StartDays: -5, EndDays: 11, "curve", [(32.8000, -79.9215), (32.7990, -79.9085)]),
+        new(204, "Regatta", 17, "Special Operations", 235, "Regatta or Race", "Off Sullivan's Island",
+            "SAILING REGATTA IN AREA OFF SULLIVAN'S ISLAND. FICTITIOUS, FOR ILLUSTRATION.",
+            StartDays: 4, EndDays: 5, "surface",
+            [(32.7270, -79.8360), (32.7350, -79.8360), (32.7350, -79.8200), (32.7270, -79.8200), (32.7270, -79.8360)]),
+    ];
+
+    public static IEnumerable<string> Write(string dir, DateTimeOffset departure)
+    {
+        Directory.CreateDirectory(dir);
+        var day = DateOnly.FromDateTime(departure.UtcDateTime);
+        foreach (var w in Warnings)
+        {
+            var yy = day.Year % 100;
+            var id = $"ZZ.S124.SAMPLE.{w.Number}.{yy:00}";
+            var start = day.AddDays(w.StartDays);
+            var path = Path.Combine(dir, $"124ZZ_SAMPLE_{w.Number}_{yy:00}.gml");
+            File.WriteAllText(path, Dataset(w, id, day.Year, start, w.EndDays is { } end ? day.AddDays(end) : null));
+            yield return path;
+        }
+    }
+
+    private static string Dataset(Warning w, string id, int year, DateOnly start, DateOnly? end)
+    {
+        static string Pos((double Lat, double Lon)[] points) => string.Join(" ", points.Select(p => $"{p.Lat:0.0000} {p.Lon:0.0000}"));
+        const string srs = "srsName=\"https://www.opengis.net/def/crs/EPSG/0/4326\" srsDimension=\"2\"";
+        var geometry = w.Kind switch
+        {
+            "point" => $"""
+                <S100:pointProperty><S100:Point gml:id="{id}.1.location" {srs}><gml:pos>{Pos(w.Points)}</gml:pos></S100:Point></S100:pointProperty>
+                """,
+            "curve" => $"""
+                <S100:curveProperty><S100:Curve gml:id="{id}.1.location" {srs}><gml:segments><gml:LineStringSegment><gml:posList>{Pos(w.Points)}</gml:posList></gml:LineStringSegment></gml:segments></S100:Curve></S100:curveProperty>
+                """,
+            _ => $"""
+                <S100:surfaceProperty><S100:Polygon gml:id="{id}.1.location" {srs}><gml:exterior><gml:LinearRing><gml:posList>{Pos(w.Points)}</gml:posList></gml:LinearRing></gml:exterior></S100:Polygon></S100:surfaceProperty>
+                """,
+        };
+        var dateEnd = end is { } e ? $"<S124:dateEnd><S100:date>{e:yyyy-MM-dd}</S100:date></S124:dateEnd>" : "";
+        return $"""
+            <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <S124:Dataset xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:S124="http://www.iho.int/S124/gml/2.0" xmlns:S100="http://www.iho.int/s100gml/5.0" xmlns:xlink="http://www.w3.org/1999/xlink" gml:id="{id}">
+                <S100:DatasetIdentificationInformation>
+                    <S100:encodingSpecification>S-100 Part 10b</S100:encodingSpecification>
+                    <S100:encodingSpecificationEdition>1.0</S100:encodingSpecificationEdition>
+                    <S100:productIdentifier>S-124</S100:productIdentifier>
+                    <S100:productEdition>2.0.0</S100:productEdition>
+                    <S100:applicationProfile>1</S100:applicationProfile>
+                    <S100:datasetFileIdentifier>124ZZ_SAMPLE_{w.Number}_{year % 100:00}.gml</S100:datasetFileIdentifier>
+                    <S100:datasetTitle>{w.Title}</S100:datasetTitle>
+                    <S100:datasetReferenceDate>{start.AddDays(-1):yyyy-MM-dd}</S100:datasetReferenceDate>
+                    <S100:datasetLanguage>eng</S100:datasetLanguage>
+                    <S100:datasetAbstract>Fictitious warning for the soundcharts.app screenshots.</S100:datasetAbstract>
+                    <S100:datasetTopicCategory>oceans</S100:datasetTopicCategory>
+                    <S100:datasetPurpose>base</S100:datasetPurpose>
+                    <S100:updateNumber>0</S100:updateNumber>
+                </S100:DatasetIdentificationInformation>
+                <S124:members>
+                    <S124:NavwarnPreamble gml:id="{id}.0">
+                        <S124:generalArea><S124:locationName><S124:language>eng</S124:language><S124:text>Charleston Harbor</S124:text></S124:locationName></S124:generalArea>
+                        <S124:locality><S124:locationName><S124:language>eng</S124:language><S124:text>{w.Locality}</S124:text></S124:locationName></S124:locality>
+                        <S124:messageSeriesIdentifier>
+                            <S124:agencyResponsibleForProduction>Sample Hydrographic Office (fictitious)</S124:agencyResponsibleForProduction>
+                            <S124:nameOfSeries>SAMPLE</S124:nameOfSeries>
+                            <S124:nationality>Zz</S124:nationality>
+                            <S124:warningNumber>{w.Number}</S124:warningNumber>
+                            <S124:warningType code="1">Local Navigational Warning</S124:warningType>
+                            <S124:year>{year}</S124:year>
+                        </S124:messageSeriesIdentifier>
+                        <S124:navwarnTitle><S124:language>eng</S124:language><S124:text>{w.Title}</S124:text></S124:navwarnTitle>
+                        <S124:intService>false</S124:intService>
+                        <S124:navwarnTypeGeneral code="{w.GeneralCode}">{w.General}</S124:navwarnTypeGeneral>
+                        <S124:publicationTime>{start.AddDays(-1):yyyy-MM-dd}T16:00:00Z</S124:publicationTime>
+                    </S124:NavwarnPreamble>
+                    <S124:NavwarnPart gml:id="{id}.1">
+                        <S124:fixedDateRange><S124:dateStart><S100:date>{start:yyyy-MM-dd}</S100:date></S124:dateStart>{dateEnd}</S124:fixedDateRange>
+                        <S124:warningInformation>
+                            <S124:information><S124:language>eng</S124:language><S124:text>SAMPLE {w.Number}/{year % 100:00}. {w.Locality.ToUpperInvariant()}. {w.Text}</S124:text></S124:information>
+                            <S124:navwarnTypeDetails code="{w.DetailsCode}">{w.Details}</S124:navwarnTypeDetails>
+                        </S124:warningInformation>
+                        <S124:header xlink:href="#{id}.0"/>
+                        <S124:geometry>{geometry}</S124:geometry>
+                    </S124:NavwarnPart>
+                </S124:members>
+            </S124:Dataset>
+            """;
+    }
+}
+
+static class ShotManifest
+{
+    private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
+    /// <summary>The repository root, so recorded paths can be made machine-independent.</summary>
+    public static string RepoRoot { get; set; } = "";
+
+    public static JsonNode? Arguments(Dictionary<string, object?>? arguments)
+    {
+        if (arguments is null) return null;
+        var node = JsonSerializer.SerializeToNode(arguments);
+        foreach (var (key, value) in node!.AsObject().ToList())
+        {
+            if (value is not JsonValue v || !v.TryGetValue<string>(out var text)) continue;
+            text = Portable(text);
+            // Keep long payloads (e.g. a densified polyline) readable.
+            node[key] = text.Length > 160 ? text[..157] + "…" : text;
+        }
+        return node;
+    }
+
+    /// <summary>A path relative to the repo, or to ~, instead of this machine's absolute path.</summary>
+    public static string Portable(string path)
+    {
+        var p = path.Replace('\\', '/');
+        var repo = RepoRoot.Replace('\\', '/').TrimEnd('/') + "/";
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile).Replace('\\', '/').TrimEnd('/') + "/";
+        return p.StartsWith(repo, StringComparison.Ordinal) ? p[repo.Length..]
+            : p.StartsWith(home, StringComparison.Ordinal) ? "~/" + p[home.Length..]
+            : path;
+    }
+
+    public static async Task RecordAsync(string manifestPath, string id, Viewer v, string imagePath, string repoRoot, bool recapturedImage)
+    {
+        JsonObject root;
+        try { root = JsonNode.Parse(await File.ReadAllTextAsync(manifestPath))!.AsObject(); }
+        catch (Exception e) when (e is IOException or JsonException) { root = new JsonObject(); }
+
+        root["generatedBy"] = "site/capture/capture.cs";
+        root["settings"] = new JsonObject
+        {
+            ["window"] = "1100×700 logical, captured at 2×",
+            ["chromeTheme"] = "per shot (Dark; Light for the .light entries; S100Dusk / S100Night for the Dusk and Night shots)",
+            ["basemap"] = "Offline (bundled Natural Earth)",
+            ["statusBar"] = false,
+            ["fourShades"] = Viewer.FourShades,
+            ["safetyContourMetres"] = 10,
+            ["safetyDepthMetres"] = 10,
+            ["hiddenViewingGroups"] = "S-101/S-57: 90020, 90021 (additional-information markers)",
+            ["outOfScaleExtentIndicators"] = false,
+            ["locale"] = "en_US, invariant number formatting",
+            ["timeZone"] = $"{TimeZoneInfo.Local.Id} unless a shot names its own",
+        };
+
+        var datasets = new JsonArray();
+        foreach (var d in (await v.Call("list_datasets"))?["datasets"]?.AsArray() ?? [])
+        {
+            var dsId = d!["id"]!.GetValue<string>();
+            v.Paths.TryGetValue(dsId, out var path);
+            var entry = Source(dsId, path, repoRoot);
+            entry["id"] = dsId;
+            entry["spec"] = d["spec"]?["name"]?.GetValue<string>();
+            entry["bounds"] = d["bounds"]?.DeepClone();
+            datasets.Add(entry);
+        }
+
+        JsonObject? timeline = null;
+        if ((await v.Call("get_timeline_state")) is { } t && t["active"]?.GetValue<bool>() == true)
+            timeline = new JsonObject
+            {
+                ["mode"] = t["mode"]?.DeepClone(), ["viewTime"] = t["viewTime"]?.DeepClone(),
+                ["now"] = t["now"]?.DeepClone(), ["runs"] = t["runs"]?.DeepClone(),
+            };
+
+        var shots = root["shots"] as JsonObject ?? new JsonObject();
+        root["shots"] = shots;
+        shots[id] = new JsonObject
+        {
+            ["image"] = Path.GetFileName(imagePath),
+            ["imageCapturedUtc"] = File.Exists(imagePath) ? File.GetLastWriteTimeUtc(imagePath).ToString("O") : null,
+            ["recordedUtc"] = DateTime.UtcNow.ToString("O"),
+            // False when recorded with --manifest-only: the image is older than this
+            // record, so live data (forecast runs, chart editions) may differ from it.
+            ["imageMatchesRecord"] = recapturedImage,
+            ["chromeTheme"] = Viewer.ChromeTheme,
+            ["timeZone"] = Viewer.TimeZone,
+            ["capture"] = v.CaptureMode,
+            ["datasets"] = datasets,
+            ["timeline"] = timeline,
+            ["steps"] = v.Steps.DeepClone(),
+        };
+
+        // Shots sorted by id so diffs stay small.
+        var sorted = new JsonObject();
+        foreach (var (key, value) in shots.OrderBy(kv => kv.Key, StringComparer.Ordinal).ToList())
+        {
+            shots.Remove(key);
+            sorted[key] = value;
+        }
+        root["shots"] = sorted;
+        await File.WriteAllTextAsync(manifestPath, root.ToJsonString(Indented) + "\n");
+    }
+
+    /// <summary>Where a dataset came from, its licence and its edition or forecast run.</summary>
+    private static JsonObject Source(string id, string? path, string repoRoot)
+    {
+        var p = path?.Replace('\\', '/') ?? "";
+        string? file = path is null ? null : Portable(path);
+        var name = Path.GetFileName(p.Length > 0 ? p : id);
+        var run = System.Text.RegularExpressions.Regex.Match(name, @"_(\d{8}T\d{2}Z)_");
+
+        (string Source, string Licence) = 0 switch
+        {
+            _ when p.Contains("Unencrypted_S100_Datasets") => ("Canadian Hydrographic Service S-100 sample package (Nov 2025)", "CHS licence: non-commercial, CHS notice required, data not redistributed"),
+            _ when p.Contains("/tests/datasets/S101/") => ("IHO S-101 test data set (fictional area)", "IHO test data, bundled in this repo"),
+            _ when p.Contains("/tests/datasets/") => ("EncDotNet.S100 test fixture", "repo fixture (MIT)"),
+            _ when p.Contains("/.cache/synthetic/") => ("Synthetic S-124 warnings written by capture.cs (fictitious)", "ours (MIT)"),
+            _ when p.Contains("/.cache/derived/") => ("Derived by capture.cs from NOAA ENC cells", "public domain source (NOAA)"),
+            _ when p.Contains("/.cache/enc/") => ("NOAA ENC (charts.noaa.gov)", "public domain (NOAA)"),
+            _ when p.Contains("/.cache/s102/") => ("NOAA S-102 on AWS (noaa-s102-pds)", "public domain (NOAA)"),
+            _ when p.Contains("/.cache/s111/") => ("NOAA S-111 on AWS (noaa-s111-pds)", "public domain (NOAA)"),
+            _ when p.Contains("/.cache/gfs/gfswave_") => ("NOAA NCEP GFS-Wave (WAVEWATCH III) on AWS (noaa-gfs-bdp-pds), fields cut by byte range", "public domain (NOAA)"),
+            _ when p.Contains("/.cache/gfs/gfs_") => ("NOAA NCEP GFS on AWS (noaa-gfs-bdp-pds), fields cut by byte range", "public domain (NOAA)"),
+            _ when p.Contains("/.cache/erddap/jplMURSST41_") => ("NASA JPL MUR SST v4.1 analysis, via NOAA CoastWatch ERDDAP", "free and open (NASA JPL PO.DAAC, GHRSST)"),
+            _ when p.Contains("/.cache/erddap/miamicurrents_") => ("NOAA AOML near-real-time geostrophic currents, via NOAA CoastWatch ERDDAP", "public domain (NOAA)"),
+            _ when p.Contains("/.cache/nhc/") => ("NOAA NHC advisory GIS files (forecast archive and best track, nhc.noaa.gov)", "public domain (NOAA)"),
+            _ when p.Contains("/.cache/wpc/") => ("NOAA NWS WPC coded surface bulletin, via the Iowa Environmental Mesonet's NWS text archive", "public domain (NOAA NWS)"),
+            _ when p.Contains("/.cache/s411/S411_NWS_") => ("US National Weather Service ice analysis, via the BSIS Ice Portal (bsis-ice.de)", "public domain (NOAA NWS)"),
+            _ when p.Contains("Inland S-57 ENCs") => ("USACE inland ENC (IENC)", "public domain (USACE)"),
+            _ when path is null && id.StartsWith("102US", StringComparison.Ordinal) => ("NOAA S-102 on AWS, downloaded by the Library", "public domain (NOAA)"),
+            _ when path is null && id.StartsWith("US", StringComparison.Ordinal) => ("NOAA ENC, downloaded by the Library", "public domain (NOAA)"),
+            _ => ("unknown", "unknown"),
+        };
+
+        var entry = new JsonObject { ["file"] = file ?? name, ["source"] = Source, ["licence"] = Licence };
+        if (run.Success) entry["forecastRun"] = run.Groups[1].Value;
+        return entry;
+    }
+}

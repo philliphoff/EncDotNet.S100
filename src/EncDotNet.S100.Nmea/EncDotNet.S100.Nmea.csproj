@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <Description>A minimal NMEA 0183 sentence reader: checksum validation, talker-agnostic decoding of the wind, water temperature, transducer (air temperature and pressure), heading, water speed and GNSS motion sentences (MWV, MWD, MTW, XDR, HDT, HDG, VHW, RMC, VTG), true wind from apparent wind, and line sources over a stream, a replay file, TCP and UDP. Shared by the NMEA weather source and, later, an own-ship NMEA driver. Not for navigation.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.Nmea.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+  </ItemGroup>
+
+</Project>

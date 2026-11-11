@@ -1,0 +1,256 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.DisplayCombinationsView"
+             x:DataType="vm:DisplayCombinationsViewModel">
+
+    <!-- The list of display combinations (design note
+         predefined-display-combinations.md §4), shared by the map's View pill
+         flyout and the View section of the Display controls panel: the active
+         view with its modified marker, Reapply and Save as, the Build up the
+         picture ladder, the other built-ins, the mariner's own views, and the
+         save / rename form. -->
+    <UserControl.Styles>
+        <Style Selector="TextBlock.groupHeader">
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="LetterSpacing" Value="0.6" />
+            <Setter Property="Opacity" Value="0.65" />
+            <Setter Property="Margin" Value="0,6,0,2" />
+        </Style>
+        <!-- A row is a button with a plain template, so it grows with its
+             note and chips and wraps them to the list's width; the theme's
+             button templates fix the height and measure content unbounded. -->
+        <Style Selector="Button.comboRow">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalContentAlignment="Stretch" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.comboRow:pointerover">
+            <Setter Property="Background" Value="{DynamicResource BorderColor}" />
+        </Style>
+        <Style Selector="Button.comboRow:focus-visible">
+            <Setter Property="Background" Value="{DynamicResource BorderColor}" />
+        </Style>
+    </UserControl.Styles>
+
+    <UserControl.DataTemplates>
+        <DataTemplate DataType="vm:DisplayCombinationRowViewModel">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <Button Grid.Column="0"
+                        Classes="comboRow"
+                        AutomationProperties.AutomationId="DisplayCombination.Row.Apply"
+                        AutomationProperties.Name="{Binding DisplayLabel}"
+                        AutomationProperties.HelpText="{Binding Description}"
+                        Command="{Binding ApplyCommand}"
+                        ToolTip.Tip="{Binding Description}">
+                    <Panel>
+                        <Border IsVisible="{Binding IsActive}"
+                                Background="{DynamicResource AccentBrush}"
+                                Opacity="0.12"
+                                CornerRadius="6"
+                                Margin="-8,-6" />
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <Border Grid.Column="0"
+                                    IsVisible="{Binding HasStep}"
+                                    Width="18" Height="18"
+                                    CornerRadius="9"
+                                    Margin="0,1,8,0"
+                                    VerticalAlignment="Top"
+                                    BorderThickness="1"
+                                    BorderBrush="{DynamicResource BorderColor}">
+                                <TextBlock Text="{Binding Step}"
+                                           FontSize="10.5"
+                                           FontWeight="SemiBold"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                            </Border>
+                            <StackPanel Grid.Column="1" Spacing="2">
+                                <TextBlock Text="{Binding DisplayLabel}"
+                                           FontSize="12.5"
+                                           FontWeight="Medium"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding Description}"
+                                           IsVisible="{Binding HasDescription}"
+                                           FontSize="11"
+                                           Opacity="0.7"
+                                           TextWrapping="Wrap" />
+                                <ItemsControl ItemsSource="{Binding Chips}"
+                                              IsVisible="{Binding HasChips}"
+                                              Margin="0,2,0,0">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:DisplayCombinationChipViewModel">
+                                            <Border BorderThickness="1"
+                                                    BorderBrush="{DynamicResource BorderColor}"
+                                                    CornerRadius="4"
+                                                    Padding="5,0"
+                                                    Margin="0,0,4,3"
+                                                    Opacity="{Binding Opacity}"
+                                                    ToolTip.Tip="{Binding Name}">
+                                                <TextBlock Text="{Binding Product}"
+                                                           FontSize="10.5"
+                                                           FontFamily="{StaticResource MonoFontFamily}" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="{Binding NotLoadedSummary}"
+                                           IsVisible="{Binding HasNotLoaded}"
+                                           FontSize="11"
+                                           Opacity="0.7" />
+                            </StackPanel>
+                            <ic:FluentIcon Grid.Column="2"
+                                           Icon="Checkmark"
+                                           IconVariant="Regular"
+                                           FontSize="14"
+                                           Margin="8,1,0,0"
+                                           VerticalAlignment="Top"
+                                           IsVisible="{Binding IsActive}" />
+                        </Grid>
+                    </Panel>
+                </Button>
+                <Button Grid.Column="1"
+                        Classes="Icon"
+                        Width="26" Height="26" Padding="0"
+                        VerticalAlignment="Top"
+                        IsVisible="{Binding IsUser}"
+                        AutomationProperties.AutomationId="DisplayCombination.Row.Rename"
+                        AutomationProperties.Name="{x:Static loc:Strings.DisplayCombination_Rename}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayCombination_Rename}"
+                        Command="{Binding RenameCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayCombination_Rename}">
+                    <ic:FluentIcon Icon="Rename" IconVariant="Regular" FontSize="14" />
+                </Button>
+                <Button Grid.Column="2"
+                        Classes="Icon"
+                        Width="26" Height="26" Padding="0"
+                        VerticalAlignment="Top"
+                        IsVisible="{Binding IsUser}"
+                        AutomationProperties.AutomationId="DisplayCombination.Row.Delete"
+                        AutomationProperties.Name="{x:Static loc:Strings.DisplayCombination_Delete}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayCombination_Delete}"
+                        Command="{Binding DeleteCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayCombination_Delete}">
+                    <ic:FluentIcon Icon="Delete" IconVariant="Regular" FontSize="14" />
+                </Button>
+            </Grid>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <StackPanel Spacing="4">
+        <!-- The active view, its modified marker, Reapply and Save as. -->
+        <Grid ColumnDefinitions="*,Auto,Auto">
+            <TextBlock Grid.Column="0"
+                       Text="{Binding ActiveLabel}"
+                       FontSize="13"
+                       FontWeight="SemiBold"
+                       VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" />
+            <Button Grid.Column="1"
+                    Classes="Outline"
+                    Padding="8,2"
+                    Margin="6,0,0,0"
+                    FontSize="11.5"
+                    AutomationProperties.AutomationId="DisplayCombination.Reapply"
+                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayCombination_Reapply}"
+                    Content="{x:Static loc:Strings.DisplayCombination_Reapply}"
+                    Command="{Binding ReapplyCommand}"
+                    IsVisible="{Binding IsModified}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayCombination_Reapply}" />
+            <Button Grid.Column="2"
+                    Classes="Outline"
+                    Padding="8,2"
+                    Margin="6,0,0,0"
+                    FontSize="11.5"
+                    AutomationProperties.AutomationId="DisplayCombination.SaveAs"
+                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayCombination_SaveAs}"
+                    Content="{x:Static loc:Strings.DisplayCombination_SaveAsShort}"
+                    Command="{Binding BeginSaveCommand}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayCombination_SaveAs}" />
+        </Grid>
+        <TextBlock Text="{Binding ChangesText}"
+                   IsVisible="{Binding HasChanges}"
+                   AutomationProperties.AutomationId="DisplayCombination.Changes"
+                   FontSize="11"
+                   Opacity="0.75"
+                   TextWrapping="Wrap" />
+
+        <!-- Save / rename form (D). -->
+        <Border IsVisible="{Binding IsEditing}"
+                BorderBrush="{DynamicResource BorderColor}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="10"
+                Margin="0,4">
+            <StackPanel Spacing="8">
+                <TextBlock Text="{Binding EditTitle}" FontWeight="SemiBold" FontSize="12.5" />
+                <StackPanel Spacing="3">
+                    <TextBlock Text="{x:Static loc:Strings.DisplayCombination_NameLabel}" FontSize="11.5" Opacity="0.8" />
+                    <TextBox Text="{Binding EditName}"
+                             AutomationProperties.AutomationId="DisplayCombination.Edit.Name"
+                             AutomationProperties.Name="{x:Static loc:Strings.DisplayCombination_NameLabel}" />
+                </StackPanel>
+                <StackPanel Spacing="3" IsVisible="{Binding IsSaving}">
+                    <TextBlock Classes="groupHeader" Text="{x:Static loc:Strings.DisplayCombination_SavedHeader}" />
+                    <ItemsControl ItemsSource="{Binding SavedLines}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock Text="{Binding}" FontSize="11.5" TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Classes="groupHeader" Text="{x:Static loc:Strings.DisplayCombination_NotSavedHeader}" />
+                    <TextBlock Text="{x:Static loc:Strings.DisplayCombination_NotSavedText}"
+                               FontSize="11.5"
+                               Opacity="0.75"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+                    <Button Classes="Outline"
+                            Padding="10,3"
+                            AutomationProperties.AutomationId="DisplayCombination.Edit.Cancel"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayCombination_Cancel}"
+                            Content="{x:Static loc:Strings.Button_Cancel}"
+                            Command="{Binding CancelEditCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayCombination_Cancel}" />
+                    <Button Classes="Primary"
+                            Padding="10,3"
+                            AutomationProperties.AutomationId="DisplayCombination.Edit.Save"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayCombination_SaveConfirm}"
+                            Content="{x:Static loc:Strings.Button_Save}"
+                            Command="{Binding ConfirmEditCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_DisplayCombination_SaveConfirm}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <TextBlock Classes="groupHeader" Text="{x:Static loc:Strings.DisplayCombination_LadderHeader}" />
+        <ItemsControl ItemsSource="{Binding LadderRows}" />
+        <TextBlock Classes="groupHeader" Text="{x:Static loc:Strings.DisplayCombination_MoreHeader}" />
+        <ItemsControl ItemsSource="{Binding MoreRows}" />
+        <TextBlock Classes="groupHeader"
+                   Text="{x:Static loc:Strings.DisplayCombination_UserHeader}"
+                   IsVisible="{Binding HasUserRows}" />
+        <ItemsControl ItemsSource="{Binding UserRows}" IsVisible="{Binding HasUserRows}" />
+    </StackPanel>
+</UserControl>

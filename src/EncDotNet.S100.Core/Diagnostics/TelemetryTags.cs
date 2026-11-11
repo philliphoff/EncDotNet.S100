@@ -1,0 +1,123 @@
+namespace EncDotNet.S100.Diagnostics;
+
+/// <summary>
+/// Standard <see cref="System.Diagnostics.Activity"/> tag and
+/// <see cref="System.Diagnostics.Metrics.Meter"/> dimension keys used
+/// across EncDotNet.S100 telemetry. Centralising them prevents drift
+/// between libraries and lets dashboards / collectors rely on a single
+/// vocabulary.
+/// </summary>
+/// <remarks>
+/// Naming follows OpenTelemetry semantic-convention style:
+/// lowercase, dot-separated, namespaced under <c>s100.</c>. New tags
+/// added by individual libraries should follow the same shape so that
+/// querying is uniform.
+/// </remarks>
+public static class TelemetryTags
+{
+    /// <summary>S-100 product identifier, e.g. <c>S-101</c>, <c>S-102</c>, <c>S-124</c>.</summary>
+    public const string Product = "s100.product";
+
+    /// <summary>Absolute or producer-supplied dataset path (sanitised by host before export if needed).</summary>
+    public const string DatasetPath = "s100.dataset.path";
+
+    /// <summary>Pipeline stage: <c>read</c>, <c>portray</c>, or <c>render</c>.</summary>
+    public const string PipelineStage = "s100.pipeline.stage";
+
+    /// <summary>Vector pipeline feature type / acronym (e.g. <c>DEPARE</c>, <c>BOYLAT</c>).</summary>
+    public const string FeatureType = "s100.feature.type";
+
+    /// <summary>HDF5 dataCodingFormat code (1..7 per S-100 Part 10c).</summary>
+    public const string CoverageFormat = "s100.coverage.format";
+
+    /// <summary>Map viewport zoom level (Mapsui "resolution" or equivalent).</summary>
+    public const string ViewportZoom = "s100.viewport.zoom";
+
+    /// <summary>Map viewport scale denominator (e.g. 50000 for 1:50,000).</summary>
+    public const string ViewportScale = "s100.viewport.scale";
+
+    /// <summary>Outcome tag for spans / metric counters: <c>ok</c>, <c>error</c>, <c>skipped</c>.</summary>
+    public const string Result = "s100.result";
+
+    /// <summary>Lua portrayal rule name (S-100 Part 9A).</summary>
+    public const string LuaRule = "s100.lua.rule";
+
+    /// <summary>Viewer command name for the top-level user-action activity.</summary>
+    public const string ViewerCommand = "s100.viewer.command";
+
+    /// <summary>Renderer implementation: <c>mapsui</c> or <c>skia</c>.</summary>
+    public const string RendererKind = "s100.renderer.kind";
+
+    /// <summary>
+    /// Context-dependent asset kind. The value space depends on the
+    /// instrument:
+    /// <list type="bullet">
+    /// <item>For asset-source I/O metrics (e.g. future
+    /// <c>s100.asset.read.duration</c> emitters): <c>file</c>, <c>zip</c>,
+    /// or <c>embedded</c>.</item>
+    /// <item>For portrayal cache counters
+    /// (<c>s100.portrayal.cache.hit/miss.count</c>): one of <c>xslt</c>,
+    /// <c>svg</c>, <c>line_style</c>, <c>area_fill</c>, <c>palette</c>,
+    /// <c>lua_script</c>, <c>lua_source</c> — see
+    /// <c>EncDotNet.S100.Portrayals.Diagnostics.PortrayalAssetKinds</c>.</item>
+    /// </list>
+    /// Queries should disambiguate by counter name; the value space is
+    /// disjoint between the two contexts.
+    /// </summary>
+    public const string AssetKind = "s100.asset.kind";
+
+    /// <summary>Symbol resolution outcome: <c>hit</c>, <c>miss</c>, or <c>fallback</c>.</summary>
+    public const string SymbolResult = "s100.symbol.result";
+
+    /// <summary>XSLT rule name (used for compile and transform spans).</summary>
+    public const string XsltRule = "s100.xslt.rule";
+
+    /// <summary>
+    /// Overview pyramid level selected for a coverage read (issue #486).
+    /// <c>0</c> = native base grid; higher values = coarser downsampled
+    /// levels (each level is 2× coarser per axis, 4× fewer cells).
+    /// Applied to the <c>s100.pipeline.coverage.stage.read</c> span
+    /// and the <c>s100.coverage.overview.level_selected</c> histogram.
+    /// </summary>
+    public const string CoverageOverviewLevel = "s100.coverage.overview.level";
+
+    /// <summary>
+    /// Reduction policy applied while downsampling a coverage grid, such as
+    /// <c>nearest</c> or <c>min</c>. Applied to the coverage read span so
+    /// safety-critical products can prove that viewport stride does not use
+    /// point sampling.
+    /// </summary>
+    public const string CoverageReducer = "s100.coverage.reducer";
+
+    /// <summary>Symbol identifier used in a resolve operation.</summary>
+    public const string SymbolId = "s100.symbol.id";
+
+    /// <summary>HDF5 entity kind: <c>group</c> or <c>dataset</c>.</summary>
+    public const string Hdf5Kind = "s100.hdf5.kind";
+
+    /// <summary>GC generation delta tag prefix. Append <c>.delta</c> to get
+    /// e.g. <c>gc.gen0.delta</c>. Values are process-wide collection-count
+    /// differences and may include noise from other threads.</summary>
+    public const string GcGen0Delta = "gc.gen0.delta";
+
+    /// <inheritdoc cref="GcGen0Delta"/>
+    public const string GcGen1Delta = "gc.gen1.delta";
+
+    /// <inheritdoc cref="GcGen0Delta"/>
+    public const string GcGen2Delta = "gc.gen2.delta";
+
+    /// <summary>
+    /// Selected line-LOD pyramid level index for the current paint (0 =
+    /// coarsest). Attached to
+    /// <c>s100.geometry.vertices.out</c> and to renderer LOD-cache
+    /// counters so hit/miss ratios can be attributed per zoom band.
+    /// </summary>
+    public const string LodBucket = "s100.geometry.lod.bucket";
+
+    /// <summary>
+    /// Cache lookup outcome on a cache-read span: <c>hit</c> or <c>miss</c>.
+    /// Used by <c>s100.portrayal.cache.read</c> and <c>s100.cell.pattern_clip</c>,
+    /// which split a warm cell load by stage.
+    /// </summary>
+    public const string CacheResult = "s100.cache.result";
+}

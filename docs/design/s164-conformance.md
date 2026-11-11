@@ -1,0 +1,790 @@
+# S-164 conformance — Design Note
+
+> Status: **Assessment** (slices 1–7 of
+> [#1120](https://github.com/philliphoff/EncDotNet.S100/issues/1120)). Most
+> statuses come from reading the code. Slice 2 added the test harness and a
+> smoke test over every v2.0.0 exchange set (§6.1); slices 3–6 run Part 2,
+> Part 3, Part 4 and Part 5–7 tests against the data, and those rows say
+> **Passes** or **Fails**. Accuracy1–15 run on the manual's listed
+> positions (§6.5). Slice 7 runs the S-64 tests Part 8 points at against the
+> S-57 path (§6.6).
+
+SoundCharts isn't an ECDIS and won't go through type approval. The IHO's
+S-164 test datasets are still the most complete public description of what
+an S-100 ECDIS has to do with S-100 data, and most of that applies to a
+chart viewer too. This note lists every S-164 test, rates how far the
+library, SoundCharts and `s100` support it today, and sets out the order in
+which #1120 turns those ratings into tests that run.
+
+## 1. Which S-164
+
+| Item | Version | Notes |
+|---|---|---|
+| Instruction manual, published | Edition 1.0.0, March 2023 | On iho.int. Written against S-100 5.0.0 and S-98 1.0.0. |
+| Instruction manual, current draft | Edition 2.0.1, July 2026 (draft) | Split into Parts 1–9 in the [S-164 sub-group repository](https://github.com/iho-ohi/S-164-Sub-Group) under `manual/docs/2.0.1`. Normative references: S-100 5.2.1, S-98 3.0, IEC 61174 and IEC 63173-2 (SECOM). |
+| Test data | Exchange sets v2.0.0, 16 October 2026 | 39 signed exchange sets on the repository's releases page, built for S-101 FC 2.0.0. They cover Part 2 loading and updating, the non-ENC overlays, display categories, Chart 1 and the Part 5–7 route checks. There's no encrypted, dual-fuel or polar data yet. |
+| S-57 test data (Part 8) | S-64:100 Edition 4.0.0, October 2025 | *IHO S-57 Test Data Sets in S-100 ECDIS*, linked from the S-64:100 entry on iho.int's standards page. It supersedes S-64 3.0.3 for S-100 ECDIS: the same S-57 cells, plus §8 skin-of-the-earth update tests and §9 chart-accuracy tests. Only the unencrypted set (S-57 cells and reference plots) is used; the encrypted set is S-63. |
+
+The matrix uses the 2.0.1 test names. Several 2.0.1 tests are still marked
+TODO or TBD in the draft, and many name exchange sets that v2.0.0 doesn't
+include yet; the **v2.0.0 data** column shows which do.
+
+**Copyright and licensing.** The manual is IHO copyright. This note gives
+only test names and references and describes each test in our own words.
+The data repository has no licence file, so #1120 fetches the exchange sets
+at test time rather than committing them. `tests/datasets/S101` already
+holds 18 S-101 cells from an earlier S-164 release. The S-64 manual and data
+are IHO copyright too, published for ECDIS testing; they're handled the same
+way, downloaded from the IHO portal at test time and never committed.
+
+## 2. Status key
+
+| Status | Meaning |
+|---|---|
+| Passes | A test in `tests/EncDotNet.S100.S164.Tests` runs it against the v2.0.0 data and it passes. The note says where the apps still fall short. Accuracy1–15 have no exchange set of their own: `tests/EncDotNet.S100.Viewer.Tests/MeasureAccuracyTests.cs` runs them on positions the manual lists. |
+| Fails | A test runs it against the v2.0.0 data and it fails. The row links the issue; the test is skipped until that's fixed. |
+| Supported | The code does what the test checks. Not yet verified against S-164 data. |
+| Partial | Some of it is done; the note says what's missing. |
+| Gap | Not done, and worth doing in a viewer. |
+| N/A | An ECDIS-only requirement that doesn't fit a viewer (radar video, bridge display calibration, mariner chart corrections). |
+
+Evidence gives one representative file. Line numbers are left out because
+they drift.
+
+## 3. Summary
+
+| Part | Area | Tests | Passes | Fails | Supported | Partial | Gap | N/A |
+|---|---|---|---|---|---|---|---|---|
+| 2 | Catalogue and dataset loading and updating | 70 | 5 | 0 | 10 | 34 | 21 | 0 |
+| 3 | Chart display | 61 | 11 | 0 | 31 | 14 | 4 | 1 |
+| 4 | Chart related functions | 47 | 21 | 0 | 0 | 14 | 10 | 2 |
+| 5 | Navigational hazards | 6 | 3 | 0 | 0 | 0 | 3 | 0 |
+| 6 | Areas with special conditions | 5 | 3 | 0 | 0 | 0 | 2 | 0 |
+| 7 | Safety contour | 6 | 2 | 0 | 0 | 2 | 2 | 0 |
+| 8 | S-57 testing | 0 | — | — | — | — | — | — |
+| 8 | S-64 tests on the S-57 path (§7, Part 8) | 35 | 22 | 0 | 6 | 0 | 5 | 2 |
+| 9 | Dual fuel mode and SECOM | 17 | 0 | 0 | 2 | 9 | 6 | 0 |
+| | **Total** | **212** | **45** | **0** | **43** | **73** | **48** | **3** |
+
+Part 8 has no tests of its own in 2.0.1. It points S-57 testing at the
+S-64 datasets, which slice 7 runs against the S-57 path (§6.6). Those rows
+are counted separately and aren't in the total.
+
+## 4. Cross-cutting findings
+
+These account for most of the Partial and Gap ratings. Each has its own
+issue.
+
+1. **Portrayal instructions that are skipped.** ([#1126](https://github.com/philliphoff/EncDotNet.S100/issues/1126)) `DrawingInstructionParser`
+   recognised `SpatialReference`, `AreaPlacement`, `Date`, `TimeValid` and
+   `AlertReference` but did nothing with them, and treated
+   `LineInstructionUnsuppressed` as a plain line. `VectorSceneBuilder` sorted
+   by geometry type before drawing priority, where S-100 Part 9 puts
+   priority first. Edge-specific lines (the safety contour on depth areas,
+   area borders), line suppression, date-dependent display and area-symbol
+   placement all follow from this. In the S-164 DisplayBase cell the
+   safety contour was drawn round each adjoining depth area's whole outline,
+   coastline and cell edges included. `SpatialReference` is now honoured for
+   lines, so the safety contour and other edge lines follow their edges, and
+   ops now draw in Part 9 order (plane, priority, then area, pattern, line,
+   point, text). The time commands (`Date`, `Time`, `DateTime`, `TimeValid`,
+   `ClearTime`) now set each instruction's time intervals, and S-101 and S-401
+   draw only what is valid at the view time. Line suppression is honoured:
+   where lines of different features share an edge, only the one drawn last
+   draws there, and `LineInstructionUnsuppressed` opts out. `AreaPlacement`
+   is honoured too: area symbols and text, which were drawn at the area's
+   first vertex or the mean of its vertices, now go at a point inside the
+   area, and `VisibleParts` moves them into the visible part as the view
+   moves (tile exports keep them fixed). `AlertReference` is kept on each
+   instruction for the route checks (finding 2). `AreaCRS` and `Hover` are
+   still skipped. Part 3 tests affected: SafetyContourDisplay,
+   AreaBorders, ComplexPortrayal, DifferentPriority, LineSuppression,
+   FixedDateRange, PeriodicDateRange, CentredSymbols1.
+2. **Route checks used their own rules, not the S-101 alert catalogue.** ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)) Done
+   for route planning. The alert catalogue is read, each drawing
+   instruction keeps its `AlertReference`, and the route check portrays the
+   corridor's features and follows their alerts: every `NavHazard` feature
+   (dangers, aids to navigation, structures, overhead features), every
+   `SafetyContour` feature (docks, hulks, pontoons, unsurveyed areas, land
+   points and curves), soundings as `SOUNDG03` judges them, and every
+   `ProhAre` area in its kind, each kind of which can be turned off. Route
+   monitoring (Parts 5–7 "Mon" tests) and the viewer's switch for the kinds
+   remain.
+   Slice 6 confirmed this against the data (§6.3). Dangers are now judged
+   against the safety contour, as the catalogue judges them, wherever they
+   lie ([#1151](https://github.com/philliphoff/EncDotNet.S100/issues/1151)).
+3. **Protected data stops at the library.** ([#1128](https://github.com/philliphoff/EncDotNet.S100/issues/1128)) Part 15 decryption, permits and
+   signature checks work in the library, but SoundCharts and `s100` don't
+   open protected datasets. The viewer verifies exchange sets with
+   `AllowUntrustedCertificates = true`, shows the result as a badge and
+   never refuses data. Authorities added in Keys & certificates are used
+   only for SECOM. Since slice 3 the library checks `CATALOG.SIGN`, and a
+   catalogue that fails it shows as an invalid signature. Affects most of
+   §2.6–2.7.
+4. **No installed-data store.** ([#1129](https://github.com/philliphoff/EncDotNet.S100/issues/1129)) The Library indexes sources where they are.
+   S-101 updates apply only when they sit beside their base cell. Since
+   slice 3 the update applicator rejects an update for another edition as
+   well as a break in the sequence. Re-issues,
+   cancellations and later update sets don't change what was loaded before.
+   Affects §2.2–2.5 and the S-128 status reports.
+5. **Spherical geodesy.** ([#1130](https://github.com/philliphoff/EncDotNet.S100/issues/1130) and
+   [#1189](https://github.com/philliphoff/EncDotNet.S100/issues/1189), fixed) The measure tool, route legs and
+   `GeodesicHelper` used a sphere. This was rated as failing the accuracy
+   tests, but their tolerance is 1% or 30 m (whichever is greater) and 1°,
+   and the sphere was well inside it (§6.5). What was missing was tools: the
+   measure tool was rhumb line only, to 0.1 NM and whole degrees, with no
+   reverse bearing, and nothing turned a range and bearing into a position
+   or drew a geodesic circle. The measure card and the Range & bearing tool
+   ([design](measure-range-bearing.md)) add those. Since #1189 all of them
+   work on the WGS-84 ellipsoid (`Wgs84Geodesy`, built on GeographicLib), so
+   the results match the manual's to well under a metre.
+6. **No route monitoring.** ([#1131](https://github.com/philliphoff/EncDotNet.S100/issues/1131)) A steerable simulated own ship exists, but
+   nothing looks ahead from it for hazards, areas or the safety contour.
+   The 12 monitoring-mode tests are rated Gap rather than N/A because the
+   own-ship pieces are already there.
+7. **Water level adjustment is point-only.** ([#1132](https://github.com/philliphoff/EncDotNet.S100/issues/1132)) S-104 is applied at a picked
+   point, over time at a point, and in route clearance. It isn't applied to
+   the chart: no adjusted depths or safety contour and no adjustment
+   boundary. The status bar's **DEPTHS** indicator
+   ([#1191](https://github.com/philliphoff/EncDotNet.S100/issues/1191))
+   permanently says the chart shows charted depths, and whether S-104 in
+   view is not applied.
+8. **Chart furniture.** ([#1133](https://github.com/philliphoff/EncDotNet.S100/issues/1133)) There's no S-52-style north arrow or vertical scale
+   bar, no latitude bar, no "no data" indication, no chart legend for a
+   position, no check symbol, no colour differentiation diagram and no
+   scale-boundary line. Each is small. Affects Parts 3 and 4.
+
+9. **Chart text hidden by the display category.** ([#1140](https://github.com/philliphoff/EncDotNet.S100/issues/1140), fixed) S-101 text has its own
+   viewing groups in the *Chart text* layers, which no display mode lists,
+   and the viewing-group filter hid everything outside the active mode, so
+   every label was dropped whenever an ECDIS category was set. The *Chart
+   text* groups are now independent of the display mode: they show unless
+   the mariner's text switches hide them.
+10. **Complex line styles.** ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141), fixed) Line styles were read as pen and dash only,
+    and ignored when the instruction also named a colour, so symbolised
+    boundaries drew as plain lines and some dashes came out solid. Named
+    styles now win, with their interval, dashes, symbols along the line and
+    composite parts, and simple dashes repeat over their interval.
+
+## 5. Deliberate differences
+
+These are places where the viewer departs from S-164 on purpose. #1120
+doesn't try to close them.
+
+- **Unauthenticated data.** S-164 expects an ECDIS to refuse data the
+  scheme administrator hasn't signed. SoundCharts loads it and shows the
+  signature status, because much of the data people open in it has no
+  scheme administrator at all. Once finding 3 is fixed, refusing could be
+  an opt-in setting.
+- **Sources stay where they are.** S-164 tests a system database that
+  data is imported into. The Library references folders, ZIPs and feeds in
+  place. Tests about the system database are rated against the Library.
+- **Manual chart corrections, radar overlay and display calibration** are
+  ECDIS-only and rated N/A.
+- **Error codes.** S-164 checks for specific S-98 error codes (SSE nn) in
+  messages. The viewer's messages describe the problem instead. Whether to
+  add the codes is open; it isn't a conformance goal.
+
+## 6. Slices
+
+| Slice | Scope | Depends on |
+|---|---|---|
+| 1 | This note: the matrix, findings and differences. | — |
+| 2 | **Done.** `tests/EncDotNet.S100.S164.Tests`: the v2.0.0 release pinned by SHA-256 in `s164-v2.0.0.json`, downloaded on demand into a cache, cached in CI, and skipped cleanly without it. A smoke test opens every exchange set, opens every dataset in it, and verifies every signature. | 1 |
+| 3 | **Done for updates and catalogue signatures.** S-164 tests apply the update sets to the `X01SW` cell across exchange sets (SequentialUpdates, InvalidSequence, NewerEditionUpdate, OlderEditionUpdate) and check every `CATALOG.SIGN` (MissingCatalogueSignature, InvalidCatalogueSignature). The applicator now rejects updates for another edition, and the library checks `CATALOG.SIGN`. The rest of finding 3 (authorities for exchange sets, a refuse-untrusted setting, protected data) stays with #1128; cross-set updates in the apps stay with #1129. | 2 |
+| 4 | **Done.** S-164 tests portray every cell in the display sets and Chart 1 at the tests' mariner settings: no portrayal rule fails, and DBASE, STNDR and OTHER features fall in their display categories. The safety contour (#1126) and chart text (#1140) tests failed at first and pass since those fixes; symbolised boundaries (#1141) were found from headless renders compared with the reference plots by eye. | 2 |
+| 5 | **Done for pick reports.** S-164 tests pick features in the PowerUp, InitialPowerUp, Settings and Chart 1 cells with `identify_features` and check the pick report the viewer shows and `describe_feature`. Names, listed values, repeated and complex values ([#1156](https://github.com/philliphoff/EncDotNet.S100/issues/1156)), associations ([#1157](https://github.com/philliphoff/EncDotNet.S100/issues/1157)), value formatting ([#1158](https://github.com/philliphoff/EncDotNet.S100/issues/1158)), priority order ([#1159](https://github.com/philliphoff/EncDotNet.S100/issues/1159)) and Chart 1 interrogation pass (§6.4). Accuracy1–15 pass on the WGS-84 ellipsoid with the measure and Range & bearing tools, to under a metre and 0.001° (§6.5, finding 5). | 2 |
+| 6 | **Done.** S-164 tests run `RouteChecker` over the NavigationalHazards, SpecialConditions and SafetyContour routes, alone and with NavigationalHazardsOverview for the largest-scale tests, and compare the findings with the reference plots and the S-101 portrayal catalogue's alert references. Danger depths now come from `defaultClearanceDepth` when there's no `valueOfSounding`. Dangers are judged against the safety contour wherever they lie (#1151). Since #1127 every Part 5–7 route-planning test runs and passes (§6.3). Dual-fuel tests follow when that data is released. | 2 |
+| 7 | **Done.** `tests/EncDotNet.S100.S164.Tests/S64`: the S-64:100 Edition 4.0.0 unencrypted test data pinned by SHA-256 in `S64/s64-100-v4.0.0.json`, downloaded under the same switch as the S-164 data, cached in CI and skipped without it. A smoke test opens all 40 base cells through `S57DatasetProcessor`, applies their updates, and portrays them; tests for §2 updating, §3.1–3.2 display, §5–7 route checks and §8 skin of the earth follow (§6.6). | 2 |
+
+Slices 3–7 are independent of each other once slice 2 lands. Gaps found in
+any slice become their own issues, and this matrix is updated as tests start
+running: a test moves to **Passes** or **Fails** once it runs against S-164
+data.
+
+### 6.1 What the test data showed
+
+Opening the 39 v2.0.0 exchange sets turned up four problems before any S-164
+test ran. Slice 2 fixes the first three in the library:
+
+1. **`S100_ROOT` packaging.** Every S-164 archive holds its exchange set
+   under `S100_ROOT/`, as S-100 Part 17 lays it out, and `S100ExchangeSet`
+   only looked for `CATALOG.XML` at the root. It now opens a folder or ZIP
+   whose catalogue is at `S100_ROOT/CATALOG.XML`. SoundCharts and the Library
+   use the same rule (`ExchangeSetRoot`) since
+   [#1136](https://github.com/philliphoff/EncDotNet.S100/issues/1136), so the
+   S-164 ZIPs open there too.
+2. **Long-form product identifiers.** The catalogues declare
+   `INT.IHO.S-101.2.0.0` with `number` 214 (the IHO register number), so
+   nothing mapped to S-101. Base cells were still found by content
+   sniffing, but update files weren't. `MapProductIdentifierToSpec` now
+   reads the long form.
+3. **Zipped catalogues.** The portrayal catalogues are delivered as ZIP
+   packages with `compressionFlag` set and signed as `unencrypted` over the
+   package bytes. Part 15 compression holds exactly one file, so the
+   verifier now checks a multi-file package against its stored bytes.
+4. **Unpublished scheme administrator.** The v2.0.0 data producer
+   certificate is issued by `urn:mrn:iho:00AA:1810`, and the S-164
+   repository publishes no certificate with that name. The smoke test
+   checks each signature against the certificate the catalogue carries but
+   can't anchor the chain; slice 3 needs that certificate for the SA tests.
+
+Ten exchange sets (`SequentialUpdate1`–`5`, `InvalidSequence001`–`003`,
+`NewUpdate`, `OldUpdate`) hold only S-101 updates for cells in other sets.
+The apps can't apply them until #1129 adds cross-set updates; slice 3's
+tests apply them in the library.
+
+Slice 3 found one more problem, in the S-101 reader:
+
+5. **S-101 2.0 field layouts.** The v2.0.0 cells describe DSID, FASC and
+   INAS with a fixed part followed by a repeating group (`DSED\\*DSTC`,
+   `FAUI\\*NATC…`): one association per FASC or INAS field, with its
+   attributes repeated after it. The reader expected the association itself
+   to repeat, so it dropped every feature and information association in
+   these cells (77 and 20 in `X01SW`), and it didn't find the edition. It
+   now reads both layouts.
+
+### 6.2 What the display tests showed
+
+The Part 3 reference plots can't be committed, so slice 4 checks the portrayal
+output and compares headless renders with the plots by eye, locally:
+
+- No S-101 rule fails in DisplayBase, DisplayStandard, DisplayOther (both
+  feature catalogue editions), Chart 1 (14 cells) or Settings. The one
+  question mark is Chart 1's own legend entry for it.
+- At the tests' settings (10 m safety contour and safety depth), the DBASE
+  dangers draw as isolated dangers in Display Base, STNDR draws only in
+  Standard Display, and OTHER's features, apart from the background areas
+  and depth-dependent dangers, are Other information only. At SoundCharts'
+  default 30 m safety contour the same dangers are shallow-water dangers
+  instead, as the portrayal catalogue intends.
+- Three things differed from the plots, all since fixed: the safety contour
+  outline (#1126), missing chart text (#1140) and plain boundaries (#1141).
+- FixedDateRange and PeriodicDateRange use the Settings cell `X0001`: two
+  buoys that replace each other on 16.08.2012, a traffic separation scheme
+  that moves on 01.12.2013, and two buoys laid March–October and
+  October–December. All were drawn at every date until #1126.
+- The date-dependent highlight (`CHDATD01`) also carries viewing group
+  90022, which is off at the tests' display settings, so the tests don't
+  check it; the manual turns *Highlight date dependent* on.
+- Dock and lock areas in DBASE belong to Standard Display, so with Display
+  Base selected they leave an unfilled hole in the land area; the plot shows
+  them filled. Not filed: the plot alone doesn't settle which is right.
+
+### 6.3 What the route-check tests showed
+
+The manual plans each route through features named WP1, WP2 and so on and
+compares the indications with reference plots. The NAVHZ and overview cells
+chart those waypoints as named points, so the tests read them from the
+data; ARSPC and SAFCO don't, so the tests place them on the cells' rows of
+features as the plots show them. The manual's "user-specified distance" is
+the corridor half-width: 0.1 NM, or 0.5 NM for the largest-scale tests.
+Every feature the plots indicate draws an `AlertReference` instruction in
+the S-101 portrayal catalogue, which settles what a plot leaves unclear.
+
+- **Danger depths.** S-101 2.0 cells give a danger without a
+  `valueOfSounding` a `defaultClearanceDepth`, which `OBSTRN07` and
+  `WRECKS05` use as its depth. The route check ignored it, so every such
+  danger was of unknown depth and always reported: the 20.1 m wrecks and
+  50 m obstructions in NAVHZ among them. The check now uses it, unless the
+  danger reaches the surface. Translated S-57 hazards carry it too.
+- **Danger threshold** ([#1151](https://github.com/philliphoff/EncDotNet.S100/issues/1151)).
+  `UDWHAZ05` raises a NavHazard when the danger's depth is at most the
+  safety contour, whatever the depth around it. The route check used the
+  safety depth, which the test fixes at 30 m while it varies the contour,
+  and left out dangers inside water already shallower than the contour.
+  It now follows `UDWHAZ05` on both counts, and the findings match the 0 m,
+  10 m and 51 m plots.
+- **NavHazard features** (#1127). The plots indicate 29 other feature types
+  on the NAVHZ route, such as buoys, beacons, piles, platforms, bridges and
+  overhead cables. The route check covered only wrecks, obstructions and
+  rocks. It now runs the portrayal on the corridor's features and reports
+  every one that raises `NavHazard`, as an aid to navigation, structure or
+  overhead finding, and finds all 29.
+- **ProhAre areas** (#1127). Of the 12 kinds the SpecialConditions test
+  selects, the area check finds the traffic separation zone, inshore traffic
+  zone, restricted area, caution area, area to be avoided, military practice
+  area, submarine transit lane, anchorage and PSSA. It didn't check
+  offshore production areas, seaplane landing areas or marine farms, nor
+  any area charted as a point. It now reads every area whose portrayal
+  raises `ProhAre`, points included, and finds all of them; each kind can
+  be turned off.
+- **SafetyContour features** (#1127). The route's crossings of the safety
+  contour match every plot from 0 m to 43 m. The plots also indicate the
+  floating docks, hulks, pontoons, shoreline constructions, unsurveyed
+  areas and land charted as points or curves on the route; the route check
+  reported only land areas. It now treats every feature that raises the
+  `SafetyContour` alert as safety-contour ground, and finds them all. Its
+  soundings follow `SOUNDG03` (no deeper than the safety contour) instead
+  of the safety depth.
+- **Largest scale.** In all three largest-scale tests no finding comes from
+  the overview cell inside the large-scale cell. The manual's plots for
+  these tests are still to be drawn, so the tests check that rule only.
+
+### 6.4 What the pick-report tests showed
+
+Unlike the Part 5–7 data, the PowerUp cell `10100AA_X0000` lies where the
+manual's positions put it (around 32°30′S 061°E); InitialPowerUp holds the
+same cell with the support files its notes and pictures name. The tests pick
+with `identify_features`, as `s100 identify` and MCP do, and read each
+match's pick report from `S101DatasetProcessor.GetFeatureInfo`, which the
+viewer's pick panel shows.
+
+- **Names.** Every feature and attribute under the manual's buoy-and-light
+  position has its full name, and listed values show their names.
+- **Repeated and complex values** ([#1156](https://github.com/philliphoff/EncDotNet.S100/issues/1156), fixed).
+  The report kept one value per attribute code, so a yellow-and-black buoy
+  read only *Black* and its topmark colour overwrote its own, and flattened
+  complex attributes, so a tidal stream panel showed one hour of its 13. It
+  now reads the feature record's attributes (ATTR with its parent index), as
+  `describe_feature` does: one row per value, complex attributes nested to
+  any depth, and the viewer's attribute table shows every level.
+- **Associations** ([#1157](https://github.com/philliphoff/EncDotNet.S100/issues/1157), fixed).
+  The caution areas' notes, as text or as `10100AAIECTMP.TXT`, and the
+  information area's picture `10100AAX4000T.TIF` sit on `NauticalInformation`
+  records linked by `AdditionalInformation`, and a buoy's light is linked by
+  `StructureEquipment`. The report showed none of them. It now adds one
+  group per linked information type, holding its attributes (a file
+  reference shows its text in the text card), and lists linked features under
+  References by association, role, type and name, which the viewer can
+  follow. `identify_features` reads linked file references into
+  `referencedTexts`. `describe_feature` inlines the linked records'
+  attributes but still doesn't read the text file.
+- **Value formatting** ([#1158](https://github.com/philliphoff/EncDotNet.S100/issues/1158), fixed).
+  Only depths carried a unit, reals kept their encoded padding (`010`), and
+  dates read as encoded (`20120816`, not `16-AUG-2012`). Values are now
+  formatted by their feature-catalogue value type: reals and integers without
+  padding and followed by the catalogue's unit (`5 s`, `10°`), and dates,
+  truncated ones included, as `16-AUG-2012`, `AUG-2012` or `MAR`. This
+  applies to every product the shared builder serves. Dates are calendar
+  dates with no time zone, so the Local/UTC preference doesn't apply to them;
+  depths still follow the depth-unit setting.
+- **Order** ([#1159](https://github.com/philliphoff/EncDotNet.S100/issues/1159), fixed).
+  `identify_features` ranked by geometry, then distance or area, not by
+  drawing priority, and the viewer by layer. The S-101 processor now keeps
+  each feature's highest drawing priority from its last portrayal (at the
+  current settings) and reports it in the pick report and to
+  `identify_features`, which ranks drawn features by it, highest first, then
+  points, curves and surfaces, then distance or area. Features with no
+  drawing instruction (`DataCoverage`) are still listed, after the drawn
+  ones; the viewer picks only drawn features and orders each dataset's hits
+  the same way. A cell loaded without a portrayal (`s100 identify`, a
+  headless MCP catalogue) keeps the geometric order.
+- **Missing data.** The manual's landmark picture `10100AATESTPC.TIF` is in
+  InitialPowerUp but no record names it. No tidal stream panel feature has a
+  second panel (Tidal panels (2)), and FeatureInformation5's InvalidFeatures
+  data isn't in v2.0.0.
+
+### 6.5 What the accuracy tests showed
+
+Accuracy1–15 name the PowerUp exchange set but test positions the manual
+lists, so `MeasureAccuracyTests` runs them on those positions, through the
+same `MarineGeodesy` calls the measure card and the Range & bearing tool
+use. The tolerance is 1% or 30 m, whichever is greater, and 1° for
+bearings. The manual computes its values on the WGS-84 ellipsoid. The
+viewer first ran them on a sphere of radius 6,371,008.8 m; since #1189 it
+uses the ellipsoid too, and the tests check to 1 m and 0.001°.
+
+| Tests | What they check | Sphere vs listed values | WGS-84 vs listed values |
+|---|---|---|---|
+| Accuracy1–3 | Great-circle distance, forward and reverse bearing | −39 m to +9 m (0.04–0.12%); bearings 0.11–0.13° | Under 5 cm; bearings under 0.001° |
+| Accuracy4–6 | Position from a range and bearing | Ends 26–86 m from the listed position | Ends within 0.23 m (the rounding of the listed inputs) |
+| Accuracy7–9 | Rhumb-line distance and bearings | As Accuracy1–3; reverse is forward ± 180° | As Accuracy1–3 |
+| Accuracy10–12 | Long great circles and the 2,000,000 m geodesic circle | Lines pass within 70–570 m of the listed points; the circle's listed points are 1.9–10.6 km off 2,000 km (up to 0.53%, on the equator) | Lines within 0.11 m; circle points within 0.14 m |
+| Accuracy13–15 | Long rhumb lines | Lines pass within 40–830 m of the listed points | Lines within 0.08 m |
+
+Run through the viewer's MCP tools (`set_measure`, `set_range_bearing`)
+with PowerUp loaded, the cards show the same values at their display
+precision (0.01 NM, 1 m, 0.1°), and the 2,000,000 m range and the first
+2,000,000 m ring draw on top of each other, as Accuracy10–12 ask. Display
+rounding takes at most 9 m and 0.05° of the tolerance.
+
+### 6.6 What the S-64 tests showed
+
+S-64:100 is the S-57 test data for S-100 ECDIS. The tests open its cells the
+way the viewer does: `S57DatasetProcessor` folds the updates into the S-57
+cell, translates it to S-101 and portrays it with the S-101 portrayal
+catalogue; the route checks load the same translation through
+`LoadedDatasetProjector`. Each test folder holds an `ENC_ROOT` exchange set
+and the reference plots. The tests put them together as the manual does,
+taking a base cell from one folder and its updates from another.
+
+The S-64 cells for §5–7 are the charts S-164 converted to S-101, at the same
+places (NAVHZ is a quarter of a degree further east). So the S-57 route
+checks are compared with the S-101 ones as well as with the plots, which
+shows translation problems directly. The S-57 cells chart WP1, WP2 and so
+on as points of object class 163 with a test-only symbol; translation keeps
+them only as unknown objects ("?"), so the tests read the waypoints from the
+S-57 records.
+
+- **Smoke test.** All 40 base cells load, take their updates and portray.
+  Three drew "?". A point RUNWAY (`GB55062B`) has no S-101 counterpart; it's
+  now converted as S-65 Annex B §4.8.12 asks, to `Helipad` or nothing
+  ([#1238](https://github.com/philliphoff/EncDotNet.S100/issues/1238), fixed).
+  A point PIPSOL (`GB4X0000`) now becomes an `Obstruction` when a depth or
+  dredged area covers it and a `Landmark` otherwise, as §11.6.1 asks
+  ([#1243](https://github.com/philliphoff/EncDotNet.S100/issues/1243), fixed).
+  A TS_FEB without CURVEL (`AA5OTHER`) failed the S-101 rule, which reads a
+  mandatory speed. It now gets the `speed` complex with `speedMaximum` empty
+  (null), Annex B's convention for a mandatory attribute with no S-57 value;
+  the portrayal API reads that as nil, so the rule draws the arrow without a
+  speed ([#1244](https://github.com/philliphoff/EncDotNet.S100/issues/1244), fixed).
+  The cells that draw "?" now are the unknown objects below.
+- **Hazard depths** ([#1237](https://github.com/philliphoff/EncDotNet.S100/issues/1237), fixed).
+  The translator gave hazards without VALSOU S-52's default depths. S-65
+  Annex B asks for those of S-101 DCEG clause 30.1, which differ: 0.1 m for
+  a submerged obstruction or rock, 0 m for an uncategorised submerged
+  wreck, and 20.1 m for a non-dangerous wreck. Before the fix the S-57 path
+  reported half the S-101 path's wreck dangers at a 0 m safety contour and
+  flagged every non-dangerous wreck. Now the dangers on the NAVHZ route match
+  the S-101 cell's, type and place, at all fifteen of the manual's safety
+  contours, apart from one floating obstruction only the S-57 cell charts.
+- **Dropped object classes** ([#1239](https://github.com/philliphoff/EncDotNet.S100/issues/1239), fixed).
+  LITVES, SUBTLN and TSEZNE had no rule, so the light vessel on the NAVHZ
+  route and the submarine transit lane and traffic separation zone on the
+  ARSPC route weren't indicated. They are now.
+- **Area findings** ([#1240](https://github.com/philliphoff/EncDotNet.S100/issues/1240), fixed).
+  Chart area findings didn't carry their feature type, in any product.
+- **Updates** ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241), fixed).
+  S-57 updates used to be folded in with no check of edition or sequence:
+  the invalid sequence and an older edition's update applied silently, a
+  cancellation wasn't reported, and an exchange set holding only updates
+  couldn't be CRC-checked. `S57UpdateApplicator` now does for S-57 what
+  `S101UpdateApplicator` does for S-101. It applies updates while they're
+  for the cell's edition and follow on, skips those a re-issue already
+  holds, stops at a gap, refuses an update for another edition, and reports
+  an edition 0 update as cancelling the cell. It also checks each record an
+  update changes: a modified or deleted record must be one version below
+  the update's `RVER`, and an inserted one must be new. Producers change a
+  record twice in one update, a version apart each time, so the check
+  follows the versions through the update. In the invalid-sequence data,
+  updates 3 and 4 carry each other's records under the right numbers.
+  Update 4's records touch nothing update 3 changes, so the one numbered 3
+  applies as if it were good; the one numbered 4 is refused. The viewer
+  warns about a refused update, a gap or a cancellation, as it does for
+  S-101. Verification now reads `CATALOG.031` itself, so an update-only set
+  is checked. Keeping track of which updates a cell has across exchange
+  sets, and what's installed, is #1129's installed-data store.
+- **Unknown object classes** ([#1242](https://github.com/philliphoff/EncDotNet.S100/issues/1242), fixed).
+  S-52 draws an object of unknown class as "?" and lets it be picked.
+  Translation used to drop it, so §3.2 showed nothing. Now an object of any
+  class with no translation rule becomes an `S57UnknownObject`, which the
+  S-101 portrayal's default rule draws as "?" by primitive, and its pick
+  report names the class and lists its S-57 attributes and position. It's
+  always on, with no setting, because the "?" marks are also where the
+  translation has gaps. The smoke test now lists them: the S-64 test-only
+  classes (161, 163, 255, 500–502, 999), and classes the mapping doesn't
+  convert yet (tidal stream panels and harmonic predictions `TS_*`/`T_*`,
+  `ICNARE`, `TSSRON`, `RADRNG`, `RADRFL`, `COSARE`, `CUSZNE`, `FRPARE`, and a
+  `TOPMAR` on no buoy or beacon). It also showed the meta objects without an
+  S-101 counterpart (`M_PROD`) and that `M_ACCY` was mapped under `M_CSCL`'s
+  code; `M_ACCY` now converts, and `M_CSCL`, `M_HDAT`, `M_HOPA`, `M_PROD`
+  and `M_UNIT` are dropped by rule.
+- **Display categories.** DBASE, STNDR and OTHER land in their categories
+  except where the S-101 catalogue places a feature differently from S-52:
+  dock areas and lock basins are Standard Display, plain depth contours and
+  landmarks Other information, overhead cables Standard. Those are listed
+  in the tests, not treated as faults.
+- **Skin of the earth.** All five §8 tests behave as the manual describes:
+  the wreck and rocks whose depth areas the updates change stop being
+  isolated dangers, and in 8.5 the isolated dangers stay. The surrounding
+  depth is worked out after the updates are folded in, so this follows.
+  (The S-101 rule also draws ISODGR01 in viewing group 24020 for dangers in
+  shallow water, the mariner's *shallow water dangers* option; the tests
+  count only the isolated dangers in 14010.)
+- **Not run.** §9 chart-accuracy cells (`AA2CATZC`, `AA5CATZC`) aren't in
+  the unencrypted set. §2.5 is S-63 encrypted data. §2.3 manual updates and
+  §2.8 rejection of an automatic update are mariner chart corrections, N/A
+  (§5). §3.3–3.9 are covered only by the smoke test so far.
+
+## 7. Matrix
+
+### Part 2 — Catalogue and dataset loading and updating
+
+| Test | Reference | v2.0.0 data | Status | Evidence | Note |
+|---|---|---|---|---|---|
+| InitialCatalogues | S-98: 20.1 | InitialCatalogues | Partial | `src/EncDotNet.S100.Viewer/Services/FeatureCatalogueOverrides.cs` | Bundled catalogues plus one persisted override per product; nothing installs catalogues from an exchange set. |
+| OutOfCatalogueSequence Dataset | S-98: 20.1 and B-1 | InitialCatalogues, OutOfCatalogueSequenceDataset | Partial | `src/EncDotNet.S100.Core/DatasetPipelines/IDatasetProcessor.cs` | Version mismatch is a warning badge; the dataset still loads. |
+| UpdateCatalogues | S-98: 20.1 and B-1 | InitialCatalogues, PowerUpCatalogues, UpdatedCatalogueData | Partial | `src/EncDotNet.S100.Viewer/ViewModels/CatalogueViewModels.cs` | Overrides can be replaced by hand; no list of installed versions and no install from exchange sets. |
+| MultipleRevisions | S-98: 20.1 and B-1 | MultipleRevisions | Partial | `src/EncDotNet.S100.Datasets.S101/S101LegacyFeatureNames.cs` | The library supports a catalogue per layer; the viewer uses one per product. 1.x names map onto the 2.0.0 portrayal. |
+| InitialPowerUp | S-98: 6.1.1; IEC 61174: 4.4.1 | InitialPowerUp | Supported | `src/EncDotNet.S100.ExchangeSets/ExchangeSetRoot.cs` | The set opens in SoundCharts and the Library (`S100_ROOT` layout, §6.1), and own ship can be placed at a fixed position. |
+| PowerUp | S-98: 6.1.1; IEC 61174: 4.4.1 | PowerUp | Partial | `src/EncDotNet.S100.Collections/Library/LibraryItemText.cs` | Edition, update and dates show per Library item; no table of everything installed. |
+| AdditionalCell | IEC 61174: 4.4.1 | Settings | Supported | `src/EncDotNet.S100.Viewer/ViewModels/LibraryPanelViewModel.cs` | Adding a folder or ZIP indexes it and draws its coverage. |
+| RemoveCell | S-98: 6.1.1; IEC 61174: 4.4.1 | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/LibraryPanelViewModel.cs` | Sources and loaded datasets can be removed, not single cells. |
+| SequentialUpdates | S-98: 20.4.3; IEC 61174: 4.4.2 | PowerUp, SequentialUpdate1 | Passes | `tests/EncDotNet.S100.S164.Tests/Part2UpdateTests.cs` | The library applies SequentialUpdate1–5 to the PowerUp cell. The apps apply updates only within one exchange set (#1129), and there's no update review. |
+| InvalidSequence | S-98: 20.4.3; IEC 61174: 4.4.2 | InvalidSequence001–003 | Passes | `tests/EncDotNet.S100.S164.Tests/Part2UpdateTests.cs` | The library stops after update 2 and reports the missing update 3. The apps show a toast, with no lasting indication. |
+| NewerEditionUpdate | IEC 61174: 6.8.16.1 | GoodBaseCells, NewUpdate | Passes | `tests/EncDotNet.S100.S164.Tests/Part2UpdateTests.cs` | An update for a newer edition than the cell is rejected with a message; it applies to that edition. |
+| UpdateInformation | S-98 20.4.3; IEC 61174 4.4.2 | — | Supported | `src/EncDotNet.S100.Specifications/content/S101/pc/Rules/UpdateInformation.lua` | Drawn by the S-101 PC and shown in the pick report. |
+| OlderEditionUpdate | S-98: 20.4.3; IEC 61174: 4.4.2 | OldUpdate | Passes | `tests/EncDotNet.S100.S164.Tests/Part2UpdateTests.cs` | An update for an older edition is rejected with a message. |
+| ReIssueAndUpdate | S-98: 20.5; IEC 61174: 4.4.2 | — | Partial | `src/EncDotNet.S100.Datasets.Pipelines/S101ExchangeSetUpdatePlan.cs` | A re-issue loads with in-set updates; later sets don't build on it. |
+| UpdateRejection | S-98: 20.4.3; IEC 61174: 4.4.2 | — | Gap | — | Needs manual updates. |
+| ManualUpdateCreation | S-98: 20.4.4; IEC 61174 6.8.17 | PowerUp | Gap | — | No manual-update editor. |
+| ManualUpdatesDates | S-98 20.4.4; IEC 61174: 6.8.17 | — | Gap | — | Needs manual updates. |
+| ManualUpdatesRetrieval | S-98: 20.4.4; IEC 61174: 6.8.17 | — | Gap | — | Needs manual updates. |
+| ManualUpdatesAlerts | S-98: 20.4.4; IEC 61174: 6.8.17 | — | Gap | — | Needs manual updates. |
+| InvalidPermit | S-98: B-3 | — | Partial | `src/EncDotNet.S100.ExchangeSets/Protection/PermitFile.cs` | Library rejects a malformed permit file; the apps don't open protected data. |
+| IncorrectPermitFormat | S-98: B-3 | — | Partial | `src/EncDotNet.S100.ExchangeSets/Protection/PermitFile.cs` | One bad entry fails the whole file. Library only. |
+| InvalidPermitChecksum | S-98: B-3 | — | Gap | `src/EncDotNet.S100.ExchangeSets/Protection/UserPermit.cs` | Only user permits have a CRC check. |
+| MissingPermitSignature | S-98: B-3 | — | Partial | `src/EncDotNet.S100.ExchangeSets/Protection/PermitSignatureVerifier.cs` | Library reports NotSigned. Library only. |
+| MultiplePermits | S-98: B-3 | — | Partial | `src/EncDotNet.S100.ExchangeSets/Protection/PermitFile.cs` | Several permits parse; the first match wins. |
+| InvalidPermitSignature | S-98: B-3 | — | Partial | `src/EncDotNet.S100.ExchangeSets/Protection/PermitSignatureVerifier.cs` | Library rejects bad signatures. Library only. |
+| ExpiringPermit | S-98: B-3 | — | Gap | `src/EncDotNet.S100.ExchangeSets/Protection/DataPermit.cs` | No 30-day permit expiry warning. |
+| InvalidPermitSignature | S-98: B-3 | — | Partial | `docs/protected-exchange-sets.md` | A wrong hardware ID only fails when the dataset is decrypted. |
+| ExpiredPermits | S-98: B-3 | — | Partial | `src/EncDotNet.S100.ExchangeSets/Protection/PermitKeyProvider.cs` | Datasets issued after expiry are refused; no expiry warning. |
+| PermitInstallation | S-98: 15-7.4 | — | Gap | `src/EncDotNet.S100.Viewer/ViewModels/Keys/KeysAndCertificatesViewModel.cs` | No permit install UI; the System IDs tab is a placeholder. |
+| MultipleDataServers | S-98: B-3 | — | Gap | `src/EncDotNet.S100.ExchangeSets/Protection/PermitHeader.cs` | Data server is parsed; no per-server permit store. |
+| PermitManagement | S-98: 15-7.4 | — | Gap | — | No permit list or removal. |
+| InstallSACertificate | S-98: B-3 | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/Keys/AddAuthorityDialogViewModel.cs` | Authorities can be added but only SECOM uses them. |
+| MissingSACertificate | S-98: B-3 | — | Partial | `docs/protected-exchange-sets.md` | The library needs a trusted root for permits; the viewer doesn't for exchange sets. |
+| CertificateExpiry | S-98: B-3 | — | Partial | `src/EncDotNet.S100.ExchangeSets/ExchangeSetVerifier.cs` | Library reports an expired certificate; the viewer shows a badge only. |
+| MissingCatalogueSignature | S-98: B-3 | — | Partial | `tests/EncDotNet.S100.S164.Tests/Part2CatalogueSignatureTests.cs` | The library reports a missing `CATALOG.SIGN`; the apps don't show it, and the set loads (§5). |
+| InvalidCatalogueSignature | S-98: B-3 | — | Passes | `tests/EncDotNet.S100.S164.Tests/Part2CatalogueSignatureTests.cs` | A catalogue that doesn't match `CATALOG.SIGN` shows as an invalid signature; the set still loads (§5). |
+| NonSASignedData | S-98: B-3 | — | Partial | `src/EncDotNet.S100.ExchangeSets/ExchangeSetVerifier.cs` | Library rejects chains outside the roots; the viewer allows untrusted certificates. |
+| AuthenticationDomainCoordinator | S-98: B-3 | — | Partial | `src/EncDotNet.S100.ExchangeSets/ExchangeSetVerifier.cs` | Intermediate chains build in the library; the viewer doesn't anchor them to the SA. |
+| InvalidDatasetSignature | — | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/SignatureStatus.cs` | Shown as a badge; nothing is blocked. |
+| ContinuousAuthentication | — | — | Supported | `src/EncDotNet.S100.ExchangeSets/ExchangeSetVerifier.cs` | Each file gets its own result. The test's cells are encrypted, which the apps can't open. |
+| MultipleDataServers | S-98: B-3 | — | Partial | `src/EncDotNet.S100.ExchangeSets/ExchangeSetVerifier.cs` | Several signer certificates verify in the library; no decryption in the apps. |
+| MissingCertificate | S-98: B-3 | — | Partial | `src/EncDotNet.S100.ExchangeSets/ExchangeSetVerifier.cs` | Library flags it per file; the viewer doesn't block. |
+| ExpiredPermits | S-98: B-3 | — | Gap | — | No expiry warnings on import or display. |
+| ExpiringPermits | S-98: B-3 | — | Gap | — | No 30-day warning. |
+| IncorrectCellKeys | S-63: 10.7.3 | — | Partial | `src/EncDotNet.S100.ExchangeSets/Protection/DatasetDecryptionException.cs` | Library fails per dataset and continues. Library only. |
+| DataIntegrity | S-98: B-3 | — | Partial | `src/EncDotNet.S100.ExchangeSets/Protection/Part15SignatureContentResolver.cs` | Library verifies decrypted content. Library only. |
+| DataManagement | S-98: B-3 | — | Gap | — | No per-server key store. |
+| AdditionalPermits | S-98: B-3 | — | Gap | — | Permit files aren't merged. |
+| ProviderChange | S-98: B-3 | — | Gap | — | No provider handling. |
+| CancelledDatasets | — | — | Partial | `src/EncDotNet.S100.Collections/Model/CollectionItem.cs` | Cancelled status comes from feeds; edition-0 cancellations aren't handled at load. |
+| Reissues | — | — | Partial | `src/EncDotNet.S100.Datasets.Pipelines/S101ExchangeSetUpdatePlan.cs` | A re-issue loads; it doesn't replace an earlier install. |
+| ECDISManagement | — | — | Partial | `src/EncDotNet.S100.Datasets.Pipelines/S101ExchangeSetUpdatePlan.cs` | Orphan updates are skipped with a warning. |
+| SupplementaryFiles | S-98: Appendix C | — | Partial | `src/EncDotNet.S100/S100ExchangeSet.cs` | Support files are read from the same set; replacements in later sets aren't kept. |
+| Fileless Cancellation | S-98: 21.2 | — | Partial | `src/EncDotNet.S100.ExchangeSets/DatasetDiscoveryMetadata.cs` | Withdrawal records are excluded from loading; an already loaded dataset stays. |
+| UpdateStatusReportENC | S-98: Appendix C | PowerUp | Partial | `src/EncDotNet.S100.Collections/Library/LibraryItemState.cs` | Downloads are flagged out of date against feeds; no S-98 Appendix C report. |
+| UpdateStatusReportENP | S-98: Appendix C | — | Gap | — | No ENP status report. |
+| MissingRevisionInformation | S-98, Appendix C | — | Gap | — | No "unknown" status without revision information. |
+| MultipleRevisionInformation | S-98, Appendix C | — | Gap | — | S-128 datasets aren't merged. |
+| RevisionInformation | S-98, Appendix C | — | Gap | — | No per-product up-to-date logic. |
+| RevisionUpdate | S-98, Appendix C | — | Gap | `src/EncDotNet.S100.Datasets.S128` | S-128 updates aren't applied. |
+| RevisionCompleteness | S-98, Appendix C | — | Gap | — | No S-124 bulletin vs S-128 cross-check. |
+| S-102 | S-98 6.1; S-98 13 | InitialCatalogues, S102 | Partial | `src/EncDotNet.S100.Datasets.S102/S102PortrayalCatalogue.cs` | Shading follows the safety contour and S-101 depth areas are suppressed; no enhanced safety contour or coverage border. |
+| Water Level Adjustment (S-104) | S-98 Appendix D-2 | EnhancedSafetyContour, InitialCatalogues, WLAOverlap | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/ChartWaterLevelAdjustmentService.cs` | S-104 overlay, tide-adjusted depth at a point, and (setting **Water level adjustment**) the S-101 depths and the S-102 surface and safety contour adjusted at the view time, with the adjusted-area boundary. Lowest over a period is #1132 phase 4. |
+| S-111 | S-98 6.1; S-98 13 | InitialCatalogues, S111 | Supported | `src/EncDotNet.S100.Datasets.Pipelines/S111DatasetProcessor.cs` | Reader and portrayal. |
+| Marine Protected Areas | S-98 6.1.1 | — | Supported | `src/EncDotNet.S100.Datasets.Pipelines/S122DatasetProcessor.cs` | Reader and portrayal. |
+| Navigational Warnings | S-98 11.12.1 S-98 11.2.2 | S124NAVARNSelection | Supported | `src/EncDotNet.S100.Datasets.Pipelines/S124DatasetProcessor.cs` | Reader, portrayal and warnings panel. |
+| S-124 Detail 2 | S-98 11.12.1 | S124MessageManagement, S124NewNAVWARN | Partial | `src/EncDotNet.S100.Viewer/ViewModels/NavigationalWarningsViewModel.cs` | No sort by installed time or warning type. |
+| Marine Traffic Management | S-98 6.1.1 | — | Supported | `src/EncDotNet.S100.Datasets.Pipelines/S127DatasetProcessor.cs` | Reader and portrayal. |
+| UnderKeelClearance | S-98 6.1.1 | — | Supported | `src/EncDotNet.S100.Datasets.Pipelines/S129DatasetProcessor.cs` | Reader and portrayal. |
+| Marine Harbour Infrastructure | S-98 6.1.1 | — | Supported | `src/EncDotNet.S100.Datasets.Pipelines/S131DatasetProcessor.cs` | Reader and portrayal; PC edition not confirmed. |
+
+### Part 3 — Chart display
+
+| Test | Reference | v2.0.0 data | Status | Evidence | Note |
+|---|---|---|---|---|---|
+| Dataset Selection | S-98 Appendix E | — | Partial | `src/EncDotNet.S100.Rendering.Engine/OverlapSuppression.cs` | Cells ranked by minimum display scale (ties broken by maximum display scale), finer clip coarser; not the S-98 Appendix E selection. The S-164 test is still TODO. |
+| DatasetRendering | S-98 Appendix E | — | Partial | `src/EncDotNet.S100.Rendering.Engine/CoverageClip.cs` | Coarser cells clipped to finer coverage; not the Appendix E algorithm. The S-164 test is still TODO. |
+| DisplayBase | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayBase | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | No rule fails, the dangers are Display Base at the test settings, and the safety contour follows its edges ([#1126](https://github.com/philliphoff/EncDotNet.S100/issues/1126)). Dock and lock areas leave holes in Display Base (§6.2). |
+| DisplayStandard | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayStandard | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Every feature draws in Standard Display, with symbolised boundaries ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141)). |
+| DisplayOther | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayOther | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Features draw as Other information, with their text and line styles. |
+| ViewingGroupsStandard | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayStandard | Partial | `src/EncDotNet.S100.Viewer/Services/EcdisDisplayState.cs` | Viewing groups toggle individually; the PC's named viewing-group layers aren't the UI. |
+| ViewingGroupsOther | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayOther | Partial | `src/EncDotNet.S100.Viewer/Services/EcdisDisplayState.cs` | As above. |
+| TextGrouping | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | DisplayBase | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Chart text shows in every display category; Important / other text toggles hide it ([#1140](https://github.com/philliphoff/EncDotNet.S100/issues/1140)). |
+| InvalidFeaturesA | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Specifications/content/S101/pc/Rules/main.lua` | Unknown classes fall back to the PC default rule. |
+| InvalidFeaturesB | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Specifications/content/S101/pc/Rules/main.lua` | PC rules; not compared with the reference plot. |
+| InvalidFeaturesPickA | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Viewer/Services/PickService.cs` | Pick report from drawn hits; unknown names fall back to codes. |
+| InvalidFeaturesPickB | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Viewer/Services/PickService.cs` | Feature without attributes still reports class and position. |
+| InvalidFeaturesPickC | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Viewer/Services/PickService.cs` | Unknown attributes show by code. |
+| InvalidFeaturesPickD | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Datasets.Pipelines/Spec/S101FeatureDescriber.cs` | Attributes decoded through the feature catalogue. |
+| SimplifiedSymbolsFalse | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Core/Pipelines/MarinerSettings.cs` | SimplifiedSymbols context parameter. |
+| SimplifiedSymbolsTrue | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Core/Pipelines/MarinerSettings.cs` | As above. |
+| PlainBoundaries | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Core/Pipelines/MarinerSettings.cs` | PlainBoundaries context parameter. |
+| Symbolisedboundaries | S-98 6.1.1; S-100 Part 9; S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | Complex line styles draw their dashes and symbols along the boundary ([#1141](https://github.com/philliphoff/EncDotNet.S100/issues/1141)). |
+| FixedDateRange | S-98 12.8.1 | Settings | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Features draw only within their dates at the view time, read in the Local/UTC setting, and a pinned time says "Display Not Real Time" ([#1126](https://github.com/philliphoff/EncDotNet.S100/issues/1126)). The library takes a viewing range; the apps show one view time, and the Timeline only moves while time-aware data is loaded. |
+| PeriodicDateRange | S-98 12.8.1 | Settings | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | Truncated dates (`----03--` to `----10--`) recur every year, wrapping over the year end. The manual names DisplayOther, but the dated buoys are in the Settings cell. As above for the view time. |
+| SafetyContourDisplay | S-98 12.6.1 | DisplayBase | Passes | `tests/EncDotNet.S100.S164.Tests/Part3DisplayTests.cs` | The safety contour is drawn only on the depth-area edges at the safety depth ([#1126](https://github.com/philliphoff/EncDotNet.S100/issues/1126)). |
+| UserSelectedSafetyContour | S-98 Appendix D-1 | PowerUp | Partial | `src/EncDotNet.S100.Datasets.S102/S102PortrayalCatalogue.cs` | S-102 coloured by the user's safety contour, and the safety contour traced from the S-102 grid with the coverage-limit border; no S-104 adjustment of the contour. |
+| SafetyDepth | — | — | Supported | `src/EncDotNet.S100.Datasets.S101/S101LuaRuleExecutor.cs` | Passed to the PC. |
+| ShallowPattern | S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Viewer/Services/EcdisDisplayState.cs` | PC pattern, switchable by viewing group. |
+| ContourLabels | S-101 Portrayal | — | Supported | `src/EncDotNet.S100.Datasets.S101/S101LuaRuleExecutor.cs` | PC labels plus safety-contour label merging. |
+| ColourPalettes1 | S-101 PC | — | Supported | `src/EncDotNet.S100.Core/Pipelines/ColorPalette.cs` | Day, dusk and night from the PC colour profiles. |
+| AdditionalInformation1 | — | — | Supported | `src/EncDotNet.S100.Viewer/ViewModels/PickTextCardViewModel.cs` | Referenced text files show in the pick report. |
+| ScaleMinimum | S-98 12.9 | — | Supported | `src/EncDotNet.S100.Renderers.Mapsui/TileScaleClass.cs` | SCAMIN per op and tile scale class, with an override. |
+| FullLightLines | — | — | Supported | `src/EncDotNet.S100.Core/Pipelines/MarinerSettings.cs` | FullLightLines context parameter. |
+| OtherLanguages | S-98 10.3 | — | Supported | `src/EncDotNet.S100.Datasets.S101/S101LuaDataProvider.cs` | NationalLanguage parameter selects chart text. |
+| Language Selections | S-98 10.3 | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/SettingsViewModel.cs` | One language, not a ranked list; pick report not localised. |
+| LanguagePacks | S-98 15.1 | InitialPowerUp | Gap | — | No language packs. |
+| DifferentPriority | S-101PC | — | Supported | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | Ops draw by plane, then drawing priority, then geometry. The v2.0.0 data has no features for this test, so it can't run yet. |
+| SamePriority | S-101PC | — | Supported | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | Equal priority draws area, line, point, text. |
+| LineSuppression | S-101PC | — | Supported | `src/EncDotNet.S100.Rendering.Scene/LineSuppression.cs` | Where lines of different features share an edge, only the one drawn last in Part 9 order draws there; `LineInstructionUnsuppressed` always draws. The v2.0.0 data has no features for this test. |
+| ManualUpdates | S-98 12.12.1 | — | N/A | — | Mariner chart corrections are ECDIS chart maintenance. |
+| TextDisplay1 | — | — | Supported | `src/EncDotNet.S100.Renderers.Skia/Scene/LabelDeclutterer.cs` | Text placed and decluttered. |
+| AreaBorders | S-101PC | — | Supported | `src/EncDotNet.S100.Core/Pipelines/Vector/DrawingInstructionParser.cs` | Plain, symbolised and edge-specific borders all draw. |
+| UnknownSymbols | S-101PC | — | Partial | `src/EncDotNet.S100.Renderers.Mapsui/MapsuiDisplayListRenderer.cs` | A missing symbol draws as a dot, not the unknown-symbol glyph. |
+| BoundaryDisplay1 | S-98 9.1.1 | — | Partial | `src/EncDotNet.S100.Renderers.Mapsui/S100DatasetExtentIndicatorLayer.cs` | Extents outlined only when out of scale. |
+| BoundaryDisplay2 | S-98 12.3.1 | — | Gap | — | No scale-boundary line between areas of different scale. |
+| OverscalePattern1 | S-98 12.3.2 | — | Supported | `src/EncDotNet.S100.Renderers.Mapsui/OverscaleCurtain.cs` | Overscale pattern over overscaled coverage. |
+| ComplexPortrayal | S-101PC | — | Supported | `src/EncDotNet.S100.Rendering.Scene/VectorSceneBuilder.cs` | SpatialReference, priority order and line suppression are honoured. The v2.0.0 data has no features for this test. |
+| CentredSymbols1 | S-101PC | Settings | Supported | `src/EncDotNet.S100.Rendering.Scene/PlacementArea.cs` | Area symbols and text go at a point inside the area and, with `AreaPlacement:VisibleParts`, move into the largest visible part when that point leaves the view. Not compared with the reference plot. |
+| OverscaleIndication1 | S-98 12.3 | PowerUp | Supported | `src/EncDotNet.S100.Renderers.Mapsui/OverscaleEvaluator.cs` | Status-bar overscale pill with factor. |
+| LargerScaleData | S-98 12.3.3 | PowerUp | Partial | `src/EncDotNet.S100.Renderers.Mapsui/S100DatasetExtentIndicatorLayer.cs` | Outlines hint at larger-scale data; no explicit indication. |
+| ScaleBoundary | S-98 12.3.1 | PowerUp | Partial | `src/EncDotNet.S100.Renderers.Mapsui/OverscaleCurtain.cs` | Overscale shown; scale-boundary line missing. |
+| DifferentScale1 | S-98 Appendix E | PowerUp | Supported | `src/EncDotNet.S100.Rendering.Engine/CoverageClip.cs` | Coarser cell fills where no finer cell covers. |
+| OverlappingData | S-98 20.3.1 | — | Gap | `src/EncDotNet.S100.Rendering.Engine/OverlapSuppression.cs` | Same-band overlaps both draw; no overlap indication. |
+| GraphicalIndex | S-98 12.4.1 | PowerUp | Supported | `src/EncDotNet.S100.Viewer/Services/LibraryCoverageOverlayController.cs` | Library coverage overlay with edition and update. |
+| DisplayScaleChange | S-98 12 | PowerUp | Partial | `src/EncDotNet.S100.Viewer/MapScaleFormatter.cs` | Zoom and scale readout; no chart-scale or range picker outside MCP. |
+| WaterLevelAdjustment | S-98 Appendix D-2 | WaterLevelAdjustment | Passes | `tests/EncDotNet.S100.S164.Tests/Part3WaterLevelAdjustmentTests.cs` | With **Water level adjustment** on, the S-101 depths in the S-104 footprint are re-portrayed with the water level at the view time (the cell declares no datum, so with **Apply anyway when datum is not declared**). The boundary is drawn and the status bar **DEPTHS** says "+ water level 14:20" with the datum status. The S-102 in this set is on MLLW and the S-104 on LAT, so the surface stays charted and the flyout says why. Not run: the manual's Interoperability Level 2 and the 100 m boundary setting. |
+| AdjustmentOfDepthValues | S-98 Appendix D-3.1 | WaterLevelAdjustment | Passes | `tests/EncDotNet.S100.S164.Tests/Part3WaterLevelAdjustmentTests.cs` | Soundings, depth areas, contours (labels included) and hazard depths in the footprint are portrayed adjusted; soundings outside it keep their charted figures. Adjusted soundings carry a ◆ marker. |
+| WLAFeatureInformation | S-98 Appendix D-3 | WaterLevelAdjustment | Passes | `tests/EncDotNet.S100.S164.Tests/Part3WaterLevelAdjustmentTests.cs` | An adjusted feature's pick report adds the water level applied and each adjusted depth value with its charted value; the Depth card gives charted depth, water level with source and time, adjusted depth and combined uncertainty at the point. |
+| UncertaintyWLA | S-98 Appendix D-2 | — | Partial | `src/EncDotNet.S100.Viewer/Services/Depth/DepthAssimilationService.cs` | S-102 and S-104 uncertainty combined, √(σ₁₀₂² + σ₁₀₄²), at a picked point; not yet on the chart. |
+| WLATimePeriod | S-98 Appendix D-2.5 | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/DepthOverTimeViewModel.cs` | Depth over time at a point; no period adjustment. |
+| IncompatibleDatums | — | WaterLevelAdjustment | Passes | `tests/EncDotNet.S100.S164.Tests/Part3WaterLevelAdjustmentTests.cs` | The WLAInvalid set the test names isn't in v2.0.0, so the test runs on the WaterLevelAdjustment set's own mismatch: the S-102 (MLLW) is refused against the S-104 (LAT) even with the override, and the S-101 cell (no datum) is refused without it. The viewer refuses adjustment rather than installation. |
+| WLAPlanning1 | S-98 Appendix D-2.7 | — | Supported | `src/EncDotNet.S100.Navigation/ClearanceCheck.UkcModel.cs` | Route clearance applies S-104 at each ETA. |
+| PolarData1 | — | — | Supported | `src/EncDotNet.S100.Rendering.Scene/WebMercator.cs` | Web Mercator to 85.05°. |
+| HighLatitudeScaleBar | S-98 12.10.1 | — | Partial | `src/EncDotNet.S100.Viewer/Views/ScaleBarView.axaml.cs` | Scale bar corrected at view centre only. |
+| PolarData2 | S-52 10.1.10.2 | — | Gap | `src/EncDotNet.S100.Rendering.Scene/WebMercator.cs` | Optional; no polar projection. |
+
+### Part 4 — Chart related functions
+
+| Test | Reference | v2.0.0 data | Status | Evidence | Note |
+|---|---|---|---|---|---|
+| ModeOrientation1 | — | PowerUp | Partial | `src/EncDotNet.S100.Viewer/Views/CompassRoseView.cs` | Compass rose shows north; not placed as the S-52 north arrow. |
+| ModeOrientation2 | — | — | Gap | — | Own ship shown but the view never re-centres on it. |
+| ModeOrientation3 | — | — | Partial | `src/EncDotNet.S100.Viewer/Services/MapInteractionController.cs` | Manual pan, zoom and rotate; own ship can't be offset on screen. |
+| NoDataAvailable | — | — | Gap | — | No no-data indication or pattern. |
+| NonNorthUp | — | — | Partial | `src/EncDotNet.S100.Rendering.Scene/RotatedViewport.cs` | Free rotation with correct symbol frames; no course-up or head-up. |
+| ScaleBar | S-98 12.10.1 | PowerUp | Partial | `src/EncDotNet.S100.Viewer/Views/ScaleBarView.axaml` | Horizontal bar at top-centre, not the S-52 vertical bar. |
+| LatitudeBar | S-98 12.10.1 | PowerUp | Gap | — | No latitude bar. |
+| FeatureInformation1 | S-98 15.1 | PowerUp | Passes | `tests/EncDotNet.S100.S164.Tests/Part4FeatureInformationTests.cs` | Every feature under the cursor, with full names and listed-value names, every value of a repeated attribute and nested complex attributes ([#1156](https://github.com/philliphoff/EncDotNet.S100/issues/1156)), and linked information types and features ([#1157](https://github.com/philliphoff/EncDotNet.S100/issues/1157)). Numbers carry their unit and no padding, and dates read DD-MMM-YYYY ([#1158](https://github.com/philliphoff/EncDotNet.S100/issues/1158)). |
+| FeatureInformation2 | S-98 15.1 | PowerUp | Passes | `tests/EncDotNet.S100.S164.Tests/Part4FeatureInformationTests.cs` | Ranked by drawing priority, then points, curves and surfaces, with undrawn features last ([#1159](https://github.com/philliphoff/EncDotNet.S100/issues/1159)). No plain-language symbol explanations or attribute definitions; not configurable. |
+| FeatureInformation3 | S-98 15.2.2 | — | Gap | — | Pick report content isn't configurable. |
+| FeatureInformation4 | S-98 15.1 | — | Gap | `src/EncDotNet.S100.Viewer/Tools/PickTool.cs` | Optional. No hover pick. |
+| FeatureInformation5 | S-98 15.1 | — | Partial | `src/EncDotNet.S100.Core/DatasetPipelines/PickAttribute.cs` | Unknown attributes fall back to codes. |
+| InteroperabilityIdentifer | 15.1 (10) | — | Gap | `src/EncDotNet.S100.Core/DatasetPipelines/NavigationalWarningInfo.cs` | Identifier read but not used to link products in the pick report. |
+| TidalStreamPanelData | S-98 15.4 | PowerUp | Passes | `tests/EncDotNet.S100.S164.Tests/Part4FeatureInformationTests.cs` | The report shows all 13 hourly values, nested under the panel ([#1156](https://github.com/philliphoff/EncDotNet.S100/issues/1156)); no tidal-stream panel layout. |
+| Tidal panels (2) | S-98 15.4 | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/PickReportViewModel.cs` | As above. No v2.0.0 feature has two panels. |
+| SupplementaryFile2 | S-98 15.2.2 | InitialPowerUp | Passes | `tests/EncDotNet.S100.S164.Tests/Part4FeatureInformationTests.cs` | The note is on an associated information type; the report follows it and shows the file's text, and `identify_features` returns it in `referencedTexts` ([#1157](https://github.com/philliphoff/EncDotNet.S100/issues/1157)). Palette handling not checked. |
+| PictorialRepresentation | S-98 15.2.2 | InitialPowerUp | Passes | `tests/EncDotNet.S100.S164.Tests/Part4FeatureInformationTests.cs` | The report follows the associated information type and names the picture ([#1157](https://github.com/philliphoff/EncDotNet.S100/issues/1157)); pictures aren't displayed. The landmark's picture isn't linked in v2.0.0. |
+| RadarOverlay | S-98 9.2 | PowerUp | N/A | — | Needs radar video. |
+| Accuracy1 | — | PowerUp | Passes | `tests/EncDotNet.S100.Viewer.Tests/MeasureAccuracyTests.cs` | Measure card, great circle: 39 m and 0.11° from the listed values (§6.5). |
+| Accuracy2 | — | — | Passes | `tests/EncDotNet.S100.Viewer.Tests/MeasureAccuracyTests.cs` | As Accuracy1: 15 m and 0.13°. |
+| Accuracy3 | — | — | Passes | `tests/EncDotNet.S100.Viewer.Tests/MeasureAccuracyTests.cs` | As Accuracy1: 9 m and 0.13°. |
+| Accuracy4 | — | — | Passes | `tests/EncDotNet.S100.Viewer.Tests/MeasureAccuracyTests.cs` | Range & bearing tool: the end is 73 m from the listed position. |
+| Accuracy5 | — | — | Passes | `tests/EncDotNet.S100.Viewer.Tests/MeasureAccuracyTests.cs` | As Accuracy4: 86 m. |
+| Accuracy6 | — | — | Passes | `tests/EncDotNet.S100.Viewer.Tests/MeasureAccuracyTests.cs` | As Accuracy4: 26 m. |
+| Accuracy7 | — | PowerUp | Passes | `tests/EncDotNet.S100.Viewer.Tests/MeasureAccuracyTests.cs` | Measure card, rhumb line: 39 m and 0.11°. |
+| Accuracy8 | — | — | Passes | `tests/EncDotNet.S100.Viewer.Tests/MeasureAccuracyTests.cs` | As Accuracy7: 15 m and 0.13°. |
+| Accuracy9 | — | — | Passes | `tests/EncDotNet.S100.Viewer.Tests/MeasureAccuracyTests.cs` | As Accuracy7: 9 m and 0.13°. |
+| Accuracy10 | — | — | Passes | `tests/EncDotNet.S100.Viewer.Tests/MeasureAccuracyTests.cs` | Great circles densified by length pass within 570 m of the listed points; the geodesic circle and a 2,000,000 m ring coincide. |
+| Accuracy11 | — | — | Passes | `tests/EncDotNet.S100.Viewer.Tests/MeasureAccuracyTests.cs` | As Accuracy10; the equatorial circle is the furthest out, 0.53%. |
+| Accuracy12 | — | — | Passes | `tests/EncDotNet.S100.Viewer.Tests/MeasureAccuracyTests.cs` | As Accuracy10. |
+| Accuracy13 | — | — | Passes | `tests/EncDotNet.S100.Viewer.Tests/MeasureAccuracyTests.cs` | Rhumb lines pass within 830 m of the listed points. |
+| Accuracy14 | — | — | Passes | `tests/EncDotNet.S100.Viewer.Tests/MeasureAccuracyTests.cs` | As Accuracy13. |
+| Accuracy15 | — | — | Passes | `tests/EncDotNet.S100.Viewer.Tests/MeasureAccuracyTests.cs` | As Accuracy13. |
+| SymbolSize | S-98 10.2.3 | PowerUp | Partial | `src/EncDotNet.S100.Renderers.Mapsui/MapsuiDisplayListRenderer.cs` | Nominal 0.32 mm pixel, not the real screen; SymbolScale can shrink symbols. |
+| Chart1Symbols | S-98 19.6.1; S-98 10.2.2 | Chart1 | Gap | — | No check symbol or size calibration. |
+| CheckSym | S-98 10.2.2 | — | Gap | — | No check symbol. |
+| TextSize | S-52 [3.1.5] | PowerUp | Partial | `src/EncDotNet.S100.Viewer/ViewerSettings.cs` | PC sizes plus a scale setting; no minimum height. |
+| Chart 1 | S-98 Chart 1 | — | Partial | `tests/datasets/S101/CATALOG.XML` | Chart 1 sets load like any other; nothing built in. |
+| Redraw | S-98 19.1 | PowerUp | Partial | `docs/design/mapsui-performance.md` | Perf tooling exists; no 5-second redraw test. |
+| UnitsLegend | S-98 9.1.5 | PowerUp | Gap | — | No chart legend for a position. |
+| LegendItems | S-98 9.1.5 | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/LayerStackViewModel.cs` | Coverage colour legends; no cross-product legend. |
+| ChartOne | S-52 19.6.1 | — | Partial | `src/EncDotNet.S100.ExchangeSets/ExchangeCatalogueReader.cs` | Not-for-navigation flagged; Chart 1 not built in. |
+| ChartOne2 | S-52 19.6.1 | Chart1 | Passes | `tests/EncDotNet.S100.S164.Tests/Part4FeatureInformationTests.cs` | Picking a Chart 1 symbol names the feature and its attributes. Chart 1 isn't built in. |
+| ColourDifferentiation | S-98 19.6.2 | — | Gap | `src/EncDotNet.S100.Viewer/PaletteTypeNameConverter.cs` | Palettes exist; no colour differentiation diagram. |
+| ColourCalibration | S-98 19.3.5 | — | N/A | — | Bridge display calibration. |
+| DataQualityPortrayal | S-98 12.10.10 | — | Partial | `src/EncDotNet.S100.Viewer/Services/EcdisDisplayDefaults.cs` | Quality patterns behind a viewing group, off by default. |
+| ENC encoding | S-98 DC Annex; S-101PC; S-100 Part 10a Part 10b | — | Partial | `src/EncDotNet.S100.Datasets.S101/S101FeatureXmlSource.cs` | ISO 8211 reading works; edge cases not verified. |
+
+### Part 5 — Navigational hazards
+
+| Test | Reference | v2.0.0 data | Status | Evidence | Note |
+|---|---|---|---|---|---|
+| NavigationalHazards | S-98 12.10.6 | NavigationalHazards | Passes | `tests/EncDotNet.S100.S164.Tests/Part5NavigationalHazardsTests.cs` | Route, danger depths and the safety-contour threshold pass ([#1151](https://github.com/philliphoff/EncDotNet.S100/issues/1151)), and every NavHazard feature type the plots indicate is found ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)). Soundings follow `SOUNDG03`. |
+| UserSelectionProhibited Areas | — | SpecialConditions | Passes | `tests/EncDotNet.S100.S164.Tests/Part6SpecialConditionsTests.cs` | Each of the 13 alert-catalogue kinds can be turned off (`RouteCheckSettings.AreaKindsOff`, MCP `areaKindsOff`, `s100 route check --areas-off`); a kind that's off says so in one finding ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)). SoundCharts has no switch for it yet. |
+| NavigationalHazardsLS | S-98 12.10.6 | NavigationalHazards, NavigationalHazardsOverview | Passes | `tests/EncDotNet.S100.S164.Tests/Part5NavigationalHazardsTests.cs` | No overview finding inside NAVHZ. The manual's plots are TBD. |
+| NavigationalHazardsMon | — | — | Gap | `src/EncDotNet.S100.Viewer/Services/DynamicSources/OwnShip/SteerableOwnShipPositionProvider.cs` | A simulated own ship exists; no monitoring look-ahead or alarm. |
+| NavigationalHazardsMonLS | — | NavigationalHazards, NavigationalHazardsOverview | Gap | — | No monitoring mode. |
+| DataQuality | — | — | Gap | — | No quality-driven check. |
+
+### Part 6 — Areas with special conditions
+
+| Test | Reference | v2.0.0 data | Status | Evidence | Note |
+|---|---|---|---|---|---|
+| SpecialConditions | S-98 12.10.7 | SpecialConditions | Passes | `tests/EncDotNet.S100.S164.Tests/Part6SpecialConditionsTests.cs` | Every area the plots box is found, of all 12 kinds and those charted as points, from the areas whose portrayal raises `ProhAre` ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)). |
+| SpecialConditionsLS | S-98 12.10.7 | NavigationalHazardsOverview | Passes | `tests/EncDotNet.S100.S164.Tests/Part6SpecialConditionsTests.cs` | Areas from ARSPC only. The manual's plot is TBD. |
+| SpecialConditionsMon | S-98 12.10.7 | — | Gap | — | No monitoring mode. |
+| SpecialConditionsMonLS | S-98 12.10.7 | — | Gap | — | No monitoring mode. |
+| SafetyContour | S-98 12.10.9 | SafetyContour | Passes | `tests/EncDotNet.S100.S164.Tests/Part7SafetyContourTests.cs` | Crossings match every plot, and the docks, hulks, pontoons, shoreline constructions, unsurveyed areas and point or curve land that raise the `SafetyContour` alert are indicated ([#1127](https://github.com/philliphoff/EncDotNet.S100/issues/1127)). |
+
+### Part 7 — Safety contour
+
+| Test | Reference | v2.0.0 data | Status | Evidence | Note |
+|---|---|---|---|---|---|
+| SafetyContourLS | S-98 12.10.9 | SafetyContour, NavigationalHazardsOverview | Passes | `tests/EncDotNet.S100.S164.Tests/Part7SafetyContourTests.cs` | No overview finding inside SAFCO. The manual's plot is TBD. |
+| SafetyContourNextLeg | S-98 12.10.9 | — | Partial | `src/EncDotNet.S100.Navigation/ChartCheck.cs` | All legs checked at planning; no next-leg rule. The S-164 test is TBD. |
+| SafetyContourWLA | S-98 Appendix D-3 | WaterLevelAdjustment | Passes | `tests/EncDotNet.S100.S164.Tests/Part3WaterLevelAdjustmentTests.cs` | At a safety contour of 11.4 m the S-101 safety contour moves with the water level inside the footprint; the S-102 safety contour is traced on the adjusted surface where its datum matches, and the S-101 one is drawn faint under S-102. Route alerts against the adjusted contour are #1272. |
+| SafetyContourMon | S-98 12.10.9 | — | Gap | — | No monitoring mode. |
+| SafetyContourMonLS | S-98 12.10.9 | — | Gap | — | No monitoring mode. |
+| DualFuelSimple | S-98 18.2 | — | Partial | `src/EncDotNet.S100.Viewer/Services/ExchangeSetService.cs` | S-57 and S-100 sets load side by side; one set with both catalogues takes the S-57 path only. |
+
+### Part 8 — S-57 testing (S-64:100 Edition 4.0.0)
+
+Section numbers are the S-64 manual's. Evidence is in
+`tests/EncDotNet.S100.S164.Tests/S64/`.
+
+| Test | Reference | S-64 data | Status | Evidence | Note |
+|---|---|---|---|---|---|
+| 2.1.1 Power up | IEC 61174 4.4.2 | 2.1.1 Power Up | Passes | `S64Part2UpdateTests.cs` | Every cell matches its CRC and portrays. |
+| 2.1.5 Loading corrupt data | IEC 61174 4.4.2 | 2.1.5 Loading Corrupt Data | Passes | `S64Part2UpdateTests.cs` | The cell fails its CRC. |
+| 2.2.1 Corrupt update | S-52 App 1 3.4.2d | 2.2.1 Corrupt Update | Passes | `S64Part2UpdateTests.cs` | The set holds only updates; the corrupt one fails its CRC ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
+| 2.2.2 Sequential update | S-52 App 1 3.4.2f | 2.2.2 Loading of Updates | Passes | `S64Part2UpdateTests.cs` | Updates 1–5 apply in order. `S57UpdateReport` lists each; the viewer shows it only when there's a problem. |
+| 2.2.3 Invalid sequence | S-52 App 1 3.4.2c | 2.2.3 Loading of Invalid Sequence | Passes | `S64Part2UpdateTests.cs` | A missing update stops the sequence. In the data, updates 3 and 4 carry each other's records; update 4 is refused because its records don't follow on, update 3 can't be told apart from a good one (§6.6, [#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
+| 2.2.4 Newer edition update | S-52 App 1 3.4.2c | 2.2.4, 2.2.5 Good Base Cells | Passes | `S64Part2UpdateTests.cs` | Refused for its edition; edition 2 takes it ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
+| 2.2.5 Older edition update | S-52 App 1 3.4.2c | 2.2.5 | Passes | `S64Part2UpdateTests.cs` | Refused for its edition ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
+| 2.2.6 Re-issue | S-52 App 1 3.4.1a | 2.2.6 Re-issue | Passes | `S64Part2UpdateTests.cs` | Update 1, already in the re-issue, is skipped; update 4 gives the same cell as updates 1–4. |
+| 2.2.7 Cancellation | S-52 App 1 3.4.1a | 2.2.7 Cancellation | Passes | `S64Part2UpdateTests.cs` | Reported as cancelled; the viewer warns that the cell is no longer for navigation ([#1241](https://github.com/philliphoff/EncDotNet.S100/issues/1241)). |
+| 2.2.8 Rejection of automatic update | S-52 App 1 3.4.2h | 2.2.2 | N/A | — | Manual chart correction (§5). |
+| 2.3 Manual updates | S-52 App 1 3.4.3 | — | N/A | — | Manual chart correction (§5). |
+| 2.5 Encrypted ENCs | S-63 | Encrypted set | Gap | — | S-63 isn't supported; the encrypted set isn't pinned. |
+| 3.1 Display of ENC data | S-52 10.3 | 3.1 ENC Display | Passes | `S64Part3DisplayTests.cs` | Categories as S-101 assigns them; differences from S-52 listed (§6.6). |
+| 3.2 Invalid objects | S-52 10.3.3.4, 10.8.6 | 3.2 Invalid Object | Passes | `S64Part3DisplayTests.cs` | Unknown classes 500–502 draw "?" by primitive and can be picked ([#1242](https://github.com/philliphoff/EncDotNet.S100/issues/1242)). |
+| 3.3 Mariner selections | S-52 10.3 | 3.3 Settings | Supported | `S64SmokeTests.cs` | Portrays without rule failures; not compared with the plots. |
+| 3.4 Non-official data | S-52 10.3 | 3.4 Non-Official Data | Supported | `S64SmokeTests.cs` | Portrays; no non-official indication. |
+| 3.6 Display priority | S-52 10.3.4 | 3.6 Display Priorities | Supported | `S64SmokeTests.cs` | Portrays; order follows S-101 (finding 1). |
+| 3.7 Scale and overlap | S-52 10.3.6 | 3.7 Overlap, 3.7.7 Scale minimum | Supported | `S64SmokeTests.cs` | Portrays; SCAMIN follows the S-57 cell display window. |
+| 3.8.5 Non-ENC data | S-52 10.3 | 3.8.5 Non ENC data | Supported | `S64SmokeTests.cs` | AML cells load and portray. |
+| 3.9 Polar ENC data | S-52 10.3 | 3.9 Polar ENC Data | Supported | `S64SmokeTests.cs` | Portrays; not compared with the polar plots. |
+| 5.1 Navigational hazards | S-52 10.5.9 | 5.0 Navigational Hazards | Passes | `S64Part5NavigationalHazardsTests.cs` | Dangers match S-164's S-101 cell at all 15 safety contours. |
+| 5.2 Navigational hazards, largest scale | S-52 10.5.9 | 5.0, Overview | Passes | `S64Part5NavigationalHazardsTests.cs` | No overview finding inside NAVHZ. |
+| 5.3–5.4 Monitoring mode | S-52 10.5.9 | — | Gap | — | No monitoring mode. |
+| 6.1 Special conditions | S-52 10.5.10 | 6.0 Special Conditions | Passes | `S64Part6SpecialConditionsTests.cs` | Every kind of area indicated; a kind can be turned off. |
+| 6.2 Special conditions, largest scale | S-52 10.5.10 | 6.0, Overview | Passes | `S64Part6SpecialConditionsTests.cs` | No overview finding inside ARSPC. |
+| 6.3–6.4 Monitoring mode | S-52 10.5.10 | — | Gap | — | No monitoring mode. |
+| 7.1 Safety contour | S-52 10.5.8 | 7.0 Safety Contour | Passes | `S64Part7SafetyContourTests.cs` | Crossings at 0–43 m, with S-164's probes. |
+| 7.2 Safety contour, largest scale | S-52 10.5.8 | 7.0, Overview | Passes | `S64Part7SafetyContourTests.cs` | No overview finding inside SAFCO. |
+| 7.3–7.4 Monitoring mode | S-52 10.5.8 | — | Gap | — | No monitoring mode. |
+| 8.1 Wreck after update | S-52 13.2.19 | SOE_Test_1 | Passes | `S64Part8SkinOfTheEarthTests.cs` | The wreck stops being an isolated danger after update 4. |
+| 8.2 Rock after update | S-52 13.2.19 | SOE_Test_2 | Passes | `S64Part8SkinOfTheEarthTests.cs` | |
+| 8.3 Rock after update (2) | S-52 13.2.19 | SOE_Test_3 | Passes | `S64Part8SkinOfTheEarthTests.cs` | |
+| 8.4 Rock after update (3) | S-52 13.2.19 | SOE_Test_4 | Passes | `S64Part8SkinOfTheEarthTests.cs` | |
+| 8.5 Isolated danger after update | S-52 13.2.19 | SOE_Test_5 | Passes | `S64Part8SkinOfTheEarthTests.cs` | The isolated dangers stay. |
+| 9 Chart accuracy | S-52 5.10.13 | — | Gap | — | Cells not in the unencrypted set; no accuracy-aware check ([#1132](https://github.com/philliphoff/EncDotNet.S100/issues/1132) is related). |
+
+### Part 9 — Dual fuel mode and SECOM
+
+| Test | Reference | v2.0.0 data | Status | Evidence | Note |
+|---|---|---|---|---|---|
+| DualFuelSimpleUpdate | S-98 18.2 | — | Partial | `src/EncDotNet.S100.Datasets.Pipelines/S101ExchangeSetUpdatePlan.cs` | Each product's updates apply; not as one dual-fuel set. |
+| DualFuelFeatureInformation | S-98 18.2 | — | Supported | `src/EncDotNet.S100.Viewer/ViewModels/PickHit.cs` | One pick list across products, each hit tagged S-57 or S-101. |
+| NavigationalHazardsDF | — | NavigationalHazards | Partial | `src/EncDotNet.S100.Datasets.Pipelines/Navigation/CatalogRouteChartSource.cs` | Translated S-57 feeds the same danger check; untested on mixed data. |
+| NavigationalHazardsDFLS | S-101PC | — | Partial | `src/EncDotNet.S100.Datasets.Pipelines/Navigation/CatalogRouteChartSource.cs` | S-57 (CSCL) and S-101 ranked together; no product preference at equal scale. |
+| NavigationalHazardsDFMon | — | — | Gap | — | No monitoring mode. |
+| NavigationalHazardsDFMonLS | — | — | Gap | — | No monitoring mode. |
+| SpecialConditionsDF | — | — | Partial | `src/EncDotNet.S100.Datasets.Pipelines/Navigation/CatalogRouteAreaSource.cs` | S-57 areas read from translated cells, through the same S-101 rules; untested on mixed data. |
+| SpecialConditionsDFLS | — | — | Partial | `src/EncDotNet.S100.Navigation/AreaCheck.cs` | Finest-cell rule spans products; untested on mixed data. |
+| SpecialConditionsMonDF | — | — | Gap | — | No monitoring mode. |
+| SpecialConditionsDFLSMon | — | — | Gap | — | No monitoring mode. |
+| SafetyContourDF | — | — | Partial | `src/EncDotNet.S100.Datasets.Pipelines/S57DatasetProcessor.cs` | S-57 drawn through the S-101 PC with the mariner's contour; not compared with plots. |
+| SafetyContourDFLS | — | — | Partial | `src/EncDotNet.S100.Core/DataModel/CellScaleRanking.cs` | Equal-scale overlap resolved by shallowest depth, not product. |
+| SafetyContourDFMonLS | — | — | Gap | — | No monitoring mode. |
+| SafetyContourDFMon | — | — | Gap | — | No monitoring mode. |
+| SECOMSelection | S-98: 20.4.3 (i); IEC 63173-2 | — | Supported | `src/EncDotNet.S100.Collections/Secom/SecomRegistry.cs` | Registry search, TLS or signed requests, product filters. |
+| SECOMManagement | S-98: 20.4.3 (i) | — | Partial | `src/EncDotNet.S100.Viewer/ViewModels/Secom/SecomConnectionState.cs` | Connection state and refresh; no subscriptions or update-available status. |
+| SECOMAcknowledgment | S-98: 20.4.3 (iii) | — | Partial | `src/EncDotNet.S100.Collections/Secom/SecomSignature.cs` | Signatures checked on download; no acknowledgement sent. |

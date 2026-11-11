@@ -1,0 +1,171 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Text.Json;
+using OpenTelemetry;
+
+namespace EncDotNet.S100.Diagnostics.Export;
+
+/// <summary>
+/// An OpenTelemetry <see cref="BaseExporter{T}"/> that serialises
+/// <see cref="Activity"/> spans to a newline-delimited JSON file.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Each exported span becomes one JSON line with structure:
+/// <code>{"kind":"span","name":"…","traceId":"…","spanId":"…",…}</code>
+/// </para>
+/// <para>
+/// Thread safety is guaranteed by pushing serialised lines into a
+/// <see cref="BlockingCollection{T}"/> that is drained by a dedicated
+/// background thread. The file is opened with
+/// <see cref="FileShare.Read"/> so external tools can tail the output
+/// while the run is in progress.
+/// </para>
+/// </remarks>
+public sealed class FileTelemetryExporter : BaseExporter<Activity>
+{
+    private readonly BlockingCollection<string> _queue = new(boundedCapacity: 4096);
+    private readonly Thread _writerThread;
+    private readonly TelemetryJsonFormat.TelemetryFileLease _file;
+    private volatile bool _disposed;
+
+    /// <summary>
+    /// Initialises the exporter, opening (or creating) the target file
+    /// and writing the version-1 header line.
+    /// </summary>
+    /// <param name="path">
+    /// Absolute or relative path to the <c>.jsonl</c> output file.
+    /// The file is created if it does not exist; an existing file is
+    /// truncated.
+    /// </param>
+    public FileTelemetryExporter(string path) : this(path, appendToExisting: false)
+    {
+    }
+
+    /// <summary>
+    /// Initialises the exporter, opening (or creating) the target file.
+    /// </summary>
+    /// <param name="path">
+    /// Absolute or relative path to the <c>.jsonl</c> output file.
+    /// </param>
+    /// <param name="appendToExisting">
+    /// When <c>true</c>, an existing file is appended to and a new
+    /// header is <em>not</em> written; when <c>false</c> (default),
+    /// the file is truncated and a fresh header is emitted. Used by
+    /// orchestrators (e.g. the perf interleave loop) that accumulate
+    /// telemetry from multiple PerfRunner invocations into a single
+    /// JSONL file.
+    /// </param>
+    public FileTelemetryExporter(string path, bool appendToExisting)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var fullPath = Path.GetFullPath(path);
+
+        // Ensure the directory exists.
+        var dir = Path.GetDirectoryName(fullPath);
+        if (!string.IsNullOrEmpty(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        _file = TelemetryJsonFormat.AcquireFile(fullPath, truncate: !appendToExisting);
+
+        _writerThread = new Thread(WriterLoop)
+        {
+            Name = "TelemetryFileWriter",
+            IsBackground = true,
+        };
+        _writerThread.Start();
+
+        if (!appendToExisting)
+        {
+            // Write the schema header as the first line.
+            var header = JsonSerializer.Serialize(
+                new TelemetryHeaderLine("header", TelemetryJsonFormat.SchemaVersion, DateTime.UtcNow),
+                TelemetryJsonFormat.Json.TelemetryHeaderLine);
+            _queue.Add(header);
+        }
+    }
+
+    /// <inheritdoc />
+    public override ExportResult Export(in Batch<Activity> batch)
+    {
+        if (_disposed)
+            return ExportResult.Failure;
+
+        foreach (var activity in batch)
+        {
+            var tags = new Dictionary<string, string>();
+            foreach (var tag in activity.TagObjects)
+            {
+                if (tag.Value is not null)
+                {
+                    tags[tag.Key] = TelemetryJsonFormat.FormatTagValue(tag.Value);
+                }
+            }
+
+            var line = JsonSerializer.Serialize(new TelemetrySpanLine(
+                Kind: "span",
+                Name: activity.DisplayName,
+                TraceId: activity.TraceId.ToString(),
+                SpanId: activity.SpanId.ToString(),
+                ParentSpanId: activity.ParentSpanId == default
+                    ? null
+                    : activity.ParentSpanId.ToString(),
+                StartUnixNs: new DateTimeOffset(activity.StartTimeUtc, TimeSpan.Zero).ToUnixTimeNanoseconds(),
+                EndUnixNs: new DateTimeOffset(activity.StartTimeUtc + activity.Duration, TimeSpan.Zero).ToUnixTimeNanoseconds(),
+                DurationMs: activity.Duration.TotalMilliseconds,
+                Status: activity.Status.ToString(),
+                Tags: tags), TelemetryJsonFormat.Json.TelemetrySpanLine);
+
+            _queue.TryAdd(line);
+        }
+
+        return ExportResult.Success;
+    }
+
+    /// <inheritdoc />
+    protected override bool OnShutdown(int timeoutMilliseconds)
+    {
+        _queue.CompleteAdding();
+        return _writerThread.Join(
+            timeoutMilliseconds > 0 ? timeoutMilliseconds : 5000);
+    }
+
+    /// <inheritdoc />
+    protected override void Dispose(bool disposing)
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        if (disposing)
+        {
+            _queue.CompleteAdding();
+            if (_writerThread.Join(5000))
+            {
+                _queue.Dispose();
+                _file.Dispose();
+            }
+        }
+
+        base.Dispose(disposing);
+    }
+
+    private void WriterLoop()
+    {
+        foreach (var line in _queue.GetConsumingEnumerable())
+        {
+            _file.WriteLine(line);
+        }
+    }
+}
+
+internal static class DateTimeOffsetExtensions
+{
+    private static readonly long UnixEpochTicks = new DateTimeOffset(1970, 1, 1, 0, 0, 0, TimeSpan.Zero).Ticks;
+
+    public static long ToUnixTimeNanoseconds(this DateTimeOffset dto)
+    {
+        return (dto.Ticks - UnixEpochTicks) * 100;
+    }
+}

@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\_shared\FakeWeatherProduct.cs" Link="TestSupport\FakeWeatherProduct.cs" />
+    <Compile Include="..\_shared\GribFixtures.cs" Link="TestSupport\GribFixtures.cs" />
+    <Compile Include="..\_shared\TropicalCycloneFixtures.cs" Link="TestSupport\TropicalCycloneFixtures.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- NOAA GFS and GFS-Wave subsets (issue #1074) for the weather check (#1093); see tests/datasets/GRIB2/README.md. -->
+    <Content Include="..\datasets\GRIB2\*.grib2" CopyToOutputDirectory="PreserveNewest" Link="TestData\GRIB2\%(Filename)%(Extension)" />
+    <!-- Synthetic S-412 warnings (issue #841); see tests/datasets/S412/README.md. -->
+    <Content Include="..\datasets\S412\synthetic_all_warnings.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S412\%(Filename)%(Extension)" />
+    <!-- Hand-written CAP alert with a circle area (#1069), for identify at a time (#1354); see tests/datasets/CAP/README.md. -->
+    <Content Include="..\datasets\CAP\hand-written-circle.xml" CopyToOutputDirectory="PreserveNewest" Link="TestData\CAP\%(Filename)%(Extension)" />
+    <!-- NHC Hurricane Ian advisory 20 (#1294) for the tropical cyclone rule (#1299); see tests/datasets/TC/README.md. -->
+    <Content Include="..\datasets\TC\**\*.zip" CopyToOutputDirectory="PreserveNewest" Link="TestData\TC\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S101\EncDotNet.S100.Datasets.S101.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S102\EncDotNet.S100.Datasets.S102.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S122\EncDotNet.S100.Datasets.S122.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S124\EncDotNet.S100.Datasets.S124.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S131\EncDotNet.S100.Datasets.S131.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Mcp.Tools\EncDotNet.S100.Mcp.Tools.csproj" />
+  </ItemGroup>
+
+</Project>

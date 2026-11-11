@@ -1,0 +1,374 @@
+using System.Xml.Linq;
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Features;
+using S100Diag = EncDotNet.S100.Datasets.S125.Diagnostics;
+
+namespace EncDotNet.S100.Datasets.S125;
+
+/// <summary>
+/// Reads an S-125 Marine Aids to Navigation GML encoded dataset
+/// (S-100 Part 10b) into an <see cref="S125Dataset"/>.
+/// </summary>
+/// <remarks>
+/// The S-125 1.0.0 application schema declares its target namespace as
+/// <c>http://www.iho.int/S125/1.0</c> and imports geometry from the S-100
+/// GML 5.0 profile (<c>http://www.iho.int/s100gml/5.0</c>). This reader is
+/// tolerant of the older S-100 GML 1.0 profile namespaces still seen in
+/// some sample datasets and of <c>S100:</c>-prefixed bare-Dataset roots
+/// that carry the spec only via the <c>productIdentifier</c> element.
+/// </remarks>
+internal static class S125DatasetReader
+{
+    private static readonly XNamespace XlinkNs = "http://www.w3.org/1999/xlink";
+
+    private static readonly XNamespace S100Ns_5_0 = "http://www.iho.int/s100gml/5.0";
+    private static readonly XNamespace S100Ns_1_0_lower = "http://www.iho.int/s100gml/1.0";
+    private static readonly XNamespace S100Ns_1_0_profile = "http://www.iho.int/S100/profile/s100gml/1.0";
+
+    private static readonly XNamespace[] CandidateS100Namespaces =
+        [S100Ns_5_0, S100Ns_1_0_profile, S100Ns_1_0_lower];
+
+    // S-125 Edition 1.0.0 Feature Catalogue — concrete feature type codes (PascalCase form).
+    private static readonly HashSet<string> FeatureTypeCodes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "AtonAggregation", "AtonAssociation", "AtonStatusIndication",
+        "CardinalBeacon", "CardinalBuoy",
+        "DangerousFeature", "DataCoverage", "Daymark",
+        "EmergencyWreckMarkingBuoy",
+        "FogSignal",
+        "InstallationBuoy", "IsolatedDangerBeacon", "IsolatedDangerBuoy",
+        "Landmark", "LateralBeacon", "LateralBuoy",
+        "LightAirObstruction", "LightAllAround", "LightFloat", "LightFogDetector",
+        "LightSectored", "LightVessel", "LocalDirectionOfBuoyage",
+        "MooringBuoy",
+        "NavigationLine", "NavigationalSystemOfMarks",
+        "OffshorePlatform",
+        "PhysicalAISAidToNavigation", "Pile",
+        "QualityOfBathymetricData",
+        "RadarReflector", "RadarTransponderBeacon", "RadioStation",
+        "RecommendedTrack", "Retroreflector",
+        "SafeWaterBeacon", "SafeWaterBuoy", "SiloTank",
+        "SoundingDatum", "SpecialPurposeGeneralBeacon", "SpecialPurposeGeneralBuoy",
+        "SyntheticAISAidToNavigation",
+        "Topmark",
+        "VerticalDatumOfData", "VirtualAISAidToNavigation",
+        "WindTurbine",
+    };
+
+    // S-125 Edition 1.0.0 Feature Catalogue — concrete information type codes.
+    private static readonly HashSet<string> InformationTypeCodes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "AtonStatusInformation", "SpatialQuality",
+    };
+
+    public static S125Dataset Read(Stream stream)
+    {
+        using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.dataset.open");
+        __activity?.SetTag("s100.product", "S-125");
+        // Tolerate leading whitespace/BOM before the XML declaration.
+        using var reader = new StreamReader(stream);
+        var xml = reader.ReadToEnd().TrimStart();
+        var doc = XDocument.Parse(xml);
+        var root = doc.Root
+            ?? throw new InvalidOperationException("S-125 GML document has no root element.");
+
+        // Decide the axis order once for the whole dataset (issue #650).
+        var (axisOrder, axisAssessment) = GmlCoordinateParser.AssessAxisOrder(root);
+
+        var datasetNs = root.Name.Namespace;
+        var s100Ns = DetectS100Namespace(root);
+
+        string? datasetId = root.Attribute(GmlNamespaces.Gml + "id")?.Value;
+        string? productId = null;
+
+        var dsInfo = root.Element(s100Ns + "DatasetIdentificationInformation");
+        if (dsInfo is not null)
+        {
+            productId = dsInfo.Element(s100Ns + "productIdentifier")?.Value;
+        }
+
+        // Two-pass parse: index information-type ids first so xlink-href
+        // children on features can be classified as information references
+        // (target is an imember) vs. feature references (target is a member).
+        var informationTypeIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var informationTypes = new List<S125InformationType>();
+        foreach (var imember in EnumerateChildren(root, datasetNs, "imember"))
+        {
+            foreach (var element in imember.Elements())
+            {
+                if (!IsInformationType(element.Name, datasetNs)) continue;
+                var info = ParseInformationType(element, s100Ns);
+                informationTypes.Add(info);
+                if (!string.IsNullOrEmpty(info.Id))
+                    informationTypeIds.Add(info.Id);
+            }
+        }
+
+        var features = new List<S125Feature>();
+        foreach (var member in EnumerateChildren(root, datasetNs, "member"))
+        {
+            foreach (var element in member.Elements())
+            {
+                if (!IsFeatureType(element.Name, datasetNs)) continue;
+                features.Add(ParseFeature(element, s100Ns, informationTypeIds, axisOrder));
+            }
+        }
+
+        return new S125Dataset
+        {
+            ProductIdentifier = productId ?? "S-125",
+            DeclaredEdition = GmlDatasetIdentification.ReadDeclaredEdition(root),
+            DatasetIdentifier = datasetId,
+            Features = features,
+            InformationTypes = informationTypes,
+            AxisOrder = axisAssessment,
+        };
+    }
+
+    private static IEnumerable<XElement> EnumerateChildren(XElement root, XNamespace datasetNs, string localName)
+    {
+        // Try dataset-namespaced first, then unnamespaced.
+        foreach (var el in root.Elements(datasetNs + localName))
+            yield return el;
+        if (datasetNs != XNamespace.None)
+        {
+            foreach (var el in root.Elements((XName)localName))
+                yield return el;
+        }
+    }
+
+    private static XNamespace DetectS100Namespace(XElement root)
+    {
+        foreach (var element in root.DescendantsAndSelf())
+        {
+            foreach (var attr in element.Attributes())
+            {
+                if (!attr.IsNamespaceDeclaration) continue;
+                foreach (var candidate in CandidateS100Namespaces)
+                {
+                    if (attr.Value == candidate.NamespaceName)
+                        return candidate;
+                }
+            }
+        }
+        return S100Ns_5_0;
+    }
+
+    private static S125Feature ParseFeature(XElement element, XNamespace s100Ns, HashSet<string> informationTypeIds, GmlAxisOrder axisOrder)
+    {
+        var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value
+            ?? element.Attribute("id")?.Value
+            ?? "";
+        var featureType = element.Name.LocalName;
+
+        var (geometryType, points, curves, exteriorRing, interiorRings) = ParseGeometry(element, s100Ns, axisOrder);
+        var (simpleAttrs, complexAttrs, infoRefs, featureRefs) = ParseAttributes(element, s100Ns, informationTypeIds);
+
+        return new S125Feature
+        {
+            Id = id,
+            FeatureType = featureType,
+            GeometryType = geometryType,
+            Points = points,
+            Curves = curves,
+            ExteriorRing = exteriorRing,
+            InteriorRings = interiorRings,
+            Attributes = simpleAttrs,
+            ComplexAttributes = complexAttrs,
+            InformationReferences = infoRefs,
+            FeatureReferences = featureRefs,
+            AttributeTree = ParseAttributeTree(element, s100Ns),
+        };
+    }
+
+    private static S125InformationType ParseInformationType(XElement element, XNamespace s100Ns)
+    {
+        var id = element.Attribute(GmlNamespaces.Gml + "id")?.Value
+            ?? element.Attribute("id")?.Value
+            ?? "";
+        var typeCode = element.Name.LocalName;
+
+        // Information types do not themselves carry feature-to-feature xlinks
+        // in the S-125 1.0.0 model. Pass an empty id-set so any xlink child
+        // (if encountered) falls through to the information-reference branch
+        // for backwards compatibility.
+        var (simpleAttrs, complexAttrs, _, _) = ParseAttributes(element, s100Ns, EmptyIdSet);
+
+        return new S125InformationType
+        {
+            Id = id,
+            TypeCode = typeCode,
+            Attributes = simpleAttrs,
+            ComplexAttributes = complexAttrs,
+        };
+    }
+
+    private static readonly HashSet<string> EmptyIdSet = new(StringComparer.OrdinalIgnoreCase);
+
+    // ── Geometry ───────────────────────────────────────────────────────
+
+    private static (S100GeometryType, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>, IReadOnlyList<GeoPosition>, IReadOnlyList<IReadOnlyList<GeoPosition>>) ParseGeometry(XElement featureElement, XNamespace s100Ns, GmlAxisOrder axisOrder)
+    {
+        IReadOnlyList<GeoPosition> points = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> curves = [];
+        IReadOnlyList<GeoPosition> exteriorRing = [];
+        IReadOnlyList<IReadOnlyList<GeoPosition>> interiorRings = [];
+        var geometryType = S100GeometryType.None;
+
+        var geometryContainer = featureElement.Element(featureElement.Name.Namespace + "geometry")
+            ?? featureElement.Element("geometry");
+        if (geometryContainer is null)
+            return (geometryType, points, curves, exteriorRing, interiorRings);
+
+        var pointProp = geometryContainer.Element(s100Ns + "pointProperty")
+            ?? geometryContainer.Element(s100Ns + "Point");
+        if (pointProp is not null)
+        {
+            var coord = GmlCoordinateParser.ParsePointElement(pointProp, null, axisOrder);
+            if (coord is not null)
+            {
+                geometryType = S100GeometryType.Point;
+                points = [coord.Value];
+            }
+        }
+
+        var curveProp = geometryContainer.Element(s100Ns + "curveProperty");
+        if (curveProp is not null)
+        {
+            geometryType = S100GeometryType.Curve;
+            var coords = GmlCoordinateParser.ParseCurveCoordinates(curveProp, axisOrder);
+            curves = coords.Count > 0
+                ? [coords]
+                : [];
+        }
+
+        var surfaceProp = geometryContainer.Element(s100Ns + "surfaceProperty");
+        if (surfaceProp is not null)
+        {
+            geometryType = S100GeometryType.Surface;
+            var (ext, intRings) = GmlCoordinateParser.ParseSurfaceCoordinates(surfaceProp, axisOrder);
+            exteriorRing = ext;
+            interiorRings = intRings;
+        }
+
+        return (geometryType, points, curves, exteriorRing, interiorRings);
+    }    // ── Attributes ─────────────────────────────────────────────────────
+
+    private static (IReadOnlyDictionary<string, string>, IReadOnlyList<S125ComplexAttribute>, IReadOnlyList<S125InformationReference>, IReadOnlyList<S125FeatureReference>) ParseAttributes(XElement element, XNamespace s100Ns, HashSet<string> informationTypeIds)
+    {
+        var simple = new Dictionary<string, string>();
+        var complex = new List<S125ComplexAttribute>();
+        var infoRefs = new List<S125InformationReference>();
+        var featureRefs = new List<S125FeatureReference>();
+
+        foreach (var child in element.Elements())
+        {
+            var localName = child.Name.LocalName;
+
+            if (localName is "geometry" or "boundedBy" ||
+                child.Name.Namespace == GmlNamespaces.Gml ||
+                child.Name.Namespace == s100Ns)
+                continue;
+
+            // Cross-reference binding: child carries an xlink:href or
+            // informationRef. Classify by target:
+            //  - if the fragment id is a known information-type id, emit an
+            //    information reference (existing behaviour);
+            //  - otherwise emit a feature reference (S-125 1.0.0
+            //    §StructureEquipment / §AtonAggregations / §PhysicalAIS / …).
+            var href = child.Attribute(XlinkNs + "href")?.Value
+                ?? child.Attribute("informationRef")?.Value;
+            if (!string.IsNullOrEmpty(href) && !child.HasElements && string.IsNullOrEmpty(child.Value))
+            {
+                var trimmed = href.TrimStart('#');
+                if (informationTypeIds.Contains(trimmed))
+                {
+                    infoRefs.Add(new S125InformationReference
+                    {
+                        Role = localName,
+                        InformationRef = trimmed,
+                    });
+                }
+                else
+                {
+                    featureRefs.Add(new S125FeatureReference
+                    {
+                        Role = localName,
+                        FeatureRef = trimmed,
+                    });
+                }
+                continue;
+            }
+
+            if (child.HasElements)
+            {
+                var subAttrs = new Dictionary<string, string>();
+                foreach (var sub in child.Elements())
+                {
+                    if (!sub.HasElements && !string.IsNullOrEmpty(sub.Value))
+                        subAttrs[sub.Name.LocalName] = sub.Value;
+                }
+                if (subAttrs.Count > 0)
+                {
+                    complex.Add(new S125ComplexAttribute
+                    {
+                        Code = localName,
+                        SubAttributes = subAttrs,
+                    });
+                }
+            }
+            else
+            {
+                if (!string.IsNullOrEmpty(child.Value))
+                    simple[localName] = child.Value;
+            }
+        }
+
+        return (simple, complex, infoRefs, featureRefs);
+    }
+
+    /// <summary>
+    /// Builds the ordered, lossless attribute tree of a feature element:
+    /// every non-geometry, non-reference child becomes a node, repeated
+    /// occurrences are kept, and complex attributes recurse.
+    /// </summary>
+    private static IReadOnlyList<S125AttributeNode> ParseAttributeTree(XElement element, XNamespace s100Ns)
+    {
+        var nodes = new List<S125AttributeNode>();
+        foreach (var child in element.Elements())
+        {
+            var localName = child.Name.LocalName;
+            if (localName is "geometry" or "boundedBy" ||
+                child.Name.Namespace == GmlNamespaces.Gml ||
+                child.Name.Namespace == s100Ns)
+                continue;
+
+            if (child.HasElements)
+            {
+                var children = ParseAttributeTree(child, s100Ns);
+                if (children.Count > 0)
+                    nodes.Add(new S125AttributeNode { Code = localName, Children = children });
+            }
+            else if (!string.IsNullOrEmpty(child.Value))
+            {
+                // Element-only references (xlink:href with no content) are
+                // associations, not attributes, and are skipped by the empty
+                // value check above.
+                nodes.Add(new S125AttributeNode { Code = localName, Value = child.Value.Trim() });
+            }
+        }
+        return nodes;
+    }
+
+    private static bool IsFeatureType(XName name, XNamespace datasetNs)
+    {
+        return (name.Namespace == datasetNs || name.Namespace == XNamespace.None) &&
+               FeatureTypeCodes.Contains(name.LocalName);
+    }
+
+    private static bool IsInformationType(XName name, XNamespace datasetNs)
+    {
+        return (name.Namespace == datasetNs || name.Namespace == XNamespace.None) &&
+               InformationTypeCodes.Contains(name.LocalName);
+    }
+}

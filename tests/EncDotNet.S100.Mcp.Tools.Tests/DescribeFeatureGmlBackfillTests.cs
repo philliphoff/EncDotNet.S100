@@ -1,0 +1,113 @@
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Datasets.S122;
+using EncDotNet.S100.Datasets.S131;
+using EncDotNet.S100.Features;
+using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
+
+namespace EncDotNet.S100.Mcp.Tools.Tests;
+
+public class DescribeFeatureGmlBackfillTests
+{
+    [Fact]
+    public async Task S122_feature_is_described_via_generic_GmlFeatureDescriber()
+    {
+        var feature = new S122Feature
+        {
+            Id = "mpa-1",
+            FeatureType = "MarineProtectedArea",
+            GeometryType = S100GeometryType.Surface,
+            Points = [],
+            Curves = [],
+            ExteriorRing = [new GeoPosition(0, 0), new GeoPosition(0, 1), new GeoPosition(1, 1), new GeoPosition(0, 0)],
+            InteriorRings = [],
+            Attributes = new Dictionary<string, string> { ["categoryOfMarineProtectedArea"] = "nature reserve" },
+            ComplexAttributes = [],
+        };
+        var model = new S122Dataset
+        {
+            Features = [feature],
+            InformationTypes = [],
+        };
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(new LoadedDataset(
+            new DatasetId("mpa"),
+            LoadedDatasetFactory.S122Spec,
+            LoadedDatasetFactory.Box(0, 0, 1, 1),
+            null,
+            new S122DatasetData(model)));
+
+        var tool = new DescribeFeatureTool(catalog);
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(
+            new DatasetId("mpa"),
+            "mpa-1"), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal("MarineProtectedArea", value.FeatureTypeName);
+        Assert.Empty(value.References);
+        var attrs = value.Attributes;
+        Assert.Equal("mpa-1", attrs.GetProperty("id").GetString());
+        Assert.Equal("Surface", attrs.GetProperty("geometryType").GetString());
+        Assert.Equal(
+            "nature reserve",
+            attrs.GetProperty("attributes").GetProperty("categoryOfMarineProtectedArea").GetString());
+    }
+
+    [Fact]
+    public async Task S131_geometryless_authority_feature_round_trips_attributes()
+    {
+        var authority = new S131Feature
+        {
+            Id = "auth-1",
+            FeatureType = "Authority",
+            GeometryType = S100GeometryType.None,
+            Points = [],
+            Curves = [],
+            ExteriorRing = [],
+            InteriorRings = [],
+            Attributes = new Dictionary<string, string> { ["authorityName"] = "Port of Test" },
+            ComplexAttributes = [],
+            References = [],
+        };
+        var model = new S131Dataset
+        {
+            Features = [authority],
+            InformationTypes = [],
+        };
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(new LoadedDataset(
+            new DatasetId("harbour"),
+            LoadedDatasetFactory.S131Spec,
+            LoadedDatasetFactory.Box(0, 0, 1, 1),
+            null,
+            new S131DatasetData(model)));
+
+        var tool = new DescribeFeatureTool(catalog);
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(
+            new DatasetId("harbour"),
+            "auth-1"), TestContext.Current.CancellationToken);
+
+        Assert.True(result.TryGetValue(out var value));
+        Assert.Equal("Authority", value.FeatureTypeName);
+        Assert.Equal(
+            "Port of Test",
+            value.Attributes.GetProperty("attributes").GetProperty("authorityName").GetString());
+    }
+
+    [Fact]
+    public async Task Missing_feature_id_returns_FeatureNotFound_for_generic_spec()
+    {
+        var catalog = new FakeDatasetCatalog();
+        catalog.Add(LoadedDatasetFactory.S122("mpa", bounds: LoadedDatasetFactory.Box()));
+        var tool = new DescribeFeatureTool(catalog);
+
+        var result = await tool.InvokeAsync(new DescribeFeatureRequest(
+            new DatasetId("mpa"),
+            "does-not-exist"), TestContext.Current.CancellationToken);
+
+        Assert.False(result.TryGetValue(out _));
+        Assert.True(result.TryGetError(out var err));
+        Assert.IsType<FeatureNotFound>(err);
+    }
+}

@@ -1,0 +1,248 @@
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.S124.DataModel;
+
+namespace EncDotNet.S100.Datasets.S124.Tests;
+
+public class S124NavigationalWarningTests
+{
+    private const string TestDataDir = "TestData";
+
+    private static S124Dataset Load(string fileName)
+    {
+        var path = Path.Combine(TestDataDir, fileName);
+        Assert.True(File.Exists(path), $"Test data file not found: {path}");
+        return S124Dataset.Open(path);
+    }
+
+    private static S124NavigationalWarning Project(string fileName, out IReadOnlyList<ProjectionDiagnostic> diagnostics)
+        => S124NavigationalWarning.From(Load(fileName), out diagnostics);
+
+    [Fact]
+    public void Mixed_PreservesDatasetIdentifiers()
+    {
+        var w = Project("navwarn_mixed.gml", out _);
+        Assert.Equal("S-124", w.ProductIdentifier);
+        Assert.Equal("DS_NavWarn_Mixed_Test", w.DatasetIdentifier);
+    }
+
+    [Fact]
+    public void Mixed_ProjectsPreambleAndMessageSeriesIdentifier()
+    {
+        var w = Project("navwarn_mixed.gml", out _);
+        Assert.NotNull(w.Preamble);
+        Assert.Equal("info1", w.Preamble!.Id);
+        Assert.Equal("North Sea", w.Preamble.GeneralArea);
+        Assert.Equal("Approaches to Rotterdam", w.Preamble.Locality);
+
+        var msi = w.Preamble.MessageSeriesIdentifier;
+        Assert.NotNull(msi);
+        Assert.Equal(305, msi!.WarningNumber);
+        Assert.Equal(2026, msi.Year);
+        Assert.Equal("NGA", msi.ProductionAgency);
+    }
+
+    [Fact]
+    public void Mixed_ProjectsNavwarnPartsAndIgnoresOtherFeatures()
+    {
+        var w = Project("navwarn_mixed.gml", out _);
+        Assert.NotEmpty(w.Parts);
+        Assert.All(w.Parts, p => Assert.NotNull(p.Id));
+        // The mixed fixture has two NavwarnPart features.
+        Assert.True(w.Parts.Count >= 2);
+    }
+
+    [Fact]
+    public void Edition2_ExtractsWarningTextAndType()
+    {
+        var part = Assert.Single(Project("navwarn_ccg_ed2.gml", out _).Parts);
+
+        Assert.StartsWith("Wave monitoring buoys deployed in Burrard Inlet", part.WarningInformation, StringComparison.Ordinal);
+        Assert.Equal("Presence of Scientific Equipment", part.NavwarnType);
+        Assert.Equal(208, part.NavwarnTypeCode);
+    }
+
+    [Fact]
+    public void Edition2_ProjectsThePreamble()
+    {
+        var w = Project("navwarn_ccg_ed2.gml", out var diagnostics);
+
+        Assert.Empty(diagnostics);
+        var preamble = Assert.IsType<S124NavwarnPreamble>(w.Preamble);
+        Assert.Equal("Obstruction", preamble.Title);
+        Assert.Equal("Vancouver Harbour", preamble.GeneralArea);
+        Assert.Equal(new DateTimeOffset(2020, 4, 3, 0, 39, 14, TimeSpan.Zero), preamble.PublicationTime);
+        Assert.Null(preamble.CancellationDate);
+        Assert.Equal(15, preamble.NavwarnTypeGeneral);
+        var msi = Assert.IsType<S124MessageSeriesIdentifier>(preamble.MessageSeriesIdentifier);
+        Assert.Equal((477, 2020, "Canadian Coast Guard", "Canada", 1), (msi.WarningNumber, msi.Year, msi.ProductionAgency, msi.Country, msi.WarningType));
+        Assert.Equal("urn:mrn:CCG.S124.CA01.P.0477.20", msi.InteroperabilityIdentifier);
+    }
+
+    [Fact]
+    public void Edition2_ProjectsTheCancellationReference()
+    {
+        var reference = Assert.Single(Project("navwarn_ccg_ed2.gml", out _).References);
+
+        Assert.Equal(1, reference.ReferenceCategory);
+        Assert.False(reference.NoMessageOnHand);
+        var cancelled = Assert.Single(reference.Warnings);
+        Assert.Equal("urn:mrn:CCG.S124.CA01.P.1383.19", cancelled.InteroperabilityIdentifier);
+        Assert.Equal(2019, cancelled.Year);
+    }
+
+    [Fact]
+    public void Edition2_ProjectsTheValidityRange()
+    {
+        var part = Assert.Single(Project("navwarn_ccg_ed2.gml", out _).Parts);
+
+        var range = Assert.Single(part.ValidityRanges);
+        Assert.Equal(new DateTimeOffset(2020, 4, 3, 0, 0, 0, TimeSpan.Zero), range.Start);
+        Assert.Null(range.End);
+    }
+
+    [Fact]
+    public void Edition2_KeepsOneTextPerLanguage()
+    {
+        // A part gives one warningInformation/information per language (#932).
+        var part = Assert.Single(Project("navwarn_ccg_ed2_bilingual.gml", out _).Parts);
+
+        Assert.Collection(
+            part.Information,
+            eng =>
+            {
+                Assert.Equal("eng", eng.Language);
+                Assert.StartsWith("Wave monitoring buoys", eng.Text, StringComparison.Ordinal);
+                Assert.Contains('\n', eng.Text);
+            },
+            fra =>
+            {
+                Assert.Equal("fra", fra.Language);
+                Assert.StartsWith("Bouées de surveillance", fra.Text, StringComparison.Ordinal);
+            });
+        Assert.Equal(part.Information[0].Text, part.WarningInformation);
+    }
+
+    [Fact]
+    public void Edition2_ProjectsGeneralTypeLabel()
+    {
+        var w = Project("navwarn_ccg_ed2.gml", out _);
+
+        Assert.Equal(15, w.Preamble?.NavwarnTypeGeneral);
+        Assert.Equal("Scientific Instruments Change", w.Preamble?.NavwarnTypeGeneralName);
+    }
+
+    [Fact]
+    public void Edition1_InformationHasOneTextWithoutLanguage()
+    {
+        var part = Project("navwarn_mixed.gml", out _).Parts.First(p => p.WarningInformation is not null);
+
+        var info = Assert.Single(part.Information);
+        Assert.Null(info.Language);
+        Assert.Equal(part.WarningInformation, info.Text);
+    }
+
+    [Fact]
+    public void Mixed_ExtractsWarningInformationAndRestriction()
+    {
+        var w = Project("navwarn_mixed.gml", out _);
+        var part = w.Parts.First(p => p.Id == "f1");
+        Assert.Equal(7, part.Restriction);
+        Assert.Contains("Uncharted obstruction", part.WarningInformation);
+    }
+
+    [Fact]
+    public void Mixed_ProjectsReferencesInfoType()
+    {
+        var w = Project("navwarn_mixed.gml", out _);
+        var r = Assert.Single(w.References);
+        Assert.Equal(2, r.ReferenceCategory);
+        Assert.Equal("HYDROLANT 0412/2026", r.MessageReference);
+    }
+
+    [Fact]
+    public void Mixed_ProjectsSpatialQuality()
+    {
+        var w = Project("navwarn_mixed.gml", out _);
+        var sq = Assert.Single(w.SpatialQualities);
+        Assert.Equal(2, sq.QualityOfPosition);
+    }
+
+    [Fact]
+    public void Point_PartHasPointGeometry()
+    {
+        var w = Project("navwarn_point.gml", out _);
+        var part = w.Parts.First();
+        Assert.Equal(S124GeometryKind.Point, part.GeometryKind);
+        Assert.Single(part.Coordinates);
+    }
+
+    [Fact]
+    public void Surface_DatasetProjectsAtLeastOnePart()
+    {
+        var w = Project("navwarn_surface.gml", out var diagnostics);
+        Assert.NotEmpty(w.Parts);
+        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void Curve_PartHasCurveGeometry()
+    {
+        var w = Project("navwarn_curve.gml", out _);
+        var part = w.Parts.First();
+        Assert.Equal(S124GeometryKind.Curve, part.GeometryKind);
+        Assert.True(part.Coordinates.Count >= 2);
+    }
+
+    // ── xlink projection ─────────────────────────────────────────
+
+    [Fact]
+    public void Xlinks_ResolvesAffectedAreaAndTextPlacement()
+    {
+        var w = Project("navwarn_with_xlinks.gml", out var diagnostics);
+
+        var part = Assert.Single(w.Parts);
+        var area = Assert.Single(part.AffectedAreas);
+        Assert.Equal("area1", area.Id);
+        Assert.Equal(S124GeometryKind.Surface, area.GeometryKind);
+        Assert.Equal(2, area.Restriction);
+
+        var text = Assert.Single(part.TextPlacements);
+        Assert.Equal("text1", text.Id);
+        Assert.Equal("Test warning label", text.Text);
+        Assert.NotNull(text.Position);
+
+        // The "#nope" xlink must produce an unresolved diagnostic.
+        Assert.Contains(diagnostics, d => d.Code == "xlink.unresolved");
+    }
+
+    [Fact]
+    public void Xlinks_PreservesUnknownAttributesAsExtras()
+    {
+        var w = Project("navwarn_with_xlinks.gml", out _);
+        // restriction is consumed; nothing else should leak through ExtraAttributes for the part.
+        var part = Assert.Single(w.Parts);
+        Assert.DoesNotContain("restriction", part.ExtraAttributes.Keys);
+    }
+
+    [Fact]
+    public void EmptyDataset_Throws()
+    {
+        // Build a fully empty dataset; only this case throws.
+        var empty = new S124Dataset
+        {
+            ProductIdentifier = "S-124",
+            DatasetIdentifier = "x",
+            Features = [],
+            InformationTypes = [],
+        };
+        Assert.Throws<InvalidOperationException>(() =>
+            S124NavigationalWarning.From(empty, out _));
+    }
+
+    [Fact]
+    public void From_ThrowsOnNullDataset()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            S124NavigationalWarning.From(null!, out _));
+    }
+}

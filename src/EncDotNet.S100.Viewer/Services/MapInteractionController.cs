@@ -1,0 +1,762 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
+using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
+using EncDotNet.S100.Viewer.Services.DynamicSources;
+using EncDotNet.S100.Viewer.Tools;
+using EncDotNet.S100.Viewer.ViewModels;
+using EncDotNet.S100.Viewer.Views;
+using Mapsui;
+using Mapsui.Extensions;
+using Mapsui.Manipulations;
+using Mapsui.Projections;
+using Mapsui.UI.Avalonia;
+
+namespace EncDotNet.S100.Viewer.Services;
+
+/// <summary>
+/// Owns the map's gesture, pointer, scale-bar, and mouse-readout
+/// wiring. MainWindow constructs one of these and calls
+/// <see cref="Attach"/>; afterwards the window has no direct
+/// awareness of map gestures, viewport changes, or long-press
+/// timing.
+/// </summary>
+internal sealed class MapInteractionController
+{
+    /// <summary>
+    /// Threshold (milliseconds) for treating a press-and-hold as a long-press
+    /// pick gesture. Mirrors typical touch UI conventions and ECDIS
+    /// "press to identify" behavior.
+    /// </summary>
+    private const int LongPressMillis = 500;
+
+    /// <summary>
+    /// Maximum movement (in pixels) tolerated during a long-press before the
+    /// gesture is cancelled (the user is panning, not picking).
+    /// </summary>
+    private const double LongPressMoveTolerance = 6.0;
+
+    /// <summary>
+    /// Raised for a plain single tap on the map — outside Pick Mode, with no
+    /// map tool active and no pick modifier held — with where it landed and
+    /// the view it landed in. Lets passive overlays (e.g. library coverage,
+    /// issue #655) react to a click without competing with feature picking.
+    /// </summary>
+    /// <remarks>
+    /// Stray clicks are not taps: the tap is held for the platform's
+    /// double-tap time and dropped if it becomes a double-click (a zoom), and
+    /// a press that moved more than the platform's tap size (a pan) or that
+    /// became a long-press is never a tap.
+    /// </remarks>
+    public event EventHandler<MapTap>? PlainTapped;
+
+    private readonly MainViewModel _viewModel;
+    private readonly IPickService _pickService;
+    private readonly IDatasetLoaderService _loader;
+    private readonly IDynamicSourcePickService? _dynamicPickService;
+
+    /// <summary>
+    /// The depth basis indicator's service (#1191), told about each viewport
+    /// change next to the overscale indication; null in hosts without one.
+    /// </summary>
+    public Depth.DepthBasisService? DepthBasis { get; init; }
+
+    /// <summary>
+    /// The map's viewport, for the zoom buttons: animating through it reports
+    /// the zoom's target to the demand planner (map rendering slice&#160;9), so
+    /// the target's cells and tiles start before the zoom ends.
+    /// </summary>
+    public IMapViewportController? Viewport { get; init; }
+
+    private MapControl? _mapControl;
+    private MapsuiMapNavigator? _mapNavigator;
+
+    private DispatcherTimer? _longPressTimer;
+    private Point? _longPressOrigin;
+    private bool _longPressFired;
+
+    /// <summary>Where the most recent left-button press on the map landed, for the pan-is-not-a-tap test.</summary>
+    private Point? _pressOrigin;
+
+    /// <summary>True when the pointer moved beyond the tap size since <see cref="_pressOrigin"/>.</summary>
+    private bool _pressMoved;
+
+    private PointerType _pressPointerType = PointerType.Mouse;
+
+    /// <summary>A plain tap held until the double-tap time has passed without a second click.</summary>
+    private DispatcherTimer? _plainTapTimer;
+    private MapTap? _pendingPlainTap;
+
+    /// <summary>When the last double-tap arrived; the second click's own tap is dropped within the double-tap time.</summary>
+    private long _lastDoubleTapTimestamp;
+
+    /// <summary>
+    /// Modifier state captured at the most recent pointer-press on the map,
+    /// used by the tap handler to detect modifier-click since the Mapsui
+    /// tap event doesn't carry keyboard modifiers itself.
+    /// </summary>
+    private KeyModifiers _lastPressedModifiers = KeyModifiers.None;
+
+    private Point? _lastMouseScreenPos;
+
+    /// <summary>
+    /// Active map-tool registry. Pointer / double-tap events are offered to
+    /// the active tool first; if the tool marks the event handled the
+    /// existing pick / pan logic is skipped for that gesture.
+    /// </summary>
+    private MapToolController? _toolController;
+
+    /// <summary>
+    /// Called by <see cref="MainWindow"/> after construction to inject the
+    /// tool controller. Kept as a setter (rather than a constructor param)
+    /// because the controller is owned by the view-model and the
+    /// interaction-controller is built before the view-model is fully wired.
+    /// </summary>
+    public void SetToolController(MapToolController controller)
+    {
+        ArgumentNullException.ThrowIfNull(controller);
+        _toolController = controller;
+    }
+
+    public MapInteractionController(
+        MainViewModel viewModel,
+        IPickService pickService,
+        IDatasetLoaderService loader)
+        : this(viewModel, pickService, loader, dynamicPickService: null)
+    {
+    }
+
+    public MapInteractionController(
+        MainViewModel viewModel,
+        IPickService pickService,
+        IDatasetLoaderService loader,
+        IDynamicSourcePickService? dynamicPickService)
+    {
+        ArgumentNullException.ThrowIfNull(viewModel);
+        ArgumentNullException.ThrowIfNull(pickService);
+        ArgumentNullException.ThrowIfNull(loader);
+
+        _viewModel = viewModel;
+        _pickService = pickService;
+        _loader = loader;
+        _dynamicPickService = dynamicPickService;
+    }
+
+    /// <summary>
+    /// Wires the map control, zoom buttons, scale-bar, and compass to this
+    /// controller. Call once after the visual tree is built.
+    /// </summary>
+    public void Attach(
+        MapControl mapControl,
+        Button zoomInButton,
+        Button zoomOutButton,
+        Button zoomToExtentButton,
+        ScaleBarView scaleBar,
+        CompassRoseView compassRose)
+    {
+        ArgumentNullException.ThrowIfNull(mapControl);
+        ArgumentNullException.ThrowIfNull(zoomInButton);
+        ArgumentNullException.ThrowIfNull(zoomOutButton);
+        ArgumentNullException.ThrowIfNull(zoomToExtentButton);
+        ArgumentNullException.ThrowIfNull(scaleBar);
+        ArgumentNullException.ThrowIfNull(compassRose);
+
+        _mapControl = mapControl;
+        _mapNavigator = mapControl.Map is { } map
+            ? new MapsuiMapNavigator(map)
+            : null;
+
+        // Trackpad magnify / rotate gestures, double-tap zoom, single-tap pick.
+        mapControl.AddHandler(InputElement.PointerTouchPadGestureMagnifyEvent, OnMapMagnify);
+        mapControl.AddHandler(InputElement.PointerTouchPadGestureRotateEvent, OnMapRotateGesture);
+        mapControl.DoubleTapped += OnMapDoubleTapped;
+        mapControl.MapTapped += OnMapTapped;
+
+        // Long-press (~500ms hold without moving) is always a one-shot pick
+        // regardless of Pick Mode. Tunneling lets us see the press before
+        // MapControl handles it.
+        mapControl.AddHandler(InputElement.PointerPressedEvent, OnMapPointerPressed, RoutingStrategies.Tunnel);
+        mapControl.AddHandler(InputElement.PointerMovedEvent, OnMapPointerMoved, RoutingStrategies.Tunnel);
+        mapControl.AddHandler(InputElement.PointerReleasedEvent, OnMapPointerReleased, RoutingStrategies.Tunnel);
+        mapControl.AddHandler(InputElement.PointerCaptureLostEvent, OnMapPointerCaptureLost, RoutingStrategies.Tunnel);
+        mapControl.PointerExited += OnMapPointerExited;
+
+        // Trackpad scroll/swipe to pan (tunnel phase to intercept before MapControl).
+        mapControl.AddHandler(InputElement.PointerWheelChangedEvent, OnMapPointerWheelChanged, RoutingStrategies.Tunnel);
+
+        // Zoom in/out overlay buttons.
+        zoomInButton.Click += OnZoomInClick;
+        zoomOutButton.Click += OnZoomOutClick;
+        zoomToExtentButton.Click += OnZoomToExtentClick;
+
+        // Compass-rose drag drives map rotation.
+        compassRose.RotationRequested += OnCompassRotationRequested;
+        compassRose.RotationResetRequested += OnCompassRotationReset;
+
+        // Keep the scale-bar and mouse lat/lon readouts synced with the
+        // viewport.
+        if (mapControl.Map?.Navigator is { } nav)
+        {
+            nav.ViewportChanged += (_, _) => HandleViewportChangedForScaleBar(scaleBar, compassRose);
+            nav.ViewportChanged += (_, _) => HandleViewportChangedForMouseLatLon();
+            UpdateScaleBar(scaleBar, compassRose, nav.Viewport);
+        }
+    }
+
+    private void OnZoomInClick(object? sender, RoutedEventArgs e)
+    {
+        ZoomBy(0.5);
+    }
+
+    private void OnZoomOutClick(object? sender, RoutedEventArgs e)
+    {
+        ZoomBy(2.0);
+    }
+
+    private void ZoomBy(double factor)
+    {
+        if (_mapControl?.Map?.Navigator is not { } navigator)
+            return;
+        var viewport = navigator.Viewport;
+        if (Viewport is { } host)
+            host.AnimateToCenterAndResolution(new MPoint(viewport.CenterX, viewport.CenterY), viewport.Resolution * factor, 250);
+        else
+            navigator.ZoomTo(viewport.Resolution * factor, 250);
+    }
+
+    /// <summary>
+    /// Zooms out to the combined extent of all loaded layers (the union
+    /// reported by <see cref="Mapsui.Map.Extent"/>) so the user can see
+    /// every loaded dataset at once without repeatedly clicking
+    /// Zoom Out.
+    /// </summary>
+    private void OnZoomToExtentClick(object? sender, RoutedEventArgs e)
+    {
+        if (_mapControl?.Map is not { } map || _mapNavigator is not { } navigation)
+            return;
+
+        var extent = map.Extent;
+        if (extent is null || extent.Width <= 0 || extent.Height <= 0)
+            return;
+
+        navigation.ZoomToExtent(extent, durationMilliseconds: 250);
+    }
+
+    private void HandleViewportChangedForScaleBar(ScaleBarView scaleBar, CompassRoseView compassRose)
+    {
+        if (_mapControl?.Map?.Navigator is not { } nav)
+            return;
+
+        var viewport = nav.Viewport;
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            UpdateScaleBar(scaleBar, compassRose, viewport);
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(() => UpdateScaleBar(scaleBar, compassRose, viewport));
+        }
+    }
+
+    private void UpdateScaleBar(ScaleBarView scaleBar, CompassRoseView compassRose, Viewport viewport)
+    {
+        scaleBar.UpdateForViewport(viewport.Resolution, viewport.CenterY);
+        compassRose.UpdateForViewport(viewport.Rotation);
+        _viewModel.StatusBar.MapScaleText = MapScaleFormatter.Format(viewport.Resolution, viewport.CenterY);
+        UpdateOverscale(viewport);
+        DepthBasis?.Invalidate();
+    }
+
+    /// <summary>
+    /// Recomputes the status-bar overscale indication (issue #441) for the
+    /// current <paramref name="viewport"/>: gathers the loaded, drawing,
+    /// scale-bearing cells from the loader and evaluates each cell's overscale
+    /// factor against the live resolution, pushing the worst offender + per-cell
+    /// list to the view-model.
+    /// </summary>
+    private void UpdateOverscale(Viewport viewport)
+    {
+        var cells = _loader.GetOverscaleCells();
+        if (cells.Count == 0)
+        {
+            _viewModel.StatusBar.UpdateOverscale(OverscaleReport.None);
+            return;
+        }
+
+        var extent = viewport.ToExtent();
+        var envelope = new NetTopologySuite.Geometries.Envelope(
+            extent.MinX, extent.MaxX, extent.MinY, extent.MaxY);
+        var report = OverscaleEvaluator.Evaluate(cells, envelope, viewport.Resolution);
+        _viewModel.StatusBar.UpdateOverscale(report);
+    }
+
+    private void OnMapMagnify(object? sender, PointerDeltaEventArgs e)
+    {
+        if (_mapControl?.Map?.Navigator is not { } navigator)
+            return;
+
+        var resolution = navigator.Viewport.Resolution;
+        var newResolution = resolution / (1 + e.Delta.Y);
+        var position = e.GetPosition(_mapControl);
+        var center = new ScreenPosition(position.X, position.Y);
+        navigator.ZoomTo(newResolution, center);
+        e.Handled = true;
+    }
+
+    private void OnMapRotateGesture(object? sender, PointerDeltaEventArgs e)
+    {
+        if (_mapControl?.Map?.Navigator is not { } navigator)
+            return;
+
+        // macOS reports the rotation delta in degrees (counter-clockwise positive).
+        // Mapsui's viewport rotation is clockwise positive, so negate.
+        var deltaDegrees = -e.Delta.X;
+        if (deltaDegrees == 0)
+            return;
+
+        var newRotation = navigator.Viewport.Rotation + deltaDegrees;
+        // Normalize to [0, 360).
+        newRotation = ((newRotation % 360.0) + 360.0) % 360.0;
+        navigator.RotateTo(newRotation);
+        e.Handled = true;
+    }
+
+    private void OnCompassRotationRequested(double rotationDegrees)
+    {
+        if (_mapControl?.Map?.Navigator is not { } navigator)
+            return;
+        navigator.RotateTo(rotationDegrees);
+    }
+
+    private void OnCompassRotationReset()
+    {
+        if (_mapControl?.Map?.Navigator is not { } navigator)
+            return;
+        // Pick the equivalent rotation closest to 0 to avoid spinning the long way.
+        var current = navigator.Viewport.Rotation;
+        var target = current > 180.0 ? 360.0 : 0.0;
+        navigator.RotateTo(target, 250);
+    }
+
+    private void OnMapPointerWheelChanged(object? sender, PointerWheelEventArgs e)
+    {
+        if (_mapControl?.Map?.Navigator is not { } navigator)
+            return;
+
+        var viewport = navigator.Viewport;
+
+        // Pan vector in the unrotated (screen-aligned) world frame: dragging
+        // the content right/up (Delta.X/Y > 0) moves the viewport center
+        // left/up by the same amount.
+        var dxScreen = -e.Delta.X * viewport.Resolution * 50;
+        var dyScreen = e.Delta.Y * viewport.Resolution * 50;
+
+        // Rotate the screen-space delta into world space by the viewport
+        // rotation so swipes always agree with the on-screen orientation.
+        var rad = viewport.Rotation * Math.PI / 180.0;
+        var sin = Math.Sin(rad);
+        var cos = Math.Cos(rad);
+        var dxWorld = dxScreen * cos - dyScreen * sin;
+        var dyWorld = dxScreen * sin + dyScreen * cos;
+
+        navigator.CenterOn(viewport.CenterX + dxWorld, viewport.CenterY + dyWorld);
+        e.Handled = true;
+    }
+
+    private void OnMapDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        // A double-click is never a Library tap: drop the held first click,
+        // and the second click's tap if it arrives after this.
+        CancelPendingPlainTap();
+        _lastDoubleTapTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+
+        // Active tool gets first refusal (e.g. measure-mode finalises on double-tap).
+        if (_toolController?.OnDoubleTapped(e) == true)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        // In Pick Mode the double-tap zoom is suppressed so that successive
+        // taps on adjacent features each register as picks rather than zooms.
+        if (_viewModel.MapTools.IsPickModeActive)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (_mapControl?.Map?.Navigator is not { } navigator)
+            return;
+
+        var resolution = navigator.Viewport.Resolution;
+        var newResolution = resolution / 2;
+        var position = e.GetPosition(_mapControl);
+        var center = new ScreenPosition(position.X, position.Y);
+        navigator.ZoomTo(newResolution, center, 250);
+        e.Handled = true;
+    }
+
+    private void OnMapTapped(object? sender, BaseEventArgs e)
+    {
+        if (e.GestureType != GestureType.SingleTap)
+            return;
+
+        // A long-press already produced a pick at PointerPressed → release time;
+        // suppress the synthesized SingleTap that follows so we don't pick twice
+        // (or, worse, show then immediately clear the panel).
+        if (_longPressFired)
+        {
+            _longPressFired = false;
+            return;
+        }
+
+        // Modifier-click is always a one-shot pick regardless of Pick Mode:
+        // Cmd-click on macOS, Ctrl-click on Windows / Linux.
+        if (IsPickModifierActive())
+        {
+            PerformPickAt(e);
+            return;
+        }
+
+        // Outside Pick Mode, a plain single-tap clears the current pick (and
+        // its map highlight) when there is one — the "click empty space to
+        // deselect" convention. With no pick to clear it stays a no-op so it
+        // doesn't fight with double-tap-to-zoom (the first tap of a double-tap
+        // also fires here; clearing on it is harmless). A tap while a map tool
+        // (e.g. Measure) is active is left for the tool and never clears.
+        if (!_viewModel.MapTools.IsPickModeActive)
+        {
+            if (ShouldClearPickOnTap(
+                    pickModeActive: false,
+                    toolActive: _toolController?.ActiveTool is not null,
+                    pickModifierActive: false,
+                    hasPick: _viewModel.PickReport.HasPick))
+            {
+                _viewModel.PickReport.Clear();
+            }
+
+            if (_toolController?.ActiveTool is null
+                && PlainTapped is not null
+                && !_pressMoved
+                && !IsWithinDoubleTapTime(_lastDoubleTapTimestamp)
+                && e.WorldPosition is { } world
+                && _mapControl?.Map?.Navigator is { } navigator)
+            {
+                var (lon, lat) = Mapsui.Projections.SphericalMercator.ToLonLat(world.X, world.Y);
+                var tapSize = PlatformSettings()?.GetTapSize(_pressPointerType) ?? new Size(4, 4);
+                HoldPlainTap(new MapTap(
+                    new EncDotNet.S100.DataModel.GeoPosition(lat, lon),
+                    e.ScreenPosition.X,
+                    e.ScreenPosition.Y,
+                    world.X,
+                    world.Y,
+                    navigator.Viewport.Resolution,
+                    Math.Max(tapSize.Width, tapSize.Height)));
+            }
+
+            return;
+        }
+
+        PerformPickAt(e);
+    }
+
+    private static Avalonia.Platform.IPlatformSettings? PlatformSettings() => Application.Current?.PlatformSettings;
+
+    private TimeSpan DoubleTapTime() =>
+        PlatformSettings()?.GetDoubleTapTime(_pressPointerType) ?? TimeSpan.FromMilliseconds(500);
+
+    private bool IsWithinDoubleTapTime(long timestamp) =>
+        timestamp != 0 && System.Diagnostics.Stopwatch.GetElapsedTime(timestamp) < DoubleTapTime();
+
+    /// <summary>
+    /// Holds a plain tap for the platform's double-tap time; it is raised
+    /// through <see cref="PlainTapped"/> only if no double-tap arrives first.
+    /// </summary>
+    private void HoldPlainTap(MapTap tap)
+    {
+        CancelPendingPlainTap();
+        _pendingPlainTap = tap;
+        _plainTapTimer = new DispatcherTimer { Interval = DoubleTapTime() };
+        _plainTapTimer.Tick += OnPlainTapTimerElapsed;
+        _plainTapTimer.Start();
+    }
+
+    private void OnPlainTapTimerElapsed(object? sender, EventArgs e)
+    {
+        var tap = _pendingPlainTap;
+        CancelPendingPlainTap();
+        if (tap is not null)
+            PlainTapped?.Invoke(this, tap);
+    }
+
+    private void CancelPendingPlainTap()
+    {
+        if (_plainTapTimer is { } timer)
+        {
+            timer.Stop();
+            timer.Tick -= OnPlainTapTimerElapsed;
+        }
+
+        _plainTapTimer = null;
+        _pendingPlainTap = null;
+    }
+
+    /// <summary>
+    /// True when a press that started at <paramref name="origin"/> and is now
+    /// at <paramref name="current"/> has moved beyond the platform's tap size:
+    /// it is a pan (or a drag), never a tap.
+    /// </summary>
+    internal static bool MovedBeyondTap(Point origin, Point current, Size tapSize) =>
+        Math.Abs(current.X - origin.X) > tapSize.Width || Math.Abs(current.Y - origin.Y) > tapSize.Height;
+
+    /// <summary>
+    /// Decides whether a plain (unmodified) single-tap on the map should clear
+    /// the current pick. Extracted as a pure function so the rule can be unit
+    /// tested without an Avalonia <see cref="MapControl"/>.
+    /// </summary>
+    /// <param name="pickModeActive">Whether Pick Mode is active.</param>
+    /// <param name="toolActive">Whether a map tool (e.g. Measure) is active.</param>
+    /// <param name="pickModifierActive">
+    /// Whether the platform pick modifier (Cmd/Ctrl) was held — a modifier-click
+    /// is a one-shot pick, never a clear.
+    /// </param>
+    /// <param name="hasPick">Whether there is a current pick to clear.</param>
+    /// <returns>
+    /// <c>true</c> only when not in Pick Mode, no tool is active, no pick
+    /// modifier is held, and a pick is present.
+    /// </returns>
+    internal static bool ShouldClearPickOnTap(
+        bool pickModeActive,
+        bool toolActive,
+        bool pickModifierActive,
+        bool hasPick)
+        => !pickModeActive && !toolActive && !pickModifierActive && hasPick;
+
+    /// <summary>
+    /// Returns true when the modifier state captured at the most recent
+    /// pointer-press matches the platform's pick modifier: <c>Cmd</c> (Meta)
+    /// on macOS, <c>Ctrl</c> on Windows and Linux.
+    /// </summary>
+    private bool IsPickModifierActive()
+    {
+        if (OperatingSystem.IsMacOS())
+            return (_lastPressedModifiers & KeyModifiers.Meta) != 0;
+        return (_lastPressedModifiers & KeyModifiers.Control) != 0;
+    }
+
+    private void OnMapPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_mapControl is null)
+            return;
+
+        // Offer the gesture to the active tool first (e.g. measure-mode
+        // begins drag-vs-click tracking here). If the tool handles it,
+        // skip the long-press / pick wiring entirely.
+        if (_toolController?.OnPointerPressed(e) == true)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        var props = e.GetCurrentPoint(_mapControl).Properties;
+        if (!props.IsLeftButtonPressed)
+            return;
+
+        // Capture modifier state for OnMapTapped's modifier-click test (the
+        // Mapsui tap event doesn't carry keyboard modifiers).
+        _lastPressedModifiers = e.KeyModifiers;
+
+        // Remember where the press started: a press that then moves beyond
+        // the tap size is a pan, never a tap.
+        _pressOrigin = e.GetPosition(_mapControl);
+        _pressMoved = false;
+        _pressPointerType = e.Pointer.Type;
+
+        // Modifier-click is handled in OnMapTapped (where we have a MapInfo
+        // resolver); skip the long-press timer for that case.
+        if (IsPickModifierActive())
+            return;
+
+        _longPressOrigin = e.GetPosition(_mapControl);
+        _longPressFired = false;
+
+        _longPressTimer?.Stop();
+        _longPressTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(LongPressMillis),
+        };
+        _longPressTimer.Tick += OnLongPressElapsed;
+        _longPressTimer.Start();
+    }
+
+    private void OnMapPointerMoved(object? sender, PointerEventArgs e)
+    {
+        UpdateMouseLatLon(e);
+
+        // Forward to active tool (e.g. measure-mode rubber-band update).
+        // Move events are advisory: tools may set Handled but we still want
+        // the lat/lon readout updated above.
+        if (_toolController?.OnPointerMoved(e) == true)
+        {
+            e.Handled = true;
+        }
+
+        TrackPressMovement(e);
+
+        if (_longPressTimer is null || _longPressOrigin is not { } origin || _mapControl is null)
+            return;
+
+        var current = e.GetPosition(_mapControl);
+        var dx = current.X - origin.X;
+        var dy = current.Y - origin.Y;
+        if ((dx * dx + dy * dy) > LongPressMoveTolerance * LongPressMoveTolerance)
+            CancelLongPress();
+    }
+
+    private void OnMapPointerExited(object? sender, PointerEventArgs e)
+    {
+        _lastMouseScreenPos = null;
+        _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
+        _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
+    }
+
+    private void HandleViewportChangedForMouseLatLon()
+    {
+        // Pan/zoom can move the world under a stationary cursor (common with
+        // trackpad gestures), so refresh the readout whenever the viewport
+        // changes — but only if the cursor is currently over the map.
+        if (_lastMouseScreenPos is not { } pos)
+            return;
+
+        Dispatcher.UIThread.Post(() => UpdateMouseLatLonFromScreen(pos));
+    }
+
+    private void UpdateMouseLatLon(PointerEventArgs e)
+    {
+        if (_mapControl is null)
+            return;
+
+        var position = e.GetPosition(_mapControl);
+        var bounds = _mapControl.Bounds;
+        if (position.X < 0 || position.Y < 0 ||
+            position.X > bounds.Width || position.Y > bounds.Height)
+        {
+            _lastMouseScreenPos = null;
+            _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
+            _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
+            return;
+        }
+
+        _lastMouseScreenPos = position;
+        UpdateMouseLatLonFromScreen(position);
+    }
+
+    private void UpdateMouseLatLonFromScreen(Point position)
+    {
+        if (_mapControl?.Map?.Navigator is not { } navigator)
+        {
+            _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
+            _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
+            return;
+        }
+
+        var world = navigator.Viewport.ScreenToWorld(position.X, position.Y);
+        var (lon, lat) = SphericalMercator.ToLonLat(world.X, world.Y);
+        if (double.IsNaN(lat) || double.IsNaN(lon) ||
+            double.IsInfinity(lat) || double.IsInfinity(lon) ||
+            lat < -90.0 || lat > 90.0)
+        {
+            _viewModel.StatusBar.MouseLatText = LatLonFormatter.Placeholder;
+            _viewModel.StatusBar.MouseLonText = LatLonFormatter.Placeholder;
+            return;
+        }
+
+        // Normalize longitude into the canonical [-180, 180] range so that
+        // panning past the antimeridian still produces sensible readings.
+        lon = ((lon + 540.0) % 360.0) - 180.0;
+        _viewModel.StatusBar.MouseLatText = LatLonFormatter.FormatLatitude(lat);
+        _viewModel.StatusBar.MouseLonText = LatLonFormatter.FormatLongitude(lon);
+    }
+
+    private void OnMapPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_toolController?.OnPointerReleased(e) == true)
+        {
+            e.Handled = true;
+        }
+
+        TrackPressMovement(e);
+        CancelLongPress();
+    }
+
+    private void TrackPressMovement(PointerEventArgs e)
+    {
+        if (_pressOrigin is not { } origin || _pressMoved || _mapControl is null)
+            return;
+
+        var tapSize = PlatformSettings()?.GetTapSize(_pressPointerType) ?? new Size(4, 4);
+        if (MovedBeyondTap(origin, e.GetPosition(_mapControl), tapSize))
+            _pressMoved = true;
+    }
+
+    private void OnMapPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        CancelLongPress();
+    }
+
+    private void CancelLongPress()
+    {
+        _longPressTimer?.Stop();
+        _longPressTimer = null;
+        _longPressOrigin = null;
+    }
+
+    private void OnLongPressElapsed(object? sender, EventArgs e)
+    {
+        if (_longPressOrigin is not { } origin || _mapControl is null)
+        {
+            CancelLongPress();
+            return;
+        }
+
+        _longPressTimer?.Stop();
+        _longPressTimer = null;
+
+        // Pick at the press position. Setting _longPressFired suppresses the
+        // SingleTap that will be synthesized when the user lifts their finger.
+        var world = _mapControl.Map?.Navigator?.Viewport.ScreenToWorld(origin.X, origin.Y);
+        _longPressOrigin = null;
+        _longPressFired = true;
+        PickAt(world);
+    }
+
+    private void PerformPickAt(BaseEventArgs e) => PickAt(e.WorldPosition);
+
+    /// <summary>
+    /// Picks at <paramref name="world"/> through the map session's engine
+    /// pick (map rendering slice 8), with the dynamic sources' hits.
+    /// </summary>
+    private void PickAt(MPoint? world)
+    {
+        var resolution = _mapControl?.Map?.Navigator?.Viewport.Resolution ?? double.NaN;
+        _ = _pickService.HandlePickAsync(world, resolution, CollectDynamicHits(world, resolution));
+    }
+
+    /// <summary>
+    /// Asks the dynamic-source pick service to hit-test
+    /// <paramref name="world"/>. Returns an empty list when the service is
+    /// unavailable (legacy ctor / test stubs) or there is no position.
+    /// </summary>
+    private IReadOnlyList<ViewModels.DynamicPickHit> CollectDynamicHits(MPoint? world, double resolution)
+    {
+        if (_dynamicPickService is null || world is null)
+        {
+            return Array.Empty<ViewModels.DynamicPickHit>();
+        }
+
+        return _dynamicPickService.Pick(world, resolution);
+    }
+}

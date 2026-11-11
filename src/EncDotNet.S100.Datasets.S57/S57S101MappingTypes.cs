@@ -1,0 +1,252 @@
+using System.Collections.ObjectModel;
+
+namespace EncDotNet.S100.Datasets.S57;
+
+/// <summary>
+/// S-57 geometric primitive of a feature instance, used to drive
+/// geometry-conditional feature-class redirects (S-57 Appendix B.1 §3.2:
+/// point / line / area). The numeric values match the S-57 spatial
+/// primitive codes (1 = point, 2 = line/curve, 3 = area/surface).
+/// </summary>
+public enum S57GeometryPrimitive
+{
+    /// <summary>No / unknown primitive (the feature carries no geometry, or
+    /// the primitive is not relevant to the redirect).</summary>
+    None = 0,
+
+    /// <summary>Point primitive (S-57 primitive 1).</summary>
+    Point = 1,
+
+    /// <summary>Line / curve primitive (S-57 primitive 2).</summary>
+    Curve = 2,
+
+    /// <summary>Area / surface primitive (S-57 primitive 3).</summary>
+    Surface = 3,
+}
+
+/// <summary>
+/// Rule describing how an S-57 feature class (object class, OBJL) maps to one
+/// or more S-101 feature classes.
+/// </summary>
+/// <remarks>
+/// <para>
+/// In the simplest case a rule has only a <see cref="DefaultS101Code"/>, which
+/// is the S-101 Feature Catalogue code that every instance of the OBJL maps
+/// to. Set <see cref="DefaultS101Code"/> to <c>null</c> to drop the feature
+/// entirely (e.g. S-57 <c>M_HOPA</c> has no S-101 equivalent).
+/// </para>
+/// <para>
+/// Cross-class redirects are expressed via <see cref="Redirects"/>. Redirects
+/// are evaluated in declaration order and the first matching redirect wins;
+/// if none match, <see cref="DefaultS101Code"/> applies. This models the
+/// pattern used by the IHO S-57 to S-101 Conversion Guidance, e.g.
+/// <c>CTRPNT</c> with <c>CATCTR ∈ {1, 5}</c> redirects to <c>Landmark</c>,
+/// while other CTRPNT instances are dropped.
+/// </para>
+/// <para>
+/// <see cref="AttributeOverrides"/> are applied to every instance regardless
+/// of which redirect (if any) fires. A redirect can supply additional
+/// overrides via <see cref="S57FeatureRedirect.AttributeOverrides"/>; redirect
+/// overrides take precedence over the rule-level overrides.
+/// </para>
+/// </remarks>
+public sealed record S57FeatureRule
+{
+    /// <summary>S-57 numeric object class code (OBJL).</summary>
+    public required ushort Objl { get; init; }
+
+    /// <summary>S-57 object class acronym (e.g. <c>COALNE</c>).</summary>
+    public required string S57Acronym { get; init; }
+
+    /// <summary>
+    /// Default S-101 Feature Catalogue code. When <c>null</c>, the feature is
+    /// dropped (unless a redirect matches).
+    /// </summary>
+    public string? DefaultS101Code { get; init; }
+
+    /// <summary>
+    /// Conditional cross-class redirects evaluated in order; the first match
+    /// wins.
+    /// </summary>
+    public IReadOnlyList<S57FeatureRedirect> Redirects { get; init; } = [];
+
+    /// <summary>
+    /// Geometric primitives for which the feature is not converted, when no
+    /// redirect matches. Used where S-57 allows a primitive that the S-101
+    /// target does not, and the conversion guidance converts it to nothing —
+    /// e.g. an area <c>RECTRC</c> (S-101 <c>RecommendedTrack</c> is curve
+    /// only).
+    /// </summary>
+    public IReadOnlyList<S57GeometryPrimitive> DroppedPrimitives { get; init; } = [];
+
+    /// <summary>
+    /// Attribute overrides applied whenever this rule is selected (default or
+    /// redirect path). Keyed by S-57 attribute acronym.
+    /// </summary>
+    public IReadOnlyDictionary<string, S57AttributeOverride> AttributeOverrides { get; init; }
+        = ReadOnlyDictionary<string, S57AttributeOverride>.Empty;
+}
+
+/// <summary>
+/// Conditional redirect on an <see cref="S57FeatureRule"/>: when the redirect's
+/// conditions are all satisfied, the feature is mapped to
+/// <see cref="TargetS101Code"/> instead of the rule's default S-101 code. A
+/// redirect may test an S-57 attribute (via <see cref="ConditionAttribute"/>),
+/// the feature's geometric primitive (via <see cref="ConditionPrimitives"/>),
+/// or both; when both are present they are combined with logical AND. At least
+/// one condition must be specified.
+/// </summary>
+public sealed record S57FeatureRedirect
+{
+    /// <summary>
+    /// S-57 attribute acronym used to test the redirect condition, or
+    /// <c>null</c> for a purely geometry-based redirect (one that fires solely
+    /// on <see cref="ConditionPrimitives"/>).
+    /// </summary>
+    public string? ConditionAttribute { get; init; }
+
+    /// <summary>
+    /// S-57 attribute values that satisfy the condition. Ignored when
+    /// <see cref="ConditionPresent"/> is <c>true</c>; must contain at least
+    /// one value when <see cref="ConditionAttribute"/> is set and
+    /// <see cref="ConditionPresent"/> is <c>false</c> (a value-matching
+    /// redirect with no values can never match and is rejected when the
+    /// mapping is constructed).
+    /// </summary>
+    public IReadOnlyList<string> ConditionValues { get; init; } = [];
+
+    /// <summary>
+    /// When <c>true</c>, the redirect fires whenever <see cref="ConditionAttribute"/>
+    /// is present with any non-empty value, rather than matching a specific
+    /// value in <see cref="ConditionValues"/>. Used for continuous-valued
+    /// discriminators such as a sector light's <c>SECTR1</c> bearing, where the
+    /// mere presence of the attribute (not its value) selects the target class.
+    /// </summary>
+    public bool ConditionPresent { get; init; }
+
+    /// <summary>
+    /// When <c>true</c>, <see cref="ConditionAttribute"/> is read as an S-57
+    /// list (comma-separated) and the redirect fires when any list item is in
+    /// <see cref="ConditionValues"/>, rather than requiring the whole value to
+    /// match. Used for list-valued discriminators such as <c>CATLIT</c>, where a
+    /// light is directional when the list contains 1 (e.g. <c>"1,4"</c>).
+    /// Ignored when <see cref="ConditionPresent"/> is <c>true</c>.
+    /// </summary>
+    public bool ConditionMatchesListItem { get; init; }
+
+    /// <summary>
+    /// Geometric primitives that satisfy the condition. When non-empty, the
+    /// redirect only fires for a feature whose primitive is in this set (in
+    /// addition to any attribute condition). Empty means "any primitive".
+    /// Used where a single S-57 object class splits across S-101 classes by
+    /// geometry — e.g. S-57 <c>MORFAC</c> (point) becomes <c>Dolphin</c> while
+    /// line/area <c>MORFAC</c> becomes <c>ShorelineConstruction</c>.
+    /// </summary>
+    public IReadOnlyList<S57GeometryPrimitive> ConditionPrimitives { get; init; } = [];
+
+    /// <summary>Target S-101 Feature Catalogue code when the condition matches.</summary>
+    public required string TargetS101Code { get; init; }
+
+    /// <summary>
+    /// Additional attribute overrides applied only when this redirect fires.
+    /// Layered on top of the rule's <see cref="S57FeatureRule.AttributeOverrides"/>.
+    /// Keyed by S-57 attribute acronym.
+    /// </summary>
+    public IReadOnlyDictionary<string, S57AttributeOverride> AttributeOverrides { get; init; }
+        = ReadOnlyDictionary<string, S57AttributeOverride>.Empty;
+}
+
+/// <summary>
+/// Per-feature attribute override: changes the target S-101 attribute name
+/// and/or remaps individual enum values.
+/// </summary>
+public sealed record S57AttributeOverride
+{
+    /// <summary>
+    /// When <c>true</c>, the attribute is dropped entirely on features to which
+    /// this override applies, regardless of value. Used when a feature-class
+    /// redirect moves an S-57 attribute's owner to an S-101 class that does not
+    /// bind the attribute's default target — e.g. <c>CATMOR</c> is dropped when
+    /// <c>MORFAC</c> redirects to <c>ShorelineConstruction</c>, which has no
+    /// <c>categoryOfDolphin</c>. Takes precedence over all other members.
+    /// </summary>
+    public bool Drop { get; init; }
+
+    /// <summary>
+    /// Override S-101 attribute name. <c>null</c> means "keep the default
+    /// attribute mapping". Set to a non-null string to redirect the attribute
+    /// (e.g. <c>CATCTR</c> on a <c>Landmark</c> redirect maps to
+    /// <c>category of landmark</c>).
+    /// </summary>
+    public string? S101Code { get; init; }
+
+    /// <summary>
+    /// Per-source-value override of the target S-101 attribute name. When the
+    /// S-57 value matches a key, the redirect attribute name takes precedence
+    /// over both <see cref="S101Code"/> and the rule-level default. Used to
+    /// model conditional cross-attribute mapping such as
+    /// <c>COALNE/CATCOA</c> selectively redirecting to <c>natureOfSurface</c>
+    /// (IHO Conversion Guidance § 4.5.1).
+    /// </summary>
+    public IReadOnlyDictionary<string, string> S101CodeByValue { get; init; }
+        = ReadOnlyDictionary<string, string>.Empty;
+
+    /// <summary>
+    /// Per-value remap. A key with a non-null value rewrites the S-57 value
+    /// to the given S-101 value. A key with a <c>null</c> value drops the
+    /// attribute entirely. Missing keys leave the value unchanged.
+    /// </summary>
+    public IReadOnlyDictionary<string, string?> ValueRemap { get; init; }
+        = ReadOnlyDictionary<string, string?>.Empty;
+}
+
+/// <summary>
+/// Rule describing how an S-57 attribute (ATTL) maps to an S-101 Feature
+/// Catalogue attribute.
+/// </summary>
+public sealed record S57AttributeRule
+{
+    /// <summary>S-57 numeric attribute code (ATTL).</summary>
+    public required ushort Attl { get; init; }
+
+    /// <summary>S-57 attribute acronym (e.g. <c>DRVAL1</c>).</summary>
+    public required string S57Acronym { get; init; }
+
+    /// <summary>
+    /// Default S-101 attribute name. <c>null</c> means the attribute has no
+    /// flat S-101 equivalent and should be dropped.
+    /// </summary>
+    public string? DefaultS101Code { get; init; }
+
+    /// <summary>
+    /// Default per-value remap. Applied unless overridden by a feature-level
+    /// override. A key with a non-null value rewrites the value; a key with
+    /// a <c>null</c> value drops the attribute. Missing keys pass through.
+    /// </summary>
+    public IReadOnlyDictionary<string, string?> DefaultValueRemap { get; init; }
+        = ReadOnlyDictionary<string, string?>.Empty;
+}
+
+/// <summary>
+/// Result of resolving an S-57 feature against the mapping rules: the chosen
+/// S-101 Feature Catalogue code and the effective attribute overrides to
+/// apply when translating attributes for that feature.
+/// </summary>
+/// <param name="S101Code">Resolved S-101 Feature Catalogue code.</param>
+/// <param name="AttributeOverrides">
+/// Effective attribute overrides for this feature (rule-level overrides
+/// merged with any redirect-supplied overrides). Keyed by S-57 attribute
+/// acronym.
+/// </param>
+public sealed record ResolvedFeature(
+    string S101Code,
+    IReadOnlyDictionary<string, S57AttributeOverride> AttributeOverrides);
+
+/// <summary>
+/// Result of resolving an S-57 attribute in the context of a
+/// <see cref="ResolvedFeature"/>: the chosen S-101 attribute name and the
+/// (possibly remapped) value.
+/// </summary>
+/// <param name="S101Code">Resolved S-101 attribute name.</param>
+/// <param name="Value">Value to emit, after any per-value remap.</param>
+public sealed record ResolvedAttribute(string S101Code, string Value);

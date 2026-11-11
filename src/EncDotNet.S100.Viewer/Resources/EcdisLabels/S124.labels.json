@@ -1,0 +1,10 @@
+{
+  "$schema": "./labels.schema.json",
+  "specCode": "S-124",
+  "_comment": "Curated viewer labels for S-124 viewing groups. Source: PC viewingGroup names/descriptions in src/EncDotNet.S100.Specifications/content/S124/pc/portrayal_catalogue.xml.",
+  "groups": {
+    "24": { "label": "Text — supplementary information" },
+    "31020": { "label": "Nautical publications" },
+    "21010": { "label": "Unknown object" }
+  }
+}

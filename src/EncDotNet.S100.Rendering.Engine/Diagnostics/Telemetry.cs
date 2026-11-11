@@ -1,0 +1,569 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
+using EncDotNet.S100.Diagnostics;
+
+namespace EncDotNet.S100.Rendering.Engine.Diagnostics;
+
+/// <summary>Per-assembly <see cref="ActivitySource"/> and <see cref="Meter"/> for <c>EncDotNet.S100.Renderers.Mapsui</c>.</summary>
+internal static class Telemetry
+{
+    public static readonly ActivitySource ActivitySource =
+        S100Telemetry.CreateActivitySource(typeof(Telemetry));
+
+    public static readonly Meter Meter =
+        S100Telemetry.CreateMeter(typeof(Telemetry));
+
+    /// <summary>
+    /// Per-product (or untagged) call-rate state used to derive
+    /// <c>s100.layer.getfeatures.fps</c> as an <see cref="ObservableGauge{T}"/>.
+    /// Each <c>InstrumentedMemoryLayer.GetFeatures</c> invocation
+    /// calls <see cref="RecordGetFeaturesCall"/>, which atomically bumps
+    /// <see cref="CallStats.Count"/> for the matching product key. The
+    /// gauge callback (registered below) computes <c>delta-count /
+    /// delta-time</c> across export intervals to emit a true rate.
+    /// </summary>
+    private sealed class CallStats
+    {
+        public long Count;
+        public long LastReadCount;
+        public long LastReadTimestamp = Stopwatch.GetTimestamp();
+    }
+
+    private static readonly ConcurrentDictionary<string, CallStats> CallStatistics =
+        new ConcurrentDictionary<string, CallStats>();
+
+    /// <summary>
+    /// Records a single <c>GetFeatures</c> invocation for fps accounting.
+    /// Pass <see langword="null"/> when no product is configured; the
+    /// stats are aggregated under an empty key (emitted as an untagged
+    /// gauge measurement).
+    /// </summary>
+    internal static void RecordGetFeaturesCall(string? product)
+    {
+        var key = product ?? string.Empty;
+        var stats = CallStatistics.GetOrAdd(key, static _ => new CallStats());
+        Interlocked.Increment(ref stats.Count);
+    }
+
+    public static readonly Histogram<double> FrameDuration =
+        Meter.CreateHistogram<double>(
+            name: "s100.render.frame.duration",
+            unit: "ms",
+            description: "Wall-clock duration of a Mapsui display-list render pass.");
+
+    public static readonly Counter<long> InstructionsProcessed =
+        Meter.CreateCounter<long>(
+            name: "s100.render.instructions.processed.count",
+            unit: "{instructions}",
+            description: "Drawing instructions processed per Mapsui render pass.");
+
+    public static readonly Counter<long> StylesApplied =
+        Meter.CreateCounter<long>(
+            name: "s100.render.styles.applied.count",
+            unit: "{styles}",
+            description: "Mapsui styles applied per render pass.");
+
+    public static readonly Histogram<double> SymbolResolveDuration =
+        Meter.CreateHistogram<double>(
+            name: "s100.symbol.resolve.duration",
+            unit: "ms",
+            description: "Duration of a single SVG symbol resolution (hit, miss, or fallback).");
+
+    public static readonly Counter<long> SymbolCacheHit =
+        Meter.CreateCounter<long>(
+            name: "s100.symbol.cache.hit.count",
+            unit: "{hits}",
+            description: "Symbol cache hits during symbol resolution. Tagged with s100.product when the renderer is configured by a dataset processor.");
+
+    public static readonly Counter<long> SymbolCacheMiss =
+        Meter.CreateCounter<long>(
+            name: "s100.symbol.cache.miss.count",
+            unit: "{misses}",
+            description: "Symbol cache misses during symbol resolution. Tagged with s100.product when the renderer is configured by a dataset processor.");
+
+    /// <summary>
+    /// Pattern-tile cache hits during area-fill resolution. Tagged with
+    /// <c>s100.product</c> when the renderer is configured by a dataset
+    /// processor. Wired in <c>MapsuiDisplayListRenderer.GetPatternTilePng</c>
+    /// (per the asset-caching audit's PR-CACHE-7 recommendation).
+    /// </summary>
+    public static readonly Counter<long> PatternCacheHit =
+        Meter.CreateCounter<long>(
+            name: "s100.pattern.cache.hit.count",
+            unit: "{hits}",
+            description: "Pattern-tile cache hits during area-fill resolution. Tagged with s100.product when the renderer is configured by a dataset processor.");
+
+    /// <inheritdoc cref="PatternCacheHit"/>
+    public static readonly Counter<long> PatternCacheMiss =
+        Meter.CreateCounter<long>(
+            name: "s100.pattern.cache.miss.count",
+            unit: "{misses}",
+            description: "Pattern-tile cache misses during area-fill resolution (tile rasterisation triggered). Tagged with s100.product when the renderer is configured by a dataset processor.");
+
+    /// <summary>
+    /// Wall-clock duration of a single Mapsui <c>GetFeatures(rect,resolution)</c>
+    /// call on an <c>InstrumentedMemoryLayer</c>. Mapsui invokes this
+    /// once per visible layer per rendered frame, so the histogram reflects
+    /// the per-frame extent-filter cost. Tagged with <c>s100.product</c>
+    /// when the renderer is configured by a dataset processor.
+    /// </summary>
+    public static readonly Histogram<double> LayerGetFeaturesDuration =
+        Meter.CreateHistogram<double>(
+            name: "s100.layer.getfeatures.duration",
+            unit: "ms",
+            description: "Wall-clock duration of MemoryLayer.GetFeatures (per-frame extent filter cost).");
+
+    /// <summary>
+    /// Number of features returned by a single <c>GetFeatures</c> call —
+    /// i.e. the count of features whose extent intersects the visible
+    /// viewport (K). Combined with <see cref="LayerGetFeaturesTotalCount"/>
+    /// this gives the K/N selectivity that determines how much a spatial
+    /// index would help: low K/N at a given zoom = big win.
+    /// </summary>
+    public static readonly Histogram<long> LayerGetFeaturesVisibleCount =
+        Meter.CreateHistogram<long>(
+            name: "s100.layer.getfeatures.visible.count",
+            unit: "{features}",
+            description: "Features returned by MemoryLayer.GetFeatures (visible/in-extent count K per frame).");
+
+    /// <summary>
+    /// Total feature count scanned by a <c>GetFeatures</c> call (N).
+    /// This is the size of the layer's feature list, identical for every
+    /// frame until the layer is re-rendered. Recorded per call so the
+    /// histogram reports it alongside the visible count without the
+    /// caller needing to correlate metrics.
+    /// </summary>
+    public static readonly Histogram<long> LayerGetFeaturesTotalCount =
+        Meter.CreateHistogram<long>(
+            name: "s100.layer.getfeatures.total.count",
+            unit: "{features}",
+            description: "Total feature count scanned by MemoryLayer.GetFeatures (N per frame).");
+
+    /// <summary>
+    /// Cumulative count of <c>GetFeatures</c> calls per product. Most
+    /// observability backends derive a per-second rate from a counter
+    /// automatically; the dedicated <c>s100.layer.getfeatures.fps</c>
+    /// gauge below provides the same value pre-computed for the
+    /// console exporter, where counters are reported as totals over the
+    /// export interval.
+    /// </summary>
+    public static readonly Counter<long> LayerGetFeaturesCalls =
+        Meter.CreateCounter<long>(
+            name: "s100.layer.getfeatures.calls.count",
+            unit: "{calls}",
+            description: "GetFeatures call count per product (each call ~= one rendered frame for that product).");
+
+    /// <summary>
+    /// Per-product frame rate (calls/second of <c>GetFeatures</c>),
+    /// computed from the rolling call counter on each meter export.
+    /// For a single visible layer per product this matches the map
+    /// control's effective fps; if N visible layers of the same product
+    /// are stacked, divide by N for the actual frame rate.
+    /// </summary>
+    /// <remarks>
+    /// Implemented as a multi-measurement <see cref="ObservableGauge{T}"/>
+    /// so a single instrument emits one sample per active product on
+    /// every collection cycle. Untagged measurements (empty product
+    /// key) are emitted with no <c>s100.product</c> tag, preserving
+    /// legacy behaviour for ad-hoc callers.
+    /// </remarks>
+    public static readonly ObservableGauge<double> LayerGetFeaturesFps =
+        Meter.CreateObservableGauge<double>(
+            name: "s100.layer.getfeatures.fps",
+            observeValues: ObserveLayerGetFeaturesFps,
+            unit: "{frames}/s",
+            description: "Average GetFeatures call rate per product (~fps for single-layer maps).");
+
+    /// <summary>
+    /// Inter-frame interval recorded on each <c>GetFeatures</c> entry
+    /// (gap since the previous call returned), in milliseconds.
+    /// Subtracting the matching
+    /// <see cref="LayerGetFeaturesDuration"/> sample yields the
+    /// render-plus-paint slice of frame time — i.e. everything Mapsui
+    /// and Skia did between two consecutive feature pulls. Idle gaps
+    /// (longer than ~500 ms) are not recorded so the histogram
+    /// reflects active rendering only.
+    /// </summary>
+    public static readonly Histogram<double> LayerFrameInterval =
+        Meter.CreateHistogram<double>(
+            name: "s100.layer.frame.interval",
+            unit: "ms",
+            description: "Inter-frame interval (gap between consecutive GetFeatures calls). Subtract LayerGetFeaturesDuration to estimate render+paint cost.");
+
+    /// <summary>
+    /// Wall-clock duration of a single off-thread <c>VectorScene</c>
+    /// rasterisation by the <c>TiledScene</c> ("B") render subsystem
+    /// (<see cref="S100VectorSceneRenderer"/>) — the worker-thread cost of
+    /// turning the scene IR into one device-resolution <c>SKImage</c> for the
+    /// whole viewport plus over-render margin. This is the cost prediction and
+    /// tiling (Phases&#160;2–3) exist to amortise; on the "A" arm the comparable
+    /// work is the synchronous per-feature paint reflected in
+    /// <see cref="FrameDuration"/> / the viewer's map-paint histogram. See
+    /// <c>docs/design/S100-Render-Subsystem-Design.md</c> §4.
+    /// </summary>
+    public static readonly Histogram<double> SceneRasterizeDuration =
+        Meter.CreateHistogram<double>(
+            name: "s100.render.scene.rasterize.duration",
+            unit: "ms",
+            description: "Wall-clock duration of one off-thread VectorScene rasterisation by the TiledScene render subsystem (whole viewport + margin).");
+
+    /// <summary>
+    /// Wall-clock duration of a single UI-thread composite (translated
+    /// <c>SKImage</c> blit) by the <c>TiledScene</c> ("B") render subsystem
+    /// (<see cref="S100VectorSceneRenderer"/>). This is the per-frame work that
+    /// stays on the render thread during a pan; keeping it bounded and
+    /// independent of feature count is the whole point of the subsystem. See
+    /// <c>docs/design/S100-Render-Subsystem-Design.md</c> §3.5.
+    /// </summary>
+    public static readonly Histogram<double> SceneCompositeDuration =
+        Meter.CreateHistogram<double>(
+            name: "s100.render.scene.composite.duration",
+            unit: "ms",
+            description: "Wall-clock duration of one UI-thread composite (translated SKImage blit) by the TiledScene render subsystem.");
+
+    /// <summary>
+    /// Wall-clock duration of one off-thread tile rasterisation (core + gutter)
+    /// by the tiled <c>TiledScene</c> arm (<see cref="S100VectorTileRenderer"/>,
+    /// Phase&#160;2). A constant-zoom pan rasterises only newly-exposed
+    /// perimeter tiles, so the count of these per gesture — not their individual
+    /// cost — is what bounds pan work. See
+    /// <c>docs/design/S100-Render-Subsystem-Design.md</c> §3.3.
+    /// </summary>
+    public static readonly Histogram<double> TileRasterizeDuration =
+        Meter.CreateHistogram<double>(
+            name: "s100.render.tile.rasterize.duration",
+            unit: "ms",
+            description: "Wall-clock duration of one off-thread base-plane tile rasterisation (core + gutter) by the tiled TiledScene render subsystem.");
+
+    /// <summary>
+    /// Wall-clock duration of one batched metatile raster job before its output
+    /// is sliced into tile-granular cache entries (issue&#160;#427).
+    /// </summary>
+    public static readonly Histogram<double> MetatileRasterizeDuration =
+        Meter.CreateHistogram<double>(
+            name: "s100.render.metatile.rasterize.duration",
+            unit: "ms",
+            description: "Wall-clock duration of one off-thread metatile union rasterisation before slicing.");
+
+    /// <summary>Wall-clock duration spent slicing one metatile into individual tile images.</summary>
+    public static readonly Histogram<double> MetatileSliceDuration =
+        Meter.CreateHistogram<double>(
+            name: "s100.render.metatile.slice.duration",
+            unit: "ms",
+            description: "Wall-clock duration spent slicing one metatile raster into tile-granular images.");
+
+    /// <summary>Number of logical tile images produced by one metatile job.</summary>
+    public static readonly Histogram<int> MetatileTiles =
+        Meter.CreateHistogram<int>(
+            name: "s100.render.metatile.tiles",
+            unit: "{tile}",
+            description: "Logical tile images produced by one metatile raster job.");
+
+    /// <summary>Count of metatile raster jobs completed.</summary>
+    public static readonly Counter<long> MetatileJobs =
+        Meter.CreateCounter<long>(
+            name: "s100.render.metatile.jobs",
+            unit: "{job}",
+            description: "Metatile raster jobs completed by the tiled TiledScene render subsystem.");
+
+    /// <summary>Count of planned metatiles that fell back to smaller jobs.</summary>
+    public static readonly Counter<long> MetatileFallbacks =
+        Meter.CreateCounter<long>(
+            name: "s100.render.metatile.fallbacks",
+            unit: "{fallback}",
+            description: "Metatile plans split or declined; tagged with the fallback reason.");
+
+    /// <summary>
+    /// Wall-clock duration of one UI-thread tile composite pass (best-available
+    /// blits of all visible tiles) by the tiled <c>TiledScene</c> arm
+    /// (<see cref="S100VectorTileRenderer"/>). This is the per-frame work that
+    /// stays on the render thread during a pan; tiling keeps it bounded by the
+    /// visible tile count. See
+    /// <c>docs/design/S100-Render-Subsystem-Design.md</c> §3.5.
+    /// </summary>
+    public static readonly Histogram<double> TileCompositeDuration =
+        Meter.CreateHistogram<double>(
+            name: "s100.render.tile.composite.duration",
+            unit: "ms",
+            description: "Wall-clock duration of one UI-thread tile composite pass (best-available blits of visible tiles) by the tiled TiledScene render subsystem.");
+
+    /// <summary>
+    /// Count of <b>visible exact-band tiles missing from the cache</b> at one
+    /// composite pass (the tiled <c>TiledScene</c> arm, Phase&#160;3). This is the
+    /// "cold-tile exposure" signal: every such tile is a slot the compositor has
+    /// to fill from a scaled fallback band instead of the crisp target. The
+    /// Phase&#160;3 exit criterion is that this drops to ≈0 during a scripted pan
+    /// once prediction (<see cref="S100VectorTileRenderer"/>) pre-warms the
+    /// perimeter. See <c>docs/design/S100-Render-Subsystem-Design.md</c> §3.6.
+    /// </summary>
+    public static readonly Histogram<int> TileColdExposure =
+        Meter.CreateHistogram<int>(
+            name: "s100.render.tile.cold.exposure",
+            unit: "{tile}",
+            description: "Number of visible exact-band tiles absent from cache at one composite pass by the tiled TiledScene render subsystem (cold-tile exposure).");
+
+    /// <summary>
+    /// End-to-end wall-clock latency of a <b>cold visible tile</b>: from the first
+    /// frame that enqueued it as a visible miss until the worker publishes it into
+    /// the hot cache (queue wait + disk read or rasterise). Unlike
+    /// <see cref="TileRasterizeDuration"/> (raster CPU cost alone), this includes
+    /// the time the tile spent waiting behind other visible misses, so it is the
+    /// signal that maps to user-felt stutter — how long a viewport slot shows a
+    /// scaled fallback band before the crisp tile lands. Read against
+    /// <see cref="TileColdExposure"/> (burst count) and the viewer's map-paint
+    /// interval: a high cold latency with cheap paints points at the tiling worker;
+    /// cheap latency with expensive paints points at Mapsui. See
+    /// <c>docs/design/S100-Render-Subsystem-Design.md</c> §3.3, §3.6.
+    /// </summary>
+    public static readonly Histogram<double> TileColdLatency =
+        Meter.CreateHistogram<double>(
+            name: "s100.render.tile.cold.latency",
+            unit: "ms",
+            description: "End-to-end latency of a cold visible tile (first enqueue to publish; queue wait + rasterise) in the tiled TiledScene render subsystem.");
+
+    /// <summary>
+    /// Count of visible cold tiles outstanding when the worker is spun up for a
+    /// frame — the cold-miss <b>burst depth</b> a gesture creates. A zoom that
+    /// crosses a band invalidates every visible tile, so this spikes; a constant-
+    /// zoom pan should be a small perimeter. Combined with
+    /// <see cref="TileColdLatency"/> it shows whether stutter is one slow tile or
+    /// a deep backlog draining serially. See §3.6.
+    /// </summary>
+    public static readonly Histogram<int> TileVisibleQueueDepth =
+        Meter.CreateHistogram<int>(
+            name: "s100.render.tile.visible.queue.depth",
+            unit: "{tile}",
+            description: "Visible cold tiles outstanding when the tiled TiledScene worker is spun up (cold-miss burst depth per gesture).");
+
+    /// <summary>
+    /// Count of tiles rasterised <b>speculatively</b> (as part of the prediction
+    /// warm set, not because they were visible) by the tiled <c>TiledScene</c>
+    /// arm. The denominator of the prediction hit-rate. See §3.6.
+    /// </summary>
+    public static readonly Counter<long> TilePredictionRasterized =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.prediction.rasterized",
+            unit: "{tile}",
+            description: "Tiles rasterised speculatively by the tiled TiledScene prediction warm set.");
+
+    /// <summary>
+    /// Count of worker admission attempts deferred because at least one layer
+    /// still has visible cold work. Predicted and cross-band queues remain intact
+    /// and are reconsidered after visible publication requests the next frame.
+    /// </summary>
+    public static readonly Counter<long> TileSpeculationDeferred =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.speculation.deferred",
+            unit: "{worker}",
+            description: "Speculative tile-worker admission attempts deferred while any layer has visible cold work.");
+
+    /// <summary>
+    /// Count of speculatively-rasterised tiles that <b>subsequently became
+    /// visible while still cached</b> — a successful prediction. Divided by
+    /// <see cref="TilePredictionRasterized"/> this is the prediction hit-rate. See §3.6.
+    /// </summary>
+    public static readonly Counter<long> TilePredictionHits =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.prediction.hits",
+            unit: "{tile}",
+            description: "Speculatively-rasterised tiles that later became visible while cached (prediction hits) in the tiled TiledScene render subsystem.");
+
+    /// <summary>
+    /// Reveal trace: a tile slot first showing content in a view (see
+    /// <c>RevealTrace</c>). Counted only while settle tracking is on.
+    /// </summary>
+    public static readonly Counter<long> RevealFirst =
+        Meter.CreateCounter<long>(
+            name: "s100.render.reveal.first",
+            unit: "{slot}",
+            description: "Tile slots that first showed content in a view.");
+
+    /// <summary>
+    /// Reveal trace: the time from the last view change to a tile slot's
+    /// first content in the view, a per-slot time to first paint (see
+    /// <c>RevealTrace</c>). Recorded only while settle tracking is on.
+    /// </summary>
+    public static readonly Histogram<double> RevealFirstDelay =
+        Meter.CreateHistogram<double>(
+            name: "s100.render.reveal.first_delay",
+            unit: "ms",
+            description: "Time from the last view change to a tile slot's first content in the view: time to first paint, per slot.");
+
+    /// <summary>
+    /// Reveal trace: a tile slot that already showed content in a view
+    /// changing again in a later frame, e.g. another layer's tile landing on
+    /// top of it (see <c>RevealTrace</c>). Counted only while settle tracking
+    /// is on.
+    /// </summary>
+    public static readonly Counter<long> RevealIncremental =
+        Meter.CreateCounter<long>(
+            name: "s100.render.reveal.incremental",
+            unit: "{slot}",
+            description: "Changes of a tile slot that already showed content in the same view.");
+
+    /// <summary>
+    /// Count of visible tiles skipped per frame because finer, currently-drawing
+    /// coverage hides them entirely, so the coverage clip would erase them
+    /// (issue #691). Counted each frame a tile is skipped, not once per tile.
+    /// </summary>
+    public static readonly Counter<long> TileHiddenSkipped =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.hidden.skipped",
+            unit: "{tile}",
+            description: "Visible tiles per frame skipped (not scheduled, rasterised or blitted) because finer coverage hides them.");
+
+    /// <summary>
+    /// Count of scenes whose product hinted live drawing
+    /// (<c>VectorScene.PreferLiveDrawing</c>) but that were tiled anyway because
+    /// they were too dense to draw every frame.
+    /// </summary>
+    public static readonly Counter<long> TileLiveBaseFallback =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.live_base.fallback",
+            unit: "{scene}",
+            description: "Scenes hinted for live drawing that were tiled because they exceeded the live-drawing budget.");
+
+    /// <summary>
+    /// Count of layer frames skipped outright because finer, currently-drawing
+    /// coverage hides the layer across the whole viewport (issue #691).
+    /// </summary>
+    public static readonly Counter<long> TileLayerHiddenSkipped =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.layer.hidden.skipped",
+            unit: "{frame}",
+            description: "Layer frames skipped because finer coverage hides the layer across the whole viewport.");
+
+    /// <summary>
+    /// Count of visible/predicted tiles served from the persistent <b>disk
+    /// cache</b> (Phase&#160;4) instead of being re-rasterised — a warm tile
+    /// surviving a layer rebuild (palette flip-back) or a process restart. See §3.4.
+    /// </summary>
+    public static readonly Counter<long> TileDiskHits =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.disk.hits",
+            unit: "{tile}",
+            description: "Tiles served from the persistent disk cache (warm) by the tiled TiledScene render subsystem, avoiding a re-rasterise.");
+
+    /// <summary>
+    /// Count of rasterised tiles written to the persistent <b>disk cache</b>
+    /// (Phase&#160;4) for future warm reuse. See §3.4.
+    /// </summary>
+    public static readonly Counter<long> TileDiskWrites =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.disk.writes",
+            unit: "{tile}",
+            description: "Tiles written to the persistent disk cache by the tiled TiledScene render subsystem.");
+
+    /// <summary>
+    /// Depth of the bounded asynchronous tile-persistence queue after an enqueue
+    /// or completion.
+    /// </summary>
+    public static readonly Histogram<int> TileDiskWriteQueueDepth =
+        Meter.CreateHistogram<int>(
+            name: "s100.render.tile.disk.write_queue.depth",
+            unit: "{tile}",
+            description: "Raster tiles awaiting asynchronous persistence in the shared warm disk cache.");
+
+    /// <summary>
+    /// Count of tile-persistence requests discarded because they duplicate an
+    /// existing request, exceed the bounded queue, cannot be snapshotted, or
+    /// arrive during shutdown.
+    /// </summary>
+    public static readonly Counter<long> TileDiskWriteQueueDiscarded =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.disk.write_queue.discarded",
+            unit: "{tile}",
+            description: "Tile persistence requests discarded by the bounded asynchronous warm-cache writer.");
+
+    /// <summary>
+    /// Count of raster tiles <b>uploaded once</b> to a GPU-resident texture
+    /// (Phase&#160;5) via <c>SKImage.ToTextureImage</c> on a GPU-backed surface.
+    /// Each upload is amortised across every subsequent frame the tile is blitted
+    /// (counted by <see cref="TileGpuHits"/>); a healthy steady pan has hits ≫
+    /// uploads. Always zero on a software/CPU surface (residency is a no-op). See
+    /// Appendix&#160;F.
+    /// </summary>
+    public static readonly Counter<long> TileGpuUploads =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.gpu.uploads",
+            unit: "{tile}",
+            description: "Raster tiles uploaded once to a GPU-resident texture by the tiled TiledScene render subsystem (Phase 5 residency).");
+
+    /// <summary>
+    /// Count of tile blits served from an <b>already-resident GPU texture</b>
+    /// (Phase&#160;5) — a re-upload of the same pixels avoided. The dominant
+    /// term during a steady pan once the working set is resident. Always zero on
+    /// a software/CPU surface. See Appendix&#160;F.
+    /// </summary>
+    public static readonly Counter<long> TileGpuHits =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.gpu.hits",
+            unit: "{tile}",
+            description: "Tile blits served from an already-resident GPU texture by the tiled TiledScene render subsystem (Phase 5 residency), avoiding a re-upload.");
+
+    /// <summary>
+    /// Count of render-thread paint faults caught by the tiled TiledScene
+    /// compositor (GPU residency or composite step). A non-zero value means a
+    /// frame was dropped rather than allowed to escape the layer lock and strand
+    /// tile production. Steady operation keeps this at zero.
+    /// </summary>
+    public static readonly Counter<long> RenderFaults =
+        Meter.CreateCounter<long>(
+            name: "s100.render.tile.faults",
+            unit: "{fault}",
+            description: "Render-thread paint faults caught (and converted to a dropped frame) by the tiled TiledScene render subsystem.");
+
+    /// <summary>
+    /// Records a caught render-thread paint fault: bumps <see cref="RenderFaults"/>,
+    /// emits a diagnostic activity event carrying the exception, and writes a
+    /// rate-limited message to <see cref="Console.Error"/> so a recurring fault is
+    /// visible in the log without requiring an OpenTelemetry exporter to be wired
+    /// up. The first fault is always written; subsequent ones are throttled to one
+    /// per <see cref="RenderFaultLogIntervalMs"/> to avoid flooding the console if
+    /// a fault repeats every frame.
+    /// </summary>
+    /// <param name="ex">The caught exception.</param>
+    public static void RecordRenderFault(Exception ex)
+    {
+        RenderFaults.Add(1);
+        Activity.Current?.AddException(ex);
+
+        var now = Environment.TickCount64;
+        var last = Interlocked.Read(ref _lastRenderFaultLogTick);
+        if ((last == 0 || now - last >= RenderFaultLogIntervalMs)
+            && Interlocked.CompareExchange(ref _lastRenderFaultLogTick, now, last) == last)
+        {
+            Console.Error.WriteLine($"[S100.Render] paint fault dropped a frame: {ex}");
+        }
+    }
+
+    private const long RenderFaultLogIntervalMs = 5000;
+    private static long _lastRenderFaultLogTick;
+
+    private static IEnumerable<Measurement<double>> ObserveLayerGetFeaturesFps()
+    {
+        var measurements = new List<Measurement<double>>(CallStatistics.Count);
+        foreach (var pair in CallStatistics)
+        {
+            var stats = pair.Value;
+            var nowTimestamp = Stopwatch.GetTimestamp();
+            var currentCount = Interlocked.Read(ref stats.Count);
+            var deltaSeconds = Stopwatch.GetElapsedTime(stats.LastReadTimestamp).TotalSeconds;
+            var deltaCalls = currentCount - stats.LastReadCount;
+
+            // Mutated only from the meter's collection thread, so no
+            // lock is needed; the call-side increments only touch
+            // Count, never these fields.
+            stats.LastReadCount = currentCount;
+            stats.LastReadTimestamp = nowTimestamp;
+
+            var fps = deltaSeconds > 0 ? deltaCalls / deltaSeconds : 0.0;
+            measurements.Add(string.IsNullOrEmpty(pair.Key)
+                ? new Measurement<double>(fps)
+                : new Measurement<double>(fps,
+                    new KeyValuePair<string, object?>("s100.product", pair.Key)));
+        }
+        return measurements;
+    }
+}

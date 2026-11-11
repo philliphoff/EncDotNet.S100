@@ -1,0 +1,72 @@
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Specifications;
+using Spectre.Console;
+using Spectre.Console.Cli;
+
+namespace EncDotNet.S100.Cli.Commands;
+
+/// <summary>
+/// <c>s100 list-specs</c> — lists the S-100 product specifications the CLI knows
+/// about and whether each supports the headless image-render path.
+/// </summary>
+internal sealed class ListSpecsCommand : Command<ListSpecsCommand.Settings>
+{
+    /// <summary>
+    /// Specs whose processors expose the headless Skia render path. S-104 and
+    /// S-111 support both gridded and positioned station/node glyph datasets.
+    /// S-57 datasets are translated in-memory to S-101 and rendered through
+    /// the S-101 portrayal pipeline; S-401 (inland ENC) is read by that same
+    /// pipeline with its own catalogues.
+    /// </summary>
+    private static readonly HashSet<string> HeadlessSpecs = new(StringComparer.Ordinal)
+    {
+        "S-57",
+        "S-101", "S-102", "S-104", "S-111",
+        "S-122", "S-124", "S-125", "S-127", "S-128", "S-129", "S-131", "S-201",
+        "S-401", "S-411", "S-421",
+    };
+
+    internal sealed class Settings : CommandSettings
+    {
+    }
+
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    {
+        var table = new Table().Border(TableBorder.Rounded);
+        table.AddColumn("Spec");
+        table.AddColumn("Portrayal");
+        table.AddColumn("Headless render");
+
+        // S-57 is not in Specification.AvailableSpecs (it has no bundled
+        // FC/PC of its own — it borrows S-101's catalogues at render time)
+        // but the CLI does support it, so report it explicitly.
+        table.AddRow(
+            "S-57",
+            "[grey]via S-101[/]",
+            HeadlessSpecs.Contains("S-57") ? "[green]yes[/]" : "[yellow]no[/]");
+
+        foreach (var spec in Specification.AvailableSpecs)
+        {
+            table.AddRow(
+                spec,
+                Specification.HasPortrayalCatalogue(spec) ? "[green]yes[/]" : "[grey]no[/]",
+                HeadlessSpecs.Contains(spec) ? "[green]yes[/]" : "[yellow]no[/]");
+        }
+
+        // The weather formats (GRIB2, NetCDF, CAP, CODSUS) aren't S-100
+        // products and have no portrayal catalogue: SoundCharts draws them in
+        // code, and every one renders headless.
+        foreach (var registration in WeatherProducts.All)
+        {
+            table.AddRow(
+                Markup.Escape(registration.Spec),
+                "[grey]SoundCharts, in code[/]",
+                "[green]yes[/]");
+        }
+
+        AnsiConsole.Write(table);
+        AnsiConsole.MarkupLine(
+            $"[grey]{Markup.Escape(string.Join(", ", WeatherProducts.All.Select(r => r.Spec)))} aren't S-100 products: weather data, not for navigation.[/]");
+        return 0;
+    }
+}

@@ -1,0 +1,106 @@
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Pipelines;
+
+namespace EncDotNet.S100.VisualRegression;
+
+/// <summary>
+/// Controls how <see cref="RenderHarness"/> rasterises a dataset.
+/// </summary>
+public sealed class HarnessOptions
+{
+    /// <summary>
+    /// How long the harness waits for the next worker-published tile before
+    /// declaring the tiled base plane settled. A redraw request that arrives
+    /// within this window restarts the wait. Default: 250&#160;ms.
+    /// </summary>
+    public TimeSpan SettleQuietPeriod { get; init; } = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>
+    /// The hard upper bound on total settle time before the harness gives up and
+    /// returns the best frame rendered so far. Default: 30&#160;s.
+    /// </summary>
+    public TimeSpan SettleTimeout { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>Output bitmap width, in pixels. Default: 800.</summary>
+    public int Width { get; init; } = 800;
+
+    /// <summary>Output bitmap height, in pixels. Default: 600.</summary>
+    public int Height { get; init; } = 600;
+
+    /// <summary>Color palette to render with. Default: <see cref="PaletteType.Day"/>.</summary>
+    public PaletteType Palette { get; init; } = PaletteType.Day;
+
+    /// <summary>Symbol scale factor. Default: 1.0.</summary>
+    public double SymbolScale { get; init; } = 1.0;
+
+    /// <summary>
+    /// ECDIS display category to render with (S-100 Part 9 §11.7). Controls
+    /// which viewing groups are drawn. Defaults to
+    /// <see cref="EcdisDisplayCategory.Standard"/>, the live viewer's default, so
+    /// the goldens show what a mariner sees (#357). Set <see langword="null"/>
+    /// for no display-mode filter (equivalent to "All"), which also draws the
+    /// supplementary content the product hides at Standard.
+    /// </summary>
+    public EcdisDisplayCategory? DisplayCategory { get; init; } = EcdisDisplayCategory.Standard;
+
+    /// <summary>
+    /// Feature ids not to draw (<see cref="RenderContext.HiddenFeatures"/>),
+    /// as the viewer hides S-124 parts not in force (#993). Default: none.
+    /// </summary>
+    public IReadOnlySet<string>? HiddenFeatures { get; init; }
+
+    /// <summary>
+    /// Viewing groups to hide for the dataset's product (and for the S-101
+    /// portrayal catalogue, which S-125 aids and S-57 cells use), as the viewer's
+    /// ECDIS panel and text switches do
+    /// (<see cref="EcdisDisplaySettings.HiddenViewingGroups"/>). Applies only
+    /// with a <see cref="DisplayCategory"/>. Default: none.
+    /// </summary>
+    public IReadOnlySet<int>? HiddenViewingGroups { get; init; }
+
+    /// <summary>Text scale factor. Default: 1.0.</summary>
+    public double TextScale { get; init; } = 1.0;
+
+    /// <summary>Optional zero-based time-step index for time-series datasets (S-104, S-111). Default: 0.</summary>
+    public int TimeStepIndex { get; init; } = 0;
+
+    /// <summary>
+    /// Optional geographic viewport (decimal degrees, WGS-84) used to frame the
+    /// render instead of zooming to the full dataset extent. When set, the
+    /// harness projects the corners to EPSG:3857 and fits this box — letting a
+    /// parity test zoom into a labelled harbour area so SCAMIN-gated point
+    /// symbols and text labels are actually drawn (a full-cell extent hides
+    /// them). When <see langword="null"/> the full dataset extent is fitted.
+    /// </summary>
+    public GeographicBounds? Viewport { get; init; }
+
+    /// <summary>
+    /// Display rotation in degrees, applied about the framed centre after
+    /// framing, as the viewer's rotate gesture does. Default: 0 (north up).
+    /// </summary>
+    public double Rotation { get; init; }
+
+    /// <summary>
+    /// Background color (any valid SkiaSharp color). Default: white.
+    /// </summary>
+    public uint BackgroundColor { get; init; } = 0xFFFFFFFFu;
+
+    /// <summary>
+    /// When true, the harness draws a thin border around the rendered viewport so that
+    /// completely-empty datasets still produce a non-blank baseline. Default: false.
+    /// </summary>
+    public bool DrawViewportBorder { get; init; } = false;
+
+    /// <summary>Default render options.</summary>
+    public static HarnessOptions Default { get; } = new();
+}
+
+/// <summary>
+/// A geographic bounding box in decimal degrees (WGS-84 / EPSG:4326), used to
+/// frame a <see cref="RenderHarness"/> render via <see cref="HarnessOptions.Viewport"/>.
+/// </summary>
+/// <param name="West">Western longitude bound, decimal degrees.</param>
+/// <param name="South">Southern latitude bound, decimal degrees.</param>
+/// <param name="East">Eastern longitude bound, decimal degrees.</param>
+/// <param name="North">Northern latitude bound, decimal degrees.</param>
+public readonly record struct GeographicBounds(double West, double South, double East, double North);

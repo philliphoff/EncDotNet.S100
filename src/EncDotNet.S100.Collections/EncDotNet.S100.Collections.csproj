@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <EmbeddedResource Include="KnownSources\known-sources.json" LogicalName="EncDotNet.S100.Collections.KnownSources.known-sources.json" />
+    <EmbeddedResource Include="Secom\TrustAnchors\mcp-mcc.pem" LogicalName="EncDotNet.S100.Collections.Secom.TrustAnchors.mcp-mcc.pem" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.Collections.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.ExchangeSets\EncDotNet.S100.ExchangeSets.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S57\EncDotNet.S100.Datasets.S57.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S128\EncDotNet.S100.Datasets.S128.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,250 @@
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Mcp.Tools.Mutable;
+using EncDotNet.S100.Mcp.Tools.Tests.Fakes;
+
+namespace EncDotNet.S100.Mcp.Tools.Tests;
+
+/// <summary>
+/// Verifies the mutating catalog tools (open / close / close-all) drive the
+/// shared <see cref="IMutableDatasetCatalog"/> (#560, option b).
+/// </summary>
+public class MutableCatalogToolsTests
+{
+    // ---- open_dataset ---------------------------------------------------
+
+    [Fact]
+    public async Task OpenDataset_LoadsAndReturnsEnrichedMetadata()
+    {
+        var catalog = new FakeMutableDatasetCatalog
+        {
+            NextLoad = [FakeMutableDatasetCatalog.MakeDataset("cell.000", "S-101")],
+        };
+        using var file = new TempFile();
+
+        var value = AssertOk(await new OpenDatasetTool(catalog)
+            .InvokeAsync(new OpenDatasetRequest(file.Path), TestContext.Current.CancellationToken));
+
+        Assert.Equal("file", value.Kind);
+        Assert.Equal(1, value.Count);
+        var opened = Assert.Single(value.Datasets);
+        Assert.Equal("cell.000", opened.Id);
+        Assert.Equal("S-101", opened.Spec);
+        Assert.Equal(10, opened.NorthLatitude);
+        Assert.True(value.LoadDurationMs >= 0);
+        Assert.Single(catalog.Datasets);
+    }
+
+    [Fact]
+    public async Task OpenDataset_NotReadyCatalog_IsHostNotReady()
+    {
+        var catalog = new FakeMutableDatasetCatalog
+        {
+            NextLoadException = new DatasetCatalogNotReadyException("the loader is not ready"),
+        };
+        using var file = new TempFile();
+
+        var error = Assert.IsType<HostNotReady>(
+            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path), TestContext.Current.CancellationToken)));
+        Assert.Contains("not ready", error.What);
+    }
+
+    [Fact]
+    public async Task OpenDataset_EmptyLoad_IsDatasetLoadFailed()
+    {
+        var catalog = new FakeMutableDatasetCatalog { NextLoad = [] };
+        using var file = new TempFile();
+
+        Assert.IsType<DatasetLoadFailed>(
+            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path), TestContext.Current.CancellationToken)));
+    }
+
+    [Fact]
+    public async Task OpenDataset_EmptyExchangeSet_ReasonSaysWhatWasSkippedAndWhy()
+    {
+        var catalog = new FakeMutableDatasetCatalog
+        {
+            NextLoad = [],
+            NextKind = DatasetSourceKind.ExchangeSet,
+            NextProblems =
+            [
+                "Failed to open exchange set 'x': Digital signature is missing required attribute 'dataStatus'.",
+                "Skipped 'S-128/a.gml': unsupported product 'S-128'.",
+            ],
+        };
+        using var file = new TempFile();
+
+        var error = Assert.IsType<DatasetLoadFailed>(
+            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path), TestContext.Current.CancellationToken)));
+        Assert.StartsWith("the exchange set contained no datasets the host can portray (", error.Reason);
+        Assert.Contains("dataStatus", error.Reason);
+        Assert.Contains("unsupported product 'S-128'", error.Reason);
+    }
+
+    [Fact]
+    public async Task OpenDataset_UnrecognisedFile_ReasonSaysWhy()
+    {
+        // #1092: a file no product recognised wasn't opened, and the host's
+        // problem (here the HDF5 no-productSpecification reason) says why.
+        var catalog = new FakeMutableDatasetCatalog
+        {
+            NextLoad = [],
+            NextKind = DatasetSourceKind.File,
+            NextProblems = ["This HDF5 file doesn't say which S-100 product it is (no productSpecification attribute)."],
+        };
+        using var file = new TempFile();
+
+        var error = Assert.IsType<DatasetLoadFailed>(
+            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path), TestContext.Current.CancellationToken)));
+        Assert.Equal(
+            "the file wasn't opened (This HDF5 file doesn't say which S-100 product it is (no productSpecification attribute))",
+            error.Reason);
+    }
+
+    [Fact]
+    public async Task OpenDataset_ManyProblems_QuotesFirstFiveAndCountsTheRest()
+    {
+        var catalog = new FakeMutableDatasetCatalog
+        {
+            NextLoad = [],
+            NextKind = DatasetSourceKind.ExchangeSet,
+            NextProblems = Enumerable.Range(1, 8).Select(i => $"problem {i}").ToList(),
+        };
+        using var file = new TempFile();
+
+        var error = Assert.IsType<DatasetLoadFailed>(
+            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path), TestContext.Current.CancellationToken)));
+        Assert.Contains("problem 5; and 3 more)", error.Reason);
+        Assert.DoesNotContain("problem 6", error.Reason);
+    }
+
+    [Fact]
+    public async Task OpenDataset_MissingPath_IsInvalidArgument()
+    {
+        var catalog = new FakeMutableDatasetCatalog();
+        var missing = Path.Combine(Path.GetTempPath(), $"nope-{Guid.NewGuid():N}.000");
+
+        var error = Assert.IsType<InvalidArgument>(
+            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(missing), TestContext.Current.CancellationToken)));
+        Assert.Equal("path", error.Parameter);
+        Assert.Equal(0, catalog.LoadCount);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task OpenDataset_EmptyPath_IsInvalidArgument(string path)
+    {
+        var catalog = new FakeMutableDatasetCatalog();
+
+        Assert.IsType<InvalidArgument>(
+            AssertErr(await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(path), TestContext.Current.CancellationToken)));
+    }
+
+    // ---- close_dataset --------------------------------------------------
+
+    [Fact]
+    public async Task CloseDataset_RemovesKnownId()
+    {
+        var catalog = new FakeMutableDatasetCatalog
+        {
+            NextLoad = [FakeMutableDatasetCatalog.MakeDataset("cell.000", "S-101")],
+        };
+        using (var file = new TempFile())
+        {
+            await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path), TestContext.Current.CancellationToken);
+        }
+
+        var value = AssertOk(await new CloseDatasetTool(catalog)
+            .InvokeAsync(new CloseDatasetRequest("cell.000"), TestContext.Current.CancellationToken));
+
+        Assert.True(value.Removed);
+        Assert.Equal(1, value.Count);
+        Assert.Equal("S-101", Assert.Single(value.RemovedDatasets).Spec);
+        Assert.Empty(catalog.Datasets);
+    }
+
+    [Fact]
+    public async Task CloseDataset_UnknownId_IsGracefulNonError()
+    {
+        var catalog = new FakeMutableDatasetCatalog();
+
+        var value = AssertOk(await new CloseDatasetTool(catalog)
+            .InvokeAsync(new CloseDatasetRequest("ghost"), TestContext.Current.CancellationToken));
+
+        Assert.False(value.Removed);
+        Assert.Equal(0, value.Count);
+        Assert.Empty(value.RemovedDatasets);
+    }
+
+    [Fact]
+    public async Task CloseDataset_EmptyId_IsInvalidArgument()
+    {
+        var catalog = new FakeMutableDatasetCatalog();
+
+        Assert.IsType<InvalidArgument>(
+            AssertErr(await new CloseDatasetTool(catalog).InvokeAsync(new CloseDatasetRequest("  "), TestContext.Current.CancellationToken)));
+    }
+
+    // ---- close_all_datasets --------------------------------------------
+
+    [Fact]
+    public async Task CloseAll_RemovesEverything()
+    {
+        var catalog = new FakeMutableDatasetCatalog
+        {
+            NextLoad =
+            [
+                FakeMutableDatasetCatalog.MakeDataset("a", "S-101"),
+                FakeMutableDatasetCatalog.MakeDataset("b", "S-102"),
+            ],
+        };
+        using (var file = new TempFile())
+        {
+            await new OpenDatasetTool(catalog).InvokeAsync(new OpenDatasetRequest(file.Path), TestContext.Current.CancellationToken);
+        }
+
+        var value = AssertOk(await new CloseAllDatasetsTool(catalog).InvokeAsync(TestContext.Current.CancellationToken));
+
+        Assert.True(value.Removed);
+        Assert.Equal(2, value.Count);
+        Assert.Equal(2, value.RemovedDatasets.Count);
+        Assert.Empty(catalog.Datasets);
+    }
+
+    [Fact]
+    public async Task CloseAll_WhenEmpty_ReportsNothingRemoved()
+    {
+        var catalog = new FakeMutableDatasetCatalog();
+
+        var value = AssertOk(await new CloseAllDatasetsTool(catalog).InvokeAsync(TestContext.Current.CancellationToken));
+
+        Assert.False(value.Removed);
+        Assert.Equal(0, value.Count);
+    }
+
+    private static TValue AssertOk<TValue>(ToolResult<TValue> result)
+    {
+        Assert.True(result.TryGetValue(out var value), "expected a success result");
+        return value!;
+    }
+
+    private static ToolError AssertErr<TValue>(ToolResult<TValue> result)
+    {
+        Assert.True(result.TryGetError(out var error), "expected an error result");
+        return error!;
+    }
+
+    private sealed class TempFile : IDisposable
+    {
+        public string Path { get; } =
+            System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"encdotnet-open-{Guid.NewGuid():N}.000");
+
+        public TempFile() => File.WriteAllText(Path, "x");
+
+        public void Dispose()
+        {
+            try { File.Delete(Path); } catch { /* best-effort */ }
+        }
+    }
+}

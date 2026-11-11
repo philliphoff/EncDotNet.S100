@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:lib="using:EncDotNet.S100.Collections.Library"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.AddToLibraryDialogView"
+             x:DataType="vm:AddToLibraryDialogViewModel"
+             MinWidth="440">
+
+    <Grid RowDefinitions="Auto,*,Auto" Margin="20,12,20,16">
+
+        <!-- Header (the dialog host supplies the close button). -->
+        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,24,12">
+            <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding SourceDescription}" FontSize="12" Opacity="0.7"
+                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding SourceDescription}" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Spacing="14">
+
+            <!-- Target collection -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Library_AddTo}" FontWeight="SemiBold" />
+                <RadioButton GroupName="Target" IsChecked="{Binding CreateNew}"
+                             AutomationProperties.AutomationId="AddToLibrary.CreateNew"
+                             Content="{x:Static loc:Strings.Library_NewCollection}" />
+                <TextBox Text="{Binding NewCollectionName}" Margin="26,0,0,0"
+                         AutomationProperties.Name="{x:Static loc:Strings.Library_CollectionNameWatermark}"
+                         AutomationProperties.AutomationId="AddToLibrary.Name"
+                         IsEnabled="{Binding CreateNew}"
+                         PlaceholderText="{x:Static loc:Strings.Library_CollectionNameWatermark}" />
+                <RadioButton GroupName="Target" IsChecked="{Binding AddToExisting}"
+                             AutomationProperties.AutomationId="AddToLibrary.AddToExisting"
+                             IsEnabled="{Binding HasExistingCollections}"
+                             Content="{x:Static loc:Strings.Library_ExistingCollection}" />
+                <ComboBox ItemsSource="{Binding ExistingCollections}"
+                          AutomationProperties.Name="{x:Static loc:Strings.Library_ExistingCollection}"
+                          AutomationProperties.AutomationId="AddToLibrary.Existing"
+                          SelectedItem="{Binding SelectedCollection}"
+                          IsEnabled="{Binding AddToExisting}"
+                          HorizontalAlignment="Stretch" Margin="26,0,0,0">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="lib:LibraryCollection">
+                            <TextBlock Text="{Binding Definition.Name}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+
+            <TextBlock Text="{x:Static loc:Strings.Library_AddNote}" FontSize="11" Opacity="0.6" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,16,0,0">
+            <Button Classes="Outline" Content="{x:Static loc:Strings.Button_Cancel}" Command="{Binding CancelCommand}"  AutomationProperties.AutomationId="AddToLibrary.Cancel"/>
+            <Button Classes="Primary" Content="{x:Static loc:Strings.Button_AddToLibrary}" Command="{Binding ConfirmCommand}"  AutomationProperties.AutomationId="AddToLibrary.Add"/>
+        </StackPanel>
+    </Grid>
+
+</UserControl>

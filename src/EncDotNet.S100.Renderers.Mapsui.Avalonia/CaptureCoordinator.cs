@@ -1,0 +1,263 @@
+using System.Diagnostics;
+
+namespace EncDotNet.S100.Renderers.Mapsui.Avalonia;
+
+internal static class CaptureCoordinator
+{
+    internal static readonly TimeSpan GateTimeout = TimeSpan.FromSeconds(10);
+    internal static readonly TimeSpan CaptureDrainTimeout = TimeSpan.FromMilliseconds(750);
+
+    private static readonly object GateState = new();
+    private static readonly SemaphoreSlim CaptureSequence = new(1, 1);
+    private static readonly SemaphoreSlim DrainSignal = new(0);
+    private static int _captureDepth;
+    private static int _gateDepth;
+    private static int _gateOwnerThreadId;
+    private static long _gateGeneration;
+
+    internal static bool CaptureActive => Volatile.Read(ref _captureDepth) > 0;
+
+    internal static void BeginCapture() => Interlocked.Increment(ref _captureDepth);
+
+    internal static void EndCapture() => Interlocked.Decrement(ref _captureDepth);
+
+    internal static void NotifyDrained() => DrainSignal.Release();
+
+    internal static bool WaitForFreshDrain(TimeSpan timeout)
+    {
+        DiscardStaleDrainSignals();
+        return DrainSignal.Wait(timeout);
+    }
+
+    internal static async Task<bool> WaitForFreshDrainAsync(
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        DiscardStaleDrainSignals();
+        return await DrainSignal.WaitAsync(timeout, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    internal static GateLease EnterLivePaint()
+    {
+        lock (GateState)
+        {
+            var threadId = Environment.CurrentManagedThreadId;
+            if (_gateOwnerThreadId == threadId)
+            {
+                // Live paint operations are not nested. Re-entry means a prior
+                // frame failed before its end marker; invalidate that lease so
+                // the compositor can recover rather than retaining the gate.
+                _gateGeneration++;
+                _gateDepth = 1;
+                return new GateLease(_gateGeneration, threadId);
+            }
+
+            while (_gateOwnerThreadId != 0)
+            {
+                Monitor.Wait(GateState);
+            }
+
+            _gateOwnerThreadId = threadId;
+            _gateDepth = 1;
+            return new GateLease(_gateGeneration, threadId);
+        }
+    }
+
+    internal static void ExitGate(GateLease lease)
+    {
+        lock (GateState)
+        {
+            if (lease.Generation != _gateGeneration
+                || lease.OwnerThreadId != _gateOwnerThreadId)
+            {
+                return;
+            }
+
+            _gateDepth--;
+            if (_gateDepth == 0)
+            {
+                _gateOwnerThreadId = 0;
+                Monitor.PulseAll(GateState);
+            }
+        }
+    }
+
+    internal static byte[]? RunCapture(Func<byte[]?> capture, TimeSpan timeout)
+    {
+        ArgumentNullException.ThrowIfNull(capture);
+
+        CaptureSequence.Wait();
+        BeginCapture();
+        try
+        {
+            var lease = AcquireGate(timeout, CancellationToken.None);
+            try
+            {
+                return capture();
+            }
+            finally
+            {
+                ExitGate(lease);
+            }
+        }
+        finally
+        {
+            EndCapture();
+            CaptureSequence.Release();
+        }
+    }
+
+    /// <summary>
+    /// Captures the map once any in-flight live paint has drained, serialized
+    /// against other captures.
+    /// </summary>
+    /// <param name="requestRepaintAsync">Requests a repaint of the map control so its render markers signal a drain.</param>
+    /// <param name="captureAsync">Performs the capture and returns the encoded image, or <see langword="null"/> on failure.</param>
+    /// <param name="cancellationToken">Cancels waiting for the capture slot or the drain.</param>
+    /// <param name="acquireGate">
+    /// Whether to hold the live-paint gate across <paramref name="captureAsync"/>.
+    /// <para>
+    /// <see langword="true"/> for a capture that renders shared Skia/GPU
+    /// resources <b>without</b> going through the map control's
+    /// <see cref="CaptureSynchronizedMapControl"/> markers (e.g. rendering Mapsui
+    /// layers straight to an offscreen bitmap): the external gate is the only
+    /// thing excluding a concurrent live paint.
+    /// </para>
+    /// <para>
+    /// <see langword="false"/> for a capture that re-renders the control tree on
+    /// the UI thread (e.g. <c>RenderTargetBitmap.Render(control)</c>): that render
+    /// re-enters the map control's start/end markers, which acquire the gate on
+    /// the UI thread themselves and so already serialize against a concurrent
+    /// compositor paint. Holding the gate here too — on a different (worker)
+    /// thread — would deadlock the UI-thread marker's <see cref="EnterLivePaint"/>
+    /// against this holder, which is in turn awaiting that same UI-thread render.
+    /// The drain still runs; only the redundant external gate is skipped.
+    /// </para>
+    /// </param>
+    /// <param name="synchronized">
+    /// Whether the map control participates in the live-paint gate (i.e. is a
+    /// <see cref="CaptureSynchronizedMapControl"/> whose render markers signal a
+    /// drain).
+    /// <para>
+    /// <see langword="true"/> (default): request a repaint and wait for the
+    /// control's live paint to drain the shared Skia/GPU resources before
+    /// capturing, so the capture never reads them mid-paint.
+    /// </para>
+    /// <para>
+    /// <see langword="false"/>: the control is a plain Mapsui map control that
+    /// never enters the gate, so no marker can ever signal a drain. Skip the
+    /// handshake entirely — waiting would only burn <see cref="CaptureDrainTimeout"/>
+    /// on a signal that can never arrive — and capture best-effort, unsynchronized
+    /// against any concurrent live paint. Captures still serialize against each
+    /// other through <see cref="CaptureSequence"/>.
+    /// </para>
+    /// </param>
+    internal static async Task<byte[]?> CaptureDrainedAsync(
+        Func<Task> requestRepaintAsync,
+        Func<Task<byte[]?>> captureAsync,
+        CancellationToken cancellationToken,
+        bool acquireGate = true,
+        bool synchronized = true)
+    {
+        ArgumentNullException.ThrowIfNull(requestRepaintAsync);
+        ArgumentNullException.ThrowIfNull(captureAsync);
+
+        cancellationToken.ThrowIfCancellationRequested();
+        await CaptureSequence.WaitAsync(cancellationToken).ConfigureAwait(false);
+        BeginCapture();
+        try
+        {
+            if (!synchronized)
+            {
+                return await captureAsync().ConfigureAwait(false);
+            }
+
+            DiscardStaleDrainSignals();
+            await requestRepaintAsync().ConfigureAwait(false);
+            await DrainSignal.WaitAsync(CaptureDrainTimeout, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (!acquireGate)
+            {
+                return await captureAsync().ConfigureAwait(false);
+            }
+
+            var lease = await Task.Run(
+                () => AcquireGate(GateTimeout, cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+            try
+            {
+                return await captureAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                ExitGate(lease);
+            }
+        }
+        finally
+        {
+            EndCapture();
+            CaptureSequence.Release();
+        }
+    }
+
+    private static GateLease AcquireGate(
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        using var cancellationRegistration = cancellationToken.Register(
+            static () =>
+            {
+                lock (GateState)
+                {
+                    Monitor.PulseAll(GateState);
+                }
+            });
+
+        lock (GateState)
+        {
+            var threadId = Environment.CurrentManagedThreadId;
+            if (_gateOwnerThreadId == 0 || _gateOwnerThreadId == threadId)
+            {
+                _gateOwnerThreadId = threadId;
+                _gateDepth++;
+                return new GateLease(_gateGeneration, threadId);
+            }
+
+            var remaining = timeout;
+            while (_gateOwnerThreadId != 0 && remaining > TimeSpan.Zero)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                Monitor.Wait(GateState, remaining);
+                remaining = timeout - stopwatch.Elapsed;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_gateOwnerThreadId != 0)
+            {
+                Debug.WriteLine(
+                    "CaptureCoordinator: timed out waiting for live paint; " +
+                    "recovering the gate and running the capture unsynchronized " +
+                    "from the abandoned paint.");
+                _gateGeneration++;
+            }
+
+            _gateOwnerThreadId = threadId;
+            _gateDepth = 1;
+            return new GateLease(_gateGeneration, threadId);
+        }
+    }
+
+    private static void DiscardStaleDrainSignals()
+    {
+        while (DrainSignal.Wait(0))
+        {
+        }
+    }
+
+    internal readonly record struct GateLease(
+        long Generation,
+        int OwnerThreadId);
+}

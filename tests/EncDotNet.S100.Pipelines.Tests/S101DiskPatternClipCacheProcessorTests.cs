@@ -1,0 +1,88 @@
+using EncDotNet.S100.Crs.ProjNet;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Features;
+using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
+using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
+
+namespace EncDotNet.S100.Pipelines.Tests;
+
+/// <summary>
+/// Processor-level coverage of the persisted (disk-backed) pattern-clip cache:
+/// with a warm <see cref="DiskPatternClipCache"/>, the <em>second</em> cold open
+/// of a cell serves its pattern-fill priority clip from disk (a clip-cache hit),
+/// while the first cold open recomputes it. Requires a real S-101 trial cell and
+/// is skipped when absent so CI stays green.
+/// </summary>
+public class S101DiskPatternClipCacheProcessorTests
+{
+    // The densest known real S-101 trial cell (~64k-vertex M_QUAL coverage),
+    // never committed (real ENC data is not checked in). Present only locally.
+    private static string DenseCellPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        "Downloads", "Complete S10X datasets", "S-101 Trial Cells",
+        "101GB00GB302045.000");
+
+    private static PortrayalCatalogueManager CreateCatalogueManager()
+    {
+        var manager = new PortrayalCatalogueManager();
+        foreach (var spec in Specification.AvailableSpecs)
+        {
+            if (Specification.HasPortrayalCatalogue(spec))
+                manager.SetSource(spec, Specification.CreatePortrayalCatalogueSource(spec));
+        }
+        return manager;
+    }
+
+    [Fact]
+    public async Task WarmDiskCache_SecondColdOpen_IsClipCacheHit()
+    {
+        Assert.SkipUnless(File.Exists(DenseCellPath), $"Dense S-101 trial cell not present: {DenseCellPath}");
+
+        var cacheDir = Path.Combine(
+            Path.GetTempPath(), "encdotnet-clipcache-proc-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(cacheDir);
+        try
+        {
+            var sharedCache = new DiskPatternClipCache(EncDotNet.S100.Testing.TestContentKinds.Open(cacheDir, maxBytes: 256L * 1024 * 1024, DiskPatternClipCache.KindOptions));
+
+            var catalogueManager = CreateCatalogueManager();
+            var fcManager = new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue);
+            var factory = new DatasetPipelineFactory(
+                catalogueManager,
+                TestLuaEngine.Create(),
+                new ProjNetCrsTransformFactory(),
+                fcManager,
+                new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider());
+
+            // The pattern-clip cache is owned by the Mapsui renderer (issue
+            // #189): a single renderer holding the shared disk cache converts
+            // both cold opens, so the second open's area build is served from
+            // disk even though the two processors share nothing else.
+            var renderer = new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory(), sharedCache);
+
+            // First cold open: the disk cache is empty, so the clip is computed
+            // (a miss) and persisted.
+            var first = (S101DatasetProcessor)factory.CreateProcessor(DenseCellPath);
+            await renderer.RenderAsync(first, cancellationToken: TestContext.Current.CancellationToken);
+            Assert.True(sharedCache.Misses >= 1);
+
+            // Second cold open (simulates reopening the cell, even after a
+            // restart): a brand-new processor over the same shared disk cache.
+            // Its area render must be served from disk — a clip-cache hit — so
+            // the multi-second NetTopologySuite overlay is skipped.
+            var second = (S101DatasetProcessor)factory.CreateProcessor(DenseCellPath);
+            await renderer.RenderAsync(second, cancellationToken: TestContext.Current.CancellationToken);
+            Assert.True(
+                sharedCache.Hits >= 1,
+                "Second cold open should hit the warm disk pattern-clip cache.");
+        }
+        finally
+        {
+            try { Directory.Delete(cacheDir, recursive: true); }
+            catch { /* best effort */ }
+        }
+    }
+}

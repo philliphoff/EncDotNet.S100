@@ -1,0 +1,273 @@
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Renderers.Skia.Scene;
+using EncDotNet.S100.Rendering.Engine;
+using EncDotNet.S100.Testing.Scenarios.Hdf5;
+using EncDotNet.S100.Validation;
+using SkiaSharp;
+
+namespace EncDotNet.S100.Pipelines.Tests;
+
+/// <summary>
+/// Pipeline-level tests for the S-104 dcf8 station-series branch of
+/// <see cref="S104DatasetProcessor"/>. Verifies that the processor's station
+/// layer binds a scene whose ops carry the
+/// <c>"station:&lt;id&gt;"</c> ref recognised by the pick router, and that a
+/// session pick on a station resolves it.
+/// </summary>
+public class S104Dcf8ProcessorTests
+{
+    private sealed class IdentityFactory : ICrsTransformFactory
+    {
+        public static readonly IdentityFactory Instance = new();
+        public ICrsTransform Create(string sourceCrs, string targetCrs) => IdentityCrsTransform.Instance;
+    }
+
+    private static string WriteFixture()
+    {
+        var path = Path.GetTempFileName() + ".h5";
+        var stations = new[]
+        {
+            new S104Dcf8FixtureBuilder.Station<S104Dcf8FixtureBuilder.SpecValueRow>
+            {
+                Identifier = "Alpha",
+                Latitude = 51.5f,
+                Longitude = -0.1f,
+                StartDateTime = "20240101T000000Z",
+                EndDateTime = "20240101T020000Z",
+                TimeRecordInterval = 3600,
+                Values =
+                [
+                    new() { WaterLevelHeight = 1.0f, WaterLevelTrend = 1 },
+                    new() { WaterLevelHeight = 1.5f, WaterLevelTrend = 2 },
+                    new() { WaterLevelHeight = 1.2f, WaterLevelTrend = 3 },
+                ],
+            },
+            new S104Dcf8FixtureBuilder.Station<S104Dcf8FixtureBuilder.SpecValueRow>
+            {
+                Identifier = "Bravo",
+                Latitude = 51.6f,
+                Longitude = -0.2f,
+                StartDateTime = "20240101T000000Z",
+                EndDateTime = "20240101T020000Z",
+                TimeRecordInterval = 3600,
+                Values =
+                [
+                    new() { WaterLevelHeight = -0.3f, WaterLevelTrend = 2 },
+                    new() { WaterLevelHeight = 0.1f, WaterLevelTrend = 2 },
+                    new() { WaterLevelHeight = 0.4f, WaterLevelTrend = 3 },
+                ],
+            },
+        };
+
+        S104Dcf8FixtureBuilder.WriteFile(path, stations, waterLevelTrendThreshold: 0.5);
+        return path;
+    }
+
+    [Fact]
+    public async Task Render_Dcf8_BindsAScene_WithOpsPerStation_TaggedByStationRef()
+    {
+        var path = WriteFixture();
+        try
+        {
+            var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
+
+            var result = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, cancellationToken: TestContext.Current.CancellationToken);
+
+            var layer = Assert.Single(result.Layers);
+            Assert.True(S100VectorTileRenderer.TryGetPartitionedScene(layer, out var baseScene, out var overlay));
+
+            // Each station is a symbol and a value label, both tagged with the
+            // station's ref so either picks it.
+            var refs = baseScene.Ops.Concat(overlay.Ops)
+                .Select(op => op.FeatureReference)
+                .Distinct()
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+
+            Assert.Equal(new[] { "station:Alpha", "station:Bravo" }, refs);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task Pick_on_a_station_resolves_it()
+    {
+        var path = WriteFixture();
+        try
+        {
+            using var map = new Mapsui.Map();
+            using var s100 = map.AddS100(new S100MapsuiOptions { CrsTransformFactory = IdentityFactory.Instance });
+            var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
+            var id = new MapDatasetId("s104");
+            Assert.True(await s100.AddDatasetAsync(
+                new MapDataset(id, id.Value, p.Metadata),
+                p,
+                cancellationToken: TestContext.Current.CancellationToken));
+
+            // Alpha is at (51.5 N, 0.1 W).
+            var picks = await s100.Query.PickAsync(
+                new GeographicPickQuery { Latitude = 51.5, Longitude = -0.1 },
+                TestContext.Current.CancellationToken);
+
+            var pick = Assert.Single(picks);
+            Assert.Equal(id, pick.DatasetId);
+            Assert.Equal("Alpha", pick.Info.FeatureRef);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task RenderHeadless_Dcf8_OfflineBasemap_PaintsLandUnderStations()
+    {
+        // The station-series path once skipped the render context's basemap
+        // (found while fixing #735). Both stations are in London, so the fitted
+        // frame is all land: its corner is parchment with the basemap and the
+        // plain background without it.
+        var path = WriteFixture();
+        try
+        {
+            var processor = new S104DatasetProcessor(path, IdentityFactory.Instance);
+
+            using var none = await processor.RenderHeadlessAsync(256, 256, cancellationToken: TestContext.Current.CancellationToken);
+            using var offline = await processor.RenderHeadlessAsync(
+                256, 256, new RenderContext { Basemap = BasemapKind.Offline }, cancellationToken: TestContext.Current.CancellationToken);
+
+            var land = NaturalEarthBasemap.LandFill;
+            Assert.Equal(SKColors.White, none.GetPixel(2, 2));
+            Assert.Equal(new SKColor(land.R, land.G, land.B), offline.GetPixel(2, 2));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task RenderHeadless_Dcf8_PaintsStationGlyphs()
+    {
+        var path = WriteFixture();
+        try
+        {
+            var processor = new S104DatasetProcessor(path, IdentityFactory.Instance);
+
+            using var bitmap = await processor.RenderHeadlessAsync(256, 256, cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Contains(
+                Enumerable.Range(0, bitmap.Width).SelectMany(x =>
+                    Enumerable.Range(0, bitmap.Height).Select(y => bitmap.GetPixel(x, y))),
+                color => color != SKColors.White);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Validate_Dcf8_UsesStationRulesInsteadOfUnsupportedProjection()
+    {
+        var path = WriteFixture();
+        try
+        {
+            var processor = new S104DatasetProcessor(path, IdentityFactory.Instance);
+
+            var report = Assert.IsType<ValidationReport>(processor.Validate());
+
+            Assert.Empty(report.Findings);
+            // Station rules plus the axis-order check (#650).
+            Assert.Equal(3, report.RulesEvaluated);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task GetFeatureInfo_StationRef_AfterRender_ReturnsCurrentTimeSample()
+    {
+        var path = WriteFixture();
+        try
+        {
+            var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
+
+            // Render at the second time-step; GetFeatureInfo should report
+            // the value at the same step (height = 1.5, trend = 2 for Alpha).
+            var secondStep = new DateTime(2024, 1, 1, 1, 0, 0, DateTimeKind.Utc);
+            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, new RenderContext { TimeStep = secondStep }, TestContext.Current.CancellationToken);
+
+            var info = p.GetFeatureInfo("station:Alpha");
+
+            Assert.NotNull(info);
+            Assert.Equal("WaterLevel", info!.FeatureType);
+            Assert.Equal("station:Alpha", info.FeatureRef);
+
+            var attrs = info.Attributes.ToDictionary(a => a.Code, a => a);
+            Assert.Equal("Alpha", attrs["stationIdentification"].RawValue);
+            Assert.Equal("1.5", attrs["waterLevelHeight"].RawValue);
+            Assert.Equal("2", attrs["waterLevelTrend"].RawValue);
+            Assert.Equal("3", attrs["sampleCount"].RawValue);
+            Assert.Contains("timePoint", attrs.Keys);
+            Assert.Contains("timeRange", attrs.Keys);
+            Assert.Contains("stationPosition", attrs.Keys);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task GetFeatureInfo_UnknownStationRef_ReturnsNull()
+    {
+        var path = WriteFixture();
+        try
+        {
+            var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
+            _ = await new MapsuiDatasetRenderer(IdentityFactory.Instance).RenderAsync(p, cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Null(p.GetFeatureInfo("station:Missing"));
+            Assert.Null(p.GetFeatureInfo("not-a-station-ref"));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Metadata_Dcf8_DerivesExtentFromStationCoordinates()
+    {
+        var path = WriteFixture();
+        try
+        {
+            var p = new S104DatasetProcessor(path, IdentityFactory.Instance);
+
+            var metadata = p.Metadata;
+
+            Assert.Equal("S-104", metadata.Spec.Name);
+            Assert.NotNull(metadata.Extent);
+
+            // Fixture stations: Alpha (51.5, -0.1), Bravo (51.6, -0.2).
+            var extent = metadata.Extent!;
+            Assert.Equal(51.5, extent.SouthLatitude, 4);
+            Assert.Equal(51.6, extent.NorthLatitude, 4);
+            Assert.Equal(-0.2, extent.WestLongitude, 4);
+            Assert.Equal(-0.1, extent.EastLongitude, 4);
+
+            // Memoized: repeat access returns the same instance (issue #467 WS1).
+            Assert.Same(metadata, p.Metadata);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+}

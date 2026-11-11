@@ -1,0 +1,206 @@
+namespace EncDotNet.S100.Core.Tests;
+
+public class CachingAssetSourceTests
+{
+    [Fact]
+    public async Task ReadAllBytesAsync_ReturnsSameBytesOnRepeatedReads()
+    {
+        var inner = new InMemoryAssetSource(new()
+        {
+            ["a.txt"] = [1, 2, 3],
+        });
+        using var cache = new CachingAssetSource(inner);
+
+        AssetBytes first = await cache.ReadAllBytesAsync("a.txt", TestContext.Current.CancellationToken);
+        AssetBytes second = await cache.ReadAllBytesAsync("a.txt", TestContext.Current.CancellationToken);
+
+        Assert.Equal(new byte[] { 1, 2, 3 }, first.Bytes.ToArray());
+        Assert.Equal(new byte[] { 1, 2, 3 }, second.Bytes.ToArray());
+        Assert.Equal(1, inner.OpenCount("a.txt"));
+    }
+
+    [Fact]
+    public async Task ReadAllBytesAsync_DifferentPathsAreIndependent()
+    {
+        var inner = new InMemoryAssetSource(new()
+        {
+            ["a.txt"] = [1],
+            ["b.txt"] = [2],
+        });
+        using var cache = new CachingAssetSource(inner);
+
+        AssetBytes a = await cache.ReadAllBytesAsync("a.txt", TestContext.Current.CancellationToken);
+        AssetBytes b = await cache.ReadAllBytesAsync("b.txt", TestContext.Current.CancellationToken);
+        AssetBytes a2 = await cache.ReadAllBytesAsync("a.txt", TestContext.Current.CancellationToken);
+
+        Assert.Equal(new byte[] { 1 }, a.Bytes.ToArray());
+        Assert.Equal(new byte[] { 2 }, b.Bytes.ToArray());
+        Assert.Equal(new byte[] { 1 }, a2.Bytes.ToArray());
+        Assert.Equal(1, inner.OpenCount("a.txt"));
+        Assert.Equal(1, inner.OpenCount("b.txt"));
+    }
+
+    [Fact]
+    public async Task ReadAllBytesAsync_KeyIsCaseSensitive()
+    {
+        // Ordinal keys: "A.txt" and "a.txt" should be distinct cache
+        // entries. The underlying source decides case semantics.
+        var inner = new InMemoryAssetSource(new()
+        {
+            ["a.txt"] = [1],
+            ["A.txt"] = [2],
+        });
+        using var cache = new CachingAssetSource(inner);
+
+        AssetBytes lower = await cache.ReadAllBytesAsync("a.txt", TestContext.Current.CancellationToken);
+        AssetBytes upper = await cache.ReadAllBytesAsync("A.txt", TestContext.Current.CancellationToken);
+
+        Assert.Equal(new byte[] { 1 }, lower.Bytes.ToArray());
+        Assert.Equal(new byte[] { 2 }, upper.Bytes.ToArray());
+        Assert.Equal(1, inner.OpenCount("a.txt"));
+        Assert.Equal(1, inner.OpenCount("A.txt"));
+    }
+
+    [Fact]
+    public async Task ConcurrentFirstReads_OpenInnerExactlyOnce()
+    {
+        var inner = new InMemoryAssetSource(
+            new() { ["hot.txt"] = [9, 9, 9] },
+            openDelay: TimeSpan.FromMilliseconds(50));
+        using var cache = new CachingAssetSource(inner);
+
+        Task<AssetBytes>[] tasks = Enumerable
+            .Range(0, 32)
+            .Select(_ => Task.Run(() => cache.ReadAllBytesAsync("hot.txt")))
+            .ToArray();
+
+        AssetBytes[] results = await Task.WhenAll(tasks);
+
+        Assert.All(results, r => Assert.Equal(new byte[] { 9, 9, 9 }, r.Bytes.ToArray()));
+        Assert.Equal(1, inner.OpenCount("hot.txt"));
+    }
+
+    [Fact]
+    public async Task OpenAsync_ReturnsFreshStreamPerCall()
+    {
+        var inner = new InMemoryAssetSource(new()
+        {
+            ["a.txt"] = [1, 2, 3, 4, 5],
+        });
+        using var cache = new CachingAssetSource(inner);
+
+        await using Stream first = await cache.OpenAsync("a.txt", TestContext.Current.CancellationToken);
+        await using Stream second = await cache.OpenAsync("a.txt", TestContext.Current.CancellationToken);
+
+        // Consuming `first` should not affect `second`.
+        Assert.Equal(1, first.ReadByte());
+        Assert.Equal(1, second.ReadByte());
+        Assert.Equal(2, first.ReadByte());
+        Assert.Equal(2, second.ReadByte());
+
+        // And the inner source was opened exactly once.
+        Assert.Equal(1, inner.OpenCount("a.txt"));
+    }
+
+    [Fact]
+    public async Task OpenAsync_ServesBytesIdenticalToReadAllBytesAsync()
+    {
+        var inner = new InMemoryAssetSource(new()
+        {
+            ["a.txt"] = [10, 20, 30, 40],
+        });
+        using var cache = new CachingAssetSource(inner);
+
+        AssetBytes bytes = await cache.ReadAllBytesAsync("a.txt", TestContext.Current.CancellationToken);
+        await using Stream stream = await cache.OpenAsync("a.txt", TestContext.Current.CancellationToken);
+        using var copy = new MemoryStream();
+        await stream.CopyToAsync(copy, TestContext.Current.CancellationToken);
+
+        Assert.Equal(bytes.Bytes.ToArray(), copy.ToArray());
+    }
+
+    [Fact]
+    public void Dispose_ForwardsToInner()
+    {
+        var inner = new InMemoryAssetSource(new());
+        var cache = new CachingAssetSource(inner);
+
+        cache.Dispose();
+
+        Assert.True(inner.Disposed);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_ForwardsToInnerAsync()
+    {
+        var inner = new InMemoryAssetSource(new());
+        var cache = new CachingAssetSource(inner);
+
+        await cache.DisposeAsync();
+
+        Assert.True(inner.DisposedAsync);
+    }
+
+    [Fact]
+    public async Task AwaitUsing_DisposesInnerAsynchronously()
+    {
+        var inner = new InMemoryAssetSource(new());
+        await using (new CachingAssetSource(inner))
+        {
+        }
+
+        Assert.True(inner.DisposedAsync);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_DefaultImplementationForwardsToDispose()
+    {
+        var source = new SyncOnlyAssetSource();
+
+        await ((IAssetSource)source).DisposeAsync();
+
+        // The default IAsyncDisposable implementation on IAssetSource
+        // forwards to the synchronous Dispose().
+        Assert.True(source.Disposed);
+    }
+
+    /// <summary>
+    /// An <see cref="IAssetSource"/> that implements only the synchronous
+    /// <see cref="IDisposable.Dispose"/>, relying on the interface's default
+    /// <c>DisposeAsync</c> to bridge to async disposal.
+    /// </summary>
+    private sealed class SyncOnlyAssetSource : IAssetSource
+    {
+        public bool Disposed { get; private set; }
+
+        public Task<Stream> OpenAsync(string relativePath, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public void Dispose() => Disposed = true;
+    }
+
+    [Fact]
+    public async Task ReadAllBytesAsync_PropagatesFileNotFoundOnMiss()
+    {
+        var inner = new InMemoryAssetSource(new());
+        using var cache = new CachingAssetSource(inner);
+
+        await Assert.ThrowsAsync<FileNotFoundException>(
+            () => cache.ReadAllBytesAsync("missing", TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public void Constructor_ThrowsOnNullInner()
+    {
+        Assert.Throws<ArgumentNullException>(() => new CachingAssetSource(null!));
+    }
+
+    [Fact]
+    public async Task ReadAllBytesAsync_ThrowsOnEmptyPath()
+    {
+        var inner = new InMemoryAssetSource(new());
+        using var cache = new CachingAssetSource(inner);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => cache.ReadAllBytesAsync("", TestContext.Current.CancellationToken));
+    }
+}

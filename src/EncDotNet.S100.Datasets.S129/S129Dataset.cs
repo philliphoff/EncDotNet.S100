@@ -1,0 +1,152 @@
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Core.Gml;
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Features;
+
+namespace EncDotNet.S100.Datasets.S129;
+
+/// <summary>
+/// Root data model for an S-129 Under Keel Clearance Management dataset,
+/// parsed from S-100 Part 10b GML encoding via <see cref="S129DatasetReader"/>.
+/// </summary>
+public sealed class S129Dataset
+{
+    /// <summary>The product specification identifier (e.g. "S-129").</summary>
+    public string? ProductIdentifier { get; init; }
+
+    /// <summary>
+    /// The declared product-specification edition (e.g. <c>"2.0.0"</c>) read
+    /// from <c>DatasetIdentificationInformation/productEdition</c>, or
+    /// <c>null</c> when the dataset declares none. S-100 Part 10b.
+    /// </summary>
+    public string? DeclaredEdition { get; init; }
+
+    /// <summary>The dataset identifier.</summary>
+    public string? DatasetIdentifier { get; init; }
+
+    /// <summary>
+    /// The outcome of the dataset-level axis-order check (issue #650), or
+    /// <c>null</c> when the dataset has no positions. When it is
+    /// <see cref="EncDotNet.S100.DataModel.AxisOrderOutcome.Swapped"/> the reader
+    /// has already read every position longitude first.
+    /// </summary>
+    public EncDotNet.S100.DataModel.AxisOrderAssessment? AxisOrder { get; init; }
+
+    /// <summary>Feature instances contained in the dataset.</summary>
+    public required IReadOnlyList<S129Feature> Features { get; init; }
+
+    /// <summary>Opens an S-129 dataset from a file path.</summary>
+    public static S129Dataset Open(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        using var stream = File.OpenRead(path);
+        return S129DatasetReader.Read(stream);
+    }
+
+    /// <summary>Opens an S-129 dataset from a stream.</summary>
+    public static S129Dataset Open(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        return S129DatasetReader.Read(stream);
+    }
+
+    /// <summary>
+    /// Reads only the lightweight <see cref="DatasetMetadata"/> for an S-129
+    /// dataset at <paramref name="path"/> — its declared specification and
+    /// geographic extent — for phased / deferred loading (issue #460).
+    /// </summary>
+    public static DatasetMetadata ReadMetadata(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        return Open(path).ReadMetadata();
+    }
+
+    /// <summary>
+    /// Reads only the lightweight <see cref="DatasetMetadata"/> for an S-129
+    /// dataset from <paramref name="stream"/> (issue #460).
+    /// </summary>
+    public static DatasetMetadata ReadMetadata(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        return Open(stream).ReadMetadata();
+    }
+
+    /// <summary>
+    /// Produces the lightweight <see cref="DatasetMetadata"/> for this parsed
+    /// dataset: declared specification and raw geographic extent (issue #460).
+    /// </summary>
+    public DatasetMetadata ReadMetadata() =>
+        GmlDatasetMetadata.Create("S-129", DeclaredEdition, Features);
+}
+
+/// <summary>
+/// A geographic feature parsed from an S-129 GML dataset.
+/// </summary>
+public sealed class S129Feature : IS100Feature
+{
+    /// <summary>The GML identifier of the feature.</summary>
+    public required string Id { get; init; }
+
+    /// <summary>The feature type code (e.g. "UnderKeelClearancePlan", "UnderKeelClearanceControlPoint").</summary>
+    public required string FeatureType { get; init; }
+
+    /// <summary>The geometry primitive type.</summary>
+    public S100GeometryType GeometryType { get; init; }
+
+    /// <summary>Point geometries (latitude, longitude pairs).</summary>
+    public IReadOnlyList<GeoPosition> Points { get; init; } = [];
+
+    /// <summary>Curve geometries as ordered coordinate sequences.</summary>
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> Curves { get; init; } = [];
+
+    /// <summary>Surface exterior ring coordinates.</summary>
+    public IReadOnlyList<GeoPosition> ExteriorRing { get; init; } = [];
+
+    /// <summary>Surface interior ring coordinates (holes).</summary>
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; init; } = [];
+
+    /// <summary>Simple attributes keyed by code.</summary>
+    public required IReadOnlyDictionary<string, string> Attributes { get; init; }
+
+    /// <summary>Complex attribute groups keyed by code, each containing sub-attribute dictionaries.</summary>
+    public required IReadOnlyList<S129ComplexAttribute> ComplexAttributes { get; init; }
+
+    /// <summary>
+    /// xlink:href references carried on this feature's child elements
+    /// (S-100 Part 10b §7.2). Default empty when no cross-references are
+    /// present.
+    /// </summary>
+    public IReadOnlyList<S129Reference> References { get; init; } =
+        [];
+
+    /// <inheritdoc/>
+    IReadOnlyList<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes;
+}
+
+/// <summary>
+/// An <c>xlink:href</c> cross-reference carried on a child element of an
+/// <see cref="S129Feature"/> (S-100 Part 10b §7.2). The <see cref="Role"/>
+/// is the local name of the child element (e.g. <c>"sourceRoute"</c>);
+/// the <see cref="Href"/> is the raw <c>xlink:href</c> value (either a
+/// fragment identifier like <c>"#WAYPOINT_03"</c> or an external URL).
+/// </summary>
+public sealed record S129Reference
+{
+    /// <summary>The local name of the referring child element (association role).</summary>
+    public required string Role { get; init; }
+
+    /// <summary>The raw <c>xlink:href</c> value.</summary>
+    public required string Href { get; init; }
+}
+
+/// <summary>
+/// A complex attribute instance containing sub-attributes.
+/// </summary>
+public sealed class S129ComplexAttribute : IS100ComplexAttribute
+{
+    /// <summary>The complex attribute code.</summary>
+    public required string Code { get; init; }
+
+    /// <summary>Sub-attribute values keyed by code.</summary>
+    public required IReadOnlyDictionary<string, string> SubAttributes { get; init; }
+}

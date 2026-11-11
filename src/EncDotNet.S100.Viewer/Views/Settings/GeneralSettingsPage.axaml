@@ -1,0 +1,67 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:viewer="using:EncDotNet.S100.Viewer"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             x:Class="EncDotNet.S100.Viewer.Views.Settings.GeneralSettingsPage"
+             x:DataType="vm:SettingsViewModel">
+
+    <!-- Settings → General: units and time format (#845). -->
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto">
+        <StackPanel Classes="settingsPage">
+            <StackPanel Spacing="3">
+                <TextBlock Classes="settingsPageTitle" Text="{x:Static loc:Strings.Settings_Category_General}" />
+                <TextBlock Classes="settingsPageHelp" Text="{x:Static loc:Strings.Settings_Category_General_Help}" />
+            </StackPanel>
+
+            <!-- Distance Unit -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_DistanceUnits}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="{x:Static loc:Strings.Settings_DistanceUnits_Help}"
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+                <ComboBox ItemsSource="{Binding AvailableDistanceUnits}"
+                          AutomationProperties.AutomationId="Settings.DistanceUnit"
+                          AutomationProperties.Name="{x:Static loc:Strings.Settings_DistanceUnits}"
+                          SelectedItem="{Binding DistanceUnit}"
+                          MinWidth="180"
+                          HorizontalAlignment="Left">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate DataType="viewer:DistanceUnit">
+                            <TextBlock Text="{Binding Converter={x:Static viewer:DistanceUnitNameConverter.Instance}}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+
+            <!-- Time Format -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{x:Static loc:Strings.Settings_TimeFormat_Label}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+                <TextBlock Text="{x:Static loc:Strings.Settings_TimeFormat_Tooltip}"
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap" />
+                <ComboBox ItemsSource="{Binding AvailableTimeFormats}"
+                          AutomationProperties.AutomationId="Settings.TimeFormat"
+                          AutomationProperties.Name="{x:Static loc:Strings.Settings_TimeFormat_Label}"
+                          SelectedItem="{Binding SelectedTimeFormat}"
+                          ToolTip.Tip="{x:Static loc:Strings.Settings_TimeFormat_Tooltip}"
+                          MinWidth="180"
+                          HorizontalAlignment="Left">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate DataType="viewer:TimeFormat">
+                            <TextBlock Text="{Binding Converter={x:Static viewer:TimeFormatNameConverter.Instance}}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

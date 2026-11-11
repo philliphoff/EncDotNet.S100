@@ -1,0 +1,6 @@
+# Hand-written NMEA 0183 recording (see README.md): relative wind and a GNSS fix, no heading.
+$GPRMC,145000.00,A,4221.000,N,07039.000,W,6.5,95.0,271026,14.5,W,A*32
+$WIMWV,045.0,R,12.0,N,A*11
+$WIMWV,300.0,R,30.0,N,V*04
+$IIMTW,12.4,C*14
+$WIMWV,046.0,R,6.2,M,A*26

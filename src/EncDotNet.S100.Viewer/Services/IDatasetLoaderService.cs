@@ -1,0 +1,291 @@
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Viewer.ViewModels;
+using Mapsui.Layers;
+
+namespace EncDotNet.S100.Viewer.Services;
+
+/// <summary>
+/// Orchestrates load / re-render / remove against focused map layer and
+/// viewport capabilities while a reusable <see cref="DatasetProcessorOwner"/>
+/// owns processor lifetime. Decouples the dataset
+/// pipeline from <see cref="MainWindow"/>; the window only supplies the
+/// map host and listens for completion events.
+/// </summary>
+internal interface IDatasetLoaderService
+{
+    /// <summary>
+    /// Wires the loader to a map host and seeds catalogue/pipeline state
+    /// from the supplied CLI options. Must be called exactly once before
+    /// any <see cref="LoadAsync"/> call.
+    /// </summary>
+    void Initialize(
+        IMapLayerCollection layerCollection,
+        IMapViewportController viewport,
+        ViewerCommandSettings? options);
+
+    /// <summary>
+    /// <see langword="true"/> once <see cref="Initialize"/> has wired the
+    /// loader to a map host, after which <see cref="LoadAsync"/> /
+    /// <see cref="RemoveEntry"/> are safe to call. Consumers that may run
+    /// before the window has constructed the map host (e.g. the MCP
+    /// open/close dataset tools) gate on this to return a clean
+    /// "map not ready" error instead of throwing.
+    /// </summary>
+    /// <remarks>
+    /// Provided as a default interface member (returns <see langword="true"/>)
+    /// so the many test doubles that implement this interface need not all
+    /// override it; the production <c>DatasetLoaderService</c> backs it with
+    /// real state.
+    /// </remarks>
+    bool IsInitialized => true;
+
+    /// <summary>
+    /// When <see langword="true"/>, per-dataset loads skip their
+    /// automatic zoom-to-extent. Set by the window when an explicit
+    /// startup viewport (<c>--center</c>/<c>--zoom</c> or <c>--bbox</c>)
+    /// was supplied so the requested framing is deterministic.
+    /// </summary>
+    /// <remarks>
+    /// Provided as a default interface member (no-op) so the many test
+    /// doubles that implement this interface need not all override it;
+    /// the production <c>DatasetLoaderService</c> backs it with real
+    /// state.
+    /// </remarks>
+    bool SuppressAutoZoom
+    {
+        get => false;
+        set { }
+    }
+
+    /// <summary>Loads a dataset and adds its rendered layers to the map.</summary>
+    Task LoadAsync(DatasetEntry entry, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Re-renders every loaded time-aware dataset at the supplied global
+    /// time, using each adapter's snap rule (nearest for S-104/S-111;
+    /// at-or-before for S-411). Calls are debounced with a short
+    /// trailing window so rapid slider scrubs collapse into a single
+    /// render pass; previously-queued scrubs are cancelled.
+    /// </summary>
+    Task ReRenderAtTimeAsync(DateTime t, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Removes a previously-loaded entry's layers from the map and asks the
+    /// processor owner to retire its processor. Safe to call for entries that
+    /// were never loaded.
+    /// </summary>
+    void RemoveEntry(DatasetEntry entry);
+
+    /// <summary>
+    /// Unloads a lazily-loaded exchange-set cell's bytes (layers and
+    /// processor) but keeps the <see cref="DatasetEntry"/> registered and
+    /// re-marks it <see cref="DatasetEntry.IsDeferred"/> so it can reload
+    /// when it next enters the viewport. The LRU-eviction counterpart to
+    /// <see cref="LoadAsync"/>. See issue #458.
+    /// </summary>
+    /// <remarks>
+    /// Provided as a default interface member so existing test doubles need
+    /// not override it. A bare interface cannot preserve collection
+    /// membership, so the fallback re-marks the entry
+    /// <see cref="DatasetEntry.IsDeferred"/> (honouring that half of the
+    /// contract) and then removes its layers via <see cref="RemoveEntry"/>;
+    /// the production loader (<c>DatasetLoaderService</c>) overrides this to
+    /// keep the entry registered in the panel.
+    /// </remarks>
+    void UnloadEntry(DatasetEntry entry)
+    {
+        entry.IsDeferred = true;
+        RemoveEntry(entry);
+    }
+
+    /// <summary>
+    /// Unloads several lazily-loaded cells as <see cref="UnloadEntry"/> does,
+    /// rebuilding the map once for the whole set rather than once per cell. A
+    /// lazy-load eviction pass can unload hundreds of cells at a time.
+    /// </summary>
+    /// <param name="entries">The exchange-set cell entries to unload.</param>
+    /// <remarks>
+    /// Provided as a default interface member that unloads one at a time, so
+    /// existing test doubles need not override it.
+    /// </remarks>
+    void UnloadEntries(IReadOnlyList<DatasetEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        foreach (var entry in entries)
+            UnloadEntry(entry);
+    }
+
+    /// <summary>
+    /// Reorders the dataset layers on the map to match the supplied
+    /// entry sequence. Lowest-indexed entry paints first (bottom of
+    /// the dataset stack). Entries not currently bound to layers are
+    /// skipped. The basemap and any tool overlays keep their positions.
+    /// </summary>
+    void SetEntryOrder(IReadOnlyList<DatasetEntry> orderedEntries);
+
+    /// <summary>
+    /// Test-double compatibility view of active processors keyed by entry.
+    /// Production callers use <see cref="AcquireProcessors"/> so processor
+    /// lifetime remains protected while processors are accessed.
+    /// </summary>
+    IReadOnlyDictionary<DatasetEntry, IDatasetProcessor> Processors =>
+        new Dictionary<DatasetEntry, IDatasetProcessor>();
+
+    /// <summary>
+    /// Acquires a point-in-time processor snapshot whose disposal releases
+    /// every processor lease.
+    /// </summary>
+    DatasetProcessorSnapshot AcquireProcessors() => new(Processors);
+
+    /// <summary>
+    /// Sets what decides, before a dataset's first render, which of its
+    /// features the map doesn't draw (<see cref="DatasetEntry.HiddenFeatures"/>);
+    /// <see langword="null"/> hides none. S-124 warnings not in force use it
+    /// so they never flash up (#993).
+    /// </summary>
+    /// <param name="policy">The entry and its processor in, the features to hide out.</param>
+    void SetHiddenFeaturesOnLoad(Func<DatasetEntry, IDatasetProcessor, IReadOnlySet<string>?>? policy)
+    {
+    }
+
+    /// <summary>
+    /// Sets what decides, before a dataset's first render, the time its
+    /// date-dependent instructions are drawn at
+    /// (<see cref="DatasetEntry.PortrayalTime"/>); <see langword="null"/>
+    /// draws them all. S-101 date ranges use it so a feature out of its dates
+    /// never flashes up.
+    /// </summary>
+    /// <param name="policy">The entry and its processor in, the time out.</param>
+    void SetPortrayalTimeOnLoad(Func<DatasetEntry, IDatasetProcessor, PortrayalTime?>? policy)
+    {
+    }
+
+    /// <summary>
+    /// Sets what decides, before a dataset's first render in the session,
+    /// whether it is active for S-98 composition
+    /// (<see cref="DatasetEntry.IsActive"/>); <see langword="null"/> from the
+    /// policy leaves it. The active display combination uses it so a product it
+    /// leaves out loads inactive and never paints for a frame (design note
+    /// <c>predefined-display-combinations.md</c> §3.3).
+    /// </summary>
+    /// <param name="policy">The entry and its processor in, the Active flag out.</param>
+    void SetActiveOnLoad(Func<DatasetEntry, IDatasetProcessor, bool?>? policy)
+    {
+    }
+
+    /// <summary>
+    /// Sets what decides a sub-layer's visibility the first time the dataset
+    /// produces it (<see cref="DatasetSubLayer.IsVisible"/>);
+    /// <see langword="null"/> from the policy leaves the processor's default.
+    /// Setting a policy starts afresh, so every dataset's sub-layers are
+    /// decided once more when they next appear. The active display combination
+    /// uses it for keys such as <c>"s104.isolines"</c>.
+    /// </summary>
+    /// <param name="policy">The entry and the sub-layer key in, the visibility out.</param>
+    void SetSubLayerVisibilityOnLoad(Func<DatasetEntry, string, bool?>? policy)
+    {
+    }
+
+    /// <summary>Read-only view of the layers each entry currently owns.</summary>
+    IReadOnlyDictionary<DatasetEntry, IReadOnlyList<ILayer>> EntryLayers { get; }
+
+    /// <summary>
+    /// Snapshot of the currently loaded, drawing, scale-bearing cells for
+    /// overscale evaluation (issue #441 / S-52 overscale indication): each
+    /// carries the cell's display name, its EPSG:3857 data-coverage footprint,
+    /// and its compilation-scale denominator
+    /// (<see cref="DatasetEntry.MaximumDisplayScale"/>). Cells that are not
+    /// drawing, declare no coverage geometry, or have no known compilation scale
+    /// are omitted. Consumed on every viewport change to drive the status-bar
+    /// overscale pill.
+    /// </summary>
+    /// <remarks>
+    /// Provided as a default interface member returning an empty list so the
+    /// many test doubles need not override it; the production
+    /// <c>DatasetLoaderService</c> backs it with real state.
+    /// </remarks>
+    IReadOnlyList<EncDotNet.S100.Rendering.Engine.OverscaleCellInput> GetOverscaleCells() => [];
+
+    /// <summary>
+    /// Picks the features drawn at a geographic point through the map
+    /// session's engine pick: each drawn dataset's own spatial index, with
+    /// features an S-98 rule suppressed left out, ranked topmost-first by the
+    /// S-98 stack (map rendering slice&#160;8). Empty when there is no map.
+    /// </summary>
+    /// <param name="query">The point, radius and resolution to pick at.</param>
+    /// <param name="cancellationToken">Cancels the pick.</param>
+    /// <returns>The picks, topmost first.</returns>
+    Task<IReadOnlyList<EncDotNet.S100.Renderers.Mapsui.S100Pick>> PickAsync(
+        EncDotNet.S100.Renderers.Mapsui.GeographicPickQuery query,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<EncDotNet.S100.Renderers.Mapsui.S100Pick>>([]);
+
+    /// <summary>
+    /// Snapshot of the current S-98-ordered layer stack across all
+    /// loaded datasets (bottom-of-paint-stack first; index 0 paints
+    /// under everything else). Updated whenever a dataset is loaded,
+    /// removed, re-rendered, or reordered. Consumed by
+    /// <see cref="PickService"/> so multi-hit picks return top-of-stack
+    /// hits first.
+    /// </summary>
+    IReadOnlyList<ILayer> CurrentStackedLayers { get; }
+
+    /// <summary>
+    /// Rich snapshot of the current S-98-ordered layer stack — same
+    /// order as <see cref="CurrentStackedLayers"/> but each entry
+    /// also carries its <see cref="S98DisplayPlane"/>, within-plane
+    /// priority, source dataset id, and (where applicable) source
+    /// feature type. Consumed by the Layer Stack panel
+    /// (<see cref="LayerStackViewModel"/>) to group rows by plane
+    /// and label each row with its provenance.
+    /// </summary>
+    IReadOnlyList<LayerStackEntry> CurrentStackEntries { get; }
+
+    /// <summary>
+    /// Raised after <see cref="CurrentStackedLayers"/> /
+    /// <see cref="CurrentStackEntries"/> have been recomputed (any
+    /// load, remove, re-render, reorder, or Active-flag toggle).
+    /// </summary>
+    event Action? LayerStackChanged;
+
+    /// <summary>
+    /// Returns whether the supplied dataset is currently <em>active</em>
+    /// for S-98 interoperability (i.e. participates in rule evaluation
+    /// and pick). Unknown ids default to active. See
+    /// <see cref="LoadedDatasetInfo.Active"/> for the distinction
+    /// between Active and <see cref="DatasetEntry.IsVisible"/>.
+    /// </summary>
+    bool GetActive(string datasetId);
+
+    /// <summary>
+    /// Sets the in-memory Active flag for the supplied dataset id and,
+    /// if the value changed, re-evaluates the S-98 layer stack and
+    /// fires <see cref="LayerStackChanged"/> and
+    /// <see cref="ActiveChanged"/>. The Active flag is process-local;
+    /// PR-L4 will persist it via <c>ViewerSettings</c>.
+    /// </summary>
+    void SetActive(string datasetId, bool active);
+
+    /// <summary>
+    /// Raised when <see cref="SetActive"/> changes a dataset's Active
+    /// flag. The string argument is the dataset id whose state flipped.
+    /// </summary>
+    event Action<string>? ActiveChanged;
+
+    /// <summary>
+    /// Raised on the calling thread (typically the UI thread) immediately
+    /// after a dataset has been successfully rendered and its layers added
+    /// to the map.
+    /// </summary>
+    event Action<DatasetEntry>? DatasetLoaded;
+
+    /// <summary>
+    /// Raised after <see cref="RemoveEntry"/> has dropped the entry from
+    /// the loader's processor cache. Consumers can use this to release
+    /// any per-entry state they kept alongside the loader (e.g. an
+    /// external MCP catalog snapshot).
+    /// </summary>
+    event Action<DatasetEntry>? DatasetRemoved;
+}

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>EncDotNet.S100.Samples.Quickstart</RootNamespace>
+    <AssemblyName>EncDotNet.S100.Samples.Quickstart</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Consumers would reference the published NuGet package instead:
+        <PackageReference Include="EncDotNet.S100" />
+      In-repo the sample uses a project reference so it builds in CI.
+    -->
+    <ProjectReference Include="..\..\src\EncDotNet.S100\EncDotNet.S100.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Reuse the existing small SYNTHETIC S-124 fixture from the test suite as
+      the single source of truth (it is hand-authored test data, not real ENC
+      data). It is copied to the output directory as sample-navwarn.gml.
+    -->
+    <None Include="..\..\tests\datasets\S124\navwarn_point.gml" Link="sample-navwarn.gml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

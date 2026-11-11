@@ -1,0 +1,148 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!--
+      Shipped product name. The executable, the macOS .app bundle and the
+      avares:// resource URIs all use the assembly name; the project and
+      namespaces stay EncDotNet.S100.Viewer (RootNamespace pinned so embedded
+      resource names such as EncDotNet.S100.Viewer.Resources.Strings are stable).
+    -->
+    <AssemblyName>SoundCharts</AssemblyName>
+    <RootNamespace>EncDotNet.S100.Viewer</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Branding\AppIcon.ico</ApplicationIcon>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <!-- See Directory.Build.targets: ship the NoDependencies Skia native on Linux (issue #23). -->
+    <UseSkiaSharpLinuxNoDependencies>true</UseSkiaSharpLinuxNoDependencies>
+    <!-- Trim analyzers run on every build (issue #764): reflection they cannot
+         follow is an error, as in the libraries. The app is not published trimmed. -->
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <!--
+      Server GC (issue #1264). Loading cells as you pan runs Lua portrayal on
+      several threads and allocates about 2 GB/s; workstation GC spent 40-60%
+      of wall time paused and roughly halved cell-load throughput. Server GC
+      keeps concurrent (background) gen2 collections, and on .NET 9+ DATAS
+      (dynamic heap count) is on by default, which keeps idle memory close to
+      workstation GC. Heap count and affinity are left to DATAS: pinning them
+      would fight other apps on a desktop machine.
+    -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+  </PropertyGroup>
+
+  <!--
+    Build date surfaced by the About dialog (issue #379). Defaults to the
+    UTC build date; CI may override with -p:BuildDate=YYYY-MM-DD. Embedded as
+    assembly metadata and read via AssemblyMetadataAttribute at runtime.
+  -->
+  <PropertyGroup>
+    <BuildDate Condition="'$(BuildDate)' == ''">$([System.DateTime]::UtcNow.ToString("yyyy-MM-dd"))</BuildDate>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="BuildDate" Value="$(BuildDate)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Avalonia window icon. Loaded via avares://… in MainWindow.axaml.
+      The other Branding artifacts (.icns / .ico / DMG background / Linux
+      PNG set) are consumed by packaging tooling, not by the app itself,
+      so they are intentionally excluded from the build below.
+    -->
+    <AvaloniaResource Include="Branding\AppIcon.png" />
+    <None Remove="Branding\AppIcon.icns" />
+    <None Remove="Branding\AppIcon.ico" />
+    <None Remove="Branding\dmg-background.png" />
+    <None Remove="Branding\dmg-background@2x.png" />
+    <None Remove="Branding\dmg-background.svg" />
+    <None Remove="Branding\icon.svg" />
+    <None Remove="Branding\png\**" />
+    <None Remove="Branding\AppIcon.iconset\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.Viewer.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Curated, human-friendly labels for ECDIS viewing groups.
+      One JSON per spec, loaded by EcdisLabelOverrideProvider.
+      Missing files are tolerated; adding a new spec without a
+      labels file simply means the viewer falls back to the raw PC
+      name / description for that spec.
+    -->
+    <EmbeddedResource Include="Resources\EcdisLabels\*.labels.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Skia" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="OpenTelemetry" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="AvaloniaUI.DiagnosticsSupport">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="FluentIcons.Avalonia" />
+    <PackageReference Include="LiveChartsCore.SkiaSharpView.Avalonia" />
+    <PackageReference Include="Mapsui.Avalonia12" />
+    <PackageReference Include="ShadUI" />
+    <PackageReference Include="Spectre.Console.Cli" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Crs.ProjNet\EncDotNet.S100.Crs.ProjNet.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Diagnostics.Export\EncDotNet.S100.Diagnostics.Export.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S101\EncDotNet.S100.Datasets.S101.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S102\EncDotNet.S100.Datasets.S102.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S57\EncDotNet.S100.Datasets.S57.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S104\EncDotNet.S100.Datasets.S104.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S111\EncDotNet.S100.Datasets.S111.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S122\EncDotNet.S100.Datasets.S122.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S124\EncDotNet.S100.Datasets.S124.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S125\EncDotNet.S100.Datasets.S125.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S127\EncDotNet.S100.Datasets.S127.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S128\EncDotNet.S100.Datasets.S128.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S411\EncDotNet.S100.Datasets.S411.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S412\EncDotNet.S100.Datasets.S412.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S129\EncDotNet.S100.Datasets.S129.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S201\EncDotNet.S100.Datasets.S201.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S421\EncDotNet.S100.Datasets.S421.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.Pipelines\EncDotNet.S100.Datasets.Pipelines.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.DynamicSources.Ais\EncDotNet.S100.DynamicSources.Ais.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo\EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.DynamicSources.Ndbc\EncDotNet.S100.DynamicSources.Ndbc.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.DynamicSources.Nmea\EncDotNet.S100.DynamicSources.Nmea.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Collections\EncDotNet.S100.Collections.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.ExchangeSets\EncDotNet.S100.ExchangeSets.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Features\EncDotNet.S100.Features.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Hdf5.PureHdf\EncDotNet.S100.Hdf5.PureHdf.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Mcp\EncDotNet.S100.Mcp.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Mcp.Tools\EncDotNet.S100.Mcp.Tools.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Navigation\EncDotNet.S100.Navigation.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Renderers.Mapsui.Avalonia\EncDotNet.S100.Renderers.Mapsui.Avalonia.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Routes.Rtz\EncDotNet.S100.Routes.Rtz.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Renderers.Mapsui\EncDotNet.S100.Renderers.Mapsui.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Renderers.Skia\EncDotNet.S100.Renderers.Skia.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Scripting.LuaCSharp\EncDotNet.S100.Scripting.LuaCSharp.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Scripting.MoonSharp\EncDotNet.S100.Scripting.MoonSharp.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Specifications\EncDotNet.S100.Specifications.csproj" />
+  </ItemGroup>
+
+</Project>

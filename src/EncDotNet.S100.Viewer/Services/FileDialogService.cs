@@ -1,0 +1,231 @@
+using Avalonia.Controls;
+using Avalonia.Platform.Storage;
+using EncDotNet.S100.Viewer.Resources;
+
+namespace EncDotNet.S100.Viewer.Services;
+
+/// <summary>
+/// Default <see cref="IFileDialogService"/> implementation backed by
+/// <see cref="TopLevel.StorageProvider"/>.
+/// </summary>
+internal sealed class FileDialogService : IFileDialogService
+{
+    public async Task<IReadOnlyList<string>> OpenDatasetsAsync(TopLevel? topLevel, bool allowMultiple)
+    {
+        if (topLevel?.StorageProvider is not { } picker)
+            return Array.Empty<string>();
+
+        var files = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = Strings.FilePicker_OpenDatasetTitle,
+            AllowMultiple = allowMultiple,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType(Strings.FilePicker_S100DatasetsType)
+                {
+                    Patterns = new[] { "*.000", "*.h5", "*.hdf5", "*.gml" },
+                },
+                // Weather formats that aren't S-100 (GRIB2, NetCDF, CAP, and WPC's
+                // coded surface bulletins as .txt). NCEP's own GRIB2 files, NOMADS
+                // GRIB filter downloads and some bulletins have no extension; All
+                // files shows them.
+                new FilePickerFileType(Strings.FilePicker_WeatherDataType)
+                {
+                    Patterns = new[] { "*.grib2", "*.grb2", "*.grib", "*.grb", "*.nc", "*.nc4", "*.xml", "*.atom", "*.json", "*.geojson", "*.txt" },
+                },
+                FilePickerFileTypes.All,
+            },
+        });
+
+        if (files is null || files.Count == 0)
+            return Array.Empty<string>();
+
+        var result = new List<string>(files.Count);
+        foreach (var file in files)
+        {
+            if (file.TryGetLocalPath() is { } path)
+                result.Add(path);
+        }
+        return result;
+    }
+
+    public async Task<string?> OpenFeatureCatalogueAsync(TopLevel? topLevel)
+    {
+        if (topLevel?.StorageProvider is not { } picker)
+            return null;
+
+        var files = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Select Feature Catalogue XML",
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType("Feature Catalogue XML") { Patterns = new[] { "*.xml" } },
+                FilePickerFileTypes.All,
+            },
+        });
+
+        if (files is null || files.Count == 0)
+            return null;
+
+        return files[0].TryGetLocalPath();
+    }
+
+    public async Task<string?> OpenPortrayalCatalogueFolderAsync(TopLevel? topLevel)
+    {
+        if (topLevel?.StorageProvider is not { } picker)
+            return null;
+
+        var folders = await picker.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Select Portrayal Catalogue Folder",
+            AllowMultiple = false,
+        });
+
+        if (folders is null || folders.Count == 0)
+            return null;
+
+        return folders[0].TryGetLocalPath();
+    }
+
+    public async Task<string?> OpenExchangeSetFolderAsync(TopLevel? topLevel)
+    {
+        if (topLevel?.StorageProvider is not { } picker)
+            return null;
+
+        var folders = await picker.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = Strings.FilePicker_ExchangeSetFolderTitle,
+            AllowMultiple = false,
+        });
+
+        if (folders is null || folders.Count == 0)
+            return null;
+
+        return folders[0].TryGetLocalPath();
+    }
+
+    public async Task<string?> OpenExchangeSetZipAsync(TopLevel? topLevel)
+    {
+        if (topLevel?.StorageProvider is not { } picker)
+            return null;
+
+        var files = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = Strings.FilePicker_ExchangeSetZipTitle,
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType(Strings.FilePicker_ExchangeSetZipType)
+                {
+                    Patterns = new[] { "*.zip" },
+                },
+                FilePickerFileTypes.All,
+            },
+        });
+
+        if (files is null || files.Count == 0)
+            return null;
+
+        return files[0].TryGetLocalPath();
+    }
+
+    public async Task<string?> OpenLibraryFolderAsync(TopLevel? topLevel)
+    {
+        if (topLevel?.StorageProvider is not { } picker)
+            return null;
+
+        var folders = await picker.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = Strings.FilePicker_LibraryFolderTitle,
+            AllowMultiple = false,
+        });
+
+        return folders is { Count: > 0 } ? folders[0].TryGetLocalPath() : null;
+    }
+
+    public async Task<string?> OpenS128CatalogueAsync(TopLevel? topLevel)
+    {
+        if (topLevel?.StorageProvider is not { } picker)
+            return null;
+
+        var files = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = Strings.FilePicker_S128CatalogueTitle,
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType(Strings.FilePicker_S128CatalogueType) { Patterns = new[] { "*.gml", "*.xml" } },
+                FilePickerFileTypes.All,
+            },
+        });
+
+        return files is { Count: > 0 } ? files[0].TryGetLocalPath() : null;
+    }
+
+    public async Task<string?> OpenCollectionManifestAsync(TopLevel? topLevel)
+    {
+        if (topLevel?.StorageProvider is not { } picker)
+            return null;
+
+        var files = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = Strings.FilePicker_ManifestTitle,
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType(Strings.FilePicker_ManifestType) { Patterns = new[] { "*.s100collection.json", "*.json" } },
+                FilePickerFileTypes.All,
+            },
+        });
+
+        return files is { Count: > 0 } ? files[0].TryGetLocalPath() : null;
+    }
+
+    public Task<string?> OpenSecomIdentityAsync(TopLevel? topLevel) =>
+        OpenOneAsync(topLevel, Strings.FilePicker_SecomIdentityTitle, Strings.FilePicker_SecomIdentityType, ["*.p12", "*.pfx", "*.pem"]);
+
+    public Task<string?> OpenCertificateAsync(TopLevel? topLevel) =>
+        OpenOneAsync(topLevel, Strings.FilePicker_CertificateTitle, Strings.FilePicker_CertificateType, ["*.pem", "*.crt", "*.cer"]);
+
+    public Task<string?> OpenRouteAsync(TopLevel? topLevel, IReadOnlyList<string> patterns) =>
+        OpenOneAsync(topLevel, Strings.FilePicker_RouteTitle, Strings.FilePicker_RouteType, patterns.ToArray());
+
+    public async Task<string?> SaveRouteAsync(TopLevel? topLevel, string suggestedName, string formatName, string extension)
+    {
+        if (topLevel?.StorageProvider is not { } picker)
+            return null;
+
+        var file = await picker.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = Strings.FilePicker_ExportRouteTitle,
+            SuggestedFileName = suggestedName,
+            DefaultExtension = extension.TrimStart('.'),
+            ShowOverwritePrompt = true,
+            FileTypeChoices =
+            [
+                new FilePickerFileType(string.Format(System.Globalization.CultureInfo.CurrentCulture, Strings.FilePicker_ExportRouteTypeFormat, formatName))
+                {
+                    Patterns = ["*" + extension],
+                },
+            ],
+        });
+
+        return file?.TryGetLocalPath();
+    }
+
+    private static async Task<string?> OpenOneAsync(TopLevel? topLevel, string title, string typeName, string[] patterns)
+    {
+        if (topLevel?.StorageProvider is not { } picker)
+            return null;
+
+        var files = await picker.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = title,
+            AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType(typeName) { Patterns = patterns }, FilePickerFileTypes.All],
+        });
+
+        return files is { Count: > 0 } ? files[0].TryGetLocalPath() : null;
+    }
+}

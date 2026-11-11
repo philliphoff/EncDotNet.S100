@@ -1,0 +1,257 @@
+using System.Diagnostics;
+using EncDotNet.S100.Diagnostics.Export;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+
+namespace EncDotNet.S100.Viewer.Diagnostics;
+
+/// <summary>
+/// Composition-root helper that registers OpenTelemetry tracing,
+/// metrics, and logging into the viewer's <see cref="IServiceCollection"/>.
+/// </summary>
+/// <remarks>
+/// All <c>EncDotNet.S100.*</c> ActivitySources and Meters declared in
+/// the libraries are subscribed via wildcard. The OTLP exporter is
+/// configured via the standard OTEL_* environment variables
+/// (<c>OTEL_EXPORTER_OTLP_ENDPOINT</c>, <c>OTEL_SERVICE_NAME</c>,
+/// <c>OTEL_RESOURCE_ATTRIBUTES</c>). The OTLP exporter is only registered
+/// when an endpoint is configured, so a viewer run without a collector
+/// does not retry exports in the background.
+/// </remarks>
+internal static class ViewerObservability
+{
+    private const string ServiceName = Telemetry.Name;
+    private const string SourceWildcard = "EncDotNet.S100.*";
+
+    private static ILogger _commandLogger = NullLogger.Instance;
+
+    /// <summary>
+    /// Wires an <see cref="ILoggerFactory"/> into the static
+    /// <see cref="BeginCommand"/> path so each viewer command emits a
+    /// structured "starting" / "completed" log entry alongside the
+    /// existing activity and metric. Pass the factory once from the
+    /// composition root after the service provider is built.
+    /// </summary>
+    public static void AttachLoggerFactory(ILoggerFactory loggerFactory)
+    {
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        _commandLogger = loggerFactory.CreateLogger("EncDotNet.S100.Viewer.Command");
+    }
+
+    public static IServiceCollection AddS100Observability(this IServiceCollection services)
+        => services.AddS100Observability(logFilePath: null, verbose: false);
+
+    /// <param name="services">Service collection to register into.</param>
+    /// <param name="logFilePath">The <c>--log-file</c> path, or <see langword="null"/>.</param>
+    /// <param name="verbose">Whether <c>--verbose</c> lowers the log floor to Debug.</param>
+    /// <param name="rollingLogDirectory">Directory for the always-on rolling
+    /// log files, or <see langword="null"/> to disable them.</param>
+    /// <param name="crashMarkerDirectory">Unclean-shutdown marker directory;
+    /// the rolling log keeps the newest file of a crashed session until a
+    /// launch reports the crash and removes its marker.</param>
+    /// <param name="getEnvironmentVariable">Environment lookup; defaults to
+    /// <see cref="Environment.GetEnvironmentVariable(string)"/>.</param>
+    public static IServiceCollection AddS100Observability(
+        this IServiceCollection services,
+        string? logFilePath,
+        bool verbose,
+        string? rollingLogDirectory = null,
+        Func<string, string?>? getEnvironmentVariable = null,
+        string? crashMarkerDirectory = null)
+    {
+        var env = getEnvironmentVariable ?? Environment.GetEnvironmentVariable;
+        var serviceName = env("OTEL_SERVICE_NAME") ?? ServiceName;
+        var serviceVersion = typeof(ViewerObservability).Assembly
+            .GetName().Version?.ToString() ?? "0.0.0";
+
+        // Optional opt-in console export — invaluable when diagnosing
+        // "why don't I see anything in the dashboard?". Enabled by
+        // setting ENC_DOTNET_OTEL_CONSOLE=1 (the AppHost project sets
+        // this by default in its launch profiles).
+        var consoleExport = string.Equals(
+            env("ENC_DOTNET_OTEL_CONSOLE"),
+            "1", StringComparison.OrdinalIgnoreCase);
+
+        // The Logs panel's in-memory buffer (#1080) always runs, with its own
+        // minimum level so the panel's Everything level leaves OTLP alone.
+        var logBuffer = new LogBuffer(TimeProvider.System, minimumLevel: verbose ? LogLevel.Debug : LogLevel.Information);
+        services.AddSingleton(logBuffer);
+
+        services.AddLogging(builder =>
+        {
+            LogBufferLoggerProvider.AddLogBuffer(builder, logBuffer);
+
+            // --verbose drops the floor to Debug so agent runs capture
+            // the full picture; otherwise leave the default (Information).
+            if (verbose)
+            {
+                builder.SetMinimumLevel(LogLevel.Debug);
+            }
+
+            // --log-file appends structured viewer logs to a file in
+            // addition to the standard diagnostics output, so an agent
+            // can collect logs from a known location per run.
+            if (!string.IsNullOrWhiteSpace(logFilePath))
+            {
+                builder.AddProvider(new FileLoggerProvider(
+                    logFilePath!, verbose ? LogLevel.Debug : LogLevel.Information));
+            }
+
+            // Always-on rolling history (5 × 1 MB) so the next launch can
+            // attach a crashed session's log to the feedback report.
+            // Registered by factory so the container disposes (flushes) it.
+            if (!string.IsNullOrWhiteSpace(rollingLogDirectory))
+            {
+                Func<IEnumerable<PreviousSession>>? unreportedCrashes =
+                    string.IsNullOrWhiteSpace(crashMarkerDirectory)
+                        ? null
+                        : () => UncleanShutdownSentinel.ReadUnreportedSessions(crashMarkerDirectory);
+                builder.Services.AddSingleton<ILoggerProvider>(_ => new RollingFileLoggerProvider(
+                    rollingLogDirectory, verbose ? LogLevel.Debug : LogLevel.Information,
+                    DateTime.UtcNow, Environment.ProcessId, RollingFileLoggerProvider.IsSessionAlive, unreportedCrashes));
+            }
+
+            builder.AddOpenTelemetry(options =>
+            {
+                options.SetResourceBuilder(
+                    ResourceBuilder.CreateDefault()
+                        .AddService(serviceName: serviceName, serviceVersion: serviceVersion));
+                options.IncludeFormattedMessage = true;
+                options.IncludeScopes = true;
+                options.ParseStateValues = true;
+                if (IsOtlpEndpointConfigured(env, "LOGS"))
+                {
+                    options.AddOtlpExporter();
+                }
+                if (consoleExport)
+                {
+                    options.AddConsoleExporter();
+                }
+            });
+        });
+
+        services.AddOpenTelemetry()
+            .ConfigureResource(r => r.AddService(serviceName: serviceName, serviceVersion: serviceVersion))
+            .WithTracing(tracing =>
+            {
+                // Record every span of the viewer's own sources, even under a
+                // parent nobody records: work an MCP request starts (a lazy
+                // cell load after set_viewport) runs under ASP.NET Core's
+                // request activity, which isn't sampled, so the default
+                // parent-based sampler dropped the warm-load breakdown's spans.
+                tracing
+                    .SetSampler(new AlwaysOnSampler())
+                    .AddSource(SourceWildcard)
+                    .AddSource(ServiceName)
+                    .AddFileExporterIfConfigured(out _);
+                if (IsOtlpEndpointConfigured(env, "TRACES"))
+                {
+                    tracing.AddOtlpExporter();
+                }
+                if (consoleExport)
+                {
+                    tracing.AddConsoleExporter();
+                }
+            })
+            .WithMetrics(metrics =>
+            {
+                metrics
+                    .AddMeter(SourceWildcard)
+                    .AddMeter(ServiceName)
+                    .AddFileExporterIfConfigured();
+                if (IsOtlpEndpointConfigured(env, "METRICS"))
+                {
+                    metrics.AddOtlpExporter();
+                }
+                if (consoleExport)
+                {
+                    metrics.AddConsoleExporter();
+                }
+            });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Whether an OTLP endpoint is configured for a signal, through
+    /// <c>OTEL_EXPORTER_OTLP_ENDPOINT</c> or the signal's own
+    /// <c>OTEL_EXPORTER_OTLP_{signal}_ENDPOINT</c>.
+    /// </summary>
+    /// <param name="getEnvironmentVariable">Environment lookup.</param>
+    /// <param name="signal"><c>LOGS</c>, <c>TRACES</c> or <c>METRICS</c>.</param>
+    internal static bool IsOtlpEndpointConfigured(Func<string, string?> getEnvironmentVariable, string signal) =>
+        !string.IsNullOrWhiteSpace(getEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT"))
+        || !string.IsNullOrWhiteSpace(getEnvironmentVariable($"OTEL_EXPORTER_OTLP_{signal}_ENDPOINT"));
+
+    /// <summary>
+    /// Starts a root <c>s100.viewer.command</c> activity wrapping a
+    /// user action, recording <c>s100.viewer.command.duration</c> on
+    /// dispose. Also emits a structured "starting" log entry now (at
+    /// Debug, so it stays out of the default log view) and a
+    /// "completed" / "failed" entry on dispose so connected log
+    /// sinks (Aspire dashboard, OTLP collectors) show user actions
+    /// without instrumenting every viewer service individually.
+    /// </summary>
+    public static CommandScope BeginCommand(string commandName)
+    {
+        var activity = Telemetry.ActivitySource.StartActivity(
+            "s100.viewer.command", ActivityKind.Internal);
+        activity?.SetTag("s100.viewer.command", commandName);
+        _commandLogger.LogDebug(
+            "Viewer command starting: {Command}", commandName);
+        return new CommandScope(activity, commandName);
+    }
+
+    internal readonly struct CommandScope : IDisposable
+    {
+        private readonly Activity? _activity;
+        private readonly string _commandName;
+        private readonly long _startTimestamp;
+
+        internal CommandScope(Activity? activity, string commandName)
+        {
+            _activity = activity;
+            _commandName = commandName;
+            _startTimestamp = Stopwatch.GetTimestamp();
+        }
+
+        public void SetStatus(bool ok, string? description = null)
+        {
+            if (_activity is null) return;
+            _activity.SetStatus(ok ? ActivityStatusCode.Ok : ActivityStatusCode.Error, description);
+            if (!ok)
+            {
+                _commandLogger.LogWarning(
+                    "Viewer command failed: {Command} ({Description})",
+                    _commandName, description ?? "(no description)");
+            }
+        }
+
+        /// <summary>
+        /// Adds a custom tag to the underlying activity (no-op when
+        /// no tracer is listening). Use to record per-command facets
+        /// like product spec, query length, or result count.
+        /// </summary>
+        public void SetTag(string key, object? value)
+        {
+            _activity?.SetTag(key, value);
+        }
+
+        public void Dispose()
+        {
+            var elapsedMs = Stopwatch.GetElapsedTime(_startTimestamp).TotalMilliseconds;
+            Telemetry.CommandDuration.Record(elapsedMs,
+                new System.Collections.Generic.KeyValuePair<string, object?>(
+                    "s100.viewer.command", _commandName));
+            _commandLogger.LogInformation(
+                "Viewer command completed: {Command} in {ElapsedMs:F1}ms",
+                _commandName, elapsedMs);
+            _activity?.Dispose();
+        }
+    }
+}

@@ -1,0 +1,213 @@
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Hdf5.PureHdf;
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Portrayals;
+
+namespace EncDotNet.S100.Datasets.S111.Tests;
+
+/// <summary>
+/// Integration tests for S111CoverageSource and the CoveragePipeline using real NOAA HDF5 data.
+/// </summary>
+public class S111CoverageSourceTests : IDisposable
+{
+    private const string TestDataFile = "TestData/111US00_DBOFS_20260320T18Z_US4DE1BB.h5";
+
+    private readonly S111Dataset? _dataset;
+
+    public S111CoverageSourceTests()
+    {
+        if (!File.Exists(TestDataFile)) return;
+
+        using var hdf5 = PureHdfFile.Open(TestDataFile);
+        _dataset = S111DatasetReader.Read(hdf5);
+    }
+
+    public void Dispose() { }
+
+    private void SkipIfNoTestData()
+    {
+        Assert.SkipWhen(_dataset is null, $"S-111 test data not found at {TestDataFile}.");
+    }
+
+    [Fact]
+    public void Metadata_ProductSpec_IsS111()
+    {
+        SkipIfNoTestData();
+
+        var source = new S111CoverageSource(_dataset!);
+
+        Assert.Equal("S-111", source.Metadata.Spec.Name);
+    }
+
+    [Fact]
+    public void Metadata_ValueFields_ContainSpeedAndDirection()
+    {
+        SkipIfNoTestData();
+
+        var source = new S111CoverageSource(_dataset!);
+        var fieldNames = source.Metadata.ValueFields.Select(f => f.Name).ToList();
+
+        Assert.Contains("surfaceCurrentSpeed", fieldNames);
+        Assert.Contains("surfaceCurrentDirection", fieldNames);
+    }
+
+    [Fact]
+    public void AvailableTimes_ReturnsAllTimeSteps()
+    {
+        SkipIfNoTestData();
+
+        var source = new S111CoverageSource(_dataset!);
+        var times = source.AvailableTimes;
+
+        Assert.Equal(_dataset!.Coverages.Count, times.Count);
+        Assert.True(times.Count >= 2);
+    }
+
+    [Fact]
+    public void SelectTime_ChangesWhichCoverageIsSampled()
+    {
+        SkipIfNoTestData();
+
+        var source = new S111CoverageSource(_dataset!);
+        var times = source.AvailableTimes;
+        Assert.True(times.Count >= 2);
+
+        source.SelectTime(times[0]);
+        var sample0 = source.Sample(GridRegion.Full, TestContext.Current.CancellationToken);
+
+        source.SelectTime(times[^1]);
+        var sampleLast = source.Sample(GridRegion.Full, TestContext.Current.CancellationToken);
+
+        // Same grid size, but likely different speed values
+        var speed0 = sample0.GetField("surfaceCurrentSpeed");
+        var speedLast = sampleLast.GetField("surfaceCurrentSpeed");
+
+        Assert.Equal(speed0.GetLength(0), speedLast.GetLength(0));
+        Assert.Equal(speed0.GetLength(1), speedLast.GetLength(1));
+    }
+
+    [Fact]
+    public void Sample_Full_ReturnsCorrectDimensions()
+    {
+        SkipIfNoTestData();
+
+        var source = new S111CoverageSource(_dataset!);
+        var sampled = source.Sample(GridRegion.Full, TestContext.Current.CancellationToken);
+
+        var coverage = _dataset!.Coverages[0];
+        var speed = sampled.GetField("surfaceCurrentSpeed");
+        var direction = sampled.GetField("surfaceCurrentDirection");
+
+        Assert.Equal(coverage.NumPointsLatitudinal, speed.GetLength(0));
+        Assert.Equal(coverage.NumPointsLongitudinal, speed.GetLength(1));
+        Assert.Equal(coverage.NumPointsLatitudinal, direction.GetLength(0));
+        Assert.Equal(coverage.NumPointsLongitudinal, direction.GetLength(1));
+    }
+
+    [Fact]
+    public void Sample_StrideLargerThanSubset_RetainsIntersectingCell()
+    {
+        SkipIfNoTestData();
+
+        var source = new S111CoverageSource(_dataset!);
+        var sampled = source.Sample(new GridRegion(0, 2, 0, 2, 3, 3), TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, sampled.Metadata.NumRows);
+        Assert.Equal(1, sampled.Metadata.NumColumns);
+        Assert.Single(sampled.Values["surfaceCurrentSpeed"]);
+        Assert.Single(sampled.Values["surfaceCurrentDirection"]);
+    }
+
+    [Fact]
+    public async Task PortrayalCatalogue_ResolveColorScheme_MapsSpeedToColors()
+    {
+        const string portrayalPath = "TestData/PortrayalCatalogue";
+        Assert.SkipUnless(Directory.Exists(portrayalPath), $"Portrayal catalogue not found at {portrayalPath}.");
+
+        var source = FileSystemAssetSource.Create(portrayalPath);
+        using var provider = await PortrayalCatalogueProvider.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
+        var catalogue = new S111PortrayalCatalogue(provider);
+
+        var scheme = catalogue.ResolveColorScheme(MarinerSettings.Default);
+
+        // The bundled S-111 portrayal catalogue
+        // (content/S111/pc/Rules/select_arrow.xsl) defines arrow
+        // symbology only — there is no coverageFill on
+        // surfaceCurrentSpeed.  S111PortrayalCatalogue therefore
+        // returns null; the colour wiring lives entirely inside the
+        // SCAROW SVGs and is consumed by MapsuiCoverageArrowRenderer.
+        Assert.Null(scheme);
+    }
+
+    [Fact]
+    public async Task CoveragePipeline_ProducesStyledLayer()
+    {
+        SkipIfNoTestData();
+
+        const string portrayalPath = "TestData/PortrayalCatalogue";
+        Assert.SkipUnless(Directory.Exists(portrayalPath), $"Portrayal catalogue not found at {portrayalPath}.");
+
+        var assetSource = FileSystemAssetSource.Create(portrayalPath);
+        using var provider = await PortrayalCatalogueProvider.OpenAsync(assetSource, cancellationToken: TestContext.Current.CancellationToken);
+
+        var source = new S111CoverageSource(_dataset!);
+        var catalogue = new S111PortrayalCatalogue(provider);
+        var pipeline = new CoveragePipeline();
+
+        var layer = await pipeline.ProcessAsync(source, catalogue, cancellationToken: TestContext.Current.CancellationToken);
+
+        // Pipeline assembled the styled layer from the source's metadata.
+        Assert.Equal(source.Metadata.NoDataValue, layer.NoDataValue);
+        // S-111 Ed 2.0.0 portrayal catalogue defines arrow symbology
+        // only, so the coverage colour scheme is null by design.
+        Assert.Null(layer.ColorScheme);
+        Assert.NotEmpty(layer.Coverage.Values);
+
+        // S-111 catalogue defines a symbol scheme for current arrows.
+        Assert.NotNull(layer.SymbolScheme);
+    }
+
+    [Fact]
+    public async Task PortrayalCatalogue_ResolveSymbolScheme_Returns9Bands()
+    {
+        const string portrayalPath = "TestData/PortrayalCatalogue";
+        Assert.SkipUnless(Directory.Exists(portrayalPath), $"Portrayal catalogue not found at {portrayalPath}.");
+
+        var source = FileSystemAssetSource.Create(portrayalPath);
+        using var provider = await PortrayalCatalogueProvider.OpenAsync(source, cancellationToken: TestContext.Current.CancellationToken);
+        var catalogue = new S111PortrayalCatalogue(provider);
+        await catalogue.SwitchPaletteAsync(PaletteType.Day, TestContext.Current.CancellationToken);
+
+        var scheme = catalogue.ResolveSymbolScheme(MarinerSettings.Default);
+
+        Assert.NotNull(scheme);
+        Assert.Equal("surfaceCurrentSpeed", scheme.ValueFieldName);
+        Assert.Equal("surfaceCurrentDirection", scheme.RotationFieldName);
+        Assert.Equal(9, scheme.Bands.Count);
+
+        // Band 1: slow → small fixed arrow
+        var band1 = scheme.Resolve(0.1f, latitude: 0);
+        Assert.NotNull(band1);
+        Assert.Equal("SCAROW01", band1.SymbolRef);
+        Assert.False(band1.ScaleByValue);
+        Assert.Equal(0.40f, band1.ScaleFactor);
+
+        // Band 5: mid-range → speed-scaled arrow
+        var band5 = scheme.Resolve(3.5f, latitude: 0);
+        Assert.NotNull(band5);
+        Assert.Equal("SCAROW05", band5.SymbolRef);
+        Assert.True(band5.ScaleByValue);
+        Assert.Equal(0.20f, band5.ScaleFactor);
+
+        // Band 9: fastest → large fixed arrow
+        var band9 = scheme.Resolve(14.0f, latitude: 0);
+        Assert.NotNull(band9);
+        Assert.Equal("SCAROW09", band9.SymbolRef);
+        Assert.False(band9.ScaleByValue);
+        Assert.Equal(2.60f, band9.ScaleFactor);
+
+        // No-data → null
+        Assert.Null(scheme.Resolve(-9999f, latitude: 0));
+    }
+}

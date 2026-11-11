@@ -1,0 +1,1869 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:svc="using:EncDotNet.S100.Viewer.Services"
+             xmlns:pp="using:EncDotNet.S100.Datasets.Pipelines"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:conv="using:EncDotNet.S100.Viewer"
+             xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.PickReportView"
+             x:Name="PickRoot"
+             x:DataType="vm:PickReportViewModel">
+
+    <UserControl.Resources>
+        <!-- Subtle tints for the depth card's source badge and reconciliation warning. -->
+        <SolidColorBrush x:Key="DepthWarningSubtleBrush" Color="{DynamicResource WarningColor}" Opacity="0.12" />
+        <SolidColorBrush x:Key="DepthSuccessSubtleBrush" Color="{DynamicResource SuccessColor}" Opacity="0.14" />
+        <SolidColorBrush x:Key="DepthWarningBrush" Color="{DynamicResource WarningColor}" />
+        <SolidColorBrush x:Key="DepthSuccessBrush" Color="{DynamicResource SuccessColor}" />
+        <!--
+            Attribute table cell: one label/value row. Attributes are at most
+            two levels deep (simple rows, plus complex rows that carry a single
+            level of leaf children — see FeatureInfoBuilder), so no recursive
+            tree is needed. The label column is a fixed width so values align
+            into a tidy second column; the value column is star-sized and
+            truncates with an ellipsis (full text remains in the tooltip).
+        -->
+        <DataTemplate x:Key="AttributeCellTemplate" x:DataType="pp:PickAttribute">
+            <Border Name="AttrRow" Padding="12,9" Background="Transparent">
+                <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="AttrLabel" />
+                        <ColumnDefinition Width="14" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center">
+                    <!-- An attribute AML adds to a standard S-57 class (#1372). -->
+                    <Border IsVisible="{Binding Mark, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            AutomationProperties.AutomationId="PickReport.Attribute.Mark"
+                            AutomationProperties.Name="{Binding Mark}"
+                            ToolTip.Tip="{x:Static loc:Strings.Pick_AmlAttributeMarkToolTip}"
+                            CornerRadius="3"
+                            BorderThickness="1"
+                            BorderBrush="{DynamicResource ForegroundColor}"
+                            Padding="3,0"
+                            Margin="0,0,6,0"
+                            VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Mark}"
+                                   FontSize="9.5"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource ForegroundColor}" />
+                    </Border>
+                    <TextBlock Text="{Binding DisplayName}"
+                               FontSize="12"
+                               Opacity="0.7"
+                               TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis"
+                               MaxWidth="{Binding $parent[views:PickReportView].Bounds.Width, Converter={x:Static conv:ProportionalWidthConverter.Instance}, ConverterParameter=0.55}"
+                               VerticalAlignment="Center">
+                        <ToolTip.Tip>
+                            <MultiBinding Converter="{x:Static conv:AttributeTooltipConverter.Instance}">
+                                <Binding Path="DisplayName" />
+                                <Binding Path="Code" />
+                            </MultiBinding>
+                        </ToolTip.Tip>
+                    </TextBlock>
+                    </StackPanel>
+                    <Grid Grid.Column="2"
+                          ColumnDefinitions="Auto,*,Auto"
+                          VerticalAlignment="Center">
+                        <Border Grid.Column="0"
+                                Width="12" Height="12"
+                                CornerRadius="2"
+                                Margin="0,0,6,0"
+                                VerticalAlignment="Center"
+                                BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="1"
+                                Background="{Binding Converter={x:Static conv:AttributeColourSwatchConverter.Instance}}"
+                                IsVisible="{Binding Converter={x:Static conv:AttributeColourSwatchConverter.Instance}, ConverterParameter=visible}" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding DisplayText}"
+                                   FontSize="12"
+                                   FontWeight="Medium"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis">
+                            <ToolTip.Tip>
+                                <MultiBinding Converter="{x:Static conv:AttributeTooltipConverter.Instance}">
+                                    <Binding Path="DisplayText" />
+                                    <Binding Path="RawValue" />
+                                </MultiBinding>
+                            </ToolTip.Tip>
+                        </TextBlock>
+                        <Button Grid.Column="2"
+                                AutomationProperties.AutomationId="PickReport.Attribute.OpenInExaminer"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_OpenInExaminer}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_OpenAttributeInExaminer}"
+                                Width="22" Height="22"
+                                MinWidth="0" MinHeight="0"
+                                Padding="0"
+                                Margin="6,0,0,0"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                VerticalAlignment="Center"
+                                HorizontalContentAlignment="Center"
+                                VerticalContentAlignment="Center"
+                                Command="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).OpenAttributeInExaminerCommand}"
+                                CommandParameter="{Binding}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenAttributeInExaminer}"
+                                IsVisible="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).IsExaminerAvailable}">
+                            <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="14" Opacity="0.7" />
+                        </Button>
+                    </Grid>
+                </Grid>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <!--
+            Row template for the attribute table: the attribute's own cell,
+            followed (for complex attributes) by its children indented one
+            level. An S-101 complex attribute can hold further complex
+            attributes (a tidal stream panel's hourly values), so the children
+            use this same template, looked up dynamically.
+        -->
+        <DataTemplate x:Key="AttributeRowTemplate" x:DataType="pp:PickAttribute">
+            <StackPanel>
+                <ContentControl Content="{Binding}"
+                                ContentTemplate="{StaticResource AttributeCellTemplate}" />
+                <ItemsControl ItemsSource="{Binding Children}"
+                              Margin="20,0,0,0"
+                              ItemTemplate="{DynamicResource AttributeRowTemplate}" />
+            </StackPanel>
+        </DataTemplate>
+
+        <!--
+            Long-text card body (#932), shared by the Warning card and the
+            referenced-text / long-value cards: the text one step darker than
+            the card, wrapped at the panel edge and selectable, monospaced
+            when the card says so (telex warnings line up by character).
+            Long texts stop at 20 lines behind "Show all". The footer has
+            Copy, Zoom to (warnings with a location), Examiner, and a NOT FOR
+            NAVIGATION label when the dataset's exchange-set metadata says so.
+        -->
+        <DataTemplate x:Key="LongTextBodyTemplate" x:DataType="vm:LongTextCardViewModel">
+            <StackPanel>
+                <Border IsVisible="{Binding ShowsTextBlock}"
+                        Background="{DynamicResource MutedBackgroundColor}"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,1">
+                    <StackPanel>
+                        <TextBlock IsVisible="{Binding ShowsNoTextMessage}"
+                                   Text="{Binding NoTextMessage}"
+                                   FontSize="11.5"
+                                   Opacity="0.65"
+                                   TextWrapping="Wrap"
+                                   Margin="12" />
+                        <views:WarningMessageTextBlock IsVisible="{Binding HasText}"
+                                                       Classes="longText"
+                                                       Classes.mono="{Binding IsMonospace}"
+                                                       AutomationProperties.AutomationId="PickReport.TextCard.Text"
+                                                       AutomationProperties.Name="{x:Static loc:Strings.Pick_Warning_Text}"
+                                                       Segments="{Binding Segments}"
+                                                       LinkCommand="{Binding LinkCommand}"
+                                                       LinkForeground="{DynamicResource AccentBrush}"
+                                                       TextWrapping="Wrap"
+                                                       Margin="12,10,12,12" />
+                        <Button IsVisible="{Binding IsClipped}"
+                                AutomationProperties.AutomationId="PickReport.TextCard.ShowAll"
+                                HorizontalAlignment="Center"
+                                Margin="0,0,0,10"
+                                Padding="10,3"
+                                FontSize="11"
+                                Command="{Binding ShowAllCommand}"
+                                Content="{Binding ShowAllText}" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Footer actions. The label keeps its place on the right; the actions wrap when narrow. -->
+                <DockPanel Margin="6,5">
+                    <TextBlock DockPanel.Dock="Right"
+                               IsVisible="{Binding NotForNavigation}"
+                               AutomationProperties.AutomationId="PickReport.TextCard.NotForNavigation"
+                               AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_NotForNavigation}"
+                               Text="{x:Static loc:Strings.Pick_NotForNavigation}"
+                               ToolTip.Tip="{x:Static loc:Strings.Tooltip_NotForNavigation}"
+                               FontSize="10"
+                               FontWeight="SemiBold"
+                               LetterSpacing="0.4"
+                               Opacity="0.65"
+                               Margin="6,0"
+                               VerticalAlignment="Center" />
+                    <WrapPanel Orientation="Horizontal">
+                        <Button Classes="cardAction"
+                                AutomationProperties.AutomationId="PickReport.TextCard.Copy"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_CopyText}"
+                                AutomationProperties.HelpText="{Binding CopyTooltip}"
+                                Command="{Binding CopyCommand}"
+                                ToolTip.Tip="{Binding CopyTooltip}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Static loc:Strings.Pick_Warning_Copy}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Classes="cardAction"
+                                AutomationProperties.AutomationId="PickReport.TextCard.ZoomTo"
+                                AutomationProperties.Name="{x:Static loc:Strings.Label_ZoomToWarning}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ZoomToWarning}"
+                                Command="{Binding ZoomToCommand}"
+                                IsVisible="{Binding CanZoom}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToWarning}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <ic:FluentIcon Icon="ZoomIn" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Static loc:Strings.Pick_Warning_ZoomTo}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Panel IsVisible="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).IsExaminerAvailable}">
+                            <Button Classes="cardAction"
+                                    AutomationProperties.AutomationId="PickReport.TextCard.OpenInExaminer"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Label_OpenInExaminer}"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}"
+                                    Command="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).OpenFeatureInExaminerCommand}"
+                                    IsVisible="{Binding ExaminesFeature}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                    <TextBlock Text="{x:Static loc:Strings.Pick_Warning_Examiner}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Classes="cardAction"
+                                    AutomationProperties.AutomationId="PickReport.TextCard.OpenAttributeInExaminer"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Label_OpenInExaminer}"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_OpenAttributeInExaminer}"
+                                    Command="{Binding $parent[views:PickReportView].((vm:PickReportViewModel)DataContext).OpenAttributeInExaminerCommand}"
+                                    CommandParameter="{Binding ExaminerAttribute}"
+                                    IsVisible="{Binding ExaminesAttribute}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenAttributeInExaminer}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                    <TextBlock Text="{x:Static loc:Strings.Pick_Warning_Examiner}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Panel>
+                    </WrapPanel>
+                </DockPanel>
+            </StackPanel>
+        </DataTemplate>
+
+        <!--
+            Long-text card (#932): a resolved `fileReference` (S-101 FC; alias
+            TXTDSC / NTXTDS) or a long text value lifted out of the attribute
+            table. The header carries a document glyph and the file's heading
+            and name, or the attribute's name; the body is the shared
+            LongTextBodyTemplate.
+        -->
+        <DataTemplate x:Key="TextCardTemplate" x:DataType="vm:PickTextCardViewModel">
+            <Border AutomationProperties.AutomationId="PickReport.TextCard"
+                    AutomationProperties.Name="{Binding Title}"
+                    BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    ClipToBounds="True">
+                <StackPanel>
+                    <Grid ColumnDefinitions="Auto,*" Margin="12,10,12,10">
+                        <ic:FluentIcon Grid.Column="0"
+                                       Icon="DocumentText"
+                                       IconVariant="Regular"
+                                       FontSize="16"
+                                       Opacity="0.7"
+                                       VerticalAlignment="Top"
+                                       Margin="0,1,8,0" />
+                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                            <SelectableTextBlock AutomationProperties.AutomationId="PickReport.TextCard.Title"
+                                                 Text="{Binding Title}"
+                                                 FontSize="13.5"
+                                                 FontWeight="SemiBold"
+                                                 TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding FileName}"
+                                       IsVisible="{Binding HasFileName}"
+                                       FontSize="11"
+                                       Opacity="0.6"
+                                       FontFamily="{StaticResource MonoFontFamily}"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Grid>
+                    <ContentControl Content="{Binding}"
+                                    ContentTemplate="{StaticResource LongTextBodyTemplate}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+        <!--
+            One value cell inside the egg diagram. The raw token is centered
+            and its semantic role (total/partial concentration, stage of
+            development, form of ice) updates the below-egg description region
+            while hovered.
+        -->
+        <DataTemplate x:Key="EggValueCellTemplate" x:DataType="pp:IceEggValue">
+            <Border Classes="eggCell"
+                    CornerRadius="4"
+                    Padding="6,5"
+                    Margin="2,0"
+                    PointerEntered="OnEggCellPointerEntered"
+                    PointerExited="OnEggCellPointerExited">
+                <TextBlock Text="{Binding Text}"
+                           FontSize="13"
+                           FontFamily="{StaticResource MonoFontFamily}"
+                           HorizontalAlignment="Center"
+                           TextAlignment="Center"
+                           MinWidth="16" />
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="HitRowTemplate" x:DataType="vm:PickHit">
+            <Grid ColumnDefinitions="Auto,*,Auto"
+                  ToolTip.Tip="{x:Static loc:Strings.Tooltip_SelectHit}">
+                <!-- Feature category glyph -->
+                <Border Grid.Column="0"
+                        Width="26" Height="26"
+                        CornerRadius="5"
+                        Margin="0,0,8,0"
+                        VerticalAlignment="Center"
+                        Background="{DynamicResource MutedBackgroundColor}">
+                    <ic:FluentIcon Icon="{Binding Glyph}"
+                                   IconVariant="Regular"
+                                   FontSize="16"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                </Border>
+                <!-- Name (primary) + class (subtitle) -->
+                <StackPanel Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Spacing="0">
+                    <TextBlock Classes="accentListTitle"
+                               Text="{Binding HitListLabel}"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding HitListSecondaryLabel}"
+                               FontSize="11"
+                               Opacity="0.7"
+                               IsVisible="{Binding HasHitListSecondaryLabel}"
+                               TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <!-- Identifier, demoted to the trailing edge -->
+                <TextBlock Grid.Column="2"
+                           Text="{Binding FeatureRef}"
+                           FontSize="11"
+                           Opacity="0.55"
+                           VerticalAlignment="Center"
+                           Margin="8,0,0,0"
+                           TextTrimming="CharacterEllipsis" />
+            </Grid>
+        </DataTemplate>
+
+        <!--
+            Warning card header (#932): number, status and type. A collapsed
+            card shows only this, which is enough to tell two warnings apart.
+        -->
+        <DataTemplate x:Key="WarningCardHeaderTemplate" x:DataType="vm:NavigationalWarningCardViewModel">
+            <StackPanel Spacing="4">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                    <SelectableTextBlock Grid.Column="0"
+                                         AutomationProperties.AutomationId="PickReport.WarningCard.Label"
+                                     IsHitTestVisible="{Binding !IsCollapsible}"
+                                         Text="{Binding Label}"
+                                         FontFamily="{StaticResource MonoFontFamily}"
+                                         FontSize="13"
+                                         FontWeight="SemiBold"
+                                         TextWrapping="Wrap"
+                                         VerticalAlignment="Center" />
+                    <!-- New since its source's latest refresh (#932). -->
+                    <TextBlock Grid.Column="1"
+                               IsVisible="{Binding IsNew}"
+                               AutomationProperties.AutomationId="PickReport.WarningCard.New"
+                               Text="{x:Static loc:Strings.NavWarnings_New}"
+                               ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_New}"
+                               Foreground="{DynamicResource AccentBrush}"
+                               FontSize="10.5"
+                               FontWeight="Bold"
+                               Margin="8,0,0,0"
+                               VerticalAlignment="Center" />
+                    <Panel Grid.Column="2" VerticalAlignment="Center" Margin="8,0,0,0">
+                        <Border IsVisible="{Binding IsInForce}"
+                                Background="{StaticResource DepthSuccessSubtleBrush}"
+                                CornerRadius="10" Padding="7,2">
+                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                <Ellipse Width="6" Height="6" Fill="{StaticResource DepthSuccessBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource DepthSuccessBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border IsVisible="{Binding IsNotYetInForce}"
+                                Background="{StaticResource DepthWarningSubtleBrush}"
+                                CornerRadius="10" Padding="7,2">
+                            <StackPanel Orientation="Horizontal" Spacing="5">
+                                <Ellipse Width="7" Height="7" Stroke="{StaticResource DepthWarningBrush}" StrokeThickness="1.5" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource DepthWarningBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <Border IsVisible="{Binding IsEnded}"
+                                Background="{DynamicResource MutedBackgroundColor}"
+                                CornerRadius="10" Padding="7,2">
+                            <TextBlock Text="{Binding StatusText}" FontSize="11" FontWeight="SemiBold"
+                                       Opacity="0.75" VerticalAlignment="Center" />
+                        </Border>
+                    </Panel>
+                    <ic:FluentIcon Grid.Column="3"
+                                   IsVisible="{Binding IsCollapsible}"
+                                   Icon="{Binding IsOpen, Converter={x:Static views:WarningCardChevron.Instance}}"
+                                   IconVariant="Regular"
+                                   FontSize="14"
+                                   Opacity="0.65"
+                                   Margin="6,0,0,0"
+                                   VerticalAlignment="Center" />
+                </Grid>
+                <TextBlock IsVisible="{Binding HasTypeText}"
+                           FontSize="13.5"
+                           FontWeight="SemiBold"
+                           TextWrapping="Wrap">
+                    <Run Text="{Binding TypeText}" />
+                    <Run Text="{Binding GeneralTypeSuffix}"
+                         FontWeight="Normal"
+                         Foreground="{DynamicResource MutedColor}" />
+                </TextBlock>
+                <!-- Why another warning ended it: a cancellation or the in-force bulletin (#992). -->
+                <TextBlock IsVisible="{Binding HasStatusReason}"
+                           AutomationProperties.AutomationId="PickReport.WarningCard.StatusReason"
+                           Text="{Binding StatusReasonText}"
+                           FontSize="11.5"
+                           Foreground="{DynamicResource MutedColor}"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </DataTemplate>
+
+        <!--
+            Warning card (#932): the message of a picked navigational
+            warning part. Header = number, type, status (at the view
+            time), then validity, area and issue time. Body = the full
+            text, monospaced so telex columns line up, wrapped at the
+            panel edge, selectable; warning numbers that name another
+            listed warning link to it. Long messages stop at 20 lines
+            behind "Show all". When a pick hits several warnings, each is
+            a card whose header opens it; only one is open at a time.
+        -->
+        <DataTemplate x:Key="WarningCardTemplate" x:DataType="vm:NavigationalWarningCardViewModel">
+            <Border AutomationProperties.AutomationId="PickReport.WarningCard"
+                    AutomationProperties.Name="{Binding Label}"
+                    BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    ClipToBounds="True"
+                    PointerEntered="OnWarningCardPointerEntered"
+                    PointerExited="OnWarningCardPointerExited">
+                <StackPanel>
+                    <StackPanel Margin="12,10,12,10" Spacing="4">
+                        <Button IsVisible="{Binding IsCollapsible}"
+                                Classes="warningHeader"
+                                AutomationProperties.AutomationId="PickReport.WarningCard.Header"
+                                AutomationProperties.Name="{Binding Label}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_OpenWarningCard}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenWarningCard}"
+                                Command="{Binding ToggleCommand}"
+                                Content="{Binding}"
+                                ContentTemplate="{StaticResource WarningCardHeaderTemplate}" />
+                        <ContentControl IsVisible="{Binding !IsCollapsible}"
+                                        Content="{Binding}"
+                                        ContentTemplate="{StaticResource WarningCardHeaderTemplate}" />
+                        <Grid ColumnDefinitions="Auto,8,*"
+                          IsVisible="{Binding IsOpen}"
+                              RowDefinitions="Auto,Auto,Auto"
+                              Margin="0,4,0,0">
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="{x:Static loc:Strings.Pick_Warning_ValidLabel}"
+                                       FontSize="11.5" Opacity="0.65" Margin="0,1" />
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding ValidityText}"
+                                       FontSize="11.5" TextWrapping="Wrap" Margin="0,1" />
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="{x:Static loc:Strings.Pick_Warning_AreaLabel}"
+                                       FontSize="11.5" Opacity="0.65" Margin="0,1"
+                                       IsVisible="{Binding HasAreaText}" />
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding AreaText}"
+                                       FontSize="11.5" TextWrapping="Wrap" Margin="0,1"
+                                       IsVisible="{Binding HasAreaText}" />
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="{x:Static loc:Strings.Pick_Warning_IssuedLabel}"
+                                       FontSize="11.5" Opacity="0.65" Margin="0,1"
+                                       IsVisible="{Binding HasIssued}" />
+                            <TextBlock Grid.Row="2" Grid.Column="2" FontSize="11.5" TextWrapping="Wrap" Margin="0,1"
+                                       IsVisible="{Binding HasIssued}">
+                                <Run Text="{Binding IssuedText}" FontFamily="{StaticResource MonoFontFamily}" FontSize="11" />
+                                <Run Text="{Binding IssuerSuffix}" Foreground="{DynamicResource MutedColor}" />
+                            </TextBlock>
+                        </Grid>
+                        <!-- While checking a route (#959): where the route meets the
+                             warning; selecting it opens the finding in the Findings list. -->
+                        <Button Classes="routeRow"
+                                AutomationProperties.AutomationId="PickReport.WarningCard.RouteFinding"
+                                AutomationProperties.Name="{Binding RouteFindingText}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_WarningRouteFinding}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_WarningRouteFinding}"
+                                Command="{Binding OpenRouteFindingCommand}"
+                                Margin="0,4,0,0">
+                            <Button.IsVisible>
+                                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                    <Binding Path="IsOpen" />
+                                    <Binding Path="HasRouteFinding" />
+                                </MultiBinding>
+                            </Button.IsVisible>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <ic:FluentIcon Icon="Flow"
+                                               IconVariant="Regular"
+                                               FontSize="13"
+                                               Foreground="{DynamicResource AccentBrush}"
+                                               VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding RouteFindingText}"
+                                           FontSize="11.5"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource AccentBrush}"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center" />
+                                <ic:FluentIcon Icon="ChevronRight"
+                                               IconVariant="Regular"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource AccentBrush}"
+                                               VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <!-- On chart / Off chart / Information (S-98 §12.12.2; #996), for a listed warning. -->
+                        <StackPanel Spacing="4" Margin="0,6,0,0">
+                            <StackPanel.IsVisible>
+                                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                    <Binding Path="IsOpen" />
+                                    <Binding Path="CanClassify" />
+                                </MultiBinding>
+                            </StackPanel.IsVisible>
+                            <TextBlock Text="{x:Static loc:Strings.Label_NavWarnings_Classification}"
+                                       FontSize="11.5" Opacity="0.65" />
+                            <!-- Wraps in a narrow panel rather than clipping the last choice. -->
+                            <WrapPanel Orientation="Horizontal" ItemSpacing="12"
+                                       AutomationProperties.AutomationId="PickReport.WarningCard.Classification"
+                                       AutomationProperties.Name="{x:Static loc:Strings.Label_NavWarnings_Classification}">
+                                <RadioButton Content="{x:Static loc:Strings.NavWarnings_ClassOnChart}"
+                                             AutomationProperties.AutomationId="PickReport.WarningCard.OnChart"
+                                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_ClassOnChart}"
+                                             FontSize="11.5"
+                                             IsChecked="{Binding IsOnChart, Mode=OneWay}"
+                                             Command="{Binding ClassifyCommand}"
+                                             CommandParameter="{x:Static svc:NavigationalWarningClassification.OnChart}" />
+                                <RadioButton Content="{x:Static loc:Strings.NavWarnings_ClassOffChart}"
+                                             AutomationProperties.AutomationId="PickReport.WarningCard.OffChart"
+                                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_ClassOffChart}"
+                                             FontSize="11.5"
+                                             IsChecked="{Binding IsOffChart, Mode=OneWay}"
+                                             Command="{Binding ClassifyCommand}"
+                                             CommandParameter="{x:Static svc:NavigationalWarningClassification.OffChart}" />
+                                <RadioButton Content="{x:Static loc:Strings.NavWarnings_ClassInformation}"
+                                             AutomationProperties.AutomationId="PickReport.WarningCard.Information"
+                                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_NavWarnings_ClassInformation}"
+                                             FontSize="11.5"
+                                             IsChecked="{Binding IsInformation, Mode=OneWay}"
+                                             Command="{Binding ClassifyCommand}"
+                                             CommandParameter="{x:Static svc:NavigationalWarningClassification.Information}" />
+                            </WrapPanel>
+                            <TextBlock IsVisible="{Binding IsClassifiedOff}"
+                                       AutomationProperties.AutomationId="PickReport.WarningCard.ClassificationNote"
+                                       Text="{x:Static loc:Strings.Pick_Warning_NotDrawnClassified}"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource MutedColor}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel IsVisible="{Binding IsOpen}">
+
+                        <!-- Language tabs, only when the part has more than one. -->
+                        <Border IsVisible="{Binding HasLanguageTabs}"
+                                HorizontalAlignment="Left"
+                                Margin="12,0,12,8"
+                                Padding="2"
+                                CornerRadius="6"
+                                Background="{DynamicResource MutedBackgroundColor}">
+                            <ItemsControl ItemsSource="{Binding Languages}"
+                                          AutomationProperties.AutomationId="PickReport.WarningCard.Languages"
+                                          AutomationProperties.Name="{x:Static loc:Strings.Pick_Warning_Languages}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="2" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:NavigationalWarningCardViewModel+LanguageTab">
+                                        <Button Classes="langTab"
+                                                Classes.selected="{Binding IsSelected}"
+                                                AutomationProperties.AutomationId="PickReport.WarningCard.Language"
+                                                AutomationProperties.Name="{Binding Name}"
+                                                Command="{Binding SelectCommand}"
+                                                Content="{Binding Name}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+
+                        <ContentControl Content="{Binding}"
+                                        ContentTemplate="{StaticResource LongTextBodyTemplate}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <!-- Long-text card text: proportional prose, or monospaced telex. The
+             text block styles as SelectableTextBlock (its StyleKeyOverride). -->
+        <Style Selector="SelectableTextBlock.longText">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="LineHeight" Value="20" />
+        </Style>
+        <Style Selector="SelectableTextBlock.longText.mono">
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="LineHeight" Value="18" />
+        </Style>
+        <!-- Zebra-stripe alternate top-level attribute rows for scanability.
+             Targets the row Border inside each even item container. -->
+        <Style Selector="ItemsControl.attrTable ContentPresenter:nth-child(even) Border#AttrRow">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
+        <!-- Highlight an egg-code value cell on mouse-over so the mariner can
+             see exactly which token they are inspecting for its tooltip. The
+             base Background is set via a style (not a local value) so the
+             :pointerover setter can override it — in Avalonia a locally-set
+             property beats a style setter. The highlight uses the
+             window-scoped AccentSubtleBrush so it tracks the user's
+             configurable accent, including the muted Dusk/Night variants. -->
+        <Style Selector="Border.eggCell">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Border.eggCell:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}" />
+        </Style>
+        <!-- Depth-card header: flat by default with a hover tint that matches
+             the accent list-item pointer-over exactly (AccentBrush at 6%
+             opacity over a rounded tint overlay). Both the base and hover
+             opacity are set via styles so the :pointerover setter wins — a
+             locally-set Opacity would beat a style setter in Avalonia. -->
+        <Style Selector="Border.depthHeader Border#DepthHeaderTint">
+            <Setter Property="Opacity" Value="0" />
+        </Style>
+        <Style Selector="Border.depthHeader:pointerover Border#DepthHeaderTint">
+            <Setter Property="Opacity" Value="0.06" />
+        </Style>
+        <!-- Warning card language tabs (#932): a segmented control. The
+             selected tab is a raised card-coloured chip on the muted track. -->
+        <Style Selector="Button.langTab">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="9,3" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Opacity" Value="0.7" />
+        </Style>
+        <Style Selector="Button.langTab.selected">
+            <Setter Property="Background" Value="{DynamicResource BackgroundColor}" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <!-- A collapsible Warning card's header: the whole header is the
+             button, flat, laid out like a lone card's header. -->
+        <Style Selector="Button.warningHeader">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Background="{TemplateBinding Background}"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      HorizontalContentAlignment="Stretch" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <!-- A Warning card's route row (#959): flat, the accent colour, a hand cursor. -->
+        <Style Selector="Button.routeRow">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0,2" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.routeRow:pointerover">
+            <Setter Property="Opacity" Value="0.8" />
+        </Style>
+        <!-- Warning card footer actions: flat, tinted on hover. -->
+        <Style Selector="Button.cardAction">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="9,4" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+    </UserControl.Styles>
+
+    <!--
+        Pick Report (Object Information) panel content. PR-M4: the chrome
+        bar (title + close button) is owned by MainWindow's right-dock
+        host; this UserControl only renders the body. When there is no
+        active pick, an empty-state watermark is shown instead of the
+        identity block / attribute list.
+    -->
+    <Grid>
+        <!-- Empty-state watermark, visible when no feature is picked. -->
+        <views:PlaceholderView IsVisible="{Binding !HasPick}"
+                               Icon="Cursor"
+                               Header="{x:Static loc:Strings.PickReport_EmptyTitle}"
+                               Description="{x:Static loc:Strings.PickReport_EmptyDescription}" />
+
+        <DockPanel IsVisible="{Binding HasPick}">
+        <!--
+            Sticky header: hit list + identity block + references all
+            stay pinned to the top of the panel; only the attribute
+            list scrolls. The UserControl's DataContext is already the
+            PickReportViewModel, so child bindings resolve directly
+            against it without an extra DataContext hop.
+        -->
+        <StackPanel DockPanel.Dock="Top"
+                    Spacing="10"
+                    Margin="12,4,12,8">
+            <!-- Pick location (lat/lon of the click point). Pinned to the very
+                 top so it is always visible regardless of which feature
+                 sections are shown; selectable text plus a copy button make
+                 the coordinate easy to grab for debugging. -->
+            <Border BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="0,0,0,1"
+                    Padding="0,0,0,8"
+                    IsVisible="{Binding HasLocation}">
+                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                    <TextBlock Grid.Row="0" Grid.Column="0"
+                               Text="{x:Static loc:Strings.Pick_LocationHeader}"
+                               FontSize="10"
+                               FontWeight="Normal"
+                               LetterSpacing="1"
+                               Opacity="0.7" />
+                    <SelectableTextBlock Grid.Row="1" Grid.Column="0"
+                                         Text="{Binding LocationDisplay}"
+                                         FontSize="13"
+                                         VerticalAlignment="Center"
+                                         TextWrapping="Wrap" />
+                    <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                            AutomationProperties.AutomationId="PickReport.CopyLocation"
+                            AutomationProperties.Name="{x:Static loc:Strings.Label_CopyLocation}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CopyLocation}"
+                            VerticalAlignment="Center"
+                            Padding="6"
+                            Background="Transparent"
+                            Command="{Binding CopyLocationCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_CopyLocation}">
+                        <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="16" />
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!--
+                Location depth-assimilation card. Shown for water-based picks
+                that resolve a base depth (S-102 bathymetry, an S-101 depth /
+                dredged area, or the nearest sounding). A prominent headline
+                readout shows the adjusted depth ("ADJUSTED DEPTH AT SELECTED
+                TIME") when an overlapping S-104 grid is found, or the charted
+                depth ("CHARTED DEPTH · WATER LEVEL NOT APPLIED") otherwise; that headline stays visible even
+                when the detail region is collapsed. Expanding reveals the
+                base/tide breakdown, the depth-over-time chart, and any
+                datum-reconciliation caveat.
+            -->
+            <Border IsVisible="{Binding HasLocationDepthSeries}"
+                    BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="0,0,0,1"
+                    Padding="0,0,0,8">
+                <StackPanel DataContext="{Binding LocationDepthSeries}">
+                    <!--
+                        Header row: chevron + "Depth" title + source badge. The
+                        whole row toggles the detail region on tap; rendered flat
+                        with a hover tint (AccentBrush at low opacity) that
+                        matches the accent list-item pointer-over exactly, so it
+                        reads as a section header rather than a button.
+                    -->
+                    <Border Classes="depthHeader"
+                            Tapped="OnDepthHeaderTapped"
+                            KeyDown="OnDepthHeaderKeyDown"
+                            Focusable="True"
+                            Cursor="Hand"
+                            AutomationProperties.Name="{x:Static loc:Strings.Pick_Depth_Title}"
+                            ToolTip.Tip="{x:Static loc:Strings.Pick_Depth_Title}">
+                        <Panel>
+                            <Border Name="DepthHeaderTint"
+                                    Background="{DynamicResource AccentBrush}"
+                                    CornerRadius="4" />
+                            <Grid ColumnDefinitions="Auto,Auto,*,Auto"
+                                  Margin="0,6"
+                                  VerticalAlignment="Center">
+                                <ic:FluentIcon Grid.Column="0"
+                                           Icon="ChevronDown"
+                                           IconVariant="Regular"
+                                           FontSize="14"
+                                           VerticalAlignment="Center"
+                                           IsVisible="{Binding IsExpanded}" />
+                            <ic:FluentIcon Grid.Column="0"
+                                           Icon="ChevronRight"
+                                           IconVariant="Regular"
+                                           FontSize="14"
+                                           VerticalAlignment="Center"
+                                           IsVisible="{Binding !IsExpanded}" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{x:Static loc:Strings.Pick_Depth_Title}"
+                                       FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Margin="8,0,0,0"
+                                       VerticalAlignment="Center" />
+
+                            <!-- S-102 bathymetry badge (blue). -->
+                            <Border Grid.Column="3"
+                                    IsVisible="{Binding IsBathymetrySource}"
+                                    Background="{DynamicResource AccentSubtleBrush}"
+                                    CornerRadius="10"
+                                    Padding="8,3"
+                                    VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <ic:FluentIcon Icon="Layer"
+                                                   IconVariant="Filled"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource AccentBrush}"
+                                                   VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding BaseSourceLabel}"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource AccentBrush}"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- S-101 soundings badge (amber). -->
+                            <Border Grid.Column="3"
+                                    IsVisible="{Binding IsSoundingSource}"
+                                    Background="{DynamicResource DepthWarningSubtleBrush}"
+                                    CornerRadius="10"
+                                    Padding="8,3"
+                                    VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <ic:FluentIcon Icon="Ruler"
+                                                   IconVariant="Filled"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource DepthWarningBrush}"
+                                                   VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding BaseSourceLabel}"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource DepthWarningBrush}"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Charted S-101 area badge (green). -->
+                            <Border Grid.Column="3"
+                                    IsVisible="{Binding IsChartedAreaSource}"
+                                    Background="{DynamicResource DepthSuccessSubtleBrush}"
+                                    CornerRadius="10"
+                                    Padding="8,3"
+                                    VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                    <ic:FluentIcon Icon="Flow"
+                                                   IconVariant="Filled"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource DepthSuccessBrush}"
+                                                   VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding BaseSourceLabel}"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource DepthSuccessBrush}"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+                            </Grid>
+                        </Panel>
+                    </Border>
+
+                    <!-- How the chart relates to this depth (#1191): "The chart
+                         shows charted depths". -->
+                    <TextBlock Text="{Binding ChartBasisLine}"
+                               IsVisible="{Binding HasChartBasisLine}"
+                               FontSize="12"
+                               Opacity="0.75"
+                               TextWrapping="Wrap"
+                               Margin="0,2,0,0" />
+
+                    <!--
+                        Prominent headline readout. Always visible (even when
+                        collapsed). Shows the "ADJUSTED DEPTH AT SELECTED TIME"
+                        or the charted depth with water level not applied. The top margin
+                        separates it from the tappable header bar above.
+                    -->
+                    <Border Background="{DynamicResource AccentSubtleBrush}"
+                            CornerRadius="6"
+                            Margin="0,6,0,8"
+                            Padding="12,10">
+                        <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding DepthNowLabel}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       LetterSpacing="1"
+                                       TextTrimming="CharacterEllipsis"
+                                       Margin="0,0,8,0"
+                                       Foreground="{DynamicResource AccentBrush}"
+                                       VerticalAlignment="Center" />
+                            <SelectableTextBlock Grid.Column="1"
+                                                 Text="{Binding DisplayDepthText}"
+                                                 FontSize="26"
+                                                 FontWeight="Bold"
+                                                 Foreground="{DynamicResource AccentBrush}"
+                                                 VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Collapsible detail region. -->
+                    <StackPanel Spacing="8"
+                                Margin="0"
+                                IsVisible="{Binding IsExpanded}">
+                        <!--
+                            Base / tide value breakdown. The base row is shown
+                            for every resolved pick (including the tide-less
+                            static case); the tide row appears only when an S-104
+                            grid overlaps. Each label sits directly beside its
+                            value, and the originating file (S-102 surface / S-104
+                            grid) is surfaced on hover of the label to avoid
+                            crowding.
+                        -->
+                        <StackPanel Spacing="4">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="{x:Static loc:Strings.Pick_Depth_Label_Base}"
+                                               ToolTip.Tip="{Binding BaseSourceTooltip}"
+                                               FontSize="12"
+                                               Opacity="0.7"
+                                               VerticalAlignment="Center" />
+                                    <SelectableTextBlock Text="{Binding BaseDepthText}"
+                                                         FontSize="13"
+                                                         FontWeight="SemiBold"
+                                                         VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Grid>
+                            <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding HasTide}">
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="{x:Static loc:Strings.Pick_Depth_Label_Tide}"
+                                               ToolTip.Tip="{Binding TideSourceTooltip}"
+                                               FontSize="12"
+                                               Opacity="0.7"
+                                               VerticalAlignment="Center" />
+                                    <SelectableTextBlock Text="{Binding TideNowText}"
+                                                         FontSize="13"
+                                                         VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Adjusted depth over time (only when an S-104 grid overlaps). -->
+                        <lvc:CartesianChart IsVisible="{Binding HasTide}"
+                                            MinHeight="200"
+                                            Series="{Binding DepthSeries}"
+                                            XAxes="{Binding TimeAxisArray}"
+                                            YAxes="{Binding DepthAxisArray}"
+                                            Sections="{Binding DepthSections}" />
+
+                        <!-- Uncertainty caption: combined S-102 and S-104 uncertainty. -->
+                        <TextBlock Text="{Binding UncertaintyText}"
+                                   FontSize="11"
+                                   Opacity="0.6"
+                                   IsVisible="{Binding HasUncertainty}" />
+
+                        <!-- No-tide info bar: neutral (non-alarming) explanation
+                             that the depth is static because no S-104 grid
+                             overlaps the point. -->
+                        <Border IsVisible="{Binding ShowNoTideInfo}"
+                                Background="{DynamicResource MutedBackgroundColor}"
+                                CornerRadius="4"
+                                Padding="10,8">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <ic:FluentIcon Grid.Column="0"
+                                               Icon="Info"
+                                               IconVariant="Filled"
+                                               FontSize="15"
+                                               Opacity="0.7"
+                                               Margin="0,0,7,0"
+                                               VerticalAlignment="Top" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding NoTideText}"
+                                           FontSize="11"
+                                           Opacity="0.75"
+                                           TextWrapping="Wrap" />
+                            </Grid>
+                        </Border>
+
+                        <!-- Datum refusal: water level on another or an undeclared datum isn't applied. -->
+                        <Border IsVisible="{Binding HasDatumNote}"
+                                Background="{DynamicResource DepthWarningSubtleBrush}"
+                                BorderBrush="{DynamicResource DepthWarningBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Padding="8,7">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <ic:FluentIcon Grid.Column="0"
+                                               Icon="Warning"
+                                               IconVariant="Filled"
+                                               FontSize="15"
+                                               Foreground="{DynamicResource DepthWarningBrush}"
+                                               Margin="0,0,7,0"
+                                               VerticalAlignment="Top" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding DatumNoteText}"
+                                           FontSize="11"
+                                           TextWrapping="Wrap"
+                                           VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Hit list (visible only when more than one feature is at this point) -->
+            <Border BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="0,0,0,1"
+                    Padding="0,0,0,8"
+                    IsVisible="{Binding ShowHitList}">
+                <StackPanel Spacing="4">
+                    <TextBlock FontSize="10"
+                               FontWeight="Normal"
+                               LetterSpacing="1"
+                               Opacity="0.7"
+                               Text="{Binding Hits.Count, StringFormat={x:Static loc:Strings.Pick_HitListHeader}}" />
+                    <ListBox ItemsSource="{Binding Hits}"
+                             AutomationProperties.AutomationId="PickReport.Hits"
+                             ItemTemplate="{StaticResource HitRowTemplate}"
+                             SelectedItem="{Binding SelectedHit, Mode=TwoWay}"
+                             Classes="accentList"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Padding="0"
+                             MaxHeight="200"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.Styles>
+                            <!-- Rows are named after their feature, not PickHit (#784). -->
+                            <Style Selector="ListBoxItem" x:DataType="vm:PickHit">
+                                <Setter Property="AutomationProperties.Name" Value="{Binding HitListLabel}" />
+                            </Style>
+                        </ListBox.Styles>
+                    </ListBox>
+                </StackPanel>
+            </Border>
+
+            <!-- PR-D4: Dynamic-source hits section. Rendered above the dataset
+                 identity block so dynamic hits stay visible even when scrolled
+                 attribute lists push the dataset detail off-screen. -->
+            <Border BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="0,0,0,1"
+                    Padding="0,0,0,8"
+                    IsVisible="{Binding HasDynamicHits}">
+                <StackPanel Spacing="4">
+                    <TextBlock FontSize="10"
+                               FontWeight="Normal"
+                               LetterSpacing="1"
+                               Opacity="0.7"
+                               Text="{Binding DynamicHits.Count, StringFormat={x:Static loc:Strings.PickReport_DynamicSection}}"
+                               ToolTip.Tip="{x:Static loc:Strings.Tooltip_DynamicHit}" />
+                    <ItemsControl ItemsSource="{Binding DynamicHits}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:DynamicPickHit">
+                                <Border BorderBrush="{DynamicResource BorderColor}"
+                                        BorderThickness="0,0,0,1"
+                                        Padding="0,4,0,4">
+                                    <StackPanel Spacing="2">
+                                        <TextBlock FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Text="{Binding DisplayLabel}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_DynamicHit}" />
+                                        <TextBlock FontSize="11" Opacity="0.7">
+                                            <Run Text="{Binding SourceDisplayName}" />
+                                            <Run Text=" · " FontWeight="Light" />
+                                            <Run Text="{Binding Kind}" FontStyle="Italic" />
+                                        </TextBlock>
+                                        <ItemsControl ItemsSource="{Binding Attributes}"
+                                                      Margin="0,2,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:DynamicPickAttributeRow">
+                                                    <Grid Margin="0,1">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="8" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0"
+                                                                   Text="{Binding Label}"
+                                                                   FontSize="12"
+                                                                   Opacity="0.7"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock Grid.Column="2"
+                                                                   Text="{Binding Value}"
+                                                                   FontSize="12"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   MaxWidth="220" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <Button Content="{x:Static loc:Strings.PickReport_TakeHelm}"
+                                                AutomationProperties.AutomationId="PickReport.TakeHelm"
+                                                HorizontalAlignment="Left"
+                                                Margin="0,4,0,0"
+                                                FontSize="12"
+                                                IsVisible="{Binding IsAisTarget}"
+                                                Command="{Binding DataContext.TakeHelmCommand, ElementName=PickRoot}"
+                                                CommandParameter="{Binding}"
+                                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_TakeHelm}" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <!-- Identity block: glyph + human name + class pill, with the
+                 technical identity (ID / spec / source) demoted to a single
+                 monospace caption line and a copy action. -->
+            <!-- A product that isn't S-100 (a weather model grid) leads with a
+                 not-for-navigation notice (weather-sources.md §3.1). -->
+            <TextBlock Text="{Binding NavigationNotice}"
+                       IsVisible="{Binding HasNavigationNotice}"
+                       AutomationProperties.AutomationId="PickReport.NavigationNotice"
+                       AutomationProperties.Name="{Binding NavigationNotice}"
+                       FontSize="12"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource WarningColor}"
+                       Margin="0,0,0,6"
+                       TextWrapping="Wrap" />
+            <!-- Stale data (vector-weather.md §7): how old the picked analysis is. -->
+            <TextBlock Text="{Binding StaleNotice}"
+                       IsVisible="{Binding HasStaleNotice}"
+                       AutomationProperties.AutomationId="PickReport.StaleNotice"
+                       AutomationProperties.Name="{Binding StaleNotice}"
+                       FontSize="12"
+                       Foreground="{DynamicResource WarningColor}"
+                       Margin="0,0,0,6"
+                       TextWrapping="Wrap" />
+            <!-- The data's credit from its Library source (#1075): attribution and licence. -->
+            <SelectableTextBlock Text="{Binding DataCredit}"
+                                 IsVisible="{Binding HasDataCredit}"
+                                 AutomationProperties.AutomationId="PickReport.DataCredit"
+                                 AutomationProperties.Name="{x:Static loc:Strings.Library_DataCreditName}"
+                                 FontSize="12"
+                                 Opacity="0.7"
+                                 Margin="0,0,0,6"
+                                 TextWrapping="Wrap" />
+            <!-- An AML feature's provenance strip (#1372, decision 13): the AML
+                 tag, the cell and the protective marking, in place of the spec. -->
+            <Border IsVisible="{Binding HasAml}"
+                    AutomationProperties.AutomationId="PickReport.AmlProvenance"
+                    AutomationProperties.Name="{x:Static loc:Strings.Pick_AmlProvenanceName}"
+                    Background="{DynamicResource MutedBackgroundColor}"
+                    CornerRadius="6"
+                    Padding="8,6"
+                    Margin="0,0,0,8">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <views:AmlTagChip Grid.Column="0"
+                                      Text="{Binding Aml.TagText}"
+                                      ToolTip.Tip="{Binding Aml.TagToolTip}"
+                                      AutomationProperties.AutomationId="PickReport.AmlTag"
+                                      AutomationProperties.Name="{Binding Aml.TagText}" />
+                    <SelectableTextBlock Grid.Column="1"
+                                         Text="{Binding Aml.CellName}"
+                                         AutomationProperties.AutomationId="PickReport.AmlCell"
+                                         FontSize="11"
+                                         FontFamily="{StaticResource MonoFontFamily}"
+                                         Opacity="0.75"
+                                         Margin="8,0"
+                                         VerticalAlignment="Center"
+                                         TextTrimming="CharacterEllipsis" />
+                    <views:AmlMarkingChip Grid.Column="2"
+                                          Marking="{Binding Aml.Marking}"
+                                          IsVisible="{Binding Aml.HasMarking}"
+                                          AutomationProperties.AutomationId="PickReport.AmlMarking"
+                                          AutomationProperties.Name="{Binding Aml.Marking}" />
+                </Grid>
+            </Border>
+            <Grid ColumnDefinitions="Auto,*,Auto"
+                  IsVisible="{Binding HasDatasetPick}">
+                <Border Grid.Column="0"
+                        Width="36" Height="36"
+                        CornerRadius="7"
+                        Margin="0,0,10,0"
+                        VerticalAlignment="Top"
+                        Background="{DynamicResource MutedBackgroundColor}">
+                    <ic:FluentIcon Icon="{Binding Glyph}"
+                                   IconVariant="Regular"
+                                   FontSize="22"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                </Border>
+                <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                    <WrapPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding PrimaryLabel}"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,6,0" />
+                        <Border IsVisible="{Binding HasSecondaryLabel}"
+                                VerticalAlignment="Center"
+                                CornerRadius="4"
+                                Padding="6,1"
+                                Background="{DynamicResource MutedBackgroundColor}">
+                            <TextBlock Text="{Binding SecondaryLabel}"
+                                       FontSize="11"
+                                       Opacity="0.8" />
+                        </Border>
+                    </WrapPanel>
+                    <SelectableTextBlock Text="{Binding IdentityCaption}"
+                                         FontSize="11"
+                                         FontFamily="{StaticResource MonoFontFamily}"
+                                         Opacity="0.6"
+                                         TextWrapping="Wrap" />
+                    <!-- The product defines no portrayal, so these symbols are ours (issue #937). -->
+                    <TextBlock Text="{Binding PortrayalNote}"
+                               IsVisible="{Binding HasPortrayalNote}"
+                               FontSize="11"
+                               FontStyle="Italic"
+                               Opacity="0.7"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal"
+                            Spacing="2"
+                            VerticalAlignment="Top">
+                    <Button Padding="6"
+                            AutomationProperties.AutomationId="PickReport.OpenFeatureInExaminer"
+                            AutomationProperties.Name="{x:Static loc:Strings.Label_OpenInExaminer}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}"
+                            Background="Transparent"
+                            Command="{Binding OpenFeatureInExaminerCommand}"
+                            IsVisible="{Binding IsExaminerAvailable}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenFeatureInExaminer}">
+                        <ic:FluentIcon Icon="Open" IconVariant="Regular" FontSize="16" />
+                    </Button>
+                    <Button Padding="6"
+                            AutomationProperties.AutomationId="PickReport.CopyIdentity"
+                            AutomationProperties.Name="{x:Static loc:Strings.Label_CopyIdentity}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CopyIdentity}"
+                            Background="Transparent"
+                            Command="{Binding CopyIdentityCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_CopyIdentity}">
+                        <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="16" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- References list (xlink:href targets) -->
+            <Border BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="0,1,0,0"
+                    Padding="0,8,0,0"
+                    IsVisible="{Binding HasReferences}">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="{x:Static loc:Strings.Pick_ReferencesHeader}"
+                               FontSize="10"
+                               FontWeight="Normal"
+                               LetterSpacing="1"
+                               Opacity="0.7" />
+                    <ItemsControl ItemsSource="{Binding References}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="pp:FeatureReference">
+                                <Button Margin="0,1"
+                                        AutomationProperties.AutomationId="PickReport.Reference.Follow"
+                                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_FollowReference}"
+                                        Padding="6,2"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Left"
+                                        Background="Transparent"
+                                        Command="{Binding $parent[ItemsControl].((vm:PickReportViewModel)DataContext).NavigateCommand}"
+                                        CommandParameter="{Binding}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_FollowReference}">
+                                    <TextBlock FontSize="12" TextTrimming="CharacterEllipsis">
+                                        <Run Text="{Binding Role}" />
+                                        <Run Text=" → " FontWeight="Light" />
+                                        <Run Text="{Binding TargetDisplayName}" FontStyle="Italic" />
+                                    </TextBlock>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <!-- Scrolling region: station chart (when present) + attributes.
+             The content's width is capped to the panel's own rendered width
+             (PickRoot.Bounds.Width) minus the 24px horizontal scroll padding,
+             so the attribute table (which contains NoWrap cells) can never
+             extend horizontally past the panel. PickRoot's width is sized by
+             the host column and is independent of the content, so the cap
+             always resolves and never feeds back into layout — unlike the
+             themed ScrollViewer's Viewport.Width, which some control themes do
+             not surface to bindings. The cells are vertical-only (no
+             wrapping), so capping width cannot loop with the vertical bar. -->
+        <ScrollViewer x:Name="AttrScroll"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto"
+                      Padding="12,0,12,12"
+                      IsVisible="{Binding HasDatasetPick}">
+            <StackPanel Spacing="8"
+                        MaxWidth="{Binding #PickRoot.Bounds.Width, Converter={x:Static conv:WidthInsetConverter.Instance}, ConverterParameter=24}"
+                        HorizontalAlignment="Stretch">
+                <!-- A lone warning's card (#932); see WarningCardTemplate. -->
+                <ContentControl IsVisible="{Binding HasSingleWarningCard}"
+                                Margin="0,8,0,0"
+                                Content="{Binding WarningCard}"
+                                ContentTemplate="{StaticResource WarningCardTemplate}" />
+
+                <!--
+                    Several warnings under the pick (#932, design 1c): the
+                    cards are the pick list. Hovering one previews its part
+                    on the map; the other features follow as rows.
+                -->
+                <StackPanel IsVisible="{Binding HasWarningCardList}"
+                            Margin="0,8,0,0"
+                            Spacing="8">
+                    <TextBlock FontSize="10"
+                               FontWeight="Normal"
+                               LetterSpacing="1"
+                               Opacity="0.7"
+                               Text="{Binding WarningCards.Count, StringFormat={x:Static loc:Strings.Pick_WarningCardsHeader}}" />
+                    <ItemsControl ItemsSource="{Binding WarningCards}"
+                                  AutomationProperties.AutomationId="PickReport.WarningCards"
+                                  AutomationProperties.Name="{x:Static loc:Strings.Pick_WarningCards}"
+                                  ItemTemplate="{StaticResource WarningCardTemplate}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Spacing="8" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                    <ListBox ItemsSource="{Binding OtherHits}"
+                             IsVisible="{Binding HasOtherHits}"
+                             AutomationProperties.AutomationId="PickReport.OtherHits"
+                             AutomationProperties.Name="{x:Static loc:Strings.Pick_OtherHits}"
+                             SelectedItem="{Binding SelectedOtherHit, Mode=TwoWay}"
+                             Classes="accentList"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Padding="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ItemTemplate="{StaticResource HitRowTemplate}">
+                        <ListBox.Styles>
+                            <Style Selector="ListBoxItem" x:DataType="vm:PickHit">
+                                <Setter Property="AutomationProperties.Name" Value="{Binding HitListLabel}" />
+                            </Style>
+                        </ListBox.Styles>
+                    </ListBox>
+                </StackPanel>
+
+                <!--
+                    Station time-series chart, shown only when the
+                    selected hit carries a StationTimeSeriesViewModel
+                    (S-104 / S-111 dcf=8 station picks). For S-104
+                    the view model is S104StationTimeSeriesViewModel
+                    and exposes a single HeightSeries; for S-111 it
+                    is S111StationTimeSeriesViewModel with two
+                    stacked charts sharing the inherited TimeAxis.
+                -->
+                <Border IsVisible="{Binding HasStationSeries}"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,1,0,0"
+                        Padding="0,8,0,0">
+                    <ContentControl Content="{Binding SelectedStationSeries}">
+                        <ContentControl.DataTemplates>
+                            <DataTemplate DataType="vm:S104StationTimeSeriesViewModel">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="{Binding Title}"
+                                               FontSize="10"
+                                               FontWeight="Normal"
+                                               LetterSpacing="1"
+                                               Opacity="0.7" />
+                                    <lvc:CartesianChart MinHeight="220"
+                                                        Series="{Binding HeightSeries}"
+                                                        XAxes="{Binding TimeAxisArray}"
+                                                        YAxes="{Binding HeightAxisArray}"
+                                                        Sections="{Binding Sections}" />
+                                </StackPanel>
+                            </DataTemplate>
+                            <DataTemplate DataType="vm:S111StationTimeSeriesViewModel">
+                                <Grid RowDefinitions="Auto,Auto,8,Auto,Auto">
+                                    <TextBlock Grid.Row="0"
+                                               Text="{Binding SpeedTitle}"
+                                               FontSize="10"
+                                               FontWeight="Normal"
+                                               LetterSpacing="1"
+                                               Opacity="0.7"
+                                               Margin="0,0,0,4" />
+                                    <lvc:CartesianChart Grid.Row="1"
+                                                        MinHeight="180"
+                                                        Series="{Binding SpeedSeries}"
+                                                        XAxes="{Binding TimeAxisArray}"
+                                                        YAxes="{Binding SpeedAxisArray}"
+                                                        Sections="{Binding Sections}" />
+                                    <TextBlock Grid.Row="3"
+                                               Text="{Binding DirectionTitle}"
+                                               FontSize="10"
+                                               FontWeight="Normal"
+                                               LetterSpacing="1"
+                                               Opacity="0.7"
+                                               Margin="0,0,0,4" />
+                                    <lvc:CartesianChart Grid.Row="4"
+                                                        MinHeight="180"
+                                                        Series="{Binding DirectionSeries}"
+                                                        XAxes="{Binding TimeAxisArray}"
+                                                        YAxes="{Binding DirectionAxisArray}"
+                                                        Sections="{Binding Sections}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ContentControl.DataTemplates>
+                    </ContentControl>
+                </Border>
+
+                <!--
+                    Attribute list. When a station chart is shown
+                    we collapse it into an Expander to keep the
+                    chart as the primary focus; otherwise the
+                    attributes render inline as before.
+                -->
+                <Border BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,1,0,0"
+                        Padding="0,8,0,0"
+                        IsVisible="{Binding ShowInlineAttributes}">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="{x:Static loc:Strings.Pick_AttributesHeading}"
+                                   FontSize="10"
+                                   FontWeight="Normal"
+                                   LetterSpacing="1"
+                                   Opacity="0.7" />
+                        <Border BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                ClipToBounds="True"
+                                Grid.IsSharedSizeScope="True"
+                                IsVisible="{Binding HasAttributes}">
+                            <ItemsControl ItemsSource="{Binding Attributes}"
+                                          Classes="attrTable"
+                                          ItemTemplate="{StaticResource AttributeRowTemplate}" />
+                        </Border>
+                        <TextBlock Text="{x:Static loc:Strings.Pick_NoAttributes}"
+                                   FontSize="12"
+                                   FontStyle="Italic"
+                                   Opacity="0.6"
+                                   IsVisible="{Binding !HasAttributes}" />
+                        <!-- An AML feature the map doesn't draw is still pickable (#1372). -->
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="6"
+                                    Margin="0,4,0,0"
+                                    IsVisible="{Binding HasAmlNotDrawnNote}">
+                            <ic:FluentIcon Icon="Info" IconVariant="Regular" FontSize="14" Opacity="0.7"
+                                           VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding AmlNotDrawnNote}"
+                                       AutomationProperties.AutomationId="PickReport.AmlNotDrawn"
+                                       AutomationProperties.Name="{Binding AmlNotDrawnNote}"
+                                       FontSize="12"
+                                       Opacity="0.7"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Beneath a Warning card the attributes fold, closed by default. -->
+                <Expander IsVisible="{Binding HasWarningCard}"
+                          AutomationProperties.AutomationId="PickReport.WarningAttributes"
+                          AutomationProperties.Name="{x:Static loc:Strings.Pick_AttributesFold}"
+                          IsExpanded="{Binding WarningAttributesExpanded, Mode=TwoWay}"
+                          HorizontalAlignment="Stretch">
+                    <Expander.Header>
+                        <TextBlock>
+                            <Run Text="{x:Static loc:Strings.Pick_AttributesFold}" />
+                            <Run Text="{Binding AttributeCount}" Foreground="{DynamicResource MutedColor}" />
+                        </TextBlock>
+                    </Expander.Header>
+                    <StackPanel Spacing="4">
+                        <Border BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                ClipToBounds="True"
+                                Grid.IsSharedSizeScope="True"
+                                IsVisible="{Binding HasAttributes}">
+                            <ItemsControl ItemsSource="{Binding Attributes}"
+                                          Classes="attrTable"
+                                          ItemTemplate="{StaticResource AttributeRowTemplate}" />
+                        </Border>
+                        <TextBlock Text="{x:Static loc:Strings.Pick_NoAttributes}"
+                                   FontSize="12"
+                                   FontStyle="Italic"
+                                   Opacity="0.6"
+                                   IsVisible="{Binding !HasAttributes}" />
+                    </StackPanel>
+                </Expander>
+
+                <Expander IsVisible="{Binding HasStationSeries}"
+                          Header="{x:Static loc:Strings.Pick_Chart_StationAttributes}"
+                          IsExpanded="False"
+                          HorizontalAlignment="Stretch">
+                    <StackPanel Spacing="4">
+                        <Border BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                ClipToBounds="True"
+                                Grid.IsSharedSizeScope="True"
+                                IsVisible="{Binding HasAttributes}">
+                            <ItemsControl ItemsSource="{Binding Attributes}"
+                                          Classes="attrTable"
+                                          ItemTemplate="{StaticResource AttributeRowTemplate}" />
+                        </Border>
+                        <TextBlock Text="{x:Static loc:Strings.Pick_NoAttributes}"
+                                   FontSize="12"
+                                   FontStyle="Italic"
+                                   Opacity="0.6"
+                                   IsVisible="{Binding !HasAttributes}" />
+                    </StackPanel>
+                </Expander>
+
+                <!--
+                    WMO / SIGRID-3 "egg code" (S-411 sea-ice / lake-ice). A
+                    render-ready projection of the feature's concentration,
+                    stage of development and floe size, drawn as the standard
+                    stacked oval. Thinner fourth / fifth ice classes appear to
+                    the right of their row outside the oval; snow depth appears
+                    as a caption beneath it. Hidden for features that carry no
+                    egg data.
+                -->
+                <Border BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,1,0,0"
+                        Padding="0,8,0,0"
+                        IsVisible="{Binding HasEggCode}">
+                    <StackPanel Spacing="6" DataContext="{Binding SelectedEggCode}">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0"
+                                       Text="{x:Static loc:Strings.Pick_EggCode_Heading}"
+                                       FontSize="10"
+                                       FontWeight="Normal"
+                                       LetterSpacing="1"
+                                       Opacity="0.7"
+                                       VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{x:Static loc:Strings.Pick_EggCode_Standard}"
+                                       FontSize="10"
+                                       LetterSpacing="1"
+                                       Opacity="0.5"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                        <TextBlock Text="{x:Static loc:Strings.Pick_EggCode_Description}"
+                                   FontSize="11"
+                                   Opacity="0.6"
+                                   TextWrapping="Wrap" />
+
+                        <!-- The egg oval (or an open-water caption). Trailing
+                             fourth / fifth ice classes (Cd/Ce, Sd/Se, Fd/Fe)
+                             are drawn outside the oval, to the right of and
+                             vertically aligned with their row. The left gutter
+                             column is reserved for future left-flank values
+                             (e.g. So). -->
+                        <StackPanel HorizontalAlignment="Center" Margin="0,4">
+                            <Grid HorizontalAlignment="Center"
+                                  IsVisible="{Binding HasOval}"
+                                  ColumnDefinitions="Auto,Auto,Auto"
+                                  RowDefinitions="Auto,Auto,Auto,Auto">
+                                <!-- Egg outline: the first (Ct) and last (form)
+                                     rows are capped by half-ellipse domes that
+                                     fill their own row, reaching full width
+                                     exactly at the adjoining separator. The
+                                     straight vertical sides are drawn only on
+                                     the interior rows (partial / stage) between
+                                     them, so every full-width separator meets a
+                                     vertical side flush. The dome ends are inset
+                                     half a stroke (0.75) to sit on the same
+                                     centre line as the interior side borders. -->
+
+                                <!-- Top dome, filling the Ct row. -->
+                                <Path Grid.Column="1" Grid.Row="0"
+                                      Margin="0.75,0,0.75,0"
+                                      Stretch="Fill"
+                                      Stroke="{DynamicResource ForegroundColor}"
+                                      StrokeThickness="1.5"
+                                      Data="M0,1 A0.5,1 0 0 1 1,1"
+                                      IsVisible="{Binding ShowTotalConcentration}" />
+                                <!-- Bottom dome for the degenerate case where the
+                                     Ct row is the only row (both first and last). -->
+                                <Path Grid.Column="1" Grid.Row="0"
+                                      Margin="0.75,0,0.75,0"
+                                      Stretch="Fill"
+                                      Stroke="{DynamicResource ForegroundColor}"
+                                      StrokeThickness="1.5"
+                                      Data="M0,0 A0.5,1 0 0 0 1,0"
+                                      IsVisible="{Binding TotalConcentrationIsLast}" />
+                                <Border Grid.Column="1" Grid.Row="0"
+                                        Padding="18,6"
+                                        MinWidth="104"
+                                        MinHeight="42"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Stretch"
+                                        IsVisible="{Binding ShowTotalConcentration}">
+                                    <ContentControl Content="{Binding TotalConcentration}"
+                                                    ContentTemplate="{StaticResource EggValueCellTemplate}"
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center" />
+                                </Border>
+
+                                <!-- Partial concentration row (Ca Cb Cc). Outline
+                                     drawn as an overlay so the row can be either an
+                                     interior row (straight vertical sides) or the
+                                     bottom-most row (curved bottom dome). -->
+                                <!-- Interior variant: straight sides + top separator. -->
+                                <Border Grid.Column="1" Grid.Row="1"
+                                        BorderBrush="{DynamicResource ForegroundColor}"
+                                        BorderThickness="1.5,1,1.5,0"
+                                        MinWidth="104"
+                                        HorizontalAlignment="Stretch"
+                                        IsVisible="{Binding ShowPartialConcentrationsAsMiddle}" />
+                                <!-- Last-row variant: bottom dome + top separator. -->
+                                <Path Grid.Column="1" Grid.Row="1"
+                                      Margin="0.75,0,0.75,0"
+                                      Stretch="Fill"
+                                      Stroke="{DynamicResource ForegroundColor}"
+                                      StrokeThickness="1.5"
+                                      Data="M0,0 A0.5,1 0 0 0 1,0"
+                                      IsVisible="{Binding PartialConcentrationsIsLast}" />
+                                <Border Grid.Column="1" Grid.Row="1"
+                                        BorderBrush="{DynamicResource ForegroundColor}"
+                                        BorderThickness="0,1,0,0"
+                                        MinWidth="104"
+                                        HorizontalAlignment="Stretch"
+                                        IsVisible="{Binding PartialConcentrationsIsLast}" />
+                                <!-- Content. -->
+                                <Border Grid.Column="1" Grid.Row="1"
+                                        Padding="18,6"
+                                        MinWidth="104"
+                                        MinHeight="{Binding PartialConcentrationsCellMinHeight}"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Stretch"
+                                        IsVisible="{Binding ShowPartialConcentrations}">
+                                    <ItemsControl ItemsSource="{Binding PartialConcentrations}"
+                                                  ItemTemplate="{StaticResource EggValueCellTemplate}"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </Border>
+                                <!-- Trailing Cd/Ce, outside the oval on the right. -->
+                                <ItemsControl Grid.Column="2" Grid.Row="1"
+                                              ItemsSource="{Binding TrailingPartialConcentrations}"
+                                              ItemTemplate="{StaticResource EggValueCellTemplate}"
+                                              VerticalAlignment="Center"
+                                              Margin="6,0,0,0"
+                                              IsVisible="{Binding ShowTrailingPartialConcentrations}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+
+                                <!-- Stage of development row (Sa Sb Sc). -->
+                                <!-- Interior variant: straight sides + top separator. -->
+                                <Border Grid.Column="1" Grid.Row="2"
+                                        BorderBrush="{DynamicResource ForegroundColor}"
+                                        BorderThickness="1.5,1,1.5,0"
+                                        MinWidth="104"
+                                        HorizontalAlignment="Stretch"
+                                        IsVisible="{Binding ShowStagesOfDevelopmentAsMiddle}" />
+                                <!-- Last-row variant: bottom dome + top separator. -->
+                                <Path Grid.Column="1" Grid.Row="2"
+                                      Margin="0.75,0,0.75,0"
+                                      Stretch="Fill"
+                                      Stroke="{DynamicResource ForegroundColor}"
+                                      StrokeThickness="1.5"
+                                      Data="M0,0 A0.5,1 0 0 0 1,0"
+                                      IsVisible="{Binding StagesOfDevelopmentIsLast}" />
+                                <Border Grid.Column="1" Grid.Row="2"
+                                        BorderBrush="{DynamicResource ForegroundColor}"
+                                        BorderThickness="0,1,0,0"
+                                        MinWidth="104"
+                                        HorizontalAlignment="Stretch"
+                                        IsVisible="{Binding StagesOfDevelopmentIsLast}" />
+                                <!-- Content. -->
+                                <Border Grid.Column="1" Grid.Row="2"
+                                        Padding="18,6"
+                                        MinWidth="104"
+                                        MinHeight="{Binding StagesOfDevelopmentCellMinHeight}"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Stretch"
+                                        IsVisible="{Binding ShowStagesOfDevelopment}">
+                                    <ItemsControl ItemsSource="{Binding StagesOfDevelopment}"
+                                                  ItemTemplate="{StaticResource EggValueCellTemplate}"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </Border>
+                                <!-- Trailing Sd/Se, outside the oval on the right. -->
+                                <ItemsControl Grid.Column="2" Grid.Row="2"
+                                              ItemsSource="{Binding TrailingStagesOfDevelopment}"
+                                              ItemTemplate="{StaticResource EggValueCellTemplate}"
+                                              VerticalAlignment="Center"
+                                              Margin="6,0,0,0"
+                                              IsVisible="{Binding ShowTrailingStagesOfDevelopment}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+
+                                <!-- Bottom dome, filling the form row (form is always
+                                     the bottom-most row when present). -->
+                                <Path Grid.Column="1" Grid.Row="3"
+                                      Margin="0.75,0,0.75,0"
+                                      Stretch="Fill"
+                                      Stroke="{DynamicResource ForegroundColor}"
+                                      StrokeThickness="1.5"
+                                      Data="M0,0 A0.5,1 0 0 0 1,0"
+                                      IsVisible="{Binding ShowFormsOfIce}" />
+                                <!-- Form of ice / floe size row (Fa Fb Fc):
+                                     curved sides (dome) + top separator. -->
+                                <Border Grid.Column="1" Grid.Row="3"
+                                        Padding="18,6"
+                                        BorderBrush="{DynamicResource ForegroundColor}"
+                                        BorderThickness="0,1,0,0"
+                                        MinWidth="104"
+                                        MinHeight="42"
+                                        HorizontalAlignment="Stretch"
+                                        VerticalAlignment="Stretch"
+                                        IsVisible="{Binding ShowFormsOfIce}">
+                                    <ItemsControl ItemsSource="{Binding FormsOfIce}"
+                                                  ItemTemplate="{StaticResource EggValueCellTemplate}"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </Border>
+                                <!-- Trailing Fd/Fe, outside the oval on the right. -->
+                                <ItemsControl Grid.Column="2" Grid.Row="3"
+                                              ItemsSource="{Binding TrailingFormsOfIce}"
+                                              ItemTemplate="{StaticResource EggValueCellTemplate}"
+                                              VerticalAlignment="Center"
+                                              Margin="6,0,0,0"
+                                              IsVisible="{Binding ShowTrailingFormsOfIce}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+                            </Grid>
+
+                            <!-- Open water / no ice: no oval, only the total
+                                 concentration token and a caption. -->
+                            <StackPanel IsVisible="{Binding !HasOval}"
+                                        HorizontalAlignment="Center"
+                                        Spacing="2">
+                                <ContentControl Content="{Binding TotalConcentration}"
+                                                ContentTemplate="{StaticResource EggValueCellTemplate}"
+                                                HorizontalAlignment="Center"
+                                                IsVisible="{Binding ShowTotalConcentration}" />
+                                <TextBlock Text="{x:Static loc:Strings.Pick_EggCode_OpenWater}"
+                                           FontSize="12"
+                                           Opacity="0.7"
+                                           HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Values reported outside the oval by convention. -->
+                        <StackPanel Spacing="2" IsVisible="{Binding HasAnnotations}">
+                            <TextBlock Text="{Binding SnowSummary}"
+                                       FontSize="11"
+                                       Opacity="0.75"
+                                       IsVisible="{Binding ShowSnowSummary}" />
+                        </StackPanel>
+
+                        <!-- Description region: shows the meaning of the value
+                             the pointer is over (or a hint when idle). Placed
+                             below the egg rather than as a per-cell tooltip so
+                             it never obscures neighbouring values. -->
+                        <Border BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Padding="8,6"
+                                MinHeight="46"
+                                Margin="0,2,0,0">
+                            <Panel>
+                                <TextBlock Text="{x:Static loc:Strings.Pick_EggCode_HoverHint}"
+                                           FontSize="11"
+                                           FontStyle="Italic"
+                                           Opacity="0.5"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           IsVisible="{Binding !IsHoveringValue}" />
+                                <TextBlock Text="{Binding HoveredDescription}"
+                                           FontSize="11"
+                                           Opacity="0.85"
+                                           TextWrapping="Wrap"
+                                           TextAlignment="Center"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           IsVisible="{Binding IsHoveringValue}" />
+                            </Panel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <!--
+                    Text (#932): resolved `fileReference` content and long text
+                    values lifted out of the attribute table above into
+                    long-text cards, so the mariner reads them whole rather
+                    than as a truncated cell. Hidden when the pick has none.
+                -->
+                <Border BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,1,0,0"
+                        Padding="0,8,0,0"
+                        IsVisible="{Binding HasTextCards}">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="{x:Static loc:Strings.Pick_TextCardsHeader}"
+                                   FontSize="10"
+                                   FontWeight="Normal"
+                                   LetterSpacing="1"
+                                   Opacity="0.7" />
+                        <ItemsControl ItemsSource="{Binding TextCards}"
+                                      AutomationProperties.AutomationId="PickReport.TextCards"
+                                      ItemTemplate="{StaticResource TextCardTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="8" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+    </Grid>
+</UserControl>

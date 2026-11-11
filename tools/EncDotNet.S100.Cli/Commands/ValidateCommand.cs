@@ -1,0 +1,621 @@
+using System.ComponentModel;
+using System.Globalization;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using EncDotNet.S100.Cli.Infrastructure;
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.S57;
+using EncDotNet.S100.ExchangeSets;
+using EncDotNet.S100.Hdf5;
+using EncDotNet.S100.Validation;
+using Spectre.Console;
+using Spectre.Console.Cli;
+
+namespace EncDotNet.S100.Cli.Commands;
+
+/// <summary>
+/// <c>s100 validate &lt;dataset&gt;</c> — detects the dataset's product
+/// specification and runs its normative validation rule pack (if one is
+/// available for the spec) via <see cref="IDatasetProcessor.Validate"/>,
+/// reporting the findings as a table or as JSON.
+/// </summary>
+/// <remarks>
+/// Validation is a pure function of the parsed dataset (independent of
+/// palette, opacity, or time step). Specs without a rule pack — coverage
+/// products and S-101 / S-57 today — report "no rules available" and exit
+/// successfully; this is distinct from a dataset that was evaluated and
+/// found conformant.
+/// </remarks>
+internal sealed partial class ValidateCommand : Command<ValidateCommand.Settings>
+{
+    /// <summary>Exit code returned when validation produced failing findings.</summary>
+    private const int FindingsExitCode = 6;
+
+    internal sealed class Settings : DatasetCommandSettings
+    {
+        [CommandOption("--format")]
+        [Description("Output format: text or json (default text).")]
+        [DefaultValue("text")]
+        public string Format { get; init; } = "text";
+
+        [CommandOption("--strict")]
+        [Description("Treat warnings as failures: exit non-zero when any warning (not just error) is present.")]
+        [DefaultValue(false)]
+        public bool Strict { get; init; }
+
+        [CommandOption("--suppress")]
+        [Description(
+            "Comma-separated list of rule ids (or glob patterns using '*') whose findings are " +
+            "dropped from the report and ignored by the exit code — e.g. " +
+            "--suppress S101-R-1.2,S101-R-3.2 or --suppress \"S101-*\". Useful for muting a " +
+            "known rule class (such as feature-catalogue-version mismatches) to surface the " +
+            "more-likely-real findings.")]
+        public string? Suppress { get; init; }
+
+        public override ValidationResult Validate()
+        {
+            if (string.IsNullOrWhiteSpace(DatasetPath))
+                return ValidationResult.Error("A dataset or exchange set path is required.");
+
+            // Accept a single dataset file, or an exchange set expressed as a
+            // directory / CATALOG.XML / .zip (resolved later in Execute).
+            if (!File.Exists(DatasetPath) && !Directory.Exists(DatasetPath))
+                return ValidationResult.Error($"Path not found: {DatasetPath}");
+
+            if (!TryParseFormat(Format, out _))
+                return ValidationResult.Error($"Unknown format '{Format}'. Use text or json.");
+
+            if (Suppress is not null && !TryParseSuppressPatterns(Suppress, out _))
+                return ValidationResult.Error(
+                    "--suppress must be a comma-separated list of one or more rule ids or patterns.");
+
+            return ValidationResult.Success();
+        }
+    }
+
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    {
+        using var diagnosticTrace = settings.Debug ? DiagnosticTraceScope.ToStandardError() : null;
+        TryParseFormat(settings.Format, out var format);
+
+        // An exchange set (folder / CATALOG.XML / .zip) is integrity-verified
+        // rather than run through a single-dataset rule pack.
+        if (ExchangeSetInput.LooksLikeExchangeSet(settings.DatasetPath))
+        {
+            return VerifyExchangeSet(settings, format);
+        }
+
+        // An S-57 / S-63 exchange set (CATALOG.031) is integrity-verified via the
+        // S-57 verifier (CRC + signature), mapped onto the same result model.
+        if (ExchangeSetInput.LooksLikeS57ExchangeSet(settings.DatasetPath))
+        {
+            return VerifyS57ExchangeSet(settings, format);
+        }
+
+        var (factory, catalogueManager) = ProcessorFactoryBuilder.Build();
+        try
+        {
+            var spec = DatasetPipelineFactory.DetectProductSpec(settings.DatasetPath);
+            if (spec is null)
+            {
+                if (format == OutputFormat.Json)
+                    EmitJsonError("spec-not-detected", UnrecognizedDatasetMessage.Describe(settings.DatasetPath));
+                else
+                    UnrecognizedDatasetMessage.Write(settings.DatasetPath);
+                return 2;
+            }
+
+            // JSON goes to stdout, so the S-101 update summary goes to stderr there.
+            var updateConsole = format == OutputFormat.Json
+                ? AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(Console.Error) })
+                : null;
+            var processor = DatasetProcessorLoader.Create(factory, spec, settings, updateConsole);
+            var report = processor.Validate();
+
+            string[] patterns = Array.Empty<string>();
+            if (settings.Suppress is not null)
+                TryParseSuppressPatterns(settings.Suppress, out patterns);
+
+            return format == OutputFormat.Json
+                ? EmitJson(processor.Spec, report, settings.Strict, patterns)
+                : EmitText(processor.Spec, report, settings.Strict, patterns);
+        }
+        catch (NotSupportedException ex)
+        {
+            ReportException("Not supported", ex, format, settings.Debug);
+            return 4;
+        }
+        catch (S100DatasetNotSupportedException ex)
+        {
+            // Recognised-but-not-yet-implemented spec feature (e.g. data coding
+            // format 1). Does not derive from NotSupportedException, so it needs
+            // its own catch to map to exit 4 rather than the generic exit-1 path.
+            // See issue #253.
+            ReportException("Not supported", ex, format, settings.Debug);
+            return 4;
+        }
+        catch (S100DatasetSchemaException ex)
+        {
+            ReportException("Non-conforming dataset", ex, format, settings.Debug, warning: true);
+            return 5;
+        }
+        catch (Exception ex)
+        {
+            ReportException("Error", ex, format, settings.Debug);
+            return 1;
+        }
+        finally
+        {
+            catalogueManager.Dispose();
+        }
+    }
+
+    // ── Exchange set integrity / signature verification ──────────────
+
+    /// <summary>
+    /// Verifies an exchange set's per-file digital signatures and checksums,
+    /// reporting the outcomes and mapping failures to the shared findings exit
+    /// code. S-100 Edition 5.2.1 Part 15.
+    /// </summary>
+    private static int VerifyExchangeSet(Settings settings, OutputFormat format)
+    {
+        IAssetSource? source = null;
+        try
+        {
+            string cataloguePath;
+            string kind;
+            (source, cataloguePath, kind) = ExchangeSetInput.Open(settings.DatasetPath);
+
+            using var exchangeSet = ExchangeSet.OpenAsync(source, cataloguePath).GetAwaiter().GetResult();
+            source = null; // ownership transferred to ExchangeSet; disposed below.
+
+            var verifier = new ExchangeSetVerifier();
+            var result = verifier
+                .VerifyAsync(
+                    exchangeSet.Source,
+                    exchangeSet.Catalogue,
+                    new TrustAnchorOptions { AllowUntrustedCertificates = true })
+                .GetAwaiter()
+                .GetResult();
+
+            return format == OutputFormat.Json
+                ? EmitVerifyJson(result, settings.Strict)
+                : EmitVerifyText(result, kind, settings.Strict);
+        }
+        catch (Exception ex)
+        {
+            ReportException("Error", ex, format, settings.Debug);
+            return 1;
+        }
+        finally
+        {
+            source?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Integrity-verifies an S-57 / S-63 exchange set (<c>CATALOG.031</c>) using
+    /// the upstream S-57 verifier, mapped onto the same result model and
+    /// exit-code semantics as the S-100 path so both products surface uniformly.
+    /// </summary>
+    private static int VerifyS57ExchangeSet(Settings settings, OutputFormat format)
+    {
+        try
+        {
+            var root = ExchangeSetInput.ResolveS57Root(settings.DatasetPath);
+
+            var result = S57ExchangeSetVerification
+                .VerifyAsync(root, allowUntrustedCertificates: true)
+                .GetAwaiter()
+                .GetResult();
+
+            return format == OutputFormat.Json
+                ? EmitVerifyJson(result, settings.Strict, product: "S-57")
+                : EmitVerifyText(result, "S-57 folder", settings.Strict);
+        }
+        catch (Exception ex)
+        {
+            ReportException("Error", ex, format, settings.Debug);
+            return 1;
+        }
+    }
+
+    /// <summary>
+    /// A file fails verification when its signature is invalid/untrusted or its
+    /// checksum mismatches / the file is missing. With <paramref name="strict"/>,
+    /// an unsigned file or a file with no declared checksum also fails.
+    /// </summary>
+    private static bool FileFailed(FileVerificationResult file, bool strict)
+    {
+        var signatureFailed = file.Outcome switch
+        {
+            VerificationOutcome.SignatureInvalid => true,
+            VerificationOutcome.CertificateUntrusted => true,
+            VerificationOutcome.CertificateExpired => true,
+            VerificationOutcome.CertificateNotFound => true,
+            VerificationOutcome.FileMissing => true,
+            VerificationOutcome.Error => true,
+            VerificationOutcome.NotSigned => strict,
+            _ => false,
+        };
+
+        var checksumFailed = file.ChecksumOutcome switch
+        {
+            VerificationOutcome.ChecksumMismatch => true,
+            VerificationOutcome.FileMissing => true,
+            VerificationOutcome.Error => true,
+            VerificationOutcome.NoChecksum => strict,
+            _ => false,
+        };
+
+        return signatureFailed || checksumFailed;
+    }
+
+    private static int EmitVerifyText(ExchangeSetVerificationResult result, string kind, bool strict)
+    {
+        if (result.FileResults.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[grey]Exchange set declares no files to verify.[/]");
+            return 0;
+        }
+
+        var table = new Table().Border(TableBorder.Rounded);
+        table.AddColumn("File");
+        table.AddColumn("Signature");
+        table.AddColumn("Checksum");
+        table.AddColumn("SHA-256");
+        table.AddColumn("Detail");
+
+        foreach (var file in result.FileResults)
+        {
+            table.AddRow(
+                Markup.Escape(file.FileName),
+                OutcomeMarkup(file.Outcome, FileFailed(file, strict)),
+                OutcomeMarkup(file.ChecksumOutcome, FileFailed(file, strict)),
+                Markup.Escape(ShortDigest(file.ComputedSha256)),
+                Markup.Escape(file.Detail ?? string.Empty));
+        }
+
+        AnsiConsole.Write(table);
+
+        int failed = result.FileResults.Count(f => FileFailed(f, strict));
+        AnsiConsole.MarkupLineInterpolated(
+            $"[grey]{result.FileResults.Count} file(s) in {kind}; integrity {(result.IntegrityVerified ? "intact" : "compromised")}; signatures {SignatureSummary(result)}.[/]");
+
+        if (failed == 0)
+        {
+            AnsiConsole.MarkupLine("[green]Verified[/] — no verification failures.");
+            return 0;
+        }
+
+        AnsiConsole.MarkupLineInterpolated($"[red]{failed} file(s) failed verification.[/]");
+        return FindingsExitCode;
+    }
+
+    private static int EmitVerifyJson(ExchangeSetVerificationResult result, bool strict, string product = "S-100")
+    {
+        int failed = result.FileResults.Count(f => FileFailed(f, strict));
+
+        var payload = new VerifyPayload(
+            Kind: "exchange-set",
+            Product: product,
+            FileCount: result.FileResults.Count,
+            IntegrityVerified: result.IntegrityVerified,
+            HasChecksumMismatches: result.HasChecksumMismatches,
+            HasMissingFiles: result.HasMissingFiles,
+            IsUnsigned: result.FileResults.Count > 0 && result.IsUnsigned,
+            Valid: failed == 0,
+            FailedCount: failed,
+            Files: result.FileResults
+                .Select(f => new VerifyFilePayload(
+                    FileName: f.FileName,
+                    SignatureOutcome: f.Outcome.ToString(),
+                    ChecksumOutcome: f.ChecksumOutcome.ToString(),
+                    ComputedSha256: f.ComputedSha256,
+                    Detail: f.Detail,
+                    Failed: FileFailed(f, strict),
+                    Signatures: f.SignatureResults
+                        .Select(signature => new VerifySignaturePayload(
+                            Id: signature.Id,
+                            Kind: signature.Kind.ToString(),
+                            Outcome: signature.Outcome.ToString(),
+                            FailureReason: signature.FailureReason.ToString(),
+                            Detail: signature.Detail))
+                        .ToArray()))
+                .ToArray());
+
+        Console.Out.WriteLine(JsonSerializer.Serialize(payload, Json.VerifyPayload));
+        return failed == 0 ? 0 : FindingsExitCode;
+    }
+
+    private static string SignatureSummary(ExchangeSetVerificationResult result)
+    {
+        if (result.FileResults.Any(f => f.Outcome != VerificationOutcome.Withdrawn) && result.IsUnsigned)
+            return "unsigned";
+        return result.AllValid ? "all valid" : "see table";
+    }
+
+    private static string ShortDigest(string? hex) =>
+        string.IsNullOrEmpty(hex) ? "—" : hex[..Math.Min(12, hex.Length)];
+
+    private static string OutcomeMarkup(VerificationOutcome outcome, bool failed)
+    {
+        var colour = outcome switch
+        {
+            VerificationOutcome.Ok => "green",
+            VerificationOutcome.NotSigned or VerificationOutcome.NoChecksum => failed ? "yellow" : "grey",
+            VerificationOutcome.Withdrawn => "grey",
+            _ => "red",
+        };
+        return $"[{colour}]{outcome}[/]";
+    }
+
+    private static int EmitText(SpecRef spec, ValidationReport? report, bool strict, IReadOnlyList<string> suppressPatterns)
+    {
+        if (report is null)
+        {
+            AnsiConsole.MarkupLineInterpolated(
+                $"[grey]No validation rules are available for[/] {spec.Name}.");
+            return 0;
+        }
+
+        var (kept, suppressedCount) = Partition(report, suppressPatterns);
+
+        if (kept.Count == 0)
+        {
+            var suffix = suppressedCount > 0
+                ? $" ([grey]{report.RulesEvaluated} rule(s) evaluated; {suppressedCount} finding(s) suppressed[/])"
+                : $" ([grey]{report.RulesEvaluated} rule(s) evaluated, no findings[/])";
+            // suffix is markup, so build the line with MarkupLine; an
+            // interpolated argument would be escaped and print literally (#762).
+            AnsiConsole.MarkupLine($"[green]Valid[/] — {Markup.Escape(spec.Name)}{suffix}");
+            return 0;
+        }
+
+        var table = new Table().Border(TableBorder.Rounded);
+        table.AddColumn("Severity");
+        table.AddColumn("Rule");
+        table.AddColumn("Message");
+        table.AddColumn("Location");
+
+        foreach (var finding in kept)
+        {
+            table.AddRow(
+                SeverityMarkup(finding.Severity),
+                Markup.Escape(finding.RuleId),
+                Markup.Escape(finding.Message),
+                Markup.Escape(FormatLocation(finding)));
+        }
+
+        AnsiConsole.Write(table);
+
+        int errors = kept.Count(f => f.Severity == ValidationSeverity.Error);
+        int warnings = kept.Count(f => f.Severity == ValidationSeverity.Warning);
+        int infos = kept.Count(f => f.Severity == ValidationSeverity.Info);
+        int rulesWithFindings = kept.Select(f => f.RuleId).Distinct().Count();
+
+        AnsiConsole.MarkupLineInterpolated(
+            $"[grey]{report.RulesEvaluated} rule(s) evaluated, {rulesWithFindings} with findings:[/] [red]{errors} error(s)[/], [yellow]{warnings} warning(s)[/], [blue]{infos} info[/].");
+
+        if (suppressedCount > 0)
+            AnsiConsole.MarkupLineInterpolated(
+                $"[grey]{suppressedCount} finding(s) suppressed via --suppress {Markup.Escape(string.Join(",", suppressPatterns))}.[/]");
+
+        return Failed(kept, strict) ? FindingsExitCode : 0;
+    }
+
+    private static int EmitJson(SpecRef spec, ValidationReport? report, bool strict, IReadOnlyList<string> suppressPatterns)
+    {
+        IReadOnlyList<ValidationFinding> kept = report is null
+            ? []
+            : Partition(report, suppressPatterns).Kept;
+        int suppressedCount = report is null ? 0 : report.Findings.Count - kept.Count;
+
+        var payload = new ValidatePayload(
+            Specification: spec.Name,
+            Edition: spec.Edition.ToString(),
+            RulesAvailable: report is not null,
+            RulesEvaluated: report?.RulesEvaluated ?? 0,
+            RulesWithFindings: kept.Select(f => f.RuleId).Distinct().Count(),
+            Valid: report is null || kept.Count == 0,
+            SuppressedPatterns: suppressPatterns.Count > 0 ? suppressPatterns.ToArray() : null,
+            SuppressedCount: suppressedCount,
+            Findings: kept
+                .Select(f => new FindingPayload(
+                    RuleId: f.RuleId,
+                    Severity: f.Severity.ToString(),
+                    Message: f.Message,
+                    DatasetId: f.DatasetId,
+                    RelatedFeatureId: f.RelatedFeatureId,
+                    Point: f.Point is { } p ? new PointPayload(p.Latitude, p.Longitude) : null,
+                    BoundingBox: f.BoundingBox is { } b
+                        ? new BoxPayload(b.SouthLatitude, b.WestLongitude, b.NorthLatitude, b.EastLongitude)
+                        : null))
+                .ToArray());
+
+        Console.Out.WriteLine(JsonSerializer.Serialize(payload, Json.ValidatePayload));
+        return report is not null && Failed(kept, strict) ? FindingsExitCode : 0;
+    }
+
+    /// <summary>
+    /// Splits a report's findings into the set kept after applying the
+    /// <paramref name="suppressPatterns"/> and the count that were suppressed.
+    /// A finding is suppressed when its <see cref="ValidationFinding.RuleId"/>
+    /// matches any pattern (see <see cref="IsSuppressed"/>).
+    /// </summary>
+    private static (IReadOnlyList<ValidationFinding> Kept, int Suppressed) Partition(
+        ValidationReport report, IReadOnlyList<string> suppressPatterns)
+    {
+        if (report.Findings.Count == 0)
+            return ([], 0);
+
+        if (suppressPatterns.Count == 0)
+            return (report.Findings, 0);
+
+        var kept = report.Findings.Where(f => !IsSuppressed(f.RuleId, suppressPatterns)).ToArray();
+        return (kept, report.Findings.Count - kept.Length);
+    }
+
+    private static bool Failed(IReadOnlyCollection<ValidationFinding> findings, bool strict) =>
+        findings.Any(f => f.Severity == ValidationSeverity.Error)
+        || (strict && findings.Any(f => f.Severity == ValidationSeverity.Warning));
+
+    private static string FormatLocation(ValidationFinding finding)
+    {
+        if (finding.RelatedFeatureId is { Length: > 0 } id)
+            return id;
+        if (finding.Point is { } p)
+            return string.Format(CultureInfo.InvariantCulture, "{0:0.#####}, {1:0.#####}", p.Latitude, p.Longitude);
+        if (finding.BoundingBox is { } b)
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "[{0:0.###}, {1:0.###} – {2:0.###}, {3:0.###}]",
+                b.SouthLatitude, b.WestLongitude, b.NorthLatitude, b.EastLongitude);
+        return string.Empty;
+    }
+
+    private static string SeverityMarkup(ValidationSeverity severity) => severity switch
+    {
+        ValidationSeverity.Error => "[red]error[/]",
+        ValidationSeverity.Warning => "[yellow]warning[/]",
+        _ => "[blue]info[/]",
+    };
+
+    private static void ReportException(
+        string label, Exception ex, OutputFormat format, bool debug, bool warning = false)
+    {
+        if (format == OutputFormat.Json)
+        {
+            EmitJsonError(label.ToLowerInvariant().Replace(' ', '-'), ex.Message);
+            return;
+        }
+
+        var colour = warning ? "yellow" : "red";
+        AnsiConsole.MarkupLineInterpolated($"[{colour}]{label}:[/] {ex.Message}");
+        if (debug)
+            AnsiConsole.WriteException(ex);
+    }
+
+    private static void EmitJsonError(string error, string message) =>
+        Console.Out.WriteLine(JsonSerializer.Serialize(new ErrorPayload(error, message), Json.ErrorPayload));
+
+    // --format json output: indented, camelCase, nulls omitted, written through
+    // source-generated metadata (issue #764).
+    private static readonly PayloadJsonContext Json = new(new JsonSerializerOptions
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+    });
+
+    private sealed record VerifyPayload(
+        string Kind,
+        string Product,
+        int FileCount,
+        bool IntegrityVerified,
+        bool HasChecksumMismatches,
+        bool HasMissingFiles,
+        bool IsUnsigned,
+        bool Valid,
+        int FailedCount,
+        IReadOnlyList<VerifyFilePayload> Files);
+
+    private sealed record VerifyFilePayload(
+        string FileName,
+        string SignatureOutcome,
+        string ChecksumOutcome,
+        string? ComputedSha256,
+        string? Detail,
+        bool Failed,
+        IReadOnlyList<VerifySignaturePayload> Signatures);
+
+    private sealed record VerifySignaturePayload(string Id, string Kind, string Outcome, string FailureReason, string? Detail);
+
+    private sealed record ValidatePayload(
+        string Specification,
+        string Edition,
+        bool RulesAvailable,
+        int RulesEvaluated,
+        int RulesWithFindings,
+        bool Valid,
+        string[]? SuppressedPatterns,
+        int SuppressedCount,
+        IReadOnlyList<FindingPayload> Findings);
+
+    private sealed record FindingPayload(
+        string RuleId,
+        string Severity,
+        string Message,
+        string? DatasetId,
+        string? RelatedFeatureId,
+        PointPayload? Point,
+        BoxPayload? BoundingBox);
+
+    private sealed record PointPayload(double Latitude, double Longitude);
+
+    private sealed record BoxPayload(double SouthLatitude, double WestLongitude, double NorthLatitude, double EastLongitude);
+
+    private sealed record ErrorPayload(string Error, string Message);
+
+    [System.Text.Json.Serialization.JsonSerializable(typeof(VerifyPayload))]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(ValidatePayload))]
+    [System.Text.Json.Serialization.JsonSerializable(typeof(ErrorPayload))]
+    private sealed partial class PayloadJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
+
+    private enum OutputFormat
+    {
+        Text,
+        Json,
+    }
+
+    private static bool TryParseFormat(string value, out OutputFormat format)
+    {
+        switch (value.Trim().ToLowerInvariant())
+        {
+            case "text": format = OutputFormat.Text; return true;
+            case "json": format = OutputFormat.Json; return true;
+            default: format = OutputFormat.Text; return false;
+        }
+    }
+
+    /// <summary>
+    /// Parses the <c>--suppress</c> value (a comma-separated list of rule ids
+    /// or glob patterns) into its constituent patterns. Empty tokens are
+    /// dropped; returns <see langword="false"/> when no non-empty pattern
+    /// remains so the command can reject a value such as <c>","</c>.
+    /// </summary>
+    internal static bool TryParseSuppressPatterns(string value, out string[] patterns)
+    {
+        patterns = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return patterns.Length > 0;
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when <paramref name="ruleId"/> matches any
+    /// of the supplied <paramref name="patterns"/> (see <see cref="RuleIdMatches"/>).
+    /// </summary>
+    internal static bool IsSuppressed(string ruleId, IReadOnlyList<string> patterns)
+    {
+        for (int i = 0; i < patterns.Count; i++)
+        {
+            if (RuleIdMatches(ruleId, patterns[i]))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Case-insensitive glob match of a rule id against a single pattern. The
+    /// only wildcard is <c>*</c>, which matches any run of characters
+    /// (including none); every other character must match literally. A pattern
+    /// with no wildcard therefore behaves as an exact, case-insensitive rule-id
+    /// match (e.g. <c>S101-R-1.2</c>), while <c>S101-*</c> or
+    /// <c>*-PROJ-UNSUPPORTED</c> match a whole class of rules.
+    /// </summary>
+    internal static bool RuleIdMatches(string ruleId, string pattern)
+    {
+        var regex = "^" + Regex.Escape(pattern).Replace("\\*", ".*") + "$";
+        return Regex.IsMatch(ruleId, regex, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+}

@@ -1,0 +1,1356 @@
+using System.Collections.Concurrent;
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Rendering.Scene;
+using SkiaSharp;
+using Svg.Skia;
+
+namespace EncDotNet.S100.Renderers.Skia.Scene;
+
+/// <summary>
+/// A headless, direct-SkiaSharp renderer for the S-100 Part 9 vector
+/// intermediate representation produced by <see cref="VectorSceneBuilder"/>.
+/// Rasterises a <see cref="VectorScene"/> against a <see cref="Viewport"/> into
+/// a standalone <see cref="SKBitmap"/> — the vector analogue of
+/// <see cref="SkiaCoverageRenderer"/>, suitable for a tile-serving web API with
+/// no Mapsui / GUI dependency.
+/// </summary>
+/// <remarks>
+/// <para>The renderer supplies the second half of the S-100 projection that the
+/// Mapsui backend delegates to its navigator: it projects the
+/// <see cref="Viewport"/> geographic bounds to EPSG:3857 and maps that
+/// rectangle linearly to pixels. Geometry is transformed world→screen, but
+/// stroke widths, symbol sizes, and text sizes are realised in display pixels
+/// per the IR unit contract (see <see cref="PaintOp"/>).</para>
+/// <para><b>Scope.</b> This renders point, line, solid-area, tiled pattern-area,
+/// and text ops. The renderer itself does not split geometry at the
+/// antimeridian or the Web-Mercator pole limits: <see cref="VectorSceneBuilder"/>
+/// already keeps rings within their own longitude frame, closes polar rings
+/// along the pole and clips to the latitude limit (issue #760).</para>
+/// </remarks>
+public sealed class SkiaDisplayListRenderer : IVectorSceneRenderer<SKCanvas>
+{
+    /// <summary>Background colour cleared before painting. Defaults to transparent.</summary>
+    public RgbaColor Background { get; set; } = RgbaColor.Transparent;
+
+    /// <summary>
+    /// Whether to apply S-100 Part 9 §11.1 scale-visibility culling using the
+    /// viewport's <see cref="Viewport.ScaleDenominator"/>. Defaults to
+    /// <see langword="true"/> (an explicit viewport carries a meaningful scale).
+    /// Auto-fit / "render the whole dataset" callers set this to
+    /// <see langword="false"/>, because the denominator synthesised from a
+    /// fitted extent is not the dataset's compilation scale and would otherwise
+    /// wrongly cull scale-ranged detail.
+    /// </summary>
+    public bool HonorScaleVisibility { get; set; } = true;
+
+    /// <summary>
+    /// Whether to apply the antimeridian seam-wrap in <see cref="WorldToScreen"/>
+    /// (wrapping each op's world-X into the viewport's shifted longitude window
+    /// when <c>MaxLongitude &gt; 180</c> or <c>MinLongitude &lt; −180</c>).
+    /// Defaults to <see langword="true"/> so the headless single-viewport
+    /// auto-fit path (issue #413) can gather geometry across the ±180° seam.
+    /// <para>
+    /// The <b>tiled</b> subsystem sets this to <see langword="false"/>: it
+    /// rasterises each tile from a narrow per-tile viewport over geometry that is
+    /// already positioned in a <i>continuous</i> EPSG:3857 X frame (longitudes
+    /// may exceed +180° without wrapping). Under a per-tile window whose bounds
+    /// both lie east of +180°, the seam-wrap would teleport the far vertices of
+    /// large polygons that extend west of the tile back across the world,
+    /// smearing them across the tile. Disabling the wrap keeps continuous
+    /// geometry continuous; off-tile vertices simply project outside the tile
+    /// and are clipped.
+    /// </para>
+    /// </summary>
+    public bool EnableSeamWrap { get; set; } = true;
+
+    /// <summary>
+    /// Whether point symbols and text placed in the visible parts of a surface
+    /// (S-100 Part 9 <c>AreaPlacement:VisibleParts</c>, see
+    /// <see cref="PlacementArea"/>) move into the part of the surface in the
+    /// viewport when their anchor is outside it. Defaults to
+    /// <see langword="true"/>, for a viewport that is the whole display. A
+    /// caller that draws a display in pieces, such as tiles, sets it to
+    /// <see langword="false"/>, so each piece doesn't place its own copy.
+    /// </summary>
+    public bool KeepAreaSymbolsInView { get; set; } = true;
+
+    /// <summary>
+    /// Process-wide cache of parsed symbol pictures keyed by the resolved SVG
+    /// content (<see cref="ResolvedSymbol.ProcessedSvg"/>). Parsing an SVG into
+    /// an <see cref="SKPicture"/> via <see cref="SKSvg.CreateFromSvg(string)"/>
+    /// is expensive, and the tiled subsystem's live overlay redraws every point
+    /// symbol and sounding glyph on <i>every</i> frame (see
+    /// <c>S100VectorTileRenderer.DrawOverlay</c>). The set of distinct symbol
+    /// SVGs is small and bounded (symbol catalogue × palette), so caching the
+    /// parsed picture across frames and tiles eliminates per-op re-parsing.
+    /// </summary>
+    /// <remarks>
+    /// The cached value is the owning <see cref="SKSvg"/>, not the bare
+    /// <see cref="SKPicture"/>: an <see cref="SKSvg"/> owns and disposes its
+    /// <see cref="SKSvg.Picture"/>, so keeping a strong reference to the
+    /// <see cref="SKSvg"/> keeps the picture's native resources alive (a GC'd
+    /// <see cref="SKSvg"/> would finalise the picture out from under us). Entries
+    /// are never evicted; the natural bound on distinct symbols keeps the cache
+    /// small. <see cref="SKPicture"/> playback (<c>DrawPicture</c>) is
+    /// thread-safe, and the cache is a <see cref="ConcurrentDictionary{TKey,TValue}"/>
+    /// because tiles rasterise on background threads while the overlay draws on
+    /// the render thread.
+    /// </remarks>
+    private static readonly ConcurrentDictionary<string, SKSvg?> SymbolPictureCache =
+        new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Process-wide cache of rasterised symbol <i>sprites</i> for the live
+    /// overlay's symbol atlas (#332 lever c2), keyed by
+    /// (processed SVG, quantised symbol scale, quantised device scale). Replaying
+    /// a vector <see cref="SKPicture"/> per point op per frame is the overlay hot
+    /// path's steepest cost on dense "All" cells (~4 µs/op); blitting a
+    /// once-rasterised <see cref="SKImage"/> instead removes the per-frame replay.
+    /// <para>
+    /// The sprite is rasterised at <c>symbolScale × deviceScale</c> device pixels
+    /// so the 1:1 blit through the canvas's HiDPI matrix is crisp; a different
+    /// device scale (e.g. moving the window to another monitor) keys a fresh
+    /// sprite. <see cref="SKImage"/> is immutable and its CPU pixels are safe to
+    /// share across threads, so — like <see cref="SymbolPictureCache"/> — this
+    /// is a never-evicted <see cref="ConcurrentDictionary{TKey,TValue}"/> bounded
+    /// by the small number of distinct symbols in a cell. A <see langword="null"/>
+    /// value caches "do not atlas this symbol" (unparseable, or larger than
+    /// <see cref="MaxSpriteDimensionPx"/>) so the miss is not re-probed each frame.
+    /// </para>
+    /// </summary>
+    private static readonly ConcurrentDictionary<(string Svg, int ScaleMilli, int DeviceMilli), SymbolSprite?> SymbolSpriteCache = new();
+
+    /// <summary>
+    /// Sampling for the atlas blit. The sprite is rasterised at device resolution
+    /// and drawn 1:1 in device space, so linear sampling only matters for the
+    /// fractional sub-pixel anchor placement; it matches the antialiased vector
+    /// edge to within a pixel.
+    /// </summary>
+    private static readonly SKSamplingOptions SpriteSampling = new(SKFilterMode.Linear, SKMipmapMode.None);
+
+    /// <summary>
+    /// Maximum width/height (device px) of a cached symbol sprite. Symbols larger
+    /// than this fall back to the vector <c>DrawPicture</c> path rather than
+    /// rasterising a large image; normal point symbols are a few tens of pixels.
+    /// </summary>
+    private const int MaxSpriteDimensionPx = 1024;
+
+    /// <summary>A once-rasterised symbol sprite plus the picture bounds it covers.</summary>
+    private sealed class SymbolSprite
+    {
+        /// <summary>The rasterised symbol, in device pixels at the keyed scale.</summary>
+        public required SKImage Image { get; init; }
+
+        /// <summary>The symbol picture's cull rect (display px), for pivot/placement math.</summary>
+        public required SKRect Bounds { get; init; }
+    }
+
+    /// <summary>
+    /// Process-wide cache of "does this typeface contain every glyph in this
+    /// string" results, keyed by (face, text). The glyph-coverage probe
+    /// (<see cref="SKTypeface.ContainsGlyphs(string)"/>) allocates a
+    /// <c>ushort[text.Length]</c> and runs a full codepoint→glyph mapping pass,
+    /// so calling it per text op per frame would heap-allocate and double the
+    /// glyph mapping on the live overlay's hot path (the dominant all-ASCII
+    /// soundings/labels case). Caching by text makes stable frames re-scan
+    /// nothing. Entries are never evicted; the natural bound on distinct label
+    /// strings (feature names and sounding values in a cell) keeps it small. A
+    /// <see cref="ConcurrentDictionary{TKey,TValue}"/> because tiles and the
+    /// overlay may probe coverage from different threads.
+    /// </summary>
+    private static readonly ConcurrentDictionary<(SKTypeface Face, string Text), bool> PrimaryCoverageCache = new();
+
+    /// <summary>
+    /// Process-wide cache of fallback typefaces resolved via
+    /// <see cref="SKFontManager.MatchCharacter(int)"/>, keyed by Unicode
+    /// codepoint. <c>MatchCharacter</c> enumerates the platform font set and is
+    /// expensive, so this must outlive any single frame: held for the app
+    /// lifetime (entries never evicted, faces never disposed), mirroring
+    /// <see cref="SymbolPictureCache"/>. A <see langword="null"/> value caches
+    /// "no platform fallback exists" so the miss is not re-probed every frame.
+    /// </summary>
+    private static readonly ConcurrentDictionary<int, SKTypeface?> FallbackFaceCache = new();
+
+    /// <summary>
+    /// Process-wide cache of fallback <see cref="SKFont"/>s keyed by their
+    /// typeface and pixel size, so a non-ASCII label does not allocate and
+    /// destroy a native font handle every frame. App-lifetime, like
+    /// <see cref="FallbackFaceCache"/>.
+    /// </summary>
+    private static readonly ConcurrentDictionary<(SKTypeface Face, float SizePx), SKFont> FallbackFontCache = new();
+
+    /// <summary>
+    /// Returns whether <paramref name="face"/> can render every glyph in
+    /// <paramref name="text"/>, caching the result per (face, text) so the
+    /// allocating full-string probe runs at most once per distinct string. See
+    /// <see cref="PrimaryCoverageCache"/>.
+    /// </summary>
+    private static bool PrimaryRendersAll(SKTypeface face, string text) =>
+        PrimaryCoverageCache.GetOrAdd((face, text), static key => key.Face.ContainsGlyphs(key.Text));
+
+    /// <summary>
+    /// Half-extent, in display pixels, by which the point/text cull rectangle is
+    /// grown beyond the viewport so a symbol or label whose <i>anchor</i> sits
+    /// just off-screen but whose body is partly visible is still drawn. Sized to
+    /// comfortably exceed the largest compound symbol / point-anchored label.
+    /// Exposed so callers that supply an explicit cull rectangle (e.g. the live
+    /// overlay under a rotated viewport) inflate by the same margin.
+    /// </summary>
+    public const float PointCullMarginPx = 256f;
+
+    /// <summary>
+    /// Returns the parsed picture for <paramref name="processedSvg"/>, parsing
+    /// and caching it on first use. Returns <see langword="null"/> when the SVG
+    /// cannot be parsed.
+    /// </summary>
+    internal static SKPicture? GetSymbolPicture(string processedSvg)
+    {
+        var svg = SymbolPictureCache.GetOrAdd(processedSvg, static content =>
+        {
+            try
+            {
+                return SKSvg.CreateFromSvg(content);
+            }
+            catch
+            {
+                return null;
+            }
+        });
+        return svg?.Picture;
+    }
+
+    /// <summary>
+    /// Renders the scene at the requested viewport, returning a new bitmap of
+    /// <see cref="Viewport.WidthPixels"/> × <see cref="Viewport.HeightPixels"/>.
+    /// The caller owns the returned bitmap.
+    /// </summary>
+    public SKBitmap Render(VectorScene scene, Viewport viewport)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(viewport);
+
+        var bitmap = new SKBitmap(
+            viewport.WidthPixels, viewport.HeightPixels, SKColorType.Rgba8888, SKAlphaType.Premul);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(Background.ToSkia());
+
+        RenderOnto(canvas, scene, viewport);
+        canvas.Flush();
+        return bitmap;
+    }
+
+    /// <summary>
+    /// Draws <paramref name="scene"/> onto an existing <paramref name="canvas"/>
+    /// using <paramref name="viewport"/>'s world→screen projection, without
+    /// allocating or clearing a backing bitmap and without flushing the canvas.
+    /// This lets a caller composite a display list directly onto a foreground
+    /// surface — e.g. the tiled subsystem's live screen-space symbol/text
+    /// overlay, which must be drawn at constant on-screen size (the tiled base
+    /// plane is rasterised at a discrete band resolution and then scaled, so any
+    /// op baked into it scales with zoom; ops drawn here against the live
+    /// viewport do not).
+    /// </summary>
+    /// <param name="canvas">The destination canvas. Not cleared or flushed.</param>
+    /// <param name="scene">The display list to draw.</param>
+    /// <param name="viewport">The live viewport whose projection places the ops.</param>
+    public void RenderOnto(SKCanvas canvas, VectorScene scene, Viewport viewport)
+        => RenderOnto(canvas, scene, viewport, pointCullBounds: null);
+
+    /// <summary>
+    /// Draws <paramref name="scene"/> onto <paramref name="surface"/> for the
+    /// pluggable <see cref="IVectorSceneRenderer{TSurface}"/> seam. Delegates to
+    /// <see cref="RenderOnto(SKCanvas, VectorScene, Viewport)"/>; the canvas is
+    /// neither cleared nor flushed.
+    /// </summary>
+    /// <param name="surface">The destination canvas.</param>
+    /// <param name="scene">The display list to draw, in Part 9 draw order.</param>
+    /// <param name="viewport">The viewport whose projection places the ops.</param>
+    void IVectorSceneRenderer<SKCanvas>.Render(SKCanvas surface, VectorScene scene, Viewport viewport)
+        => RenderOnto(surface, scene, viewport);
+
+    /// <summary>
+    /// As <see cref="RenderOnto(SKCanvas, VectorScene, Viewport)"/>, but culls
+    /// point and point-anchored text ops whose projected anchor falls outside
+    /// <paramref name="pointCullBounds"/> (in viewport pixel space) before any
+    /// per-op work — avoiding the cost of parsing a symbol SVG or measuring a
+    /// label that cannot be visible. When <paramref name="pointCullBounds"/> is
+    /// <see langword="null"/>, the cull rectangle is the viewport inflated by
+    /// <see cref="PointCullMarginPx"/>. A caller that rotates the canvas (the
+    /// live overlay under a rotated viewport) must pass an explicit rectangle
+    /// expanded to the rotated viewport's bounding box, since this method draws
+    /// in pre-rotation pixel space.
+    /// </summary>
+    /// <param name="canvas">The destination canvas. Not cleared or flushed.</param>
+    /// <param name="scene">The display list to draw.</param>
+    /// <param name="viewport">The live viewport whose projection places the ops.</param>
+    /// <param name="pointCullBounds">
+    /// Pixel-space rectangle outside which point/text ops are skipped, or
+    /// <see langword="null"/> to derive it from the viewport plus the symbol
+    /// margin.
+    /// </param>
+    public void RenderOnto(SKCanvas canvas, VectorScene scene, Viewport viewport, SKRect? pointCullBounds)
+        => RenderOnto(canvas, scene, viewport, new OverlayDrawOptions { PointCullBounds = pointCullBounds });
+
+    /// <summary>
+    /// As <see cref="RenderOnto(SKCanvas, VectorScene, Viewport, SKRect?)"/>, but
+    /// driven by <paramref name="options"/> so the tiled subsystem's live label
+    /// plane can: suppress decluttered text
+    /// (<see cref="OverlayDrawOptions.SuppressedText"/>), keep labels and
+    /// screen-relative symbols <b>upright</b> under a rotated viewport by
+    /// rotating each point and text <i>anchor</i> about the screen centre while
+    /// drawing glyphs unrotated
+    /// (<see cref="OverlayDrawOptions.AnchorRotationDegrees"/>), and draw the
+    /// point and text passes separately
+    /// (<see cref="OverlayDrawOptions.DrawPoints"/> /
+    /// <see cref="OverlayDrawOptions.DrawText"/>). The defaults reproduce the
+    /// plain overlay behaviour (draw everything, no suppression, no rotation).
+    /// </summary>
+    /// <param name="canvas">The destination canvas. Not cleared or flushed.</param>
+    /// <param name="scene">The display list to draw.</param>
+    /// <param name="viewport">The live viewport whose projection places the ops.</param>
+    /// <param name="options">Overlay draw controls; see <see cref="OverlayDrawOptions"/>.</param>
+    public void RenderOnto(SKCanvas canvas, VectorScene scene, Viewport viewport, OverlayDrawOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ArgumentNullException.ThrowIfNull(scene);
+        ArgumentNullException.ThrowIfNull(viewport);
+        ArgumentNullException.ThrowIfNull(options);
+
+        var transform = WorldToScreen.Create(viewport, EnableSeamWrap);
+        double denom = viewport.ScaleDenominator;
+        ViewExtent? view = KeepAreaSymbolsInView ? ViewExtent.Of(viewport) : null;
+
+        var cullBounds = options.PointCullBounds ?? new SKRect(
+            -PointCullMarginPx,
+            -PointCullMarginPx,
+            viewport.WidthPixels + PointCullMarginPx,
+            viewport.HeightPixels + PointCullMarginPx);
+
+        var suppressed = options.SuppressedText;
+        double anchorRotationDeg = options.AnchorRotationDegrees;
+        float centerX = options.ScreenCenterX;
+        float centerY = options.ScreenCenterY;
+
+        // Per-render cache of decoded pattern tiles, keyed by pattern
+        // reference. Real S-101 cells can have many polygons sharing a single
+        // pattern (e.g. quality-of-bathymetry overlays) so decoding the PNG
+        // once and reusing the SKImage across ops is a meaningful saving.
+        Dictionary<string, SKImage?>? patternImages = null;
+
+        // Per-render reusable text resources. The live overlay redraws every
+        // sounding/label per frame; allocating an SKFont + SKPaint per text op
+        // (S-100 "All" scenes have thousands) churns native handles. A single
+        // scratch reuses one paint and caches fonts by pixel size (soundings
+        // share a size), disposed once when the render completes.
+        TextDrawScratch? textScratch = null;
+
+        // Per-render reusable line resources; see LineDrawScratch. Lazily
+        // created because text/point-only overlay passes draw no lines.
+        LineDrawScratch? lineScratch = null;
+
+        try
+        {
+            foreach (var op in scene.Ops)
+            {
+                if (HonorScaleVisibility && !ScaleVisibility.IsVisibleAtScale(op, denom))
+                    continue;
+
+                switch (op)
+                {
+                    case AreaPaintOp area when options.DrawAreasAndLines:
+                        DrawArea(canvas, area, transform);
+                        break;
+                    case PatternAreaPaintOp pattern when options.DrawAreasAndLines:
+                        patternImages ??= new Dictionary<string, SKImage?>(StringComparer.Ordinal);
+                        DrawPatternArea(canvas, pattern, transform, patternImages);
+                        break;
+                    case LinePaintOp line when options.DrawAreasAndLines:
+                        lineScratch ??= new LineDrawScratch();
+                        DrawLine(canvas, line, transform, cullBounds, lineScratch);
+                        break;
+                    case PointPaintOp point when options.DrawPoints:
+                        DrawPoint(canvas, point, view?.Anchor(point) ?? point.World, transform, cullBounds,
+                            options.UseSymbolAtlas, options.DeviceScale,
+                            anchorRotationDeg, centerX, centerY);
+                        break;
+                    case TextPaintOp text when options.DrawText:
+                        if (suppressed is not null && suppressed.Contains(text))
+                            break;
+                        textScratch ??= new TextDrawScratch();
+                        DrawText(canvas, text, view?.Anchor(text) ?? text.World, transform, cullBounds, textScratch,
+                            anchorRotationDeg, centerX, centerY);
+                        break;
+                }
+            }
+        }
+        finally
+        {
+            if (patternImages is not null)
+            {
+                foreach (var img in patternImages.Values)
+                    img?.Dispose();
+            }
+            textScratch?.Dispose();
+            lineScratch?.Dispose();
+        }
+    }
+
+    private static void DrawArea(SKCanvas canvas, AreaPaintOp op, WorldToScreen t)
+    {
+        using var path = new SKPath { FillType = SKPathFillType.EvenOdd };
+        AddRing(path, op.WorldShell, t);
+        foreach (var hole in op.WorldHoles)
+            AddRing(path, hole, t);
+
+        using var fill = new SKPaint
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill,
+            Color = op.Fill.ToSkia(),
+        };
+        canvas.DrawPath(path, fill);
+
+        if (op.OutlineWidthPx > 0 && op.OutlineColor.A > 0)
+        {
+            using var outline = new SKPaint
+            {
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                Color = op.OutlineColor.ToSkia(),
+                StrokeWidth = (float)op.OutlineWidthPx,
+            };
+            canvas.DrawPath(path, outline);
+        }
+    }
+
+    /// <summary>
+    /// Fills the polygon with the op's tiled pattern. The repeat anchor is the
+    /// world (0, 0) point projected to screen space, matching the Mapsui
+    /// <c>AnchoredPatternFillStyle</c> contract so the pattern grid is global
+    /// (overlapping polygons sharing a pattern align seamlessly across their
+    /// boundary, avoiding moiré).
+    /// </summary>
+    private static void DrawPatternArea(
+        SKCanvas canvas,
+        PatternAreaPaintOp op,
+        WorldToScreen t,
+        Dictionary<string, SKImage?> imageCache)
+    {
+        if (op.WorldShell.Count < 3)
+            return;
+
+        if (!imageCache.TryGetValue(op.PatternReference, out var tileImage))
+        {
+            tileImage = SKImage.FromEncodedData(op.TilePng);
+            imageCache[op.PatternReference] = tileImage;
+        }
+        if (tileImage is null)
+            return;
+
+        using var path = new SKPath { FillType = SKPathFillType.EvenOdd };
+        AddRing(path, op.WorldShell, t);
+        foreach (var hole in op.WorldHoles)
+            AddRing(path, hole, t);
+
+        // Tiles are rasterized supersampled (PatternTileRenderPixelsPerMm); scale
+        // the shader back down by PatternTileShaderScale so they draw at their
+        // intended on-screen size. Downsampling a high-resolution tile keeps the
+        // pattern crisp instead of blurring an upsampled low-resolution one.
+        const float tileScale = (float)SkiaSvgRasterizer.PatternTileShaderScale;
+        var (anchorX, anchorY) = t.Project((0, 0));
+        var localMatrix = SKMatrix.Concat(
+            SKMatrix.CreateTranslation(anchorX, anchorY),
+            SKMatrix.CreateScale(tileScale, tileScale));
+        var sampling = new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear);
+        using var shader = tileImage.ToShader(
+            SKShaderTileMode.Repeat, SKShaderTileMode.Repeat, sampling, localMatrix);
+
+        using var paint = new SKPaint
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill,
+            Shader = shader,
+        };
+
+        canvas.Save();
+        canvas.ClipPath(path, antialias: true);
+        canvas.DrawRect(path.Bounds, paint);
+        canvas.Restore();
+    }
+
+    private static void DrawLine(
+        SKCanvas canvas, LinePaintOp op, WorldToScreen t, SKRect cullBounds, LineDrawScratch scratch)
+    {
+        int count = op.World.Count;
+        if (count < 2)
+            return;
+
+        // Project every vertex once, into the scratch buffer, tracking the
+        // polyline's screen-space bounding box so an off-view line can be culled
+        // before the (native) DrawPath — matching DrawPoint's cull discipline.
+        var points = scratch.RentPoints(count);
+        float minX = float.MaxValue, minY = float.MaxValue;
+        float maxX = float.MinValue, maxY = float.MinValue;
+        for (int i = 0; i < count; i++)
+        {
+            var (px, py) = t.Project(op.World[i]);
+            points[i] = new SKPoint(px, py);
+            if (px < minX) minX = px;
+            if (px > maxX) maxX = px;
+            if (py < minY) minY = py;
+            if (py > maxY) maxY = py;
+        }
+
+        float width = (float)op.WidthPx;
+
+        // Pad the bbox by half the stroke width so a wide line whose centreline
+        // sits just outside the cull rectangle (but whose stroke would still
+        // paint inside it) is not wrongly culled. Round joins/caps stay within
+        // half the stroke width of the geometry. Symbols along the line reach
+        // further, by up to their own size.
+        float pad = op.Symbols.Count > 0 ? Math.Max(width * 0.5f, LineSymbolMarginPx) : width * 0.5f;
+        if (maxX + pad < cullBounds.Left || minX - pad > cullBounds.Right ||
+            maxY + pad < cullBounds.Top || minY - pad > cullBounds.Bottom)
+        {
+            return;
+        }
+
+        if (!op.Stroke)
+        {
+            DrawLineSymbols(canvas, op, points.AsSpan(0, count), cullBounds);
+            return;
+        }
+
+        var paint = scratch.Paint;
+        paint.Color = op.Color.ToSkia();
+        paint.StrokeWidth = width;
+
+        float[]? dashPattern = null;
+        if (op.DashArrayPx is { Count: > 0 } dashArray)
+        {
+            dashPattern = new float[dashArray.Count];
+            for (int i = 0; i < dashPattern.Length; i++)
+                dashPattern[i] = dashArray[i];
+        }
+        else if (op.DefaultDash)
+        {
+            float d = (float)Math.Max(op.WidthPx * 3.0, 3.0);
+            dashPattern = [d, d];
+        }
+
+        var path = scratch.Path;
+
+        // A line that stays near the cull rectangle is stroked whole. One that
+        // reaches far past it (a long route leg when zoomed in) is clipped to
+        // the rectangle first: a dash effect walks the whole path, so stroking
+        // it unclipped costs its full projected length, nearly all off screen.
+        // The clip margin keeps caps and joins at the cut off screen.
+        float margin = width + LineClipMarginPx;
+        var clip = new SKRect(
+            cullBounds.Left - margin, cullBounds.Top - margin,
+            cullBounds.Right + margin, cullBounds.Bottom + margin);
+        if (minX >= clip.Left && maxX <= clip.Right && minY >= clip.Top && maxY <= clip.Bottom)
+        {
+            path.Rewind();
+            path.AddPoly(points.AsSpan(0, count), close: false);
+            paint.PathEffect = dashPattern is null ? null : scratch.DashFor(dashPattern, (float)op.DashPhasePx);
+            canvas.DrawPath(path, paint);
+        }
+        else
+        {
+            DrawClippedLine(canvas, points.AsSpan(0, count), clip, dashPattern, paint, scratch, op.DashPhasePx);
+        }
+
+        // Symbols sit on top of the stroke.
+        DrawLineSymbols(canvas, op, points.AsSpan(0, count), cullBounds);
+    }
+
+    /// <summary>
+    /// How far, in pixels, a line's symbols may reach past its centreline:
+    /// the cull pad for lines that carry them.
+    /// </summary>
+    private const float LineSymbolMarginPx = 24f;
+
+    /// <summary>
+    /// Draws the symbols a line style repeats along the projected polyline
+    /// <paramref name="points"/>: each at its position within every interval,
+    /// pivot on the line and rotated to the segment's direction (S-100 Part 9).
+    /// Only segments near <paramref name="cullBounds"/> are walked, so a long
+    /// line zoomed in costs only its visible part.
+    /// </summary>
+    private static void DrawLineSymbols(SKCanvas canvas, LinePaintOp op, ReadOnlySpan<SKPoint> points, SKRect cullBounds)
+    {
+        var interval = op.SymbolIntervalPx;
+        if (interval <= 0.5)
+            return;
+
+        var near = new SKRect(
+            cullBounds.Left - LineSymbolMarginPx, cullBounds.Top - LineSymbolMarginPx,
+            cullBounds.Right + LineSymbolMarginPx, cullBounds.Bottom + LineSymbolMarginPx);
+
+        double along = 0;
+        for (int i = 0; i + 1 < points.Length; i++)
+        {
+            var a = points[i];
+            var b = points[i + 1];
+            double dx = b.X - a.X;
+            double dy = b.Y - a.Y;
+            double length = Math.Sqrt(dx * dx + dy * dy);
+            if (length <= 0)
+                continue;
+
+            var segmentEnd = along + length;
+            if (Math.Max(a.X, b.X) >= near.Left && Math.Min(a.X, b.X) <= near.Right
+                && Math.Max(a.Y, b.Y) >= near.Top && Math.Min(a.Y, b.Y) <= near.Bottom)
+            {
+                float angle = (float)(Math.Atan2(dy, dx) * 180.0 / Math.PI);
+                foreach (var placed in op.Symbols)
+                {
+                    // Every k with along ≤ k·interval + position < segmentEnd.
+                    var first = Math.Ceiling((along - placed.PositionPx) / interval);
+                    for (var k = Math.Max(first, 0); k * interval + placed.PositionPx < segmentEnd; k++)
+                    {
+                        var t = (k * interval + placed.PositionPx - along) / length;
+                        float x = (float)(a.X + dx * t);
+                        float y = (float)(a.Y + dy * t);
+                        if (near.Contains(x, y))
+                            DrawLineSymbol(canvas, placed.Symbol, x, y, angle + (float)placed.RotationDegrees);
+                    }
+                }
+            }
+
+            along = segmentEnd;
+        }
+    }
+
+    private static void DrawLineSymbol(SKCanvas canvas, ResolvedSymbol symbol, float x, float y, float angle)
+    {
+        var picture = GetSymbolPicture(symbol.ProcessedSvg);
+        if (picture is null)
+            return;
+
+        // The same pivot placement as a point symbol (see DrawPoint), rotated
+        // to the line.
+        var bounds = picture.CullRect;
+        float scale = (float)symbol.Scale;
+        float pivotPicX = bounds.Left + bounds.Width / 2f - (float)(symbol.PivotRelativeX * bounds.Width);
+        float pivotPicY = bounds.Top + bounds.Height / 2f - (float)(symbol.PivotRelativeY * bounds.Height);
+
+        canvas.Save();
+        canvas.Translate(x, y);
+        canvas.RotateDegrees(angle);
+        canvas.Scale(scale);
+        canvas.Translate(-pivotPicX, -pivotPicY);
+        canvas.DrawPicture(picture);
+        canvas.Restore();
+    }
+
+    /// <summary>
+    /// Margin, in pixels beyond the stroke width, around the cull rectangle a
+    /// long line is clipped to, so its caps and joins at the cut fall off screen.
+    /// </summary>
+    private const float LineClipMarginPx = 8f;
+
+    /// <summary>
+    /// Strokes the parts of the polyline <paramref name="points"/> inside
+    /// <paramref name="clip"/>. Each run starts its dash pattern at its distance
+    /// along the whole line, so dashes sit where the unclipped line puts them
+    /// and stay put as the view pans.
+    /// </summary>
+    private static void DrawClippedLine(
+        SKCanvas canvas, ReadOnlySpan<SKPoint> points, SKRect clip, float[]? dashPattern,
+        SKPaint paint, LineDrawScratch scratch, double dashPhase = 0)
+    {
+        double patternLength = 0;
+        if (dashPattern is not null)
+        {
+            foreach (var interval in dashPattern)
+                patternLength += interval;
+        }
+
+        var path = scratch.Path;
+        path.Rewind();
+        var runOpen = false;
+        double runStart = 0;
+        double along = dashPhase;
+
+        for (int i = 0; i + 1 < points.Length; i++)
+        {
+            var a = points[i];
+            var b = points[i + 1];
+            double dx = b.X - a.X;
+            double dy = b.Y - a.Y;
+            double length = Math.Sqrt(dx * dx + dy * dy);
+
+            if (ClipSegment(a, dx, dy, clip, out var t0, out var t1))
+            {
+                if (!runOpen || t0 > 0)
+                {
+                    // A dashed run is stroked alone, with its own phase; a
+                    // solid line collects every run into one path.
+                    if (runOpen && dashPattern is not null)
+                        StrokeRun(canvas, path, dashPattern, patternLength, runStart, paint, scratch);
+
+                    path.MoveTo((float)(a.X + dx * t0), (float)(a.Y + dy * t0));
+                    runStart = along + length * t0;
+                    runOpen = true;
+                }
+
+                path.LineTo((float)(a.X + dx * t1), (float)(a.Y + dy * t1));
+                if (t1 < 1)
+                {
+                    if (dashPattern is not null)
+                        StrokeRun(canvas, path, dashPattern, patternLength, runStart, paint, scratch);
+                    runOpen = false;
+                }
+            }
+            else if (runOpen)
+            {
+                if (dashPattern is not null)
+                    StrokeRun(canvas, path, dashPattern, patternLength, runStart, paint, scratch);
+                runOpen = false;
+            }
+
+            along += length;
+        }
+
+        if (dashPattern is null)
+        {
+            paint.PathEffect = null;
+            if (!path.IsEmpty)
+                canvas.DrawPath(path, paint);
+        }
+        else if (runOpen)
+        {
+            StrokeRun(canvas, path, dashPattern, patternLength, runStart, paint, scratch);
+        }
+    }
+
+    /// <summary>Strokes the dashed run in <paramref name="path"/>, phased to <paramref name="runStart"/>, then empties the path.</summary>
+    private static void StrokeRun(
+        SKCanvas canvas, SKPath path, float[] dashPattern, double patternLength, double runStart,
+        SKPaint paint, LineDrawScratch scratch)
+    {
+        var phase = patternLength > 0 ? (float)(runStart % patternLength) : 0f;
+        paint.PathEffect = scratch.DashFor(dashPattern, phase);
+        canvas.DrawPath(path, paint);
+        path.Rewind();
+    }
+
+    /// <summary>
+    /// Clips the segment from <paramref name="start"/> along
+    /// (<paramref name="dx"/>, <paramref name="dy"/>) to <paramref name="clip"/>
+    /// (Liang–Barsky), returning the kept parameter range [<paramref name="t0"/>,
+    /// <paramref name="t1"/>] within 0…1, or <see langword="false"/> when no part
+    /// lies inside.
+    /// </summary>
+    internal static bool ClipSegment(SKPoint start, double dx, double dy, SKRect clip, out double t0, out double t1)
+    {
+        t0 = 0;
+        t1 = 1;
+        return ClipEdge(-dx, start.X - clip.Left, ref t0, ref t1)
+            && ClipEdge(dx, clip.Right - start.X, ref t0, ref t1)
+            && ClipEdge(-dy, start.Y - clip.Top, ref t0, ref t1)
+            && ClipEdge(dy, clip.Bottom - start.Y, ref t0, ref t1);
+    }
+
+    private static bool ClipEdge(double p, double q, ref double t0, ref double t1)
+    {
+        if (p == 0)
+            return q >= 0;
+
+        var r = q / p;
+        if (p < 0)
+        {
+            if (r > t1)
+                return false;
+            if (r > t0)
+                t0 = r;
+        }
+        else
+        {
+            if (r < t0)
+                return false;
+            if (r < t1)
+                t1 = r;
+        }
+
+        return true;
+    }
+
+    private static void DrawPoint(SKCanvas canvas, PointPaintOp op, (double X, double Y) world, WorldToScreen t, SKRect cullBounds,
+        bool useAtlas, float deviceScale, double anchorRotationDeg, float centerX, float centerY)
+    {
+        // Under a rotated viewport the anchor turns about the screen centre with
+        // the chart, while the offset and the glyph stay in screen space: a
+        // screen-relative (PortrayalCRS) symbol keeps its angle, and only a
+        // north-relative (GeographicCRS) one turns by the display rotation
+        // (issue #652). North-up (deg == 0) is a no-op.
+        var (px, py) = t.Project(world);
+        var (cx, cy) = RotateAbout(px, py, centerX, centerY, anchorRotationDeg);
+        double? rotation = ScreenRotation(op, anchorRotationDeg);
+        cx += (float)op.OffsetXpx;
+        cy += (float)op.OffsetYpx;
+
+        if (!cullBounds.Contains(cx, cy))
+            return;
+
+        if (op.Symbol is { } symbol)
+        {
+            var picture = GetSymbolPicture(symbol.ProcessedSvg);
+            if (picture is not null)
+            {
+                var bounds = picture.CullRect;
+                // Svg.Skia already rasterises the SVG's millimetre dimensions to
+                // pixels at 96 DPI, so CullRect is in display pixels (e.g. a
+                // 3.98 mm symbol → 15 px). The symbol is therefore drawn at its
+                // natural pixel size times the global symbol scale — matching the
+                // Mapsui ImageStyle convention (SymbolScale applied to the same
+                // CullRect). Applying a further mm→px factor here would oversize
+                // every symbol by ~3.78×.
+                float scale = (float)symbol.Scale;
+
+                // The symbol's pivot point (S-100 Part 9 §11.5) must coincide
+                // with the feature anchor, and any rotation/scale must be about
+                // that pivot — not the bounding-box centre. Working entirely in
+                // picture coordinates, the pivot is the bbox centre shifted by
+                // the pivot fraction (PivotRelative = (centre − pivot) / size):
+                //   pivot = bboxCentre − PivotRelative × bounds
+                // Composing translate(anchor) → rotate → scale → translate(−pivot)
+                // rotates and scales the glyph about its pivot while keeping the
+                // pivot pinned to the anchor for *every* rotation. (Pre-rotation
+                // pivot shifts in screen space only land correctly at 0°, which
+                // left oriented secondary symbols — e.g. a buoy's light flare or
+                // an offset colour symbol — drifting off the anchor; see #335.)
+                float pivotPicX = bounds.Left + bounds.Width / 2f
+                    - (float)(symbol.PivotRelativeX * bounds.Width);
+                float pivotPicY = bounds.Top + bounds.Height / 2f
+                    - (float)(symbol.PivotRelativeY * bounds.Height);
+
+                // #332 lever c2 — atlas the common upright case as a cached sprite
+                // blit. The sprite is rasterised at scale×deviceScale device px,
+                // so placing it in a logical-size dest rect blits 1:1 through the
+                // HiDPI matrix — identical pixels to replaying the picture, minus
+                // the per-frame vector replay. Per-op-rotated symbols (oriented
+                // lights/secondary symbols) keep the vector path for exact parity.
+                if (useAtlas && rotation is null)
+                {
+                    var sprite = GetSymbolSprite(symbol.ProcessedSvg, scale, deviceScale, picture, bounds);
+                    if (sprite is not null)
+                    {
+                        float destLeft = cx + (bounds.Left - pivotPicX) * scale;
+                        float destTop = cy + (bounds.Top - pivotPicY) * scale;
+                        var dest = new SKRect(
+                            destLeft, destTop,
+                            destLeft + bounds.Width * scale,
+                            destTop + bounds.Height * scale);
+                        canvas.DrawImage(sprite.Image, dest, SpriteSampling);
+                        return;
+                    }
+                }
+
+                canvas.Save();
+                canvas.Translate(cx, cy);
+                if (rotation is { } rot)
+                    canvas.RotateDegrees((float)rot);
+                canvas.Scale(scale);
+                canvas.Translate(-pivotPicX, -pivotPicY);
+                canvas.DrawPicture(picture);
+                canvas.Restore();
+                return;
+            }
+        }
+
+        // Fallback: a small filled dot, sized like the legacy SymbolStyle dot.
+        float radius = (float)Math.Max(op.FallbackScale * 12.0, 1.0);
+        using var dot = new SKPaint
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill,
+            Color = op.FallbackColor.ToSkia(),
+        };
+        canvas.DrawCircle(cx, cy, radius, dot);
+    }
+
+    /// <summary>
+    /// The on-screen clockwise rotation of <paramref name="op"/>'s glyph on a
+    /// display rotated by <paramref name="displayRotationDeg"/>, or
+    /// <see langword="null"/> for upright. A screen-relative symbol keeps its
+    /// own rotation; a north-relative one adds the display rotation.
+    /// </summary>
+    internal static double? ScreenRotation(PointPaintOp op, double displayRotationDeg)
+    {
+        if (op.RotationCrs != SymbolRotationCrs.Geographic || displayRotationDeg == 0)
+            return op.Rotation;
+        return (op.Rotation ?? 0) + displayRotationDeg;
+    }
+
+    /// <summary>
+    /// Returns the cached device-resolution sprite for an upright symbol at the
+    /// given symbol/device scale, rasterising it once on first use. Returns
+    /// <see langword="null"/> (cached) when the symbol should not be atlased
+    /// (degenerate bounds, or larger than <see cref="MaxSpriteDimensionPx"/>),
+    /// signalling the caller to use the vector path.
+    /// </summary>
+    private static SymbolSprite? GetSymbolSprite(
+        string processedSvg, float scale, float deviceScale, SKPicture picture, SKRect bounds)
+    {
+        var key = (processedSvg,
+            (int)MathF.Round(scale * 1000f),
+            (int)MathF.Round(deviceScale * 1000f));
+
+        return SymbolSpriteCache.GetOrAdd(key, _ =>
+        {
+            float r = scale * deviceScale;
+            if (!(r > 0) || bounds.Width <= 0 || bounds.Height <= 0)
+                return null;
+
+            int widthPx = (int)MathF.Ceiling(bounds.Width * r);
+            int heightPx = (int)MathF.Ceiling(bounds.Height * r);
+            if (widthPx < 1 || heightPx < 1 ||
+                widthPx > MaxSpriteDimensionPx || heightPx > MaxSpriteDimensionPx)
+            {
+                return null;
+            }
+
+            var info = new SKImageInfo(widthPx, heightPx, SKColorType.Rgba8888, SKAlphaType.Premul);
+            using var surface = SKSurface.Create(info);
+            if (surface is null)
+                return null;
+
+            var c = surface.Canvas;
+            c.Clear(SKColors.Transparent);
+            c.Scale(r);
+            c.Translate(-bounds.Left, -bounds.Top);
+            c.DrawPicture(picture);
+            c.Flush();
+
+            return new SymbolSprite { Image = surface.Snapshot(), Bounds = bounds };
+        });
+    }
+
+    private static void DrawText(
+        SKCanvas canvas, TextPaintOp op, (double X, double Y) world, WorldToScreen t, SKRect cullBounds, TextDrawScratch scratch,
+        double anchorRotationDeg, float centerX, float centerY)
+    {
+        var (ax, ay) = t.Project(world);
+
+        // Upright-under-rotation: rotate the label *anchor* about the screen
+        // centre to match where the rotated base/point passes place the feature,
+        // but draw the glyphs axis-aligned (this method never rotates the
+        // canvas), so the text stays horizontal. North-up (deg == 0) is a no-op.
+        (ax, ay) = RotateAbout(ax, ay, centerX, centerY, anchorRotationDeg);
+
+        if (!cullBounds.Contains(ax + (float)op.OffsetXpx, ay + (float)op.OffsetYpx))
+            return;
+
+        var font = scratch.FontFor(op);
+        var paint = scratch.Paint;
+
+        var layout = LayoutText(op, ax, ay, font, paint);
+
+        if (op.BackColor is { } back)
+        {
+            paint.Color = back.ToSkia();
+            canvas.DrawRect(layout.Background, paint);
+        }
+
+        if (op.HaloColor is { } halo && op.HaloWidthPx > 0)
+        {
+            // The halo is stroked under the fill, as SVG paint-order="stroke" does.
+            var haloPaint = scratch.HaloPaint;
+            haloPaint.Color = halo.ToSkia();
+            haloPaint.StrokeWidth = (float)op.HaloWidthPx;
+            DrawRunsWithFallback(canvas, op.Text, layout.X, layout.Baseline, (float)op.FontSizePx, font, haloPaint, scratch);
+        }
+
+        paint.Color = op.ForeColor.ToSkia();
+        DrawRunsWithFallback(canvas, op.Text, layout.X, layout.Baseline, (float)op.FontSizePx, font, paint, scratch);
+    }
+
+    /// <summary>
+    /// Rotates the screen point (<paramref name="x"/>, <paramref name="y"/>)
+    /// about (<paramref name="cx"/>, <paramref name="cy"/>) by
+    /// <paramref name="degrees"/>, in the same sense as
+    /// <see cref="SKCanvas.RotateDegrees(float, float, float)"/> (screen +Y down).
+    /// A zero angle returns the point unchanged. Used to keep label anchors
+    /// aligned with a rotated viewport while glyphs stay upright.
+    /// </summary>
+    internal static (float X, float Y) RotateAbout(float x, float y, float cx, float cy, double degrees)
+    {
+        if (degrees == 0)
+            return (x, y);
+
+        double rad = degrees * Math.PI / 180.0;
+        double cos = Math.Cos(rad);
+        double sin = Math.Sin(rad);
+        double dx = x - cx;
+        double dy = y - cy;
+        return ((float)(cx + dx * cos - dy * sin), (float)(cy + dx * sin + dy * cos));
+    }
+
+    /// <summary>
+    /// Computes the draw origin and the ink/background rectangle for a label,
+    /// given an already-rotated screen anchor (<paramref name="ax"/>,
+    /// <paramref name="ay"/>). Shared by <see cref="DrawText"/> (which draws at
+    /// the returned origin) and <see cref="LabelDeclutterer"/> (which uses the
+    /// returned rectangle as the label's collision footprint), so both agree on
+    /// exactly where a label lands. The rectangle includes the same small pad as
+    /// the optional background box.
+    /// </summary>
+    internal static (float X, float Baseline, SKRect Background) LayoutText(
+        TextPaintOp op, float ax, float ay, SKFont font, SKPaint paint)
+    {
+        font.MeasureText(op.Text, out var textBounds, paint);
+        float textWidth = textBounds.Width;
+        float textHeight = textBounds.Height;
+
+        // Resolve the anchor according to alignment (screen +Y = down).
+        float x = op.HorizontalAlignment switch
+        {
+            TextHorizontalAlignment.Start => ax,
+            TextHorizontalAlignment.End => ax - textWidth,
+            _ => ax - textWidth / 2f,
+        };
+        float baseline = op.VerticalAlignment switch
+        {
+            TextVerticalAlignment.Top => ay - textBounds.Top,
+            TextVerticalAlignment.Bottom => ay - textBounds.Bottom,
+            _ => ay - textBounds.MidY,
+        };
+
+        x += (float)op.OffsetXpx;
+        baseline += (float)op.OffsetYpx;
+
+        float pad = 1.5f + (op.HaloColor is null ? 0f : (float)op.HaloWidthPx / 2f);
+        var background = new SKRect(
+            x + textBounds.Left - pad,
+            baseline + textBounds.Top - pad,
+            x + textBounds.Left + textWidth + pad,
+            baseline + textBounds.Top + textHeight + pad);
+
+        return (x, baseline, background);
+    }
+
+    /// <summary>
+    /// Draws <paramref name="text"/> with per-run font fallback. When the primary
+    /// face has every glyph (the common ASCII case for soundings and most
+    /// labels) the whole string is drawn in one call. Otherwise the string is
+    /// split into runs of consecutive codepoints the primary face can render and
+    /// runs it cannot; each missing run is drawn with a fallback face resolved
+    /// via <see cref="SKFontManager.MatchCharacter(int)"/>, advancing the pen by
+    /// each run's measured width. This avoids <c>.notdef</c> "tofu" boxes for
+    /// codepoints absent from the primary face.
+    /// </summary>
+    private static void DrawRunsWithFallback(
+        SKCanvas canvas, string text, float x, float baseline, float sizePx,
+        SKFont primary, SKPaint paint, TextDrawScratch scratch)
+    {
+        if (string.IsNullOrEmpty(text) || primary.Typeface is null || PrimaryRendersAll(primary.Typeface, text))
+        {
+            canvas.DrawText(text, x, baseline, SKTextAlign.Left, primary, paint);
+            return;
+        }
+
+        var primaryFace = primary.Typeface;
+        var runs = SegmentRuns(text, cp => primaryFace.ContainsGlyph(cp) ? null : scratch.FallbackFor(cp));
+
+        float penX = x;
+        foreach (var (start, length, face) in runs)
+        {
+            var runFont = face is SKTypeface fallback ? scratch.FallbackFontFor(fallback, sizePx) : primary;
+            string run = text.Substring(start, length);
+            canvas.DrawText(run, penX, baseline, SKTextAlign.Left, runFont, paint);
+            penX += runFont.MeasureText(run, paint);
+        }
+    }
+
+    /// <summary>
+    /// Splits <paramref name="text"/> into maximal runs of consecutive
+    /// codepoints served by the same face, where <paramref name="resolveFace"/>
+    /// returns the face to use for a Unicode codepoint (<see langword="null"/>
+    /// meaning "use the primary face" — either it has the glyph or no fallback
+    /// exists). Runs are compared by reference identity so a shared fallback face
+    /// is drawn in one call. Pure and codepoint-aware (handles surrogate pairs),
+    /// exposed for deterministic testing of the run segmentation independent of
+    /// the platform font manager.
+    /// </summary>
+    internal static List<(int Start, int Length, object? Face)> SegmentRuns(
+        string text, Func<int, object?> resolveFace)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(resolveFace);
+
+        var runs = new List<(int, int, object?)>();
+        if (text.Length == 0)
+            return runs;
+
+        int runStart = 0;
+        object? runFace = resolveFace(char.ConvertToUtf32(text, 0));
+        int i = char.IsSurrogatePair(text, 0) ? 2 : 1;
+
+        while (i < text.Length)
+        {
+            object? face = resolveFace(char.ConvertToUtf32(text, i));
+            if (!ReferenceEquals(face, runFace))
+            {
+                runs.Add((runStart, i - runStart, runFace));
+                runStart = i;
+                runFace = face;
+            }
+            i += char.IsSurrogatePair(text, i) ? 2 : 1;
+        }
+
+        runs.Add((runStart, text.Length - runStart, runFace));
+        return runs;
+    }
+
+    /// <summary>
+    /// Computes the on-screen bounding rectangle of a point symbol (or fallback
+    /// dot), centred on its already-rotated screen anchor. Used by
+    /// <see cref="LabelDeclutterer"/> so labels avoid colliding with symbols
+    /// (S-100 Part 9 draw order keeps symbols on top of yielding text). The box
+    /// is centred on the anchor; the small pivot asymmetry is immaterial for a
+    /// collision obstacle.
+    /// </summary>
+    internal static SKRect PointScreenBounds(PointPaintOp op, float cx, float cy)
+    {
+        float halfW, halfH;
+        if (op.Symbol is { } symbol && GetSymbolPicture(symbol.ProcessedSvg) is { } picture)
+        {
+            var bounds = picture.CullRect;
+            float scale = (float)symbol.Scale;
+            halfW = Math.Max(bounds.Width * scale / 2f, 1f);
+            halfH = Math.Max(bounds.Height * scale / 2f, 1f);
+        }
+        else
+        {
+            float radius = (float)Math.Max(op.FallbackScale * 12.0, 1.0);
+            halfW = halfH = radius;
+        }
+
+        return new SKRect(cx - halfW, cy - halfH, cx + halfW, cy + halfH);
+    }
+
+    /// <summary>
+    /// Per-render scratch for text drawing: a single reusable
+    /// <see cref="SKPaint"/> (its colour is reset per op) and a cache of
+    /// <see cref="SKFont"/> keyed by pixel size, plus per-codepoint fallback
+    /// faces (and their fonts) resolved on demand for missing-glyph runs. Avoids
+    /// allocating native font and paint handles per text op, which matters for
+    /// the live overlay that redraws thousands of soundings/labels every frame.
+    /// Not thread-safe; one instance per
+    /// <see cref="RenderOnto(SKCanvas, VectorScene, Viewport, OverlayDrawOptions)"/>
+    /// call. The paint defaults to <see cref="SKPaintStyle.Fill"/>, which is
+    /// correct for both the glyph fill and the optional label background rect.
+    /// </summary>
+    internal sealed class TextDrawScratch : IDisposable
+    {
+        private readonly Dictionary<(float, TextFontWeight, TextFontProportion, TextFontSlant), SKFont> _fonts = new();
+
+        // Italic text is drawn as a synthetic oblique of the label face, so it
+        // looks the same on every platform whether or not an italic face is
+        // installed.
+        private const float ItalicSkewX = -0.2f;
+
+        /// <summary>The shared antialiased fill paint; set its colour per op.</summary>
+        public SKPaint Paint { get; } = new() { IsAntialias = true };
+
+        /// <summary>The shared halo stroke paint; set its colour and width per op.</summary>
+        public SKPaint HaloPaint { get; } = new()
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeJoin = SKStrokeJoin.Round,
+        };
+
+        /// <summary>Returns a cached regular font for <paramref name="sizePx"/>, creating it on first use.</summary>
+        public SKFont FontFor(float sizePx) =>
+            FontFor(sizePx, TextFontWeight.Medium, TextFontProportion.Proportional, TextFontSlant.Upright);
+
+        /// <summary>Returns the cached font a text op is drawn and measured with.</summary>
+        public SKFont FontFor(TextPaintOp op) =>
+            FontFor((float)op.FontSizePx, op.FontWeight, op.FontProportion, op.FontSlant);
+
+        private SKFont FontFor(float sizePx, TextFontWeight weight, TextFontProportion proportion, TextFontSlant slant)
+        {
+            if (!_fonts.TryGetValue((sizePx, weight, proportion, slant), out var font))
+            {
+                font = new SKFont(RendererFonts.For(weight, proportion), sizePx)
+                {
+                    SkewX = slant == TextFontSlant.Italics ? ItalicSkewX : 0f,
+                };
+                _fonts[(sizePx, weight, proportion, slant)] = font;
+            }
+            return font;
+        }
+
+        /// <summary>
+        /// Returns a typeface that can render <paramref name="codepoint"/> when
+        /// the primary face cannot, or <see langword="null"/> when the platform
+        /// font manager has no match. Resolved via the app-lifetime
+        /// <see cref="FallbackFaceCache"/> (the platform lookup is expensive
+        /// and must not re-run per frame).
+        /// </summary>
+        public SKTypeface? FallbackFor(int codepoint) =>
+            FallbackFaceCache.GetOrAdd(codepoint, static cp =>
+            {
+                try
+                {
+                    return SKFontManager.Default.MatchCharacter(cp);
+                }
+                catch
+                {
+                    return null;
+                }
+            });
+
+        /// <summary>Returns a cached font for a fallback <paramref name="face"/> at <paramref name="sizePx"/> from the app-lifetime <see cref="FallbackFontCache"/>.</summary>
+        public SKFont FallbackFontFor(SKTypeface face, float sizePx) =>
+            FallbackFontCache.GetOrAdd((face, sizePx), static key => new SKFont(key.Face, key.SizePx));
+
+        public void Dispose()
+        {
+            Paint.Dispose();
+            HaloPaint.Dispose();
+            foreach (var font in _fonts.Values)
+                font.Dispose();
+            _fonts.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Per-render reusable resources for <see cref="DrawLine"/>. A full S-57
+    /// exchange set emits thousands of line ops per tile; allocating a fresh
+    /// <see cref="SKPath"/>, <see cref="SKPaint"/>, and dash
+    /// <see cref="SKPathEffect"/> per op (the previous implementation) churned
+    /// native handles and dominated pan/zoom CPU (finalizer/GC pressure plus the
+    /// per-op interop). This scratch reuses one path (reset via
+    /// <see cref="SKPath.Rewind"/>), one stroke paint (only colour/width/effect
+    /// mutated per op), a growable projection buffer fed to
+    /// <see cref="SKPath.AddPoly(ReadOnlySpan{SKPoint}, bool)"/> in a single
+    /// interop call, and caches dash effects by pattern so shared dashes are
+    /// created once.
+    /// </summary>
+    /// <remarks>
+    /// Instances are per-<c>RenderOnto</c> locals (like
+    /// <see cref="TextDrawScratch"/>), never shared statics or instance fields:
+    /// the tiled subsystem's overlay renderer is a shared instance, and tile
+    /// base-plane workers each rasterise on their own thread, so per-invocation
+    /// scoping keeps the mutable scratch confined to a single thread.
+    /// </remarks>
+    private sealed class LineDrawScratch : IDisposable
+    {
+        private readonly Dictionary<DashKey, SKPathEffect> _dashEffects = new();
+        private SKPoint[] _points = new SKPoint[64];
+
+        /// <summary>The reusable stroke path; call <see cref="SKPath.Rewind"/> before reuse.</summary>
+        public SKPath Path { get; } = new();
+
+        /// <summary>
+        /// The reusable stroke paint. Round cap/join and antialiasing are fixed;
+        /// only <see cref="SKPaint.Color"/>, <see cref="SKPaint.StrokeWidth"/>,
+        /// and <see cref="SKPaint.PathEffect"/> are mutated per op.
+        /// </summary>
+        public SKPaint Paint { get; } = new()
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeCap = SKStrokeCap.Round,
+            StrokeJoin = SKStrokeJoin.Round,
+        };
+
+        /// <summary>Returns a projection buffer with capacity for at least <paramref name="count"/> points.</summary>
+        public SKPoint[] RentPoints(int count)
+        {
+            if (_points.Length < count)
+            {
+                int size = _points.Length;
+                while (size < count)
+                    size *= 2;
+                _points = new SKPoint[size];
+            }
+            return _points;
+        }
+
+        /// <summary>
+        /// Returns a cached dash effect for <paramref name="intervals"/> and
+        /// <paramref name="phase"/>, creating it on first use. The returned
+        /// effect is owned by the scratch and must not be disposed by the caller.
+        /// </summary>
+        public SKPathEffect DashFor(ReadOnlySpan<float> intervals, float phase)
+        {
+            // Materialize the pattern once and share it between the cache key and
+            // the created effect, so a cache miss allocates a single array rather
+            // than one for the key and another for CreateDash.
+            float[] pattern = intervals.ToArray();
+            var key = new DashKey(pattern, phase);
+            if (!_dashEffects.TryGetValue(key, out var effect))
+            {
+                effect = SKPathEffect.CreateDash(pattern, phase);
+                _dashEffects[key] = effect;
+            }
+            return effect;
+        }
+
+        public void Dispose()
+        {
+            Path.Dispose();
+            Paint.Dispose();
+            foreach (var effect in _dashEffects.Values)
+                effect.Dispose();
+            _dashEffects.Clear();
+        }
+
+        /// <summary>Value-equal key over a dash interval pattern and phase, so distinct op instances sharing a pattern reuse one effect.</summary>
+        private readonly struct DashKey : IEquatable<DashKey>
+        {
+            private readonly float[] _intervals;
+            private readonly float _phase;
+            private readonly int _hash;
+
+            public DashKey(float[] intervals, float phase)
+            {
+                _intervals = intervals;
+                _phase = phase;
+                var hash = new HashCode();
+                foreach (var value in intervals)
+                    hash.Add(value);
+                hash.Add(phase);
+                _hash = hash.ToHashCode();
+            }
+
+            public bool Equals(DashKey other)
+            {
+                if (_phase != other._phase || _intervals.Length != other._intervals.Length)
+                    return false;
+                for (int i = 0; i < _intervals.Length; i++)
+                {
+                    if (_intervals[i] != other._intervals[i])
+                        return false;
+                }
+                return true;
+            }
+
+            public override bool Equals(object? obj) => obj is DashKey other && Equals(other);
+
+            public override int GetHashCode() => _hash;
+        }
+    }
+
+    private static void AddRing(SKPath path, IReadOnlyList<(double X, double Y)> ring, WorldToScreen t)
+    {
+        if (ring.Count < 3)
+            return;
+        var (sx, sy) = t.Project(ring[0]);
+        path.MoveTo(sx, sy);
+        for (int i = 1; i < ring.Count; i++)
+        {
+            var (px, py) = t.Project(ring[i]);
+            path.LineTo(px, py);
+        }
+        path.Close();
+    }
+}
+

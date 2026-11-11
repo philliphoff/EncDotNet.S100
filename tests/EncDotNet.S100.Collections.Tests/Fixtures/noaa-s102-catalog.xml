@@ -1,0 +1,513 @@
+<?xml version="1.0" ?>
+<S100XC:S100_ExchangeCatalogue xmlns:S100SE="http://www.iho.int/s100/se/5.2" xmlns:S100XC="http://www.iho.int/s100/xc/5.2" xmlns:cit="http://standards.iso.org/iso/19115/-3/cit/2.0" xmlns:gco="http://standards.iso.org/iso/19115/-3/gco/1.0" xmlns:gex="http://standards.iso.org/iso/19115/-3/gex/1.0" xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:lan="http://standards.iso.org/iso/19115/-3/lan/1.0" xmlns:mco="http://standards.iso.org/iso/19115/-3/mco/1.0" xmlns:mri="http://standards.iso.org/iso/19115/-3/mri/1.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.iho.int/s100/xc/5.2 https://schemas.s100dev.net/schemas/S100/5.2.0/S100Catalog/20240415/S100_ExchangeCatalogue.xsd">
+  <S100XC:identifier>
+    <S100XC:identifier>US_102_00</S100XC:identifier>
+    <S100XC:dateTime>2026-09-30T18:01:17Z</S100XC:dateTime>
+  </S100XC:identifier>
+  <S100XC:contact>
+    <S100XC:organization>
+      <gco:CharacterString>NOAA Office of Coast Survey</gco:CharacterString>
+    </S100XC:organization>
+    <S100XC:phone>
+      <cit:number>
+        <gco:CharacterString>18889906622</gco:CharacterString>
+      </cit:number>
+      <cit:numberType>
+        <cit:CI_TelephoneTypeCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#CI_TelephoneTypeCode" codeListValue="voice">voice</cit:CI_TelephoneTypeCode>
+      </cit:numberType>
+    </S100XC:phone>
+    <S100XC:address>
+      <cit:deliveryPoint>
+        <gco:CharacterString>1315 East West Highway</gco:CharacterString>
+      </cit:deliveryPoint>
+      <cit:city>
+        <gco:CharacterString>Silver Spring</gco:CharacterString>
+      </cit:city>
+      <cit:administrativeArea>
+        <gco:CharacterString>Maryland</gco:CharacterString>
+      </cit:administrativeArea>
+      <cit:postalCode>
+        <gco:CharacterString>20910</gco:CharacterString>
+      </cit:postalCode>
+      <cit:country>
+        <gco:CharacterString>United States</gco:CharacterString>
+      </cit:country>
+      <cit:electronicMailAddress>
+        <gco:CharacterString>https://nauticalcharts.noaa.gov/customer-service/assist/index.html</gco:CharacterString>
+      </cit:electronicMailAddress>
+    </S100XC:address>
+  </S100XC:contact>
+  <S100XC:productSpecification>
+    <S100XC:name>Bathymetric Surface</S100XC:name>
+    <S100XC:version>3.0.0</S100XC:version>
+    <S100XC:date>2024-12-27</S100XC:date>
+    <S100XC:productIdentifier>S-102</S100XC:productIdentifier>
+    <S100XC:number>215</S100XC:number>
+    <S100XC:compliancyCategory>category3</S100XC:compliancyCategory>
+  </S100XC:productSpecification>
+  <S100XC:defaultLocale>
+    <lan:PT_Locale>
+      <lan:language>
+        <lan:LanguageCode codeList="https://schemas.s100dev.net/schemas/S100/5.2.0/resources/Codelists/cat/codelists.xml#S100_MD_LanguageCode" codeListValue="eng">English</lan:LanguageCode>
+      </lan:language>
+      <lan:characterEncoding>
+        <lan:MD_CharacterSetCode codeList="https://schemas.s100dev.net/schemas/S100/5.2.0/resources/Codelists/cat/codelists.xml#S100_MD_CharacterSetCode" codeListValue="UTF-8">UTF-8</lan:MD_CharacterSetCode>
+      </lan:characterEncoding>
+    </lan:PT_Locale>
+  </S100XC:defaultLocale>
+  <S100XC:exchangeCatalogueDescription>
+    <gco:CharacterString>S-102 exchange catalog for test and evaluation</gco:CharacterString>
+  </S100XC:exchangeCatalogueDescription>
+  <S100XC:exchangeCatalogueComment>
+    <gco:CharacterString>For test and evaluation exchange certificates and signatures are not valid</gco:CharacterString>
+  </S100XC:exchangeCatalogueComment>
+  <S100XC:certificates>
+    <S100SE:schemeAdministrator id="root"/>
+    <S100SE:certificate id="US00" issuer="root">ZGVmYXVsdA==</S100SE:certificate>
+  </S100XC:certificates>
+  <S100XC:dataServerIdentifier>IHO</S100XC:dataServerIdentifier>
+  <S100XC:datasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>file:../Northeast/Boston/102US005MA1RF262267.h5</S100XC:fileName>
+      <S100XC:description>
+        <gco:CharacterString>Northeast, Boston</gco:CharacterString>
+      </S100XC:description>
+      <S100XC:datasetID>urn:mrn:iho:hash:sha256:5dd9d623f084b74fa2d0cbdf7248a6f07f3a3fa9abc1d5abb14546b891b5fed1</S100XC:datasetID>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>false</S100XC:dataProtection>
+      <S100XC:protectionScheme>S100p15</S100XC:protectionScheme>
+      <S100XC:digitalSignatureReference>ECDSA-384-SHA2</S100XC:digitalSignatureReference>
+      <S100XC:digitalSignatureValue>
+        <S100SE:S100_SE_SignatureOnData id="sig1" certificateRef="US00" dataStatus="unencrypted">302C021433796C6647CC1C55A67DC72FA7C6E157A6594B2B02145D3768B44F3A6ABA11A77178B738AD3B6A0DE344</S100SE:S100_SE_SignatureOnData>
+      </S100XC:digitalSignatureValue>
+      <S100XC:copyright>false</S100XC:copyright>
+      <S100XC:classification gco:isoType="mco:MD_ClassificationCode">
+        <mco:MD_ClassificationCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#MD_ClassificationCode" codeListValue="unclassified">unclassified</mco:MD_ClassificationCode>
+      </S100XC:classification>
+      <S100XC:purpose>newEdition</S100XC:purpose>
+      <S100XC:notForNavigation>true</S100XC:notForNavigation>
+      <S100XC:specificUsage>
+        <mri:MD_Usage>
+          <mri:specificUsage>
+            <gco:CharacterString>general</gco:CharacterString>
+          </mri:specificUsage>
+        </mri:MD_Usage>
+      </S100XC:specificUsage>
+      <S100XC:editionNumber>20</S100XC:editionNumber>
+      <S100XC:updateNumber>0</S100XC:updateNumber>
+      <S100XC:updateApplicationDate>2026-07-10</S100XC:updateApplicationDate>
+      <S100XC:issueDate>2026-07-10</S100XC:issueDate>
+      <S100XC:issueTime>23:44:13+00:00</S100XC:issueTime>
+      <S100XC:boundingBox>
+        <gex:westBoundLongitude>
+          <gco:Decimal>-71.025</gco:Decimal>
+        </gex:westBoundLongitude>
+        <gex:eastBoundLongitude>
+          <gco:Decimal>-70.95</gco:Decimal>
+        </gex:eastBoundLongitude>
+        <gex:southBoundLatitude>
+          <gco:Decimal>42.45</gco:Decimal>
+        </gex:southBoundLatitude>
+        <gex:northBoundLatitude>
+          <gco:Decimal>42.525</gco:Decimal>
+        </gex:northBoundLatitude>
+      </S100XC:boundingBox>
+      <S100XC:productSpecification>
+        <S100XC:name>Bathymetric Surface</S100XC:name>
+        <S100XC:version>3.0.0</S100XC:version>
+        <S100XC:productIdentifier>S-102</S100XC:productIdentifier>
+        <S100XC:number>215</S100XC:number>
+        <S100XC:compliancyCategory>category3</S100XC:compliancyCategory>
+      </S100XC:productSpecification>
+      <S100XC:producingAgency>
+        <cit:CI_Responsibility>
+          <cit:role>
+            <cit:CI_RoleCode codeList="https://schemas.isotc211.org/19115/resources/Codelist/cat/codelists.xml#CI_RoleCode" codeListValue="owner">owner</cit:CI_RoleCode>
+          </cit:role>
+          <cit:party>
+            <cit:CI_Organisation>
+              <cit:name>
+                <gco:CharacterString>NOAA</gco:CharacterString>
+              </cit:name>
+            </cit:CI_Organisation>
+          </cit:party>
+        </cit:CI_Responsibility>
+      </S100XC:producingAgency>
+      <S100XC:encodingFormat>HDF5</S100XC:encodingFormat>
+      <S100XC:dataCoverage>
+        <S100XC:boundingPolygon>
+          <gex:polygon>
+            <gml:Polygon gml:id="ID_102US005MA1RF262267" srsName="EPSG:4326">
+              <gml:exterior>
+                <gml:LinearRing>
+                  <gml:posList> 42.45 -71.025 42.45 -70.95 42.525 -70.95 42.525 -71.025 42.45 -71.025 </gml:posList>
+                </gml:LinearRing>
+              </gml:exterior>
+            </gml:Polygon>
+          </gex:polygon>
+        </S100XC:boundingPolygon>
+        <S100XC:approximateGridResolution>4.0</S100XC:approximateGridResolution>
+      </S100XC:dataCoverage>
+      <S100XC:comment>
+        <gco:CharacterString>This dataset was created for S-102 Product</gco:CharacterString>
+      </S100XC:comment>
+      <S100XC:metadataDateStamp>2026-07-10</S100XC:metadataDateStamp>
+      <S100XC:replacedData>false</S100XC:replacedData>
+      <S100XC:navigationPurpose>port</S100XC:navigationPurpose>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>file:../Northeast/Boston/102US004MA1HE262257.h5</S100XC:fileName>
+      <S100XC:description>
+        <gco:CharacterString>Northeast, Boston</gco:CharacterString>
+      </S100XC:description>
+      <S100XC:datasetID>urn:mrn:iho:hash:sha256:954e1527ff75d1f9c8c758250613fe22b96e632070e142bd3b93d99a9be72a98</S100XC:datasetID>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>false</S100XC:dataProtection>
+      <S100XC:protectionScheme>S100p15</S100XC:protectionScheme>
+      <S100XC:digitalSignatureReference>ECDSA-384-SHA2</S100XC:digitalSignatureReference>
+      <S100XC:digitalSignatureValue>
+        <S100SE:S100_SE_SignatureOnData id="sig1" certificateRef="US00" dataStatus="unencrypted">302C021433796C6647CC1C55A67DC72FA7C6E157A6594B2B02145D3768B44F3A6ABA11A77178B738AD3B6A0DE344</S100SE:S100_SE_SignatureOnData>
+      </S100XC:digitalSignatureValue>
+      <S100XC:copyright>false</S100XC:copyright>
+      <S100XC:classification gco:isoType="mco:MD_ClassificationCode">
+        <mco:MD_ClassificationCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#MD_ClassificationCode" codeListValue="unclassified">unclassified</mco:MD_ClassificationCode>
+      </S100XC:classification>
+      <S100XC:purpose>newEdition</S100XC:purpose>
+      <S100XC:notForNavigation>true</S100XC:notForNavigation>
+      <S100XC:specificUsage>
+        <mri:MD_Usage>
+          <mri:specificUsage>
+            <gco:CharacterString>general</gco:CharacterString>
+          </mri:specificUsage>
+        </mri:MD_Usage>
+      </S100XC:specificUsage>
+      <S100XC:editionNumber>9</S100XC:editionNumber>
+      <S100XC:updateNumber>0</S100XC:updateNumber>
+      <S100XC:updateApplicationDate>2026-09-23</S100XC:updateApplicationDate>
+      <S100XC:issueDate>2026-09-23</S100XC:issueDate>
+      <S100XC:issueTime>16:46:18+00:00</S100XC:issueTime>
+      <S100XC:boundingBox>
+        <gex:westBoundLongitude>
+          <gco:Decimal>-70.5</gco:Decimal>
+        </gex:westBoundLongitude>
+        <gex:eastBoundLongitude>
+          <gco:Decimal>-70.2</gco:Decimal>
+        </gex:eastBoundLongitude>
+        <gex:southBoundLatitude>
+          <gco:Decimal>42.3</gco:Decimal>
+        </gex:southBoundLatitude>
+        <gex:northBoundLatitude>
+          <gco:Decimal>42.6</gco:Decimal>
+        </gex:northBoundLatitude>
+      </S100XC:boundingBox>
+      <S100XC:productSpecification>
+        <S100XC:name>Bathymetric Surface</S100XC:name>
+        <S100XC:version>3.0.0</S100XC:version>
+        <S100XC:productIdentifier>S-102</S100XC:productIdentifier>
+        <S100XC:number>215</S100XC:number>
+        <S100XC:compliancyCategory>category3</S100XC:compliancyCategory>
+      </S100XC:productSpecification>
+      <S100XC:producingAgency>
+        <cit:CI_Responsibility>
+          <cit:role>
+            <cit:CI_RoleCode codeList="https://schemas.isotc211.org/19115/resources/Codelist/cat/codelists.xml#CI_RoleCode" codeListValue="owner">owner</cit:CI_RoleCode>
+          </cit:role>
+          <cit:party>
+            <cit:CI_Organisation>
+              <cit:name>
+                <gco:CharacterString>NOAA</gco:CharacterString>
+              </cit:name>
+            </cit:CI_Organisation>
+          </cit:party>
+        </cit:CI_Responsibility>
+      </S100XC:producingAgency>
+      <S100XC:encodingFormat>HDF5</S100XC:encodingFormat>
+      <S100XC:dataCoverage>
+        <S100XC:boundingPolygon>
+          <gex:polygon>
+            <gml:Polygon gml:id="ID_102US004MA1HE262257" srsName="EPSG:4326">
+              <gml:exterior>
+                <gml:LinearRing>
+                  <gml:posList> 42.3 -70.5 42.3 -70.2 42.6 -70.2 42.6 -70.5 42.3 -70.5 </gml:posList>
+                </gml:LinearRing>
+              </gml:exterior>
+            </gml:Polygon>
+          </gex:polygon>
+        </S100XC:boundingPolygon>
+        <S100XC:approximateGridResolution>16.0</S100XC:approximateGridResolution>
+      </S100XC:dataCoverage>
+      <S100XC:comment>
+        <gco:CharacterString>This dataset was created for S-102 Product</gco:CharacterString>
+      </S100XC:comment>
+      <S100XC:metadataDateStamp>2026-09-23</S100XC:metadataDateStamp>
+      <S100XC:replacedData>false</S100XC:replacedData>
+      <S100XC:navigationPurpose>transit</S100XC:navigationPurpose>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>file:../California/Newport/102US005CA1LU262227.h5</S100XC:fileName>
+      <S100XC:description>
+        <gco:CharacterString>California, Newport</gco:CharacterString>
+      </S100XC:description>
+      <S100XC:datasetID>urn:mrn:iho:hash:sha256:cb3245bcb8ca7eb202129e9b5247cf30413842586a470a6d4b933609baac71d1</S100XC:datasetID>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>false</S100XC:dataProtection>
+      <S100XC:protectionScheme>S100p15</S100XC:protectionScheme>
+      <S100XC:digitalSignatureReference>ECDSA-384-SHA2</S100XC:digitalSignatureReference>
+      <S100XC:digitalSignatureValue>
+        <S100SE:S100_SE_SignatureOnData id="sig1" certificateRef="US00" dataStatus="unencrypted">302C021433796C6647CC1C55A67DC72FA7C6E157A6594B2B02145D3768B44F3A6ABA11A77178B738AD3B6A0DE344</S100SE:S100_SE_SignatureOnData>
+      </S100XC:digitalSignatureValue>
+      <S100XC:copyright>false</S100XC:copyright>
+      <S100XC:classification gco:isoType="mco:MD_ClassificationCode">
+        <mco:MD_ClassificationCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#MD_ClassificationCode" codeListValue="unclassified">unclassified</mco:MD_ClassificationCode>
+      </S100XC:classification>
+      <S100XC:purpose>newDataset</S100XC:purpose>
+      <S100XC:notForNavigation>true</S100XC:notForNavigation>
+      <S100XC:specificUsage>
+        <mri:MD_Usage>
+          <mri:specificUsage>
+            <gco:CharacterString>general</gco:CharacterString>
+          </mri:specificUsage>
+        </mri:MD_Usage>
+      </S100XC:specificUsage>
+      <S100XC:editionNumber>1</S100XC:editionNumber>
+      <S100XC:updateNumber>0</S100XC:updateNumber>
+      <S100XC:updateApplicationDate>2026-09-17</S100XC:updateApplicationDate>
+      <S100XC:issueDate>2026-09-17</S100XC:issueDate>
+      <S100XC:issueTime>23:37:48+00:00</S100XC:issueTime>
+      <S100XC:boundingBox>
+        <gex:westBoundLongitude>
+          <gco:Decimal>-117.75</gco:Decimal>
+        </gex:westBoundLongitude>
+        <gex:eastBoundLongitude>
+          <gco:Decimal>-117.675</gco:Decimal>
+        </gex:eastBoundLongitude>
+        <gex:southBoundLatitude>
+          <gco:Decimal>33.45</gco:Decimal>
+        </gex:southBoundLatitude>
+        <gex:northBoundLatitude>
+          <gco:Decimal>33.525</gco:Decimal>
+        </gex:northBoundLatitude>
+      </S100XC:boundingBox>
+      <S100XC:productSpecification>
+        <S100XC:name>Bathymetric Surface</S100XC:name>
+        <S100XC:version>3.0.0</S100XC:version>
+        <S100XC:productIdentifier>S-102</S100XC:productIdentifier>
+        <S100XC:number>215</S100XC:number>
+        <S100XC:compliancyCategory>category3</S100XC:compliancyCategory>
+      </S100XC:productSpecification>
+      <S100XC:producingAgency>
+        <cit:CI_Responsibility>
+          <cit:role>
+            <cit:CI_RoleCode codeList="https://schemas.isotc211.org/19115/resources/Codelist/cat/codelists.xml#CI_RoleCode" codeListValue="owner">owner</cit:CI_RoleCode>
+          </cit:role>
+          <cit:party>
+            <cit:CI_Organisation>
+              <cit:name>
+                <gco:CharacterString>NOAA</gco:CharacterString>
+              </cit:name>
+            </cit:CI_Organisation>
+          </cit:party>
+        </cit:CI_Responsibility>
+      </S100XC:producingAgency>
+      <S100XC:encodingFormat>HDF5</S100XC:encodingFormat>
+      <S100XC:dataCoverage>
+        <S100XC:boundingPolygon>
+          <gex:polygon>
+            <gml:Polygon gml:id="ID_102US005CA1LU262227" srsName="EPSG:4326">
+              <gml:exterior>
+                <gml:LinearRing>
+                  <gml:posList> 33.45 -117.75 33.45 -117.675 33.525 -117.675 33.525 -117.75 33.45 -117.75 </gml:posList>
+                </gml:LinearRing>
+              </gml:exterior>
+            </gml:Polygon>
+          </gex:polygon>
+        </S100XC:boundingPolygon>
+        <S100XC:approximateGridResolution>4.0</S100XC:approximateGridResolution>
+      </S100XC:dataCoverage>
+      <S100XC:comment>
+        <gco:CharacterString>This dataset was created for S-102 Product</gco:CharacterString>
+      </S100XC:comment>
+      <S100XC:metadataDateStamp>2026-09-17</S100XC:metadataDateStamp>
+      <S100XC:replacedData>false</S100XC:replacedData>
+      <S100XC:navigationPurpose>port</S100XC:navigationPurpose>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>file:../Oregon/Newport/102US005OR2MC262247.h5</S100XC:fileName>
+      <S100XC:description>
+        <gco:CharacterString>Oregon, Newport</gco:CharacterString>
+      </S100XC:description>
+      <S100XC:datasetID>urn:mrn:iho:hash:sha256:9875ec57dd861e24d86f826d2961777e4840da00f9bc23dcfb5541850ac4e545</S100XC:datasetID>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>false</S100XC:dataProtection>
+      <S100XC:protectionScheme>S100p15</S100XC:protectionScheme>
+      <S100XC:digitalSignatureReference>ECDSA-384-SHA2</S100XC:digitalSignatureReference>
+      <S100XC:digitalSignatureValue>
+        <S100SE:S100_SE_SignatureOnData id="sig1" certificateRef="US00" dataStatus="unencrypted">302C021433796C6647CC1C55A67DC72FA7C6E157A6594B2B02145D3768B44F3A6ABA11A77178B738AD3B6A0DE344</S100SE:S100_SE_SignatureOnData>
+      </S100XC:digitalSignatureValue>
+      <S100XC:copyright>false</S100XC:copyright>
+      <S100XC:classification gco:isoType="mco:MD_ClassificationCode">
+        <mco:MD_ClassificationCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#MD_ClassificationCode" codeListValue="unclassified">unclassified</mco:MD_ClassificationCode>
+      </S100XC:classification>
+      <S100XC:purpose>newEdition</S100XC:purpose>
+      <S100XC:notForNavigation>true</S100XC:notForNavigation>
+      <S100XC:specificUsage>
+        <mri:MD_Usage>
+          <mri:specificUsage>
+            <gco:CharacterString>general</gco:CharacterString>
+          </mri:specificUsage>
+        </mri:MD_Usage>
+      </S100XC:specificUsage>
+      <S100XC:editionNumber>2</S100XC:editionNumber>
+      <S100XC:updateNumber>0</S100XC:updateNumber>
+      <S100XC:updateApplicationDate>2026-09-13</S100XC:updateApplicationDate>
+      <S100XC:issueDate>2026-09-13</S100XC:issueDate>
+      <S100XC:issueTime>03:25:05+00:00</S100XC:issueTime>
+      <S100XC:boundingBox>
+        <gex:westBoundLongitude>
+          <gco:Decimal>-124.125</gco:Decimal>
+        </gex:westBoundLongitude>
+        <gex:eastBoundLongitude>
+          <gco:Decimal>-124.05</gco:Decimal>
+        </gex:eastBoundLongitude>
+        <gex:southBoundLatitude>
+          <gco:Decimal>44.775</gco:Decimal>
+        </gex:southBoundLatitude>
+        <gex:northBoundLatitude>
+          <gco:Decimal>44.85</gco:Decimal>
+        </gex:northBoundLatitude>
+      </S100XC:boundingBox>
+      <S100XC:productSpecification>
+        <S100XC:name>Bathymetric Surface</S100XC:name>
+        <S100XC:version>3.0.0</S100XC:version>
+        <S100XC:productIdentifier>S-102</S100XC:productIdentifier>
+        <S100XC:number>215</S100XC:number>
+        <S100XC:compliancyCategory>category3</S100XC:compliancyCategory>
+      </S100XC:productSpecification>
+      <S100XC:producingAgency>
+        <cit:CI_Responsibility>
+          <cit:role>
+            <cit:CI_RoleCode codeList="https://schemas.isotc211.org/19115/resources/Codelist/cat/codelists.xml#CI_RoleCode" codeListValue="owner">owner</cit:CI_RoleCode>
+          </cit:role>
+          <cit:party>
+            <cit:CI_Organisation>
+              <cit:name>
+                <gco:CharacterString>NOAA</gco:CharacterString>
+              </cit:name>
+            </cit:CI_Organisation>
+          </cit:party>
+        </cit:CI_Responsibility>
+      </S100XC:producingAgency>
+      <S100XC:encodingFormat>HDF5</S100XC:encodingFormat>
+      <S100XC:dataCoverage>
+        <S100XC:boundingPolygon>
+          <gex:polygon>
+            <gml:Polygon gml:id="ID_102US005OR2MC262247" srsName="EPSG:4326">
+              <gml:exterior>
+                <gml:LinearRing>
+                  <gml:posList> 44.775 -124.125 44.775 -124.05 44.85 -124.05 44.85 -124.125 44.775 -124.125 </gml:posList>
+                </gml:LinearRing>
+              </gml:exterior>
+            </gml:Polygon>
+          </gex:polygon>
+        </S100XC:boundingPolygon>
+        <S100XC:approximateGridResolution>4.0</S100XC:approximateGridResolution>
+      </S100XC:dataCoverage>
+      <S100XC:comment>
+        <gco:CharacterString>This dataset was created for S-102 Product</gco:CharacterString>
+      </S100XC:comment>
+      <S100XC:metadataDateStamp>2026-09-13</S100XC:metadataDateStamp>
+      <S100XC:replacedData>false</S100XC:replacedData>
+      <S100XC:navigationPurpose>port</S100XC:navigationPurpose>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>file:../Southeast/Wilmington/102US004SC1EV262247.h5</S100XC:fileName>
+      <S100XC:description>
+        <gco:CharacterString>Southeast, Wilmington</gco:CharacterString>
+      </S100XC:description>
+      <S100XC:datasetID>urn:mrn:iho:hash:sha256:c8489d75df8ba152cc55413af6df099f0639c4212474b259f10e6d30878e5aa3</S100XC:datasetID>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>false</S100XC:dataProtection>
+      <S100XC:protectionScheme>S100p15</S100XC:protectionScheme>
+      <S100XC:digitalSignatureReference>ECDSA-384-SHA2</S100XC:digitalSignatureReference>
+      <S100XC:digitalSignatureValue>
+        <S100SE:S100_SE_SignatureOnData id="sig1" certificateRef="US00" dataStatus="unencrypted">302C021433796C6647CC1C55A67DC72FA7C6E157A6594B2B02145D3768B44F3A6ABA11A77178B738AD3B6A0DE344</S100SE:S100_SE_SignatureOnData>
+      </S100XC:digitalSignatureValue>
+      <S100XC:copyright>false</S100XC:copyright>
+      <S100XC:classification gco:isoType="mco:MD_ClassificationCode">
+        <mco:MD_ClassificationCode codeList="http://standards.iso.org/iso/19115/resources/Codelists/cat/codelists.xml#MD_ClassificationCode" codeListValue="unclassified">unclassified</mco:MD_ClassificationCode>
+      </S100XC:classification>
+      <S100XC:purpose>newEdition</S100XC:purpose>
+      <S100XC:notForNavigation>true</S100XC:notForNavigation>
+      <S100XC:specificUsage>
+        <mri:MD_Usage>
+          <mri:specificUsage>
+            <gco:CharacterString>general</gco:CharacterString>
+          </mri:specificUsage>
+        </mri:MD_Usage>
+      </S100XC:specificUsage>
+      <S100XC:editionNumber>5</S100XC:editionNumber>
+      <S100XC:updateNumber>0</S100XC:updateNumber>
+      <S100XC:updateApplicationDate>2026-08-25</S100XC:updateApplicationDate>
+      <S100XC:issueDate>2026-08-25</S100XC:issueDate>
+      <S100XC:issueTime>05:50:12+00:00</S100XC:issueTime>
+      <S100XC:boundingBox>
+        <gex:westBoundLongitude>
+          <gco:Decimal>-78</gco:Decimal>
+        </gex:westBoundLongitude>
+        <gex:eastBoundLongitude>
+          <gco:Decimal>-77.7</gco:Decimal>
+        </gex:eastBoundLongitude>
+        <gex:southBoundLatitude>
+          <gco:Decimal>33.3</gco:Decimal>
+        </gex:southBoundLatitude>
+        <gex:northBoundLatitude>
+          <gco:Decimal>33.6</gco:Decimal>
+        </gex:northBoundLatitude>
+      </S100XC:boundingBox>
+      <S100XC:productSpecification>
+        <S100XC:name>Bathymetric Surface</S100XC:name>
+        <S100XC:version>3.0.0</S100XC:version>
+        <S100XC:productIdentifier>S-102</S100XC:productIdentifier>
+        <S100XC:number>215</S100XC:number>
+        <S100XC:compliancyCategory>category3</S100XC:compliancyCategory>
+      </S100XC:productSpecification>
+      <S100XC:producingAgency>
+        <cit:CI_Responsibility>
+          <cit:role>
+            <cit:CI_RoleCode codeList="https://schemas.isotc211.org/19115/resources/Codelist/cat/codelists.xml#CI_RoleCode" codeListValue="owner">owner</cit:CI_RoleCode>
+          </cit:role>
+          <cit:party>
+            <cit:CI_Organisation>
+              <cit:name>
+                <gco:CharacterString>NOAA</gco:CharacterString>
+              </cit:name>
+            </cit:CI_Organisation>
+          </cit:party>
+        </cit:CI_Responsibility>
+      </S100XC:producingAgency>
+      <S100XC:encodingFormat>HDF5</S100XC:encodingFormat>
+      <S100XC:dataCoverage>
+        <S100XC:boundingPolygon>
+          <gex:polygon>
+            <gml:Polygon gml:id="ID_102US004SC1EV262247" srsName="EPSG:4326">
+              <gml:exterior>
+                <gml:LinearRing>
+                  <gml:posList> 33.3 -78 33.3 -77.7 33.6 -77.7 33.6 -78 33.3 -78 </gml:posList>
+                </gml:LinearRing>
+              </gml:exterior>
+            </gml:Polygon>
+          </gex:polygon>
+        </S100XC:boundingPolygon>
+        <S100XC:approximateGridResolution>16.0</S100XC:approximateGridResolution>
+      </S100XC:dataCoverage>
+      <S100XC:comment>
+        <gco:CharacterString>This dataset was created for S-102 Product</gco:CharacterString>
+      </S100XC:comment>
+      <S100XC:metadataDateStamp>2026-08-25</S100XC:metadataDateStamp>
+      <S100XC:replacedData>false</S100XC:replacedData>
+      <S100XC:navigationPurpose>transit</S100XC:navigationPurpose>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+  </S100XC:datasetDiscoveryMetadata>
+  <S100XC:supportFileDiscoveryMetadata/>
+  <S100XC:catalogueDiscoveryMetadata/>
+</S100XC:S100_ExchangeCatalogue>

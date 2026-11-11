@@ -1,0 +1,233 @@
+using EncDotNet.S100.Crs.ProjNet;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Features;
+using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Rendering.Engine;
+using EncDotNet.S100.Rendering.Scene;
+using EncDotNet.S100.Specifications;
+using EncDotNet.S100.TestSupport;
+using Mapsui.Layers;
+using SkiaSharp;
+
+namespace EncDotNet.S100.Pipelines.Tests;
+
+/// <summary>
+/// Real-data regression cover: every committed IHO S-101 test cell, run through
+/// the viewer's Mapsui render path, must produce drawing instructions, leave
+/// features visible, and rasterise non-empty tiles at a scale inside the
+/// cell's own display band.
+/// </summary>
+/// <remarks>
+/// Cells 101AA00DS0006 / 0007 / 0015 declare an inverted <c>DataCoverage</c>
+/// pair (<c>minimumDisplayScale</c> 22000, <c>maximumDisplayScale</c> 90000).
+/// Read literally, the out-of-scale-band cutoff hid their line work, points
+/// and text beyond 1:22 000, so the viewer drew nothing at 1:50 000 while the
+/// headless renderer (which applies no band) drew the cell.
+/// </remarks>
+public class S101NativeCellVisibilityTests
+{
+    /// <summary>A scale inside every committed cell's intended 1:90 000..1:22 000 band.</summary>
+    private const int InBandScaleDenominator = 50000;
+
+    /// <summary>The committed IHO S-101 test cells.</summary>
+    public static TheoryData<string> Cells()
+    {
+        var data = new TheoryData<string>();
+        foreach (var path in Directory.EnumerateFiles(ResolveFixtureDirectory(), "*.000").Order(StringComparer.Ordinal))
+            data.Add(Path.GetFileName(path));
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(Cells))]
+    public async Task NativeCell_HasVisibleFeatures_AtInBandScale(string cell)
+    {
+        var processor = CreateFactory().CreateProcessor(Path.Combine(ResolveFixtureDirectory(), cell));
+        using var lifetime = processor as IDisposable;
+        var renderer = new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory());
+
+        var result = await renderer.RenderAsync(processor, cancellationToken: TestContext.Current.CancellationToken);
+
+        var cellMinimum = Assert.IsType<int>(result.CellMinimumDisplayScale);
+        Assert.True(
+            cellMinimum >= InBandScaleDenominator,
+            $"{cell}: cell band ends at 1:{cellMinimum}, so it is hidden at 1:{InBandScaleDenominator}.");
+
+        var ops = result.Layers.SelectMany(BoundOps).ToList();
+        Assert.NotEmpty(ops);
+
+        // Line work, points and text carry the out-of-scale-band cap; at least
+        // one of them must survive it at an in-band scale.
+        var lineworkVisible = result.Layers
+            .Where(static l => l.Name.Contains("(lines)", StringComparison.Ordinal))
+            .SelectMany(BoundOps)
+            .Count(static op => ScaleVisibility.IsVisibleAtScale(op, InBandScaleDenominator));
+        Assert.True(lineworkVisible > 0, $"{cell}: no line/point/text op is visible at 1:{InBandScaleDenominator}.");
+    }
+
+    /// <summary>The ops of the scene bound to a tiled layer (base and overlay planes).</summary>
+    private static IEnumerable<PaintOp> BoundOps(ILayer layer) =>
+        S100VectorTileRenderer.TryGetPartitionedScene(layer, out var baseScene, out var overlay)
+            ? baseScene.Ops.Concat(overlay.Ops)
+            : [];
+
+    [Theory]
+    [MemberData(nameof(Cells))]
+    public async Task NativeCell_TileRendererPaintsPixels_AtInBandScale(string cell)
+    {
+        var processor = CreateFactory().CreateProcessor(Path.Combine(ResolveFixtureDirectory(), cell));
+        using var lifetime = processor as IDisposable;
+        var renderer = new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory());
+
+        var result = await renderer.RenderAsync(processor, cancellationToken: TestContext.Current.CancellationToken);
+
+        // Apply the whole-cell zoom-out window exactly as the viewer's layer
+        // session does, so a wrong cell band hides the layers here too.
+        var cellMinimum = Assert.IsType<int>(result.CellMinimumDisplayScale);
+        MapsuiDatasetRenderer.ApplyCellScaleWindow(result.Layers, cellMinimum);
+
+        var extent = result.Extent;
+        var latitudeRadians = MapsuiDisplayListRenderer.WebMercatorYToLatitudeRadians(
+            (extent.MinY + extent.MaxY) / 2.0);
+        var resolution = MapsuiDisplayListRenderer.DenominatorToResolution(InBandScaleDenominator, latitudeRadians);
+
+        var tiledLayers = result.Layers
+            .Where(static l => l.CustomLayerRendererName == S100VectorTileRenderer.RendererName)
+            .ToList();
+        Assert.NotEmpty(tiledLayers);
+
+        var visibleLayers = tiledLayers
+            .Where(l => l.Enabled && l.MinVisible <= resolution && resolution <= l.MaxVisible)
+            .ToList();
+        Assert.True(
+            visibleLayers.Count > 0,
+            $"{cell}: every tiled layer is out of range at 1:{InBandScaleDenominator} (cell band ends at 1:{cellMinimum}).");
+
+        // Rasterise every base-plane tile over the cell at the band the live
+        // map snaps to for this resolution, as the tile workers would.
+        var band = TileGrid.BandForResolution(resolution);
+        var tiles = TileGrid.VisibleTiles(
+            (extent.MinX + extent.MaxX) / 2.0,
+            (extent.MinY + extent.MaxY) / 2.0,
+            extent.Width / resolution,
+            extent.Height / resolution,
+            resolution,
+            band);
+
+        long paintedPixels = 0;
+        foreach (var layer in visibleLayers)
+        {
+            Assert.True(
+                S100VectorTileRenderer.TryGetPartitionedScene(layer, out var baseScene, out _),
+                $"{cell}: no scene bound to tiled layer '{layer.Name}'.");
+
+            foreach (var key in tiles)
+            {
+                using var bitmap = S100VectorTileRenderer.RasterizeTile(baseScene, baseIndex: null, key, deviceScale: 1f);
+                paintedPixels += CountPaintedPixels(bitmap);
+            }
+        }
+
+        Assert.True(
+            paintedPixels > 0,
+            $"{cell}: {tiles.Count} band-{band} tiles at 1:{InBandScaleDenominator} rasterised fully transparent.");
+    }
+
+    [Theory]
+    [MemberData(nameof(Cells))]
+    public async Task NativeCell_TileLineWorkPaints_AtItsBandEdge(string cell)
+    {
+        var processor = CreateFactory().CreateProcessor(Path.Combine(ResolveFixtureDirectory(), cell));
+        using var lifetime = processor as IDisposable;
+        var renderer = new MapsuiDatasetRenderer(new ProjNetCrsTransformFactory());
+
+        var result = await renderer.RenderAsync(processor, cancellationToken: TestContext.Current.CancellationToken);
+
+        // S-101 PS §4.6: the band includes minimumDisplayScale itself. The live
+        // map snaps to the log-nearest band, whose own scale may lie past the
+        // cap; the cell's line work must still draw there (#761).
+        var cellMinimum = Assert.IsType<int>(result.CellMinimumDisplayScale);
+        MapsuiDatasetRenderer.ApplyCellScaleWindow(result.Layers, cellMinimum);
+
+        var extent = result.Extent;
+        var latitudeRadians = MapsuiDisplayListRenderer.WebMercatorYToLatitudeRadians(
+            (extent.MinY + extent.MaxY) / 2.0);
+        var resolution = MapsuiDisplayListRenderer.DenominatorToResolution(cellMinimum - 1, latitudeRadians);
+
+        var lineWork = Assert.Single(
+            result.Layers,
+            static l => l.CustomLayerRendererName == S100VectorTileRenderer.RendererName
+                && l.Name.Contains("(lines)", StringComparison.Ordinal));
+        Assert.True(
+            lineWork.MinVisible <= resolution && resolution <= lineWork.MaxVisible,
+            $"{cell}: the line-work layer is out of range at 1:{cellMinimum - 1}.");
+        Assert.True(S100VectorTileRenderer.TryGetPartitionedScene(lineWork, out var baseScene, out _));
+        Assert.False(S100VectorTileRenderer.IsPastScaleMinimumCap(
+            baseScene, (extent.MinX + extent.MaxX) / 2.0, (extent.MinY + extent.MaxY) / 2.0, resolution));
+
+        var band = TileGrid.BandForResolution(resolution);
+        var tiles = TileGrid.VisibleTiles(
+            (extent.MinX + extent.MaxX) / 2.0,
+            (extent.MinY + extent.MaxY) / 2.0,
+            extent.Width / resolution,
+            extent.Height / resolution,
+            resolution,
+            band);
+
+        long paintedPixels = 0;
+        foreach (var key in tiles)
+        {
+            using var bitmap = S100VectorTileRenderer.RasterizeTile(baseScene, baseIndex: null, key, deviceScale: 1f);
+            paintedPixels += CountPaintedPixels(bitmap);
+        }
+
+        Assert.True(
+            paintedPixels > 0,
+            $"{cell}: line work rasterised fully transparent in {tiles.Count} band-{band} tiles at 1:{cellMinimum - 1}.");
+    }
+
+    private static long CountPaintedPixels(SKBitmap bitmap)
+    {
+        long count = 0;
+        foreach (var pixel in bitmap.Pixels)
+        {
+            if (pixel.Alpha != 0)
+                count++;
+        }
+
+        return count;
+    }
+
+    private static DatasetPipelineFactory CreateFactory()
+    {
+        var catalogueManager = new PortrayalCatalogueManager();
+        foreach (var spec in Specification.AvailableSpecs)
+        {
+            if (Specification.HasPortrayalCatalogue(spec))
+                catalogueManager.SetSource(spec, Specification.CreatePortrayalCatalogueSource(spec));
+        }
+
+        return new DatasetPipelineFactory(
+            catalogueManager,
+            TestLuaEngine.Create(),
+            new ProjNetCrsTransformFactory(),
+            new FeatureCatalogueManager(Specification.TryOpenFeatureCatalogue),
+            new EncDotNet.S100.Datasets.Pipelines.Interoperability.DisplayPlaneAuthorityProvider());
+    }
+
+    /// <summary>Walks up from the test assembly to find the committed S-101 fixture directory.</summary>
+    private static string ResolveFixtureDirectory()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir.FullName, "tests", "datasets", "S101", "S-101", "DATASET_FILES");
+            if (Directory.Exists(candidate))
+                return candidate;
+            dir = dir.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Committed S-101 fixture directory not found.");
+    }
+}

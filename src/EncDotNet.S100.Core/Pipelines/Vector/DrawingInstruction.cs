@@ -1,0 +1,541 @@
+using EncDotNet.S100.DataModel;
+namespace EncDotNet.S100.Pipelines.Vector;
+
+/// <summary>
+/// Categories of <see cref="DrawingInstruction"/> that can be selectively
+/// suppressed from a rendered scene. Mirrors the four S-100 Part 9 instruction
+/// types (areas → lines → points → text) and is used by callers — typically
+/// the headless render path — that want to hide certain primitive classes
+/// (e.g. text labels at preview scales) without re-running the portrayal
+/// pipeline.
+/// </summary>
+[Flags]
+public enum DrawingInstructionCategory
+{
+    /// <summary>No categories are hidden — render everything.</summary>
+    None = 0,
+
+    /// <summary>Solid-colour and pattern area fills (<see cref="AreaInstruction"/>).</summary>
+    Areas = 1 << 0,
+
+    /// <summary>Line strokes (<see cref="LineInstruction"/>).</summary>
+    Lines = 1 << 1,
+
+    /// <summary>Point symbols (<see cref="PointInstruction"/>).</summary>
+    Points = 1 << 2,
+
+    /// <summary>Text labels (<see cref="TextInstruction"/>).</summary>
+    Text = 1 << 3,
+
+    /// <summary>All renderable categories.</summary>
+    All = Areas | Lines | Points | Text,
+}
+
+/// <summary>
+/// A unified, resource-unresolved S-100 Part 9 drawing instruction. Instances
+/// reference catalogue resources (symbols, line styles, area fills, fonts) by
+/// name, and reference dataset features by id (<see cref="FeatureReference"/>);
+/// the renderer is responsible for resolving geometry and visual resources.
+/// </summary>
+/// <remarks>
+/// This shape matches the S-100 Part 9 display list produced by both the
+/// XSLT-style portrayal pipelines (S-124, S-129, S-421) and the Lua-style
+/// portrayal pipeline (S-101 — see
+/// <c>EncDotNet.S100.Datasets.S101.DrawingInstructionParser</c>).
+/// </remarks>
+public abstract class DrawingInstruction
+{
+    /// <summary>
+    /// Identifier of the dataset feature this instruction portrays. The
+    /// renderer uses this to look up geometry from the dataset.
+    /// </summary>
+    public required string FeatureReference { get; init; }
+
+    /// <summary>Whether the instruction renders under or over the radar overlay.</summary>
+    public DisplayPlane Plane { get; init; } = DisplayPlane.UnderRadar;
+
+    /// <summary>
+    /// Primary viewing group controlling visibility of this instruction — the
+    /// first id the portrayal assigned. See <see cref="AdditionalViewingGroups"/>
+    /// for any further ids.
+    /// </summary>
+    public int ViewingGroup { get; init; }
+
+    /// <summary>
+    /// Viewing groups assigned to this instruction after
+    /// <see cref="ViewingGroup"/>, in emission order (e.g. the <c>90020</c> of an
+    /// S-101 <c>ViewingGroup:27070,90020</c> command). Empty when the instruction
+    /// has a single viewing group.
+    /// </summary>
+    /// <remarks>
+    /// S-100 Ed 5.2 Part 9 §9-11.1.3 (and Part 9a §9a-11.2.2.1, the
+    /// <c>ViewingGroup:vg1[,vg2[,…]]</c> command): "A drawing instruction which
+    /// has multiple Viewing Groups is disabled when any assigned Viewing Group
+    /// is disabled". <see cref="ViewingGroupController.IsVisible(DrawingInstruction)"/>
+    /// applies that rule over <see cref="ViewingGroup"/> and every id here.
+    /// </remarks>
+    public IReadOnlyList<int> AdditionalViewingGroups { get; init; } = [];
+
+    /// <summary>
+    /// Drawing priority within the display plane (ascending, back-to-front).
+    /// Within the same priority, the S-100 Part 9 type order applies:
+    /// areas → lines → points → text.
+    /// </summary>
+    public int DrawingPriority { get; init; }
+
+    /// <summary>
+    /// Minimum display scale denominator at which this instruction is visible
+    /// (i.e. zoomed-out limit). Null means no lower bound.
+    /// </summary>
+    public double? ScaleMinimum { get; init; }
+
+    /// <summary>
+    /// Maximum display scale denominator at which this instruction is visible
+    /// (i.e. zoomed-in limit). Null means no upper bound.
+    /// </summary>
+    public double? ScaleMaximum { get; init; }
+
+    /// <summary>
+    /// The time intervals the instruction is drawn in, or empty when it is
+    /// always drawn (S-100 Part 9 <c>timeValid</c>; set by the
+    /// <c>Date</c>/<c>Time</c>/<c>DateTime</c> and <c>TimeValid</c> commands of
+    /// Part 9a §9a-11.2.6). The instruction is drawn when the time the map
+    /// shows falls in any of them; see <see cref="PortrayalTimeFilter"/>.
+    /// </summary>
+    public IReadOnlyList<PortrayalTimeInterval> TimeValid { get; init; } = [];
+
+    /// <summary>
+    /// The alert the instruction's geometry raises when a route crosses it,
+    /// or <see langword="null"/> when it raises none (S-100 Part 9
+    /// <c>alertReference</c>; set by the <c>AlertReference</c> command of Part
+    /// 9a §9a-11.2.2.9). Route checks read it; drawing ignores it.
+    /// </summary>
+    public PortrayalAlertReference? AlertReference { get; init; }
+
+    /// <summary>
+    /// Returns a numeric type order for S-100 Part 9 intra-priority sorting:
+    /// areas (0) → lines (1) → points (2) → text (3).
+    /// </summary>
+    internal abstract int TypeSortOrder { get; }
+}
+
+/// <summary>
+/// A point-symbol placement instruction. Geometry is the feature's point
+/// position, resolved by <see cref="DrawingInstruction.FeatureReference"/>.
+/// </summary>
+public sealed class PointInstruction : DrawingInstruction
+{
+    /// <summary>Reference (by name) to a symbol in the portrayal catalogue.</summary>
+    public string? SymbolReference { get; init; }
+
+    /// <summary>Symbol scale factor (1.0 = nominal size).</summary>
+    public double SymbolScale { get; init; } = 1.0;
+
+    /// <summary>
+    /// Symbol rotation in degrees, clockwise, measured in
+    /// <see cref="RotationCrs"/>. Null means upright.
+    /// </summary>
+    public double? Rotation { get; init; }
+
+    /// <summary>
+    /// The frame <see cref="Rotation"/> is measured in (S-100 Part 9
+    /// <c>rotationCRS</c>): the screen (<see cref="SymbolRotationCrs.Portrayal"/>,
+    /// the default) or true north (<see cref="SymbolRotationCrs.Geographic"/>).
+    /// It only matters on a rotated display, where a Portrayal symbol stays
+    /// upright and a Geographic one turns with the chart.
+    /// </summary>
+    public SymbolRotationCrs RotationCrs { get; init; }
+
+    /// <summary>
+    /// Local horizontal offset of the symbol from the geometry anchor, in
+    /// millimetres on the nominal S-100 display surface (S-100 Part 9 §11.3).
+    /// </summary>
+    public double LocalOffsetX { get; init; }
+
+    /// <summary>
+    /// Local vertical offset of the symbol from the geometry anchor, in
+    /// millimetres on the nominal S-100 display surface (S-100 Part 9 §11.3).
+    /// Positive values move the symbol toward the bottom of the display.
+    /// </summary>
+    public double LocalOffsetY { get; init; }
+
+    /// <summary>
+    /// Optional fractional position (0.0–1.0) along the feature's curve geometry
+    /// at which to anchor the symbol. Used for line-placed symbols.
+    /// </summary>
+    public double? LinePlacementPosition { get; init; }
+
+    /// <summary>
+    /// Optional explicit (latitude, longitude) anchor that overrides the
+    /// feature's geometry-derived anchor.  Set by the S-100 Part 9 §11.5
+    /// <c>AugmentedPoint</c> primitive in <c>GeographicCRS</c> mode
+    /// (e.g. used by S-101 SOUNDG03 to place each sounding of a MultiPoint
+    /// feature at its own coordinate).
+    /// </summary>
+    public GeoPosition? CoordinateOverride { get; init; }
+
+    /// <summary>
+    /// Where the anchor goes on a surface (S-100 Part 9 <c>AreaPlacement</c>):
+    /// a representative point inside the area, kept in the visible part of the
+    /// area as the view moves (<see cref="AreaPlacementMode.VisibleParts"/>,
+    /// the default) or fixed (<see cref="AreaPlacementMode.Geographic"/>).
+    /// Ignored for points, curves and an explicit <c>CoordinateOverride</c>.
+    /// </summary>
+    public AreaPlacementMode AreaPlacement { get; init; }
+
+    internal override int TypeSortOrder => 2;
+}
+
+/// <summary>
+/// A line rendering instruction. Geometry is the feature's curve, resolved by
+/// <see cref="DrawingInstruction.FeatureReference"/>.
+/// </summary>
+public sealed class LineInstruction : DrawingInstruction
+{
+    /// <summary>
+    /// Sentinel <see cref="LineStyleReference"/> (and
+    /// <see cref="AreaInstruction.OutlineStyleReference"/>) value emitted by
+    /// the S-100 Part 9A Lua portrayal model (<c>PortrayalModel.lua</c>'s
+    /// <c>SimpleLineStyle</c>) to denote an inline "simple" line style whose
+    /// colour, width, and dash pattern are carried directly on the
+    /// instruction (<see cref="LineColor"/> / <see cref="LineWidth"/> /
+    /// <see cref="Dashes"/>) rather than by a named complex line style in the
+    /// portrayal catalogue. Renderers and the catalogue pre-warm must treat
+    /// this value as "no catalogue lookup" — attempting to resolve it would
+    /// always miss (and historically threw a <see cref="KeyNotFoundException"/>
+    /// on every dataset load).
+    /// </summary>
+    public const string SimpleLineStyleReference = "_simple_";
+
+    /// <summary>Reference (by name) to a line style in the portrayal catalogue.</summary>
+    public string? LineStyleReference { get; init; }
+
+    /// <summary>Pen width (mm). Zero means use the catalogue default.</summary>
+    public double LineWidth { get; init; }
+
+    /// <summary>S-100 colour token (e.g. <c>CHBLK</c>) for the line stroke.</summary>
+    public string? LineColor { get; init; }
+
+    /// <summary>
+    /// Optional dashes as (start, length) pairs in millimetres within each
+    /// <see cref="DashIntervalLength"/> (S-100 Part 9 <c>Dash:start,length</c>).
+    /// </summary>
+    public IReadOnlyList<(double Offset, double Length)>? Dashes { get; init; }
+
+    /// <summary>
+    /// Length in millimetres of the interval the <see cref="Dashes"/> repeat
+    /// over: the second parameter of <c>LineStyle:_simple_,interval,width,colour</c>
+    /// (S-100 Part 9). Zero when none was given, in which case each dash is
+    /// followed by a gap as long as itself.
+    /// </summary>
+    public double DashIntervalLength { get; init; }
+
+    /// <summary>
+    /// Optional explicit coordinate sequence that overrides the feature's
+    /// geometry-derived polyline. Set by the S-100 Part 9A §11.5
+    /// <c>AugmentedRay</c> / <c>ArcByRadius</c> / <c>AugmentedPath</c>
+    /// primitives to supply synthetic geometry for sector-light limit lines
+    /// and all-around-light circles.
+    /// </summary>
+    public IReadOnlyList<GeoPosition>? CoordinatesOverride { get; init; }
+
+    /// <summary>
+    /// Whether line suppression applies (S-100 Part 9): where a line from
+    /// another feature with a higher drawing priority covers the same edge,
+    /// this line isn't drawn there, and this line suppresses lower ones in
+    /// turn. <see langword="false"/> for <c>LineInstructionUnsuppressed</c>,
+    /// which always draws in full and suppresses nothing.
+    /// </summary>
+    public bool Suppression { get; init; } = true;
+
+    internal override int TypeSortOrder => 1;
+}
+
+/// <summary>
+/// An area fill instruction. Geometry is the feature's surface (one or more
+/// rings), resolved by <see cref="DrawingInstruction.FeatureReference"/>.
+/// </summary>
+public sealed class AreaInstruction : DrawingInstruction
+{
+    /// <summary>Reference (by name) to an area fill in the portrayal catalogue.</summary>
+    public string? AreaFillReference { get; init; }
+
+    /// <summary>
+    /// S-100 colour token for a solid-colour fill. When set,
+    /// <see cref="AreaFillReference"/> denotes a pattern fill is not in use.
+    /// </summary>
+    public string? FillColor { get; init; }
+
+    /// <summary>Optional fill transparency (0.0 = opaque, 1.0 = fully transparent).</summary>
+    public double? Transparency { get; init; }
+
+    /// <summary>Optional reference (by name) to a line style for the area outline.</summary>
+    public string? OutlineStyleReference { get; init; }
+
+    internal override int TypeSortOrder => 0;
+}
+
+/// <summary>
+/// A text label rendering instruction. Anchor position is the feature's
+/// representative point, resolved by <see cref="DrawingInstruction.FeatureReference"/>.
+/// </summary>
+public sealed class TextInstruction : DrawingInstruction
+{
+    /// <summary>The literal text to render.</summary>
+    public required string Text { get; init; }
+
+    /// <summary>Optional reference (by name) to a font in the portrayal catalogue.</summary>
+    public string? FontReference { get; init; }
+
+    /// <summary>Font size (points).</summary>
+    public double FontSize { get; init; } = 10.0;
+
+    /// <summary>S-100 colour token (e.g. <c>CHBLK</c>) for the text foreground.</summary>
+    public string FontColor { get; init; } = "CHBLK";
+
+    /// <summary>
+    /// Optional opacity for the foreground colour, in the range 0.0 (fully
+    /// opaque) to 1.0 (fully transparent), matching the S-100 Part 9
+    /// <c>transparency</c> attribute on <c>&lt;foreground&gt;</c>.
+    /// </summary>
+    public double? FontTransparency { get; init; }
+
+    /// <summary>
+    /// Optional S-100 colour token for the text background (S-100 Part 9
+    /// §11.4 <c>&lt;background&gt;</c>).  Renderers typically draw this as a
+    /// translucent box or halo behind the glyphs.
+    /// </summary>
+    public string? BackgroundColor { get; init; }
+
+    /// <summary>
+    /// Optional opacity for the background colour, in the range 0.0 (fully
+    /// opaque) to 1.0 (fully transparent), matching the S-100 Part 9
+    /// <c>transparency</c> attribute on <c>&lt;background&gt;</c>.
+    /// </summary>
+    public double? BackgroundTransparency { get; init; }
+
+    /// <summary>Text rotation in degrees (clockwise from north). Null means upright.</summary>
+    public double? Rotation { get; init; }
+
+    /// <summary>
+    /// Optional fractional position (0.0–1.0) along the feature's curve geometry
+    /// at which to anchor the text. Used for line-placed labels.
+    /// </summary>
+    public double? LinePlacementPosition { get; init; }
+
+    /// <summary>
+    /// Horizontal alignment of the text relative to its anchor point
+    /// (S-100 Part 9 §11.4: <c>Start</c> | <c>Center</c> | <c>End</c>).
+    /// </summary>
+    public TextHorizontalAlignment HorizontalAlignment { get; init; } = TextHorizontalAlignment.Center;
+
+    /// <summary>
+    /// Vertical alignment of the text relative to its anchor point
+    /// (S-100 Part 9 §11.4: <c>Top</c> | <c>Center</c> | <c>Bottom</c>).
+    /// </summary>
+    public TextVerticalAlignment VerticalAlignment { get; init; } = TextVerticalAlignment.Center;
+
+    /// <summary>Optional X offset (millimetres on the nominal display surface) from the anchor.</summary>
+    public double? OffsetX { get; init; }
+
+    /// <summary>Optional Y offset (millimetres on the nominal display surface) from the anchor.</summary>
+    public double? OffsetY { get; init; }
+
+    /// <summary>
+    /// Optional line-placement start offset (S-100 Part 9 §11.4.2). Interpretation
+    /// depends on <see cref="LineOffsetMode"/>: a fraction of the curve length when
+    /// <c>Relative</c>, millimetres when <c>Absolute</c>.
+    /// </summary>
+    public double? LineStartOffset { get; init; }
+
+    /// <summary>Optional line-placement end offset; see <see cref="LineStartOffset"/>.</summary>
+    public double? LineEndOffset { get; init; }
+
+    /// <summary>Mode used to interpret <see cref="LineStartOffset"/> / <see cref="LineEndOffset"/>.</summary>
+    public LinePlacementMode? LineOffsetMode { get; init; }
+
+    /// <summary>
+    /// Optional explicit (latitude, longitude) anchor that overrides the
+    /// feature's geometry-derived anchor (S-100 Part 9 §11.5 <c>AugmentedPoint</c>
+    /// in <c>GeographicCRS</c> mode).
+    /// </summary>
+    public GeoPosition? CoordinateOverride { get; init; }
+
+    /// <summary>
+    /// Where the anchor goes on a surface (S-100 Part 9 <c>AreaPlacement</c>):
+    /// a representative point inside the area, kept in the visible part of the
+    /// area as the view moves (<see cref="AreaPlacementMode.VisibleParts"/>,
+    /// the default) or fixed (<see cref="AreaPlacementMode.Geographic"/>).
+    /// Ignored for points, curves and an explicit <c>CoordinateOverride</c>.
+    /// </summary>
+    public AreaPlacementMode AreaPlacement { get; init; }
+
+    /// <summary>
+    /// Font weight (S-100 Part 9 <c>FontCharacteristics.weight</c>). Defaults to
+    /// <see cref="TextFontWeight.Medium"/>, the renderer's regular face.
+    /// </summary>
+    public TextFontWeight FontWeight { get; init; } = TextFontWeight.Medium;
+
+    /// <summary>
+    /// Font proportion (S-100 Part 9 <c>FontCharacteristics.proportion</c>).
+    /// Defaults to <see cref="TextFontProportion.Proportional"/>.
+    /// </summary>
+    public TextFontProportion FontProportion { get; init; } = TextFontProportion.Proportional;
+
+    /// <summary>
+    /// Font slant (S-100 Part 9 <c>FontCharacteristics.slant</c>). Defaults to
+    /// <see cref="TextFontSlant.Upright"/>.
+    /// </summary>
+    public TextFontSlant FontSlant { get; init; } = TextFontSlant.Upright;
+
+    /// <summary>
+    /// Optional S-100 colour token for a halo stroked around the glyphs, so the
+    /// label reads over busy chart content. Not an S-100 Part 9 text attribute:
+    /// it is used by portrayals SoundCharts defines itself (S-104 water level).
+    /// <see langword="null"/> draws no halo.
+    /// </summary>
+    public string? HaloColor { get; init; }
+
+    /// <summary>
+    /// Width of the <see cref="HaloColor"/> stroke in millimetres on the nominal
+    /// display surface. Ignored when <see cref="HaloColor"/> is <see langword="null"/>.
+    /// </summary>
+    public double HaloWidth { get; init; }
+
+    internal override int TypeSortOrder => 3;
+}
+
+/// <summary>S-100 Part 9 font weight.</summary>
+/// <remarks>
+/// The numeric values are a persisted contract; see the remarks on
+/// <see cref="TextHorizontalAlignment"/>.
+/// </remarks>
+public enum TextFontWeight
+{
+    /// <summary>A light face.</summary>
+    Light = 0,
+
+    /// <summary>The regular face.</summary>
+    Medium = 1,
+
+    /// <summary>A bold face.</summary>
+    Bold = 2,
+}
+
+/// <summary>S-100 Part 9 font proportion.</summary>
+/// <remarks>
+/// The numeric values are a persisted contract; see the remarks on
+/// <see cref="TextHorizontalAlignment"/>.
+/// </remarks>
+public enum TextFontProportion
+{
+    /// <summary>A proportional face.</summary>
+    Proportional = 0,
+
+    /// <summary>A monospaced face.</summary>
+    MonoSpaced = 1,
+}
+
+/// <summary>S-100 Part 9 font slant.</summary>
+/// <remarks>
+/// The numeric values are a persisted contract; see the remarks on
+/// <see cref="TextHorizontalAlignment"/>.
+/// </remarks>
+public enum TextFontSlant
+{
+    /// <summary>An upright face.</summary>
+    Upright = 0,
+
+    /// <summary>An italic face.</summary>
+    Italics = 1,
+}
+
+/// <summary>S-100 Part 9 horizontal text alignment.</summary>
+/// <remarks>
+/// The numeric values are a persisted contract: they are written by ordinal
+/// into the disk-backed portrayal cache (<see cref="Caching.DrawingInstructionSerializer"/>).
+/// Do not renumber or reorder existing members; append new members with the
+/// next free value, and bump <see cref="Caching.DrawingInstructionSerializer.FormatVersion"/>
+/// if the wire meaning changes.
+/// </remarks>
+public enum TextHorizontalAlignment
+{
+    /// <summary>The text starts at the anchor point (left-aligned for left-to-right text).</summary>
+    Start = 0,
+
+    /// <summary>The text is centred horizontally on the anchor point.</summary>
+    Center = 1,
+
+    /// <summary>The text ends at the anchor point (right-aligned for left-to-right text).</summary>
+    End = 2,
+}
+
+/// <summary>S-100 Part 9 vertical text alignment.</summary>
+/// <remarks>
+/// The numeric values are a persisted contract; see the remarks on
+/// <see cref="TextHorizontalAlignment"/>.
+/// </remarks>
+public enum TextVerticalAlignment
+{
+    /// <summary>The top of the text is placed at the anchor point.</summary>
+    Top = 0,
+
+    /// <summary>The text is centred vertically on the anchor point.</summary>
+    Center = 1,
+
+    /// <summary>The bottom of the text is placed at the anchor point.</summary>
+    Bottom = 2,
+}
+
+/// <summary>S-100 Part 9 line placement mode.</summary>
+/// <remarks>
+/// The numeric values are a persisted contract; see the remarks on
+/// <see cref="TextHorizontalAlignment"/>.
+/// </remarks>
+public enum LinePlacementMode
+{
+    /// <summary>Offsets are fractions in the range [0,1] of the curve length.</summary>
+    Relative = 0,
+
+    /// <summary>Offsets are absolute distances in millimetres along the curve.</summary>
+    Absolute = 1,
+}
+
+/// <summary>
+/// The frame a symbol rotation is measured in (S-100 Part 9 <c>rotationCRS</c>).
+/// </summary>
+public enum SymbolRotationCrs
+{
+    /// <summary>
+    /// <c>PortrayalCRS</c> (the default): relative to the screen, so the symbol
+    /// keeps its angle, upright or not, however the display is rotated.
+    /// </summary>
+    Portrayal,
+
+    /// <summary>
+    /// <c>GeographicCRS</c>: clockwise from true north, so the symbol turns with
+    /// the chart on a rotated display (orientation arrows, light flares).
+    /// </summary>
+    Geographic,
+}
+
+/// <summary>
+/// Where a point symbol or text goes on a surface (S-100 Part 9
+/// <c>AreaPlacementMode</c>).
+/// </summary>
+public enum AreaPlacementMode
+{
+    /// <summary>
+    /// <c>VisibleParts</c> (the default): in the visible part of the area. The
+    /// anchor is a representative point inside the area; when that point is
+    /// out of view, the symbol moves into the largest part of the area that is
+    /// in view.
+    /// </summary>
+    VisibleParts,
+
+    /// <summary>
+    /// <c>Geographic</c>: at a fixed representative point inside the area,
+    /// wherever the view is.
+    /// </summary>
+    Geographic,
+}

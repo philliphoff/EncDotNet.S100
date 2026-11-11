@@ -1,0 +1,354 @@
+using System.Globalization;
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Pipelines;
+
+namespace EncDotNet.S100.Datasets.S57;
+
+/// <summary>
+/// Thin wrapper over <see cref="EncDotNet.S57.S57Document"/> from the
+/// upstream <c>EncDotNet.S57</c> package. Provides the <see cref="IsS57File"/>
+/// discriminator used by <c>DatasetPipelineFactory</c>
+/// to disambiguate <c>.000</c> files between S-57 and S-101 (which share the
+/// extension and ISO 8211 envelope).
+/// </summary>
+public sealed class S57Dataset
+{
+    /// <summary>S-57 Appendix A attribute code (ATTL) of <c>SCAMIN</c>.</summary>
+    private const int ScaminAttributeCode = 133;
+
+    private S57Dataset(EncDotNet.S57.S57Document document, S57UpdateReport? updateReport = null)
+    {
+        Document = document;
+        UpdateReport = updateReport;
+    }
+
+    /// <summary>The underlying parsed S-57 document (from the package).</summary>
+    public EncDotNet.S57.S57Document Document { get; }
+
+    /// <summary>
+    /// What happened to the updates when the cell was opened with
+    /// <see cref="Open(Stream, IReadOnlyList{Stream})"/>; otherwise
+    /// <see langword="null"/>.
+    /// </summary>
+    public S57UpdateReport? UpdateReport { get; }
+
+    /// <summary>Dataset name from the DSID record.</summary>
+    public string DatasetName => Document.DataSetIdentification?.DataSetName ?? "";
+
+    /// <summary>Number of feature records in the dataset.</summary>
+    public int FeatureCount => Document.FeatureRecords.Count;
+
+    /// <summary>
+    /// The S-57 product specification the dataset declares in its DSID
+    /// <c>PRSP</c> subfield (see <see cref="S57ProductSpecification"/>), or
+    /// <c>0</c> when it declares none.
+    /// </summary>
+    public int DeclaredProductSpecification => DeclaredProductSpecificationOf(Document);
+
+    /// <summary>
+    /// The S-100 product this dataset should be translated into:
+    /// <see cref="S57TranslationTarget.S401"/> for a cell declaring
+    /// <see cref="S57ProductSpecification.InlandElectronicNavigationalChart"/>,
+    /// otherwise <see cref="S57TranslationTarget.S101"/>.
+    /// </summary>
+    public S57TranslationTarget TranslationTarget => TranslationTargetFor(Document);
+
+    /// <summary>
+    /// The S-57 product specification <paramref name="document"/> declares in its
+    /// DSID <c>PRSP</c> subfield, or <c>0</c> when it has no DSID.
+    /// </summary>
+    /// <param name="document">The parsed S-57 document.</param>
+    public static int DeclaredProductSpecificationOf(EncDotNet.S57.S57Document document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return document.DataSetIdentification?.ProductSpecification ?? 0;
+    }
+
+    /// <summary>
+    /// The S-100 product <paramref name="document"/> should be translated into,
+    /// chosen from the S-57 product specification it declares (see
+    /// <see cref="TranslationTarget"/>).
+    /// </summary>
+    /// <param name="document">The parsed S-57 document.</param>
+    public static S57TranslationTarget TranslationTargetFor(EncDotNet.S57.S57Document document)
+        => DeclaredProductSpecificationOf(document) == S57ProductSpecification.InlandElectronicNavigationalChart
+            ? S57TranslationTarget.S401
+            : S57TranslationTarget.S101;
+
+    /// <summary>
+    /// Reads only the lightweight <see cref="DatasetMetadata"/> for an S-57
+    /// base cell at <paramref name="path"/> — its (canonical) specification,
+    /// geographic extent, and intended display-scale window — for phased /
+    /// deferred loading (issue #460). See <see cref="ReadMetadata()"/> for the
+    /// rationale and the cheap-scan strategy.
+    /// </summary>
+    /// <param name="path">Absolute path to the S-57 base cell (<c>.000</c>).</param>
+    /// <returns>The cell's lightweight metadata.</returns>
+    public static DatasetMetadata ReadMetadata(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        return Open(path).ReadMetadata();
+    }
+
+    /// <summary>
+    /// Reads only the lightweight <see cref="DatasetMetadata"/> for an S-57
+    /// base cell from <paramref name="stream"/>. See
+    /// <see cref="ReadMetadata()"/> for the phased-loading rationale.
+    /// </summary>
+    /// <param name="stream">The S-57 base cell (<c>.000</c>) stream.</param>
+    /// <returns>The cell's lightweight metadata.</returns>
+    public static DatasetMetadata ReadMetadata(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        return Open(stream).ReadMetadata();
+    }
+
+    /// <summary>
+    /// Produces the lightweight <see cref="DatasetMetadata"/> for this already
+    /// parsed dataset: the canonical <c>S-57</c> specification, the geographic
+    /// extent, and the whole-cell display window (issue #460).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The phased win over a full load is that the S-57 → S-101 translation and
+    /// the portrayal catalogue are never touched: the extent is folded directly
+    /// from the raw spatial records' coordinates (2-D vertices and sounding
+    /// nodes), divided by the coordinate multiplication factor (COMF) from the
+    /// <c>DSPM</c> field to yield WGS-84 decimal degrees. This mirrors the
+    /// extent the full render ultimately fits, but skips S-101 feature/attribute
+    /// materialisation (the display window reads only the raw <c>SCAMIN</c>
+    /// attribute values).
+    /// </para>
+    /// <para>
+    /// The display-scale window carries only a coarsest bound, from
+    /// <see cref="ResolveCellMinimumDisplayScale"/> (the larger of the
+    /// compilation scale and the largest feature <c>SCAMIN</c>) — the same value
+    /// the full processor applies as the whole-cell minimum display scale. The
+    /// canonical spec name is <c>S-57</c> with a <c>default</c> edition, matching
+    /// <c>S57DatasetProcessor.Spec</c>.
+    /// </para>
+    /// </remarks>
+    /// <returns>The cell's lightweight metadata.</returns>
+    public DatasetMetadata ReadMetadata() => ReadMetadata(Document);
+
+    /// <summary>
+    /// Produces the lightweight <see cref="DatasetMetadata"/> for an
+    /// already-parsed (and, where applicable, update-folded)
+    /// <see cref="EncDotNet.S57.S57Document"/>. Exposed so the render pipeline's
+    /// <c>S57DatasetProcessor</c> can surface the same metadata from the merged
+    /// document it already holds, without re-opening the cell.
+    /// </summary>
+    /// <param name="document">The parsed S-57 document.</param>
+    /// <returns>The document's lightweight metadata.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="document"/> is null.</exception>
+    public static DatasetMetadata ReadMetadata(EncDotNet.S57.S57Document document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return new DatasetMetadata
+        {
+            Spec = new SpecRef("S-57", default),
+            Extent = ComputeExtent(document),
+            HorizontalCrsEpsg = null,
+            DisplayScale = ResolveDisplayScale(document),
+        };
+    }
+
+    /// <summary>
+    /// Folds the WGS-84 extent from every 2-D vertex and sounding node in the
+    /// document's spatial records, converting raw integer coordinates to decimal
+    /// degrees via the coordinate multiplication factor (COMF, S-57 Appendix
+    /// B.1 §7.3.1.1). Returns <see langword="null"/> when the document declares
+    /// no usable COMF or carries no coordinate-bearing spatial record.
+    /// </summary>
+    private static BoundingBox? ComputeExtent(EncDotNet.S57.S57Document document)
+    {
+        var comf = document.CoordinateMultiplicationFactor;
+        if (comf <= 0)
+            return null;
+
+        long minX = long.MaxValue, maxX = long.MinValue;
+        long minY = long.MaxValue, maxY = long.MinValue;
+        var any = false;
+
+        foreach (var vector in document.VectorRecords)
+        {
+            foreach (var c in vector.Coordinates2D)
+            {
+                if (c.X < minX) minX = c.X;
+                if (c.X > maxX) maxX = c.X;
+                if (c.Y < minY) minY = c.Y;
+                if (c.Y > maxY) maxY = c.Y;
+                any = true;
+            }
+
+            foreach (var s in vector.Soundings)
+            {
+                if (s.X < minX) minX = s.X;
+                if (s.X > maxX) maxX = s.X;
+                if (s.Y < minY) minY = s.Y;
+                if (s.Y > maxY) maxY = s.Y;
+                any = true;
+            }
+        }
+
+        if (!any)
+            return null;
+
+        double divisor = comf;
+        return new BoundingBox(
+            southLatitude: minY / divisor,
+            westLongitude: minX / divisor,
+            northLatitude: maxY / divisor,
+            eastLongitude: maxX / divisor);
+    }
+
+    /// <summary>
+    /// Resolves the display-scale window: only the coarsest bound is modelled
+    /// (S-57 has no finest-scale analogue), taken from
+    /// <see cref="ResolveCellMinimumDisplayScale"/> — the same whole-cell
+    /// minimum display scale the full processor applies. Returns
+    /// <see langword="null"/> when the cell declares no usable scale.
+    /// </summary>
+    private static DisplayScaleRange? ResolveDisplayScale(EncDotNet.S57.S57Document document)
+    {
+        var minimum = ResolveCellMinimumDisplayScale(document);
+        return minimum is int value ? new DisplayScaleRange(value, null) : null;
+    }
+
+    /// <summary>
+    /// Resolves an S-57 cell's whole-cell zoom-out window: the coarsest
+    /// (largest-denominator) scale at which any of its content is intended to
+    /// be displayed. This is the larger of the compilation scale (CSCL, DSPM
+    /// field, S-57 Appendix B.1 §7.3.1.1) and the largest feature
+    /// <c>SCAMIN</c> (S-57 Appendix A attribute 133) in the cell.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// S-57 carries no minimum display scale. The compilation scale is the
+    /// <em>largest</em> intended viewing scale — S-52 §3.1.7 uses it only for
+    /// the overscale indication — and S-65 Annex B §2.1.6 maps it to the S-101
+    /// optimum display scale while leaving <c>minimumDisplayScale</c> null.
+    /// Capping the cell at CSCL therefore hid content the producer encoded to
+    /// remain visible further out: NOAA <c>SCAMIN</c> values run to 3–5× CSCL,
+    /// and USACE inland cells (CSCL 1:5,000) to 1:300,000. The largest
+    /// <c>SCAMIN</c> is the producer's own coarsest visibility statement, so
+    /// beyond it no feature would draw anyway; features without
+    /// <c>SCAMIN</c> (area fills, coverage) stay visible up to it.
+    /// </para>
+    /// <para>
+    /// The compilation scale remains the cell's ranking scale against
+    /// overlapping cells; see <see cref="ResolveCompilationScale"/>.
+    /// </para>
+    /// </remarks>
+    /// <param name="document">The parsed (and, where applicable, update-folded) S-57 document.</param>
+    /// <returns>
+    /// The window denominator, or <see langword="null"/> when the cell declares
+    /// neither a positive compilation scale nor any positive <c>SCAMIN</c>.
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="document"/> is null.</exception>
+    public static int? ResolveCellMinimumDisplayScale(EncDotNet.S57.S57Document document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var result = ResolveCompilationScale(document) ?? 0;
+        foreach (var feature in document.FeatureRecords)
+        {
+            foreach (var attribute in feature.Attributes)
+            {
+                if (attribute.AttributeCode == ScaminAttributeCode
+                    && int.TryParse(attribute.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var scamin)
+                    && scamin > result)
+                {
+                    result = scamin;
+                }
+            }
+        }
+
+        return result > 0 ? result : null;
+    }
+
+    /// <summary>
+    /// Resolves an S-57 cell's compilation scale (CSCL, DSPM field, S-57
+    /// Appendix B.1 §7.3.1.1) — the analogue of the S-101 optimum display
+    /// scale (S-65 Annex B §2.1.6) used to rank overlapping cells (a smaller
+    /// denominator is the finer cell).
+    /// </summary>
+    /// <param name="document">The parsed S-57 document.</param>
+    /// <returns>The positive compilation scale denominator, or <see langword="null"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="document"/> is null.</exception>
+    public static int? ResolveCompilationScale(EncDotNet.S57.S57Document document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var compilationScale = document.DataSetParameters?.CompilationScale ?? 0;
+        return compilationScale > 0 ? compilationScale : null;
+    }
+
+    /// <summary>Opens an S-57 base cell from a file path.</summary>
+    public static S57Dataset Open(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        var doc = EncDotNet.S57.S57DocumentReader.ReadFromFile(path);
+        return new S57Dataset(doc);
+    }
+
+    /// <summary>Opens an S-57 base cell from a stream.</summary>
+    public static S57Dataset Open(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        var doc = EncDotNet.S57.S57DocumentReader.Read(stream);
+        return new S57Dataset(doc);
+    }
+
+    /// <summary>
+    /// Opens an S-57 base cell from <paramref name="baseStream"/> and applies the
+    /// sequential update datasets in <paramref name="updateStreams"/> with
+    /// <see cref="S57UpdateApplicator"/>.
+    /// </summary>
+    /// <remarks>
+    /// Updates are applied while they're for the cell's edition and follow on
+    /// from each other; the first that doesn't stops the sequence, and an update
+    /// with edition 0 cancels the cell. What happened is in
+    /// <see cref="UpdateReport"/>, and never stops the cell from opening.
+    /// </remarks>
+    /// <param name="baseStream">The base cell (<c>.000</c>) stream.</param>
+    /// <param name="updateStreams">The update streams, in ascending update-number order.</param>
+    public static S57Dataset Open(Stream baseStream, IReadOnlyList<Stream> updateStreams)
+    {
+        ArgumentNullException.ThrowIfNull(baseStream);
+        ArgumentNullException.ThrowIfNull(updateStreams);
+
+        var doc = EncDotNet.S57.S57DocumentReader.Read(baseStream);
+        var updates = new List<EncDotNet.S57.S57Document>(updateStreams.Count);
+        foreach (var updateStream in updateStreams)
+        {
+            ArgumentNullException.ThrowIfNull(updateStream);
+            updates.Add(EncDotNet.S57.S57DocumentReader.Read(updateStream));
+        }
+
+        var merged = S57UpdateApplicator.Apply(doc, updates, out var report);
+        return new S57Dataset(merged, report);
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> when the file at <paramref name="path"/> appears to
+    /// be an S-57 dataset (heuristic: the ISO 8211 DDR contains a <c>DSPM</c>
+    /// field, which is unique to S-57 and not present in S-101). Returns
+    /// <c>false</c> for non-ISO 8211 files or files lacking <c>DSPM</c>.
+    /// </summary>
+    public static bool IsS57File(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        try
+        {
+            var iso = EncDotNet.Iso8211.Iso8211DocumentReader.ReadFromFile(path);
+            if (iso.DataDescriptiveRecord is null) return false;
+            var ddr = EncDotNet.Iso8211.Iso8211DataDescriptiveRecordReader.Read(iso.DataDescriptiveRecord);
+            return ddr.GetFieldDefinition("DSPM") is not null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+}

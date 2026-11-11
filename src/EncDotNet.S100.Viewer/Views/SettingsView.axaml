@@ -1,0 +1,169 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:settings="using:EncDotNet.S100.Viewer.Views.Settings"
+             x:Class="EncDotNet.S100.Viewer.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+
+    <!--
+      The Settings panel (#845): a category list on the left and the selected
+      category's page on the right. The panel fills the content area (see
+      IActivityTab.FillsContent), so pages get a readable column instead of
+      the side dock's 320 px. Each page lives in Views/Settings and keeps the
+      Settings.* automation ids of its controls; a page's controls are in the
+      visual tree only while its category is selected.
+    -->
+    <UserControl.Styles>
+        <!-- Category list: a vertical strip of tabs beside the selected page. -->
+        <Style Selector="TabControl.settingsNav">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="ItemsPanel">
+                <ItemsPanelTemplate>
+                    <StackPanel Spacing="2" />
+                </ItemsPanelTemplate>
+            </Setter>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Grid ColumnDefinitions="200,*">
+                        <Border Grid.Column="0"
+                                BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="0,0,1,0"
+                                Padding="8,12">
+                            <ItemsPresenter Name="PART_ItemsPresenter"
+                                            ItemsPanel="{TemplateBinding ItemsPanel}" />
+                        </Border>
+                        <ContentPresenter Grid.Column="1"
+                                          Name="PART_SelectedContentHost"
+                                          Content="{TemplateBinding SelectedContent}"
+                                          ContentTemplate="{TemplateBinding SelectedContentTemplate}"
+                                          HorizontalContentAlignment="Stretch"
+                                          VerticalContentAlignment="Stretch" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="TabControl.settingsNav > TabItem">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Panel>
+                        <Border Name="PART_Tint"
+                                Background="{DynamicResource AccentBrush}"
+                                CornerRadius="6"
+                                Opacity="0" />
+                        <ContentPresenter Name="PART_ContentPresenter"
+                                          Content="{TemplateBinding Header}"
+                                          ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                          Padding="10,7" />
+                    </Panel>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="TabControl.settingsNav > TabItem:pointerover /template/ Border#PART_Tint">
+            <Setter Property="Opacity" Value="0.06" />
+        </Style>
+        <Style Selector="TabControl.settingsNav > TabItem:selected /template/ Border#PART_Tint">
+            <Setter Property="Opacity" Value="0.12" />
+        </Style>
+        <Style Selector="TabControl.settingsNav > TabItem:selected">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+
+        <Style Selector="TextBlock.settingsNavStatus">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="TextBlock.settingsNavStatus.warning">
+            <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
+        </Style>
+        <Style Selector="TextBlock.settingsNavStatus.destructive">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+
+        <!-- Page layout shared by Views/Settings/*SettingsPage. -->
+        <Style Selector="StackPanel.settingsPage">
+            <Setter Property="Spacing" Value="16" />
+            <Setter Property="Margin" Value="28,20,28,28" />
+            <Setter Property="MaxWidth" Value="720" />
+            <Setter Property="HorizontalAlignment" Value="Left" />
+        </Style>
+        <Style Selector="TextBlock.settingsPageTitle">
+            <Setter Property="FontSize" Value="17" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.settingsPageHelp">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Opacity" Value="0.6" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="TextBlock.settingsSection">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Opacity" Value="0.7" />
+        </Style>
+        <Style Selector="TextBlock.settingsHelp">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Opacity" Value="0.6" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </UserControl.Styles>
+
+    <!-- Tab order must match SettingsCategory: SelectedCategoryIndex is its value. -->
+    <TabControl Classes="settingsNav"
+                AutomationProperties.AutomationId="Settings.Categories"
+                AutomationProperties.Name="{x:Static loc:Strings.Label_SettingsCategories}"
+                SelectedIndex="{Binding SelectedCategoryIndex}">
+        <TabItem Header="{x:Static loc:Strings.Settings_Category_General}"
+                 AutomationProperties.AutomationId="Settings.Category.General"
+                 AutomationProperties.Name="{x:Static loc:Strings.Settings_Category_General}">
+            <settings:GeneralSettingsPage />
+        </TabItem>
+        <TabItem Header="{x:Static loc:Strings.Settings_Category_Appearance}"
+                 AutomationProperties.AutomationId="Settings.Category.Appearance"
+                 AutomationProperties.Name="{x:Static loc:Strings.Settings_Category_Appearance}">
+            <settings:AppearanceSettingsPage />
+        </TabItem>
+        <TabItem Header="{x:Static loc:Strings.Settings_Category_Chart}"
+                 AutomationProperties.AutomationId="Settings.Category.Chart"
+                 AutomationProperties.Name="{x:Static loc:Strings.Settings_Category_Chart}">
+            <settings:ChartSettingsPage />
+        </TabItem>
+        <TabItem Header="{x:Static loc:Strings.Settings_Category_Vessels}"
+                 AutomationProperties.AutomationId="Settings.Category.Vessels"
+                 AutomationProperties.Name="{x:Static loc:Strings.Settings_Category_Vessels}">
+            <settings:VesselsSettingsPage />
+        </TabItem>
+        <TabItem Header="{x:Static loc:Strings.Settings_Category_Integrations}"
+                 AutomationProperties.AutomationId="Settings.Category.Integrations"
+                 AutomationProperties.Name="{x:Static loc:Strings.Settings_Category_Integrations}">
+            <settings:IntegrationsSettingsPage />
+        </TabItem>
+        <!-- The status line under the label is the Settings warning for an
+             identity that ends within 30 days or was revoked (#845 A2). -->
+        <TabItem AutomationProperties.AutomationId="Settings.Category.Keys"
+                 AutomationProperties.Name="{x:Static loc:Strings.Settings_Category_Keys}"
+                 AutomationProperties.HelpText="{Binding KeysAndCertificates.StatusText}"
+                 IsVisible="{Binding KeysAndCertificates, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TabItem.Header>
+                <StackPanel Spacing="2">
+                    <TextBlock Text="{x:Static loc:Strings.Settings_Category_Keys}" />
+                    <TextBlock Classes="settingsNavStatus"
+                               Classes.destructive="{Binding KeysAndCertificates.StatusIsDestructive, FallbackValue=False}"
+                               Classes.warning="{Binding KeysAndCertificates.StatusIsWarning, FallbackValue=False}"
+                               Text="{Binding KeysAndCertificates.StatusText}"
+                               IsVisible="{Binding KeysAndCertificates.HasStatus, FallbackValue=False}" />
+                </StackPanel>
+            </TabItem.Header>
+            <settings:KeysAndCertificatesSettingsPage DataContext="{Binding KeysAndCertificates}" />
+        </TabItem>
+        <TabItem Header="{x:Static loc:Strings.Settings_Category_Advanced}"
+                 AutomationProperties.AutomationId="Settings.Category.Advanced"
+                 AutomationProperties.Name="{x:Static loc:Strings.Settings_Category_Advanced}">
+            <settings:AdvancedSettingsPage />
+        </TabItem>
+    </TabControl>
+</UserControl>

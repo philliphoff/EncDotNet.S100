@@ -1,0 +1,398 @@
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Features;
+using EncDotNet.S100.Validation;
+
+namespace EncDotNet.S100.Datasets.Pipelines;
+
+/// <summary>
+/// Processes a dataset file and exposes feature/coverage pick info,
+/// enumeration, and validation. Rendering is performed separately by a
+/// renderer that consumes the processor's portrayal-output seam (e.g.
+/// <c>IVectorPortrayalSource</c> / <c>ICoveragePortrayalSource</c>), so this
+/// abstraction carries no renderer (Mapsui) type. Constructed once per file.
+/// </summary>
+public interface IDatasetProcessor
+{
+    /// <summary>
+    /// The product specification (name + edition) this dataset declares
+    /// conformance to. Each per-spec processor returns a fixed name (e.g.
+    /// "S-101"); the edition portion is populated from the dataset itself
+    /// (HDF5 <c>productSpecification</c> attribute, GML application
+    /// namespace, S-101 ProductSpecificationEdition, etc.) when known,
+    /// otherwise defaults to <see cref="SpecVersion"/> default.
+    /// </summary>
+    SpecRef Spec { get; }
+
+    /// <summary>
+    /// The lightweight, product-agnostic <see cref="DatasetMetadata"/> for
+    /// this dataset — its declared specification and, where cheaply
+    /// derivable, its geographic extent, horizontal CRS, display-scale
+    /// window, and temporal coverage. Overriding processors derive it
+    /// <em>once</em> from the already-parsed dataset (never a second parse) and
+    /// cache it, so hosts can frame a viewport, register a layer, draw an
+    /// out-of-scale indicator, or gate visibility without re-reading the
+    /// dataset. The default implementation does not override this and instead
+    /// returns a fresh, minimal value carrying only <see cref="Spec"/> on each
+    /// access; processors that can supply an extent (and other facts) override
+    /// it with the derive-once-and-cache behaviour above. See issue #467 / #460.
+    /// </summary>
+    DatasetMetadata Metadata => new() { Spec = Spec };
+
+    /// <summary>
+    /// The specification whose Feature Catalogue, Portrayal Catalogue, and
+    /// ECDIS display conventions are actually used to process and draw this
+    /// dataset. Equal to <see cref="Spec"/> for every native S-100 product;
+    /// for a legacy S-57 cell (translated in-memory to S-101) this is
+    /// <c>"S-101"</c> while <see cref="Spec"/> stays <c>"S-57"</c>. Callers
+    /// resolving a portrayal / feature catalogue, keying viewing-group or
+    /// display-category state, or selecting a display mode must key off this
+    /// rather than <see cref="Spec"/>; callers labelling, validating, or
+    /// version-assessing the dataset use <see cref="Spec"/>. The default is
+    /// <see cref="Spec"/>; a processor that portrays its product through another
+    /// specification's catalogue (the S-57 processor) overrides it.
+    /// </summary>
+    SpecRef PortrayalSpec => Spec;
+
+    /// <summary>
+    /// How the dataset's declared product specification edition
+    /// (<see cref="Spec"/>) relates to the version of the catalogue used to
+    /// process it, or <c>null</c> when no catalogue self-describes its
+    /// version (so no assessment can be made). Computed once at construction
+    /// — catalogue resolution is a one-shot per processor — and surfaced by
+    /// hosts (CLI <c>info</c>/<c>render</c>, viewer layer list) to warn on a
+    /// version mismatch per S-100 Edition 5.2.1 Part 2 §6.
+    /// </summary>
+    SpecVersionAssessment? VersionAssessment => null;
+
+    /// <summary>
+    /// The outcome of the dataset-level axis-order check the reader ran on
+    /// the dataset's positions (issue #650), or <c>null</c> when the product
+    /// has no positions to check or the reader does not run it. A
+    /// <see cref="EncDotNet.S100.DataModel.AxisOrderOutcome.Swapped"/> outcome
+    /// means the reader swapped latitude and longitude for the whole dataset
+    /// (when <see cref="EncDotNet.S100.DataModel.AxisOrderAssessment.Normalized"/>
+    /// is set). Surfaced by hosts (CLI <c>info</c>, the viewer's dataset list)
+    /// and, when swapped or inconsistent, as a <c>{product}-PROJ-AXIS</c>
+    /// warning in <see cref="Validate"/>.
+    /// </summary>
+    EncDotNet.S100.DataModel.AxisOrderAssessment? AxisOrder => null;
+
+    /// <summary>
+    /// Returns information about a feature identified by its reference string
+    /// (as stored in the rendered feature via the renderer's feature-ref key),
+    /// or <c>null</c> if the feature cannot be found.
+    /// </summary>
+    /// <remarks>
+    /// Real-world datasets occasionally contain features that share a
+    /// <c>gml:id</c> (a producer bug), so callers that already know the
+    /// feature's position within the dataset should prefer
+    /// <see cref="GetFeatureInfoAt"/> for a collision-free lookup.
+    /// </remarks>
+    FeatureInfo? GetFeatureInfo(string featureRef);
+
+    /// <summary>
+    /// Returns information about the feature at the given enumeration
+    /// ordinal — the same index reported via
+    /// <see cref="FeatureSummary.Ordinal"/> from
+    /// <see cref="EnumerateFeatures"/>. Used by the search index so
+    /// duplicate <c>gml:id</c>s (a real producer bug) still route to
+    /// the correct feature.
+    /// </summary>
+    /// <returns>
+    /// Feature info, or <c>null</c> when the ordinal is out of range or
+    /// this processor does not expose discrete features.
+    /// </returns>
+    FeatureInfo? GetFeatureInfoAt(int ordinal) => null;
+
+    /// <summary>
+    /// Returns the renderer-neutral geometry of the feature at the given
+    /// enumeration ordinal — the same index reported by
+    /// <see cref="FeatureSummary.Ordinal"/> and carried by
+    /// <see cref="FeatureGeometryHit.Ordinal"/>, so a pick resolves to its
+    /// outline the same collision-free way <see cref="GetFeatureInfoAt"/>
+    /// resolves its attributes. Lets a host highlight or outline a picked
+    /// feature without reaching into a product's feature model.
+    /// </summary>
+    /// <returns>
+    /// The feature's geometry, or <c>null</c> when the ordinal is out of range
+    /// or this processor does not expose discrete vector features (coverage /
+    /// non-vector products leave the default and pick through
+    /// <see cref="GetCoverageInfo"/>).
+    /// </returns>
+    S100FeatureGeometry? GetFeatureGeometryAt(int ordinal) => null;
+
+    /// <summary>
+    /// Returns every navigational warning part in the dataset (each S-124
+    /// <c>NavwarnPart</c>) with its message, in dataset order, including parts
+    /// with no geometry. Lets a host list warnings without picking them: a
+    /// part with no location draws nothing, so a pick can never reach it.
+    /// </summary>
+    /// <returns>
+    /// One entry per warning part, or an empty list when the product carries
+    /// no warnings.
+    /// </returns>
+    IReadOnlyList<NavigationalWarningFeature> GetNavigationalWarnings() => [];
+
+    /// <summary>
+    /// Returns the dataset's navigational warning as a whole (S-124: its
+    /// <c>NavwarnPreamble</c> and <c>References</c>), with no part's validity,
+    /// text or geometry. A cancellation or an in-force bulletin may have no
+    /// parts, so <see cref="GetNavigationalWarnings"/> doesn't list it, yet it
+    /// ends other warnings; build a <see cref="NavigationalWarningSet"/> from it.
+    /// </summary>
+    /// <returns>The warning, or <c>null</c> when the product carries none.</returns>
+    NavigationalWarningInfo? GetNavigationalWarningMessage() => null;
+
+    /// <summary>
+    /// Samples this dataset at the supplied geographic position and
+    /// returns a synthetic <see cref="FeatureInfo"/> describing the
+    /// underlying coverage value(s) — used by the viewer to provide a
+    /// pick experience on raster / coverage products (S-102, S-104,
+    /// S-111). Vector products do not implement this method and the
+    /// default implementation returns <c>null</c>.
+    /// </summary>
+    /// <param name="latitude">Click position latitude in WGS84 degrees.</param>
+    /// <param name="longitude">Click position longitude in WGS84 degrees.</param>
+    /// <param name="time">
+    /// The selected time step for time-aware coverages (S-104, S-111);
+    /// ignored by static coverages (S-102). When <c>null</c> the
+    /// implementation chooses the dataset's first available time step.
+    /// </param>
+    /// <returns>
+    /// A <see cref="FeatureInfo"/> whose <see cref="FeatureInfo.Attributes"/>
+    /// carry the sampled coverage values, or <c>null</c> if the click
+    /// falls outside the dataset extent or this processor does not
+    /// expose coverage data.
+    /// </returns>
+    FeatureInfo? GetCoverageInfo(double latitude, double longitude, DateTime? time) => null;
+
+    /// <summary>
+    /// Hit-tests this dataset's vector features against a geographic point,
+    /// returning every feature whose geometry contains the point (area
+    /// features) or lies within <paramref name="radiusMeters"/> of it (point /
+    /// curve features), in feature-enumeration order. The reusable geographic
+    /// complement to <see cref="GetCoverageInfo"/>: a caller resolves each hit
+    /// to full attributes via <see cref="GetFeatureInfoAt"/> (or
+    /// <see cref="GetFeatureInfo"/>) and ranks the results across datasets
+    /// itself — for example by a rendering paint stack, which the processor
+    /// contract deliberately knows nothing about.
+    /// </summary>
+    /// <param name="latitude">Pick latitude in WGS-84 degrees.</param>
+    /// <param name="longitude">Pick longitude in WGS-84 degrees.</param>
+    /// <param name="radiusMeters">
+    /// Search tolerance for point/curve features in metres; area features use
+    /// exact containment and ignore it. Negative or non-finite values are
+    /// treated as 0.
+    /// </param>
+    /// <returns>
+    /// The matching features in enumeration order — each
+    /// <see cref="FeatureGeometryHit.Ordinal"/> aligns with
+    /// <see cref="GetFeatureInfoAt"/> — or an empty list. Vector processors
+    /// override this; coverage / non-vector processors leave the default empty
+    /// implementation and expose picks through <see cref="GetCoverageInfo"/>
+    /// instead.
+    /// </returns>
+    IReadOnlyList<FeatureGeometryHit> HitTestFeatures(
+        double latitude, double longitude, double radiusMeters)
+        => System.Array.Empty<FeatureGeometryHit>();
+
+    /// <summary>
+    /// Enumerates a lightweight summary of every feature exposed by this
+    /// processor — used to seed the viewer's feature-search index without
+    /// forcing a full <see cref="GetFeatureInfo"/> call per feature.
+    /// </summary>
+    /// <remarks>
+    /// Coverage products (S-102, S-104, S-111) and any processor that does
+    /// not expose discrete features should leave this returning the
+    /// default empty enumeration.
+    /// </remarks>
+    IEnumerable<FeatureSummary> EnumerateFeatures() => System.Array.Empty<FeatureSummary>();
+
+    /// <summary>
+    /// Runs the spec's normative validation rule pack against this
+    /// processor's parsed dataset and returns the aggregated report,
+    /// or <c>null</c> when no rule pack is available for the spec
+    /// (e.g. coverage products and S-101 / S-201 / S-57 today).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Validation is a pure function of the parsed dataset and does
+    /// not depend on the current palette, opacity, or selected time
+    /// step; callers cache the report rather than re-running it on
+    /// every render. Implementations should run the projection
+    /// (<c>S125AtonDataset.From(...)</c>, etc.) lazily and cache the
+    /// resulting <see cref="ValidationReport"/> on a private field so
+    /// repeated calls are cheap.
+    /// </para>
+    /// <para>
+    /// A return value of <c>null</c> means "no rule pack is yet
+    /// defined for this spec" — distinct from
+    /// <see cref="ValidationReport.Empty"/>, which means "rules were
+    /// evaluated and found nothing".
+    /// </para>
+    /// </remarks>
+    ValidationReport? Validate() => null;
+}
+
+/// <summary>
+/// Lightweight feature descriptor returned by
+/// <see cref="IDatasetProcessor.EnumerateFeatures"/>.
+/// </summary>
+public sealed class FeatureSummary
+{
+    /// <summary>The feature reference string (dataset-specific ID).</summary>
+    public required string FeatureRef { get; init; }
+
+    /// <summary>
+    /// The feature's position within
+    /// <see cref="IDatasetProcessor.EnumerateFeatures"/>. Used as a
+    /// collision-free key when a producer reuses <c>gml:id</c>s across
+    /// features within a single dataset; pair with
+    /// <see cref="IDatasetProcessor.GetFeatureInfoAt"/> to resolve.
+    /// Defaults to 0 — processors must set this to the loop index when
+    /// duplicate-id resilience matters.
+    /// </summary>
+    public int Ordinal { get; init; }
+
+    /// <summary>
+    /// The feature type code as it appears in the dataset (typically the
+    /// GML element local name or the feature catalogue code).
+    /// </summary>
+    public required string FeatureType { get; init; }
+
+    /// <summary>
+    /// Human-readable feature type name resolved through the dataset's
+    /// Feature Catalogue when available; otherwise <c>null</c>.
+    /// </summary>
+    public string? FeatureTypeName { get; init; }
+}
+
+/// <summary>
+/// Feature information returned by a pick / object-info operation.
+/// </summary>
+public sealed class FeatureInfo
+{
+    /// <summary>The feature reference string (dataset-specific ID).</summary>
+    public required string FeatureRef { get; init; }
+
+    /// <summary>
+    /// The feature type code as it appears in the dataset (typically the
+    /// GML element local name or the feature catalogue code, e.g.
+    /// <c>"DepthArea"</c>, <c>"LateralBuoy"</c>, <c>"NavwarnPart"</c>).
+    /// </summary>
+    public required string FeatureType { get; init; }
+
+    /// <summary>
+    /// Human-readable feature type name resolved through the dataset's
+    /// Feature Catalogue, when one is available; otherwise <c>null</c>.
+    /// Viewers should prefer this over <see cref="FeatureType"/> when set.
+    /// </summary>
+    public string? FeatureTypeName { get; init; }
+
+    /// <summary>
+    /// Feature attributes, optionally decoded against the dataset's
+    /// Feature Catalogue (see <see cref="PickAttribute"/>). Complex
+    /// attributes nest their sub-attributes via
+    /// <see cref="PickAttribute.Children"/>.
+    /// </summary>
+    public required IReadOnlyList<PickAttribute> Attributes { get; init; }
+
+    /// <summary>
+    /// The highest drawing priority of the feature's drawing instructions in
+    /// the dataset's last portrayal (S-100 Part 9), which orders the pick
+    /// report (S-98 15.1, see <see cref="PickOrder"/>); <c>null</c> when the
+    /// feature wasn't drawn or the product doesn't report it.
+    /// </summary>
+    public int? DrawingPriority { get; init; }
+
+    /// <summary>
+    /// The feature's geometry, which orders the pick report at equal
+    /// <see cref="DrawingPriority"/>; <see cref="S100GeometryType.None"/>
+    /// when the product doesn't report it.
+    /// </summary>
+    public S100GeometryType Geometry { get; init; }
+
+    /// <summary>
+    /// xlink-style references this feature points to (e.g. S-125
+    /// information bindings, S-421 route topology). Each reference's
+    /// <see cref="FeatureReference.TargetRef"/> resolves against the
+    /// same dataset's feature collection via
+    /// <see cref="IDatasetProcessor.GetFeatureInfo"/>. Empty for
+    /// products that do not model cross-references.
+    /// </summary>
+    public IReadOnlyList<FeatureReference> References { get; init; }
+        = System.Array.Empty<FeatureReference>();
+
+    /// <summary>
+    /// Full time-series snapshot for the feature when it represents a
+    /// fixed-station observation (S-104 / S-111 data-coding-format-8
+    /// stations). <c>null</c> for every other feature shape — including
+    /// gridded coverage samples synthesised by
+    /// <see cref="IDatasetProcessor.GetCoverageInfo"/>. Viewers use this
+    /// to render the pick panel's time-series chart without re-querying
+    /// the processor as the global clock moves.
+    /// </summary>
+    public StationTimeSeriesSnapshot? StationSeries { get; init; }
+
+    /// <summary>
+    /// WMO / SIGRID-3 ice "egg code" projection for the feature when it is an
+    /// S-411 sea-ice / lake-ice feature carrying concentration, stage of
+    /// development, and form-of-ice attributes; <c>null</c> for every other
+    /// feature shape. Object-information UIs use it to render the egg diagram
+    /// in the pick report (S-411 Edition 1.2.1 Annex A).
+    /// </summary>
+    public IceEggCode? EggCode { get; init; }
+
+    /// <summary>
+    /// The warning message when the feature is part of a navigational warning
+    /// (an S-124 <c>NavwarnPart</c>): its identification, type, validity and
+    /// full text in every language; <c>null</c> for every other feature.
+    /// Object-information UIs show it as one card in place of attribute rows.
+    /// </summary>
+    public NavigationalWarningInfo? NavigationalWarning { get; init; }
+}
+
+/// <summary>
+/// An xlink-style reference from one feature to another within the same
+/// dataset. Promoted from per-spec reference types (e.g.
+/// <c>S125InformationReference</c>, <c>GmlReference</c>) so that the
+/// pick UI can offer uniform "follow reference" navigation across all
+/// GML-encoded products.
+/// </summary>
+public sealed class FeatureReference
+{
+    /// <summary>
+    /// The role / association name as it appears in the dataset (e.g.
+    /// <c>"AtonStatus"</c> for an S-125 information binding, or
+    /// <c>"routeWaypoints"</c> for an S-421 route → waypoints link).
+    /// </summary>
+    public required string Role { get; init; }
+
+    /// <summary>
+    /// The referenced feature's identifier (matches
+    /// <see cref="FeatureInfo.FeatureRef"/> on the target). Already
+    /// trimmed of any leading <c>#</c> from the underlying
+    /// <c>xlink:href</c>.
+    /// </summary>
+    public required string TargetRef { get; init; }
+
+    /// <summary>
+    /// The <c>xlink:arcrole</c> value when present; conveys the semantic
+    /// of the link (e.g. an S-421 segment role, or an S-101 feature
+    /// association's role such as <c>"theEquipment"</c>) and may be null.
+    /// </summary>
+    public string? ArcRole { get; init; }
+
+    /// <summary>
+    /// A readable name for the referenced feature, e.g. its feature type and
+    /// name (<c>"Light All Around: Bell Rock"</c>), or <c>null</c> when the
+    /// product doesn't resolve one.
+    /// </summary>
+    public string? TargetName { get; init; }
+
+    /// <summary>
+    /// What a pick report shows for the target: <see cref="TargetName"/>
+    /// when set, otherwise <see cref="TargetRef"/>.
+    /// </summary>
+    public string TargetDisplayName => TargetName ?? TargetRef;
+}

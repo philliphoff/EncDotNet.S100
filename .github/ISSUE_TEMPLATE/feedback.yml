@@ -1,0 +1,40 @@
+name: Viewer feedback
+description: Send feedback from SoundCharts (prefilled by the app's "Report Feedback" command).
+title: "[Feedback]: "
+labels: ["feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for your feedback! This form is normally opened pre-filled by
+        the viewer's **Report Feedback** command. Review what's here, paste your
+        screenshot if you captured one, and submit.
+
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Your feedback
+      description: What happened, or what could be improved?
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot
+      description: |
+        If the viewer copied a screenshot to your clipboard, paste it here with
+        **⌘V / Ctrl+V**. If that paste fails with "failed to upload", the viewer
+        also revealed a `screenshot.png` file in your file manager — drag that
+        file into this field instead (file uploads are more reliable than
+        pasting). You can leave this empty.
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Technical details (auto-collected)
+      description: |
+        Collected automatically by the viewer to help diagnose the issue (app
+        version, OS, .NET runtime, current viewport, loaded datasets, and the
+        most recent error, if any). No file contents or personal data are
+        included. Edit or delete anything you don't want to share.

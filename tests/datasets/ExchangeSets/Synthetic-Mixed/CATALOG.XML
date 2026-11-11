@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Synthetic exchange-set catalogue used by ExchangeSetServiceLoaderTests.
+  Three datasets exercise the partial-failure path: two recognised
+  product identifiers (S-101, S-102) and one identifier not registered
+  in DatasetPipelineFactory.MapProductIdentifierToSpec (S-999), which
+  the loader must skip with a status message while still dispatching
+  the supported entries.
+
+  Producer organisation and per-dataset issueDate are populated so the
+  ExchangeSetHeader fields can be asserted as well.
+
+  Dataset files referenced by <fileName> are NOT shipped — the test
+  uses a NoopLoader so RequestLoad never opens them.
+-->
+<S100XC:S100_ExchangeCatalogue
+    xmlns:S100XC="http://www.iho.int/s100/xc/5.0"
+    xmlns:gco="http://standards.iso.org/iso/19115/-3/gco/1.0">
+  <S100XC:identifier>
+    <S100XC:identifier>SYNTH_MIXED_v1</S100XC:identifier>
+    <S100XC:dateTime>2026-01-15T00:00:00Z</S100XC:dateTime>
+  </S100XC:identifier>
+  <S100XC:contact>
+    <S100XC:organization>
+      <gco:CharacterString>Synthetic Hydrographic Office</gco:CharacterString>
+    </S100XC:organization>
+  </S100XC:contact>
+  <S100XC:datasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>S-101/SYNTH101.000</S100XC:fileName>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>false</S100XC:dataProtection>
+      <S100XC:copyright>false</S100XC:copyright>
+      <S100XC:purpose>newDataset</S100XC:purpose>
+      <S100XC:notForNavigation>true</S100XC:notForNavigation>
+      <S100XC:editionNumber>1</S100XC:editionNumber>
+      <S100XC:updateNumber>0</S100XC:updateNumber>
+      <S100XC:issueDate>2026-01-10</S100XC:issueDate>
+      <S100XC:productSpecification>
+        <S100XC:name><gco:CharacterString>S-101</gco:CharacterString></S100XC:name>
+        <S100XC:version><gco:CharacterString>1.1.0</gco:CharacterString></S100XC:version>
+        <S100XC:productIdentifier>S-101</S100XC:productIdentifier>
+      </S100XC:productSpecification>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>S-102/SYNTH102.h5</S100XC:fileName>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>false</S100XC:dataProtection>
+      <S100XC:copyright>false</S100XC:copyright>
+      <S100XC:purpose>newDataset</S100XC:purpose>
+      <S100XC:notForNavigation>true</S100XC:notForNavigation>
+      <S100XC:editionNumber>1</S100XC:editionNumber>
+      <S100XC:updateNumber>0</S100XC:updateNumber>
+      <S100XC:issueDate>2026-01-12</S100XC:issueDate>
+      <S100XC:productSpecification>
+        <S100XC:name><gco:CharacterString>S-102</gco:CharacterString></S100XC:name>
+        <S100XC:version><gco:CharacterString>2.2.0</gco:CharacterString></S100XC:version>
+        <S100XC:productIdentifier>S-102</S100XC:productIdentifier>
+      </S100XC:productSpecification>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+    <S100XC:S100_DatasetDiscoveryMetadata>
+      <S100XC:fileName>S-999/UNSUPPORTED.dat</S100XC:fileName>
+      <S100XC:compressionFlag>false</S100XC:compressionFlag>
+      <S100XC:dataProtection>false</S100XC:dataProtection>
+      <S100XC:copyright>false</S100XC:copyright>
+      <S100XC:purpose>newDataset</S100XC:purpose>
+      <S100XC:notForNavigation>true</S100XC:notForNavigation>
+      <S100XC:editionNumber>1</S100XC:editionNumber>
+      <S100XC:updateNumber>0</S100XC:updateNumber>
+      <S100XC:issueDate>2026-01-08</S100XC:issueDate>
+      <S100XC:productSpecification>
+        <S100XC:name><gco:CharacterString>S-999</gco:CharacterString></S100XC:name>
+        <S100XC:version><gco:CharacterString>0.0.1</gco:CharacterString></S100XC:version>
+        <S100XC:productIdentifier>S-999</S100XC:productIdentifier>
+      </S100XC:productSpecification>
+    </S100XC:S100_DatasetDiscoveryMetadata>
+  </S100XC:datasetDiscoveryMetadata>
+</S100XC:S100_ExchangeCatalogue>

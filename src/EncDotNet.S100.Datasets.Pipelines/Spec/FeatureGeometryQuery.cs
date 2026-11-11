@@ -1,0 +1,88 @@
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines.Geometry;
+using EncDotNet.S100.Features;
+using EncDotNet.S100.Pipelines;
+
+namespace EncDotNet.S100.Datasets.Pipelines.Spec;
+
+/// <summary>
+/// Geometry helpers for <see cref="IS100Feature"/> instances.
+/// </summary>
+/// <remarks>
+/// All operations work in planar lat/lon space and match the precision
+/// of the per-dataset bounding box. Surface geometry takes precedence
+/// over curve, which takes precedence over point — matching the
+/// preference order in
+/// <see cref="EncDotNet.S100.Pipelines.Vector.FeatureGeometryProvider{TFeature}"/>.
+/// </remarks>
+public static class FeatureGeometryQuery
+{
+    /// <summary>
+    /// Computes the bounding box of <paramref name="feature"/>'s
+    /// geometry. Returns <c>null</c> when the feature has no geometry
+    /// at all (e.g. container-style features such as
+    /// <c>S131:Authority</c>).
+    /// </summary>
+    public static BoundingBox? TryGetBoundingBox(IS100Feature feature)
+    {
+        ArgumentNullException.ThrowIfNull(feature);
+
+        var south = double.PositiveInfinity;
+        var north = double.NegativeInfinity;
+        var west = double.PositiveInfinity;
+        var east = double.NegativeInfinity;
+        var any = false;
+
+        void Accumulate(GeoPosition p)
+        {
+            any = true;
+            if (p.Latitude < south) south = p.Latitude;
+            if (p.Latitude > north) north = p.Latitude;
+            if (p.Longitude < west) west = p.Longitude;
+            if (p.Longitude > east) east = p.Longitude;
+        }
+
+        if (feature.ExteriorRing.Count > 0)
+        {
+            foreach (var p in feature.ExteriorRing) Accumulate(p);
+        }
+
+        if (feature.Curves.Count > 0)
+        {
+            foreach (var curve in feature.Curves)
+            {
+                if (curve.Count > 0)
+                {
+                    foreach (var p in curve) Accumulate(p);
+                }
+            }
+        }
+
+        if (feature.Points.Count > 0)
+        {
+            foreach (var p in feature.Points) Accumulate(p);
+        }
+
+        return any ? new BoundingBox(south, west, north, east) : null;
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="feature"/>'s bounding
+    /// box intersects (or touches) the supplied <paramref name="query"/>'s
+    /// coarse bounding box. Features without geometry never match.
+    /// </summary>
+    public static bool Intersects(IS100Feature feature, GeoQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(feature);
+        ArgumentNullException.ThrowIfNull(query);
+
+        var bounds = TryGetBoundingBox(feature);
+        if (bounds is null) return false;
+
+        return query switch
+        {
+            GeoQuery.Point p => SpatialPredicates.Contains(bounds, p.Value),
+            _ => SpatialPredicates.Intersects(bounds, query),
+        };
+    }
+}

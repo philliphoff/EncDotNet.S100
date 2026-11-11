@@ -1,0 +1,206 @@
+using EncDotNet.S100.Pipelines.Vector;
+
+namespace EncDotNet.S100.Datasets.Pipelines;
+
+/// <summary>
+/// The four ECDIS standard display categories (S-100 Part 9 §11.7,
+/// S-101 §10.4). The viewer exposes these as a cross-spec selection
+/// and <see cref="EcdisCategoryMapper"/> resolves each to a
+/// per-spec display-mode id.
+/// </summary>
+public enum EcdisDisplayCategory
+{
+    /// <summary>
+    /// "Display Base" — the minimum information required for safe
+    /// navigation that cannot be removed by the mariner.
+    /// </summary>
+    DisplayBase,
+
+    /// <summary>
+    /// "Standard Display" — the default ECDIS display.
+    /// </summary>
+    Standard,
+
+    /// <summary>
+    /// "Other Information" — Standard plus the producer-tagged
+    /// supplementary content. Subset of "All".
+    /// </summary>
+    OtherInformation,
+
+    /// <summary>
+    /// "All" — every viewing group is visible (no display-mode filter).
+    /// </summary>
+    All,
+}
+
+/// <summary>
+/// Cross-spec ECDIS display settings carried on every
+/// <see cref="RenderContext"/>. Producers (the viewer) populate this
+/// from <c>EcdisDisplayState</c>; consumers (per-spec processors)
+/// apply it to their <see cref="IVectorPortrayalCatalogue"/> via
+/// <see cref="EcdisDisplayExtensions.ApplyTo"/>.
+/// </summary>
+public sealed record EcdisDisplaySettings
+{
+    /// <summary>The active ECDIS category. Defaults to Standard.</summary>
+    public EcdisDisplayCategory Category { get; init; } = EcdisDisplayCategory.Standard;
+
+    /// <summary>
+    /// Per-spec viewing-group ids the user has explicitly hidden via
+    /// the ECDIS panel. Keys are spec codes (e.g. <c>"S-101"</c>).
+    /// Empty by default.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlySet<int>> HiddenViewingGroups { get; init; }
+        = new Dictionary<string, IReadOnlySet<int>>();
+
+    /// <summary>
+    /// Display planes the user has hidden via the ECDIS panel
+    /// (S-100 Part 9 §11.6). Empty by default.
+    /// </summary>
+    public IReadOnlySet<DisplayPlane> HiddenDisplayPlanes { get; init; }
+        = new HashSet<DisplayPlane>();
+
+    /// <summary>
+    /// Per-spec explicit S-100 Part 9 §11.7 display-mode selections
+    /// (spec code → mode id, e.g. <c>"S-411"</c> →
+    /// <c>"IceScientificIcesodDisplayMode"</c>). Populated by the viewer's
+    /// per-dataset display-mode selector for products whose portrayal
+    /// catalogue declares more than one mode. Unlike <see cref="Category"/>
+    /// (which maps to a viewing-group filter), an entry here selects an
+    /// alternate <em>portrayal</em> and, when present, wins over the
+    /// ECDIS-category-derived mode in
+    /// <c>GmlDatasetProcessorBase.ApplyDisplayMode</c>. Empty by default
+    /// (each catalogue renders its default mode). A <c>null</c> value is
+    /// equivalent to no entry. Keyed case-insensitively so a producer that
+    /// populates the map with a different spec casing (e.g. <c>s-411</c>)
+    /// still matches the canonical lookup key.
+    /// </summary>
+    public IReadOnlyDictionary<string, string?> ActiveDisplayModes { get; init; }
+        = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Map-wide switches for a product's optional layers, keyed by the
+    /// processor's stable sub-layer key (e.g. <c>"weather.pressure.isobars"</c>
+    /// → <see langword="true"/>). A processor that offers optional layers
+    /// draws a layer when its entry is <see langword="true"/>, leaves it out
+    /// when <see langword="false"/>, and falls back to its own default when
+    /// the key is missing. Unlike a dataset's sub-layer visibility, which
+    /// hides a built layer in one dataset, this applies to every dataset of
+    /// the product and changes what is portrayed. Set by the viewer's Display
+    /// controls Weather section (issue #1072). Empty by default, so every
+    /// layer follows its producer's default (as <c>s100 render</c> does).
+    /// </summary>
+    public IReadOnlyDictionary<string, bool> LayerVisibility { get; init; }
+        = new Dictionary<string, bool>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Whether the optional layer <paramref name="layerKey"/> is drawn:
+    /// its <see cref="LayerVisibility"/> entry, or
+    /// <paramref name="defaultVisible"/> when it has none.
+    /// </summary>
+    /// <param name="layerKey">The sub-layer key.</param>
+    /// <param name="defaultVisible">The producer's default.</param>
+    public bool IsLayerVisible(string layerKey, bool defaultVisible)
+    {
+        ArgumentNullException.ThrowIfNull(layerKey);
+        return LayerVisibility.TryGetValue(layerKey, out var visible) ? visible : defaultVisible;
+    }
+}
+
+/// <summary>
+/// Maps a cross-spec <see cref="EcdisDisplayCategory"/> to the
+/// per-spec <c>displayMode</c> id declared in that spec's bundled
+/// portrayal catalogue. Specs that only declare a single mode
+/// (typically just <c>StandardDisplay</c>) fall back to <c>null</c>
+/// for non-Standard categories — meaning "no mode filter, render
+/// everything", matching the bundled catalogue's authoring intent.
+/// </summary>
+public static class EcdisCategoryMapper
+{
+    /// <summary>
+    /// Resolves the ECDIS category for a given spec to a
+    /// <see cref="DisplayModeController.ActiveDisplayModeId"/> value.
+    /// Returns <c>null</c> for "All" (no filter) or for specs that
+    /// don't declare per-category modes.
+    /// </summary>
+    /// <param name="productSpec">Spec code, e.g. <c>"S-101"</c>.</param>
+    /// <param name="category">Cross-spec ECDIS category.</param>
+    /// <param name="availableModeIds">
+    /// Display-mode ids declared by the spec's portrayal catalogue.
+    /// </param>
+    public static string? Map(
+        string productSpec,
+        EcdisDisplayCategory category,
+        IReadOnlySet<string> availableModeIds)
+    {
+        ArgumentNullException.ThrowIfNull(productSpec);
+        ArgumentNullException.ThrowIfNull(availableModeIds);
+
+        if (category == EcdisDisplayCategory.All)
+            return null;
+
+        // Canonical S-101 ids are well-known; other specs reuse the
+        // same names where they declare them.
+        var preferred = category switch
+        {
+            EcdisDisplayCategory.DisplayBase => "DisplayBase",
+            EcdisDisplayCategory.Standard => "StandardDisplay",
+            EcdisDisplayCategory.OtherInformation => "OtherInformation",
+            _ => null,
+        };
+
+        if (preferred is not null && availableModeIds.Contains(preferred))
+            return preferred;
+
+        // Fallback: spec only declares Standard (or fewer); render
+        // everything for non-Standard requests.
+        return null;
+    }
+}
+
+/// <summary>
+/// Extensions that apply <see cref="EcdisDisplaySettings"/> to a
+/// freshly-constructed per-spec vector portrayal catalogue. Called
+/// by every vector dataset processor immediately after it builds
+/// the catalogue and before <c>VectorPipeline</c> consumes it.
+/// </summary>
+public static class EcdisDisplayExtensions
+{
+    /// <summary>
+    /// Applies the supplied settings to <paramref name="catalogue"/>:
+    /// resolves the ECDIS category to the spec's display-mode id and
+    /// activates it; then writes per-spec hidden-VG ids as user-off
+    /// overrides. Idempotent and path-independent — any prior user
+    /// overrides are cleared first, so the effective visibility is a
+    /// pure function of <paramref name="settings"/> even when
+    /// <paramref name="catalogue"/> is reused across renders (the
+    /// per-spec processors hold a single long-lived catalogue). This
+    /// also ensures a viewing group hidden by an earlier render is
+    /// restored when a later render no longer hides it.
+    /// </summary>
+    public static void ApplyTo(this EcdisDisplaySettings settings, IVectorPortrayalCatalogue catalogue)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(catalogue);
+
+        var modeId = EcdisCategoryMapper.Map(
+            catalogue.Spec.Name, settings.Category, catalogue.DisplayModes.DeclaredModeIds);
+        catalogue.DisplayModes.SetActive(modeId);
+
+        // Reset any overrides left by a previous render so the resulting
+        // visibility depends only on the supplied settings, not on call
+        // history. ApplyTo is the sole writer of user overrides.
+        catalogue.ViewingGroups.ClearUserOverrides();
+        if (settings.HiddenViewingGroups.TryGetValue(catalogue.Spec.Name, out var hidden))
+        {
+            foreach (var vg in hidden)
+                catalogue.ViewingGroups.SetUserOverride(vg, false);
+        }
+
+        // Push display-plane visibility (S-100 Part 9 §11.6).
+        foreach (var plane in Enum.GetValues<DisplayPlane>())
+        {
+            catalogue.DisplayPlanes.SetVisible(plane, !settings.HiddenDisplayPlanes.Contains(plane));
+        }
+    }
+}

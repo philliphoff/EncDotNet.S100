@@ -1,0 +1,196 @@
+using Avalonia;
+using Avalonia.Controls;
+using EncDotNet.S100.Renderers.Mapsui;
+using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.ViewModels;
+using EncDotNet.S100.Viewer.Views;
+using Microsoft.Extensions.Time.Testing;
+
+namespace EncDotNet.S100.Viewer.Tests;
+
+/// <summary>
+/// The real Timeline view, bound and laid out headlessly: the view-model
+/// tests never bind, so a binding loop (#708: a lazy axis rebuild raising the
+/// properties that triggered it) only shows here.
+/// </summary>
+public sealed class TimelineViewTests
+{
+    private static readonly DateTime Run = new(2026, 10, 2, 0, 0, 0, DateTimeKind.Utc);
+
+    private static void Show(TimelineViewModel timeline)
+    {
+        var view = new TimelineView { DataContext = timeline };
+        var window = new Window { Content = view, Width = 900, Height = 320 };
+        window.Show();
+        window.Measure(new Size(900, 320));
+        window.Arrange(new Rect(0, 0, 900, 320));
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void An_empty_timeline_binds_without_looping()
+    {
+        var timeline = new TimelineViewModel(new GlobalTimeService(), null, new FakeTimeProvider(new DateTimeOffset(Run)), action => action(), refresher: null, progress: null, scope: null, library: null);
+
+        Show(timeline);
+
+        Assert.False(timeline.IsActive);
+    }
+
+    [AvaloniaFact]
+    public void A_timeline_with_gaps_binds_and_lays_out()
+    {
+        var service = new GlobalTimeService();
+        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action(), refresher: null, progress: null, scope: null, library: null);
+        var early = Enumerable.Range(0, 24).Select(h => Run.AddDays(-60).AddHours(h)).ToArray();
+        var late = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
+        var samples = early.Concat(late).ToArray();
+        service.ApplySnapshot(new MapsuiMapTimeSnapshot
+        {
+            Minimum = samples[0],
+            Maximum = samples[^1],
+            Current = samples[0],
+            Samples = samples,
+            CoverageSegments = [new MapsuiMapTimeSegment(early[0], early[^1]), new MapsuiMapTimeSegment(late[0], late[^1])],
+            Datasets =
+            [
+                new MapsuiMapTimedDataset("104US004SC1BO_20251217T12Z", early[0], early[^1]) { ProductSpec = "S-104", Samples = early },
+                new MapsuiMapTimedDataset("111US00_CBOFS_US4MD1DD", late[0], late[^1]) { ProductSpec = "S-111", Samples = late },
+            ],
+        });
+
+        Show(timeline);
+
+        Assert.NotEmpty(timeline.Gaps);
+        Assert.Contains(timeline.AxisLabels, l => l.Kind == AxisLabelKind.Gap);
+    }
+
+    [AvaloniaFact]
+    public void Lanes_with_a_folded_row_bind_and_lay_out()
+    {
+        var service = new GlobalTimeService();
+        var scope = new InViewScope("m0", "m1");
+        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action(), scope: scope, refresher: null, progress: null, library: null);
+        var samples = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
+        service.ApplySnapshot(new MapsuiMapTimeSnapshot
+        {
+            Minimum = samples[0],
+            Maximum = samples[^1],
+            Current = samples[0],
+            Samples = samples,
+            CoverageSegments = [new MapsuiMapTimeSegment(samples[0], samples[^1])],
+            Datasets = [.. Enumerable.Range(0, 8).Select(i => new MapsuiMapTimedDataset($"111US00_M{i}OFS_20261002T00Z_US4XX1DD", samples[0], samples[^1])
+            {
+                DatasetId = $"m{i}",
+                ProductSpec = "S-111",
+                Samples = samples,
+            })],
+        });
+        timeline.IsOutsideExpanded = true;
+
+        Show(timeline);
+
+        Assert.True(timeline.ShowLanes);
+        Assert.Equal(2, Assert.Single(timeline.LaneGroups).Count);
+        Assert.Equal(6, timeline.OutsideLanes.Count);
+    }
+
+    [AvaloniaFact]
+    public void The_time_HUD_binds_and_drops_the_offset_then_the_pinned_label_on_narrow_maps()
+    {
+        var service = new GlobalTimeService();
+        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action(), refresher: null, progress: null, scope: null, library: null);
+        var samples = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
+        service.ApplySnapshot(new MapsuiMapTimeSnapshot
+        {
+            Minimum = samples[0],
+            Maximum = samples[^1],
+            Current = samples[0],
+            Samples = samples,
+            CoverageSegments = [new MapsuiMapTimeSegment(samples[0], samples[^1])],
+            Datasets = [new MapsuiMapTimedDataset("111US00_CBOFS_20261002T00Z_US4MD1DD", samples[0], samples[^1]) { ProductSpec = "S-111", Samples = samples }],
+        });
+        service.SetCurrentTime(Run.AddHours(20));
+        var hud = new TimeHudView { DataContext = timeline, MapWidth = 1200 };
+        var window = new Window { Content = hud, Width = 900, Height = 200 };
+        window.Show();
+        window.Measure(new Size(900, 200));
+        window.Arrange(new Rect(0, 0, 900, 200));
+
+        Assert.DoesNotContain("compact", hud.Classes);
+        hud.MapWidth = 600;
+        Assert.Contains("compact", hud.Classes);
+        Assert.DoesNotContain("tiny", hud.Classes);
+        hud.MapWidth = 500;
+        Assert.Contains("tiny", hud.Classes);
+        window.Close();
+    }
+
+    private sealed class InViewScope(params string[] inView) : ITimelineMapScope
+    {
+        public event Action? Changed { add { } remove { } }
+
+        public bool? IsInMapView(string datasetId) => inView.Contains(datasetId);
+
+        public void Highlight(string? datasetId, (byte R, byte G, byte B) color = default)
+        {
+        }
+
+        public bool? Intersects(EncDotNet.S100.Collections.GeoBounds bounds) => true;
+
+        public void HighlightAreas(IReadOnlyList<EncDotNet.S100.Collections.GeoBounds> areas, (byte R, byte G, byte B) color = default)
+        {
+        }
+    }
+
+    [AvaloniaFact]
+    public void The_step_buttons_stay_put_while_stepping_going_live_and_changing_the_step()
+    {
+        // Time-overlays D13: Go live is always there at a fixed size and the
+        // step menu is as wide as its longest label, so ⏮ ‹ › ⏭ don't jump when
+        // the time is pinned (Go live used to appear and push them ~80 px left).
+        var service = new GlobalTimeService();
+        var timeline = new TimelineViewModel(service, null, new FakeTimeProvider(new DateTimeOffset(Run.AddHours(5))), action => action(), refresher: null, progress: null, scope: null, library: null);
+        var samples = Enumerable.Range(0, 49).Select(h => Run.AddHours(h)).ToArray();
+        service.ApplySnapshot(new MapsuiMapTimeSnapshot
+        {
+            Minimum = samples[0],
+            Maximum = samples[^1],
+            Current = samples[0],
+            Samples = samples,
+            CoverageSegments = [new MapsuiMapTimeSegment(samples[0], samples[^1])],
+            Datasets = [new MapsuiMapTimedDataset("111US00_CBOFS_20261002T00Z_US4MD1DD", samples[0], samples[^1]) { ProductSpec = "S-111", Samples = samples }],
+        });
+        timeline.NowCommand.Execute(null);
+        timeline.StepKind = TimelineStepKind.Hour;
+        using var host = Headless.ViewHost.Show(new TimelineView { DataContext = timeline }, width: 1100, height: 320);
+        string[] ids = ["Timeline.PreviousData", "Timeline.PreviousStep", "Timeline.StepMenu", "Timeline.NextStep", "Timeline.NextData", "Timeline.GoLive"];
+        Rect[] Bounds()
+        {
+            host.Settle();
+            return ids.Select(id => host.Find<Button>(id)).Select(b => new Rect(b.TranslatePoint(default, host.Window)!.Value, b.Bounds.Size)).ToArray();
+        }
+
+        var live = Bounds();
+        Assert.Equal(64, live[^1].Width);
+
+        host.Click(host.Find<Button>("Timeline.NextStep"));
+        Assert.False(timeline.IsLive);
+        Assert.Equal(live, Bounds());
+        for (var i = 0; i < 12; i++)
+            host.Click(host.Find<Button>("Timeline.NextStep"));
+        Assert.Equal(live, Bounds());
+
+        timeline.StepKind = TimelineStepKind.Day;
+        Assert.Equal(live, Bounds());
+        timeline.StepKind = TimelineStepKind.Sample;
+        Assert.Equal(live, Bounds());
+
+        // Go live, then Live again: the second click does nothing.
+        host.Click(host.Find<Button>("Timeline.GoLive"));
+        Assert.True(timeline.IsLive);
+        host.Click(host.Find<Button>("Timeline.GoLive"));
+        Assert.True(timeline.IsLive);
+        Assert.Equal(live, Bounds());
+    }
+}

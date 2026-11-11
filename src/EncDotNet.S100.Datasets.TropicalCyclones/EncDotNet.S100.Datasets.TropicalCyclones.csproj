@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <Description>A tropical cyclone advisory model and a reader for the US National Hurricane Center's GIS shapefile zips: the forecast track and cone ({ATCF}_5day_{adv}), the forecast wind radii ({ATCF}_fcst_{adv}) and the best track ({ATCF}_best_track). Gives the storm, the advisory, every forecast point with its intensity, class and 34/50/64 kt radii by quadrant, the cone split at 72 hours, and the past track with observed radii. Includes a small managed SHP and DBF reader for points, lines and polygons. Not for navigation. Depends on EncDotNet.S100.Core and NetTopologySuite.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.Datasets.TropicalCyclones.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NetTopologySuite" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+  </ItemGroup>
+
+</Project>

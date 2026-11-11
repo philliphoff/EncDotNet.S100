@@ -1,0 +1,32 @@
+namespace EncDotNet.S100.VisualRegression.Tests;
+
+/// <summary>
+/// Visual regression tests for S-128 Catalogue of Nautical Products
+/// rendering. The official 2.0.0 sample
+/// (<c>S128_TDS_sample.gml</c>) exercises the three product feature
+/// classes (<c>ElectronicProduct</c>, <c>PhysicalProduct</c>,
+/// <c>S100Service</c>) plus a handful of geometry-less metadata
+/// features (<c>DistributorInformation</c>, <c>ContactDetails</c>,
+/// <c>ProducerInformation</c>, <c>CatalogueSectionHeader</c>).
+/// </summary>
+public sealed class S128RenderingTests
+{
+    [Theory]
+    [InlineData("S128_TDS_sample.gml")]
+    public Task CatalogueOfNauticalProducts(string fileName)
+    {
+        var path = Path.Combine(TestHelpers.DatasetsRoot, "S128", fileName);
+        Assert.SkipUnless(File.Exists(path), $"S-128 test dataset not present: {path}");
+
+        using var harness = new RenderHarness();
+        var bitmap = harness.Render(path, new HarnessOptions
+        {
+            Width = 600,
+            Height = 600,
+        });
+
+        // Dashed coverage outlines only (outline-only adapter): sparse ink.
+        return TestHelpers.VerifySparseBitmap(bitmap, minimumInkPixels: 2_000, maxDifferentInkFraction: 0.25)
+            .UseParameters(Path.GetFileNameWithoutExtension(fileName));
+    }
+}

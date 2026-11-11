@@ -1,0 +1,1966 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:bh="using:EncDotNet.S100.Viewer.Behaviors"
+             x:Class="EncDotNet.S100.Viewer.Views.RoutesView"
+             x:DataType="vm:RoutesPanelViewModel">
+
+    <UserControl.Styles>
+        <!-- Mirror of the main window's `GridSplitter.PaneSplitter` style;
+             UserControls don't inherit window-scoped styles. -->
+        <Style Selector="GridSplitter.PaneSplitter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="GridSplitter.PaneSplitter.hovered">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="GridSplitter.PaneSplitter:pressed">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+
+        <!--
+          Full-width selectable waypoint row. The accent left bar and the
+          low-opacity accent tint live on the row Border so the selection
+          spans the whole list width (content + overflow), matching the
+          `accentList` language used by the Datasets / Search / Pick lists.
+          The inner hit button is a bare, chrome-free click target; hover
+          and selection visuals are driven by the parent Border's pseudo /
+          selected classes.
+        -->
+        <!--
+          Full-width selectable waypoint row. This mirrors the `accentList`
+          ListBoxItem template (a "3,*" grid with a rounded accent bar plus a
+          tinted content panel) so the waypoint list lines up pixel-for-pixel
+          with the routes list above it. Hover/selection visuals are driven by
+          the root grid's pseudo/selected classes; a full-area, chrome-free
+          hit button sits beneath the (non-hit-testable) row visuals so a click
+          anywhere on the row selects the waypoint.
+        -->
+        <Style Selector="Grid.wpRow">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="MinHeight" Value="46" />
+            <Setter Property="Margin" Value="0,1" />
+        </Style>
+        <Style Selector="Border.wpBar">
+            <Setter Property="Width" Value="3" />
+            <Setter Property="CornerRadius" Value="1.5" />
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <!-- Leg rows share the waypoint rows' selection look (#896): the
+             selected leg is haloed on the map too. -->
+        <Style Selector="Grid.legRow">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Grid.legRow.selected Border.wpBar">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Grid.legRow:pointerover Border.wpTint">
+            <Setter Property="Opacity" Value="0.06" />
+        </Style>
+        <Style Selector="Grid.legRow.selected Border.wpTint">
+            <Setter Property="Opacity" Value="0.12" />
+        </Style>
+        <Style Selector="Grid.legRow.selected TextBlock.legText">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="Grid.wpRow.selected Border.wpBar">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Border.wpTint">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+        <Style Selector="Grid.wpRow:pointerover Border.wpTint">
+            <Setter Property="Opacity" Value="0.06" />
+        </Style>
+        <Style Selector="Grid.wpRow.selected Border.wpTint">
+            <Setter Property="Opacity" Value="0.12" />
+        </Style>
+
+        <!-- Full-area click target for the waypoint row. The templated Border
+             carries the (transparent) background so the entire row area is
+             hit-testable, not just where content happens to sit. -->
+        <Style Selector="Button.wpHit">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+
+        <!-- Numbered timeline circle: outlined by default, filled accent when
+             its waypoint is selected. -->
+        <Style Selector="Border.wpCircle">
+            <Setter Property="Width" Value="22" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="CornerRadius" Value="11" />
+            <Setter Property="BorderThickness" Value="1.5" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="Background" Value="{DynamicResource BackgroundColor}" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Grid.wpRow.selected Border.wpCircle">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="TextBlock.wpNum">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Grid.wpRow.selected TextBlock.wpNum">
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="TextBlock.wpLabel">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style Selector="Grid.wpRow.selected TextBlock.wpLabel">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+
+        <!-- Vertical connector segment drawn in the rail of each leg row so
+             consecutive waypoint circles read as a single timeline spine. The
+             rail width (28) and leading offset match the waypoint circle so
+             the line passes through the circle centres. -->
+        <Style Selector="Border.legConnector">
+            <Setter Property="Width" Value="2" />
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="Background" Value="{DynamicResource BorderColor}" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+        </Style>
+
+        <!-- Leg geometry pill. -->
+        <Style Selector="Button.geoChip">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="7,1" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="10" />
+        </Style>
+        <Style Selector="Button.geoChip.geodesic">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <!-- Inline-edit text fields in a waypoint row: they read as plain text
+             until hovered or focused, then show a field border. -->
+        <Style Selector="TextBox.inlineEdit">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Height" Value="21" />
+            <Setter Property="Margin" Value="-5,0,0,0" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBox.inlineEdit:pointerover">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+        </Style>
+        <Style Selector="TextBox.inlineEdit:focus-within">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Background" Value="{DynamicResource BackgroundColor}" />
+        </Style>
+        <Style Selector="TextBox.wpName">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Grid.wpRow.selected TextBox.wpName">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="TextBox.wpCoords">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
+            <Setter Property="Opacity" Value="0.7" />
+        </Style>
+        <Style Selector="TextBox.wpCoords:focus-within">
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="TextBox.wpCoords.invalid">
+            <Setter Property="BorderBrush" Value="{DynamicResource DestructiveColor}" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+
+        <!-- "Editing" pill beside the active route's name. -->
+        <Style Selector="Border.editingPill">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Padding" Value="8,1" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!-- Footer mode toggles (Edit, Check passage): 32px, outlined when
+             off, filled with the accent when on. -->
+        <Style Selector="ToggleButton.modeToggle">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="ToggleButton.modeToggle:checked">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="ToggleButton.modeToggle:checked /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="ToggleButton.modeToggle:checked ic|FluentIcon">
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="ToggleButton.modeToggle:disabled">
+            <Setter Property="Opacity" Value="0.5" />
+        </Style>
+
+        <!-- Passage card and leg-detail fields (#898). A field is a 26px box:
+             a solid frame and a mono value when set, a dashed frame and a muted
+             "+ Add" (or inherited value) when unset. The frame is a Rectangle
+             because a Border can't be dashed. -->
+        <Style Selector="TextBlock.fieldLabel">
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="Opacity" Value="0.65" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style Selector="TextBlock.fieldLabel.override">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="Panel.fieldBox">
+            <Setter Property="Height" Value="26" />
+        </Style>
+        <Style Selector="Rectangle.fieldFrame">
+            <Setter Property="Stroke" Value="{DynamicResource BorderColor}" />
+            <Setter Property="StrokeThickness" Value="1" />
+            <Setter Property="RadiusX" Value="6" />
+            <Setter Property="RadiusY" Value="6" />
+            <Setter Property="StrokeDashArray" Value="3,2" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+        <Style Selector="Panel.fieldBox.set Rectangle.fieldFrame">
+            <Setter Property="StrokeDashArray" Value="{x:Null}" />
+        </Style>
+        <Style Selector="Panel.fieldBox.override Rectangle.fieldFrame">
+            <Setter Property="StrokeDashArray" Value="{x:Null}" />
+            <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Panel.fieldBox:focus-within Rectangle.fieldFrame">
+            <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="StrokeDashArray" Value="{x:Null}" />
+        </Style>
+        <Style Selector="TextBox.routeField">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Height" Value="26" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontFamily" Value="{StaticResource MonoFontFamily}" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBox.routeField:pointerover /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="TextBox.routeField:focus /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="TextBlock.fieldSuffix">
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="Opacity" Value="0.55" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+        <Style Selector="Button.linkButton">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.optionalPill">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Ellipse.overrideDot">
+            <Setter Property="Width" Value="5" />
+            <Setter Property="Height" Value="5" />
+            <Setter Property="Fill" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <!-- Rhumb / Great circle segmented control in the leg detail. -->
+        <Style Selector="ToggleButton.segment">
+            <Setter Property="Height" Value="24" />
+            <Setter Property="MinHeight" Value="24" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="Background" Value="{DynamicResource BackgroundColor}" />
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+            <Setter Property="CornerRadius" Value="6,0,0,6" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="ToggleButton.segment.last">
+            <Setter Property="CornerRadius" Value="0,6,6,0" />
+            <Setter Property="Margin" Value="-1,0,0,0" />
+        </Style>
+        <Style Selector="ToggleButton.segment:checked">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <!-- A leg row is one full-width button that opens its detail. -->
+        <Style Selector="Button.legRow">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}" CornerRadius="4">
+                        <ContentPresenter Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalContentAlignment="Stretch"
+                                          VerticalContentAlignment="Stretch" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.legRow:pointerover">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
+        <!-- In a leg row the row's tint shows hover and selection. -->
+        <Style Selector="Button.legRow.plain:pointerover">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+
+        <!-- Check passage (#901). The verdict card and leg chips take a tone:
+             a fill and a border in the tone colour at low opacity (separate
+             layers, because a theme brush can't be given an alpha here). -->
+        <Style Selector="Border.toneFill">
+            <Setter Property="Opacity" Value="0.06" />
+            <Setter Property="Background" Value="{DynamicResource MutedColor}" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+        <Style Selector="Border.toneEdge">
+            <Setter Property="Opacity" Value="0.3" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource MutedColor}" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+        <Style Selector="Panel.success Border.toneFill"><Setter Property="Background" Value="{DynamicResource SuccessColor}" /></Style>
+        <Style Selector="Panel.warning Border.toneFill"><Setter Property="Background" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Panel.destructive Border.toneFill"><Setter Property="Background" Value="{DynamicResource DestructiveColor}" /></Style>
+        <Style Selector="Panel.success Border.toneEdge"><Setter Property="BorderBrush" Value="{DynamicResource SuccessColor}" /></Style>
+        <Style Selector="Panel.warning Border.toneEdge"><Setter Property="BorderBrush" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Panel.destructive Border.toneEdge"><Setter Property="BorderBrush" Value="{DynamicResource DestructiveColor}" /></Style>
+        <Style Selector="Panel.success TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource SuccessColor}" /></Style>
+        <Style Selector="Panel.success ic|FluentIcon.toneInk"><Setter Property="Foreground" Value="{DynamicResource SuccessColor}" /></Style>
+        <Style Selector="Panel.warning TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Panel.warning ic|FluentIcon.toneInk"><Setter Property="Foreground" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Panel.destructive TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" /></Style>
+        <Style Selector="Panel.destructive ic|FluentIcon.toneInk"><Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" /></Style>
+        <Style Selector="Panel.neutral TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource MutedColor}" /></Style>
+        <Style Selector="Panel.neutral ic|FluentIcon.toneInk"><Setter Property="Foreground" Value="{DynamicResource MutedColor}" /></Style>
+        <!-- A chip's own tone wins over the card it sits in (#959 summary rows). -->
+        <Style Selector="Panel.chip.success > Border.toneFill"><Setter Property="Background" Value="{DynamicResource SuccessColor}" /></Style>
+        <Style Selector="Panel.chip.warning > Border.toneFill"><Setter Property="Background" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Panel.chip.destructive > Border.toneFill"><Setter Property="Background" Value="{DynamicResource DestructiveColor}" /></Style>
+        <Style Selector="Panel.chip.neutral > Border.toneFill"><Setter Property="Background" Value="{DynamicResource MutedColor}" /></Style>
+        <Style Selector="Panel.chip.success > Border.toneEdge"><Setter Property="BorderBrush" Value="{DynamicResource SuccessColor}" /></Style>
+        <Style Selector="Panel.chip.warning > Border.toneEdge"><Setter Property="BorderBrush" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Panel.chip.destructive > Border.toneEdge"><Setter Property="BorderBrush" Value="{DynamicResource DestructiveColor}" /></Style>
+        <Style Selector="Panel.chip.neutral > Border.toneEdge"><Setter Property="BorderBrush" Value="{DynamicResource MutedColor}" /></Style>
+        <Style Selector="Panel.chip.success > TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource SuccessColor}" /></Style>
+        <Style Selector="Panel.chip.warning > TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Panel.chip.destructive > TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" /></Style>
+        <Style Selector="Panel.chip.neutral > TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource MutedColor}" /></Style>
+        <Style Selector="Panel.chip.destructive StackPanel > TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" /></Style>
+        <Style Selector="Panel.chip.warning StackPanel > TextBlock.toneInk"><Setter Property="Foreground" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Panel.chip.warning StackPanel > ic|FluentIcon.toneInk"><Setter Property="Foreground" Value="{DynamicResource WarningColor}" /></Style>
+        <Style Selector="Path.octagon.badge">
+            <Setter Property="RenderTransform" Value="scale(0.8)" />
+        </Style>
+        <!-- A chip is tinted more strongly than the card. -->
+        <Style Selector="Panel.chip Border.toneFill">
+            <Setter Property="Opacity" Value="0.16" />
+            <Setter Property="CornerRadius" Value="9" />
+        </Style>
+        <Style Selector="Panel.chip Border.toneEdge">
+            <Setter Property="Opacity" Value="0.45" />
+            <Setter Property="CornerRadius" Value="9" />
+        </Style>
+        <!-- Lower confidence: the chip keeps its band tint; its border is dashed and muted (#939). -->
+        <Style Selector="Rectangle.chipDash">
+            <Setter Property="Stroke" Value="{DynamicResource MutedColor}" />
+            <Setter Property="StrokeThickness" Value="1" />
+            <Setter Property="StrokeDashArray" Value="3,2" />
+            <Setter Property="RadiusX" Value="9" />
+            <Setter Property="RadiusY" Value="9" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+        </Style>
+        <Style Selector="Panel.chip.lowConfidence Border.toneEdge">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Button.checkLeg">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <!-- Its own template, as Button.finding: the theme's would size
+                 the row (and its hover tint) to its content. -->
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Background="{TemplateBinding Background}"
+                                      CornerRadius="{TemplateBinding CornerRadius}"
+                                      Padding="{TemplateBinding Padding}"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      HorizontalContentAlignment="Stretch"
+                                      VerticalContentAlignment="Center" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.checkLeg:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}" />
+        </Style>
+        <!-- Findings (#905, F2): a row is a button over the selected-row
+             pattern (3 px accent bar and tint) shared with waypoint rows. -->
+        <!-- The theme's button template lays content out in a horizontal
+             StackPanel, which wouldn't stretch the row; this one does. -->
+        <Style Selector="Button.finding">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Background="{TemplateBinding Background}"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      HorizontalContentAlignment="Stretch" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.finding:focus-visible Border.wpTint">
+            <Setter Property="Opacity" Value="0.1" />
+        </Style>
+        <Style Selector="Button.finding:pointerover Border.wpTint">
+            <Setter Property="Opacity" Value="0.06" />
+        </Style>
+        <!-- Selected as in `accentList`: the bar in its own column beside a
+             0.12 tint, and the title in the accent colour. -->
+        <Style Selector="Button.finding.selected Border.wpTint">
+            <Setter Property="Opacity" Value="0.12" />
+        </Style>
+        <Style Selector="Button.finding.selected Border.wpBar">
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Button.finding.selected TextBlock.findingTitle">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <!-- Rows nest as the Library tree's do: a 16 px disclosure column, and
+             a merged row's findings indented one step (AccentTreeIndent) inside
+             full-width rows, so their selection spans the list. -->
+        <Style Selector="Grid.findingContent">
+            <Setter Property="Margin" Value="6,7,8,7" />
+        </Style>
+        <Style Selector="Grid.findingContent.subRow">
+            <Setter Property="Margin" Value="22,7,8,7" />
+        </Style>
+        <Style Selector="StackPanel.findingCard">
+            <Setter Property="Margin" Value="50,0,8,8" />
+        </Style>
+        <Style Selector="StackPanel.findingCard.subRow">
+            <Setter Property="Margin" Value="66,0,8,8" />
+        </Style>
+        <Style Selector="Border.findingTag">
+            <Setter Property="Height" Value="18" />
+            <Setter Property="Padding" Value="6,0" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+        </Style>
+        <!-- #959 (B3): a verdict-card summary row is a 24 px button. Its own
+             template, as Button.finding, so the value and chip stretch. -->
+        <Style Selector="Button.summaryRow">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="MinHeight" Value="24" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="-4,0" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Background="{TemplateBinding Background}"
+                                      CornerRadius="{TemplateBinding CornerRadius}"
+                                      Padding="{TemplateBinding Padding}"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      HorizontalContentAlignment="Stretch"
+                                      VerticalContentAlignment="Center" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.summaryRow:pointerover">
+            <Setter Property="Background" Value="{DynamicResource AccentSubtleBrush}" />
+        </Style>
+        <Style Selector="Button.link">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="MinHeight" Value="22" />
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <!-- #959 (D1): source filter chips, 22 px pills; the selected one is
+             filled with the foreground colour. -->
+        <Style Selector="Button.filterChip">
+            <Setter Property="Height" Value="22" />
+            <Setter Property="MinHeight" Value="22" />
+            <Setter Property="Padding" Value="9,0" />
+            <Setter Property="Margin" Value="0,0,4,4" />
+            <Setter Property="CornerRadius" Value="11" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Background="{TemplateBinding Background}"
+                                      BorderBrush="{TemplateBinding BorderBrush}"
+                                      BorderThickness="{TemplateBinding BorderThickness}"
+                                      CornerRadius="{TemplateBinding CornerRadius}"
+                                      Padding="{TemplateBinding Padding}"
+                                      Content="{TemplateBinding Content}"
+                                      VerticalContentAlignment="Center" />
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.filterChip:pointerover">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
+        <Style Selector="Button.filterChip.selected">
+            <Setter Property="Background" Value="{DynamicResource ForegroundColor}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ForegroundColor}" />
+        </Style>
+        <Style Selector="Button.filterChip.selected TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryForegroundColor}" />
+        </Style>
+        <Style Selector="Path.octagon">
+            <Setter Property="Data" Value="M 4.7,0.5 L 10.3,0.5 L 14.5,4.7 L 14.5,10.3 L 10.3,14.5 L 4.7,14.5 L 0.5,10.3 L 0.5,4.7 Z M 6.8,3.6 L 8.2,3.6 L 8.0,8.9 L 7.0,8.9 Z M 7.5,10 A 0.95,0.95 0 1 1 7.49,10 Z" />
+            <Setter Property="Width" Value="15" />
+            <Setter Property="Height" Value="15" />
+            <Setter Property="Stretch" Value="None" />
+        </Style>
+        <Style Selector="Panel.destructive Path.toneInk"><Setter Property="Fill" Value="{DynamicResource DestructiveColor}" /></Style>
+    </UserControl.Styles>
+
+    <UserControl.DataTemplates>
+        <!-- A finding row (#905 F2); a merged row (#959 D2) shows "×N" and
+             expands into its findings as sub-rows, indented 24 px. -->
+        <DataTemplate x:DataType="vm:RouteFindingRowViewModel">
+            <StackPanel>
+                <Button Classes="finding"
+                        Classes.selected="{Binding IsSelected}"
+                        AutomationProperties.AutomationId="{Binding AutomationId}"
+                        AutomationProperties.Name="{Binding Title}"
+                        AutomationProperties.HelpText="{Binding Tooltip}"
+                        ToolTip.Tip="{Binding Tooltip}"
+                        Command="{Binding $parent[UserControl].((vm:RoutesPanelViewModel)DataContext).Check.Findings.SelectCommand, FallbackValue={x:Null}}"
+                        CommandParameter="{Binding}">
+                    <Grid ColumnDefinitions="3,*" Margin="0,1">
+                        <Border Grid.Column="0" Classes="wpBar" />
+                        <Border Grid.Column="1" Classes="wpTint" />
+                        <Grid Grid.Column="1"
+                              Classes="findingContent"
+                              Classes.subRow="{Binding IsSubRow}"
+                              ColumnDefinitions="16,Auto,*,Auto"
+                              ColumnSpacing="6">
+                            <ToggleButton Grid.Column="0"
+                                          AutomationProperties.AutomationId="Routes.Check.Finding.Disclosure"
+                                          AutomationProperties.AccessibilityView="Raw"
+                                          Theme="{StaticResource AccentTreeChevronTheme}"
+                                          IsVisible="{Binding IsExpandable}"
+                                          IsChecked="{Binding IsOpen, Mode=OneWay}"
+                                          IsHitTestVisible="False"
+                                          Focusable="False"
+                                          VerticalAlignment="Top"
+                                          Margin="0,2,0,0" />
+                            <Panel Grid.Column="1"
+                                   VerticalAlignment="Top"
+                                   Margin="0,1,0,0"
+                                   Classes.destructive="{Binding IsDestructive}"
+                                   Classes.warning="{Binding IsWarning}"
+                                   Classes.neutral="{Binding IsNeutral}">
+                                <Path Classes="octagon toneInk" IsVisible="{Binding IsOctagon}" />
+                                <ic:FluentIcon Classes="toneInk" Icon="Warning" IconVariant="Regular" FontSize="15" IsVisible="{Binding IsTriangle}" />
+                                <ic:FluentIcon Classes="toneInk" Icon="Water" IconVariant="Regular" FontSize="15" IsVisible="{Binding IsWaves}" />
+                                <ic:FluentIcon Classes="toneInk" Icon="Info" IconVariant="Regular" FontSize="15" IsVisible="{Binding IsInfo}" />
+                            </Panel>
+                            <StackPanel Grid.Column="2" Spacing="2" Margin="4,0,4,0">
+                                <TextBlock Classes="findingTitle"
+                                           Text="{Binding Title}"
+                                           FontSize="12"
+                                           FontWeight="SemiBold"
+                                           LineHeight="15.6"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Meta}"
+                                           FontSize="11"
+                                           Opacity="0.6"
+                                           LineHeight="14.85"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Top">
+                                <TextBlock AutomationProperties.AutomationId="Routes.Check.Finding.Count"
+                                           Text="{Binding CountLabel}"
+                                           IsVisible="{Binding IsMerged}"
+                                           FontSize="11"
+                                           FontFamily="{StaticResource MonoFontFamily}"
+                                           Opacity="0.7"
+                                           VerticalAlignment="Center" />
+                                <Border Classes="findingTag"
+                                        AutomationProperties.AutomationId="Routes.Check.Finding.Tag"
+                                        AutomationProperties.Name="{Binding Tag}">
+                                    <TextBlock Text="{Binding Tag}"
+                                               FontSize="10"
+                                               Opacity="0.6"
+                                               VerticalAlignment="Center" />
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </Button>
+                <!-- E1: a selected S-124 finding expands into its Warning card,
+                     status at the ETA (E2), with a link to the warnings panel. -->
+                <StackPanel Classes="findingCard"
+                            Classes.subRow="{Binding IsSubRow}"
+                            IsVisible="{Binding HasWarningCard}"
+                            Spacing="6">
+                    <views:WarningCardView DataContext="{Binding WarningCard}" />
+                    <Button Classes="link"
+                            AutomationProperties.AutomationId="Routes.Check.Finding.OpenInWarnings"
+                            AutomationProperties.Name="{x:Static loc:Strings.Findings_OpenInWarnings}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_FindingOpenInWarnings}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_FindingOpenInWarnings}"
+                            HorizontalAlignment="Left"
+                            IsVisible="{Binding $parent[UserControl].((vm:RoutesPanelViewModel)DataContext).Check.Findings.CanOpenInWarnings, FallbackValue=False}"
+                            Command="{Binding $parent[UserControl].((vm:RoutesPanelViewModel)DataContext).Check.Findings.OpenInWarningsCommand, FallbackValue={x:Null}}">
+                        <TextBlock Text="{x:Static loc:Strings.Findings_OpenInWarnings}"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource AccentBrush}" />
+                    </Button>
+                </StackPanel>
+                <ItemsControl ItemsSource="{Binding Members}"
+                              IsVisible="{Binding ShowMembers}" />
+            </StackPanel>
+        </DataTemplate>
+        <!-- A leg-detail field: label (blue, with a dot, when overridden), a
+             box that is solid when overridden and dashed showing the inherited
+             value when not, and a Reset link on an override. Listed before the
+             plain field so it matches first. -->
+        <DataTemplate x:DataType="vm:RouteLegFieldViewModel">
+            <StackPanel Spacing="3">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <Ellipse Classes="overrideDot" IsVisible="{Binding IsOverridden}" />
+                    <TextBlock Classes="fieldLabel"
+                               Text="{Binding Label}"
+                               Classes.override="{Binding IsOverridden}" />
+                </StackPanel>
+                <Panel Classes="fieldBox" Classes.override="{Binding IsOverridden}">
+                    <Rectangle Classes="fieldFrame" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBox Grid.Column="0"
+                                 Classes="routeField"
+                                 AutomationProperties.AutomationId="{Binding AutomationId}"
+                                 AutomationProperties.Name="{Binding Label}"
+                                 Text="{Binding Text, Mode=TwoWay}"
+                                 IsReadOnly="{Binding IsReadOnly}"
+                                 PlaceholderText="{Binding Placeholder}">
+                            <TextBox.KeyBindings>
+                                <KeyBinding Gesture="Enter" Command="{Binding CommitCommand}" />
+                                <KeyBinding Gesture="Escape" Command="{Binding RevertCommand}" />
+                            </TextBox.KeyBindings>
+                        </TextBox>
+                        <Button Grid.Column="1"
+                                Classes="linkButton"
+                                AutomationProperties.AutomationId="{Binding AutomationId, StringFormat='{}{0}.Reset'}"
+                                Content="{x:Static loc:Strings.Routes_FieldReset}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_ResetOverride}"
+                                Command="{Binding ResetCommand}"
+                                IsVisible="{Binding IsOverridden}"
+                                IsEnabled="{Binding !IsReadOnly}" />
+                    </Grid>
+                </Panel>
+            </StackPanel>
+        </DataTemplate>
+        <!-- A Passage-card field box (its label sits outside, in the card). -->
+        <DataTemplate x:DataType="vm:RouteFieldViewModel">
+            <Panel Classes="fieldBox" Classes.set="{Binding IsSet}">
+                <Rectangle Classes="fieldFrame" />
+                <TextBox Classes="routeField"
+                         AutomationProperties.AutomationId="{Binding AutomationId}"
+                         AutomationProperties.Name="{Binding Label}"
+                         Text="{Binding Text, Mode=TwoWay}"
+                         IsReadOnly="{Binding IsReadOnly}"
+                         PlaceholderText="{Binding Placeholder}">
+                    <TextBox.KeyBindings>
+                        <KeyBinding Gesture="Enter" Command="{Binding CommitCommand}" />
+                        <KeyBinding Gesture="Escape" Command="{Binding RevertCommand}" />
+                    </TextBox.KeyBindings>
+                </TextBox>
+            </Panel>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <DockPanel LastChildFill="True">
+
+        <!-- Route-collection header actions (the host pane supplies the
+             "ROUTES" title above this row). -->
+        <Border DockPanel.Dock="Top" Padding="8,4,6,4">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                <!-- #960 (F1): Import route… opens a file as a received route. -->
+                <Button Grid.Column="1"
+                        AutomationProperties.AutomationId="Routes.Import"
+                        AutomationProperties.Name="{x:Static loc:Strings.Routes_ImportRoute}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ImportRoute}"
+                        Classes="Icon"
+                        IsVisible="{Binding CanExchange}"
+                        Command="{Binding ImportRouteCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_ImportRoute}">
+                    <ic:FluentIcon Icon="ArrowDownload" IconVariant="Regular" FontSize="16" />
+                </Button>
+                <Button Grid.Column="2"
+                        AutomationProperties.AutomationId="Routes.PromoteMeasurement"
+                        AutomationProperties.Name="{x:Static loc:Strings.Label_PromoteMeasurement}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_PromoteMeasurement}"
+                        Classes="Icon"
+                        Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).MapTools.PromoteMeasurementToRouteCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_PromoteMeasurement}">
+                    <ic:FluentIcon Icon="Ruler" IconVariant="Regular" FontSize="16" />
+                </Button>
+                <Button Grid.Column="3"
+                        AutomationProperties.AutomationId="Routes.Add"
+                        AutomationProperties.Name="{x:Static loc:Strings.Label_AddRoute}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_AddRoute}"
+                        Classes="Icon"
+                        Command="{Binding AddRouteCommand}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_AddRoute}">
+                    <ic:FluentIcon Icon="Add" IconVariant="Regular" FontSize="16" />
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Empty state. -->
+        <views:PlaceholderView DockPanel.Dock="Top"
+                               IsVisible="{Binding !HasRoutes}"
+                               Icon="Flow"
+                               Header="{x:Static loc:Strings.Pane_Routes}"
+                               Description="{Binding EmptyText}" />
+
+        <!-- Main body: routes list (top) over the active route detail,
+             separated by the standard PaneSplitter. -->
+        <Grid x:Name="RoutesBody" IsVisible="{Binding HasRoutes}">
+            <!-- The list sizes to its routes (up to 200 px) until the
+                 splitter is dragged; code-behind then keeps the height. -->
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" MinHeight="52" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" MinHeight="160" />
+            </Grid.RowDefinitions>
+
+            <!-- Routes list. -->
+            <ListBox Grid.Row="0"
+                     AutomationProperties.AutomationId="Routes.List"
+                     x:Name="RouteList"
+                     MaxHeight="200"
+                     ItemsSource="{Binding Routes}"
+                     SelectedItem="{Binding SelectedRoute, Mode=TwoWay}"
+                     Classes="accentList"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     Padding="0,0,10,0"
+                     Margin="8,2,8,4"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.Styles>
+                    <!-- Rows are named after their route, not RouteRowViewModel (#784). -->
+                    <Style Selector="ListBoxItem" x:DataType="vm:RouteRowViewModel">
+                        <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
+                    </Style>
+                </ListBox.Styles>
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:RouteRowViewModel">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                            <ic:FluentIcon Grid.Column="0"
+                                           Icon="Flow"
+                                           IconVariant="Filled"
+                                           FontSize="16"
+                                           VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Name}"
+                                           Classes="accentListTitle"
+                                           FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding Meta}"
+                                           FontSize="11"
+                                           Opacity="0.6" />
+                            </StackPanel>
+                            <Button Grid.Column="2"
+                                    AutomationProperties.AutomationId="Routes.Row.Menu"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_RouteRowMenu}"
+                                    Classes="Icon"
+                                    VerticalAlignment="Center"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_RouteRowMenu}">
+                                <ic:FluentIcon Icon="MoreHorizontal" IconVariant="Regular" FontSize="16" />
+                                <Button.Flyout>
+                                    <MenuFlyout>
+                                        <MenuItem Header="{x:Static loc:Strings.Menu_RenameRoute}"
+                                                  IsVisible="{Binding IsOwned}"
+                                                  AutomationProperties.AutomationId="Routes.RowMenu.Rename"
+                                                  Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).RenameRouteCommand}"
+                                                  CommandParameter="{Binding}" />
+                                        <MenuItem Header="{x:Static loc:Strings.Menu_ReverseRoute}"
+                                                  IsVisible="{Binding IsOwned}"
+                                                  AutomationProperties.AutomationId="Routes.RowMenu.Reverse"
+                                                  Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).ReverseRouteCommand}"
+                                                  CommandParameter="{Binding}" />
+                                        <!-- #960 (F1): Copy to edit (received) and Export… (both). -->
+                                        <MenuItem Header="{x:Static loc:Strings.Menu_CopyToEdit}"
+                                                  IsVisible="{Binding IsReceived}"
+                                                  AutomationProperties.AutomationId="Routes.RowMenu.CopyToEdit"
+                                                  Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).CopyToEditCommand}"
+                                                  CommandParameter="{Binding}" />
+                                        <MenuItem Header="{x:Static loc:Strings.Menu_ExportRoute}"
+                                                  IsVisible="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).CanExchange}"
+                                                  AutomationProperties.AutomationId="Routes.RowMenu.Export"
+                                                  Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).ExportRouteCommand}"
+                                                  CommandParameter="{Binding}" />
+                                        <Separator />
+                                        <MenuItem Header="{x:Static loc:Strings.Menu_RemoveRoute}"
+                                                  IsVisible="{Binding IsOwned}"
+                                                  AutomationProperties.AutomationId="Routes.RowMenu.Remove"
+                                                  Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).RemoveRouteCommand}"
+                                                  CommandParameter="{Binding}" />
+                                        <!-- #960 (F1): a received route is closed with its dataset. -->
+                                        <MenuItem Header="{x:Static loc:Strings.Menu_CloseRoute}"
+                                                  IsVisible="{Binding IsReceived}"
+                                                  AutomationProperties.AutomationId="Routes.RowMenu.Close"
+                                                  Command="{Binding $parent[ListBox].((vm:RoutesPanelViewModel)DataContext).RemoveRouteCommand}"
+                                                  CommandParameter="{Binding}" />
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <!-- Splitter between the list and the active route. The 1px
+                 hairline is a separate non-hit-testing border; the
+                 GridSplitter sits on top with the standard 4px hit target. -->
+            <Border Grid.Row="1"
+                    Height="1"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Center"
+                    IsHitTestVisible="False"
+                    Background="{DynamicResource BorderColor}" />
+            <GridSplitter Grid.Row="1"
+                          x:Name="RoutesSplitter"
+                          AutomationProperties.AutomationId="Routes.Splitter"
+                          Classes="PaneSplitter"
+                          Height="4"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Center"
+                          ResizeDirection="Rows"
+                          ResizeBehavior="PreviousAndNext"
+                          bh:HoverDelay.DelayMilliseconds="500"
+                          DragStarted="OnSplitterDragStarted"
+                          DragCompleted="OnSplitterDragCompleted" />
+
+
+            <!-- Active-route waypoint/leg timeline. -->
+            <Grid Grid.Row="2" RowDefinitions="Auto,*,Auto">
+                <!-- Active-route detail header: name (+ inline rename), the
+                     Editing pill, meta, and the editing toolbar. -->
+                <Border Grid.Row="0"
+                        IsVisible="{Binding HasActiveRoute}"
+                        Padding="11,6,8,6"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,0,0,1">
+                    <StackPanel Spacing="2">
+                        <!-- The name and its pencil (or Received badge) are a
+                             left-aligned grid, so a short name keeps the pencil
+                             beside it and a long one trims, keeping it in view. -->
+                        <Grid ColumnDefinitions="*,Auto"
+                              ColumnSpacing="6"
+                              IsVisible="{Binding !IsRenamingActiveRoute}">
+                            <Grid Grid.Column="0"
+                                  ColumnDefinitions="*,Auto"
+                                  ColumnSpacing="6"
+                                  HorizontalAlignment="Left">
+                                <TextBlock Grid.Column="0"
+                                           AutomationProperties.AutomationId="Routes.Active.Name"
+                                           Text="{Binding ActiveRouteName}"
+                                           ToolTip.Tip="{Binding ActiveRouteName}"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                                <Button Grid.Column="1"
+                                        AutomationProperties.AutomationId="Routes.Active.Rename"
+                                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_EditRouteName}"
+                                        Classes="Icon"
+                                        Command="{Binding BeginRenameCommand}"
+                                        IsVisible="{Binding CanEditActiveRoute}"
+                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_EditRouteName}">
+                                    <ic:FluentIcon Icon="Edit" IconVariant="Regular" FontSize="14" />
+                                </Button>
+                                <!-- #960 (A6): a received route says so after its name. -->
+                                <Border Grid.Column="1"
+                                        Classes="optionalPill"
+                                        AutomationProperties.AutomationId="Routes.Active.ReadOnlyBadge"
+                                        IsVisible="{Binding IsActiveReadOnly}"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding ReceivedBadgeText}" FontSize="10" Opacity="0.8" />
+                                </Border>
+                            </Grid>
+                            <Border Grid.Column="1"
+                                    Classes="editingPill"
+                                    AutomationProperties.AutomationId="Routes.Active.EditingBadge"
+                                    IsVisible="{Binding IsEditing}">
+                                <TextBlock Text="{x:Static loc:Strings.Routes_EditingBadge}"
+                                           FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="White" />
+                            </Border>
+                        </Grid>
+                        <TextBox Text="{Binding RenameText, Mode=TwoWay}"
+                                 AutomationProperties.AutomationId="Routes.Active.NameBox"
+                                 AutomationProperties.Name="{x:Static loc:Strings.Tooltip_EditRouteName}"
+                                 FontSize="13"
+                                 Padding="4,2"
+                                 IsVisible="{Binding IsRenamingActiveRoute}"
+                                 LostFocus="OnNameBoxLostFocus">
+                            <TextBox.KeyBindings>
+                                <KeyBinding Gesture="Enter" Command="{Binding CommitRenameCommand}" />
+                                <KeyBinding Gesture="Escape" Command="{Binding CancelRenameCommand}" />
+                            </TextBox.KeyBindings>
+                        </TextBox>
+                        <TextBlock Text="{Binding ActiveRouteDetailMeta}"
+                                   FontSize="11"
+                                   Opacity="0.6"
+                                   IsVisible="{Binding !ShowCheckPanel}" />
+                        <!-- #960 (A6, A7): a received route's source, and its display mode. -->
+                        <TextBlock AutomationProperties.AutomationId="Routes.Active.Source"
+                                   Text="{Binding ActiveSourceText}"
+                                   FontSize="11"
+                                   Opacity="0.6"
+                                   TextTrimming="CharacterEllipsis"
+                                   IsVisible="{Binding IsActiveReadOnly}" />
+                        <StackPanel Orientation="Horizontal"
+                                    Margin="0,3,0,1"
+                                    IsVisible="{Binding ShowDisplayMode}"
+                                    IsEnabled="{Binding CanChangeDisplayMode}"
+                                    ToolTip.Tip="{Binding DisplayModeTooltip}"
+                                    ToolTip.ShowOnDisabled="True">
+                            <ToggleButton Classes="segment"
+                                          AutomationProperties.AutomationId="Routes.DisplayMode.Native"
+                                          AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayModeNative}"
+                                          Content="{x:Static loc:Strings.Routes_DisplayModeNative}"
+                                          IsChecked="{Binding IsNativeMode, Mode=TwoWay}" />
+                            <ToggleButton Classes="segment last"
+                                          AutomationProperties.AutomationId="Routes.DisplayMode.Planning"
+                                          AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_DisplayModePlanning}"
+                                          Content="{x:Static loc:Strings.Routes_DisplayModePlanning}"
+                                          IsChecked="{Binding IsPlanningMode, Mode=TwoWay}" />
+                        </StackPanel>
+                        <!-- #960 (F4, F6): a copy's source has a newer edition; preserved schedules went stale. -->
+                        <TextBlock AutomationProperties.AutomationId="Routes.Active.NewerEdition"
+                                   Text="{Binding NewerEditionText}"
+                                   FontSize="11"
+                                   Foreground="{DynamicResource AccentBrush}"
+                                   TextWrapping="Wrap"
+                                   IsVisible="{Binding HasNewerEdition}" />
+                        <StackPanel Orientation="Horizontal"
+                                    Spacing="6"
+                                    AutomationProperties.AutomationId="Routes.Active.StaleSchedules"
+                                    IsVisible="{Binding HasStaleSchedules}">
+                            <TextBlock Text="{Binding StaleSchedulesText}" FontSize="11" Opacity="0.8" VerticalAlignment="Center" />
+                            <Button Classes="linkButton"
+                                    AutomationProperties.AutomationId="Routes.Active.StaleSchedules.Drop"
+                                    Content="{x:Static loc:Strings.Routes_StaleSchedulesDrop}"
+                                    Command="{Binding DropStaleSchedulesCommand}" />
+                            <Button Classes="linkButton"
+                                    AutomationProperties.AutomationId="Routes.Active.StaleSchedules.Keep"
+                                    Content="{x:Static loc:Strings.Routes_StaleSchedulesKeep}"
+                                    Command="{Binding KeepStaleSchedulesCommand}"
+                                    IsVisible="{Binding !IsKeepingStaleSchedules}" />
+                            <TextBlock Text="{x:Static loc:Strings.Routes_StaleSchedulesKept}" FontSize="11" Opacity="0.6"
+                                       VerticalAlignment="Center" IsVisible="{Binding IsKeepingStaleSchedules}" />
+                        </StackPanel>
+                        <!-- Check passage header (C2): vessel · draft · dep · arr. -->
+                        <TextBlock AutomationProperties.AutomationId="Routes.Check.HeaderMeta"
+                                   Text="{Binding Check.HeaderMeta, FallbackValue={x:Null}}"
+                                   FontSize="11"
+                                   Opacity="0.6"
+                                   TextTrimming="CharacterEllipsis"
+                                   IsVisible="{Binding ShowCheckPanel}" />
+
+                        <!-- Editing toolbar: undo / redo, zoom to route / reverse,
+                             and the keyboard hint. -->
+                        <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*"
+                              Margin="-6,2,0,0">
+                            <Button Grid.Column="0"
+                                    AutomationProperties.AutomationId="Routes.Undo"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Label_UndoRouteEdit}"
+                                    AutomationProperties.HelpText="{Binding UndoTooltip}"
+                                    Classes="Icon"
+                                    Command="{Binding UndoCommand}"
+                                    ToolTip.Tip="{Binding UndoTooltip}">
+                                <ic:FluentIcon Icon="ArrowUndo" IconVariant="Regular" FontSize="16" />
+                            </Button>
+                            <Button Grid.Column="1"
+                                    AutomationProperties.AutomationId="Routes.Redo"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Label_RedoRouteEdit}"
+                                    AutomationProperties.HelpText="{Binding RedoTooltip}"
+                                    Classes="Icon"
+                                    Command="{Binding RedoCommand}"
+                                    ToolTip.Tip="{Binding RedoTooltip}">
+                                <ic:FluentIcon Icon="ArrowRedo" IconVariant="Regular" FontSize="16" />
+                            </Button>
+                            <Border Grid.Column="2"
+                                    Width="1"
+                                    Height="16"
+                                    Margin="4,0"
+                                    Background="{DynamicResource BorderColor}" />
+                            <Button Grid.Column="3"
+                                    AutomationProperties.AutomationId="Routes.ZoomToRoute"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Label_ZoomToRoute}"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ZoomToRoute}"
+                                    Classes="Icon"
+                                    Command="{Binding ZoomToRouteCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ZoomToRoute}">
+                                <ic:FluentIcon Icon="ZoomFit" IconVariant="Regular" FontSize="16" />
+                            </Button>
+                            <Button Grid.Column="4"
+                                    AutomationProperties.AutomationId="Routes.Reverse"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Button_ReverseRoute}"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_ReverseRoute}"
+                                    Classes="Icon"
+                                    Command="{Binding ReverseActiveRouteCommand}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ReverseRoute}">
+                                <ic:FluentIcon Icon="ArrowSwap" IconVariant="Regular" FontSize="16" />
+                            </Button>
+                            <TextBlock Grid.Column="5"
+                                       Text="{Binding EditHint}"
+                                       FontSize="10.5"
+                                       Opacity="0.55"
+                                       HorizontalAlignment="Right"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <ScrollViewer Grid.Row="1"
+                              IsVisible="{Binding HasActiveRoute}"
+                              HorizontalScrollBarVisibility="Disabled">
+                  <!-- Right gutter keeps the overlay scrollbar off the content. -->
+                  <StackPanel AutomationProperties.AutomationId="Routes.Detail" Margin="0,0,8,0">
+                    <!-- Passage card (B1–B3): the route-level values legs
+                         inherit. Collapsed to one line on a new route. -->
+                    <Border Margin="8,6,8,2"
+                            BorderBrush="{DynamicResource BorderColor}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            DataContext="{Binding Passage}">
+                        <StackPanel>
+                            <Button Classes="legRow"
+                                    AutomationProperties.AutomationId="Routes.Passage.Toggle"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Routes_PassageTitle}"
+                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_PassageToggle}"
+                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_PassageToggle}"
+                                    Command="{Binding ToggleExpandedCommand}">
+                                <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6" Margin="10,7,10,7">
+                                    <TextBlock Grid.Column="0"
+                                               Text="{x:Static loc:Strings.Routes_PassageTitle}"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center" />
+                                    <Border Grid.Column="1" Classes="optionalPill" IsVisible="{Binding IsExpanded}">
+                                        <TextBlock Text="{x:Static loc:Strings.Routes_PassageOptional}" FontSize="10" Opacity="0.7" />
+                                    </Border>
+                                    <TextBlock Grid.Column="2"
+                                               AutomationProperties.AutomationId="Routes.Passage.Summary"
+                                               Text="{Binding Summary}"
+                                               IsVisible="{Binding !IsExpanded}"
+                                               FontSize="11.5"
+                                               Opacity="0.65"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <ic:FluentIcon Grid.Column="3"
+                                                   Icon="ChevronDown"
+                                                   IconVariant="Regular"
+                                                   FontSize="12"
+                                                   Opacity="0.65"
+                                                   VerticalAlignment="Center"
+                                                   IsVisible="{Binding !IsExpanded}" />
+                                    <ic:FluentIcon Grid.Column="3"
+                                                   Icon="ChevronUp"
+                                                   IconVariant="Regular"
+                                                   FontSize="12"
+                                                   Opacity="0.65"
+                                                   VerticalAlignment="Center"
+                                                   IsVisible="{Binding IsExpanded}" />
+                                </Grid>
+                            </Button>
+                            <StackPanel IsVisible="{Binding IsExpanded}" Margin="10,0,10,9" Spacing="8">
+                                <!-- #960 (A9): your check settings (local; not route content), then
+                                     the route's own values (read-only on a received route). -->
+                                <StackPanel Spacing="5" AutomationProperties.AutomationId="Routes.Passage.CheckSettings">
+                                    <TextBlock Text="{Binding CheckSettingsHeading}" FontSize="11" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding CheckSettingsNote}" FontSize="10.5" Opacity="0.6" TextWrapping="Wrap" />
+                                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="7">
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Spacing="3">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Classes="fieldLabel" Text="{x:Static loc:Strings.Routes_PassageDraftSquat}" />
+                                            <TextBlock Classes="fieldLabel" Opacity="0.6" Text="{Binding FromFileText}" IsVisible="{Binding Draft.IsFromFile}" />
+                                        </StackPanel>
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                                            <ContentControl Grid.Column="0" Content="{Binding Draft}" />
+                                            <ContentControl Grid.Column="1" Width="64" Content="{Binding Squat}" IsVisible="{Binding ShowSquat}" />
+                                        </Grid>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Spacing="3">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Classes="fieldLabel" Text="{x:Static loc:Strings.Routes_PassageRequiredUkc}" />
+                                            <TextBlock Classes="fieldLabel" Opacity="0.6" Text="{Binding FromFileText}" IsVisible="{Binding RequiredUkc.IsFromFile}" />
+                                        </StackPanel>
+                                        <Panel>
+                                            <ContentControl Content="{Binding RequiredUkc}" />
+                                            <TextBlock Classes="fieldSuffix"
+                                                       Text="{x:Static loc:Strings.Routes_PassageStatic}"
+                                                       IsVisible="{Binding RequiredUkc.IsSet}" />
+                                        </Panel>
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.Column="0" Spacing="3">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Classes="fieldLabel" Text="{x:Static loc:Strings.Routes_PassageDeparture}" />
+                                            <TextBlock Classes="fieldLabel" Opacity="0.6" Text="{Binding FromFileText}" IsVisible="{Binding Departure.IsFromFile}" />
+                                        </StackPanel>
+                                        <Panel ToolTip.Tip="{x:Static loc:Strings.Tooltip_PassageDeparture}">
+                                            <ContentControl Content="{Binding Departure}" />
+                                            <ic:FluentIcon Icon="Clock"
+                                                           IconVariant="Regular"
+                                                           FontSize="12"
+                                                           Opacity="0.55"
+                                                           Margin="0,0,8,0"
+                                                           HorizontalAlignment="Right"
+                                                           VerticalAlignment="Center"
+                                                           IsHitTestVisible="False"
+                                                           IsVisible="{Binding !Departure.IsSet}" />
+                                        </Panel>
+                                    </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                                <StackPanel Spacing="5" AutomationProperties.AutomationId="Routes.Passage.RouteValues">
+                                    <TextBlock Text="{Binding RouteValuesHeading}" FontSize="11" FontWeight="SemiBold" />
+                                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="7">
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Spacing="3">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Classes="fieldLabel" Text="{x:Static loc:Strings.Routes_PassageSpeed}" />
+                                            <TextBlock Classes="fieldLabel" Opacity="0.6" Text="{Binding FromFileText}" IsVisible="{Binding Speed.IsFromFile}" />
+                                        </StackPanel>
+                                        <ContentControl Content="{Binding Speed}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" Grid.Column="1" Spacing="3">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Classes="fieldLabel" Text="{x:Static loc:Strings.Routes_PassageCrossTrack}" />
+                                            <TextBlock Classes="fieldLabel" Opacity="0.6" Text="{Binding FromFileText}" IsVisible="{Binding CrossTrack.IsFromFile}" />
+                                        </StackPanel>
+                                        <ContentControl Content="{Binding CrossTrack}" ToolTip.Tip="{x:Static loc:Strings.Tooltip_PassageCrossTrack}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="1" Grid.Column="0" Spacing="3">
+                                        <TextBlock Classes="fieldLabel" Text="{x:Static loc:Strings.Routes_PassageVessel}" />
+                                        <Panel Classes="fieldBox" Classes.set="{Binding HasVessel}">
+                                            <Rectangle Classes="fieldFrame" />
+                                            <Button Classes="legRow"
+                                                    AutomationProperties.AutomationId="Routes.Passage.Vessel"
+                                                    AutomationProperties.Name="{x:Static loc:Strings.Routes_PassageVessel}"
+                                                    VerticalAlignment="Stretch">
+                                                <Panel Margin="8,0">
+                                                    <TextBlock Text="{Binding VesselText}"
+                                                               FontSize="12"
+                                                               VerticalAlignment="Center"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               IsVisible="{Binding HasVessel}" />
+                                                    <TextBlock Text="{x:Static loc:Strings.Routes_FieldAdd}"
+                                                               FontSize="12"
+                                                               Opacity="0.55"
+                                                               VerticalAlignment="Center"
+                                                               IsVisible="{Binding !HasVessel}" />
+                                                </Panel>
+                                                <Button.Flyout>
+                                                    <Flyout Placement="BottomEdgeAlignedLeft">
+                                                        <Grid Width="240" ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="6">
+                                                            <TextBlock Grid.Row="0" Classes="fieldLabel" VerticalAlignment="Center" Text="{x:Static loc:Strings.Routes_VesselName}" />
+                                                            <ContentControl Grid.Row="0" Grid.Column="1" Content="{Binding VesselName}" />
+                                                            <TextBlock Grid.Row="1" Classes="fieldLabel" VerticalAlignment="Center" Text="{x:Static loc:Strings.Routes_VesselMmsi}" />
+                                                            <ContentControl Grid.Row="1" Grid.Column="1" Content="{Binding VesselMmsi}" />
+                                                            <TextBlock Grid.Row="2" Classes="fieldLabel" VerticalAlignment="Center" Text="{x:Static loc:Strings.Routes_VesselImo}" />
+                                                            <ContentControl Grid.Row="2" Grid.Column="1" Content="{Binding VesselImo}" />
+                                                            <TextBlock Grid.Row="3" Classes="fieldLabel" VerticalAlignment="Center" Text="{x:Static loc:Strings.Routes_VesselCallsign}" />
+                                                            <ContentControl Grid.Row="3" Grid.Column="1" Content="{Binding VesselCallsign}" />
+                                                            <TextBlock Grid.Row="4" Classes="fieldLabel" VerticalAlignment="Center" Text="{x:Static loc:Strings.Routes_VesselLength}" />
+                                                            <ContentControl Grid.Row="4" Grid.Column="1" Content="{Binding VesselLength}" />
+                                                            <TextBlock Grid.Row="5" Classes="fieldLabel" VerticalAlignment="Center" Text="{x:Static loc:Strings.Routes_VesselBeam}" />
+                                                            <ContentControl Grid.Row="5" Grid.Column="1" Content="{Binding VesselBeam}" />
+                                                        </Grid>
+                                                    </Flyout>
+                                                </Button.Flyout>
+                                            </Button>
+                                        </Panel>
+                                    </StackPanel>
+                                    </Grid>
+                                </StackPanel>
+                                <TextBlock Text="{x:Static loc:Strings.Routes_PassageHelp}"
+                                           FontSize="10.5"
+                                           Opacity="0.6"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Check passage (#901, C3–C5): the verdict card, the
+                         Legs / Findings switch and the check-mode leg rows,
+                         in place of the waypoint timeline. -->
+                    <Panel IsVisible="{Binding ShowCheckPanel}">
+                    <StackPanel Margin="8,4,8,4"
+                                Spacing="6"
+                                DataContext="{Binding Check}"
+                                x:DataType="vm:PassageCheckViewModel">
+                        <TextBlock AutomationProperties.AutomationId="Routes.Check.Status"
+                                   Text="{Binding StatusText}"
+                                   IsVisible="{Binding StatusText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                   FontSize="11.5"
+                                   Opacity="0.7"
+                                   TextWrapping="Wrap"
+                                   Margin="4,2" />
+                        <Panel AutomationProperties.AutomationId="Routes.Check.Verdict"
+                               AutomationProperties.Name="{Binding Title}"
+                               IsVisible="{Binding HasVerdict}"
+                               Opacity="{Binding VerdictOpacity}"
+                               Classes.success="{Binding IsSuccess}"
+                               Classes.warning="{Binding IsWarning}"
+                               Classes.destructive="{Binding IsDestructive}"
+                               Classes.neutral="{Binding IsNeutral}">
+                            <Border Classes="toneFill" CornerRadius="8" />
+                            <Border Classes="toneEdge" CornerRadius="8" />
+                            <StackPanel Margin="12,10,12,9" Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Panel VerticalAlignment="Center">
+                                        <ic:FluentIcon Classes="toneInk" Icon="CheckmarkCircle" IconVariant="Filled" FontSize="16" IsVisible="{Binding IsSuccess}" />
+                                        <ic:FluentIcon Classes="toneInk" Icon="Warning" IconVariant="Filled" FontSize="16" IsVisible="{Binding IsWarning}" />
+                                        <ic:FluentIcon Classes="toneInk" Icon="ErrorCircle" IconVariant="Filled" FontSize="16" IsVisible="{Binding IsDestructive}" />
+                                        <ic:FluentIcon Classes="toneInk" Icon="Prohibited" IconVariant="Regular" FontSize="16" IsVisible="{Binding IsNeutral}" />
+                                    </Panel>
+                                    <TextBlock AutomationProperties.AutomationId="Routes.Check.VerdictTitle"
+                                               Text="{Binding Title}"
+                                               FontSize="12.5"
+                                               FontWeight="SemiBold"
+                                               TextWrapping="Wrap"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                                <!-- B2: where the worst item is, and what else there is. -->
+                                <TextBlock AutomationProperties.AutomationId="Routes.Check.Subtitle"
+                                           Text="{Binding Subtitle}"
+                                           IsVisible="{Binding Subtitle, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                           FontSize="11.5"
+                                           Opacity="0.7"
+                                           TextWrapping="Wrap" />
+                                <!-- B3: Clearance / Route / Warnings / Weather (#1093). Each row filters the findings list. -->
+                                <ItemsControl AutomationProperties.AutomationId="Routes.Check.Summary"
+                                              ItemsSource="{Binding SummaryRows}"
+                                              Margin="0,4,0,0">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:CheckSummaryRowViewModel">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <Button Grid.ColumnSpan="2"
+                                                        Classes="summaryRow"
+                                                        AutomationProperties.AutomationId="{Binding Key, StringFormat='Routes.Check.Summary.{0}'}"
+                                                        AutomationProperties.Name="{Binding Label}"
+                                                        AutomationProperties.HelpText="{Binding Tooltip}"
+                                                        ToolTip.Tip="{Binding Tooltip}"
+                                                        Command="{Binding $parent[ItemsControl].((vm:PassageCheckViewModel)DataContext).SelectSummaryCommand}"
+                                                        CommandParameter="{Binding}">
+                                                    <Grid ColumnDefinitions="66,*,Auto" Margin="0,0,4,0">
+                                                        <TextBlock Grid.Column="0"
+                                                                   Text="{Binding Label}"
+                                                                   FontSize="11.5"
+                                                                   Opacity="0.6"
+                                                                   VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1"
+                                                                   AutomationProperties.AutomationId="Routes.Check.Summary.Text"
+                                                                   Text="{Binding Text}"
+                                                                   FontSize="11.5"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   VerticalAlignment="Center" />
+                                                        <Panel Grid.Column="2"
+                                                               Classes="chip"
+                                                               Classes.success="{Binding IsChipSuccess}"
+                                                               Classes.warning="{Binding IsChipWarning}"
+                                                               Classes.destructive="{Binding IsChipDestructive}"
+                                                               Classes.neutral="{Binding IsChipNeutral}"
+                                                               AutomationProperties.AutomationId="Routes.Check.Summary.Chip"
+                                                               AutomationProperties.Name="{Binding Chip}"
+                                                               IsVisible="{Binding HasChip}"
+                                                               MinWidth="26"
+                                                               Height="18"
+                                                               VerticalAlignment="Center">
+                                                            <Border Classes="toneFill" />
+                                                            <Border Classes="toneEdge" />
+                                                            <TextBlock Classes="toneInk"
+                                                                       Text="{Binding Chip}"
+                                                                       FontSize="10.5"
+                                                                       Margin="7,0"
+                                                                       HorizontalAlignment="Center"
+                                                                       VerticalAlignment="Center" />
+                                                        </Panel>
+                                                    </Grid>
+                                                </Button>
+                                                <!-- A5: "+ Add draft" sits over the row's right end. -->
+                                                <Button Grid.Column="1"
+                                                        Classes="link"
+                                                        AutomationProperties.AutomationId="Routes.Check.Summary.AddDraft"
+                                                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CheckAddDraft}"
+                                                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_CheckAddDraft}"
+                                                        Content="{x:Static loc:Strings.Check_SummaryAddDraft}"
+                                                        IsVisible="{Binding AddDraft}"
+                                                        Command="{Binding $parent[ItemsControl].((vm:PassageCheckViewModel)DataContext).AddDraftCommand}"
+                                                        VerticalAlignment="Center" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <!-- #939: confidence qualifies the band-led title, never replaces it. -->
+                                <StackPanel AutomationProperties.AutomationId="Routes.Check.Confidence"
+                                            AutomationProperties.Name="{Binding ConfidenceText}"
+                                            Orientation="Horizontal"
+                                            Spacing="5"
+                                            Opacity="0.75"
+                                            IsVisible="{Binding ConfidenceText, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                    <ic:FluentIcon Icon="Info" IconVariant="Regular" FontSize="12" VerticalAlignment="Top" Margin="0,1,0,0" />
+                                    <TextBlock Text="{Binding ConfidenceText}"
+                                               FontSize="11"
+                                               TextWrapping="Wrap"
+                                               MaxWidth="260" />
+                                </StackPanel>
+                                <!-- #903 (C3): the departure window line and Depart {HH:MM}. -->
+                                <StackPanel DataContext="{Binding Window}"
+                                            x:DataType="vm:DepartureWindowViewModel"
+                                            IsVisible="{Binding IsVisible}"
+                                            Opacity="{Binding Opacity}"
+                                            Spacing="6"
+                                            Margin="0,2,0,0">
+                                    <TextBlock AutomationProperties.AutomationId="Routes.Check.Window"
+                                               Text="{Binding Text}"
+                                               FontSize="11.5"
+                                               TextWrapping="Wrap" />
+                                    <Button Classes="Primary"
+                                            AutomationProperties.AutomationId="Routes.Check.Depart"
+                                            Content="{Binding DepartText}"
+                                            Command="{Binding DepartCommand}"
+                                            IsVisible="{Binding ShowDepart}"
+                                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_CheckDepart}"
+                                            HorizontalAlignment="Left"
+                                            Height="28"
+                                            MinHeight="28"
+                                            FontSize="12"
+                                            Padding="12,0" />
+                                </StackPanel>
+                                <!-- B4: route findings don't move with departure. -->
+                                <TextBlock AutomationProperties.AutomationId="Routes.Check.WindowNote"
+                                           Text="{x:Static loc:Strings.Check_WindowRouteFindings}"
+                                           IsVisible="{Binding ShowWindowNote}"
+                                           FontSize="11.5"
+                                           TextWrapping="Wrap" />
+                                <TextBlock AutomationProperties.AutomationId="Routes.Check.Footer"
+                                           Text="{Binding FooterText}"
+                                           FontSize="10.5"
+                                           Opacity="0.6"
+                                           TextWrapping="Wrap"
+                                           Margin="0,2,0,0" />
+                            </StackPanel>
+                        </Panel>
+
+                        <!-- C4: Legs / Findings {N}. -->
+                        <!-- Header-only tabs: the two lists below follow ShowLegs / ShowFindings. -->
+                        <TabControl Classes="pillTabs"
+                                    AutomationProperties.AutomationId="Routes.Check.Tabs"
+                                    IsVisible="{Binding HasVerdict}"
+                                    SelectedIndex="{Binding SelectedTabIndex, Mode=TwoWay}">
+                            <TabItem AutomationProperties.AutomationId="Routes.Check.LegsTab"
+                                     Header="{x:Static loc:Strings.Check_TabLegs}" />
+                            <TabItem AutomationProperties.AutomationId="Routes.Check.FindingsTab"
+                                     AutomationProperties.Name="{Binding FindingsLabel}">
+                                <!-- The count in the secondary colour, as the Library's counts. -->
+                                <TabItem.Header>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="{x:Static loc:Strings.Check_TabFindings}" />
+                                        <TextBlock AutomationProperties.AutomationId="Routes.Check.FindingsTab.Count"
+                                                   Text="{Binding FindingsCount}"
+                                                   Foreground="{DynamicResource MutedColor}" />
+                                    </StackPanel>
+                                </TabItem.Header>
+                            </TabItem>
+                        </TabControl>
+                        <!-- F1/F2: one list per route, grouped by what to do.
+                             Clicking a row zooms the map to the finding and
+                             moves the profile cursor there (F3). -->
+                        <StackPanel AutomationProperties.AutomationId="Routes.Check.Findings"
+                                    DataContext="{Binding Findings}"
+                                    x:DataType="vm:RouteFindingsViewModel"
+                                    IsVisible="{Binding $parent[StackPanel].((vm:PassageCheckViewModel)DataContext).ShowFindings}"
+                                    Spacing="2">
+                            <StackPanel.KeyBindings>
+                                <!-- E1: Esc closes the inline Warning card. -->
+                                <KeyBinding Gesture="Escape" Command="{Binding CloseWarningCardCommand}" />
+                            </StackPanel.KeyBindings>
+                            <!-- D1: source filter chips; a chip shows only when it has findings. -->
+                            <ItemsControl AutomationProperties.AutomationId="Routes.Check.Filter"
+                                          ItemsSource="{Binding FilterChips}"
+                                          IsVisible="{Binding !IsEmpty}"
+                                          Margin="2,2,2,2">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:FindingsFilterChipViewModel">
+                                        <Button Classes="filterChip"
+                                                Classes.selected="{Binding IsSelected}"
+                                                AutomationProperties.AutomationId="{Binding Key, StringFormat='Routes.Check.Filter.{0}'}"
+                                                AutomationProperties.Name="{Binding Label}"
+                                                IsVisible="{Binding IsVisible}"
+                                                Command="{Binding $parent[ItemsControl].((vm:RouteFindingsViewModel)DataContext).SetFilterCommand}"
+                                                CommandParameter="{Binding}">
+                                            <TextBlock Text="{Binding Label}" FontSize="11" />
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock AutomationProperties.AutomationId="Routes.Check.Findings.Empty"
+                                       Text="{x:Static loc:Strings.Findings_Empty}"
+                                       IsVisible="{Binding IsEmpty}"
+                                       FontSize="11"
+                                       Opacity="0.55"
+                                       TextWrapping="Wrap"
+                                       Margin="4,2" />
+                            <TextBlock AutomationProperties.AutomationId="Routes.Check.Findings.FilterEmpty"
+                                       Text="{x:Static loc:Strings.Findings_FilterEmpty}"
+                                       IsVisible="{Binding IsFilteredEmpty}"
+                                       FontSize="11"
+                                       Opacity="0.55"
+                                       TextWrapping="Wrap"
+                                       Margin="4,2" />
+                            <ItemsControl ItemsSource="{Binding Groups}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:RouteFindingGroupViewModel">
+                                        <StackPanel AutomationProperties.AutomationId="{Binding Key, StringFormat='Routes.Check.Findings.Group.{0}'}"
+                                                    AutomationProperties.Name="{Binding Label}">
+                                            <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,8,8,4" IsVisible="{Binding !IsFoldable}">
+                                                <TextBlock Text="{Binding Label}"
+                                                           FontSize="10.5"
+                                                           FontWeight="SemiBold"
+                                                           LetterSpacing="0.6"
+                                                           Opacity="0.6" />
+                                                <TextBlock Text="{Binding CountLabel}" FontSize="10.5" Opacity="0.45" />
+                                            </StackPanel>
+                                            <!-- D3: INFO folds by default; its heading toggles it. -->
+                                            <Button Classes="summaryRow"
+                                                    AutomationProperties.AutomationId="Routes.Check.Findings.InfoToggle"
+                                                    AutomationProperties.Name="{Binding Label}"
+                                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_FindingsInfoToggle}"
+                                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_FindingsInfoToggle}"
+                                                    IsVisible="{Binding IsFoldable}"
+                                                    Command="{Binding $parent[ItemsControl].((vm:RouteFindingsViewModel)DataContext).ToggleInfoCommand}"
+                                                    Margin="4,4,4,0">
+                                                <StackPanel Orientation="Horizontal" Spacing="6" Margin="4,0">
+                                                    <TextBlock Text="{Binding Label}"
+                                                               FontSize="10.5"
+                                                               FontWeight="SemiBold"
+                                                               LetterSpacing="0.6"
+                                                               Opacity="0.6"
+                                                               VerticalAlignment="Center" />
+                                                    <TextBlock Text="{Binding CountLabel}" FontSize="10.5" Opacity="0.45" VerticalAlignment="Center" />
+                                                    <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="11" Opacity="0.6" IsVisible="{Binding IsFolded}" VerticalAlignment="Center" />
+                                                    <ic:FluentIcon Icon="ChevronDown" IconVariant="Regular" FontSize="11" Opacity="0.6" IsVisible="{Binding IsOpen}" VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </Button>
+                                            <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding IsOpen}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <!-- C5: one 34 px row per leg with its min-UKC chip.
+                             Hovering a row moves the cursor and ghost there. -->
+                        <TextBlock AutomationProperties.AutomationId="Routes.Check.Legs.NeedsDraft"
+                                   Text="{x:Static loc:Strings.Check_AddDraft}"
+                                   IsVisible="{Binding ShowLegsNeedsDraft}"
+                                   FontSize="11"
+                                   Opacity="0.55"
+                                   TextWrapping="Wrap"
+                                   Margin="4,2" />
+                        <ItemsControl AutomationProperties.AutomationId="Routes.Check.Legs"
+                                      ItemsSource="{Binding Legs}"
+                                      IsVisible="{Binding ShowLegs}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:PassageCheckLegRowViewModel">
+                                    <Button Classes="checkLeg"
+                                            AutomationProperties.AutomationId="Routes.Check.Leg"
+                                            AutomationProperties.Name="{Binding Name}"
+                                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CheckLegRow}"
+                                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_CheckLegRow}"
+                                            PointerEntered="OnCheckLegPointerEntered"
+                                            Command="{Binding $parent[ItemsControl].((vm:PassageCheckViewModel)DataContext).HoverLegCommand}"
+                                            CommandParameter="{Binding}">
+                                        <Grid ColumnDefinitions="22,*,Auto,Auto" ColumnSpacing="6">
+                                            <TextBlock Grid.Column="0"
+                                                       Text="{Binding Number}"
+                                                       FontFamily="{StaticResource MonoFontFamily}"
+                                                       FontSize="11"
+                                                       Opacity="0.7"
+                                                       VerticalAlignment="Center" />
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Name}"
+                                                           FontSize="12"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding TimesText}"
+                                                           FontSize="10.5"
+                                                           Opacity="0.6"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                            <!-- D4: the leg's worst route-check group and count. -->
+                                            <Panel Grid.Column="2"
+                                                   Classes="chip"
+                                                   Classes.destructive="{Binding IsBadgeMustReview}"
+                                                   Classes.warning="{Binding IsBadgeCheck}"
+                                                   AutomationProperties.AutomationId="Routes.Check.Leg.Badge"
+                                                   AutomationProperties.Name="{Binding BadgeText}"
+                                                   ToolTip.Tip="{x:Static loc:Strings.Tooltip_CheckLegBadge}"
+                                                   IsVisible="{Binding HasBadge}"
+                                                   Height="20"
+                                                   VerticalAlignment="Center">
+                                                <Border Classes="toneFill" Opacity="0.1" />
+                                                <StackPanel Orientation="Horizontal" Spacing="3" Margin="6,0" VerticalAlignment="Center">
+                                                    <Path Classes="octagon toneInk badge" IsVisible="{Binding IsBadgeMustReview}" />
+                                                    <ic:FluentIcon Classes="toneInk" Icon="Warning" IconVariant="Regular" FontSize="12" IsVisible="{Binding IsBadgeCheck}" />
+                                                    <TextBlock Classes="toneInk"
+                                                               Text="{Binding BadgeText}"
+                                                               FontFamily="{StaticResource MonoFontFamily}"
+                                                               FontSize="11"
+                                                               VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </Panel>
+                                            <Panel Grid.Column="3"
+                                                   IsVisible="{Binding HasChip}"
+                                                   Classes="chip"
+                                                   Classes.success="{Binding IsChipSuccess}"
+                                                   Classes.warning="{Binding IsChipWarning}"
+                                                   Classes.destructive="{Binding IsChipDestructive}"
+                                                   Classes.neutral="{Binding IsChipNeutral}"
+                                                   Classes.lowConfidence="{Binding IsLowConfidence}"
+                                                   AutomationProperties.AutomationId="Routes.Check.Leg.Chip"
+                                                   AutomationProperties.Name="{Binding ChipText}"
+                                                   MinWidth="52"
+                                                   Height="20"
+                                                   VerticalAlignment="Center">
+                                                <Border Classes="toneFill" />
+                                                <Border Classes="toneEdge" />
+                                                <Rectangle Classes="chipDash"
+                                                           IsVisible="{Binding IsLowConfidence}"
+                                                           ToolTip.Tip="{x:Static loc:Strings.Tooltip_CheckLowConfidence}" />
+                                                <TextBlock Classes="toneInk"
+                                                           Text="{Binding ChipText}"
+                                                           FontFamily="{StaticResource MonoFontFamily}"
+                                                           FontSize="11"
+                                                           Margin="8,0"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center" />
+                                            </Panel>
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                    </Panel>
+
+                    <ItemsControl x:Name="TimelineItems"
+                                  IsVisible="{Binding !ShowCheckPanel}"
+                                  ItemsSource="{Binding Timeline}"
+                                  Margin="8,2,8,4">
+                        <ItemsControl.DataTemplates>
+                            <!-- Waypoint row. The accent bar + tint live on
+                                 the row Border so selection spans the full
+                                 width (content + overflow). The inner grid's
+                                 8,5 margin matches the `accentList` content
+                                 padding so this list lines up with the routes
+                                 list above it. -->
+                            <DataTemplate x:DataType="vm:RouteWaypointRowViewModel">
+                                <Grid Classes="wpRow"
+                                      Classes.selected="{Binding IsSelected}"
+                                      ColumnDefinitions="3,*">
+                                    <Border Grid.Column="0" Classes="wpBar" />
+                                    <Panel Grid.Column="1">
+                                        <Border Classes="wpTint" />
+                                        <!-- Full-area select target (bottom layer). -->
+                                        <Button Classes="wpHit"
+                                                AutomationProperties.AutomationId="Routes.Waypoint"
+                                                AutomationProperties.Name="{Binding Label}"
+                                                Command="{Binding $parent[ItemsControl].((vm:RoutesPanelViewModel)DataContext).SelectWaypointCommand}"
+                                                CommandParameter="{Binding}" />
+                                        <!-- Row visuals (top layer). The disc is
+                                             non-hit-testable so clicks fall through
+                                             to the select target; the name and
+                                             position fields and the overflow
+                                             button take their own clicks. -->
+                                        <Grid ColumnDefinitions="*,Auto" Margin="8,5">
+                                            <Grid Grid.Column="0"
+                                                  ColumnDefinitions="28,*"
+                                                  ColumnSpacing="8">
+                                                <Border Grid.Column="0"
+                                                        Classes="wpCircle"
+                                                        VerticalAlignment="Top"
+                                                        Margin="0,2,0,0"
+                                                        IsHitTestVisible="False">
+                                                    <TextBlock Classes="wpNum"
+                                                               Text="{Binding Number}" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <!-- The name, with the ETA (A8) on its right
+                                                         once the route has a speed. -->
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBox Grid.Column="0"
+                                                                 Classes="inlineEdit wpName"
+                                                                 AutomationProperties.AutomationId="Routes.Waypoint.Name"
+                                                                 AutomationProperties.Name="{x:Static loc:Strings.Label_WaypointName}"
+                                                                 Text="{Binding NameText, Mode=TwoWay}"
+                                                                 IsReadOnly="{Binding IsReadOnly}"
+                                                                 PlaceholderText="{Binding FallbackName}">
+                                                            <TextBox.KeyBindings>
+                                                                <KeyBinding Gesture="Enter" Command="{Binding CommitNameCommand}" />
+                                                                <KeyBinding Gesture="Escape" Command="{Binding RevertNameCommand}" />
+                                                            </TextBox.KeyBindings>
+                                                        </TextBox>
+                                                        <TextBlock Grid.Column="1"
+                                                                   AutomationProperties.AutomationId="Routes.Waypoint.Eta"
+                                                                   Text="{Binding Eta}"
+                                                                   IsVisible="{Binding HasEta}"
+                                                                   ToolTip.Tip="{Binding EtaTooltip}"
+                                                                   FontSize="11"
+                                                                   FontFamily="{StaticResource MonoFontFamily}"
+                                                                   Opacity="0.7"
+                                                                   Margin="6,0,0,0"
+                                                                   VerticalAlignment="Center" />
+                                                    </Grid>
+                                                    <TextBox Classes="inlineEdit wpCoords"
+                                                             Classes.invalid="{Binding HasCoordsError}"
+                                                             AutomationProperties.AutomationId="Routes.Waypoint.Position"
+                                                             AutomationProperties.Name="{x:Static loc:Strings.Label_WaypointPosition}"
+                                                             Text="{Binding CoordsText, Mode=TwoWay}"
+                                                             IsReadOnly="{Binding IsReadOnly}">
+                                                        <TextBox.KeyBindings>
+                                                            <KeyBinding Gesture="Enter" Command="{Binding CommitCoordsCommand}" />
+                                                            <KeyBinding Gesture="Escape" Command="{Binding RevertCoordsCommand}" />
+                                                        </TextBox.KeyBindings>
+                                                    </TextBox>
+                                                    <TextBlock AutomationProperties.AutomationId="Routes.Waypoint.PositionError"
+                                                               Text="{Binding CoordsError}"
+                                                               IsVisible="{Binding HasCoordsError}"
+                                                               Foreground="{DynamicResource DestructiveColor}"
+                                                               FontSize="11"
+                                                               TextWrapping="Wrap"
+                                                               Margin="0,2,0,0" />
+                                                </StackPanel>
+                                            </Grid>
+                                            <!-- Overflow menu. The flyout binds to
+                                                 commands surfaced on the row VM:
+                                                 ancestor bindings do not resolve
+                                                 across the flyout popup, but the
+                                                 inherited DataContext does. -->
+                                            <Button Grid.Column="1"
+                                                    AutomationProperties.AutomationId="Routes.Waypoint.Menu"
+                                                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_WaypointRowMenu}"
+                                                    Classes="Icon"
+                                                    VerticalAlignment="Center"
+                                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_WaypointRowMenu}">
+                                                <ic:FluentIcon Icon="MoreHorizontal" IconVariant="Regular" FontSize="16" />
+                                                <Button.Flyout>
+                                                    <MenuFlyout>
+                                                        <!-- #960 (A8): a received route offers Copy to edit instead. -->
+                                                        <MenuItem Header="{x:Static loc:Strings.Menu_CopyToEdit}"
+                                                                  IsVisible="{Binding IsReadOnly}"
+                                                                  AutomationProperties.AutomationId="Routes.WaypointMenu.CopyToEdit"
+                                                                  Command="{Binding CopyToEditCommand}" />
+                                                        <MenuItem Header="{x:Static loc:Strings.Menu_InsertWaypointAfter}"
+                                                                  IsVisible="{Binding !IsReadOnly}"
+                                                                  AutomationProperties.AutomationId="Routes.WaypointMenu.InsertAfter"
+                                                                  Command="{Binding InsertAfterCommand}"
+                                                                  CommandParameter="{Binding}" />
+                                                        <MenuItem Header="{x:Static loc:Strings.Menu_DeleteWaypoint}"
+                                                                  IsVisible="{Binding !IsReadOnly}"
+                                                                  AutomationProperties.AutomationId="Routes.WaypointMenu.Delete"
+                                                                  Command="{Binding DeleteCommand}"
+                                                                  CommandParameter="{Binding}" />
+                                                    </MenuFlyout>
+                                                </Button.Flyout>
+                                            </Button>
+                                        </Grid>
+                                    </Panel>
+                                </Grid>
+                            </DataTemplate>
+                            <!-- Leg row (sits between two waypoint rows). The
+                                 11px left margin (3px accent bar + 8px content
+                                 margin) lines the connector up with the
+                                 waypoint circle centres above and below. -->
+                            <DataTemplate x:DataType="vm:RouteLegRowViewModel">
+                                <StackPanel>
+                                    <!-- The row selects the leg (haloed on the map,
+                                         #896) and opens its detail. A leg that
+                                         overrides a passage value shows a blue dot
+                                         and the overridden values (B4). -->
+                                    <Grid Classes="legRow"
+                                          Classes.selected="{Binding IsSelected}"
+                                          ColumnDefinitions="3,*">
+                                        <Border Grid.Column="0" Classes="wpBar" />
+                                        <Panel Grid.Column="1">
+                                            <Border Classes="wpTint" />
+                                            <Button Classes="legRow plain"
+                                                    AutomationProperties.AutomationId="Routes.Leg"
+                                                    AutomationProperties.Name="{Binding LegText}"
+                                                    AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_LegDetail}"
+                                                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_LegDetail}"
+                                                    Command="{Binding $parent[ItemsControl].((vm:RoutesPanelViewModel)DataContext).ToggleLegDetailCommand}"
+                                                    CommandParameter="{Binding}">
+                                                <Grid ColumnDefinitions="28,*" ColumnSpacing="8" Margin="8,5,8,5">
+                                                    <Border Grid.Column="0" Classes="legConnector" />
+                                                    <StackPanel Grid.Column="1"
+                                                                Orientation="Horizontal"
+                                                                Spacing="8"
+                                                                VerticalAlignment="Center">
+                                                        <TextBlock Classes="legText"
+                                                                   Text="{Binding LegText}"
+                                                                   FontSize="11"
+                                                                   Opacity="0.75"
+                                                                   VerticalAlignment="Center" />
+                                                        <TextBlock Text="{Binding GeometryText}"
+                                                                   FontSize="10"
+                                                                   Opacity="0.55"
+                                                                   VerticalAlignment="Center"
+                                                                   IsVisible="{Binding IsGeodesic}" />
+                                                        <StackPanel Orientation="Horizontal"
+                                                                    Spacing="4"
+                                                                    IsVisible="{Binding HasOverride}">
+                                                            <Ellipse Classes="overrideDot" />
+                                                            <TextBlock AutomationProperties.AutomationId="Routes.Leg.Overrides"
+                                                                       Text="{Binding OverrideText}"
+                                                                       FontSize="11"
+                                                                       FontFamily="{StaticResource MonoFontFamily}"
+                                                                       Foreground="{DynamicResource AccentBrush}"
+                                                                       VerticalAlignment="Center" />
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Button>
+                                        </Panel>
+                                    </Grid>
+
+                                    <!-- Inline leg detail (B5): one leg open at a
+                                         time, a tinted card with the accent bar. -->
+                                    <Panel IsVisible="{Binding IsOpen}">
+                                        <Grid ColumnDefinitions="3,*"
+                                              Margin="0,0,0,4"
+                                              DataContext="{Binding Detail}"
+                                              x:DataType="vm:RouteLegDetailViewModel">
+                                            <Border Grid.Column="0" CornerRadius="1.5" Background="{DynamicResource AccentBrush}" />
+                                            <Border Grid.Column="1"
+                                                    AutomationProperties.AutomationId="Routes.LegDetail"
+                                                    Background="{DynamicResource AccentSubtleBrush}"
+                                                    CornerRadius="0,6,6,0"
+                                                    Padding="10,8">
+                                                <StackPanel Spacing="8">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" />
+                                                        <TextBlock Text="{Binding Meta}" FontSize="11" Opacity="0.65" VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="7">
+                                                        <ContentControl Grid.Row="0" Grid.Column="0" Content="{Binding Speed}" />
+                                                        <ContentControl Grid.Row="0" Grid.Column="1" Content="{Binding Draft}" />
+                                                        <ContentControl Grid.Row="1" Grid.Column="0" Content="{Binding CrossTrack}" ToolTip.Tip="{x:Static loc:Strings.Tooltip_PassageCrossTrack}" />
+                                                        <ContentControl Grid.Row="1" Grid.Column="1" Content="{Binding RequiredUkc}" />
+                                                    </Grid>
+                                                    <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                                                        <ToggleButton Grid.Column="0"
+                                                                      Classes="segment"
+                                                                      AutomationProperties.AutomationId="Routes.LegDetail.Rhumb"
+                                                                      Content="{x:Static loc:Strings.Routes_GeometryLoxodrome}"
+                                                                      IsChecked="{Binding IsRhumb, Mode=OneWay}"
+                                                                      Command="{Binding SetRhumbCommand}" />
+                                                        <ToggleButton Grid.Column="1"
+                                                                      Classes="segment last"
+                                                                      AutomationProperties.AutomationId="Routes.LegDetail.GreatCircle"
+                                                                      Content="{x:Static loc:Strings.Routes_GeometryGeodesic}"
+                                                                      IsChecked="{Binding IsGreatCircle, Mode=OneWay}"
+                                                                      Command="{Binding SetGreatCircleCommand}" />
+                                                        <Button Grid.Column="3"
+                                                                Classes="linkButton"
+                                                                AutomationProperties.AutomationId="Routes.LegDetail.AddNote"
+                                                                Content="{x:Static loc:Strings.Routes_LegAddNote}"
+                                                                Command="{Binding AddNoteCommand}"
+                                                                IsVisible="{Binding !IsNoteVisible}" />
+                                                    </Grid>
+                                                    <ContentControl Content="{Binding Note}" IsVisible="{Binding IsNoteVisible}" />
+                                                    <TextBlock Text="{x:Static loc:Strings.Routes_LegDetailFootnote}"
+                                                               FontSize="10.5"
+                                                               Opacity="0.6"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                        </Grid>
+                                    </Panel>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.DataTemplates>
+                    </ItemsControl>
+                  </StackPanel>
+                </ScrollViewer>
+
+                <!-- No-active-route hint. -->
+                <TextBlock Grid.Row="1"
+                           Text="{Binding NoActiveRouteText}"
+                           FontSize="11"
+                           Opacity="0.55"
+                           TextWrapping="Wrap"
+                           Margin="12,8"
+                           VerticalAlignment="Top"
+                           IsVisible="{Binding !HasActiveRoute}" />
+
+                <!-- Footer mode toggles: Edit on the left, Check passage on
+                     the right, in fixed places so a mode is turned off where it
+                     was turned on. Turning Edit off is "done". -->
+                <Border Grid.Row="2"
+                        IsVisible="{Binding HasActiveRoute}"
+                        Padding="8,6,8,8"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,1,0,0">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <!-- #960 (A8): on a received route Copy to edit takes Edit's place. -->
+                        <Button Grid.Column="0"
+                                Classes="Outline"
+                                Height="32"
+                                AutomationProperties.AutomationId="Routes.CopyToEdit"
+                                AutomationProperties.Name="{x:Static loc:Strings.Routes_CopyToEdit}"
+                                AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_CopyToEdit}"
+                                IsVisible="{Binding ShowCopyToEdit}"
+                                Command="{Binding CopyToEditCommand}"
+                                ToolTip.Tip="{x:Static loc:Strings.Tooltip_CopyToEdit}">
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <ic:FluentIcon Icon="Copy" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Static loc:Strings.Routes_CopyToEdit}" FontSize="12" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <ToggleButton Grid.Column="0"
+                                      Classes="modeToggle"
+                                      IsVisible="{Binding !ShowCopyToEdit}"
+                                      AutomationProperties.AutomationId="Routes.EditToggle"
+                                      AutomationProperties.Name="{x:Static loc:Strings.Button_EditRoute}"
+                                      AutomationProperties.HelpText="{Binding EditToggleTooltipText}"
+                                      IsEnabled="{Binding CanEditActiveRoute}"
+                                      IsChecked="{Binding IsEditing, Mode=TwoWay}"
+                                      ToolTip.Tip="{Binding EditToggleTooltipText}"
+                                      ToolTip.ShowOnDisabled="True">
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <ic:FluentIcon Icon="Edit" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Static loc:Strings.Button_EditRoute}" FontSize="12" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </ToggleButton>
+                        <ToggleButton Grid.Column="2"
+                                      Classes="modeToggle"
+                                      AutomationProperties.AutomationId="Routes.CheckRouteToggle"
+                                      AutomationProperties.Name="{x:Static loc:Strings.Button_CheckRoute}"
+                                      AutomationProperties.HelpText="{Binding CheckPassageTooltip}"
+                                      IsEnabled="{Binding CanCheckPassage}"
+                                      IsChecked="{Binding IsCheckingPassage, Mode=TwoWay}"
+                                      ToolTip.Tip="{Binding CheckPassageTooltip}"
+                                      ToolTip.ShowOnDisabled="True">
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <ic:FluentIcon Icon="Gauge" IconVariant="Regular" FontSize="14" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Static loc:Strings.Button_CheckRoute}" FontSize="12" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </ToggleButton>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</UserControl>

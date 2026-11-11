@@ -1,0 +1,285 @@
+using System.ComponentModel;
+using System.Globalization;
+using Avalonia;
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Rendering.Engine;
+using Spectre.Console.Cli;
+
+namespace EncDotNet.S100.Viewer;
+
+internal sealed class ViewerCommandSettings : CommandSettings
+{
+    // ── Catalogues / datasets ────────────────────────────────────────
+
+    [CommandOption("-f|--fc <PATH>")]
+    [Description("Feature catalogue XML file path. The product spec is detected automatically. May be specified multiple times.")]
+    public string[]? FeatureCatalogues { get; set; }
+
+    [CommandOption("-p|--pc <PATH>")]
+    [Description("Portrayal catalogue folder path. The product spec is detected automatically. May be specified multiple times.")]
+    public string[]? PortrayalCatalogues { get; set; }
+
+    // ── MCP server (agent automation) ────────────────────────────────
+
+    [CommandOption("--mcp")]
+    [Description("Start the embedded MCP server on launch, overriding the persisted setting for this run.")]
+    public bool Mcp { get; set; }
+
+    [CommandOption("--mcp-port <PORT>")]
+    [Description("TCP port for the MCP server. 0 (the default) picks an ephemeral port. Implies --mcp.")]
+    public int? McpPort { get; set; }
+
+    [CommandOption("--mcp-bind <ADDRESS>")]
+    [Description("MCP server bind address (loopback only is recommended). Implies --mcp.")]
+    public string? McpBind { get; set; }
+
+    [CommandOption("--mcp-port-file <PATH>")]
+    [Description("Write the bound MCP endpoint URI to this file once the server is listening, so an agent can discover an ephemeral port. Implies --mcp.")]
+    public string? McpPortFile { get; set; }
+
+    [CommandOption("--secom-identity <PATH>")]
+    [Description("Present this MCP client certificate (PKCS#12 or PEM with its key) to SECOM services that ask for one, for this run only, overriding the identity chosen in Settings > Keys & certificates. The password, if any, is read from the SOUNDCHARTS_SECOM_IDENTITY_PASSWORD environment variable.")]
+    public string? SecomIdentity { get; set; }
+
+    [CommandOption("--mcp-test-hooks")]
+    [Description("Register test-only MCP tools such as set_test_clock, which moves or freezes the viewer's notion of now. For scripted testing only. Implies --mcp.")]
+    public bool McpTestHooks { get; set; }
+
+    // ── Settings isolation ───────────────────────────────────────────
+
+    [CommandOption("--settings <PATH>")]
+    [Description("Use the settings file at this path instead of the per-user default. Lets agent runs avoid the real profile.")]
+    public string? SettingsPath { get; set; }
+
+    [CommandOption("--data-dir <PATH>")]
+    [Description("Redirect all settings AND disk caches under this folder (also honoured via the S100_DATA_DIR env var). Point at an empty temp directory for a guaranteed-fresh instance; --settings still overrides just the settings file.")]
+    public string? DataDir { get; set; }
+
+    [CommandOption("--cache-dir <PATH>")]
+    [Description("Redirect only the render caches (portrayal instructions, pattern clips, tiles) under this folder (also S100_CACHE_DIR). Settings and the Library stay put, so a performance run can start cold without clearing the real caches.")]
+    public string? CacheDir { get; set; }
+
+    [CommandOption("--ephemeral")]
+    [Description("Run against a throwaway settings file that is never persisted, leaving the user's profile untouched.")]
+    public bool Ephemeral { get; set; }
+
+    // ── Viewport ─────────────────────────────────────────────────────
+
+    [CommandOption("--center <LATLON>")]
+    [Description("Center the map on this WGS-84 latitude,longitude after loading (e.g. 47.6,-122.3). Requires --zoom; suppresses auto-zoom-to-extent.")]
+    public string? Center { get; set; }
+
+    [CommandOption("--zoom <LEVEL>")]
+    [Description("Web-mercator zoom level (0-24) to apply with --center. Suppresses auto-zoom-to-extent.")]
+    public double? Zoom { get; set; }
+
+    [CommandOption("--bbox <BBOX>")]
+    [Description("Zoom to this WGS-84 bounding box after loading (e.g. 47.5,-122.5,47.7,-122.1). Suppresses auto-zoom-to-extent.")]
+    public string? BoundingBox { get; set; }
+
+    // ── Render state ─────────────────────────────────────────────────
+
+    [CommandOption("--palette <PALETTE>")]
+    [Description("ECDIS palette to use: Day, Dusk, or Night. Overrides the persisted palette for this run.")]
+    public string? Palette { get; set; }
+
+    [CommandOption("--display-category <CATEGORY>")]
+    [Description("ECDIS display category: DisplayBase, Standard, OtherInformation, or All. Overrides the persisted category for this run.")]
+    public string? DisplayCategory { get; set; }
+
+    [CommandOption("--basemap <MODE>")]
+    [Description("Basemap mode: None, Offline (bundled Natural Earth land), or Online (OpenStreetMap). Overrides the persisted setting for this run; use None/Offline for offline operation. Legacy true/false are accepted (true=Online, false=None).")]
+    public string? Basemap { get; set; }
+
+    [CommandOption("--time-step <STEP>")]
+    [Description("For time-varying data, jump to this time step after loading — a zero-based index or an ISO-8601 UTC timestamp.")]
+    public string? TimeStep { get; set; }
+
+    // ── Own-ship helm ────────────────────────────────────────────────
+
+    [CommandOption("--own-ship-pos <LATLON>")]
+    [Description("Place the simulated own-ship at this WGS-84 latitude,longitude after loading (e.g. 47.6,-122.3).")]
+    public string? OwnShipPosition { get; set; }
+
+    [CommandOption("--own-ship-cog <DEG>")]
+    [Description("Set the simulated own-ship course over ground in degrees true [0,360).")]
+    public double? OwnShipCourse { get; set; }
+
+    [CommandOption("--own-ship-sog <MS>")]
+    [Description("Set the simulated own-ship speed over ground in metres per second (>= 0).")]
+    public double? OwnShipSpeed { get; set; }
+
+    // ── Logging / diagnostics ────────────────────────────────────────
+
+    [CommandOption("--log-file <PATH>")]
+    [Description("Append structured viewer logs to this file in addition to the standard diagnostics output.")]
+    public string? LogFile { get; set; }
+
+    [CommandOption("--crash-log <PATH>")]
+    [Description("Path for the crash log (default: a 'viewer-crash.log' file in the system temp directory).")]
+    public string? CrashLog { get; set; }
+
+    [CommandOption("-v|--verbose")]
+    [Description("Enable verbose (Debug-level) logging.")]
+    public bool Verbose { get; set; }
+
+    [CommandOption("--demo-notifications")]
+    [Description("Seed a set of sample notification cards on launch to visually exercise the notification overlay (developer aid).")]
+    public bool DemoNotifications { get; set; }
+
+    // ── Positional ───────────────────────────────────────────────────
+
+    [CommandArgument(0, "[datasets]")]
+    [Description("One or more dataset file paths to open.")]
+    public string[]? Datasets { get; set; }
+
+    /// <summary>
+    /// True when any MCP-related option was supplied on the command
+    /// line. Such a run enables the server and must not persist the
+    /// bound port back to the user's settings file.
+    /// </summary>
+    public bool McpRequested =>
+        Mcp || McpPort.HasValue || McpBind is not null || McpPortFile is not null || McpTestHooks;
+
+    /// <summary>
+    /// True when the user supplied an explicit viewport (center+zoom or
+    /// a bounding box). When set, the window suppresses its automatic
+    /// zoom-to-extent so the requested framing is deterministic.
+    /// </summary>
+    public bool HasExplicitViewport => Center is not null || BoundingBox is not null;
+
+    /// <summary>Parsed center as (latitude, longitude), or <c>null</c>.</summary>
+    public GeoPosition? ParsedCenter =>
+        TryParseLatLon(Center, out var lat, out var lon) ? new GeoPosition(lat, lon) : null;
+
+    /// <summary>Parsed bounding box as (south, west, north, east), or <c>null</c>.</summary>
+    public (double South, double West, double North, double East)? ParsedBoundingBox =>
+        TryParseBoundingBox(BoundingBox, out var s, out var w, out var n, out var e) ? (s, w, n, e) : null;
+
+    /// <summary>Parsed own-ship position as (latitude, longitude), or <c>null</c>.</summary>
+    public GeoPosition? ParsedOwnShipPosition =>
+        TryParseLatLon(OwnShipPosition, out var lat, out var lon) ? new GeoPosition(lat, lon) : null;
+
+    /// <summary>True when any own-ship helm option was supplied.</summary>
+    public bool HasOwnShipOption =>
+        OwnShipPosition is not null || OwnShipCourse.HasValue || OwnShipSpeed.HasValue;
+
+    public override Spectre.Console.ValidationResult Validate()
+    {
+        if (Center is not null && !TryParseLatLon(Center, out _, out _))
+            return Spectre.Console.ValidationResult.Error(
+                $"--center must be 'LAT,LON' in decimal degrees (got '{Center}').");
+
+        if (Center is not null && !Zoom.HasValue)
+            return Spectre.Console.ValidationResult.Error("--center requires --zoom.");
+
+        if (Zoom is { } z && (z < 0 || z > 24))
+            return Spectre.Console.ValidationResult.Error("--zoom must be between 0 and 24.");
+
+        if (BoundingBox is not null && !TryParseBoundingBox(BoundingBox, out _, out _, out _, out _))
+            return Spectre.Console.ValidationResult.Error(
+                $"--bbox must be 'SOUTH,WEST,NORTH,EAST' in decimal degrees with south<north and west<east (got '{BoundingBox}').");
+
+        if (Center is not null && BoundingBox is not null)
+            return Spectre.Console.ValidationResult.Error("--center/--zoom and --bbox are mutually exclusive.");
+
+        if (McpPort is { } port && (port < 0 || port > 65535))
+            return Spectre.Console.ValidationResult.Error("--mcp-port must be between 0 and 65535.");
+
+        if (McpBind is not null && !System.Net.IPAddress.TryParse(McpBind, out _))
+            return Spectre.Console.ValidationResult.Error(
+                $"--mcp-bind must be a valid IP address (got '{McpBind}').");
+
+        if (Palette is not null && !Enum.TryParse<EncDotNet.S100.Pipelines.PaletteType>(Palette, ignoreCase: true, out _))
+            return Spectre.Console.ValidationResult.Error(
+                $"--palette must be Day, Dusk, or Night (got '{Palette}').");
+
+        if (DisplayCategory is not null &&
+            !Enum.TryParse<EncDotNet.S100.Datasets.Pipelines.EcdisDisplayCategory>(DisplayCategory.Trim(), ignoreCase: true, out _))
+            return Spectre.Console.ValidationResult.Error(
+                $"--display-category must be DisplayBase, Standard, OtherInformation, or All (got '{DisplayCategory}').");
+
+        if (Ephemeral && SettingsPath is not null)
+            return Spectre.Console.ValidationResult.Error("--ephemeral and --settings are mutually exclusive.");
+
+        if (OwnShipPosition is not null && !TryParseLatLon(OwnShipPosition, out _, out _))
+            return Spectre.Console.ValidationResult.Error(
+                $"--own-ship-pos must be 'LAT,LON' in decimal degrees (got '{OwnShipPosition}').");
+
+        if (OwnShipCourse is { } cog && (double.IsNaN(cog) || double.IsInfinity(cog) || cog < 0 || cog >= 360))
+            return Spectre.Console.ValidationResult.Error("--own-ship-cog must be in [0, 360) degrees.");
+
+        if (OwnShipSpeed is { } sog && (double.IsNaN(sog) || double.IsInfinity(sog) || sog < 0))
+            return Spectre.Console.ValidationResult.Error("--own-ship-sog must be a non-negative number of metres per second.");
+
+        return Spectre.Console.ValidationResult.Success();
+    }
+
+    internal static bool TryParseLatLon(string? raw, out double latitude, out double longitude)
+    {
+        latitude = 0;
+        longitude = 0;
+        if (string.IsNullOrWhiteSpace(raw)) return false;
+        var parts = raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2) return false;
+        if (!double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out latitude)) return false;
+        if (!double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out longitude)) return false;
+        return latitude is >= -90 and <= 90 && longitude is >= -180 and <= 180;
+    }
+
+    internal static bool TryParseBoundingBox(
+        string? raw, out double south, out double west, out double north, out double east)
+    {
+        south = west = north = east = 0;
+        if (string.IsNullOrWhiteSpace(raw)) return false;
+        var parts = raw.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 4) return false;
+        if (!double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out south)) return false;
+        if (!double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out west)) return false;
+        if (!double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out north)) return false;
+        if (!double.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out east)) return false;
+        return south is >= -90 and <= 90 && north is >= -90 and <= 90
+            && west is >= -180 and <= 180 && east is >= -180 and <= 180
+            && south < north && west < east;
+    }
+}
+
+internal sealed class ViewerCommand : Command<ViewerCommandSettings>
+{
+    public override int Execute(CommandContext context, ViewerCommandSettings settings, CancellationToken cancellationToken)
+    {
+        App.StartupOptions = settings;
+
+        // Route crash logging to the user-chosen path (or temp default)
+        // before any startup code can fault.
+        CrashLog.ConfigurePath(settings.CrashLog);
+
+        try
+        {
+            AppBuilder.Configure<App>()
+                .UsePlatformDetect()
+                .With(CreateSkiaOptions())
+                .WithInterFont()
+                .LogToTrace()
+                .StartWithClassicDesktopLifetime([]);
+        }
+        catch (System.Exception ex)
+        {
+            System.Console.Error.WriteLine($"[FATAL] {ex}");
+            CrashLog.Append("FATAL", ex.ToString());
+            throw;
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Sizes the GPU resource cache so the tiles every drawing layer blits stay
+    /// resident between frames instead of being re-uploaded on each paint
+    /// (see <see cref="ChartSessionOptions.SkiaGpuResourceMb"/>).
+    /// </summary>
+    internal static SkiaOptions CreateSkiaOptions() => new()
+    {
+        MaxGpuResourceSizeBytes = (long)(ChartEngine.Options.SkiaGpuResourceMb * 1024 * 1024),
+    };
+}

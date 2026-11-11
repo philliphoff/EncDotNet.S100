@@ -1,0 +1,136 @@
+using System.ComponentModel;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Mcp.MutableTools;
+using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
+
+namespace EncDotNet.S100.Viewer.McpTools;
+
+/// <summary>
+/// Wraps a <see cref="SetViewportTool"/> as an <see cref="McpServerTool"/>
+/// so the viewer's <c>McpServerHost</c> can inject it into the hosted
+/// <c>EncDotNet.S100.Mcp.S100McpServer</c>. The tool mutates the live
+/// viewer's navigator and so is explicitly NOT side-effect-free —
+/// callers should treat it as the counterpart to the read-only
+/// <c>render_to_image</c> tool when scripting measurement runs.
+/// </summary>
+internal static class SetViewportMcpAdapter
+{
+    private static readonly JsonSerializerOptions JsonOptions = McpAdapterShared.Options;
+
+    private const string Description =
+        "Mutates the live viewer's map navigator to a specific WGS-84 viewport. Supply EXACTLY ONE " +
+        "of a bbox (south/west/north/east), centre+zoom (centerLat/centerLon/zoom), or centre+scale " +
+        "(centerLat/centerLon/scaleDenominator); mixing forms is rejected. Coordinates are decimal " +
+        "degrees. Zoom is the standard web-mercator level (0–24); scaleDenominator is the 1:N map " +
+        "scale (e.g. 50000), converted at the centre latitude the same way the status bar reads it. " +
+        "The result echoes the applied scaleDenominator read back from the live map. An optional rotation (degrees clockwise, 0 = north-up) is applied on top of the " +
+        "frame so scripted runs can exercise the rotated-viewport render path. " +
+        "Longitudes may run past ±180 (to ±540) to frame the world copy east or west of the antimeridian, where the viewer also draws " +
+        "the chart data (e.g. centerLon 205, or a bbox west 190 east 220 for the Beaufort Sea of a dataset kept in a 175…225 frame); a bbox " +
+        "with west > east crosses the antimeridian (west 170, east -140 frames 170…220). The echo reports the framed box in that continuous " +
+        "frame and the live centerLat/centerLon. Companion to render_to_image: " +
+        "this tool drives the navigator, render_to_image then captures the resulting frame. " +
+        "Viewer-injected tool — not available from a headless MCP host until that host supplies its own equivalent.";
+
+    /// <summary>Creates the <see cref="McpServerTool"/>.</summary>
+    public static McpServerTool Create(SetViewportTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+
+        var del = (
+            [Description("Bounding-box south edge in decimal degrees (WGS-84). Must be paired with west/north/east; mutually exclusive with centre+zoom.")] double? south = null,
+            [Description("Bounding-box west edge in decimal degrees (WGS-84), in [-540, 540]. Must be paired with south/north/east; mutually exclusive with centre+zoom. Greater than east for a box that crosses the antimeridian.")] double? west = null,
+            [Description("Bounding-box north edge in decimal degrees (WGS-84). Must be paired with south/west/east; mutually exclusive with centre+zoom.")] double? north = null,
+            [Description("Bounding-box east edge in decimal degrees (WGS-84), in [-540, 540]. Must be paired with south/west/north; mutually exclusive with centre+zoom. Past 180 frames the world copy east of the antimeridian.")] double? east = null,
+            [Description("Centre latitude in decimal degrees (WGS-84). Must be paired with centerLon and one of zoom or scaleDenominator; mutually exclusive with the bbox form.")] double? centerLat = null,
+            [Description("Centre longitude in decimal degrees (WGS-84), in [-540, 540]; past ±180 frames the adjacent world copy. Must be paired with centerLat and one of zoom or scaleDenominator; mutually exclusive with the bbox form.")] double? centerLon = null,
+            [Description("Web-mercator zoom level in [0, 24]. Must be paired with centerLat/centerLon; mutually exclusive with scaleDenominator and the bbox form.")] double? zoom = null,
+            [Description("Optional clockwise viewport rotation in degrees (0 = north-up), applied on top of the bbox or centre+zoom frame. Any finite value is accepted and normalised to [0, 360); must accompany a frame form.")] double? rotation = null,
+            [Description("Map scale denominator (e.g. 50000 for 1:50 000); positive and finite. Must be paired with centerLat/centerLon; mutually exclusive with zoom and the bbox form.")] double? scaleDenominator = null,
+            [Description("Optional animation duration in milliseconds (0 to 10000) for the centre forms: the map animates to the view instead of jumping. The echo then reports the target.")] long? durationMs = null,
+            CancellationToken ct = default) =>
+            DispatchAsync(() => inner.InvokeAsync(
+                new SetViewportRequest(south, west, north, east, centerLat, centerLon, zoom, rotation, scaleDenominator, durationMs),
+                ct));
+
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SetViewportTool.Name,
+            Description = Description,
+            SerializerOptions = JsonOptions,
+        });
+    }
+
+    private static async Task<CallToolResult> DispatchAsync(
+        Func<Task<ToolResult<SetViewportResult>>> resultFactory)
+    {
+        try
+        {
+            var result = await resultFactory().ConfigureAwait(false);
+            return TranslateResult(result);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return InternalError(ex);
+        }
+    }
+
+    /// <summary>
+    /// Translates the tool's <see cref="ToolResult{T}"/> into the
+    /// <see cref="CallToolResult"/> a client receives.
+    /// </summary>
+    internal static CallToolResult TranslateResult(ToolResult<SetViewportResult> result)
+    {
+        if (result.TryGetValue(out var value))
+        {
+            return Success(value);
+        }
+        result.TryGetError(out var err);
+        return Failure(err!);
+    }
+
+    private static CallToolResult Success(SetViewportResult value)
+    {
+        var payload = new JsonObject
+        {
+            ["mode"] = value.Mode,
+            ["south"] = value.South,
+            ["west"] = value.West,
+            ["north"] = value.North,
+            ["east"] = value.East,
+            ["rotation"] = value.Rotation,
+        };
+        if (value.ScaleDenominator is { } scale)
+        {
+            payload["scaleDenominator"] = scale;
+        }
+
+        if (value.CenterLat is { } centerLat && value.CenterLon is { } centerLon)
+        {
+            payload["centerLat"] = centerLat;
+            payload["centerLon"] = centerLon;
+        }
+
+        return new CallToolResult
+        {
+            Content =
+            [
+                new TextContentBlock { Text = payload.ToJsonString(JsonOptions) },
+            ],
+            IsError = false,
+        };
+    }
+
+    private static CallToolResult Failure(ToolError error) =>
+        ToolErrorPayload.AsCallToolResult(error, JsonOptions);
+
+    private static CallToolResult InternalError(Exception ex) =>
+        ToolErrorPayload.InternalError(ex, JsonOptions);
+}

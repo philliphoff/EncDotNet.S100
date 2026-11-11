@@ -1,0 +1,112 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             x:Class="EncDotNet.S100.Viewer.Views.FeatureSearchView"
+             x:DataType="vm:FeatureSearchViewModel">
+
+    <DockPanel LastChildFill="True">
+
+        <!-- Query box -->
+        <Border DockPanel.Dock="Top" Padding="12,8,12,4">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0"
+                         AutomationProperties.Name="{x:Static loc:Strings.Label_SearchFeatures}"
+                         AutomationProperties.HelpText="{x:Static loc:Strings.Search_Placeholder}"
+                         AutomationProperties.AutomationId="Search.Query"
+                         x:Name="SearchBox"
+                         Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         PlaceholderText="{x:Static loc:Strings.Search_Placeholder}"
+                         VerticalContentAlignment="Center"
+                         Padding="8,4" />
+                <Button Grid.Column="1"
+                        AutomationProperties.AutomationId="Search.Clear"
+                        AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ClearSearch}"
+                        Margin="4,0,0,0"
+                        Padding="8,4"
+                        Command="{Binding ClearQueryCommand}"
+                        IsVisible="{Binding Query, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClearSearch}">
+                    <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="14" />
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Footer: result count / truncation / no-results -->
+        <Border DockPanel.Dock="Bottom"
+                Padding="12,4,12,8"
+                IsVisible="{Binding Summary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock Text="{Binding Summary}"
+                       FontSize="11"
+                       Opacity="0.7"
+                       TextWrapping="Wrap" />
+        </Border>
+
+        <!-- Results list (with empty-state placeholders sharing the fill
+             slot so they centre in the available space). -->
+        <Grid>
+            <!-- Initial prompt: no query entered yet. -->
+            <views:PlaceholderView IsVisible="{Binding ShowEmptyPrompt}"
+                                   Icon="Search"
+                                   Header="{x:Static loc:Strings.Search_EmptyTitle}"
+                                   Description="{x:Static loc:Strings.Search_EmptyDescription}" />
+
+            <!-- No matches for a non-empty query. -->
+            <views:PlaceholderView IsVisible="{Binding ShowNoResults}"
+                                   Icon="SearchInfo"
+                                   Header="{x:Static loc:Strings.Search_NoResultsTitle}"
+                                   Description="{x:Static loc:Strings.Search_NoResultsDescription}" />
+
+            <!-- Results list -->
+            <ListBox ItemsSource="{Binding Results}"
+                 AutomationProperties.AutomationId="Search.Results"
+                 SelectedItem="{Binding SelectedResult, Mode=TwoWay}"
+                 SelectionMode="Single"
+                 Classes="accentList"
+                 BorderThickness="0"
+                 Background="Transparent"
+                 Padding="0">
+            <ListBox.Styles>
+                <!-- Rows are named after their feature type, not their view model (#784). -->
+                <Style Selector="ListBoxItem" x:DataType="vm:FeatureSearchResultItem">
+                    <Setter Property="AutomationProperties.Name" Value="{Binding DisplayType}" />
+                </Style>
+            </ListBox.Styles>
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:FeatureSearchResultItem">
+                    <!--
+                        Border with Background=Transparent so the entire
+                        row hit-tests for click-to-select; without it,
+                        gaps between the StackPanel's children swallow
+                        pointer events and the row needs multiple clicks
+                        to select (same fix as DatasetsView).
+                    -->
+                    <Border Background="Transparent"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_OpenSearchResult}">
+                        <StackPanel Orientation="Vertical" Spacing="2">
+                            <TextBlock Text="{Binding DisplayType}" Classes="accentListTitle" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding FeatureRef}"
+                                       FontSize="11"
+                                       Opacity="0.75" />
+                            <TextBlock FontSize="10"
+                                       Opacity="0.55"
+                                       TextTrimming="CharacterEllipsis">
+                                <Run Text="{Binding ProductSpec}" />
+                                <Run Text="·" />
+                                <Run Text="{Binding DatasetFileName}" />
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        </Grid>
+    </DockPanel>
+
+</UserControl>

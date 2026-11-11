@@ -1,0 +1,153 @@
+using System.Runtime.CompilerServices;
+using EncDotNet.S100.ExchangeSets;
+
+namespace EncDotNet.S100.Datasets.Pipelines;
+
+/// <summary>
+/// Result of attempting to load a single dataset from an exchange set.
+/// Either <see cref="Processor"/> is non-null on success, or
+/// <see cref="Error"/> is non-null on failure. Never both null.
+/// </summary>
+public sealed record ExchangeSetLoadResult(
+    DatasetDiscoveryMetadata Metadata,
+    string RelativePath,
+    IDatasetProcessor? Processor,
+    Exception? Error);
+
+/// <summary>
+/// Per-dataset progress event raised by <see cref="ExchangeSetLoader"/>.
+/// </summary>
+/// <param name="Index">1-based index of the dataset currently being loaded.</param>
+/// <param name="Total">Total number of datasets in the exchange set.</param>
+/// <param name="CurrentFileName">Normalized relative path of the current dataset.</param>
+public sealed record ExchangeSetProgress(int Index, int Total, string CurrentFileName);
+
+/// <summary>
+/// Bulk-loads every dataset declared in an
+/// <see cref="ExchangeSet"/>'s catalogue, routing each one through
+/// <see cref="DatasetPipelineFactory"/>. Errors are captured per-dataset
+/// rather than thrown so a single bad dataset does not abort the load.
+/// </summary>
+/// <remarks>
+/// The loader does not own the supplied <see cref="ExchangeSet"/>; the
+/// caller is responsible for keeping it alive (and its underlying
+/// <see cref="EncDotNet.S100.Core.IAssetSource"/>) for as long as any
+/// returned processor is in use, then disposing it.
+/// </remarks>
+public sealed class ExchangeSetLoader
+{
+    private readonly DatasetPipelineFactory _factory;
+
+    /// <summary>
+    /// Initializes a new <see cref="ExchangeSetLoader"/> that delegates
+    /// per-dataset processor construction to <paramref name="factory"/>.
+    /// </summary>
+    public ExchangeSetLoader(DatasetPipelineFactory factory)
+    {
+        ArgumentNullException.ThrowIfNull(factory);
+        _factory = factory;
+    }
+
+    /// <summary>
+    /// Asynchronously loads every dataset declared by
+    /// <paramref name="exchangeSet"/>'s catalogue.
+    /// </summary>
+    /// <param name="exchangeSet">The exchange set to walk.</param>
+    /// <param name="progress">Optional progress sink; reports before each dataset is opened.</param>
+    /// <param name="cancellationToken">Honored between datasets; mid-dataset cancellation depends on the underlying reader.</param>
+    /// <returns>One <see cref="ExchangeSetLoadResult"/> per dataset, in catalogue order.</returns>
+    public async IAsyncEnumerable<ExchangeSetLoadResult> LoadAllAsync(
+        ExchangeSet exchangeSet,
+        IProgress<ExchangeSetProgress>? progress = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(exchangeSet);
+
+        var datasets = exchangeSet.Catalogue.CurrentDatasets;
+
+        // Index the catalogue's support files by name so S-101 can resolve
+        // `fileReference` external text files through the catalogue — the
+        // canonical ECDIS mechanism. S-100 Edition 5.2.1 Part 17.
+        var supportFiles = BuildSupportFileMap(exchangeSet);
+
+        // Group S-101 base cells with their in-set sequential updates so each
+        // cell is loaded once at its up-to-date state (S-100 Part 10a). Non-S-101
+        // datasets pass through unchanged.
+        var plan = S101ExchangeSetUpdatePlan.Build(datasets);
+        var total = plan.Count;
+
+        for (var i = 0; i < total; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var item = plan[i];
+            var metadata = item.Base;
+            var relativePath = metadata.RelativePath;
+            progress?.Report(new ExchangeSetProgress(i + 1, total, relativePath));
+
+            IDatasetProcessor? processor = null;
+            Exception? error = null;
+            try
+            {
+                switch (item.Kind)
+                {
+                    case S101LoadItemKind.BaseWithUpdates:
+                        var updatePaths = item.Updates.Select(u => u.RelativePath).ToList();
+                        processor = _factory.CreateS101ProcessorWithUpdates(
+                            exchangeSet.Source, relativePath, updatePaths, supportFiles);
+                        break;
+
+                    case S101LoadItemKind.OrphanUpdate:
+                        error = new InvalidOperationException(
+                            $"S-101 update '{relativePath}' has no base cell in this exchange set; " +
+                            "updates are only applied when bundled with their base.");
+                        break;
+
+                    case S101LoadItemKind.Single:
+                    default:
+                        processor = _factory.CreateProcessor(
+                            exchangeSet.Source,
+                            relativePath,
+                            metadata.ProductSpecification?.ProductIdentifier,
+                            supportFiles);
+                        break;
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                error = ex;
+            }
+
+            yield return new ExchangeSetLoadResult(metadata, relativePath, processor, error);
+            await Task.Yield();
+        }
+    }
+
+    /// <summary>
+    /// Builds a case-insensitive map of support-file name to its source-relative
+    /// path from the exchange set's <c>supportFileDiscoveryMetadata</c>, so a
+    /// dataset can resolve a <c>fileReference</c> attribute to the actual file
+    /// regardless of the sub-directory it is stored in. S-100 Edition 5.2.1
+    /// Part 17. Returns <see langword="null"/> when the catalogue declares no
+    /// support files.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string>? BuildSupportFileMap(ExchangeSet exchangeSet)
+    {
+        var entries = exchangeSet.Catalogue.SupportFileDiscoveryMetadata;
+        if (entries.Count == 0)
+            return null;
+
+        var map = new Dictionary<string, string>(entries.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in entries)
+        {
+            if (!string.IsNullOrEmpty(entry.FileName))
+                map[entry.FileName] = entry.RelativePath;
+        }
+
+        return map.Count > 0 ? map : null;
+    }
+}

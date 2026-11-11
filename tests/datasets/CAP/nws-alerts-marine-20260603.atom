@@ -1,0 +1,317 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:cap="urn:oasis:names:tc:emergency:cap:1.2">
+    <id>https://api.weather.gov/alerts.atom?status%5B0%5D=actual&amp;message_type%5B0%5D=alert&amp;active=1</id>
+    <generator>NWS CAP Server</generator>
+    <updated>2026-06-03T16:45:00+00:00</updated>
+    <author>
+        <name>w-nws.webmaster@noaa.gov</name>
+    </author>
+    <title>Current watches, warnings, and advisories</title>
+    <link rel="self" href="https://api.weather.gov/alerts.atom?status%5B0%5D=actual&amp;message_type%5B0%5D=alert&amp;active=1"/>
+    <entry>
+        <id>https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.304f0e68151e6e5e27d933effd28fd9175045bdd.001.1</id>
+        <link rel="alternate" href="https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.304f0e68151e6e5e27d933effd28fd9175045bdd.001.1.cap"/>
+        <updated>2026-06-03T12:34:00-04:00</updated>
+        <published>2026-06-03T12:34:00-04:00</published>
+        <author>
+            <name>NWS</name>
+        </author>
+        <title>Special Marine Warning issued June 3 at 12:34PM EDT until June 3 at 1:00PM EDT by NWS Key West FL</title>
+        <summary>SMWKEY
+
+The National Weather Service in Key West has issued a
+
+* Special Marine Warning for...
+Hawk Channel and Straits of Florida from Craig Key to west end of
+Seven Mile Bridge out 20 nm...
+Bayside and Gulf side from Craig Key to west end of Seven Mile
+Bridge...
+
+* Until 100 PM EDT.
+
+* At 1233 PM EDT, a strong thunderstorm was located over Sombrero Key
+Light, moving east at 5 knots.
+
+HAZARD...Wind gusts 34 knots or greater and small hail.
+
+SOURCE...Radar.
+
+IMPACT...Expect wind gusts in excess of 34 knots, suddenly higher
+waves, frequent lightning, and heavy downpours.
+
+* Locations in the warning include...
+Sombrero Key Light, East Turtle Shoal Light, and East Washerwoman
+Shoal Light.</summary>
+        <cap:event>Special Marine Warning</cap:event>
+        <cap:sent>2026-06-03T12:34:00-04:00</cap:sent>
+        <cap:effective>2026-06-03T12:34:00-04:00</cap:effective>
+        <cap:onset>2026-06-03T12:34:00-04:00</cap:onset>
+        <cap:expires>2026-06-03T13:00:00-04:00</cap:expires>
+        <cap:status>Actual</cap:status>
+        <cap:msgType>Alert</cap:msgType>
+        <cap:category>Met</cap:category>
+        <cap:urgency>Immediate</cap:urgency>
+        <cap:severity>Severe</cap:severity>
+        <cap:certainty>Likely</cap:certainty>
+        <cap:areaDesc>Bayside and Gulfside from Craig Key to West End of Seven Mile Bridge; Hawk Channel from Craig Key to west end of Seven Mile Bridge out to the reef; Straits of Florida from Craig Key to west end of Seven Mile Bridge out 20 NM</cap:areaDesc>
+        <cap:polygon>24.57,-80.89 24.57,-81.12 24.68,-81.13 24.69,-81.10 24.69,-81.08 24.70,-81.08 24.72,-81.03 24.72,-81.01 24.73,-81.00 24.77,-80.90 24.57,-80.89</cap:polygon>
+        <cap:geocode>
+            <valueName>SAME</valueName>
+            <value>077032</value>
+        </cap:geocode>
+        <cap:geocode>
+            <valueName>SAME</valueName>
+            <value>077043</value>
+        </cap:geocode>
+        <cap:geocode>
+            <valueName>SAME</valueName>
+            <value>077053</value>
+        </cap:geocode>
+        <cap:geocode>
+            <valueName>UGC</valueName>
+            <value>GMZ032</value>
+        </cap:geocode>
+        <cap:geocode>
+            <valueName>UGC</valueName>
+            <value>GMZ043</value>
+        </cap:geocode>
+        <cap:geocode>
+            <valueName>UGC</valueName>
+            <value>GMZ053</value>
+        </cap:geocode>
+        <cap:parameter>
+            <valueName>AWIPSidentifier</valueName>
+            <value>SMWKEY</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>WMOidentifier</valueName>
+            <value>WHUS52 KKEY 031634</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>eventMotionDescription</valueName>
+            <value>2026-06-03T16:33:00-00:00...storm...262DEG...5KT...24.61,-81.08</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>BLOCKCHANNEL</valueName>
+            <value>EAS</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>BLOCKCHANNEL</valueName>
+            <value>NWEM</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>BLOCKCHANNEL</valueName>
+            <value>CMAS</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>EAS-ORG</valueName>
+            <value>WXR</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>VTEC</valueName>
+            <value>/O.NEW.KKEY.MA.W.0103.260603T1634Z-260603T1700Z/</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>eventEndingTime</valueName>
+            <value>2026-06-03T13:00:00-04:00</value>
+        </cap:parameter>
+        <cap:scope>Public</cap:scope>
+        <cap:code>IPAWSv1.0</cap:code>
+        <cap:language>en-US</cap:language>
+        <cap:web>http://www.weather.gov</cap:web>
+        <cap:eventCode>
+            <valueName>SAME</valueName>
+            <value>SMW</value>
+        </cap:eventCode>
+        <cap:eventCode>
+            <valueName>NationalWeatherService</valueName>
+            <value>MAW</value>
+        </cap:eventCode>
+    </entry>
+    <entry>
+        <id>https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.7467e212c1de62bfbbbb1a4dbc313e1a91cadf37.002.1</id>
+        <link rel="alternate" href="https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.7467e212c1de62bfbbbb1a4dbc313e1a91cadf37.002.1.cap"/>
+        <updated>2026-06-03T11:19:00-05:00</updated>
+        <published>2026-06-03T11:19:00-05:00</published>
+        <author>
+            <name>NWS</name>
+        </author>
+        <title>Small Craft Advisory issued June 3 at 11:19AM CDT until June 5 at 7:00AM CDT by NWS Lake Charles LA</title>
+        <summary>* WHAT...East winds 15 to 25 kt with gusts up to 30 kt and seas
+6 to 9 ft expected.
+
+* WHERE...Coastal waters from Lower Atchafalaya River to
+Intracoastal City LA from 20 to 60 NM.
+
+* WHEN...From 1 PM Thursday to 7 AM CDT Friday.
+
+* IMPACTS...Conditions will be hazardous to small craft.</summary>
+        <cap:event>Small Craft Advisory</cap:event>
+        <cap:sent>2026-06-03T11:19:00-05:00</cap:sent>
+        <cap:effective>2026-06-03T11:19:00-05:00</cap:effective>
+        <cap:onset>2026-06-04T13:00:00-05:00</cap:onset>
+        <cap:expires>2026-06-04T11:30:00-05:00</cap:expires>
+        <cap:status>Actual</cap:status>
+        <cap:msgType>Alert</cap:msgType>
+        <cap:category>Met</cap:category>
+        <cap:urgency>Expected</cap:urgency>
+        <cap:severity>Minor</cap:severity>
+        <cap:certainty>Likely</cap:certainty>
+        <cap:areaDesc>Waters from Lower Atchafalaya River to Intracoastal City LA from 20 to 60 NM</cap:areaDesc>
+        <cap:polygon/>
+        <cap:geocode>
+            <valueName>SAME</valueName>
+            <value>077475</value>
+        </cap:geocode>
+        <cap:geocode>
+            <valueName>UGC</valueName>
+            <value>GMZ475</value>
+        </cap:geocode>
+        <cap:parameter>
+            <valueName>AWIPSidentifier</valueName>
+            <value>MWWLCH</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>WMOidentifier</valueName>
+            <value>WHUS74 KLCH 031619</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>NWSheadline</valueName>
+            <value>SMALL CRAFT ADVISORY IN EFFECT FROM 1 PM THURSDAY TO 7 AM CDT FRIDAY</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>BLOCKCHANNEL</valueName>
+            <value>EAS</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>BLOCKCHANNEL</valueName>
+            <value>NWEM</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>BLOCKCHANNEL</valueName>
+            <value>CMAS</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>VTEC</valueName>
+            <value>/O.NEW.KLCH.SC.Y.0024.260604T1800Z-260605T1200Z/</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>eventEndingTime</valueName>
+            <value>2026-06-05T07:00:00-05:00</value>
+        </cap:parameter>
+        <cap:scope>Public</cap:scope>
+        <cap:code>IPAWSv1.0</cap:code>
+        <cap:language>en-US</cap:language>
+        <cap:web>http://www.weather.gov</cap:web>
+        <cap:eventCode>
+            <valueName>SAME</valueName>
+            <value>NWS</value>
+        </cap:eventCode>
+        <cap:eventCode>
+            <valueName>NationalWeatherService</valueName>
+            <value>SCY</value>
+        </cap:eventCode>
+    </entry>
+    <entry>
+        <id>https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.7467e212c1de62bfbbbb1a4dbc313e1a91cadf37.001.1</id>
+        <link rel="alternate" href="https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.7467e212c1de62bfbbbb1a4dbc313e1a91cadf37.001.1.cap"/>
+        <updated>2026-06-03T11:19:00-05:00</updated>
+        <published>2026-06-03T11:19:00-05:00</published>
+        <author>
+            <name>NWS</name>
+        </author>
+        <title>Small Craft Advisory issued June 3 at 11:19AM CDT until June 5 at 1:00AM CDT by NWS Lake Charles LA</title>
+        <summary>* WHAT...East winds 15 to 25 kt with gusts up to 30 kt and seas
+4 to 7 ft expected.
+
+* WHERE...Coastal waters from Intracoastal City to Cameron LA
+out 20 NM, Coastal waters from Lower Atchafalaya River to
+Intracoastal City LA out 20 NM and Coastal waters from
+Intracoastal City to Cameron LA from 20 to 60 NM.
+
+* WHEN...From 1 PM Thursday to 1 AM CDT Friday.
+
+* IMPACTS...Conditions will be hazardous to small craft.</summary>
+        <cap:event>Small Craft Advisory</cap:event>
+        <cap:sent>2026-06-03T11:19:00-05:00</cap:sent>
+        <cap:effective>2026-06-03T11:19:00-05:00</cap:effective>
+        <cap:onset>2026-06-04T13:00:00-05:00</cap:onset>
+        <cap:expires>2026-06-04T11:30:00-05:00</cap:expires>
+        <cap:status>Actual</cap:status>
+        <cap:msgType>Alert</cap:msgType>
+        <cap:category>Met</cap:category>
+        <cap:urgency>Expected</cap:urgency>
+        <cap:severity>Minor</cap:severity>
+        <cap:certainty>Likely</cap:certainty>
+        <cap:areaDesc>Coastal waters from Intracoastal City to Cameron LA out 20 NM; Coastal waters from Lower Atchafalaya River to Intracoastal City LA out 20 NM; Waters from Intracoastal City to Cameron LA from 20 to 60 NM</cap:areaDesc>
+        <cap:polygon/>
+        <cap:geocode>
+            <valueName>SAME</valueName>
+            <value>077452</value>
+        </cap:geocode>
+        <cap:geocode>
+            <valueName>SAME</valueName>
+            <value>077455</value>
+        </cap:geocode>
+        <cap:geocode>
+            <valueName>SAME</valueName>
+            <value>077472</value>
+        </cap:geocode>
+        <cap:geocode>
+            <valueName>UGC</valueName>
+            <value>GMZ452</value>
+        </cap:geocode>
+        <cap:geocode>
+            <valueName>UGC</valueName>
+            <value>GMZ455</value>
+        </cap:geocode>
+        <cap:geocode>
+            <valueName>UGC</valueName>
+            <value>GMZ472</value>
+        </cap:geocode>
+        <cap:parameter>
+            <valueName>AWIPSidentifier</valueName>
+            <value>MWWLCH</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>WMOidentifier</valueName>
+            <value>WHUS74 KLCH 031619</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>NWSheadline</valueName>
+            <value>SMALL CRAFT ADVISORY IN EFFECT FROM 1 PM THURSDAY TO 1 AM CDT FRIDAY</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>BLOCKCHANNEL</valueName>
+            <value>EAS</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>BLOCKCHANNEL</valueName>
+            <value>NWEM</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>BLOCKCHANNEL</valueName>
+            <value>CMAS</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>VTEC</valueName>
+            <value>/O.NEW.KLCH.SC.Y.0024.260604T1800Z-260605T0600Z/</value>
+        </cap:parameter>
+        <cap:parameter>
+            <valueName>eventEndingTime</valueName>
+            <value>2026-06-05T01:00:00-05:00</value>
+        </cap:parameter>
+        <cap:scope>Public</cap:scope>
+        <cap:code>IPAWSv1.0</cap:code>
+        <cap:language>en-US</cap:language>
+        <cap:web>http://www.weather.gov</cap:web>
+        <cap:eventCode>
+            <valueName>SAME</valueName>
+            <value>NWS</value>
+        </cap:eventCode>
+        <cap:eventCode>
+            <valueName>NationalWeatherService</valueName>
+            <value>SCY</value>
+        </cap:eventCode>
+    </entry>
+</feed>

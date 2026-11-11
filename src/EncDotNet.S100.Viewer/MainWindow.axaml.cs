@@ -1,0 +1,1807 @@
+using Avalonia;
+using Avalonia.Input;
+using Avalonia.Input.Platform;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Viewer.Resources;
+using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.Notifications;
+using EncDotNet.S100.Viewer.Services.Updates;
+using EncDotNet.S100.Viewer.Tools;
+using EncDotNet.S100.Viewer.ViewModels;
+using Mapsui;
+using Mapsui.Extensions;
+using Mapsui.Projections;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace EncDotNet.S100.Viewer;
+
+public partial class MainWindow : ShadUI.Window
+{
+    private readonly IRecentFilesService _recentFiles;
+    private readonly IDatasetLoaderService _loader;
+    private readonly IPickService _pickService;
+    private readonly IFileDialogService _fileDialog;
+    private readonly IExchangeSetService _exchangeSetService;
+    private readonly IUpdateNotificationCoordinator? _updateNotificationCoordinator;
+    private readonly MainViewModel _viewModel;
+    private readonly ILibraryImporter _libraryImporter;
+    private readonly CancellationTokenSource _windowLifetimeCancellation = new();
+    private readonly MapsuiMapHost _mapHost;
+    private ValidationOverlayService? _validationOverlay;
+    private EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor? _renderActivityMonitor;
+    private EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor? _settleMonitor;
+    private Map? _renderActivityMap;
+    private EventHandler? _renderActivityRefreshHandler;
+    private EncDotNet.S100.Renderers.Mapsui.DynamicSources.S100DynamicSourceHost? _dynamicSourceOverlayHost;
+    private EncDotNet.S100.Viewer.Services.PickHighlightController? _pickHighlightController;
+    private EncDotNet.S100.Viewer.Services.DatasetExtentIndicatorController? _extentIndicatorController;
+    private EncDotNet.S100.Viewer.Services.Aml.AmlCoverageOutlineController? _amlOutlineController;
+
+    /// <summary>The status-bar width below which the MARKING pill drops its label.</summary>
+    private const double AmlMarkingLabelMinWidth = 900;
+
+    private LibraryCoverageOverlayController? _libraryCoverageController;
+    private EncDotNet.S100.Viewer.Services.Depth.AdjustedAreaBoundaryController? _adjustedAreaBoundary;
+    private EncDotNet.S100.Viewer.Services.OverscaleCurtainController? _overscaleCurtainController;
+    private Mapsui.Layers.MemoryLayer? _routeOverlayLayer;
+    private EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider? _routeAppearance;
+    private EncDotNet.S100.Viewer.Services.RoutesService? _routeStore;
+    private EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService? _passageCheck;
+    private EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService? _routeFindings;
+    private IMarinerSettingsProvider? _routeMariner;
+    private ITimeFormatProvider? _routeTimeFormat;
+    private EncDotNet.S100.Viewer.ViewModels.RouteCheckLegendViewModel? _routeCheckLegend;
+    private float _routeCheckLegendReserve;
+    private readonly List<IDisposable> _dynamicSourceRegistrations = new();
+    private ViewerCommandSettings? _startupOptions;
+    private Color _accentColor;
+
+    public MainWindow() : this(null) { }
+
+    /// <summary>
+    /// Legacy constructor retained for the Avalonia design-time previewer
+    /// and for callers that pre-DI created their own instance. Falls through
+    /// to the dependency-injected constructor by resolving services from
+    /// <see cref="App.Services"/> if available, else newing up defaults.
+    /// </summary>
+    internal MainWindow(ViewerCommandSettings? options)
+        : this(
+            options,
+            ResolveOrFallback<MainViewModel>(static () => throw new InvalidOperationException(
+                "MainViewModel cannot be resolved without the application service provider.")),
+            ResolveOrFallback<ILibraryImporter>(static () => throw new InvalidOperationException(
+                "ILibraryImporter cannot be resolved without the application service provider.")),
+            ResolveOrFallback<IRecentFilesService>(static () => throw new InvalidOperationException(
+                "IRecentFilesService cannot be resolved without the application service provider.")),
+            ResolveOrFallback<IDatasetLoaderService>(static () => throw new InvalidOperationException(
+                "IDatasetLoaderService cannot be resolved without the application service provider.")),
+            ResolveOrFallback<IPickService>(static () => throw new InvalidOperationException(
+                "IPickService cannot be resolved without the application service provider.")),
+            ResolveOrFallback<IFileDialogService>(static () => new FileDialogService()),
+            ResolveOrFallback<IExchangeSetService>(static () => throw new InvalidOperationException(
+                "IExchangeSetService cannot be resolved without the application service provider.")),
+            null)
+    {
+    }
+
+    private static T ResolveOrFallback<T>(Func<T> fallback) where T : class
+    {
+        try
+        {
+            return App.Services.GetRequiredService<T>();
+        }
+        catch (InvalidOperationException)
+        {
+            return fallback();
+        }
+    }
+
+    internal MainWindow(
+        ViewerCommandSettings? options,
+        MainViewModel viewModel,
+        ILibraryImporter libraryImporter,
+        IRecentFilesService recentFiles,
+        IDatasetLoaderService loader,
+        IPickService pickService,
+        IFileDialogService fileDialog,
+        IExchangeSetService exchangeSetService,
+        IUpdateNotificationCoordinator? updateNotificationCoordinator)
+    {
+        ArgumentNullException.ThrowIfNull(viewModel);
+        ArgumentNullException.ThrowIfNull(libraryImporter);
+        ArgumentNullException.ThrowIfNull(recentFiles);
+        ArgumentNullException.ThrowIfNull(loader);
+        ArgumentNullException.ThrowIfNull(pickService);
+        ArgumentNullException.ThrowIfNull(fileDialog);
+        ArgumentNullException.ThrowIfNull(exchangeSetService);
+
+        InitializeComponent();
+
+        // Open large on first run and where the user left it afterwards (#825).
+        InitializeWindowPlacement(options, App.Services.GetRequiredService<ViewerSettings>());
+
+        // Bind the notification overlay to the DI-managed notification
+        // service so background services can surface notifications.
+        NotificationHost.ItemsSource =
+            App.Services.GetRequiredService<Services.Notifications.INotificationService>().Active;
+
+        _viewModel = viewModel;
+        _libraryImporter = libraryImporter;
+        _recentFiles = recentFiles;
+        _loader = loader;
+        _pickService = pickService;
+        _fileDialog = fileDialog;
+        _exchangeSetService = exchangeSetService;
+        _updateNotificationCoordinator = updateNotificationCoordinator;
+
+        // Timeline keys (#708 C8): ←/→ step, Home/End, N, +/−/0 and T, while
+        // the map, the Timeline or nothing has focus (never while typing).
+        AddHandler(KeyDownEvent, OnTimelineKeyDown, RoutingStrategies.Tunnel);
+
+        // Route editor keys (#895): Ctrl+E (⌘E) edit, Ctrl+Z / Ctrl+Shift+Z
+        // undo and redo, Delete removes the selected waypoint; never while typing.
+        Tools.RouteEditorKeys.Attach(
+            this,
+            _viewModel.RoutesService,
+            visual => ReferenceEquals(visual, MapControl) || ReferenceEquals(visual, MapArea));
+
+        // Measure keys (#1130, D20): G geometry, Delete clears, Ctrl+C (⌘C) copies.
+        Tools.MeasureKeys.Attach(
+            this,
+            _viewModel.MapTools.MeasureSession,
+            _viewModel.MapTools.MeasureCard,
+            visual => ReferenceEquals(visual, MapControl) || ReferenceEquals(visual, MapArea));
+
+        // Range & bearing keys (#1130 D20): G geometry, Delete clears, Ctrl+C
+        // (⌘C) copies; only while the tool is on and never while typing.
+        Tools.RangeBearingKeys.Attach(
+            this,
+            _viewModel.MapTools.RangeBearing.State,
+            () =>
+            {
+                if (_viewModel.MapTools.RangeBearing.CopyText is { } text && Clipboard is { } clipboard)
+                    _ = clipboard.SetTextAsync(text);
+            },
+            visual => ReferenceEquals(visual, MapControl) || ReferenceEquals(visual, MapArea));
+
+        // The Time HUD and the dock follow the map's width (#712 F5).
+        MapArea.SizeChanged += (_, e) => _viewModel.Layout.MapWidth = e.NewSize.Width;
+        SizeChanged += (_, e) => _viewModel.Layout.WindowWidth = e.NewSize.Width;
+
+        // Hand the loader a map host now that the Mapsui control exists, and
+        // seed catalogues / build the pipeline factory from CLI options. The
+        // loader subscribes to its own settings dependencies internally. The
+        // host sets up S-100 through the public mapControl.AddS100 entry point
+        // (the same one the MapHost sample uses), sharing the DI processor owner
+        // and dataset renderer as borrowed collaborators so other Viewer
+        // services keep acquiring leases / rendering on the same instances.
+        _mapHost = new MapsuiMapHost(
+            MapControl,
+            App.Services.GetRequiredService<DatasetProcessorOwner>(),
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Renderers.Mapsui.MapsuiDatasetRenderer>(),
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Datasets.Pipelines.Interoperability.IInteroperabilityAuthorityProvider>(),
+            App.Services.GetRequiredService<EncDotNet.S100.Rendering.Engine.Prediction.DemandPlanner>());
+        App.Services.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>().Current = _mapHost;
+        App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current = _mapHost;
+        // The image renderer is the MCP readiness gate, so publish it only after
+        // the coordinate and viewport capabilities used alongside it are attached.
+        App.Services.GetRequiredService<MapCapabilityAccessor<IImageRenderer>>().Current = _mapHost;
+        // Let the feedback reporter capture the whole application window.
+        App.Services.GetRequiredService<IAppScreenshotProvider>().Target = this;
+        // Render-state controller bridges MCP / scripted callers to the
+        // viewer's palette and ECDIS display category without exposing
+        // SettingsViewModel / EcdisDisplayState directly.
+        App.Services.GetRequiredService<IRenderStateControllerAccessor>().Current =
+            new ViewerRenderStateController(
+                App.Services.GetRequiredService<ViewModels.SettingsViewModel>(),
+                App.Services.GetRequiredService<EcdisDisplayState>());
+        // UI controller bridges MCP / scripted callers to the viewer's
+        // activity-panel state (which docks are open and which tab each
+        // shows) without exposing MainViewModel directly.
+        App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current =
+            new ViewerUiController(_viewModel.Layout);
+        _loader.Initialize(_mapHost, _mapHost, options);
+        // Wire validation finding click-to-zoom: each finding view-model
+        // routes its <c>ZoomToFindingCommand</c> through this dispatcher.
+        _viewModel.Datasets.ZoomDispatcher = _mapHost.ZoomToExtent;
+        // Build the validation findings overlay layer that draws above
+        // all dataset layers for the currently-selected dataset. The
+        // service subscribes to the datasets view-model and lives for
+        // the lifetime of the window.
+        _validationOverlay = new ValidationOverlayService(_mapHost, _viewModel.Datasets);
+
+        Closed += (_, _) =>
+        {
+            _windowLifetimeCancellation.Cancel();
+            _windowLifetimeCancellation.Dispose();
+            App.Services.GetRequiredService<DatasetProcessorOwner>().Dispose();
+            _validationOverlay?.Dispose();
+            _validationOverlay = null;
+            // Detach render-activity wiring so the static hub does not
+            // outlive the window and a torn-down map is not probed.
+            EncDotNet.S100.Viewer.Diagnostics.RenderActivityHub.Sink = null;
+            if (_renderActivityMonitor is not null)
+            {
+                _renderActivityMonitor.BusyProbe = null;
+                if (_settleMonitor is not null)
+                {
+                    _settleMonitor.TileProbe = null;
+                    _settleMonitor.RequestRedraw = null;
+                    _settleMonitor = null;
+                }
+                if (_renderActivityMap is not null && _renderActivityRefreshHandler is not null)
+                {
+                    _renderActivityMap.RefreshGraphicsRequest -= _renderActivityRefreshHandler;
+                }
+                _renderActivityMonitor = null;
+                _renderActivityMap = null;
+                _renderActivityRefreshHandler = null;
+            }
+            // PR-M3: flush any pending debounced size writes so the last
+            // splitter drag isn't lost on shutdown.
+            _viewModel.Layout.OnShutdown();
+            // Record a clean shutdown so the next launch does not report
+            // this (graceful) exit as a crash.
+            EncDotNet.S100.Viewer.Diagnostics.UncleanShutdownSentinel.MarkCleanExit();
+            foreach (var reg in _dynamicSourceRegistrations) reg.Dispose();
+            _dynamicSourceRegistrations.Clear();
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>()
+                .Current = null;
+            _dynamicSourceOverlayHost?.Dispose();
+            _dynamicSourceOverlayHost = null;
+            _pickHighlightController?.Dispose();
+            _pickHighlightController = null;
+            _extentIndicatorController?.Dispose();
+            _extentIndicatorController = null;
+            _amlOutlineController?.Dispose();
+            _amlOutlineController = null;
+            _libraryCoverageController?.Dispose();
+            _libraryCoverageController = null;
+            _adjustedAreaBoundary?.Dispose();
+            _adjustedAreaBoundary = null;
+            _overscaleCurtainController?.Dispose();
+            _overscaleCurtainController = null;
+            // Clear the late-bound accessors this window owns so panel /
+            // screenshot MCP tools observe the torn-down state (UiNotReady /
+            // WindowNotReady) rather than a stale controller, and so the
+            // MainViewModel / window are not kept alive after close.
+            App.Services.GetRequiredService<IViewerUiControllerAccessor>().Current = null;
+            App.Services.GetRequiredService<IAppScreenshotProvider>().Target = null;
+            App.Services.GetRequiredService<MapCapabilityAccessor<IImageRenderer>>().Current = null;
+            App.Services.GetRequiredService<MapCapabilityAccessor<IMapCoordinateConverter>>().Current = null;
+            App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current = null;
+            _mapHost.Dispose();
+        };
+        DataContext = _viewModel;
+
+        // Build the native menu bar (File / View › Appearance) and keep its
+        // toggle items mirrored against the view-model. The builder owns the
+        // PropertyChanged subscriptions for the lifetime of this window.
+        new NativeMenuBuilder(_viewModel, _recentFiles).Attach(
+            window: this,
+            openDatasetAsync: OpenDatasetAsync,
+            openExchangeSetAsync: OpenExchangeSetAsync,
+            openExchangeSetZipAsync: OpenExchangeSetZipAsync,
+            libraryImporter: _libraryImporter);
+
+        // Open Recent replays exchange sets through the same progress UI.
+        _viewModel.DatasetOpening.ExchangeSetOpener = RunExchangeSetAsync;
+
+        // Show built-in specification entries in the catalogue views
+        foreach (var spec in Specifications.Specification.AvailableSpecs)
+        {
+            var (fcVersion, fcVersionDate) = CatalogueSpecDetection.ReadBuiltInFeatureCatalogueInfo(spec);
+            _viewModel.FeatureCatalogues.AddBuiltIn(spec, Strings.Catalogue_BuiltInLabel, fcVersion, fcVersionDate);
+
+            if (Specifications.Specification.HasPortrayalCatalogue(spec))
+            {
+                _viewModel.PortrayalCatalogues.AddBuiltIn(spec, Strings.Catalogue_BuiltInLabel, CatalogueSpecDetection.ReadBuiltInPortrayalCatalogueVersion(spec));
+            }
+        }
+
+        // Apply persisted accent color. Both the user's colour choice and
+        // the active chrome theme feed the effective brush, so re-apply on
+        // either change (the low-light themes mute the accent).
+        ApplyAccentColor(_viewModel.Settings.AccentColor);
+        _viewModel.Settings.AccentColorChanged += ApplyAccentColor;
+        if (Application.Current is { } themedApp)
+            themedApp.ActualThemeVariantChanged += (_, _) => ApplyAccentColor(_accentColor);
+
+        // Apply persisted scale-bar distance unit and react to changes.
+        ScaleBar.Unit = _viewModel.Settings.DistanceUnit;
+        _viewModel.Settings.DistanceUnitChanged += unit => ScaleBar.Unit = unit;
+
+        // Surface DatasetsViewModel rejection of files no product recognises.
+        _viewModel.Datasets.UnrecognizedFileEncountered += path =>
+        {
+            App.Services.GetRequiredService<INotificationService>()
+                .Create(Strings.Toast_Warning)
+                .WithSeverity(NotificationSeverity.Warning)
+                .WithContent(UnrecognizedFileMessage.For(path))
+                .Show();
+        };
+
+        // Clean up layers when a dataset entry is removed from the list.
+        _viewModel.Datasets.Entries.CollectionChanged += (_, e) =>
+        {
+            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Remove && e.OldItems is not null)
+            {
+                foreach (DatasetEntry removed in e.OldItems)
+                {
+                    _loader.RemoveEntry(removed);
+                }
+            }
+        };
+
+        // Basemap (issue #295). Default Offline (bundled Natural Earth
+        // land — zero network); the user can switch to None or Online in
+        // Settings (or via --basemap). Keep a reference so swapping mode
+        // can replace it live. Always sits at index 0, beneath datasets.
+        _mapHost.SetBasemapLayer(
+            BasemapLayerFactory.TryCreate(_viewModel.Settings.SelectedBasemapMode));
+        _viewModel.Settings.BasemapModeChanged += OnBasemapModeChanged;
+
+        // ENC water colour (S-52 / S-101 DEPDW) — used as the map control
+        // background so the unrendered area outside the tile layer's
+        // extent visually blends with the chart's water.
+        if (MapControl.Map is { } mapForBackColor)
+        {
+            mapForBackColor.BackColor = new Mapsui.Styles.Color(170, 211, 223);
+        }
+
+        // Wire the render-activity monitor that backs the MCP
+        // 'await_render_idle' / 'get_render_stats' tools. The
+        // InstrumentedMapControl feeds paint stats through the static
+        // RenderActivityHub.Sink; here we additionally feed Mapsui's
+        // graphics-refresh signal as activity and expose a layer-busy
+        // probe so idle is not reported while an async fetch is pending.
+        if (MapControl.Map is { } activityMap)
+        {
+            var monitor = App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Diagnostics.RenderActivityMonitor>();
+            _renderActivityMonitor = monitor;
+            _renderActivityMap = activityMap;
+            EncDotNet.S100.Viewer.Diagnostics.RenderActivityHub.Sink = monitor;
+
+            monitor.BusyProbe = () =>
+            {
+                // Snapshot the layer collection defensively: it may be
+                // mutated on the UI thread while this runs on a threadpool
+                // thread driving an MCP request.
+                foreach (var layer in activityMap.Layers.ToArray())
+                {
+                    if (layer.Busy) return true;
+                }
+                return false;
+            };
+
+            _renderActivityRefreshHandler = (_, _) => monitor.NotifyActivity();
+            activityMap.RefreshGraphicsRequest += _renderActivityRefreshHandler;
+
+            // The tile half of the settled signal behind the MCP await_settled
+            // tool (map rendering slice 1). Read on the MCP request's thread from
+            // a snapshot of the layers; inert until a harness turns tracking on.
+            var settle = App.Services.GetRequiredService<EncDotNet.S100.Viewer.Diagnostics.ViewSettleMonitor>();
+            _settleMonitor = settle;
+            settle.TileProbe = () => EncDotNet.S100.Renderers.Mapsui.MapsuiChartLayers.EvaluateSettle(
+                activityMap.Layers.ToArray());
+            settle.RequestRedraw = activityMap.RefreshGraphics;
+        }
+
+        // The background vector-snapshot / scene / tile renderers repaint through
+        // a per-session redraw sink the session stamps onto each dataset layer
+        // (wired via MapsuiMapHost from the Avalonia adapter's UI-thread
+        // RefreshGraphics), so the window no longer sets process-global hooks.
+
+        // Bind the map-viewport notifier as early as possible so the
+        // AIS overlay's zoom-gated decorator (resolved below via
+        // GetServices<IDynamicFeatureSource>) can read the current
+        // viewport synchronously in its constructor. See
+        // docs/design/ais-zoom-gated-subscription.md.
+        if (MapControl.Map?.Navigator is { } notifierNav)
+        {
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Services.MapViewportNotifier>()
+                .Bind(notifierNav);
+
+            // Clamp zoom in/out so the user cannot zoom to an unbounded,
+            // meaningless scale (e.g. many world copies off the edge of a
+            // cross-antimeridian dataset, or arbitrarily deep past chart
+            // resolution).
+            MapZoomLimits.Apply(notifierNav);
+        }
+
+        // PR-D2: dynamic-source overlay host. Registered *after* the
+        // basemap so MapsuiMapHost's ComputeOverlayInsertIndex places
+        // the overlay above the OSM tile layer rather than at index 0
+        // (where the subsequently-added basemap would cover it).
+        _dynamicSourceOverlayHost = new EncDotNet.S100.Renderers.Mapsui.DynamicSources.S100DynamicSourceHost(
+            _mapHost,
+            rendererKey => rendererKey is null
+                ? null
+                : App.Services.GetKeyedService<EncDotNet.S100.Renderers.Mapsui.DynamicSources.IDynamicFeatureRenderer>(rendererKey),
+            marshal: action =>
+            {
+                if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) action();
+                else Avalonia.Threading.Dispatcher.UIThread.Post(action);
+            },
+            logger: App.Services.GetService<Microsoft.Extensions.Logging.ILogger<EncDotNet.S100.Renderers.Mapsui.DynamicSources.S100DynamicSourceHost>>());
+
+        // PR-D2.1: seed per-source visibility from persisted settings
+        // *before* the Register loop so each source's MemoryLayer.Enabled
+        // starts in the user's last-known state, then wire write-back so
+        // the Layer Stack panel's visibility toggle persists.
+        var viewerSettings = App.Services.GetRequiredService<ViewerSettings>();
+        foreach (var kv in viewerSettings.DynamicSourceVisibility)
+        {
+            _dynamicSourceOverlayHost.SetVisible(kv.Key, kv.Value);
+        }
+        // #1070: NDBC observations start hidden until the user turns them on.
+        var ndbcOverlay = App.Services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.Ndbc.NdbcObservationsOverlay>();
+        ndbcOverlay?.SeedDefaultVisibility(_dynamicSourceOverlayHost, viewerSettings.DynamicSourceVisibility);
+        _dynamicSourceOverlayHost.SourcesChanged += () =>
+        {
+            foreach (var info in _dynamicSourceOverlayHost.Sources)
+            {
+                viewerSettings.DynamicSourceVisibility[info.Id] = _dynamicSourceOverlayHost.GetVisible(info.Id);
+            }
+            try { viewerSettings.Save(); } catch { /* best-effort */ }
+        };
+
+        // Attach the registry to the accessor so view-models resolved
+        // before window construction (e.g. LayerStackViewModel as a
+        // singleton) start seeing dynamic sources.
+        App.Services.GetRequiredService<
+            EncDotNet.S100.Viewer.Services.DynamicSources.DynamicFeatureSourceRegistryAccessor>()
+            .Current = _dynamicSourceOverlayHost;
+
+        foreach (var source in App.Services.GetServices<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>())
+        {
+            _dynamicSourceRegistrations.Add(_dynamicSourceOverlayHost.Register(source));
+        }
+
+        // #1070: bind the NDBC source to the viewport and its Layer Stack
+        // toggle, then start polling.
+        ndbcOverlay?.Attach(_dynamicSourceOverlayHost);
+
+        // #1073: feed the NMEA weather source the own-ship fix and start
+        // reading its input (only present when an input is configured).
+        App.Services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.Nmea.NmeaWeatherOverlay>()?.Attach();
+
+        // Pick highlight: keep a cursor-echo marker + selected-feature outline
+        // on the overlay tier in sync with the current pick report, so the
+        // pick stays visible as the user (or an MCP agent) pans the map.
+        _pickHighlightController = new EncDotNet.S100.Viewer.Services.PickHighlightController(
+            _mapHost,
+            App.Services.GetRequiredService<PickReportViewModel>(),
+            App.Services.GetRequiredService<ViewerDatasetCatalog>(),
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
+            App.Services.GetRequiredService<SettingsViewModel>(),
+            UiThread.RunOrPost,
+            warningDrawing: App.Services.GetService<EncDotNet.S100.Viewer.Services.NavigationalWarningDrawingService>());
+
+        // Out-of-scale extent indicators: outline the extents of loaded
+        // datasets that have zoomed out past their display-scale minimum, so a
+        // wide-spread exchange set still shows where its members are (#446).
+        _extentIndicatorController = new EncDotNet.S100.Viewer.Services.DatasetExtentIndicatorController(
+            _mapHost,
+            _viewModel.Datasets,
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
+            App.Services.GetRequiredService<SettingsViewModel>(),
+            UiThread.RunOrPost,
+            UiThread.Post);
+
+        // AML coverage outlines (#1371): where AML cells that aren't drawn
+        // (or are hidden) lie, as an ink frame with inward ticks.
+        _amlOutlineController = new EncDotNet.S100.Viewer.Services.Aml.AmlCoverageOutlineController(
+            _mapHost,
+            _viewModel.Datasets,
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
+            UiThread.RunOrPost,
+            UiThread.Post);
+
+        // Timeline lanes (#710): the hovered lane's footprint.
+        App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.TimelineMapScope>().Attach(_mapHost);
+
+        // Library ↔ Timeline actions (#711): Show on timeline, Go to start of run, Reveal in Library.
+        _ = new EncDotNet.S100.Viewer.Services.LibraryTimelineLink(
+            App.Services.GetRequiredService<LibraryPanelViewModel>(),
+            _viewModel.Timeline,
+            App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.GlobalTimeService>(),
+            _viewModel.Layout);
+
+        // Navigational warnings (#932): the no-sources state's Open Library.
+        var warnings = _viewModel.MapChrome.NavigationalWarnings;
+        warnings.OpenLibraryRequested += (_, _) => _viewModel.Layout.SelectTab(LibraryImportCoordinator.LibraryPanelId);
+        // #959 E1: a finding's "Open in Navigational warnings" brings the panel forward.
+        warnings.RevealRequested += (_, _) => _viewModel.Layout.SelectTab("NavigationalWarnings");
+
+        // #959: a Warning card's "Crosses route · leg 3 → 4" brings the Routes panel's Findings forward.
+        if (App.Services.GetService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>() is { } routeFindings)
+            routeFindings.OpenRequested += (_, _) => _viewModel.Layout.SelectTab("Routes");
+
+        // Library coverage (issue #655): outline the datasets listed in the
+        // Library panel — without loading them — while that panel is showing.
+        _libraryCoverageController = new LibraryCoverageOverlayController(
+            _mapHost,
+            App.Services.GetRequiredService<LibraryPanelViewModel>(),
+            _viewModel.Layout,
+            App.Services.GetRequiredService<IMapViewportNotifier>(),
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
+            () => App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current,
+            UiThread.RunOrPost);
+
+        // Chart-wide water level adjustment (#1132): the edge of the adjusted area.
+        _adjustedAreaBoundary = new EncDotNet.S100.Viewer.Services.Depth.AdjustedAreaBoundaryController(
+            _mapHost,
+            App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.IWaterLevelAdjustmentState>());
+
+        // On-chart overscale curtain: paint a subtle vertical-line pattern over
+        // the region of each cell displayed beyond its compilation scale (#441).
+        _overscaleCurtainController = new EncDotNet.S100.Viewer.Services.OverscaleCurtainController(
+            _mapHost,
+            _viewModel.Datasets,
+            _loader,
+            App.Services.GetRequiredService<
+                EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
+            App.Services.GetRequiredService<SettingsViewModel>(),
+            UiThread.RunOrPost);
+        // Depth basis indicator (#1191): what the chart's depths are relative to.
+        InitializeDepthBasis();
+
+        // Disable Mapsui's built-in LoggingWidget — it can throw "minX > maxX" on
+        // narrow viewports during resize, and the exception is raised on the
+        // render thread where we cannot intercept it.
+        Mapsui.Widgets.InfoWidgets.LoggingWidget.ShowLoggingInMap = Mapsui.Widgets.ActiveMode.No;
+        if (MapControl.Map is { } mapForWidgets)
+        {
+            var remaining = mapForWidgets.Widgets
+                .Where(w => w is not Mapsui.Widgets.InfoWidgets.LoggingWidget)
+                .ToArray();
+            mapForWidgets.Widgets.Clear();
+            foreach (var w in remaining)
+            {
+                mapForWidgets.Widgets.Enqueue(w);
+            }
+        }
+
+        // Enable trackpad pan/pinch/rotate gestures, single/double-tap pick,
+        // long-press pick, mouse lat/lon readout, scale-bar/compass viewport
+        // sync, and the zoom in/out overlay buttons.
+        var interactionController = new MapInteractionController(
+            _viewModel,
+            _pickService,
+            _loader,
+            App.Services.GetService<EncDotNet.S100.Viewer.Services.DynamicSources.IDynamicSourcePickService>())
+        {
+            DepthBasis = App.Services.GetService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>(),
+            Viewport = _mapHost,
+        };
+        interactionController.Attach(MapControl, ZoomInButton, ZoomOutButton, ZoomToExtentButton, ScaleBar, CompassRose);
+        interactionController.PlainTapped += (_, tap) => _libraryCoverageController?.HandleTap(tap);
+
+        // Wire the map-tool controller to the map: tools are registered with
+        // the view-model's controller and pointer events are forwarded by
+        // the interaction controller.
+        InitializeMapTools(interactionController);
+
+        // Apply the cursor that matches the current mode and keep it in sync
+        // with the active tool.
+        ApplyToolCursor();
+        _viewModel.MapTools.Tools.ActiveToolChanged += _ => Dispatcher.UIThread.Post(ApplyToolCursor);
+
+        // Enable drag & drop of dataset files onto the map
+        AddHandler(DragDrop.DropEvent, OnDrop);
+
+        // Apply CLI options
+        _startupOptions = options;
+
+        // When an explicit startup viewport is requested, suppress the
+        // per-dataset auto-zoom so the requested framing wins.
+        if (options?.HasExplicitViewport == true)
+        {
+            _loader.SuppressAutoZoom = true;
+        }
+
+        // Add CLI portrayal catalogues to the view model (transient — not persisted)
+        if (options?.PortrayalCatalogues is { } pcArgs)
+        {
+            foreach (var pcPath in pcArgs)
+            {
+                if (Directory.Exists(pcPath) && CatalogueSpecDetection.DetectPortrayalCatalogueSpec(pcPath) is { } pcSpec)
+                {
+                    _viewModel.PortrayalCatalogues.AddTransient(pcSpec, pcPath);
+                }
+            }
+        }
+
+        // Add CLI feature catalogues to the view model (transient — not persisted)
+        if (options?.FeatureCatalogues is { } fcArgs)
+        {
+            foreach (var fcPath in fcArgs)
+            {
+                if (File.Exists(fcPath) && CatalogueSpecDetection.DetectFeatureCatalogueSpec(fcPath) is { } fcSpec)
+                {
+                    _viewModel.FeatureCatalogues.AddTransient(fcSpec, fcPath);
+                }
+            }
+        }
+
+        // Run startup automation once the window is shown: load CLI
+        // datasets and drive the map to the requested state — in a
+        // deterministic order so an agent gets a stable result.
+        var datasetPaths = options?.Datasets?.Where(File.Exists).ToArray() ?? [];
+        var needsAutomation = datasetPaths.Length > 0
+            || options?.HasExplicitViewport == true
+            || options?.TimeStep is not null
+            || options?.HasOwnShipOption == true;
+        if (needsAutomation)
+        {
+            Opened += async (_, _) => await RunStartupAutomationAsync(datasetPaths);
+        }
+        else if (options?.HasExplicitViewport != true)
+        {
+            // Interactive launch with no CLI-driven viewport: if the
+            // own-ship overlay is enabled, frame the map on the own-ship
+            // rather than leaving it at the whole-world default.
+            Opened += async (_, _) => await FrameOnOwnShipAtStartupAsync();
+        }
+
+        // Surface a recovery notification when the previous run terminated
+        // without a clean shutdown (a native crash, FailFast, kill, …).
+        Opened += (_, _) => ReportPreviousUncleanShutdown();
+
+        if (_updateNotificationCoordinator is not null)
+        {
+            Opened += async (_, _) => await _updateNotificationCoordinator
+                .CheckAndNotifyAsync(_windowLifetimeCancellation.Token);
+        }
+
+        // Developer aid (--demo-notifications): seed a representative set of
+        // notification cards so the overlay's styling and behaviour can be
+        // verified on-screen without loading real data.
+        if (options?.DemoNotifications == true)
+        {
+            Opened += (_, _) => SeedDemoNotifications();
+        }
+    }
+
+    private bool _demoNotificationsSeeded;
+
+    /// <summary>
+    /// Seeds a representative spread of notification cards (severities,
+    /// long body text for the "Show more"/"Show less" expander, and a
+    /// persistent indeterminate/determinate progress bar) for on-screen
+    /// verification of the notification overlay. Reachable only via the
+    /// undocumented <c>--demo-notifications</c> developer flag, so the demo
+    /// strings are intentionally inline rather than localized.
+    /// </summary>
+    private void SeedDemoNotifications()
+    {
+        if (_demoNotificationsSeeded)
+            return;
+        _demoNotificationsSeeded = true;
+
+        var notifications = App.Services.GetRequiredService<INotificationService>();
+
+        const string longBody =
+            "This is a deliberately long notification body that exceeds two lines "
+            + "so the card clips it with an ellipsis and offers a \"Show more\" link. "
+            + "Expanding it reveals the full wrapped text, and a \"Show less\" link "
+            + "collapses it again — exactly the behaviour we are verifying here.";
+
+        notifications.Create("Information")
+            .WithSeverity(NotificationSeverity.Info)
+            .WithContent(longBody)
+            .Persistent()
+            .Show();
+
+        notifications.Create("Success")
+            .WithSeverity(NotificationSeverity.Success)
+            .WithContent("Dataset loaded and rendered.")
+            .Persistent()
+            .Show();
+
+        notifications.Create("Warning")
+            .WithSeverity(NotificationSeverity.Warning)
+            .WithContent("Some cells reference updates that were not applied.")
+            .WithAction("Details", () => { })
+            .WithAction("Remind me later", () => { })
+            .WithAction("Skip this version", () => { })
+            .WithAction("Stop checking", () => { })
+            .Persistent()
+            .Show();
+
+        notifications.Create("Error")
+            .WithSeverity(NotificationSeverity.Error)
+            .WithContent(longBody)
+            .WithAction("Copy details", () => { })
+            .Persistent()
+            .Show();
+
+        var indeterminate = notifications.Create("Loading exchange set…")
+            .WithSeverity(NotificationSeverity.Info)
+            .WithContent("Parsing catalogue")
+            .Persistent()
+            .Show();
+        indeterminate.SetIndeterminate(true);
+
+        var determinate = notifications.Create("Loading dataset…")
+            .WithSeverity(NotificationSeverity.Info)
+            .WithContent("US5WA50M/US5WA50M.000")
+            .Persistent()
+            .Show();
+        determinate.Report(0.45);
+    }
+
+    private bool _previousCrashReported;
+
+    /// <summary>
+    /// Shows a sticky warning toast when one or more previous sessions
+    /// ended unexpectedly (detected by
+    /// <see cref="App.PreviousUncleanShutdowns"/>), offering a one-click
+    /// action to open the feedback reporter — which already carries the
+    /// captured crash context via the last-error tracker. Shown at most
+    /// once per window.
+    /// </summary>
+    private void ReportPreviousUncleanShutdown()
+    {
+        if (_previousCrashReported)
+            return;
+        _previousCrashReported = true;
+
+        var crashed = App.PreviousUncleanShutdowns;
+        if (crashed.Count == 0)
+            return;
+
+        var mostRecent = crashed[^1];
+        var body = crashed.Count > 1
+            ? string.Format(Strings.Toast_PreviousCrashBodyMultiple, crashed.Count)
+            : string.Format(Strings.Toast_PreviousCrashBody, mostRecent.StartedUtc.ToLocalTime());
+
+        App.Services.GetRequiredService<INotificationService>()
+            .Create(Strings.Toast_PreviousCrashTitle)
+            .WithSeverity(NotificationSeverity.Warning)
+            .WithContent(body)
+            .WithAction(
+                Strings.Toast_PreviousCrashAction,
+                () => _viewModel.AppCommands.ShowFeedbackCommand.Execute(null))
+            .Persistent()
+            .Show();
+    }
+
+    /// <summary>
+    /// Interactive-launch framing: when the own-ship overlay is enabled,
+    /// centre and zoom the map on the own-ship instead of the whole-world
+    /// default. If the overlay is enabled but no fix has arrived yet, waits
+    /// briefly for the first fix (via <see cref="OwnShipSource.Changed"/>)
+    /// before framing, then gives up quietly. No-op when the overlay is
+    /// disabled or an explicit CLI viewport was supplied.
+    /// </summary>
+    private async Task FrameOnOwnShipAtStartupAsync()
+    {
+        var source = ResolveOrFallback<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource>(
+            static () => null!);
+        if (source is null || !source.IsEnabled) return;
+
+        if (TryFrameOnOwnShip(source)) return;
+
+        // No fix yet: wait once for the first published feature, with a
+        // short timeout so launch isn't blocked if no fix ever arrives.
+        var tcs = new TaskCompletionSource();
+        void OnChanged(object? sender, EncDotNet.S100.DynamicSources.DynamicFeaturesChanged e) => tcs.TrySetResult();
+        source.Changed += OnChanged;
+        try
+        {
+            var completed = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(3)));
+            if (completed == tcs.Task)
+            {
+                await Dispatcher.UIThread.InvokeAsync(() => TryFrameOnOwnShip(source));
+            }
+        }
+        finally
+        {
+            source.Changed -= OnChanged;
+        }
+    }
+
+    /// <summary>
+    /// Closes the consolidated display-settings overlay when its in-panel
+    /// close (✕) button is clicked. The flyout otherwise dismisses on
+    /// light-dismiss (click-away) or Escape; this button gives the panel
+    /// an explicit affordance matching the mockup.
+    /// </summary>
+    private void OnCloseDisplaySettings(object? sender, RoutedEventArgs e)
+        => DisplaySettingsButton.Flyout?.Hide();
+
+    /// <summary>
+    /// Swaps the basemap layer in response to the Settings basemap-mode
+    /// selector (issue #295). The basemap always sits at the bottom of
+    /// the layer stack (index 0) beneath every dataset and overlay; a new
+    /// mode removes the old layer and inserts a fresh one (or none for
+    /// <see cref="BasemapMode.None"/>).
+    /// </summary>
+    private void OnBasemapModeChanged(BasemapMode mode)
+    {
+        _mapHost.SetBasemapLayer(BasemapLayerFactory.TryCreate(mode));
+        _mapHost.RequestRedraw();
+    }
+
+    /// <summary>
+    /// Centres and zooms the map on the own-ship's current fix, if one is
+    /// published. Returns <see langword="true"/> when framing was applied.
+    /// </summary>
+    private bool TryFrameOnOwnShip(
+        EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.OwnShipSource source)
+    {
+        var feature = source.CurrentFeatures.FirstOrDefault();
+        if (feature?.Coordinates is not { Count: > 0 } coords) return false;
+
+        var (lat, lon) = coords[0];
+        var (x, y) = SphericalMercator.FromLonLat(lon, lat);
+        // Harbour-scale resolution (~web-mercator zoom 13): close enough to
+        // see the own-ship and its surroundings without losing context.
+        const double resolution = 156543.03392804097 / (1 << 13);
+        _mapHost.SetViewportToCenterAndResolution(new MPoint(x, y), resolution);
+        return true;
+    }
+
+    /// <summary>
+    /// Deterministic startup sequence for headless/agent runs: load any
+    /// CLI datasets, wait for rendering to quiesce, then drive the map to
+    /// the requested time step and viewport. Live capture and further
+    /// state changes are driven over MCP once the window is up; the
+    /// process itself is stopped from the OS (there is no MCP shutdown).
+    /// </summary>
+    private async Task RunStartupAutomationAsync(string[] datasetPaths)
+    {
+        var lastEventTicks = new long[1];
+        Action<DatasetEntry> handler =
+            _ => Interlocked.Exchange(ref lastEventTicks[0], Environment.TickCount64);
+        _loader.DatasetLoaded += handler;
+        try
+        {
+            if (datasetPaths.Length > 0)
+            {
+                _viewModel.Layout.SelectDefaultTab();
+                foreach (var datasetPath in datasetPaths)
+                {
+                    // No registered product claims an unrecognised file, so skip
+                    // it rather than guess (the interactive path warns instead).
+                    if (DatasetPipelineFactory.DetectProductSpec(datasetPath) is not { } spec)
+                        continue;
+                    var entry = _viewModel.Datasets.Add(datasetPath, spec);
+                    await _loader.LoadAsync(entry);
+                }
+
+                await WaitForRenderQuiesceAsync(lastEventTicks, expectWork: true);
+            }
+
+            // Drive the global clock; the loader re-renders in response,
+            // so wait for that pass to settle before framing/capturing.
+            if (ApplyStartupTimeStep())
+            {
+                await WaitForRenderQuiesceAsync(lastEventTicks, expectWork: false);
+            }
+        }
+        finally
+        {
+            _loader.DatasetLoaded -= handler;
+        }
+
+        ApplyStartupOwnShip();
+        ApplyStartupViewport();
+
+        // Own-ship-only launch (no datasets to auto-zoom, no explicit CLI
+        // viewport): frame the map on the own-ship we just positioned,
+        // matching the interactive framing path. With datasets or an
+        // explicit viewport, that framing wins instead.
+        if (datasetPaths.Length == 0
+            && _startupOptions?.HasOwnShipOption == true
+            && _startupOptions?.HasExplicitViewport != true)
+        {
+            await FrameOnOwnShipAtStartupAsync();
+        }
+    }
+
+    /// <summary>
+    /// Polls until dataset-load / re-render events stop arriving for a
+    /// short quiet window, or a hard timeout elapses. Mirrors the
+    /// debounce used by the exchange-set zoom path so a single render
+    /// quiesce signal drives both framing and capture.
+    /// </summary>
+    private static async Task WaitForRenderQuiesceAsync(long[] lastEventTicks, bool expectWork)
+    {
+        const int quietWindowMs = 600;
+        const int pollMs = 100;
+        const int maxWaitMs = 30_000;
+
+        var startedAt = Environment.TickCount64;
+        while (true)
+        {
+            await Task.Delay(pollMs);
+
+            var lastEvent = Interlocked.Read(ref lastEventTicks[0]);
+            var now = Environment.TickCount64;
+
+            if (lastEvent == 0)
+            {
+                // No events yet. When we expected work, keep waiting up
+                // to the cap; otherwise (e.g. a time-step that produced
+                // no re-render) return promptly.
+                if (!expectWork || now - startedAt >= maxWaitMs) return;
+                continue;
+            }
+
+            if (now - lastEvent >= quietWindowMs) return;
+            if (now - startedAt >= maxWaitMs) return;
+        }
+    }
+
+    /// <summary>
+    /// Applies the <c>--own-ship-pos</c> / <c>--own-ship-cog</c> /
+    /// <c>--own-ship-sog</c> startup options by driving the own-ship
+    /// helm, if any were supplied. No-op otherwise. Runs after datasets
+    /// load and before framing/capture so an agent can snapshot own-ship
+    /// in a known kinematic state.
+    /// </summary>
+    private void ApplyStartupOwnShip()
+    {
+        if (_startupOptions is not { } options || !options.HasOwnShipOption) return;
+
+        var helm = ResolveOrFallback<EncDotNet.S100.Viewer.Services.DynamicSources.OwnShip.IOwnShipHelm>(
+            static () => null!);
+        if (helm is null) return;
+
+        if (options.ParsedOwnShipPosition is { } pos)
+        {
+            helm.SetState(pos.Latitude, pos.Longitude,
+                options.OwnShipCourse, options.OwnShipSpeed);
+        }
+        else
+        {
+            if (options.OwnShipCourse is { } cog) helm.SetCourse(cog);
+            if (options.OwnShipSpeed is { } sog) helm.SetSpeed(sog);
+        }
+    }
+
+    /// <summary>
+    /// Applies the <c>--center</c>/<c>--zoom</c> or <c>--bbox</c> startup
+    /// viewport, if supplied. No-op otherwise. WGS-84 inputs are
+    /// projected to the map's web-mercator CRS.
+    /// </summary>
+    private void ApplyStartupViewport()
+    {
+        if (_startupOptions is not { } options) return;
+
+        if (options.ParsedBoundingBox is { } bbox)
+        {
+            var (minX, minY) = SphericalMercator.FromLonLat(bbox.West, bbox.South);
+            var (maxX, maxY) = SphericalMercator.FromLonLat(bbox.East, bbox.North);
+            var extent = new MRect(minX, minY, maxX, maxY);
+            if (extent.Width > 0 && extent.Height > 0)
+            {
+                _mapHost.SetViewportToExtent(extent);
+            }
+            return;
+        }
+
+        if (options.ParsedCenter is { } center && options.Zoom is { } zoom)
+        {
+            var (x, y) = SphericalMercator.FromLonLat(center.Longitude, center.Latitude);
+            // Standard web-mercator resolution (metres/pixel) at a given
+            // 256-pixel-tile zoom level: 156543.03392804097 / 2^zoom.
+            var resolution = 156543.03392804097 / Math.Pow(2, zoom);
+            _mapHost.SetViewportToCenterAndResolution(new MPoint(x, y), resolution);
+        }
+    }
+
+    /// <summary>
+    /// Applies the <c>--time-step</c> startup option (a zero-based index
+    /// into the aggregated time samples, or an ISO-8601 UTC timestamp).
+    /// Returns <see langword="true"/> when a time step was applied (and
+    /// thus a re-render was triggered).
+    /// </summary>
+    private bool ApplyStartupTimeStep()
+    {
+        if (_startupOptions?.TimeStep is not { } raw || string.IsNullOrWhiteSpace(raw))
+            return false;
+
+        var globalTime = App.Services.GetService<GlobalTimeService>();
+        if (globalTime is null || !globalTime.IsActive)
+            return false;
+
+        var samples = globalTime.AllSamples;
+        if (samples.Count == 0)
+            return false;
+
+        DateTime target;
+        if (int.TryParse(raw.Trim(), System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var index))
+        {
+            index = Math.Clamp(index, 0, samples.Count - 1);
+            target = samples[index];
+        }
+        else if (DateTime.TryParse(raw.Trim(),
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AdjustToUniversal
+                | System.Globalization.DateTimeStyles.AssumeUniversal,
+                out var parsed))
+        {
+            // Snap to the nearest available sample.
+            target = samples.OrderBy(s => Math.Abs((s - parsed).Ticks)).First();
+        }
+        else
+        {
+            return false;
+        }
+
+        globalTime.SetCurrentTime(target);
+        return true;
+    }
+
+    private void ApplyAccentColor(Color color)
+    {
+        _accentColor = color;
+        AccentColors.Apply(Resources, color, Application.Current?.ActualThemeVariant);
+    }
+
+    /// <summary>
+    /// Updates the map's cursor to reflect the active map tool (Pick Mode
+    /// cross-hair, Measure Mode cross-hair, etc.). Called once at startup
+    /// and again whenever the active tool changes.
+    /// </summary>
+    private void ApplyToolCursor()
+    {
+        MapControl.Cursor = _viewModel.MapTools.Tools.ActiveTool?.Cursor ?? Cursor.Default;
+    }
+
+    /// <summary>
+    /// Registers the available <see cref="IMapTool"/>s with the view-model's
+    /// <see cref="MapToolController"/>, then initialises the controller with
+    /// a context that knows how to add overlay layers, refresh graphics, and
+    /// project pointer positions to lat/lon.
+    /// </summary>
+    private void InitializeMapTools(MapInteractionController interactionController)
+    {
+        var tools = _viewModel.MapTools.Tools;
+
+        var context = new MapToolContext(
+            mapControl: MapControl,
+            addLayer: _mapHost.AddToolLayer,
+            removeLayer: _mapHost.RemoveToolLayer,
+            setStatusSummary: text => Dispatcher.UIThread.Post(() => _viewModel.MapTools.MeasureSummary = text),
+            refreshGraphics: _mapHost.RequestRedraw,
+            screenToLatLon: ScreenToLatLon,
+            latLonToScreen: LatLonToScreen);
+
+        // Tools (pick, measure) were registered by the view-model in its
+        // constructor; here we just hand them an Avalonia-aware context.
+        tools.Initialize(context);
+
+        // Hand the same controller to the interaction controller so pointer
+        // events are offered to the active tool first.
+        interactionController.SetToolController(tools);
+
+        // The route overlay is persistent (unlike the measure overlay, which
+        // only exists while its tool is active): routes stay visible whether
+        // or not the editor tool is engaged. The host owns the layer and
+        // rebuilds it whenever the route store or theme/accent changes.
+        InitializeRouteOverlay();
+
+        // Tool selection is intentionally not persisted across launches —
+        // entering Pick or Measure mode must be an explicit user action.
+    }
+
+    /// <summary>
+    /// Creates the persistent route overlay layer, adds it to the map, and
+    /// subscribes to the route store and appearance provider so the overlay
+    /// reflects the current routes and theme at all times.
+    /// </summary>
+    private void InitializeRouteOverlay()
+    {
+        _routeStore = _viewModel.RoutesService;
+        _routeAppearance = App.Services.GetRequiredService<
+            EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>();
+
+        _routeOverlayLayer = EncDotNet.S100.Viewer.Tools.RouteOverlayLayer.Create();
+        _mapHost.AddToolLayer(_routeOverlayLayer);
+
+        _routeStore.Changed += OnRouteStoreChanged;
+        _routeStore.EditModeChanged += OnRouteStoreChanged;
+        _routeStore.CheckModeChanged += OnRouteStoreChanged;
+        _routeAppearance.Changed += OnRouteStoreChanged;
+
+        // Check passage (#901): the route is coloured by UKC state while the
+        // mode is on, and redrawn whenever a result (or the cursor) changes.
+        _passageCheck = App.Services.GetService<EncDotNet.S100.Viewer.Services.PassageCheck.PassageCheckService>();
+        _routeMariner = App.Services.GetService<IMarinerSettingsProvider>();
+        _routeTimeFormat = App.Services.GetService<ITimeFormatProvider>();
+        if (_passageCheck is not null)
+        {
+            _passageCheck.Changed += OnRouteStoreChanged;
+
+            // #902: hovering the checked route moves the Clearance cursor (and the ghost).
+            MapControl.AddHandler(PointerMovedEvent, OnMapPointerMovedForCheck, RoutingStrategies.Tunnel, handledEventsToo: true);
+        }
+
+        // #905: the selected finding is outlined on the map with its chip.
+        _routeFindings = App.Services.GetService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteFindingsService>();
+        if (_routeFindings is not null)
+            _routeFindings.Changed += OnRouteStoreChanged;
+
+        // #959 C8: the map legend, a control at the map's bottom left. The
+        // finding chip (drawn by the overlay) sits above it, so the overlay
+        // learns its height.
+        _routeCheckLegend = new EncDotNet.S100.Viewer.ViewModels.RouteCheckLegendViewModel(
+            _routeStore,
+            _passageCheck,
+            _routeAppearance,
+            App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState>());
+        RouteCheckLegend.DataContext = _routeCheckLegend;
+        // #1374: the AML CLB chip ("not used for depth checks").
+        AmlClbChip.DataContext = App.Services.GetRequiredService<AmlDisplaySectionViewModel>();
+        // Clear of the Time HUD when it's shown, else close to the map's edge.
+        void PlaceLegend() => RouteCheckLegend.Margin = new Thickness(
+            12, 0, 0, _viewModel.Layout.IsTimeHudVisible ? EncDotNet.S100.Viewer.Tools.RouteOverlayRenderer.LegendBottomMargin : 12);
+        PlaceLegend();
+        _viewModel.Layout.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ShellLayoutViewModel.IsTimeHudVisible))
+                PlaceLegend();
+        };
+        RouteCheckLegend.LayoutUpdated += (_, _) =>
+        {
+            // From the map's bottom edge to the legend's top.
+            var reserve = RouteCheckLegend.IsEffectivelyVisible && _routeCheckLegend.IsVisible && RouteCheckLegend.Bounds.Height > 0
+                ? (float)(MapArea.Bounds.Height - RouteCheckLegend.Bounds.Y)
+                : 0f;
+            if (Math.Abs(reserve - _routeCheckLegendReserve) > 0.5f)
+            {
+                _routeCheckLegendReserve = reserve;
+                RebuildRouteOverlay();
+            }
+        };
+
+        // #959 C6: clicking a finding's marker selects it; clicking a cluster zooms in.
+        MapControl.AddHandler(PointerPressedEvent, OnMapPointerPressedForCheck, RoutingStrategies.Tunnel);
+
+        RebuildRouteOverlay();
+    }
+
+    private void OnMapPointerPressedForCheck(object? sender, PointerPressedEventArgs e)
+    {
+        if (_routeOverlayLayer is null || _routeFindings is null
+            || !e.GetCurrentPoint(MapControl).Properties.IsLeftButtonPressed
+            || EncDotNet.S100.Viewer.Tools.RouteOverlayLayer.SceneOf(_routeOverlayLayer).Check is not { } check)
+            return;
+
+        var placement = EncDotNet.S100.Viewer.Tools.RouteCheckMapLayout.Place(check.Map, LatLonToScreen);
+        if (EncDotNet.S100.Viewer.Tools.RouteCheckMapLayout.HitTest(placement, e.GetPosition(MapControl)) is not { } hit)
+            return;
+
+        e.Handled = true;
+        if (hit.Marker is { } marker)
+        {
+            if (_routeFindings.Findings.FirstOrDefault(f => f.Id == marker.Mark.FindingId) is { } finding)
+                _routeFindings.Select(finding, zoom: false);
+        }
+        else if (hit.Cluster is { } cluster && MapControl.Map?.Navigator is { } navigator)
+        {
+            // Two zoom steps on the cluster: its markers are within 24 px, so
+            // at four times the scale they stand apart.
+            var world = navigator.Viewport.ScreenToWorld(cluster.Center.X, cluster.Center.Y + EncDotNet.S100.Viewer.Tools.RouteCheckMapLayout.StemLength);
+            _mapHost.AnimateToCenterAndResolution(world, navigator.Viewport.Resolution / 4, 250);
+        }
+    }
+
+    /// <summary>Within this many pixels of the checked route, the pointer moves the profile cursor.</summary>
+    private const double CheckHoverRadiusPx = 12;
+
+    private void OnMapPointerMovedForCheck(object? sender, PointerEventArgs e)
+    {
+        if (_passageCheck is not { IsActive: true, Current: { } current })
+            return;
+
+        var pointer = e.GetPosition(MapControl);
+        double? nearest = null;
+        var best = CheckHoverRadiusPx * CheckHoverRadiusPx;
+        foreach (var sample in current.Result.Samples)
+        {
+            if (LatLonToScreen(sample.Position) is not { } p)
+                continue;
+            var dx = p.X - pointer.X;
+            var dy = p.Y - pointer.Y;
+            var d2 = (dx * dx) + (dy * dy);
+            if (d2 < best)
+            {
+                best = d2;
+                nearest = sample.DistanceMeters;
+            }
+        }
+
+        if (nearest is { } distance)
+            _passageCheck.SetCursor(distance);
+    }
+
+    private void OnRouteStoreChanged(object? sender, EventArgs e) =>
+        Dispatcher.UIThread.Post(RebuildRouteOverlay);
+
+    /// <summary>
+    /// Rebuilds the persistent route overlay from the current
+    /// <see cref="EncDotNet.S100.Viewer.Services.RoutesService"/> state and
+    /// schedules a redraw.
+    /// </summary>
+    private void RebuildRouteOverlay()
+    {
+        if (_routeOverlayLayer is null || _routeStore is null || _routeAppearance is null)
+            return;
+
+        EncDotNet.S100.Viewer.Tools.RouteOverlayLayer.Update(
+            _routeOverlayLayer,
+            _routeStore.Routes,
+            _routeStore.SelectedWaypointIndex,
+            _routeStore.SelectedLegIndex,
+            _routeStore.IsEditModeActive,
+            _routeAppearance.Current,
+            EncDotNet.S100.Viewer.Tools.RouteCheckOverlay.Build(
+                _routeStore.IsCheckModeActive && _passageCheck is not null,
+                _passageCheck?.Current,
+                _passageCheck?.IsStale ?? false,
+                _passageCheck?.Cursor,
+                _routeAppearance.Current,
+                _routeMariner?.Current.DepthUnit ?? EncDotNet.S100.Pipelines.DepthUnit.Metres,
+                _routeTimeFormat?.Current ?? TimeFormat.Local,
+                _routeFindings?.Selected,
+                _routeFindings?.Findings,
+                hasDraft: _passageCheck?.Input is not { HasDraft: false },
+                route: _routeStore.Routes.ActiveRoute,
+                viewTime: _routeStore.ViewTime.Current) is { } check
+                ? check with { LegendReserve = _routeCheckLegendReserve }
+                : null,
+            // Native-mode received routes are drawn by their dataset (#960).
+            route => EncDotNet.S100.Viewer.Services.ReceivedRoutesService.DrawsWithRouteRenderer(_routeStore, route));
+        _mapHost.RequestRedraw();
+    }
+
+    /// <summary>
+    /// Converts a pointer position (in <see cref="MapControl"/> client
+    /// coordinates) to a WGS-84 lat/lon, or <c>null</c> when the pointer
+    /// projects to an invalid Mercator location. Mirrors the projection
+    /// math used by the mouse lat/lon readout in
+    /// <see cref="MapInteractionController"/>.
+    /// </summary>
+    private GeoPosition? ScreenToLatLon(Point screen)
+    {
+        if (MapControl.Map?.Navigator is not { } navigator)
+            return null;
+
+        var world = navigator.Viewport.ScreenToWorld(screen.X, screen.Y);
+        var (lon, lat) = SphericalMercator.ToLonLat(world.X, world.Y);
+        if (double.IsNaN(lat) || double.IsNaN(lon) ||
+            double.IsInfinity(lat) || double.IsInfinity(lon) ||
+            lat < -90.0 || lat > 90.0)
+        {
+            return null;
+        }
+
+        // Normalize longitude into the canonical (-180, 180] range so paths
+        // that cross the antimeridian render with consistent endpoints.
+        lon = ((lon + 540.0) % 360.0) - 180.0;
+        return new GeoPosition(lat, lon);
+    }
+
+    /// <summary>
+    /// Converts a WGS-84 lat/lon to a pointer position in
+    /// <see cref="MapControl"/> client coordinates, or <c>null</c> when no
+    /// viewport is available. Inverse of <see cref="ScreenToLatLon"/>; used
+    /// by editing tools to hit-test pointer gestures against world-space
+    /// features.
+    /// </summary>
+    private Point? LatLonToScreen(GeoPosition world)
+    {
+        if (MapControl.Map?.Navigator is not { } navigator)
+            return null;
+
+        var (x, y) = SphericalMercator.FromLonLat(world.Longitude, world.Latitude);
+        var screen = navigator.Viewport.WorldToScreen(x, y);
+        if (double.IsNaN(screen.X) || double.IsNaN(screen.Y) ||
+            double.IsInfinity(screen.X) || double.IsInfinity(screen.Y))
+        {
+            return null;
+        }
+
+        return new Point(screen.X, screen.Y);
+    }
+
+    private async Task OpenDatasetAsync()
+    {
+        var paths = await _fileDialog.OpenDatasetsAsync(this, allowMultiple: true);
+        if (paths.Count == 0)
+            return;
+
+        _viewModel.Layout.SelectDefaultTab();
+
+        foreach (var path in paths)
+        {
+            if (!File.Exists(path))
+                continue;
+
+            await _viewModel.Datasets.LoadFromPathAsync(path);
+        }
+    }
+
+    private async Task OpenExchangeSetAsync()
+    {
+        var folder = await _fileDialog.OpenExchangeSetFolderAsync(this);
+        if (folder is null)
+            return;
+
+        await RunExchangeSetAsync(folder);
+    }
+
+    private async Task OpenExchangeSetZipAsync()
+    {
+        var zip = await _fileDialog.OpenExchangeSetZipAsync(this);
+        if (zip is null)
+            return;
+
+        await RunExchangeSetAsync(zip);
+    }
+
+    private async Task RunExchangeSetAsync(string sourcePath)
+    {
+        _viewModel.Layout.SelectDefaultTab();
+
+        var token = _viewModel.DatasetOpening.BeginExchangeSetLoad(sourcePath);
+
+        // One progress notification drives the whole open: indeterminate
+        // until the catalogue is parsed, then determinate as datasets are
+        // dispatched. A Cancel action mirrors the overlay. Failure /
+        // cancellation terminal states are driven in place by the exchange-set
+        // service; the success / partial terminal is deferred and driven here
+        // (see DriveExchangeSetTerminalAsync) once the cells are visible.
+        var notification = App.Services.GetRequiredService<INotificationService>()
+            .Create(Strings.Toast_ExchangeSetLoading)
+            .WithSeverity(NotificationSeverity.Info)
+            .WithContent(Services.Notifications.NotificationFormat.ShortenPath(sourcePath))
+            .AsProgress(indeterminate: true)
+            .Persistent()
+            .WithAction(
+                Strings.Toast_Cancel,
+                () => _viewModel.DatasetOpening.CancelExchangeSetCommand.Execute(null),
+                dismissOnInvoke: false)
+            .Show();
+
+        var progress = new Progress<Services.ExchangeSetProgress>(p =>
+        {
+            // Stay indeterminate until at least one cell has actually finished
+            // loading. The exchange-set service reports Completed based on real
+            // load completions (not dispatch), so a single-cell set animates as
+            // indeterminate for its whole load, and multi-cell sets fill as each
+            // cell lands — never racing to 100% during the instant dispatch.
+            if (!notification.IsDismissed && p.Total > 0 && p.Completed > 0)
+            {
+                notification.Report((double)p.Completed / p.Total);
+            }
+        });
+
+        // Subscribe to per-dataset load completions for the duration of
+        // this open. We accumulate each loaded entry's layer extents so
+        // we can zoom to their union — the catalogue may not declare
+        // per-dataset bounding boxes (S-101 producer dumps often skip
+        // them) and Map.Extent alone could include unrelated layers.
+        var loadedEntries = new HashSet<DatasetEntry>();
+        var unionSlot = new MRect?[1];
+        var lastEventTicks = new long[1];
+        Action<DatasetEntry> handler = entry =>
+        {
+            // Only count entries from any exchange set — we filter to
+            // this specific open below by checking the entry's Source.
+            if (!entry.IsFromExchangeSet) return;
+            if (!loadedEntries.Add(entry)) return;
+            if (_loader.EntryLayers.TryGetValue(entry, out var layers))
+            {
+                foreach (var layer in layers)
+                {
+                    if (layer.Extent is { } e && e.Width > 0 && e.Height > 0)
+                    {
+                        unionSlot[0] = unionSlot[0] is null
+                            ? new MRect(e.MinX, e.MinY, e.MaxX, e.MaxY)
+                            : unionSlot[0]!.Join(e);
+                    }
+                }
+            }
+            Interlocked.Exchange(ref lastEventTicks[0], Environment.TickCount64);
+        };
+        _loader.DatasetLoaded += handler;
+
+        try
+        {
+            // Frame the viewport as soon as the service knows the catalogue's
+            // union bounding box — before any dataset finishes loading — so
+            // incremental per-dataset paints appear in the correctly-framed
+            // view instead of off-screen (issue #448). The service resumes on
+            // this UI thread (ConfigureAwait(true)) before invoking the
+            // callback, so we frame inline here; a Dispatcher.UIThread.Invoke
+            // fallback covers any off-thread invocation. A flag lets us skip
+            // the redundant end-of-load reframe below.
+            var framedEarly = false;
+            void FrameEarly(EncDotNet.S100.ExchangeSets.BoundingBox bbox)
+            {
+                ZoomToCatalogueBoundingBox(bbox);
+                framedEarly = true;
+            }
+
+            Action<EncDotNet.S100.ExchangeSets.BoundingBox> onFramingReady = bbox =>
+            {
+                if (Dispatcher.UIThread.CheckAccess())
+                {
+                    FrameEarly(bbox);
+                }
+                else
+                {
+                    Dispatcher.UIThread.Invoke(() => FrameEarly(bbox));
+                }
+            };
+
+            var result = await _exchangeSetService.OpenAsync(
+                sourcePath, progress, token, notification, onFramingReady);
+            _viewModel.DatasetOpening.EndExchangeSetLoad(result);
+
+            // Remember a successfully opened exchange set in Open Recent
+            // (issue #655). A dropped CATALOG.031 is recorded as its folder.
+            if (!result.Cancelled && !result.CatalogueNotFound && result.FailureMessage is null && result.Loaded > 0)
+                _recentFiles.Add(RecentExchangeSetPath(sourcePath));
+
+            // Frame the loaded cells. If early framing already ran, skip the
+            // reframe: the early and final union bounding boxes are computed
+            // from the same immutable catalogue metadata, so they are identical
+            // and a second zoom would only be a jarring no-op. Otherwise prefer
+            // the catalogue's union bbox when available; failing that, debounce
+            // on DatasetLoaded events (zoom once no new event has arrived for
+            // QuietWindowMs), which naturally handles per-dataset load failures
+            // (which never raise the event) without waiting a fixed timeout.
+            if (framedEarly)
+            {
+                // Already framed up front — nothing to do.
+            }
+            else if (result.UnionBoundingBox is { } bbox)
+            {
+                ZoomToCatalogueBoundingBox(bbox);
+            }
+            else
+            {
+                await ZoomWhenLoadingQuietsAsync(loadedEntries, unionSlot, lastEventTicks);
+            }
+
+            // The cells are loaded and framed; hold the progress notification
+            // until the map has actually painted them, then drive it to its
+            // terminal "loaded" state. This keeps the success notification from
+            // ever preceding the charts becoming visible. Failure / cancelled
+            // outcomes were driven immediately inside OpenAsync and leave
+            // PendingTerminal null, so this is a no-op for them.
+            await DriveExchangeSetTerminalAsync(notification, result, token);
+        }
+        catch (Exception ex)
+        {
+            _viewModel.DatasetOpening.EndExchangeSetLoad(new Services.ExchangeSetOpenResult
+            {
+                SourcePath = sourcePath,
+                FailureMessage = ex.Message,
+            });
+
+            // OpenAsync handles its own failures and drives the
+            // notification's terminal state; this is a safety net for
+            // anything thrown afterwards (e.g. the post-load zoom).
+            if (!notification.IsDismissed)
+            {
+                notification.ClearProgress();
+                notification.SetActions();
+                notification.Update(
+                    title: Strings.Toast_ExchangeSetFailed,
+                    message: ex.Message,
+                    severity: NotificationSeverity.Error);
+                notification.ScheduleAutoDismiss(
+                    NotificationService.DefaultDelayFor(NotificationSeverity.Error));
+            }
+        }
+        finally
+        {
+            _loader.DatasetLoaded -= handler;
+        }
+    }
+
+    /// <summary>
+    /// Drives the shared exchange-set progress notification to its deferred
+    /// terminal state (<see cref="Services.ExchangeSetOpenResult.PendingTerminal"/>)
+    /// once the loaded cells have been framed and the map has painted them,
+    /// so the "loaded" notification never precedes the charts becoming
+    /// visible. A no-op when the outcome has no pending terminal (failure /
+    /// cancellation, already driven inside <c>OpenAsync</c>) or the
+    /// notification was dismissed by the user. The render-idle wait is bounded
+    /// by a timeout so a slow basemap never blocks the notification.
+    /// </summary>
+    private async Task DriveExchangeSetTerminalAsync(
+        Services.Notifications.INotificationHandle notification,
+        Services.ExchangeSetOpenResult result,
+        CancellationToken token)
+    {
+        if (result.PendingTerminal is not { } pending || notification.IsDismissed)
+            return;
+
+        if (_renderActivityMonitor is not null)
+        {
+            try
+            {
+                await _renderActivityMonitor
+                    .WaitForIdleAsync(
+                        TimeSpan.FromMilliseconds(200),
+                        TimeSpan.FromSeconds(8),
+                        token)
+                    .ConfigureAwait(true);
+            }
+            catch (OperationCanceledException)
+            {
+                // Still settle the notification below — the cells are loaded.
+            }
+        }
+
+        if (notification.IsDismissed)
+            return;
+
+        notification.ClearProgress();
+        notification.SetActions();
+        notification.Update(
+            title: pending.Title, message: pending.Message, severity: pending.Severity);
+        notification.ScheduleAutoDismiss(
+            NotificationService.DefaultDelayFor(pending.Severity));
+    }
+
+    private void ZoomToCatalogueBoundingBox(EncDotNet.S100.ExchangeSets.BoundingBox bbox)
+    {
+        // EPSG:4326 lat/lon → web mercator. SphericalMercator clamps
+        // the input range, so polar catalogues degrade gracefully.
+        var (minX, minY) = SphericalMercator.FromLonLat(
+            bbox.WestBoundLongitude, bbox.SouthBoundLatitude);
+        var (maxX, maxY) = SphericalMercator.FromLonLat(
+            bbox.EastBoundLongitude, bbox.NorthBoundLatitude);
+        var extent = new MRect(minX, minY, maxX, maxY);
+        if (extent.Width > 0 && extent.Height > 0)
+        {
+            _mapHost.ZoomToExtent(extent, durationMilliseconds: 250);
+        }
+    }
+
+    private async Task ZoomWhenLoadingQuietsAsync(
+        HashSet<DatasetEntry> loadedEntries,
+        MRect?[] unionSlot,
+        long[] lastEventTicks)
+    {
+        // Quiet-window debounce: the per-dataset loaders complete on
+        // their own background tasks and may fail silently (caught and
+        // logged inside DatasetLoaderService), so we can't simply
+        // await an exact count. Instead we wait until DatasetLoaded
+        // events stop arriving for a short window — at that point
+        // every dispatched dataset has either completed or errored,
+        // and the accumulated union extent is final.
+        const int quietWindowMs = 600;
+        const int pollMs = 100;
+        const int maxWaitMs = 30_000;
+
+        var startedAt = Environment.TickCount64;
+        while (true)
+        {
+            await Task.Delay(pollMs);
+
+            var lastEvent = Interlocked.Read(ref lastEventTicks[0]);
+            var now = Environment.TickCount64;
+
+            // No events yet — keep waiting up to maxWaitMs from start.
+            if (lastEvent == 0)
+            {
+                if (now - startedAt >= maxWaitMs) return;
+                continue;
+            }
+
+            // We've seen at least one event; trigger as soon as the
+            // bus is quiet for quietWindowMs.
+            if (now - lastEvent >= quietWindowMs)
+                break;
+
+            if (now - startedAt >= maxWaitMs)
+                break;
+        }
+
+        var extent = unionSlot[0] ?? MapControl.Map.Extent;
+        if (extent is null || extent.Width <= 0 || extent.Height <= 0) return;
+
+        _mapHost.ZoomToExtent(extent, durationMilliseconds: 250);
+    }
+
+    private async void OnDrop(object? sender, DragEventArgs e)
+    {
+        if (e.DataTransfer.TryGetFiles() is not { } files)
+            return;
+
+        _viewModel.Layout.SelectDefaultTab();
+
+        foreach (var item in files)
+        {
+            var path = item.TryGetLocalPath();
+            if (path is null)
+                continue;
+
+            // Folder drop: treat as an exchange set when CATALOG.XML
+            // (S-100) or CATALOG.031 (S-57) is at the root, or a
+            // catalogue-less folder of loose ENC cells (a base ….000 plus
+            // its updates), and open it — offering to add it to the library.
+            // Any other folder (e.g. a tree of many exchange sets) is too
+            // broad to open; offer to add it to the library instead
+            // (issue #655).
+            if (Directory.Exists(path))
+            {
+                if (ExchangeSetDetection.LooksLikeExchangeSetFolder(path)
+                    || ExchangeSetDetection.LooksLikeS57ExchangeSetFolder(path)
+                    || ExchangeSetDetection.LooksLikeLooseCellFolder(path))
+                {
+                    await RunExchangeSetAsync(path);
+                    OfferAddToLibrary(path);
+                }
+                else
+                {
+                    await _libraryImporter.AddPathAsync(path, targetCollectionId: null);
+                }
+                continue;
+            }
+
+            if (!File.Exists(path))
+                continue;
+
+            // A collection manifest (named *.s100collection.json, or JSON whose
+            // format says so) is added to the library, not opened as a dataset.
+            if (EncDotNet.S100.Collections.Manifests.CollectionManifest.IsManifestPath(path))
+            {
+                await _libraryImporter.AddPathAsync(path, targetCollectionId: null);
+                continue;
+            }
+
+            // File drop: a .zip with a root-level CATALOG.XML is an
+            // exchange-set ZIP, and a dropped CATALOG.031 is an S-57
+            // exchange set; everything else falls through to the
+            // single-dataset loader.
+            if (ExchangeSetDetection.IsZipPath(path) &&
+                ExchangeSetDetection.LooksLikeExchangeSetZip(path))
+            {
+                await RunExchangeSetAsync(path);
+                OfferAddToLibrary(path);
+                continue;
+            }
+
+            if (ExchangeSetDetection.IsS57CataloguePath(path))
+            {
+                await RunExchangeSetAsync(path);
+                OfferAddToLibrary(Path.GetDirectoryName(path)!);
+                continue;
+            }
+
+            await _viewModel.Datasets.LoadFromPathAsync(path);
+        }
+    }
+
+    /// <summary>
+    /// After opening a dropped exchange set, offers (via a notification
+    /// action) to add it to the library so it can be found again without
+    /// opening it — unless the library already covers it.
+    /// </summary>
+    private void OfferAddToLibrary(string path)
+    {
+        if (_libraryImporter.IsInLibrary(path))
+            return;
+
+        App.Services.GetRequiredService<INotificationService>()
+            .Create(Strings.Toast_AddToLibraryAction)
+            .WithSeverity(NotificationSeverity.Info)
+            .WithContent(Strings.Toast_AddedToLibraryPrompt)
+            .WithAction(Strings.Toast_AddToLibraryAction,
+                () => _ = _libraryImporter.AddPathAsync(path, targetCollectionId: null),
+                isPrimary: true)
+            .AutoDismiss(TimeSpan.FromSeconds(12))
+            .Show();
+    }
+
+    /// <summary>
+    /// The path Open Recent records for an opened exchange set: the full path,
+    /// without a trailing separator, and a <c>CATALOG.031</c> as its folder.
+    /// </summary>
+    internal static string RecentExchangeSetPath(string sourcePath)
+    {
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(sourcePath));
+        return ExchangeSetDetection.IsS57CataloguePath(full) ? Path.GetDirectoryName(full)! : full;
+    }
+
+    private void OnTimelineKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Handled || !IsTimelineKeyScope(FocusManager?.GetFocusedElement() as Visual))
+            return;
+        if (e.Key == Key.T && e.KeyModifiers == KeyModifiers.None)
+        {
+            _viewModel.Layout.ToggleTimelineCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+        if (_viewModel.Timeline.HandleKey(e.Key, e.KeyModifiers))
+            e.Handled = true;
+    }
+
+    /// <summary>
+    /// True when the Timeline's keys apply: focus is on nothing, the map or
+    /// the Timeline, and not in a text box (lists and trees keep their keys).
+    /// </summary>
+    private bool IsTimelineKeyScope(Visual? focused)
+    {
+        if (focused is null || ReferenceEquals(focused, this))
+            return true;
+        for (var visual = focused; visual is not null; visual = visual.GetVisualParent())
+        {
+            if (visual is Avalonia.Controls.TextBox)
+                return false;
+            if (visual is Views.TimelineView or Views.TimeHudView || ReferenceEquals(visual, MapControl))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Feeds the status bar's depth basis pill from <see cref="EncDotNet.S100.Viewer.Services.Depth.DepthBasisService"/>
+    /// and keeps it to a whole form that fits the status bar (#1191).
+    /// </summary>
+    private void InitializeDepthBasis()
+    {
+        if (App.Services.GetService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>() is not { } depthBasis)
+            return;
+
+        var timeFormat = App.Services.GetService<ITimeFormatProvider>();
+        void Push() => _viewModel.StatusBar.UpdateDepthBasis(
+            depthBasis.Current, depthBasis.WaterLevelLoaded, timeFormat?.Current ?? TimeFormat.Utc);
+        depthBasis.Changed += (_, _) => Push();
+        if (timeFormat is not null)
+            timeFormat.TimeFormatChanged += _ => Dispatcher.UIThread.Post(Push);
+
+        // The pill draws the longest whole form that fits: the room is the
+        // status bar's width less every other item in the right-hand cluster.
+        void FitDepthBasis()
+        {
+            if (StatusBarDock is not { } dock || StatusRightCluster is not { } cluster || DepthBasisIndicator is not { } pill)
+                return;
+            var room = dock.Bounds.Width - (cluster.DesiredSize.Width - pill.DesiredSize.Width);
+            pill.Fit(room);
+        }
+        StatusBarDock.SizeChanged += (_, _) => FitDepthBasis();
+        // The MARKING pill keeps its marking whole and drops its label when
+        // the status bar is short of room (#1371, decision 10).
+        StatusBarDock.SizeChanged += (_, _) =>
+            _viewModel.StatusBar.AmlMarking.ShowsLabel = StatusBarDock.Bounds.Width >= AmlMarkingLabelMinWidth;
+        StatusRightCluster.SizeChanged += (_, _) => FitDepthBasis();
+        _viewModel.StatusBar.DepthBasis.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DepthBasisIndicatorViewModel.FormTexts))
+                Dispatcher.UIThread.Post(FitDepthBasis, DispatcherPriority.Render);
+        };
+
+        depthBasis.Invalidate();
+    }
+}

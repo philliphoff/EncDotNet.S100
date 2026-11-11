@@ -1,0 +1,50 @@
+{
+    "informationSummaryObject": [
+        {
+            "dataReference": "00000000-0000-0000-0000-000000186044",
+            "dataProtection": false,
+            "dataCompression": false,
+            "containerType": 0,
+            "dataProductType": "S124",
+            "info_identifier": "NW-P-1368-26",
+            "info_name": "Marine Works",
+            "info_status": "PUBLISHED",
+            "info_description": "Installation of log booming grounds in Boughey Bay in the vicinity of 50 32.170N 126 10.862W.\u00a0\nHours of operation 1200 UTC to 0500 UTC daily from Oct 07 to April 01.",
+            "info_lastModifiedDate": "2026-10-06T22:35:31Z",
+            "info_productVersion": "2.0.0",
+            "info_size": 5065
+        },
+        {
+            "dataReference": "00000000-0000-0000-0000-000000186043",
+            "dataProtection": false,
+            "dataCompression": false,
+            "containerType": 0,
+            "dataProductType": "S124",
+            "info_identifier": "NW-C-4241-26",
+            "info_name": "Drifting Hazard",
+            "info_status": "PUBLISHED",
+            "info_description": "Partially submerged flat yellow object 20 metres by 1 metre reported adrift in the vicinity of 44 32.5N 080 24.1W at 062125 UTC Oct 2026.",
+            "info_lastModifiedDate": "2026-10-06T21:58:13Z",
+            "info_productVersion": "2.0.0",
+            "info_size": 5378
+        },
+        {
+            "dataReference": "00000000-0000-0000-0000-000000186042",
+            "dataProtection": false,
+            "dataCompression": false,
+            "containerType": 0,
+            "dataProductType": "S124",
+            "info_identifier": "NW-C-4240-26",
+            "info_name": "Seasonal Buoy Program",
+            "info_status": "PUBLISHED",
+            "info_description": "The seasonal decommissioning of Canadian Coast Guard navigational buoys is underway in: Playgreen LakeLake Winnipeg - North Basin Lake Winnipeg - South Basin Winnipeg RiverRed River",
+            "info_lastModifiedDate": "2026-10-06T21:40:58Z",
+            "info_productVersion": "2.0.0",
+            "info_size": 12439
+        }
+    ],
+    "pagination": {
+        "totalItems": 1735,
+        "maxItemsPerPage": 3
+    }
+}

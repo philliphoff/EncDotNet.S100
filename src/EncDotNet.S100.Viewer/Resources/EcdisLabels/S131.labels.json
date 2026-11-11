@@ -1,0 +1,90 @@
+{
+  "$schema": "./labels.schema.json",
+  "specCode": "S-131",
+  "_comment": "Curated viewer labels for S-131 viewing groups. The PC is largely cloned from S-101 (with harbour-specific additions) and shares the same authorial inconsistencies. Where IDs match S-101, the labels here mirror S101.labels.json. Group-header rows (e.g. 11000, 12000) become section-style labels.",
+  "groups": {
+    "11000": { "label": "Chart-display information (section)" },
+    "11010": { "label": "Cursor" },
+    "11030": { "label": "Scale bar and latitude scale" },
+    "11040": { "label": "North arrow" },
+    "11050": { "label": "No data, unsurveyed, and incompletely surveyed areas" },
+    "11060": { "label": "Non-HO data boundary" },
+
+    "12000": { "label": "Topography and infrastructure (section)" },
+    "12010": { "label": "Land area" },
+    "12210": { "label": "Bridges, pylons, overhead cables, conveyors, pipelines, and offshore platforms" },
+    "12400": { "label": "Shoreline" },
+    "12410": { "label": "Coastline, glaciers, shoreline construction, dolphins, and floating structures" },
+    "12420": { "label": "Docks, locks, canals, and rivers" },
+
+    "14000": { "label": "Subsea features (section)" },
+    "14010": { "label": "Isolated underwater dangers in deep water" },
+
+    "21000": { "label": "Chart-display information — standard (section)" },
+    "21010": { "label": "Unknown object" },
+    "21020": { "label": "Generic objects" },
+    "21030": { "label": "Chart scale boundary and overscale data" },
+    "21060": { "label": "Geographic name placeholders" },
+
+    "22000": { "label": "Major coastal features (section)" },
+    "22010": { "label": "Lakes, sloping ground, dykes, causeways, and dams" },
+    "22200": { "label": "Conspicuous landmarks" },
+    "22240": { "label": "Built-up areas" },
+
+    "23000": { "label": "Depths (section)" },
+
+    "24010": { "label": "Mooring cables, seabed tunnels, and sandwaves" },
+
+    "25001": { "label": "Collision regulations limit" },
+    "25030": { "label": "Ferry routes" },
+
+    "26040": { "label": "Submarine transit lanes, military practice, seaplane, and offshore production areas" },
+    "26050": { "label": "Fairways" },
+    "26150": { "label": "Caution areas" },
+    "26200": { "label": "Information and protected areas" },
+    "26210": { "label": "Information and protected areas (variant)" },
+    "26220": { "label": "Anchorage areas and anchor berths" },
+    "26240": { "label": "Dumping grounds" },
+    "26250": { "label": "Cargo transhipment and incineration areas" },
+
+    "27060": { "label": "Gridirons" },
+
+    "28000": { "label": "Services (section)" },
+    "28010": { "label": "Pilot boarding points" },
+    "28020": { "label": "Signal stations — traffic and warning" },
+
+    "31000": { "label": "Chart-display information — other (section)" },
+    "31010": { "label": "Data accuracy, survey reliability, and quality" },
+    "31011": { "label": "Low-accuracy data marker" },
+    "31020": { "label": "Information areas and nautical publications" },
+    "31030": { "label": "Additional information" },
+    "31031": { "label": "Additional documents" },
+    "31032": { "label": "Date-dependent objects" },
+    "31040": { "label": "Data coverage" },
+
+    "32000": { "label": "Natural features (section)" },
+    "32200": { "label": "Shore structures (section)" },
+    "32220": { "label": "Landmarks, buildings, tanks, walls, and forts (non-conspicuous)" },
+    "32240": { "label": "Airports and runways" },
+    "32250": { "label": "Landmarks, buildings, tanks, walls, and forts (non-conspicuous, variant)" },
+    "32270": { "label": "Industrial production areas — quarries, refineries, power stations, wind farms" },
+    "32400": { "label": "Port features (section)" },
+    "32410": { "label": "Harbour facilities and customs check points" },
+    "32440": { "label": "Berth numbers, mooring facilities, gates, dry docks, and cranes" },
+
+    "36000": { "label": "Administrative areas (section)" },
+    "36020": { "label": "Harbour areas, free ports, and customs zones" },
+
+    "38000": { "label": "Services — other (section)" },
+    "38200": { "label": "Small craft facilities (section)" },
+    "38210": { "label": "Small craft facilities" },
+
+    "11": { "label": "Text — important navigation information" },
+    "21": { "label": "Text — buoy and beacon names or numbers" },
+    "24": { "label": "Text — supplementary information" },
+    "26": { "label": "Text — geographic names" },
+    "27": { "label": "Text — magnetic variation and swept depth" },
+    "28": { "label": "Text — height of land features" },
+    "29": { "label": "Text — berth numbers" }
+  }
+}

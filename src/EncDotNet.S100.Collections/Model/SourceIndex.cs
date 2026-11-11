@@ -1,0 +1,85 @@
+namespace EncDotNet.S100.Collections;
+
+/// <summary>
+/// The result of indexing one <see cref="CollectionSource"/>: its items plus
+/// the fingerprint that decides whether a later refresh can reuse it.
+/// </summary>
+/// <remarks>
+/// An index is derived data: hosts cache it separately from the collection
+/// definitions and can always rebuild it by re-indexing the source.
+/// </remarks>
+/// <param name="SourceId">The indexed source's <see cref="CollectionSource.Id"/>.</param>
+/// <param name="IndexedAt">When indexing completed.</param>
+/// <param name="Fingerprint">
+/// An opaque token describing the source's state when indexed, or
+/// <see langword="null"/> when the source cannot be fingerprinted (the index is
+/// then always rebuilt on refresh).
+/// </param>
+/// <param name="Items">The indexed items.</param>
+/// <param name="Diagnostics">Problems met while indexing; none are fatal.</param>
+public sealed record SourceIndex(
+    Guid SourceId,
+    DateTimeOffset IndexedAt,
+    string? Fingerprint,
+    IReadOnlyList<CollectionItem> Items,
+    IReadOnlyList<IndexDiagnostic> Diagnostics)
+{
+    /// <summary>
+    /// The groups the source defines, in display order, including groups
+    /// that indexed no items (for a <see cref="LocalManifestSource"/>, its
+    /// selected manifest groups); empty for sources without groups.
+    /// </summary>
+    public IReadOnlyList<SourceIndexGroup> Groups { get; init; } = [];
+
+    /// <summary>
+    /// When the publisher last generated the source's catalogue (for example a
+    /// remote exchange catalogue's own date-time), if it says; otherwise
+    /// <see langword="null"/>.
+    /// </summary>
+    public DateTimeOffset? PublishedAt { get; init; }
+
+    /// <summary>
+    /// For a <see cref="SecomSource"/>: which identity it presented when read,
+    /// whether the service asked for one, and the outcome (#883);
+    /// <see langword="null"/> for other sources.
+    /// </summary>
+    public Secom.SecomPresentation? Presentation { get; init; }
+}
+
+/// <summary>A group of a <see cref="SourceIndex"/>, such as one group of a collection manifest.</summary>
+/// <param name="Id">The group id, as items carry it.</param>
+/// <param name="Name">The group's display name.</param>
+/// <param name="MissingPathCount">How many of the group's paths were not found when indexed.</param>
+public sealed record SourceIndexGroup(string Id, string Name, int MissingPathCount = 0);
+
+/// <summary>A problem met while indexing a source.</summary>
+/// <param name="Severity">How serious the problem is.</param>
+/// <param name="Message">A human-readable description.</param>
+/// <param name="Path">The file or entry concerned, if any.</param>
+public sealed record IndexDiagnostic(IndexDiagnosticSeverity Severity, string Message, string? Path = null)
+{
+    /// <summary>
+    /// What kind of problem it is, for hosts that explain or act on it without
+    /// parsing <see cref="Message"/>, e.g. a <see cref="Secom.SecomDiagnosticCodes"/>
+    /// value; <see langword="null"/> when there is none.
+    /// </summary>
+    public string? Code { get; init; }
+}
+
+/// <summary>The severity of an <see cref="IndexDiagnostic"/>.</summary>
+public enum IndexDiagnosticSeverity
+{
+    /// <summary>Informational: something was skipped by design.</summary>
+    Info = 0,
+
+    /// <summary>An item is incomplete or a file could not be read.</summary>
+    Warning,
+
+    /// <summary>A whole exchange set or file could not be indexed.</summary>
+    Error,
+}
+
+/// <summary>Progress reported while indexing a source.</summary>
+/// <param name="ItemsIndexed">Items indexed so far.</param>
+/// <param name="CurrentPath">The file or folder being processed, if any.</param>
+public readonly record struct IndexProgress(int ItemsIndexed, string? CurrentPath);

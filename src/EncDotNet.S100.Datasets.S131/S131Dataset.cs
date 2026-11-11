@@ -1,0 +1,195 @@
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Core.Gml;
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Features;
+
+namespace EncDotNet.S100.Datasets.S131;
+
+/// <summary>
+/// Root data model for an S-131 Marine Harbour Infrastructure dataset,
+/// parsed from S-100 Part 10b GML encoding via <see cref="S131DatasetReader"/>.
+/// </summary>
+/// <remarks>
+/// The S-131 Edition 2.0.0 application schema namespace is
+/// <c>http://www.iho.int/S131/2.0</c> (Edition 1.0.0 used
+/// <c>http://www.iho.int/S131/1.0</c>); geometry uses the S-100 GML 5.0
+/// profile namespace <c>http://www.iho.int/s100gml/5.0</c>. See the
+/// S-131 Product Specification and its Data Classification and Encoding
+/// Guide for the full feature and attribute model.
+/// </remarks>
+public sealed class S131Dataset
+{
+    /// <summary>The product specification identifier (e.g. <c>"S-131"</c>).</summary>
+    public string? ProductIdentifier { get; init; }
+
+    /// <summary>
+    /// The declared product-specification edition (e.g. <c>"2.0.0"</c>) read
+    /// from <c>DatasetIdentificationInformation/productEdition</c>, or
+    /// <c>null</c> when the dataset declares none. S-100 Part 10b.
+    /// </summary>
+    public string? DeclaredEdition { get; init; }
+
+    /// <summary>The dataset identifier (gml:id of the dataset root).</summary>
+    public string? DatasetIdentifier { get; init; }
+
+    /// <summary>
+    /// The outcome of the dataset-level axis-order check (issue #650), or
+    /// <c>null</c> when the dataset has no positions. When it is
+    /// <see cref="EncDotNet.S100.DataModel.AxisOrderOutcome.Swapped"/> the reader
+    /// has already read every position longitude first.
+    /// </summary>
+    public EncDotNet.S100.DataModel.AxisOrderAssessment? AxisOrder { get; init; }
+
+    /// <summary>Feature instances contained in the dataset.</summary>
+    public required IReadOnlyList<S131Feature> Features { get; init; }
+
+    /// <summary>Information type instances contained in the dataset.</summary>
+    public required IReadOnlyList<S131InformationType> InformationTypes { get; init; }
+
+    /// <summary>Opens an S-131 dataset from a file path.</summary>
+    public static S131Dataset Open(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        using var stream = File.OpenRead(path);
+        return S131DatasetReader.Read(stream);
+    }
+
+    /// <summary>Opens an S-131 dataset from a stream.</summary>
+    public static S131Dataset Open(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        return S131DatasetReader.Read(stream);
+    }
+
+    /// <summary>
+    /// Reads only the lightweight <see cref="DatasetMetadata"/> for an S-131
+    /// dataset at <paramref name="path"/> — its declared specification and
+    /// geographic extent — for phased / deferred loading (issue #460).
+    /// </summary>
+    public static DatasetMetadata ReadMetadata(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        return Open(path).ReadMetadata();
+    }
+
+    /// <summary>
+    /// Reads only the lightweight <see cref="DatasetMetadata"/> for an S-131
+    /// dataset from <paramref name="stream"/> (issue #460).
+    /// </summary>
+    public static DatasetMetadata ReadMetadata(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        return Open(stream).ReadMetadata();
+    }
+
+    /// <summary>
+    /// Produces the lightweight <see cref="DatasetMetadata"/> for this parsed
+    /// dataset: declared specification and raw geographic extent (issue #460).
+    /// </summary>
+    public DatasetMetadata ReadMetadata() =>
+        GmlDatasetMetadata.Create("S-131", DeclaredEdition, Features);
+}
+
+/// <summary>
+/// A geographic feature parsed from an S-131 GML dataset. Concrete feature
+/// types include harbour infrastructure such as <c>Berth</c>, <c>Bollard</c>,
+/// <c>Terminal</c>, <c>DryDock</c>, <c>AnchorageArea</c>,
+/// and <c>HarbourAreaAdministrative</c>. See the S-131 Edition 2.0.0
+/// Feature Catalogue for the full set of 35 concrete feature types.
+/// </summary>
+public sealed class S131Feature : IS100Feature
+{
+    /// <summary>The GML identifier of the feature.</summary>
+    public required string Id { get; init; }
+
+    /// <summary>The feature type code (PascalCase, e.g. <c>"Berth"</c>).</summary>
+    public required string FeatureType { get; init; }
+
+    /// <summary>The geometry primitive type.</summary>
+    public S100GeometryType GeometryType { get; init; }
+
+    /// <summary>Point geometries (latitude, longitude pairs).</summary>
+    public IReadOnlyList<GeoPosition> Points { get; init; } = [];
+
+    /// <summary>Curve geometries as ordered coordinate sequences.</summary>
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> Curves { get; init; } = [];
+
+    /// <summary>Surface exterior ring coordinates.</summary>
+    public IReadOnlyList<GeoPosition> ExteriorRing { get; init; } = [];
+
+    /// <summary>Surface interior ring coordinates (holes).</summary>
+    public IReadOnlyList<IReadOnlyList<GeoPosition>> InteriorRings { get; init; } = [];
+
+    /// <summary>Simple attributes keyed by code.</summary>
+    public required IReadOnlyDictionary<string, string> Attributes { get; init; }
+
+    /// <summary>Complex attribute groups, each containing sub-attribute values.</summary>
+    public required IReadOnlyList<S131ComplexAttribute> ComplexAttributes { get; init; }
+
+    /// <inheritdoc/>
+    IReadOnlyList<IS100ComplexAttribute> IS100Feature.ComplexAttributes => ComplexAttributes.Cast<IS100ComplexAttribute>().ToArray();
+
+    /// <summary>
+    /// Information-type and feature-type association references resolved from
+    /// <c>xlink:href</c> attributes. Used by the Lua data provider to service
+    /// <c>HostFeatureGetAssociatedInformationIDs</c> and
+    /// <c>HostFeatureGetAssociatedFeatureIDs</c> host calls.
+    /// </summary>
+    public required IReadOnlyList<S131Reference> References { get; init; }
+}
+
+/// <summary>
+/// An information type instance parsed from an S-131 GML dataset
+/// (e.g. <c>ContactDetails</c>, <c>NauticalInformation</c>,
+/// <c>Applicability</c>, <c>ServiceHours</c>).
+/// </summary>
+public sealed class S131InformationType : IS100InformationType
+{
+    /// <summary>The GML identifier.</summary>
+    public required string Id { get; init; }
+
+    /// <summary>The information type code (e.g. <c>"ContactDetails"</c>).</summary>
+    public required string TypeCode { get; init; }
+
+    /// <summary>Simple attributes keyed by code.</summary>
+    public required IReadOnlyDictionary<string, string> Attributes { get; init; }
+
+    /// <summary>Complex attribute groups.</summary>
+    public required IReadOnlyList<S131ComplexAttribute> ComplexAttributes { get; init; }
+
+    /// <summary>
+    /// Cross-references parsed from <c>xlink:href</c> attributes on the
+    /// information type's child elements (e.g. an <c>Authority</c> info
+    /// type binding its <c>theContactDetails</c> / <c>theApplicability</c>
+    /// peers). Defaults to an empty array for information types that do
+    /// not carry outgoing references.
+    /// </summary>
+    public IReadOnlyList<S131Reference> References { get; init; } =
+        [];
+}
+
+/// <summary>
+/// A complex attribute instance containing sub-attributes.
+/// </summary>
+public sealed class S131ComplexAttribute : IS100ComplexAttribute
+{
+    /// <summary>The complex attribute code.</summary>
+    public required string Code { get; init; }
+
+    /// <summary>Sub-attribute values keyed by code.</summary>
+    public required IReadOnlyDictionary<string, string> SubAttributes { get; init; }
+}
+
+/// <summary>
+/// A reference from a feature or information type to another object within
+/// the dataset, represented in S-131 GML as a child element bearing an
+/// <c>xlink:href</c> attribute that resolves to a <c>gml:id</c>.
+/// </summary>
+public sealed class S131Reference
+{
+    /// <summary>The role / association name (e.g. <c>"theContactDetails"</c>).</summary>
+    public required string Role { get; init; }
+
+    /// <summary>The referenced object's gml:id (without leading <c>#</c>).</summary>
+    public required string TargetRef { get; init; }
+}

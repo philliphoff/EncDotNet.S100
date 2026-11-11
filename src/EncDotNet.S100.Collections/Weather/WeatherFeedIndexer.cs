@@ -1,0 +1,823 @@
+using System.Globalization;
+using System.Net;
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using EncDotNet.S100.Collections.Downloads;
+using EncDotNet.S100.Collections.Indexing;
+using EncDotNet.S100.Collections.Net;
+
+namespace EncDotNet.S100.Collections.Weather;
+
+/// <summary>What a weather service has now, for the Add-to-Library dialog.</summary>
+/// <param name="LatestRun">A model service's latest run with every chosen hour published, if found.</param>
+/// <param name="Items">How many items an index would list (datasets, or alerts in force).</param>
+/// <param name="Detail">A line describing what was found, e.g. ERDDAP's dataset titles; null for none.</param>
+public sealed record WeatherServiceSummary(DateTimeOffset? LatestRun, int Items, string? Detail = null);
+
+/// <summary>
+/// Indexes a <see cref="WeatherFeedSource"/> (#1075; design note
+/// weather-sources.md §6.3) into one online item per model or dataset: the
+/// latest run, as one download of the chosen parameters and hours.
+/// </summary>
+/// <remarks>
+/// <list type="bullet">
+/// <item><description>
+/// <b>GRIB2 models</b> (NOMADS GRIB filter, AWS <c>noaa-gfs-bdp-pds</c>): runs
+/// are tried newest first, every <see cref="WeatherService.CadenceHours"/>
+/// back to a day, and the first whose <c>.idx</c> for the last chosen hour
+/// answers is the latest run, so a run still being published isn't offered.
+/// Its item downloads one request per forecast hour (the filter's subset, or
+/// the chosen fields' byte ranges from each file's <c>.idx</c>), appended into
+/// one GRIB2 file. The item carries the run (<see cref="S100ForecastFeedIndexer.RunProperty"/>),
+/// so a downloaded run is outdated once a newer one is listed, and a newer
+/// run's download replaces it.
+/// </description></item>
+/// <item><description>
+/// <b>Alerts</b> (<c>api.weather.gov</c>): the alerts in force for the area's
+/// marine zones, read at each index (they are small) for their count and
+/// <c>updated</c> time, and downloaded as NWS GeoJSON.
+/// </description></item>
+/// <item><description>
+/// <b>WPC bulletins</b>: each chosen bulletin is read whole (a few kB) for its
+/// times (<see cref="WpcBulletinTimes"/>): the analysis's valid time, or the
+/// time a forecast's lead times count from, is its run, so a newer analysis
+/// replaces the downloaded one as a newer model run does. Items cover WPC's
+/// domain (V36) and are stale after the service's <see cref="WeatherService.StaleAfterHours"/>.
+/// </description></item>
+/// <item><description>
+/// <b>NHC storms</b>: <c>CurrentStorms.json</c> is read whole
+/// (<see cref="NhcActiveStorms"/>), one item per active storm, keyed and named
+/// by its ATCF id. The item's run is its latest advisory's issue time, and it
+/// downloads that advisory's GIS zips as separate files in one folder
+/// (<see cref="RemotePart.FileName"/>), so the next advisory replaces it in
+/// place. Items have no area: a storm's extent is only known once its files
+/// are read. A storm NHC stops listing (its final advisory issued) drops out.
+/// </description></item>
+/// <item><description>
+/// <b>ERDDAP</b>: each dataset's <c>info</c> gives its axes and time coverage;
+/// the item downloads a NetCDF subset from now to the last chosen hour (or
+/// the dataset's last hours, when it has ended).
+/// </description></item>
+/// </list>
+/// <para>
+/// Each item carries the source's licence and attribution
+/// (<see cref="WeatherRuns.LicenceProperty"/>, <see cref="WeatherRuns.AttributionProperty"/>).
+/// With a downloads folder, pinned runs (<see cref="Pin"/>) are listed as
+/// local items beside the latest, and a service that can't be reached lists
+/// its downloaded run instead (stale, with the error). Every request sends a
+/// <c>User-Agent</c> (<see cref="UserAgent"/>), as the NWS API requires.
+/// Weather sources are re-read on every index (no fingerprint): finding the
+/// latest run is the index.
+/// </para>
+/// </remarks>
+public sealed class WeatherFeedIndexer : ICollectionSourceIndexer
+{
+    /// <summary>How many runs back the latest run is looked for.</summary>
+    public const int RunsTried = 5;
+
+    private readonly HttpClient _http;
+    private readonly string? _downloadsRoot;
+    private readonly TimeProvider _time;
+
+    /// <summary>Creates an indexer.</summary>
+    /// <param name="httpClient">The client requests are made with.</param>
+    /// <param name="downloadsDirectory">The hosts' downloads root (pinned and downloaded runs are listed from it), or null.</param>
+    /// <param name="timeProvider">The clock; the system clock when null.</param>
+    public WeatherFeedIndexer(HttpClient httpClient, string? downloadsDirectory = null, TimeProvider? timeProvider = null)
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        _http = httpClient;
+        _downloadsRoot = downloadsDirectory;
+        _time = timeProvider ?? TimeProvider.System;
+    }
+
+    /// <summary>The <c>User-Agent</c> sent when the client sets none; <see cref="LibraryHttp.DefaultUserAgent"/> by default.</summary>
+    public string UserAgent { get; init; } = LibraryHttp.DefaultUserAgent;
+
+    /// <inheritdoc/>
+    public bool CanIndex(CollectionSource source) => source is WeatherFeedSource;
+
+    /// <inheritdoc/>
+    /// <remarks>Always null: a weather source is re-read on every index.</remarks>
+    public ValueTask<string?> GetFingerprintAsync(CollectionSource source, CancellationToken cancellationToken) =>
+        ValueTask.FromResult<string?>(null);
+
+    /// <inheritdoc/>
+    public async ValueTask<SourceIndex> IndexAsync(CollectionSource source, IProgress<IndexProgress>? progress, CancellationToken cancellationToken)
+    {
+        var feed = AsFeed(source);
+        var diagnostics = new List<IndexDiagnostic>();
+        var items = new List<CollectionItem>();
+        progress?.Report(new IndexProgress(0, feed.ServiceUri.AbsoluteUri));
+        if (feed.Service.Kind is WeatherServiceKind.GribFilter or WeatherServiceKind.ErddapGriddap
+            && feed.Selection.Area is { } chosen && RequestArea(feed) is { } kept && kept != chosen)
+        {
+            diagnostics.Add(new IndexDiagnostic(IndexDiagnosticSeverity.Warning, string.Create(CultureInfo.InvariantCulture,
+                $"The area crosses the antimeridian (180°), which weather grids can't cross yet; only its side from {kept.West}° to {kept.East}° is downloaded."),
+                feed.ServiceUri.AbsoluteUri));
+        }
+
+        try
+        {
+            switch (feed.Service.Kind)
+            {
+                case WeatherServiceKind.GribFilter or WeatherServiceKind.GribIndex:
+                    if (await FindLatestRunAsync(feed, cancellationToken).ConfigureAwait(false) is { } run)
+                        items.Add(GribItem(feed, run));
+                    else
+                        diagnostics.Add(new IndexDiagnostic(IndexDiagnosticSeverity.Error, NoRunMessage(feed), feed.ServiceUri.AbsoluteUri));
+                    break;
+                case WeatherServiceKind.NwsAlerts:
+                    items.Add(await AlertsItemAsync(feed, cancellationToken).ConfigureAwait(false));
+                    break;
+                case WeatherServiceKind.ErddapGriddap:
+                    foreach (var dataset in feed.Selection.DatasetsOf(feed.Service))
+                    {
+                        try
+                        {
+                            items.Add(await ErddapItemAsync(feed, dataset, cancellationToken).ConfigureAwait(false));
+                        }
+                        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidDataException)
+                        {
+                            diagnostics.Add(new IndexDiagnostic(IndexDiagnosticSeverity.Error, $"{dataset.Id}: {ex.Message}",
+                                WeatherRequests.ErddapInfoUri(feed.ServiceUri, dataset.Id).AbsoluteUri));
+                            if (DownloadedItem(feed, dataset.Id) is { } offline)
+                                items.Add(offline);
+                        }
+                    }
+
+                    break;
+                case WeatherServiceKind.WpcBulletins:
+                    foreach (var bulletin in feed.Selection.DatasetsOf(feed.Service))
+                    {
+                        try
+                        {
+                            items.Add(await BulletinItemAsync(feed, bulletin, cancellationToken).ConfigureAwait(false));
+                        }
+                        catch (Exception ex) when (ex is HttpRequestException or InvalidDataException
+                            or TaskCanceledException && !cancellationToken.IsCancellationRequested)
+                        {
+                            diagnostics.Add(new IndexDiagnostic(IndexDiagnosticSeverity.Error, $"{bulletin.Name}: {ex.Message}",
+                                feed.Service.BulletinUri(bulletin).AbsoluteUri));
+                            if (DownloadedItem(feed, bulletin.Id) is { } offline)
+                                items.Add(offline);
+                        }
+                    }
+
+                    break;
+                case WeatherServiceKind.NhcStorms:
+                    items.AddRange(await StormItemsAsync(feed, cancellationToken).ConfigureAwait(false));
+                    break;
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidDataException or TaskCanceledException
+            && !cancellationToken.IsCancellationRequested)
+        {
+            diagnostics.Add(new IndexDiagnostic(IndexDiagnosticSeverity.Error, ex.Message, feed.ServiceUri.AbsoluteUri));
+            if (feed.Service.Kind == WeatherServiceKind.NhcStorms)
+                items.AddRange(DownloadedStorms(feed));
+            else if (DownloadedItem(feed, NameOf(feed)) is { } offline)
+                items.Add(offline);
+        }
+
+        items.AddRange(PinnedItems(feed));
+        progress?.Report(new IndexProgress(items.Count, null));
+        var latest = items.Select(S100ForecastFeedIndexer.RunOf).Max();
+        return new SourceIndex(source.Id, _time.GetUtcNow(), null, items, diagnostics) { PublishedAt = latest };
+    }
+
+    /// <summary>
+    /// What <paramref name="feed"/>'s service has now (its latest run, the
+    /// alerts in force, the datasets' titles), for the Add-to-Library dialog.
+    /// </summary>
+    /// <exception cref="HttpRequestException">The service can't be reached.</exception>
+    public async Task<WeatherServiceSummary> DescribeAsync(WeatherFeedSource feed, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(feed);
+        switch (feed.Service.Kind)
+        {
+            case WeatherServiceKind.GribFilter or WeatherServiceKind.GribIndex:
+                var run = await FindLatestRunAsync(feed, cancellationToken).ConfigureAwait(false);
+                return run is null ? throw new HttpRequestException(NoRunMessage(feed)) : new WeatherServiceSummary(run, 1);
+            case WeatherServiceKind.NwsAlerts:
+                var alerts = await AlertsItemAsync(feed, cancellationToken).ConfigureAwait(false);
+                return new WeatherServiceSummary(null, int.Parse(alerts.Properties[AlertCountProperty], CultureInfo.InvariantCulture));
+            case WeatherServiceKind.WpcBulletins:
+                var chosen = feed.Selection.DatasetsOf(feed.Service);
+                DateTimeOffset? latest = null;
+                foreach (var bulletin in chosen)
+                {
+                    var item = await BulletinItemAsync(feed, bulletin, cancellationToken).ConfigureAwait(false);
+                    if (S100ForecastFeedIndexer.RunOf(item) is { } itemRun && (latest is null || itemRun > latest))
+                        latest = itemRun;
+                }
+
+                return new WeatherServiceSummary(latest, chosen.Count);
+            case WeatherServiceKind.NhcStorms:
+                var storms = await ReadStormsAsync(feed, cancellationToken).ConfigureAwait(false);
+                return new WeatherServiceSummary(
+                    storms.Count == 0 ? null : storms.Max(s => s.Issued),
+                    storms.Count,
+                    storms.Count == 0 ? null : string.Join("; ", storms.Select(StormTitle)));
+            default:
+                var titles = new List<string>();
+                foreach (var dataset in feed.Selection.DatasetsOf(feed.Service))
+                {
+                    var info = await ReadErddapInfoAsync(feed.ServiceUri, dataset.Id, cancellationToken).ConfigureAwait(false);
+                    titles.Add(info.Title ?? dataset.Name);
+                }
+
+                return new WeatherServiceSummary(null, titles.Count, string.Join("; ", titles));
+        }
+    }
+
+    /// <summary>The item property holding how many alerts an alerts item has.</summary>
+    public const string AlertCountProperty = "alerts";
+
+    /// <summary>
+    /// Keeps the downloaded copy of <paramref name="item"/>'s run (a weather
+    /// item, through its source's downloader) beside the latest, so a later run
+    /// doesn't replace it: the copy is listed by the next index as a pinned,
+    /// local item.
+    /// </summary>
+    /// <returns>The pinned copy's download name, or null when the item has no downloaded copy.</returns>
+    public static string? Pin(EncCellDownloader downloader, CollectionItem item)
+    {
+        ArgumentNullException.ThrowIfNull(downloader);
+        ArgumentNullException.ThrowIfNull(item);
+        if (downloader.TryGetDownloaded(item.Name) is not { PublishedAt: { } run })
+            return null;
+        var name = WeatherRuns.PinnedName(item.Name, run);
+        return downloader.Copy(item.Name, name) ? name : null;
+    }
+
+    /// <summary>Deletes a pinned copy (a <see cref="WeatherRuns.IsPinned"/> item); true when one was deleted.</summary>
+    public static bool Unpin(EncCellDownloader downloader, CollectionItem pinned)
+    {
+        ArgumentNullException.ThrowIfNull(downloader);
+        ArgumentNullException.ThrowIfNull(pinned);
+        return WeatherRuns.IsPinned(pinned) && downloader.Delete(pinned.Name);
+    }
+
+    /// <summary>
+    /// The managed folder, relative to the downloads root, a source's runs
+    /// download into: one per source, e.g. <c>weather/nomads.ncep.noaa.gov-3f2a9c1b</c>.
+    /// </summary>
+    public static string DownloadFolderFor(WeatherFeedSource feed)
+    {
+        ArgumentNullException.ThrowIfNull(feed);
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(feed.ServiceUri.AbsoluteUri + "|" + feed.Id.ToString("N"))))[..8]
+            .ToLowerInvariant();
+        var host = new string(feed.ServiceUri.Host.Select(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' ? c : '-').ToArray());
+        return $"weather/{host}-{hash}";
+    }
+
+    /// <summary>
+    /// The latest run of a GRIB2 source whose last chosen hour is published,
+    /// newest first over <see cref="RunsTried"/> cycles; null when none is.
+    /// </summary>
+    /// <exception cref="HttpRequestException">The server can't be reached (as opposed to a run not being there).</exception>
+    public async Task<DateTimeOffset?> FindLatestRunAsync(WeatherFeedSource feed, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(feed);
+        var hours = feed.Selection.HoursOf(feed.Service);
+        var last = hours.Count > 0 ? hours[^1] : 0;
+        foreach (var run in WeatherRequests.CandidateRuns(_time.GetUtcNow(), feed.Service.CadenceHours, RunsTried))
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Head, WeatherRequests.IndexUri(feed.Service, run, last));
+            Identify(request);
+            using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (response.IsSuccessStatusCode)
+                return run;
+            if (response.StatusCode is not (HttpStatusCode.NotFound or HttpStatusCode.Forbidden or HttpStatusCode.Gone))
+                response.EnsureSuccessStatusCode();
+        }
+
+        return null;
+    }
+
+    private CollectionItem GribItem(WeatherFeedSource feed, DateTimeOffset run)
+    {
+        var service = feed.Service;
+        var parameters = feed.Selection.ParametersOf(service);
+        var hours = feed.Selection.HoursOf(service);
+        var area = service.Kind == WeatherServiceKind.GribFilter ? RequestArea(feed) : null;
+        var parts = hours.Select(hour => service.Kind == WeatherServiceKind.GribFilter
+                ? new RemotePart(WeatherRequests.GribFilterUri(feed.ServiceUri, service, parameters, area, run, hour))
+                : new RemotePart(WeatherRequests.FileUri(service, run, hour), [.. parameters.Select(p => p.IndexMatch)]))
+            .ToArray();
+        var name = NameOf(feed);
+        var fileName = string.Create(CultureInfo.InvariantCulture, $"{name}.t{run.UtcDateTime:HH}z.{run.UtcDateTime:yyyyMMdd}.grib2");
+        var properties = Stamp(feed, run, run.AddHours(hours.Count > 0 ? hours[^1] : 0));
+        properties["parameters"] = string.Join(", ", parameters.Select(p => p.Id));
+        properties["hours"] = hours.Count == 0
+            ? string.Empty
+            : string.Create(CultureInfo.InvariantCulture, $"{hours[0]}–{hours[^1]} h");
+
+        return new CollectionItem
+        {
+            Key = name,
+            ProductSpec = "GRIB2",
+            Name = name,
+            Title = service.ModelName ?? service.Model,
+            IssueDate = DateOnly.FromDateTime(run.UtcDateTime),
+            Bounds = AreaOf(feed, area),
+            Location = new RemoteItemLocation(parts[0].Uri, null, run, DownloadFolderFor(feed), Layout: new PackageLayout(fileName, []))
+            {
+                Parts = parts,
+            },
+            Properties = properties,
+        };
+    }
+
+    private async Task<CollectionItem> AlertsItemAsync(WeatherFeedSource feed, CancellationToken cancellationToken)
+    {
+        var uri = WeatherRequests.NwsAlertsUri(feed.ServiceUri, feed.Selection.Zones);
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        Identify(request);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(GeoJsonMediaType));
+        using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var root = document.RootElement;
+        var count = root.TryGetProperty("features", out var features) && features.ValueKind == JsonValueKind.Array ? features.GetArrayLength() : 0;
+        DateTimeOffset? updated = root.TryGetProperty("updated", out var u) && u.ValueKind == JsonValueKind.String
+            && DateTimeOffset.TryParse(u.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed)
+                ? parsed
+                : _time.GetUtcNow();
+
+        var name = NameOf(feed);
+        var properties = Stamp(feed, run: null, validTo: null);
+        properties[AlertCountProperty] = count.ToString(CultureInfo.InvariantCulture);
+        if (feed.Selection.Zones.Count > 0)
+            properties["zones"] = string.Join(", ", feed.Selection.Zones);
+        return new CollectionItem
+        {
+            Key = name,
+            ProductSpec = "CAP",
+            Name = name,
+            Title = feed.Service.ModelName ?? "Marine alerts",
+            IssueDate = DateOnly.FromDateTime(updated.Value.UtcDateTime),
+            Bounds = AreaOf(feed, feed.Selection.Area),
+            Location = new RemoteItemLocation(uri, null, updated, DownloadFolderFor(feed), Layout: new PackageLayout(name + ".json", []))
+            {
+                Parts = [new RemotePart(uri)],
+                Accept = GeoJsonMediaType,
+            },
+            Properties = properties,
+        };
+    }
+
+    private async Task<CollectionItem> ErddapItemAsync(WeatherFeedSource feed, WeatherServiceDataset dataset, CancellationToken cancellationToken)
+    {
+        var info = await ReadErddapInfoAsync(feed.ServiceUri, dataset.Id, cancellationToken).ConfigureAwait(false);
+        var now = _time.GetUtcNow();
+        var hours = feed.Selection.HoursOf(feed.Service);
+        var ahead = TimeSpan.FromHours(hours.Count > 0 ? Math.Max(hours[^1], 1) : feed.Service.DefaultHours);
+        var end = info.End is { } last && last < now + ahead ? last : now + ahead;
+        var start = info.End is { } ended && ended < now ? ended - ahead : now - TimeSpan.FromHours(Math.Max(feed.Service.StepHours, 1));
+        if (info.Start is { } first && start < first)
+            start = first;
+        if (end < start)
+            end = start;
+
+        var area = RequestArea(feed);
+        var uri = WeatherRequests.ErddapGriddapUri(feed.ServiceUri, dataset, info.Axes, area, start, end);
+
+        // An issue date counts as the run only within the forecast it describes: NWW3_Global_Best
+        // carries the dataset's own dates (date_issued 2010, date_modified 2021), not its run's.
+        var run = info.Issued is { } stated && (info.End is not { } coverageEnd
+            || stated >= coverageEnd - TimeSpan.FromHours(Math.Max(feed.Service.MaxHours, 24)))
+                ? stated
+                : (DateTimeOffset?)null;
+        var issued = run ?? info.End ?? now;
+        var properties = Stamp(feed, run, run is null ? null : end);
+        if (run is null)
+            properties.Remove(WeatherRuns.StaleAfterProperty);
+        properties["variables"] = string.Join(", ", dataset.Variables);
+        return new CollectionItem
+        {
+            Key = dataset.Id,
+            ProductSpec = "NetCDF",
+            Name = dataset.Id,
+            Title = info.Title ?? dataset.Name,
+            IssueDate = DateOnly.FromDateTime(issued.UtcDateTime),
+            Bounds = AreaOf(feed, area),
+            Location = new RemoteItemLocation(uri, null, issued, DownloadFolderFor(feed), Layout: new PackageLayout(dataset.Id + ".nc", []))
+            {
+                Parts = [new RemotePart(uri)],
+            },
+            Properties = properties,
+        };
+    }
+
+    /// <summary>The item property naming a WPC bulletin's kind: <c>analysis</c> or <c>forecast</c>.</summary>
+    public const string BulletinKindProperty = "bulletin";
+
+    /// <summary>
+    /// How old WPC's forecast fronts may be before they are stale: 13 hours.
+    /// WPC issues them about every 12 hours, not every 3 as the analysis, so
+    /// the analysis's 6 hours would mark each one stale soon after it is
+    /// issued; an hour's grace follows the cycle, as for cyclone advisories (V28).
+    /// </summary>
+    public static TimeSpan ForecastBulletinStaleAfter { get; } = TimeSpan.FromHours(13);
+
+    /// <summary>
+    /// One WPC bulletin as an item: read whole for its times, downloaded as
+    /// the text file. The run is the analysis's valid time (or, for forecast
+    /// fronts, the time its lead times count from) and the item is valid to
+    /// its last forecast.
+    /// </summary>
+    private async Task<CollectionItem> BulletinItemAsync(WeatherFeedSource feed, WeatherServiceDataset bulletin, CancellationToken cancellationToken)
+    {
+        var uri = feed.Service.BulletinUri(bulletin);
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        Identify(request);
+        using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        var reference = response.Content.Headers.LastModified ?? _time.GetUtcNow();
+        var times = WpcBulletinTimes.TryRead(text, reference)
+            ?? throw new InvalidDataException($"{uri.AbsoluteUri} has no WMO heading; is it a WPC coded surface bulletin?");
+
+        var forecast = times.FirstLeadHours is not null;
+        var properties = Stamp(feed, times.Run, forecast ? times.LastValid : null);
+        properties[BulletinKindProperty] = forecast ? "forecast" : "analysis";
+        properties[WeatherRuns.CoverageProperty] = Library.LibraryText.Get("Weather_WpcDomain");
+        if (forecast && ForecastBulletinStaleAfter > feed.Service.StaleAfter)
+            properties[WeatherRuns.StaleAfterProperty] = ForecastBulletinStaleAfter.TotalHours.ToString(CultureInfo.InvariantCulture);
+        var fileName = bulletin.Id + ".txt";
+        return new CollectionItem
+        {
+            Key = bulletin.Id,
+            ProductSpec = SpecOf(feed.Service.Kind),
+            Name = bulletin.Id,
+            Title = bulletin.Name,
+            IssueDate = DateOnly.FromDateTime(times.Issued.UtcDateTime),
+            Bounds = AreaOf(feed, null),
+            Location = new RemoteItemLocation(uri, null, times.Run, DownloadFolderFor(feed), Layout: new PackageLayout(fileName, []))
+            {
+                Parts = [new RemotePart(uri)],
+            },
+            Properties = properties,
+        };
+    }
+
+    /// <summary>The item property holding an NHC storm's latest advisory number, as people read it: <c>17</c> or <c>17A</c>.</summary>
+    public const string AdvisoryProperty = "advisory";
+
+    /// <summary>The item property holding an NHC storm's name ("Zelda").</summary>
+    public const string StormNameProperty = "stormName";
+
+    /// <summary>The item property holding an NHC storm's class code (<c>HU</c>, <c>TS</c>, <c>TD</c>, <c>PTC</c> …).</summary>
+    public const string StormClassProperty = "stormClass";
+
+    /// <summary>The item property holding an NHC storm's maximum sustained wind in knots.</summary>
+    public const string IntensityProperty = "intensityKnots";
+
+    /// <summary>The item property holding an NHC storm's latitude in degrees, which picks its hemisphere's symbol.</summary>
+    public const string LatitudeProperty = "latitude";
+
+    /// <summary>The item property holding an NHC storm's basin: "Atlantic", "East Pacific" or "Central Pacific".</summary>
+    public const string BasinProperty = "basin";
+
+    /// <summary>
+    /// How long NHC's five-day forecast runs from the advisory's synoptic
+    /// time: 120 hours. An item's valid window ends then.
+    /// </summary>
+    public static TimeSpan StormForecastPeriod { get; } = TimeSpan.FromHours(120);
+
+    /// <summary>
+    /// The storm list's items (V27): one per active storm, named by its ATCF
+    /// id (<c>al142026</c>), the download folder its advisories replace each
+    /// other in. Its run is the advisory's issue time, so a newer advisory
+    /// makes the downloaded one outdated; it is valid to the end of the
+    /// five-day forecast, counted from the advisory's synoptic time (the
+    /// six-hourly hour at least three hours before it is issued).
+    /// </summary>
+    private async Task<IReadOnlyList<CollectionItem>> StormItemsAsync(WeatherFeedSource feed, CancellationToken cancellationToken)
+    {
+        var storms = await ReadStormsAsync(feed, cancellationToken).ConfigureAwait(false);
+        return [.. storms.Select(storm => StormItem(feed, storm))];
+    }
+
+    private async Task<IReadOnlyList<NhcActiveStorm>> ReadStormsAsync(WeatherFeedSource feed, CancellationToken cancellationToken)
+    {
+        var uri = feed.Service.StormListUri ?? throw new InvalidDataException("The NHC source has no storm list address.");
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        Identify(request);
+        using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        return NhcActiveStorms.Parse(text, uri);
+    }
+
+    private static CollectionItem StormItem(WeatherFeedSource feed, NhcActiveStorm storm)
+    {
+        var synoptic = SynopticTimeOf(storm.Issued);
+        var properties = Stamp(feed, storm.Issued, synoptic + StormForecastPeriod);
+        properties[AdvisoryProperty] = storm.AdvisoryNumber;
+        properties[StormNameProperty] = storm.Name;
+        properties[StormClassProperty] = storm.Classification;
+        if (storm.IntensityKnots is { } wind)
+            properties[IntensityProperty] = wind.ToString(CultureInfo.InvariantCulture);
+        if (storm.Latitude is { } latitude)
+            properties[LatitudeProperty] = latitude.ToString("0.0", CultureInfo.InvariantCulture);
+        if (storm.Basin is { } basin)
+            properties[BasinProperty] = basin;
+
+        var files = storm.Files;
+        return new CollectionItem
+        {
+            Key = storm.AtcfId,
+            ProductSpec = SpecOf(WeatherServiceKind.NhcStorms),
+            Name = storm.AtcfId,
+            Title = StormTitle(storm),
+            IssueDate = DateOnly.FromDateTime(storm.Issued.UtcDateTime),
+            Location = new RemoteItemLocation(storm.ForecastZip, null, storm.Issued, DownloadFolderFor(feed),
+                Layout: new PackageLayout(files[0].FileName, []))
+            {
+                Parts = [.. files.Select(f => new RemotePart(f.Uri, null, f.FileName))],
+            },
+            Properties = properties,
+        };
+    }
+
+    /// <summary>"Zelda (AL142026), advisory 17": an NHC storm item's title.</summary>
+    private static string StormTitle(NhcActiveStorm storm) => string.Format(
+        CultureInfo.CurrentCulture, Library.LibraryText.Get("Weather_StormTitleFormat"), storm.Name, storm.AtcfId.ToUpperInvariant(), storm.AdvisoryNumber);
+
+    /// <summary>
+    /// The synoptic time of an NHC advisory issued at <paramref name="issued"/>:
+    /// the six-hourly hour (00, 06, 12, 18 UTC) at least three hours before,
+    /// which an intermediate advisory three hours later shares.
+    /// </summary>
+    internal static DateTimeOffset SynopticTimeOf(DateTimeOffset issued)
+    {
+        var utc = issued.ToUniversalTime().AddHours(-3);
+        return new DateTimeOffset(utc.Year, utc.Month, utc.Day, utc.Hour / 6 * 6, 0, 0, TimeSpan.Zero);
+    }
+
+    /// <summary>
+    /// The storms downloaded from the source, listed while NHC can't be reached:
+    /// each downloaded storm folder as a local item at its advisory.
+    /// </summary>
+    private IEnumerable<CollectionItem> DownloadedStorms(WeatherFeedSource feed)
+    {
+        if (Downloader(feed) is not { } downloader)
+            yield break;
+        foreach (var name in downloader.ListDownloaded())
+        {
+            if (WeatherRuns.RunOfPinnedName(name, out _) is not null || downloader.TryGetDownloaded(name) is not { } copy)
+                continue;
+            var properties = Stamp(feed, copy.PublishedAt, null);
+            if (copy.PublishedAt is null)
+            {
+                properties.Remove(S100ForecastFeedIndexer.RunProperty);
+                properties.Remove(WeatherRuns.StaleAfterProperty);
+            }
+
+            yield return new CollectionItem
+            {
+                Key = name,
+                ProductSpec = SpecOf(WeatherServiceKind.NhcStorms),
+                Name = name,
+                Title = name.ToUpperInvariant(),
+                IssueDate = copy.PublishedAt is { } published ? DateOnly.FromDateTime(published.UtcDateTime) : null,
+                Location = copy.Location,
+                Properties = properties,
+            };
+        }
+    }
+
+    /// <summary>An ERDDAP dataset's metadata, from <c>info/&lt;id&gt;/index.json</c>.</summary>
+    internal sealed record ErddapInfo(
+        IReadOnlyList<ErddapAxis> Axes, DateTimeOffset? Start, DateTimeOffset? End, DateTimeOffset? Issued, string? Title);
+
+    internal async Task<ErddapInfo> ReadErddapInfoAsync(Uri erddapUri, string datasetId, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, WeatherRequests.ErddapInfoUri(erddapUri, datasetId));
+        Identify(request);
+        using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return ParseErddapInfo(document.RootElement);
+    }
+
+    /// <summary>
+    /// Reads ERDDAP's <c>info</c> table (rows of row type, variable, attribute,
+    /// data type and value): the axes in order (<c>dimension</c> rows; a
+    /// negative <c>averageSpacing</c> is a descending axis, and a numeric one
+    /// its spacing), their
+    /// <c>actual_range</c>, and the global <c>time_coverage_start</c>/<c>_end</c>,
+    /// <c>title</c> and issue date (<c>date_issued</c>, else <c>date_modified</c>, else <c>date_created</c>).
+    /// </summary>
+    internal static ErddapInfo ParseErddapInfo(JsonElement root)
+    {
+        if (!root.TryGetProperty("table", out var table) || !table.TryGetProperty("rows", out var rows) || rows.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("The ERDDAP info has no table.");
+
+        var axes = new List<(string Name, bool Descending, double? Spacing)>();
+        var ranges = new Dictionary<string, (double Min, double Max)>(StringComparer.Ordinal);
+        var globals = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var row in rows.EnumerateArray())
+        {
+            if (row.ValueKind != JsonValueKind.Array || row.GetArrayLength() < 5)
+                continue;
+            string Cell(int i) => row[i].ValueKind == JsonValueKind.String ? row[i].GetString() ?? string.Empty : row[i].ToString();
+            var (type, variable, attribute, value) = (Cell(0), Cell(1), Cell(2), Cell(4));
+            if (type == "dimension")
+            {
+                var spacing = value.IndexOf("averageSpacing=", StringComparison.Ordinal);
+                double? step = null;
+                if (spacing >= 0)
+                {
+                    var text = value[(spacing + 15)..];
+                    var comma = text.IndexOf(',', StringComparison.Ordinal);
+                    if (double.TryParse(comma < 0 ? text : text[..comma], NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+                        step = Math.Abs(parsed);
+                }
+
+                axes.Add((variable, spacing >= 0 && value.Length > spacing + 15 && value[spacing + 15] == '-', step));
+            }
+            else if (type == "attribute" && variable == "NC_GLOBAL")
+            {
+                globals[attribute] = value;
+            }
+            else if (type == "attribute" && attribute == "actual_range")
+            {
+                var parts = value.Split(',');
+                if (parts.Length == 2
+                    && double.TryParse(parts[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var min)
+                    && double.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var max))
+                {
+                    ranges[variable] = (Math.Min(min, max), Math.Max(min, max));
+                }
+            }
+        }
+
+        if (axes.Count == 0)
+            throw new InvalidDataException("The ERDDAP dataset lists no axes; is it a griddap dataset?");
+
+        DateTimeOffset? Time(string key) => globals.TryGetValue(key, out var text)
+            && DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var t)
+                ? t
+                : null;
+
+        return new ErddapInfo(
+            [.. axes.Select(a => new ErddapAxis(a.Name, a.Descending,
+                ranges.TryGetValue(a.Name, out var r) ? r.Min : null, ranges.TryGetValue(a.Name, out var r2) ? r2.Max : null, a.Spacing))],
+            Time("time_coverage_start"),
+            Time("time_coverage_end"),
+            Time("date_issued") ?? Time("date_modified") ?? Time("date_created"),
+            globals.GetValueOrDefault("title"));
+    }
+
+    /// <summary>The source's latest downloaded run, listed while the service can't be reached.</summary>
+    private CollectionItem? DownloadedItem(WeatherFeedSource feed, string name)
+    {
+        if (Downloader(feed)?.TryGetDownloaded(name) is not { } copy)
+            return null;
+        var properties = Stamp(feed, copy.PublishedAt, null);
+        if (feed.Service.Kind == WeatherServiceKind.NwsAlerts || copy.PublishedAt is null)
+        {
+            properties.Remove(S100ForecastFeedIndexer.RunProperty);
+            properties.Remove(WeatherRuns.StaleAfterProperty);
+        }
+
+        return new CollectionItem
+        {
+            Key = name,
+            ProductSpec = SpecOf(feed.Service.Kind),
+            Name = name,
+            Title = feed.Service.ModelName ?? feed.Service.Model,
+            IssueDate = copy.PublishedAt is { } published ? DateOnly.FromDateTime(published.UtcDateTime) : null,
+            Bounds = AreaOf(feed, RequestArea(feed)),
+            Location = copy.Location,
+            Properties = properties,
+        };
+    }
+
+    /// <summary>Pinned runs kept in the source's download folder, as local items.</summary>
+    private IEnumerable<CollectionItem> PinnedItems(WeatherFeedSource feed)
+    {
+        if (Downloader(feed) is not { } downloader)
+            yield break;
+        foreach (var name in downloader.ListDownloaded())
+        {
+            if (WeatherRuns.RunOfPinnedName(name, out var itemName) is not { } run || downloader.TryGetDownloaded(name) is not { } copy)
+                continue;
+            var properties = Stamp(feed, run, null);
+            properties[WeatherRuns.PinnedProperty] = "true";
+            properties[WeatherRuns.DownloadFolderProperty] = DownloadFolderFor(feed);
+            properties.Remove(S100ForecastFeedIndexer.ValidToProperty);
+            yield return new CollectionItem
+            {
+                Key = itemName + "@" + run.ToString("yyyyMMddHH", CultureInfo.InvariantCulture),
+                ProductSpec = SpecOf(feed.Service.Kind),
+                Name = name,
+                Title = string.Create(CultureInfo.InvariantCulture,
+                    $"{feed.Service.ModelName ?? feed.Service.Model} {WeatherRequests.FormatRun(run)}"),
+                IssueDate = DateOnly.FromDateTime(run.UtcDateTime),
+                Bounds = feed.Service.Kind == WeatherServiceKind.NhcStorms
+                    ? null
+                    : AreaOf(feed, feed.Service.Kind == WeatherServiceKind.GribIndex ? null : RequestArea(feed)),
+                Location = copy.Location,
+                Properties = properties,
+            };
+        }
+    }
+
+    private EncCellDownloader? Downloader(WeatherFeedSource feed) =>
+        _downloadsRoot is { Length: > 0 } root ? new EncCellDownloader(_http, Path.Combine(root, DownloadFolderFor(feed))) : null;
+
+    private static Dictionary<string, string> Stamp(WeatherFeedSource feed, DateTimeOffset? run, DateTimeOffset? validTo)
+    {
+        var properties = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [S100ForecastFeedIndexer.ModelProperty] = feed.Service.Model,
+            [WeatherRuns.ServiceProperty] = JsonNamingPolicy.CamelCase.ConvertName(feed.Service.Kind.ToString()),
+            [WeatherRuns.StaleAfterProperty] = feed.Service.StaleAfter.TotalHours.ToString(CultureInfo.InvariantCulture),
+            ["notForNavigation"] = "true",
+        };
+        if (run is { } r)
+            properties[S100ForecastFeedIndexer.RunProperty] = r.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+        if (validTo is { } v)
+            properties[S100ForecastFeedIndexer.ValidToProperty] = v.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+        if (feed.Licence is { Length: > 0 } licence)
+            properties[WeatherRuns.LicenceProperty] = licence;
+        if (feed.Attribution is { Length: > 0 } attribution)
+            properties[WeatherRuns.AttributionProperty] = attribution;
+        return properties;
+    }
+
+    /// <summary>
+    /// The area a grid service is asked for: the chosen area, cut to one side
+    /// of the antimeridian (<see cref="WeatherRequests.OneSideOfAntimeridian"/>);
+    /// alerts keep the chosen area, as their zones were picked from it.
+    /// </summary>
+    private static GeoBounds? RequestArea(WeatherFeedSource feed) =>
+        feed.Selection.Area is { } area && feed.Service.Kind is not WeatherServiceKind.NwsAlerts
+            ? WeatherRequests.OneSideOfAntimeridian(area, out _)
+            : feed.Selection.Area;
+
+    private static GeoBounds AreaOf(WeatherFeedSource feed, GeoBounds? area)
+    {
+        if (feed.Service.Kind == WeatherServiceKind.WpcBulletins)
+            return WpcDomain;
+        if (area is not { } box)
+            return new GeoBounds(-90, -180, 90, 180);
+        var (south, west, north, east) = WeatherRequests.Rounded(box, feed.Service.GridDegrees);
+        return new GeoBounds(south, west, north, east > 180 ? east - 360 : east);
+    }
+
+    private static string NameOf(WeatherFeedSource feed) => feed.Service.Kind switch
+    {
+        WeatherServiceKind.NwsAlerts => "nws-marine-alerts",
+        _ => Safe(feed.Service.Model),
+    };
+
+    private static string Safe(string text) =>
+        new(text.Select(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_' ? c : '-').ToArray());
+
+    /// <summary>
+    /// WPC's domain, the area a surface analysis covers (V36): the northern
+    /// hemisphere west of Greenwich, as the dataset reader reports it.
+    /// </summary>
+    public static GeoBounds WpcDomain { get; } = new(0, -180, 90, 0);
+
+    private static string SpecOf(WeatherServiceKind kind) => kind switch
+    {
+        WeatherServiceKind.NwsAlerts => "CAP",
+        WeatherServiceKind.WpcBulletins => "CODSUS",
+        WeatherServiceKind.NhcStorms => "TC",
+        WeatherServiceKind.ErddapGriddap => "NetCDF",
+        _ => "GRIB2",
+    };
+
+    private static string NoRunMessage(WeatherFeedSource feed)
+    {
+        var hours = feed.Selection.HoursOf(feed.Service);
+        return string.Create(CultureInfo.InvariantCulture,
+            $"No {feed.Service.ModelName ?? feed.Service.Model} run of the last {RunsTried * feed.Service.CadenceHours} hours has forecast hour {(hours.Count > 0 ? hours[^1] : 0)} yet.");
+    }
+
+    private void Identify(HttpRequestMessage request)
+    {
+        if (_http.DefaultRequestHeaders.UserAgent.Count == 0)
+            request.Headers.UserAgent.TryParseAdd(UserAgent);
+    }
+
+    private static WeatherFeedSource AsFeed(CollectionSource source) => source switch
+    {
+        WeatherFeedSource feed => feed,
+        null => throw new ArgumentNullException(nameof(source)),
+        _ => throw new NotSupportedException($"{nameof(WeatherFeedIndexer)} cannot index {source.GetType().Name}."),
+    };
+
+    private const string GeoJsonMediaType = "application/geo+json";
+}

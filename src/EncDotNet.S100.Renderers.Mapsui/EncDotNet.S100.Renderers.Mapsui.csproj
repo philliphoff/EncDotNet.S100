@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.Pipelines.Tests" />
+    <InternalsVisibleTo Include="EncDotNet.S100.VisualRegression" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Mapsui" />
+    <PackageReference Include="Mapsui.Nts" />
+    <PackageReference Include="Mapsui.Rendering.Skia" />
+    <PackageReference Include="Mapsui.Tiling" />
+    <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="ZstdSharp.Port" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Portrayals\EncDotNet.S100.Portrayals.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Renderers.Skia\EncDotNet.S100.Renderers.Skia.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Rendering.Engine\EncDotNet.S100.Rendering.Engine.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Rendering.Scene\EncDotNet.S100.Rendering.Scene.csproj" />
+  </ItemGroup>
+
+</Project>

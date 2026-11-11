@@ -1,0 +1,125 @@
+{
+  "metadata": [
+    {
+      "src": [
+        {
+          "files": [
+            "src/**/*.csproj"
+          ],
+          "exclude": [
+            "src/EncDotNet.S100.AppHost/**",
+            "src/EncDotNet.S100.Datasets.S129.Fusion/**",
+            "src/EncDotNet.S100.Diagnostics.Export/**",
+            "src/EncDotNet.S100.DynamicSources.Ais/**",
+            "src/EncDotNet.S100.DynamicSources.Ais.Drivers.AisStreamIo/**",
+            "src/EncDotNet.S100.DynamicSources.Ndbc/**",
+            "src/EncDotNet.S100.DynamicSources.Nmea/**",
+            "src/EncDotNet.S100.Nmea/**",
+            "src/EncDotNet.S100.Mcp/**",
+            "src/EncDotNet.S100.Mcp.Tools/**",
+            "src/EncDotNet.S100.Viewer/**"
+          ]
+        },
+        {
+          "src": "external/EncDotNet",
+          "files": [
+            "src/EncDotNet.Iso8211/EncDotNet.Iso8211.csproj",
+            "src/EncDotNet.S57/EncDotNet.S57.csproj",
+            "src/EncDotNet.Noaa/EncDotNet.Noaa.csproj"
+          ]
+        }
+      ],
+      "dest": "api",
+      "properties": {
+        "TargetFramework": "net10.0"
+      }
+    }
+  ],
+  "build": {
+    "content": [
+      {
+        "files": [
+          "api/**.yml",
+          "api/index.md"
+        ]
+      },
+      {
+        "files": [
+          "docs/**.md",
+          "docs/**/toc.yml",
+          "toc.yml",
+          "*.md"
+        ]
+      },
+      {
+        "files": [
+          "src/**/README.md",
+          "src/toc.yml",
+          "samples/**/README.md",
+          "tools/*/README.md"
+        ],
+        "exclude": [
+          "**/bin/**",
+          "**/obj/**"
+        ]
+      },
+      {
+        "src": "external/EncDotNet/docs",
+        "dest": "docs/s57",
+        "files": [
+          "*.md"
+        ],
+        "exclude": [
+          "coding-style.md",
+          "docs-style.md"
+        ]
+      },
+      {
+        "src": "external/EncDotNet/src",
+        "dest": "src",
+        "files": [
+          "EncDotNet.Iso8211/README.md",
+          "EncDotNet.S57/README.md",
+          "EncDotNet.Noaa/README.md"
+        ]
+      }
+    ],
+    "resource": [
+      {
+        "files": [
+          "docs/images/**",
+          "docs/design/**/*.png",
+          "readme/**",
+          "site/src/assets/shots/*.png",
+          "src/*/images/**",
+          "src/EncDotNet.S100.Viewer/Branding/icon.svg"
+        ],
+        "exclude": [
+          "site/src/assets/shots/*.light.png"
+        ]
+      }
+    ],
+    "output": "_site",
+    "sitemap": {
+      "baseUrl": "https://soundcharts.app/",
+      "changefreq": "weekly",
+      "priority": 0.5,
+      "fileOptions": {
+        "api/**": {
+          "priority": 0.3
+        }
+      }
+    },
+    "template": [
+      "default",
+      "modern",
+      "docs/template"
+    ],
+    "globalMetadata": {
+      "_appLogoPath": "src/EncDotNet.S100.Viewer/Branding/icon.svg",
+      "_appFaviconPath": "src/EncDotNet.S100.Viewer/Branding/icon.svg",
+      "_appName": "EncDotNet.S100",
+      "_appTitle": "EncDotNet.S100 Docs"
+    }
+  }
+}

@@ -1,0 +1,190 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.LayerStackView"
+             x:DataType="vm:LayerStackViewModel">
+
+    <UserControl.Styles>
+        <!-- A plane's header toggle is named after its plane, as the expander is;
+             otherwise its peer falls back to the header's type name (#784). -->
+        <Style Selector="Expander /template/ :is(Button)">
+            <Setter Property="AutomationProperties.Name"
+                    Value="{Binding $parent[Expander].(AutomationProperties.Name)}" />
+        </Style>
+        <Style Selector="Button.legendLink">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="MinHeight" Value="20" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+    </UserControl.Styles>
+
+    <DockPanel LastChildFill="True">
+
+        <!-- Header: "Show empty planes" toggle. The pane title comes
+             from MainWindow's PaneTitle binding; this header only
+             carries the toggle so the tree starts at row 1. -->
+        <Border DockPanel.Dock="Top" Padding="8,4,8,6">
+            <CheckBox IsChecked="{Binding ShowEmptyPlanes, Mode=TwoWay}"
+                      AutomationProperties.AutomationId="LayerStack.ShowEmptyPlanes"
+                      Content="{x:Static loc:Strings.LayerStack_ShowEmptyPlanes}"
+                      ToolTip.Tip="{x:Static loc:Strings.LayerStack_ShowEmptyPlanes}" />
+        </Border>
+
+        <!-- Footer: Active vs. Visibility help text. -->
+        <Border DockPanel.Dock="Bottom"
+                Padding="8,6,8,8"
+                BorderBrush="{DynamicResource BorderColor}"
+                BorderThickness="0,1,0,0">
+            <TextBlock Text="{Binding ActiveVsVisibilityHelp}"
+                       FontSize="11"
+                       Opacity="0.65"
+                       TextWrapping="Wrap" />
+        </Border>
+
+        <!-- Body: empty state and populated tree share the fill slot
+             so the empty-state placeholder centres in the available
+             space (DockPanel only stretches its last child, so we
+             need a single fill container here). -->
+        <Grid>
+
+        <!-- Empty state -->
+        <views:PlaceholderView IsVisible="{Binding IsEmpty}"
+                               Icon="Stack"
+                               Header="{x:Static loc:Strings.LayerStack_EmptyTitle}"
+                               Description="{x:Static loc:Strings.LayerStack_EmptyDescription}" />
+
+        <!-- Populated state: tree of planes, each with a list of entries. -->
+        <ScrollViewer IsVisible="{Binding !IsEmpty}"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Planes}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LayerStackPlaneViewModel">
+                        <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                  AutomationProperties.Name="{Binding Title}"
+                                  Margin="4,2"
+                                  Padding="0">
+                            <Expander.Header>
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding Title}"
+                                               FontWeight="SemiBold"
+                                               FontSize="12"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding ChildCountText}"
+                                               FontSize="11"
+                                               Opacity="0.7"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </Expander.Header>
+
+                            <Panel>
+                                <!-- Empty placeholder when ShowEmptyPlanes is on. -->
+                                <TextBlock IsVisible="{Binding IsEmpty}"
+                                           Text="{x:Static loc:Strings.LayerStack_EmptyPlane_Placeholder}"
+                                           FontSize="11"
+                                           Opacity="0.5"
+                                           Margin="24,4,8,4" />
+
+                                <ItemsControl ItemsSource="{Binding Children}"
+                                              IsVisible="{Binding !IsEmpty}">
+                                    <ItemsControl.DataTemplates>
+                                        <DataTemplate DataType="vm:LayerStackEntryViewModel">
+                                            <Grid ColumnDefinitions="Auto,*,Auto"
+                                                  RowDefinitions="Auto,Auto"
+                                                  ColumnSpacing="8"
+                                                  Margin="24,3,8,3">
+                                                <CheckBox Grid.Column="0"
+                                                          AutomationProperties.Name="{Binding DatasetLabel}"
+                                                          AutomationProperties.AutomationId="LayerStack.Entry.Active"
+                                                          IsChecked="{Binding IsActive, Mode=TwoWay}"
+                                                          ToolTip.Tip="{Binding ActiveTooltip}"
+                                                          VerticalAlignment="Center" />
+                                                <StackPanel Grid.Column="1"
+                                                            VerticalAlignment="Center"
+                                                            Spacing="0">
+                                                    <TextBlock Text="{Binding DatasetLabel}"
+                                                               FontSize="12"
+                                                               ToolTip.Tip="{Binding DatasetId}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding SourceFeatureType}"
+                                                               IsVisible="{Binding HasSourceFeatureType}"
+                                                               FontSize="10"
+                                                               Opacity="0.65"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="2"
+                                                           Text="{Binding PriorityText}"
+                                                           FontSize="10"
+                                                           Opacity="0.6"
+                                                           VerticalAlignment="Center"
+                                                           FontFamily="{StaticResource MonoFontFamily}" />
+                                                <!-- Legends D8: the rows moved to the Legend tab; a one-line
+                                                     link opens it at this layer's section. -->
+                                                <Button Grid.Row="1"
+                                                        Grid.Column="1"
+                                                        Grid.ColumnSpan="2"
+                                                        Classes="legendLink"
+                                                        HorizontalAlignment="Left"
+                                                        Margin="0,1,0,1"
+                                                        IsVisible="{Binding HasLegend}"
+                                                        Command="{Binding ShowLegendCommand}"
+                                                        AutomationProperties.AutomationId="LayerStack.Entry.Legend"
+                                                        AutomationProperties.Name="{Binding LegendLinkName}"
+                                                        ToolTip.Tip="{Binding LegendLinkName}">
+                                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                                        <ic:FluentIcon Icon="ColorLine" IconVariant="Regular" FontSize="12" VerticalAlignment="Center" />
+                                                        <TextBlock Text="{x:Static loc:Strings.LayerStack_LegendLink}" VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                </Button>
+                                            </Grid>
+                                        </DataTemplate>
+                                        <!-- PR-D2.1: dynamic-feature-source row. Same chrome
+                                             as a dataset row but the checkbox toggles overlay
+                                             visibility via IDynamicFeatureSourceRegistry. -->
+                                        <DataTemplate DataType="vm:LayerStackDynamicEntryViewModel">
+                                            <Grid ColumnDefinitions="Auto,*"
+                                                  ColumnSpacing="8"
+                                                  Margin="24,3,8,3">
+                                                <CheckBox Grid.Column="0"
+                                                          AutomationProperties.Name="{Binding DisplayName}"
+                                                          AutomationProperties.AutomationId="{Binding AutomationId}"
+                                                          IsChecked="{Binding IsActive, Mode=TwoWay}"
+                                                          ToolTip.Tip="{x:Static loc:Strings.LayerStack_DynamicEntry_VisibilityTooltip}"
+                                                          VerticalAlignment="Center" />
+                                                <StackPanel Grid.Column="1"
+                                                            VerticalAlignment="Center"
+                                                            Spacing="0">
+                                                    <TextBlock Text="{Binding DisplayName}"
+                                                               FontSize="12"
+                                                               ToolTip.Tip="{Binding SourceId}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding Description}"
+                                                               IsVisible="{Binding HasDescription}"
+                                                               FontSize="10"
+                                                               Opacity="0.65"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.DataTemplates>
+                                </ItemsControl>
+                                <!-- TODO PR-L4 (TBD-11): unify ordering UX with DatasetsViewModel drag-reorder -->
+                            </Panel>
+                        </Expander>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+        </Grid>
+    </DockPanel>
+</UserControl>

@@ -1,0 +1,261 @@
+using EncDotNet.S100.Viewer.ViewModels;
+
+namespace EncDotNet.S100.Viewer.Services;
+
+/// <summary>
+/// Default <see cref="IViewerTimelineController"/> over the viewer's
+/// <see cref="GlobalTimeService"/>, <see cref="TimelineViewModel"/> and
+/// <see cref="DatasetsViewModel"/>.
+/// </summary>
+internal sealed class ViewerTimelineController : IViewerTimelineController
+{
+    private readonly GlobalTimeService _time;
+    private readonly TimelineViewModel _timeline;
+    private readonly DatasetsViewModel _datasets;
+    private readonly TimeProvider _clock;
+    private readonly Func<Action, Task> _dispatch;
+
+    public ViewerTimelineController(
+        GlobalTimeService time,
+        TimelineViewModel timeline,
+        DatasetsViewModel datasets,
+        TimeProvider clock,
+        Func<Action, Task> dispatch)
+    {
+        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(timeline);
+        ArgumentNullException.ThrowIfNull(datasets);
+        ArgumentNullException.ThrowIfNull(clock);
+        ArgumentNullException.ThrowIfNull(dispatch);
+        _time = time;
+        _timeline = timeline;
+        _datasets = datasets;
+        _clock = clock;
+        _dispatch = dispatch;
+    }
+
+    /// <inheritdoc />
+    public async Task<ViewerTimelineState> GetStateAsync(CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        ViewerTimelineState? state = null;
+        await _dispatch(() => state = Snapshot()).ConfigureAwait(false);
+        return state!;
+    }
+
+    /// <inheritdoc />
+    public async Task<ViewTimeOutcome> SetViewTimeAsync(DateTime? time, bool snapToNearestSample, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        string? reason = null;
+        ViewerTimelineState? state = null;
+        await _dispatch(() =>
+        {
+            reason = Apply(time, snapToNearestSample);
+            state = Snapshot();
+        }).ConfigureAwait(false);
+        return new ViewTimeOutcome(reason is null, reason, state!);
+    }
+
+    /// <inheritdoc />
+    public async Task<ViewTimeOutcome> StepAsync(TimelineStepKind? kind, int direction, int count, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        string? reason = null;
+        ViewerTimelineState? state = null;
+        await _dispatch(() =>
+        {
+            if (!_time.IsActive)
+            {
+                reason = "no time-aware dataset is loaded";
+            }
+            else
+            {
+                var moved = 0;
+                for (; moved < count && _timeline.StepTarget(kind ?? _timeline.StepKind, direction) is not null; moved++)
+                    _timeline.StepBy(direction, kind);
+                if (moved == 0)
+                    reason = direction > 0 ? "there is nothing later to step to" : "there is nothing earlier to step to";
+            }
+            state = Snapshot();
+        }).ConfigureAwait(false);
+        return new ViewTimeOutcome(reason is null, reason, state!);
+    }
+
+    /// <inheritdoc />
+    public async Task<ViewTimeOutcome> SetViewAsync(TimelineViewChange change, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+        ct.ThrowIfCancellationRequested();
+        string? reason = null;
+        ViewerTimelineState? state = null;
+        await _dispatch(() =>
+        {
+            var windowed = change.Preset is not null || change.Zoom is not null || change.Window is not null;
+            if (change.InMapView is not null && !_timeline.IsInMapViewAvailable)
+                reason = "the map view is not available";
+            else if (change.ShowOnline is not null && !_timeline.IsShowOnlineAvailable)
+                reason = "the Library is not available";
+            else if (windowed && !_time.IsActive)
+                reason = "no time-aware dataset is loaded";
+            else
+            {
+                // Lanes and the filter first: the filter decides what a preset spans.
+                if (change.CollapsedToStrip is { } strip)
+                    _timeline.IsCollapsedToStrip = strip;
+                if (change.InMapView is { } inMapView)
+                    _timeline.IsInMapView = inMapView;
+                if (change.ShowOnline is { } showOnline)
+                    _timeline.ShowOnline = showOnline;
+                if (change.Preset is { } preset && !_timeline.ApplyPreset(preset))
+                    reason = preset == TimelinePreset.InView ? "no layer is in the map view" : "there is no run to show";
+                else if (change.Zoom is { } zoom)
+                    _timeline.ZoomBy(zoom > 0 ? 0.5 : 2);
+                else if (change.Window is { } window)
+                    _timeline.SetWindow(window.Start, window.End);
+            }
+            state = Snapshot();
+        }).ConfigureAwait(false);
+        return new ViewTimeOutcome(reason is null, reason, state!);
+    }
+
+    private string? Apply(DateTime? time, bool snapToNearestSample)
+    {
+        if (!_time.IsActive)
+            return "no time-aware dataset is loaded";
+
+        if (time is null)
+        {
+            // Go live through the Timeline's own command, as the user does;
+            // already live is already there.
+            if (_timeline.NowCommand.CanExecute(null))
+                _timeline.NowCommand.Execute(null);
+            return null;
+        }
+
+        var target = time.Value;
+        var samples = _time.AllSamples;
+        if (snapToNearestSample && samples.Count > 0)
+            target = samples.MinBy(sample => (sample - target).Duration());
+        _time.SetCurrentTime(target);
+        return null;
+    }
+
+    private ViewerTimelineState Snapshot()
+    {
+        var viewTime = _time.CurrentTime;
+        var layers = _datasets.Entries
+            .Where(entry => entry.HasTimeSteps)
+            .Select(entry => Layer(entry, viewTime))
+            .ToArray();
+        return new ViewerTimelineState(
+            Active: _time.IsActive,
+            Now: _clock.GetUtcNow().UtcDateTime,
+            ViewTime: viewTime,
+            FollowingNow: _time.Mode == TimeMode.Live,
+            Minimum: _time.MinTime,
+            Maximum: _time.MaxTime,
+            SampleCount: _time.AllSamples.Count,
+            Coverage: _time.CoverageSegments,
+            Runs: _timeline.Runs,
+            NowInCoverage: _timeline.IsNowInCoverage,
+            ForecastEnded: _timeline.IsForecastEnded,
+            Readout: _timeline.CurrentTimeLabel,
+            Summary: _timeline.RangeLabel,
+            Layers: layers)
+        {
+            WindowStart = _timeline.VisibleStart,
+            WindowEnd = _timeline.VisibleEnd,
+            Preset = _timeline.PresetLabel,
+            Step = _timeline.StepKind,
+            StepDriver = _timeline.Driver?.Name,
+            Gaps = _timeline.AxisGaps,
+            InMapView = _timeline.IsInMapView,
+            ShowOnline = _timeline.ShowOnline,
+            CollapsedToStrip = _timeline.IsCollapsedToStrip,
+            Lanes = Lanes(),
+            Passage = Passage(),
+            FollowPassage = _timeline.Passage?.IsFollowing == true,
+            Offset = _timeline.OffsetText,
+            Message = _timeline.HasStatusMessage ? _timeline.StatusMessage : null,
+            MessageAction = _timeline.HasStatusAction ? _timeline.StatusActionText : null,
+        };
+    }
+
+    private TimelinePassageState? Passage()
+    {
+        if (_timeline.Passage is not { HasLanes: true, Departure: { } departure, Arrival: { } arrival, Verdict: { } verdict } p)
+            return null;
+        return new TimelinePassageState(
+            departure,
+            arrival,
+            p.MinimumTime,
+            verdict,
+            p.IsStale,
+            p.PassageStart,
+            p.PassageEnd,
+            double.IsFinite(p.MinimumPosition) ? p.MinimumPosition : null,
+            p.CanFollow)
+        {
+            DeparturePosition = p.HasWindow ? p.DeparturePosition : null,
+            Windows = p.HasWindow ? p.WindowSub : null,
+            Segments = p.HasWindow ? p.WindowSegments : [],
+        };
+    }
+
+    private TimelineLaneState[] Lanes()
+    {
+        string Id(TimelineLaneViewModel lane) =>
+            lane.Dataset is { } dataset
+                ? _datasets.Entries.FirstOrDefault(e => e.Id.Value == lane.DatasetId)?.DisplayName ?? dataset.Name
+                : lane.Key;
+        TimelineLaneState State(TimelineLaneViewModel lane, string group, bool listed) =>
+            new(Id(lane), lane.Code, group, listed, lane.IsInMapView, lane.IsExpired, lane.LayerTime)
+            {
+                Library = lane.IsKnown,
+                NewRun = lane.IsNewRun,
+                Windows = [.. lane.Entries.Select(e => new TimelineLibraryWindow(e.ItemId, e.State, e.Start, e.End, e.Run, e.IsNewRun, e.IsExpired))],
+                Sub = lane.Sub,
+                Issued = lane.Marks.Any(m => m.Kind == TimelineLaneMarkKind.Issued) ? lane.Dataset?.IssueTime : null,
+                NextIssue = lane.Marks.Any(m => m.Kind == TimelineLaneMarkKind.NextIssue) ? lane.Dataset?.NextIssueTime : null,
+                StepTicks = lane.Marks.Count(m => m.Kind == TimelineLaneMarkKind.Step),
+            };
+        var listed = _timeline.LaneGroups.SelectMany(g => g.Lanes.Select(lane => State(lane, g.Title, true)));
+        var folded = _timeline.HasOutsideLanes
+            ? _timeline.OutsideLanes.Select(lane => State(lane, TimelineViewModel.GroupTitle(lane.Spec), false))
+            : [];
+        return [.. listed, .. folded];
+    }
+
+    private static TimelineLayerState Layer(DatasetEntry entry, DateTime? viewTime)
+    {
+        var samples = entry.AvailableTimes ?? [];
+        DateTime? previous = null;
+        DateTime? next = null;
+        if (viewTime is { } at)
+        {
+            foreach (var sample in samples)
+            {
+                if (sample <= at && (previous is null || sample > previous))
+                    previous = sample;
+                else if (sample > at && (next is null || sample < next))
+                    next = sample;
+            }
+        }
+        return new TimelineLayerState(
+            Id: entry.DisplayName,
+            Spec: entry.ProductSpec,
+            Visible: entry.IsVisible,
+            DrawnTime: entry.CurrentTime,
+            PreviousSample: previous,
+            NextSample: next,
+            SampleCount: samples.Count)
+        {
+            Time = entry.LayerTime?.Text,
+            Hidden = entry.IsLayerHidden,
+            Drawing = entry.IsLayerDrawing,
+            StaleHours = entry.LayerTime?.StaleAge is { } age ? (int)age.TotalHours : null,
+            Tag = entry.IsLayerWarning ? entry.LayerTagText : null,
+        };
+    }
+}

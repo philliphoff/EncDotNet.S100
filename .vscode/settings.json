@@ -1,0 +1,26 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "dotnet build": true,
+        "dotnet package": true,
+        "dotnet restore": true,
+        "dotnet run": true,
+        "dotnet test": true,
+        "dotnet tool": true,
+        "awk": true,
+        "cp": true,
+        "mkdir": true,
+        "dotnet list": true,
+        "dotnet ilspycmd": true,
+        "dotnet nuget": true,
+        "dotnet add": true,
+        "dotnet ildasm": true,
+        "nuget": true,
+        "dotnet remove": true,
+        "dotnet-ilspy": true,
+        "strings": true,
+        "pip": true,
+        "ilspycmd": true,
+        "~/.dotnet/tools/ilspycmd": true,
+        "dotnet msbuild": true
+    }
+}

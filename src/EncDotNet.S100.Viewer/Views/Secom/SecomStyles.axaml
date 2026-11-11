@@ -1,0 +1,68 @@
+<!--
+  Styles for SECOM connection states (#883): a toned status block (border at
+  36 %, fill at 7 %, from SecomTints) and a toned tag, in the as-built tones:
+  success, warning, destructive and neutral.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ic="using:FluentIcons.Avalonia">
+    <Style Selector="Border.secomBlock">
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="13,12" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+        <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+    </Style>
+    <Style Selector="Border.secomBlock.success, Border.secomTag.success">
+        <Setter Property="BorderBrush" Value="{DynamicResource SecomSuccessBorderBrush}" />
+        <Setter Property="Background" Value="{DynamicResource SecomSuccessFillBrush}" />
+    </Style>
+    <Style Selector="Border.secomBlock.warning, Border.secomTag.warning">
+        <Setter Property="BorderBrush" Value="{DynamicResource SecomWarningBorderBrush}" />
+        <Setter Property="Background" Value="{DynamicResource SecomWarningFillBrush}" />
+    </Style>
+    <Style Selector="Border.secomBlock.destructive, Border.secomTag.destructive">
+        <Setter Property="BorderBrush" Value="{DynamicResource SecomDestructiveBorderBrush}" />
+        <Setter Property="Background" Value="{DynamicResource SecomDestructiveFillBrush}" />
+    </Style>
+    <Style Selector="Border.secomTag">
+        <Setter Property="CornerRadius" Value="999" />
+        <Setter Property="Padding" Value="8,2" />
+        <Setter Property="MinHeight" Value="20" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+        <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+    </Style>
+    <Style Selector="Border.secomTag > TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+    </Style>
+    <Style Selector=":is(Control).secomToned.success, TextBlock.secomToned.success">
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource SuccessColor}" />
+    </Style>
+    <Style Selector=":is(Control).secomToned.warning">
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource WarningColor}" />
+    </Style>
+    <Style Selector=":is(Control).secomToned.destructive">
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource DestructiveColor}" />
+    </Style>
+    <Style Selector=":is(Control).secomToned.neutral">
+        <Setter Property="TextElement.Foreground" Value="{DynamicResource MutedColor}" />
+    </Style>
+    <Style Selector="Border.secomTag.success > TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource SuccessColor}" />
+    </Style>
+    <Style Selector="Border.secomTag.warning > TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
+    </Style>
+    <Style Selector="Border.secomTag.destructive > TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+    </Style>
+    <Style Selector="Border.secomQuote">
+        <Setter Property="BorderThickness" Value="2,0,0,0" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="Margin" Value="0,9,0,0" />
+    </Style>
+</Styles>

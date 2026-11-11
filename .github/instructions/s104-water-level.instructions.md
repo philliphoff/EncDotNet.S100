@@ -1,0 +1,41 @@
+---
+applyTo: "src/EncDotNet.S100.Datasets.S104/**,tests/EncDotNet.S100.Datasets.S104.Tests/**"
+---
+
+# S-104 editing rules
+
+When modifying S-104 code:
+
+- Load the `s104-water-level` skill before proposing non-trivial changes.
+- Preserve HDF5 group/attribute names exactly as specified in the
+  S-104 Edition 2.0.0 product spec (case-sensitive).
+- Do not assume `dataCodingFormat` is regular grid (2) — support (or
+  explicitly reject) the other formats declared on the root group.
+- `waterLevelTrend` is a spec-defined enumeration (0 nodata, 1
+  decreasing, 2 increasing, 3 steady). Never recompute it client-side;
+  preserve producer-supplied values.
+- Times derive from `dateTimeOfFirstRecord` + `timeRecordInterval *
+  index` unless an explicit time dataset exists.
+- Cite the S-104 section number in XML doc comments when adding
+  spec-derived constants, attribute names, or group paths.
+- Any new public API requires a matching xunit test (skip with
+  `Assert.SkipUnless` when a real HDF5 file is required).
+- **Portrayal is SoundCharts' own by design.** IHO publishes no official
+  S-104 portrayal catalogue (the spec treats water levels as input to ECDIS
+  depth adjustment, not a visual layer). `S104CoverageStyle` defines
+  station gauges (trend mark + signed value) and dashed surface isolines in
+  one ink colour per Day / Dusk / Night palette; the S-104 README's
+  Portrayal section is the reference. Do **not** invent a synthetic
+  IHO-shaped PC under `content/S104/pc/`; that directory stays
+  `.gitkeep`-only until IHO publishes one. Don't add colour fills, or red,
+  green or depth blues: they compete with the ENC. Update
+  `S104CoverageStyleTests` and the `S104RenderingTests` baselines with
+  any change.
+  The style is built with the `EncDotNet.S100.Portrayals.Application`
+  toolkit: colours in `S104CoverageStyle.Palette` (`ApplicationPalette`),
+  symbols as SVG files in `src/EncDotNet.S100.Datasets.S104/Symbols/`
+  (`SymbolSet`), instructions from `StationSymbols` / `StationLabels`
+  (`InstructionBuilder`). Don't add palette dictionaries or inline SVG
+  strings back. Bump `S104CoverageStyle.StyleVersion` when a symbol or
+  colour changes, so the tile disk cache drops tiles drawn with the old
+  style.

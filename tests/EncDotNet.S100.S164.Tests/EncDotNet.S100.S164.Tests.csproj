@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+    <UseSkiaSharpLinuxNoDependencies>true</UseSkiaSharpLinuxNoDependencies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\_shared\TestLuaEngine.cs" Link="TestSupport\TestLuaEngine.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EncDotNet.S100\EncDotNet.S100.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.ExchangeSets\EncDotNet.S100.ExchangeSets.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Navigation\EncDotNet.S100.Navigation.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="s164-v2.0.0.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="S64\s64-100-v4.0.0.json" Link="s64-100-v4.0.0.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

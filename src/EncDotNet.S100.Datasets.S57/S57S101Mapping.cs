@@ -1,0 +1,526 @@
+using System.Collections.Concurrent;
+
+namespace EncDotNet.S100.Datasets.S57;
+
+/// <summary>
+/// Mapping from the S-57 (Edition 3.1) Object Catalogue to the S-101 Feature
+/// Catalogue. Encodes feature-class and attribute mappings, plus richer rule
+/// types used by the S-57 to S-101 conversion: cross-class redirects,
+/// per-feature attribute overrides, and per-value enum remaps.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Rule data is sourced primarily from the IHO draft "S-57 to S-101
+/// Conversion Guidance" (S-100WG / S-101 Project Team 6, January 2021),
+/// cross-checked against the IHO S-57 Object Catalogue (Appendix A, Edition
+/// 3.1) for OBJL/ATTL numeric codes.
+/// </para>
+/// <para>
+/// The <see cref="Default"/> mapping is built from compiled-in seed data; no
+/// resource files are loaded at runtime. Use the <see cref="Builder"/> to
+/// compose custom mappings.
+/// </para>
+/// </remarks>
+public sealed class S57S101Mapping
+{
+    private readonly IReadOnlyDictionary<string, ushort> _attlByAcronym;
+
+    /// <summary>Feature-class rules keyed by S-57 OBJL.</summary>
+    public IReadOnlyDictionary<ushort, S57FeatureRule> FeatureRules { get; }
+
+    /// <summary>Attribute rules keyed by S-57 ATTL.</summary>
+    public IReadOnlyDictionary<ushort, S57AttributeRule> AttributeRules { get; }
+
+    private S57S101Mapping(
+        IReadOnlyDictionary<ushort, S57FeatureRule> featureRules,
+        IReadOnlyDictionary<ushort, S57AttributeRule> attributeRules)
+    {
+        FeatureRules = featureRules;
+        AttributeRules = attributeRules;
+
+        // Fail fast on redirects that can never match: a value-matching
+        // redirect (ConditionPresent == false) with no ConditionValues would
+        // silently never fire, masking a mapping-rule authoring mistake.
+        foreach (var (objl, rule) in featureRules)
+        {
+            foreach (var redirect in rule.Redirects)
+            {
+                var hasAttrCondition = redirect.ConditionAttribute is not null;
+                var hasPrimitiveCondition = redirect.ConditionPrimitives.Count > 0;
+
+                // A redirect must constrain on something; one with neither an
+                // attribute nor a primitive condition would fire unconditionally
+                // and shadow the rule default (and any later redirects).
+                if (!hasAttrCondition && !hasPrimitiveCondition)
+                {
+                    throw new ArgumentException(
+                        $"S-57 feature redirect on OBJL {objl} (target " +
+                        $"'{redirect.TargetS101Code}') specifies no condition. Provide a " +
+                        "ConditionAttribute (with ConditionPresent or ConditionValues) " +
+                        "and/or a ConditionPrimitives constraint.",
+                        nameof(featureRules));
+                }
+
+                // A value-matching attribute condition (ConditionAttribute set,
+                // ConditionPresent false) needs at least one value, else the
+                // attribute gate can never pass — masking an authoring mistake
+                // even if a primitive condition is also present.
+                if (hasAttrCondition
+                    && !redirect.ConditionPresent
+                    && redirect.ConditionValues.Count == 0)
+                {
+                    throw new ArgumentException(
+                        $"S-57 feature redirect on OBJL {objl} (condition attribute " +
+                        $"'{redirect.ConditionAttribute}', target '{redirect.TargetS101Code}') " +
+                        "has ConditionPresent == false and no ConditionValues, so it can " +
+                        "never match. Set ConditionPresent = true for a presence test, or " +
+                        "provide at least one entry in ConditionValues.",
+                        nameof(featureRules));
+                }
+            }
+        }
+
+        var byAcronym = new Dictionary<string, ushort>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (attl, rule) in attributeRules)
+            byAcronym[rule.S57Acronym] = attl;
+        _attlByAcronym = byAcronym;
+    }
+
+    /// <summary>
+    /// The default mapping bundled with this assembly. Suitable for most ENC
+    /// base cells; extend by composing your own <see cref="Builder"/> when a
+    /// producer uses additional object classes.
+    /// </summary>
+    public static S57S101Mapping Default { get; } = BuildDefault();
+
+    private static readonly ConcurrentDictionary<string, Lazy<S57S101Mapping>> BySpec =
+        new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The bundled mapping into the Feature Catalogue of
+    /// <paramref name="targetSpec"/>. For <c>"S-101"</c> this is
+    /// <see cref="Default"/>. For another product sharing the S-101 document
+    /// model it is <see cref="Default"/> restricted to the feature classes and
+    /// attributes that product's bundled catalogue defines (see
+    /// <see cref="RestrictToFeatureTypes"/> and <see cref="RestrictToAttributes"/>).
+    /// For S-401 the inland ENC object classes and attributes (IEHG IENC
+    /// Feature Catalogue 2.4) are added before restricting, so an inland cell's
+    /// 17000-range codes translate too. The anchorage rules are also replaced
+    /// for S-401: an anchorage area whose <c>CATACH</c> is 8 (small craft mooring
+    /// area) becomes <c>MooringArea</c>, and <c>CATACH</c> 10 becomes
+    /// <c>categoryOfAnchorage</c> 16 (IEHG S-57 ENC to S-401 Conversion Guidance
+    /// clauses 3.3, 3.4 and 3.85). A gate's <c>VERCLR</c> becomes
+    /// <c>verticalClearanceOpen</c> (clause 3.55). Built once per spec.
+    /// </summary>
+    /// <param name="targetSpec">The target product, e.g. <c>"S-401"</c>.</param>
+    /// <returns>The shared mapping for that product.</returns>
+    /// <exception cref="InvalidOperationException">No Feature Catalogue is bundled for <paramref name="targetSpec"/>.</exception>
+    public static S57S101Mapping ForSpec(string targetSpec)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetSpec);
+        if (string.Equals(targetSpec, S57TranslationTarget.S101.Spec, StringComparison.OrdinalIgnoreCase))
+            return Default;
+
+        return BySpec.GetOrAdd(targetSpec, static spec => new(() =>
+        {
+            var catalogue = S101FeatureAttributeBindings.ForSpec(spec);
+            var baseline = string.Equals(spec, S57TranslationTarget.S401.Spec, StringComparison.OrdinalIgnoreCase)
+                ? WithInlandRules(Default)
+                : Default;
+            return baseline
+                .RestrictToFeatureTypes(catalogue.DefinesFeatureType)
+                .RestrictToAttributes(catalogue.DefinesAttribute);
+        })).Value;
+    }
+
+    private static S57S101Mapping WithInlandRules(S57S101Mapping standard)
+    {
+        var builder = new Builder().WithDefaults();
+        foreach (var rule in InlandRules.FeatureRules(standard))
+            builder.AddFeatureRule(rule);
+        foreach (var rule in InlandRules.AttributeRules(standard))
+            builder.AddAttributeRule(rule);
+
+        // S-401-only anchorage rules replace both the standard rules and their
+        // inland twins (Mooring Area redirect, catach 10 → 16).
+        foreach (var rule in S401AnchorageRules.FeatureRules(standard))
+            builder.AddFeatureRule(rule);
+        foreach (var rule in S401AnchorageRules.AttributeRules(standard))
+            builder.AddAttributeRule(rule);
+
+        // S-401-only gate rule (VERCLR → verticalClearanceOpen).
+        foreach (var rule in S401GateRules.FeatureRules(standard))
+            builder.AddFeatureRule(rule);
+        return builder.Build();
+    }
+
+    /// <summary>
+    /// Returns a copy of this mapping whose attribute rules only target
+    /// attributes for which <paramref name="isDefined"/> holds; a rule whose
+    /// default attribute is not defined keeps its ATTL but loses the target, so
+    /// the attribute is reported as rule-dropped. Feature rules, including their
+    /// attribute overrides, are carried over unchanged.
+    /// </summary>
+    /// <param name="isDefined">Whether the target Feature Catalogue defines an attribute code.</param>
+    /// <returns>The restricted mapping.</returns>
+    public S57S101Mapping RestrictToAttributes(Func<string, bool> isDefined)
+    {
+        ArgumentNullException.ThrowIfNull(isDefined);
+
+        var attributes = new Dictionary<ushort, S57AttributeRule>(AttributeRules.Count);
+        foreach (var (attl, rule) in AttributeRules)
+        {
+            attributes[attl] = rule.DefaultS101Code is { } code && !isDefined(code)
+                ? rule with { DefaultS101Code = null }
+                : rule;
+        }
+
+        return new S57S101Mapping(new Dictionary<ushort, S57FeatureRule>(FeatureRules), attributes);
+    }
+
+    /// <summary>
+    /// Returns a copy of this mapping that only targets feature classes for
+    /// which <paramref name="isDefined"/> holds. A rule whose default class is
+    /// not defined keeps its OBJL but loses the default, so instances that no
+    /// remaining redirect claims are dropped (and reported as rule-dropped, not
+    /// unmapped); redirects to an undefined class are removed. Attribute rules
+    /// are carried over unchanged.
+    /// </summary>
+    /// <param name="isDefined">Whether the target Feature Catalogue defines a feature class code.</param>
+    /// <returns>The restricted mapping.</returns>
+    public S57S101Mapping RestrictToFeatureTypes(Func<string, bool> isDefined)
+    {
+        ArgumentNullException.ThrowIfNull(isDefined);
+
+        var features = new Dictionary<ushort, S57FeatureRule>(FeatureRules.Count);
+        foreach (var (objl, rule) in FeatureRules)
+        {
+            var defaultCode = rule.DefaultS101Code is { } code && isDefined(code) ? code : null;
+            var redirects = rule.Redirects.Where(r => isDefined(r.TargetS101Code)).ToArray();
+            features[objl] = defaultCode == rule.DefaultS101Code && redirects.Length == rule.Redirects.Count
+                ? rule
+                : rule with { DefaultS101Code = defaultCode, Redirects = redirects };
+        }
+
+        return new S57S101Mapping(features, new Dictionary<ushort, S57AttributeRule>(AttributeRules));
+    }
+
+    // ── Legacy back-compat lookups ──────────────────────────────────────
+
+    /// <summary>
+    /// Resolves a numeric S-57 OBJL code to its default S-101 Feature
+    /// Catalogue code. Returns <c>null</c> when the code is not in the
+    /// mapping table or has no default code (because every concrete
+    /// destination depends on a redirect condition).
+    /// </summary>
+    public string? ResolveFeatureCode(ushort objl)
+        => FeatureRules.TryGetValue(objl, out var r) ? r.DefaultS101Code : null;
+
+    /// <summary>
+    /// Resolves a numeric S-57 ATTL code to its default S-101 Feature
+    /// Catalogue attribute name. Returns <c>null</c> when the code is not in
+    /// the mapping table or has no flat S-101 equivalent.
+    /// </summary>
+    public string? ResolveAttributeCode(ushort attl)
+        => AttributeRules.TryGetValue(attl, out var r) ? r.DefaultS101Code : null;
+
+    /// <summary>Number of feature classes in the mapping.</summary>
+    public int FeatureCount => FeatureRules.Count;
+
+    /// <summary>Number of attributes in the mapping.</summary>
+    public int AttributeCount => AttributeRules.Count;
+
+    // ── Rule-aware resolution ───────────────────────────────────────────
+
+    /// <summary>
+    /// Resolves an S-57 feature instance without considering geometry; equivalent
+    /// to passing <see cref="S57GeometryPrimitive.None"/>.
+    /// </summary>
+    public ResolvedFeature? ResolveFeature(
+        ushort objl,
+        IReadOnlyDictionary<string, string> s57AttributesByAcronym)
+        => ResolveFeature(objl, s57AttributesByAcronym, S57GeometryPrimitive.None);
+
+    /// <summary>
+    /// Resolves an S-57 feature instance to the S-101 feature class it should
+    /// map to, evaluating any conditional redirects defined for the OBJL
+    /// against the supplied S-57 attribute values.
+    /// </summary>
+    /// <param name="objl">S-57 numeric object class (OBJL).</param>
+    /// <param name="s57AttributesByAcronym">
+    /// The feature's S-57 attributes keyed by acronym. Use
+    /// <see cref="BuildAcronymView"/> to construct this view from a feature's
+    /// raw attribute records.
+    /// </param>
+    /// <param name="primitive">
+    /// The feature's geometric primitive, used to evaluate geometry-conditional
+    /// redirects (<see cref="S57FeatureRedirect.ConditionPrimitives"/>). Pass
+    /// <see cref="S57GeometryPrimitive.None"/> when geometry is irrelevant.
+    /// </param>
+    /// <returns>
+    /// A <see cref="ResolvedFeature"/>, or <c>null</c> if the OBJL has no
+    /// rule or all matching rules drop the feature.
+    /// </returns>
+    public ResolvedFeature? ResolveFeature(
+        ushort objl,
+        IReadOnlyDictionary<string, string> s57AttributesByAcronym,
+        S57GeometryPrimitive primitive)
+    {
+        if (!FeatureRules.TryGetValue(objl, out var rule)) return null;
+
+        foreach (var redirect in rule.Redirects)
+        {
+            // Geometry gate: a redirect constrained to specific primitives only
+            // fires when the feature's primitive is among them.
+            if (redirect.ConditionPrimitives.Count > 0
+                && !redirect.ConditionPrimitives.Contains(primitive))
+            {
+                continue;
+            }
+
+            // Attribute gate: a redirect with no ConditionAttribute is purely
+            // geometry-based and passes the attribute gate unconditionally.
+            var attributeMatches = redirect.ConditionAttribute is null
+                || (s57AttributesByAcronym.TryGetValue(redirect.ConditionAttribute, out var v)
+                    && (redirect.ConditionPresent
+                        ? !string.IsNullOrEmpty(v)
+                        : redirect.ConditionMatchesListItem
+                            ? v.Split(',', StringSplitOptions.TrimEntries)
+                                .Any(item => redirect.ConditionValues.Contains(item, StringComparer.Ordinal))
+                            : redirect.ConditionValues.Contains(v, StringComparer.Ordinal)));
+
+            if (attributeMatches)
+            {
+                var combined = MergeOverrides(rule.AttributeOverrides, redirect.AttributeOverrides);
+                return new ResolvedFeature(redirect.TargetS101Code, combined);
+            }
+        }
+
+        if (rule.DefaultS101Code is null || rule.DroppedPrimitives.Contains(primitive)) return null;
+        return new ResolvedFeature(rule.DefaultS101Code, rule.AttributeOverrides);
+    }
+
+    /// <summary>
+    /// Resolves an S-57 attribute, in the context of a previously resolved
+    /// feature, to the S-101 attribute name and value to emit.
+    /// </summary>
+    /// <param name="s57Acronym">S-57 attribute acronym (e.g. <c>CATCOA</c>).</param>
+    /// <param name="value">Raw S-57 attribute value as a string.</param>
+    /// <param name="feature">
+    /// The resolved feature whose effective overrides apply to this
+    /// attribute.
+    /// </param>
+    /// <returns>
+    /// A <see cref="ResolvedAttribute"/>, or <c>null</c> if the attribute is
+    /// not mapped or a value remap drops it.
+    /// </returns>
+    public ResolvedAttribute? ResolveAttribute(string s57Acronym, string value, ResolvedFeature feature)
+    {
+        ArgumentNullException.ThrowIfNull(s57Acronym);
+        ArgumentNullException.ThrowIfNull(value);
+        ArgumentNullException.ThrowIfNull(feature);
+
+        if (!_attlByAcronym.TryGetValue(s57Acronym, out var attl)) return null;
+        return ResolveAttribute(attl, value, feature);
+    }
+
+    /// <summary>
+    /// Resolves an S-57 attribute identified by its numeric code, in the
+    /// context of a previously resolved feature, to the S-101 attribute name
+    /// and value to emit. Prefer this overload when the ATTL is known: an
+    /// inland ENC attribute re-registers a standard acronym in lower case under
+    /// a different code (e.g. <c>catslc</c> = 17012 for <c>CATSLC</c>), so an
+    /// acronym alone may not identify the rule.
+    /// </summary>
+    /// <param name="attl">S-57 numeric attribute code (ATTL).</param>
+    /// <param name="value">Raw S-57 attribute value as a string.</param>
+    /// <param name="feature">The resolved feature whose effective overrides apply.</param>
+    /// <returns>
+    /// A <see cref="ResolvedAttribute"/>, or <c>null</c> if the attribute is
+    /// not mapped or a value remap drops it.
+    /// </returns>
+    public ResolvedAttribute? ResolveAttribute(ushort attl, string value, ResolvedFeature feature)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        ArgumentNullException.ThrowIfNull(feature);
+
+        if (!AttributeRules.TryGetValue(attl, out var rule)) return null;
+        var s57Acronym = rule.S57Acronym;
+
+        string? s101Code = rule.DefaultS101Code;
+        var valueRemap = rule.DefaultValueRemap;
+
+        if (feature.AttributeOverrides.TryGetValue(s57Acronym, out var ov))
+        {
+            // A feature-scoped drop removes the attribute entirely (e.g. CATMOR
+            // on a MORFAC that redirected to ShorelineConstruction).
+            if (ov.Drop) return null;
+            if (ov.S101Code is not null) s101Code = ov.S101Code;
+            // Per-value code override wins over both rule default and the
+            // override's S101Code.
+            if (ov.S101CodeByValue.TryGetValue(value, out var perValueCode))
+                s101Code = perValueCode;
+            if (ov.ValueRemap.Count > 0)
+                valueRemap = MergeValueRemap(valueRemap, ov.ValueRemap);
+        }
+
+        if (s101Code is null) return null;
+
+        if (valueRemap.TryGetValue(value, out var newValue))
+        {
+            if (newValue is null) return null; // explicit drop
+            value = newValue;
+        }
+
+        return new ResolvedAttribute(s101Code, value);
+    }
+
+    /// <summary>
+    /// Builds a {acronym → value} view of an S-57 feature's raw attributes,
+    /// suitable for passing to <see cref="ResolveFeature(ushort, System.Collections.Generic.IReadOnlyDictionary{string, string})"/>. Values for
+    /// attributes whose ATTL is unknown to this mapping are omitted.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> BuildAcronymView(IEnumerable<EncDotNet.S57.S57AttributeValue> attributes)
+    {
+        ArgumentNullException.ThrowIfNull(attributes);
+        var b = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var a in attributes)
+        {
+            if (AttributeRules.TryGetValue((ushort)a.AttributeCode, out var rule))
+                b[rule.S57Acronym] = a.Value;
+        }
+        return b;
+    }
+
+    /// <summary>
+    /// Try to look up the numeric ATTL for a given S-57 attribute acronym.
+    /// </summary>
+    public bool TryGetAttl(string s57Acronym, out ushort attl)
+        => _attlByAcronym.TryGetValue(s57Acronym, out attl);
+
+    private static IReadOnlyDictionary<string, S57AttributeOverride> MergeOverrides(
+        IReadOnlyDictionary<string, S57AttributeOverride> ruleLevel,
+        IReadOnlyDictionary<string, S57AttributeOverride> redirectLevel)
+    {
+        if (redirectLevel.Count == 0) return ruleLevel;
+        if (ruleLevel.Count == 0) return redirectLevel;
+
+        var b = new Dictionary<string, S57AttributeOverride>(ruleLevel, StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in redirectLevel)
+            b[kv.Key] = kv.Value; // redirect-level wins
+        return b;
+    }
+
+    private static IReadOnlyDictionary<string, string?> MergeValueRemap(
+        IReadOnlyDictionary<string, string?> defaultRemap,
+        IReadOnlyDictionary<string, string?> overrideRemap)
+    {
+        if (overrideRemap.Count == 0) return defaultRemap;
+        if (defaultRemap.Count == 0) return overrideRemap;
+
+        var b = new Dictionary<string, string?>(defaultRemap);
+        foreach (var kv in overrideRemap)
+            b[kv.Key] = kv.Value;
+        return b;
+    }
+
+    // ── Builder ─────────────────────────────────────────────────────────
+
+    /// <summary>Builder for composing custom mapping tables.</summary>
+    public sealed class Builder
+    {
+        private readonly Dictionary<ushort, S57FeatureRule> _features = new();
+        private readonly Dictionary<ushort, S57AttributeRule> _attributes = new();
+
+        /// <summary>Adds or replaces a feature-class rule.</summary>
+        public Builder AddFeatureRule(S57FeatureRule rule)
+        {
+            ArgumentNullException.ThrowIfNull(rule);
+            _features[rule.Objl] = rule;
+            return this;
+        }
+
+        /// <summary>
+        /// Convenience overload that adds a 1:1 feature-class mapping.
+        /// </summary>
+        public Builder AddFeature(ushort objl, string s57Acronym, string s101Code)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(s57Acronym);
+            ArgumentException.ThrowIfNullOrEmpty(s101Code);
+            _features[objl] = new S57FeatureRule
+            {
+                Objl = objl,
+                S57Acronym = s57Acronym,
+                DefaultS101Code = s101Code,
+            };
+            return this;
+        }
+
+        /// <summary>
+        /// Convenience overload that adds a 1:1 feature-class mapping by S-101
+        /// code only. Use when the S-57 acronym is not relevant for the test
+        /// being constructed.
+        /// </summary>
+        public Builder AddFeature(ushort objl, string s101Code)
+            => AddFeature(objl, $"OBJL{objl}", s101Code);
+
+        /// <summary>Adds or replaces an attribute rule.</summary>
+        public Builder AddAttributeRule(S57AttributeRule rule)
+        {
+            ArgumentNullException.ThrowIfNull(rule);
+            _attributes[rule.Attl] = rule;
+            return this;
+        }
+
+        /// <summary>
+        /// Convenience overload that adds a 1:1 attribute mapping.
+        /// </summary>
+        public Builder AddAttribute(ushort attl, string s57Acronym, string s101Code)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(s57Acronym);
+            ArgumentException.ThrowIfNullOrEmpty(s101Code);
+            _attributes[attl] = new S57AttributeRule
+            {
+                Attl = attl,
+                S57Acronym = s57Acronym,
+                DefaultS101Code = s101Code,
+            };
+            return this;
+        }
+
+        /// <summary>
+        /// Convenience overload that adds a 1:1 attribute mapping by S-101
+        /// code only. Use when the S-57 acronym is not relevant for the test
+        /// being constructed.
+        /// </summary>
+        public Builder AddAttribute(ushort attl, string s101Code)
+            => AddAttribute(attl, $"ATTL{attl}", s101Code);
+
+        /// <summary>Pre-populates the builder with the default mapping.</summary>
+        public Builder WithDefaults()
+        {
+            foreach (var kv in Default.FeatureRules) _features[kv.Key] = kv.Value;
+            foreach (var kv in Default.AttributeRules) _attributes[kv.Key] = kv.Value;
+            return this;
+        }
+
+        /// <summary>Builds an immutable mapping.</summary>
+        public S57S101Mapping Build()
+            => new(new Dictionary<ushort, S57FeatureRule>(_features), new Dictionary<ushort, S57AttributeRule>(_attributes));
+    }
+
+    // ── Default rule data (compiled-in) ─────────────────────────────────
+
+    private static S57S101Mapping BuildDefault()
+    {
+        var features = new Dictionary<ushort, S57FeatureRule>();
+        foreach (var rule in DefaultRules.FeatureRules())
+            features[rule.Objl] = rule;
+
+        var attributes = new Dictionary<ushort, S57AttributeRule>();
+        foreach (var rule in DefaultRules.AttributeRules())
+            attributes[rule.Attl] = rule;
+
+        return new S57S101Mapping(features, attributes);
+    }
+}

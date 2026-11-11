@@ -1,0 +1,290 @@
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using EncDotNet.S100.Diagnostics.Export;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
+using Spectre.Console;
+using Spectre.Console.Cli;
+
+namespace EncDotNet.S100.PerfRunner;
+
+/// <summary>
+/// The <c>run</c> command that drives a named performance scenario.
+/// </summary>
+public sealed class RunCommand : AsyncCommand<RunCommand.Settings>
+{
+    public sealed class Settings : CommandSettings
+    {
+        [CommandArgument(0, "<scenario>")]
+        [Description("Scenario name (e.g. s101-portray-cold). Use 'list' to see available scenarios.")]
+        public string Scenario { get; set; } = string.Empty;
+
+        [CommandOption("--corpus <PATH>")]
+        [Description("Path to the test corpus directory.")]
+        [DefaultValue("tests/datasets")]
+        public string Corpus { get; set; } = "tests/datasets";
+
+        [CommandOption("--out <DIR>")]
+        [Description("Output directory for .jsonl and .md files.")]
+        [DefaultValue("./perf-runs")]
+        public string OutputDir { get; set; } = "./perf-runs";
+
+        [CommandOption("--warmup <N>")]
+        [Description("Number of warmup iterations (discarded).")]
+        [DefaultValue(3)]
+        public int Warmup { get; set; } = 3;
+
+        [CommandOption("--iterations <N>")]
+        [Description("Number of measured iterations.")]
+        [DefaultValue(20)]
+        public int Iterations { get; set; } = 20;
+
+        [CommandOption("--tag <KEY=VALUE>")]
+        [Description("Extra metadata tags (repeatable).")]
+        public string[]? Tags { get; set; }
+
+        [CommandOption("--lua-engine <ENGINE>")]
+        [Description("The Lua engine scenarios portray with: luacsharp (default) or moonsharp. Defaults to S100_LUA_ENGINE when that is set.")]
+        public string? LuaEngine { get; set; }
+
+        [CommandOption("--profile <MODE>")]
+        [Description("Capture an in-process EventPipe trace alongside the .jsonl: 'none' (default), 'cpu', or 'alloc'. Output is <basename>.nettrace; convert with 'dotnet-trace convert <file>.nettrace --format speedscope'.")]
+        [DefaultValue("none")]
+        public string Profile { get; set; } = "none";
+
+        [CommandOption("--profile-sampling-interval-ms <MS>")]
+        [Description("CPU sampling interval in milliseconds (only when --profile=cpu). Default 1; raise to 5–10 for sub-100ms scenarios.")]
+        [DefaultValue(1)]
+        public int ProfileSamplingIntervalMs { get; set; } = 1;
+    }
+
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    {
+        if (string.Equals(settings.Scenario, "list", StringComparison.OrdinalIgnoreCase))
+        {
+            AnsiConsole.MarkupLine("[bold]Available scenarios:[/]");
+            foreach (var name in ScenarioRegistry.Names)
+            {
+                var s = ScenarioRegistry.Create(name)!;
+                AnsiConsole.MarkupLine($"  [green]{s.Name}[/] — {s.Description}");
+            }
+            return 0;
+        }
+
+        var scenario = ScenarioRegistry.Create(settings.Scenario);
+        if (scenario is null)
+        {
+            AnsiConsole.MarkupLine($"[red]Unknown scenario:[/] {settings.Scenario}");
+            AnsiConsole.MarkupLine("Available: " + string.Join(", ", ScenarioRegistry.Names));
+            return 1;
+        }
+
+        // Resolve corpus path.
+        var corpus = Path.GetFullPath(settings.Corpus);
+        if (!Directory.Exists(corpus))
+        {
+            AnsiConsole.MarkupLine($"[red]Corpus directory not found:[/] {corpus}");
+            return 1;
+        }
+
+        if (!PerfLuaEngine.TrySelect(settings.LuaEngine))
+        {
+            AnsiConsole.MarkupLine($"[red]Invalid --lua-engine value:[/] {settings.LuaEngine ?? Environment.GetEnvironmentVariable(PerfLuaEngine.EnvironmentVariable)} (expected: luacsharp, moonsharp)");
+            return 1;
+        }
+
+        // Resolve profile mode early so we fail fast on bad input.
+        if (!TryParseProfileMode(settings.Profile, out var profileMode))
+        {
+            AnsiConsole.MarkupLine($"[red]Invalid --profile value:[/] {settings.Profile} (expected: none, cpu, alloc)");
+            return 1;
+        }
+
+        // Set up output.
+        Directory.CreateDirectory(settings.OutputDir);
+        var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+        var baseName = $"{timestamp}-{scenario.Name}";
+        var jsonlPath = Path.Combine(settings.OutputDir, baseName + ".jsonl");
+        var mdPath = Path.Combine(settings.OutputDir, baseName + ".md");
+        var nettracePath = Path.Combine(settings.OutputDir, baseName + ".nettrace");
+
+        // Wire up OTel with the file exporter.
+        Environment.SetEnvironmentVariable(FileExporterExtensions.FileExportEnvVar, jsonlPath);
+
+        using var tracerProvider = Sdk.CreateTracerProviderBuilder()
+            .AddSource("EncDotNet.S100.*")
+            .AddFileExporter(jsonlPath)
+            .Build();
+
+        using var meterProvider = Sdk.CreateMeterProviderBuilder()
+            .AddMeter("EncDotNet.S100.*")
+            .AddFileExporter(jsonlPath)
+            .Build();
+
+        AnsiConsole.MarkupLine($"[bold]Scenario:[/] {scenario.Name}");
+        AnsiConsole.MarkupLine($"[bold]Corpus:[/]   {corpus}");
+        AnsiConsole.MarkupLine($"[bold]Output:[/]   {jsonlPath}");
+        AnsiConsole.MarkupLine($"[bold]Warmup:[/]   {settings.Warmup}  [bold]Iterations:[/] {settings.Iterations}");
+        AnsiConsole.MarkupLine($"[bold]Lua:[/]      {PerfLuaEngine.Name}");
+        if (profileMode != ProfileMode.None)
+        {
+            AnsiConsole.MarkupLine($"[bold]Profile:[/]  {profileMode} → {nettracePath}");
+        }
+        AnsiConsole.WriteLine();
+
+        var totalSw = Stopwatch.StartNew();
+
+        // Warmup iterations.
+        for (int i = 0; i < settings.Warmup; i++)
+        {
+            AnsiConsole.Markup($"  warmup {i + 1}/{settings.Warmup}…");
+            var ctx = new PerfContext { CorpusPath = corpus, IsWarmup = true, Iteration = i };
+            await scenario.RunAsync(ctx, CancellationToken.None);
+            AnsiConsole.MarkupLine(" [grey]done[/]");
+        }
+
+        // Profiling wraps measured iterations only (after warmup) so the
+        // trace contains representative steady-state samples — not JIT
+        // and first-touch overhead. For cold scenarios where Warmup=0
+        // and Iterations=1 the trace covers the entire single iteration,
+        // which is the desired behaviour (cold-path cost IS what we want
+        // to see in that case).
+        EventPipeProfilingSession? profilingSession = profileMode == ProfileMode.None
+            ? null
+            : EventPipeProfilingSession.Start(nettracePath, profileMode, settings.ProfileSamplingIntervalMs);
+        try
+        {
+            // Measured iterations — wrapped in a perf.iteration activity so the
+            // JSONL contains a tagged span per sample (consistent with `baseline`).
+            var durations = new List<double>();
+            var allocatedMb = new List<double>();
+            for (int i = 0; i < settings.Iterations; i++)
+            {
+                AnsiConsole.Markup($"  iteration {i + 1}/{settings.Iterations}…");
+                var ctx = new PerfContext { CorpusPath = corpus, IsWarmup = false, Iteration = i };
+                using var iterActivity = PerfActivitySource.Instance.StartActivity(PerfActivitySource.IterationActivityName);
+                iterActivity?.SetTag(PerfActivitySource.ScenarioTag, scenario.Name);
+                iterActivity?.SetTag(PerfActivitySource.RoundTag, 1);
+                iterActivity?.SetTag(PerfActivitySource.IterationIndexTag, i);
+                iterActivity?.SetTag(PerfActivitySource.LuaEngineTag, PerfLuaEngine.Name);
+
+                // Bytes allocated on every thread during the iteration, so
+                // background work the scenario starts is counted too.
+                var allocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
+                var sw = Stopwatch.StartNew();
+                await scenario.RunAsync(ctx, CancellationToken.None);
+                sw.Stop();
+                var allocated = GC.GetTotalAllocatedBytes(precise: true) - allocatedBefore;
+                iterActivity?.SetTag(PerfActivitySource.AllocatedBytesTag, allocated);
+                durations.Add(sw.Elapsed.TotalMilliseconds);
+                allocatedMb.Add(allocated / (1024.0 * 1024.0));
+                AnsiConsole.MarkupLine($" [green]{sw.Elapsed.TotalMilliseconds:F1}ms[/] [grey]{allocated / (1024.0 * 1024.0):F1} MB[/]");
+            }
+
+            totalSw.Stop();
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine($"[bold]Total:[/] {totalSw.Elapsed.TotalSeconds:F1}s");
+
+            // Write a simple markdown summary alongside.
+            WriteSummary(mdPath, scenario, settings, durations, allocatedMb);
+
+            AnsiConsole.MarkupLine($"[bold]Summary:[/] {mdPath}");
+        }
+        finally
+        {
+            if (profilingSession is not null)
+            {
+                await profilingSession.DisposeAsync();
+                AnsiConsole.MarkupLine($"[bold]Trace:[/]    {nettracePath}");
+                AnsiConsole.MarkupLine("[grey]Convert: dotnet-trace convert " + nettracePath + " --format speedscope[/]");
+            }
+        }
+        return 0;
+    }
+
+    internal static bool TryParseProfileMode(string s, out ProfileMode mode)
+    {
+        switch ((s ?? "none").ToLowerInvariant())
+        {
+            case "none": mode = ProfileMode.None; return true;
+            case "cpu": mode = ProfileMode.Cpu; return true;
+            case "alloc": mode = ProfileMode.Alloc; return true;
+            default: mode = ProfileMode.None; return false;
+        }
+    }
+
+    private static void WriteSummary(
+        string path, IPerfScenario scenario, Settings settings, List<double> durations, List<double> allocatedMb)
+    {
+        durations.Sort();
+        using var writer = new StreamWriter(path);
+        writer.WriteLine($"# {scenario.Name}");
+        writer.WriteLine();
+        writer.WriteLine($"- **Date:** {DateTime.UtcNow:u}");
+        writer.WriteLine($"- **OS:** {RuntimeInformation.OSDescription}");
+        writer.WriteLine($"- **Arch:** {RuntimeInformation.ProcessArchitecture}");
+        writer.WriteLine($"- **CPUs:** {Environment.ProcessorCount}");
+        writer.WriteLine($"- **Runtime:** {RuntimeInformation.FrameworkDescription}");
+        writer.WriteLine($"- **Warmup:** {settings.Warmup}");
+        writer.WriteLine($"- **Iterations:** {settings.Iterations}");
+        writer.WriteLine($"- **Corpus:** {settings.Corpus}");
+        writer.WriteLine($"- **Lua engine:** {PerfLuaEngine.Name}");
+        writer.WriteLine();
+
+        if (durations.Count > 0)
+        {
+            writer.WriteLine("## Iteration durations (ms)");
+            writer.WriteLine();
+            writer.WriteLine("| Stat | Value |");
+            writer.WriteLine("|------|-------|");
+            writer.WriteLine($"| Min | {durations[0]:F2} |");
+            writer.WriteLine($"| P50 | {Percentile(durations, 0.50):F2} |");
+            writer.WriteLine($"| P90 | {Percentile(durations, 0.90):F2} |");
+            writer.WriteLine($"| P95 | {Percentile(durations, 0.95):F2} |");
+            writer.WriteLine($"| P99 | {Percentile(durations, 0.99):F2} |");
+            writer.WriteLine($"| Max | {durations[^1]:F2} |");
+            writer.WriteLine($"| Mean | {durations.Average():F2} |");
+        }
+
+        if (allocatedMb.Count > 0)
+        {
+            allocatedMb.Sort();
+            writer.WriteLine();
+            writer.WriteLine("## Bytes allocated per iteration (MB)");
+            writer.WriteLine();
+            writer.WriteLine("| Stat | Value |");
+            writer.WriteLine("|------|-------|");
+            writer.WriteLine($"| Min | {allocatedMb[0]:F1} |");
+            writer.WriteLine($"| P50 | {Percentile(allocatedMb, 0.50):F1} |");
+            writer.WriteLine($"| Max | {allocatedMb[^1]:F1} |");
+            writer.WriteLine($"| Mean | {allocatedMb.Average():F1} |");
+        }
+
+        if (settings.Tags is { Length: > 0 })
+        {
+            writer.WriteLine();
+            writer.WriteLine("## Tags");
+            writer.WriteLine();
+            foreach (var tag in settings.Tags)
+            {
+                writer.WriteLine($"- `{tag}`");
+            }
+        }
+
+        writer.WriteLine();
+        writer.WriteLine("---");
+        writer.WriteLine("*Generated by EncDotNet.S100.PerfRunner — example only, not a baseline.*");
+    }
+
+    internal static double Percentile(List<double> sorted, double p)
+    {
+        if (sorted.Count == 0) return 0;
+        var index = p * (sorted.Count - 1);
+        var lower = (int)Math.Floor(index);
+        var upper = (int)Math.Ceiling(index);
+        if (lower == upper) return sorted[lower];
+        return sorted[lower] + (index - lower) * (sorted[upper] - sorted[lower]);
+    }
+}

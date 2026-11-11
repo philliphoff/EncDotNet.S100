@@ -1,0 +1,112 @@
+using System.Text.Json;
+
+namespace EncDotNet.S100.Cli.Infrastructure.Updates;
+
+/// <summary>
+/// Stores update-check state as JSON in the user's local application data.
+/// </summary>
+internal sealed partial class JsonCliUpdateCache : ICliUpdateCache
+{
+    private static readonly CacheJsonContext CacheJson = new(new JsonSerializerOptions
+    {
+        WriteIndented = true,
+    });
+
+    private readonly string _path;
+
+    /// <summary>The cache file in the user's local application data.</summary>
+    public static string DefaultPath { get; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "EncDotNet.S100.Cli",
+        "update-cache.json");
+
+    /// <param name="path">The cache file (the CLI passes <see cref="DefaultPath"/>).</param>
+    public JsonCliUpdateCache(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+        _path = path;
+    }
+
+    public async Task<CliUpdateCacheEntry?> LoadAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (!File.Exists(_path))
+            {
+                return null;
+            }
+
+            await using var stream = File.OpenRead(_path);
+            return await JsonSerializer
+                .DeserializeAsync(
+                    stream,
+                    CacheJson.CliUpdateCacheEntry,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    public async Task SaveAsync(
+        CliUpdateCacheEntry entry,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        var temporaryPath = $"{_path}.{Environment.ProcessId}.tmp";
+        try
+        {
+            var directory = Path.GetDirectoryName(_path);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            await using (var stream = File.Create(temporaryPath))
+            {
+                await JsonSerializer
+                    .SerializeAsync(stream, entry, CacheJson.CliUpdateCacheEntry, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            File.Move(temporaryPath, _path, overwrite: true);
+        }
+        catch (IOException)
+        {
+            TryDelete(temporaryPath);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            TryDelete(temporaryPath);
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
+    [System.Text.Json.Serialization.JsonSerializable(typeof(CliUpdateCacheEntry))]
+    private sealed partial class CacheJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
+}

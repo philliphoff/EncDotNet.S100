@@ -1,0 +1,1033 @@
+using System.Diagnostics;
+using System.Globalization;
+using EncDotNet.S100.Diagnostics;
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Pipelines.Vector.Caching;
+using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Renderers.Skia;
+using EncDotNet.S100.Rendering.Engine;
+using Mapsui;
+using Mapsui.Layers;
+using Mapsui.Nts;
+using Mapsui.Styles;
+using NetTopologySuite.Geometries;
+using MapsuiColor = Mapsui.Styles.Color;
+using S100Diag = EncDotNet.S100.Rendering.Engine.Diagnostics;
+using Scene = EncDotNet.S100.Rendering.Scene;
+
+namespace EncDotNet.S100.Renderers.Mapsui;
+
+/// <summary>
+/// Renders an S-100 Part 9 drawing-instruction display list into a Mapsui
+/// <see cref="ILayer"/> by resolving feature geometry from an
+/// <see cref="IFeatureGeometryProvider"/>, projecting to EPSG:3857, and
+/// applying styles derived from the instruction properties.
+/// </summary>
+/// <remarks>
+/// This renderer is product-agnostic: it consumes the unified
+/// <see cref="DrawingInstruction"/> model (produced by S-101 Lua, S-124/S-129/S-421
+/// XSLT, or other portrayal pipelines) and a geometry provider that knows how to
+/// look up feature geometry for the current product.
+/// </remarks>
+public sealed class MapsuiDisplayListRenderer
+{
+    /// <summary>
+    /// Key used to store the originating S-100 feature reference on Mapsui features.
+    /// Consumers can read <c>feature[FeatureRefKey]</c> to trace a rendered feature
+    /// back to its source dataset record.
+    /// </summary>
+    public const string FeatureRefKey = "S100.FeatureRef";
+
+    /// <summary>
+    /// Size, in millimetres, of one S-100 portrayal "pixel" on the nominal
+    /// display surface (S-100 Part 9 §3.10.4 — 1 pixel = 0.32 mm).  Used to
+    /// convert spec-defined widths from millimetres to Mapsui screen pixels.
+    /// </summary>
+    private const double S100PixelSizeMm = 0.32;
+
+    /// <summary>Name assigned to the generated Mapsui layer.</summary>
+    public string LayerName { get; set; } = "S-101 Vector";
+
+    /// <summary>
+    /// Optional S-100 product identifier (e.g. <c>"S-101"</c>, <c>"S-131"</c>)
+    /// used as the <c>s100.product</c> dimension on cache and render-frame
+    /// metrics. Set by dataset processors so cache hit/miss counts can be
+    /// attributed by product. When <see langword="null"/>, the counter is
+    /// emitted without a product tag (preserving legacy behaviour for
+    /// direct callers).
+    /// </summary>
+    public string? Product { get; set; }
+
+    /// <summary>
+    /// Content identity of the dataset this layer portrays (see
+    /// <see cref="EncDotNet.S100.Datasets.Pipelines.Portrayal.VectorPortrayalResult.ContentScope"/>),
+    /// folded into the warm tile disk-cache namespace. The style-state hash
+    /// covers the drawing instructions but not the geometry they draw, so
+    /// without it two same-shaped datasets of one product, or a re-issued
+    /// dataset whose geometry moved, would be served each other's tiles. When
+    /// <see langword="null"/>, the layer bypasses the disk cache.
+    /// </summary>
+    public string? ContentScope { get; set; }
+
+    /// <summary>
+    /// The color palette to use for resolving S-100 color tokens.
+    /// When set, overrides the built-in fallback colors.
+    /// </summary>
+    public ColorPalette? Palette { get; set; }
+
+    /// <summary>
+    /// Optional function that returns raw SVG content for a symbol name
+    /// (e.g. "POSGEN03" → the contents of POSGEN03.svg).
+    /// When set, point features will render using actual SVG symbols.
+    /// </summary>
+    public Func<string, string?>? SymbolProvider { get; set; }
+
+    /// <summary>
+    /// Optional function that returns an <see cref="AreaFill"/> definition by name.
+    /// When set, non-colorFill area instructions will render using tiled SVG patterns.
+    /// </summary>
+    public Func<string, AreaFill?>? AreaFillProvider { get; set; }
+
+    /// <summary>
+    /// Optional function that returns a <see cref="LineStyle"/> definition by
+    /// name. When set, line instructions that carry only a
+    /// <c>lineStyleReference</c> (e.g. S-421 <c>RTEACTLEGLINE</c>) will render
+    /// using the referenced colour, width, and dash pattern from the
+    /// portrayal catalogue.
+    /// </summary>
+    public Func<string, LineStyle?>? LineStyleProvider { get; set; }
+
+    /// <summary>
+    /// Global scale factor applied to all point symbols (default 1.0).
+    /// </summary>
+    public double SymbolScale { get; set; } = 1.0;
+
+    /// <summary>
+    /// Global scale factor applied to all text labels (default 1.0).
+    /// </summary>
+    public double TextScale { get; set; } = 1.0;
+
+    /// <summary>
+    /// Optional dataset-wide out-of-scale-band cap, as an S-100 Part 9 §11.1
+    /// scale denominator (the cell's most-permissive
+    /// <c>DataCoverage.minimumDisplayScale</c>; S-101 FC §3.1.1). Applies only
+    /// to the TiledScene ("B") render subsystem: it is propagated onto the
+    /// <see cref="Scene.VectorScene"/> ops so that, like the Mapsui ("A")
+    /// feature path (<c>MapsuiDatasetRenderer.ApplyOutOfScaleBandCap</c>),
+    /// features lacking their own SCAMIN are hidden once the display is zoomed
+    /// out past the cell's compilation scale. <see langword="null"/> (the
+    /// default) applies no cap.
+    /// </summary>
+    public int? OutOfBandMinDisplayScale { get; set; }
+
+    /// <summary>
+    /// The product's <see cref="Scene.VectorScene.PreferLiveDrawing"/> hint,
+    /// stamped on the scene so the tiled renderer may draw it directly.
+    /// </summary>
+    public bool PreferLiveDrawing { get; set; }
+
+    /// <summary>
+    /// Optional shared cache for processed-SVG symbol entries and rasterised
+    /// pattern tiles. When set, the renderer routes its symbol/pattern
+    /// lookups through this cache so re-renders of the same dataset (e.g.
+    /// after a palette toggle, time-step scrub, or mariner-setting change)
+    /// reuse the SVG processing + pattern rasterization work. When unset
+    /// (the default), a per-renderer cache is used, preserving legacy
+    /// behaviour for ad-hoc / one-shot callers such as tests.
+    /// </summary>
+    public MapsuiRenderAssetCache? AssetCache { get; set; }
+
+    // Per-renderer fallback used when AssetCache is null.
+    private readonly MapsuiRenderAssetCache _localAssetCache = new();
+
+    /// <summary>
+    /// Optional cache for the pattern-fill priority clip result. When set
+    /// together with <see cref="PatternClipCacheKey"/>, the renderer obtains
+    /// the clipped pattern geometry via
+    /// <see cref="IPatternClipCache.GetOrCompute"/> so re-renders that do not
+    /// change the clip inputs (most importantly Day/Dusk/Night palette
+    /// switches) skip the expensive NetTopologySuite overlay. When unset, the
+    /// clip is computed inline on every render, preserving legacy behaviour for
+    /// products without pattern fills and for ad-hoc / one-shot callers.
+    /// </summary>
+    public IPatternClipCache? PatternClipCache { get; init; }
+
+    /// <summary>
+    /// Key that fully identifies this render's pattern-clip inputs (for S-101,
+    /// the mariner + ECDIS display-state portrayal cache key). Used with
+    /// <see cref="PatternClipCache"/>; ignored when either is <see langword="null"/>.
+    /// </summary>
+    public string? PatternClipCacheKey { get; init; }
+
+    /// <summary>
+    /// Optional captured Mapsui rendering configuration. When
+    /// <see langword="null"/>, settings that have not been overridden directly
+    /// are read from the legacy process-global
+    /// <see cref="ChartSessionOptions"/> store.
+    /// </summary>
+    public S100MapsuiOptions? Options { get; init; }
+
+    /// <summary>
+    /// A cached SVG symbol: its Mapsui <c>svg-content://</c> source URI plus
+    /// the pivot-to-bounds-centre offset recovered from the raw SVG before
+    /// <see cref="SvgProcessor"/> stripped its layout elements.  The relative
+    /// offset (in fractions of viewBox size) is what Mapsui's
+    /// <c>RelativeOffset</c> consumes; the millimetre offset is retained in
+    /// case a future code path needs an absolute-pixel translation.
+    /// </summary>
+    internal readonly record struct SymbolEntry(
+        string? Source,
+        double PivotOffsetXMm,
+        double PivotOffsetYMm,
+        double RelativeOffsetX,
+        double RelativeOffsetY);
+
+    /// <summary>
+    /// Renders the supplied display list against the geometry provided by
+    /// <paramref name="geometryProvider"/>, returning a Mapsui memory layer.
+    /// </summary>
+    /// <remarks>
+    /// Drawing instructions whose feature reference cannot be resolved by
+    /// the provider are silently skipped; this lets callers pre-process the
+    /// list (e.g. merging S-101 SAFCON labels) without worrying about
+    /// synthesised feature references.
+    /// </remarks>
+    public ILayer Render(
+        IReadOnlyList<DrawingInstruction> instructions,
+        IFeatureGeometryProvider geometryProvider)
+    {
+        ArgumentNullException.ThrowIfNull(instructions);
+        ArgumentNullException.ThrowIfNull(geometryProvider);
+
+        using var __activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.render.frame");
+        __activity?.SetTag("s100.render.target", "mapsui");
+        __activity?.SetTag("s100.render.instructions.count", instructions.Count);
+        var renderStart = Stopwatch.GetTimestamp();
+
+        S100Diag.Telemetry.InstructionsProcessed.Add(instructions.Count);
+
+        // Lower the instructions into the shared, backend-agnostic VectorScene.
+        // All S-100 Part 9 correctness (draw ordering, colour / mm→px / symbol /
+        // line-style / pattern / text-anchor resolution, and the lat/lon →
+        // EPSG:3857 projection half) lives in VectorSceneBuilder. The tiled
+        // renderer paints and picks this scene; only the single-surface arm
+        // builds Mapsui features from it, for pick identity, so every painted
+        // op — pattern fills included — is a pick target (issue #604).
+        var sceneBuilder = new Scene.VectorSceneBuilder
+        {
+            ResolveColor = Scene.ColorResolver.Create(Palette),
+            SymbolResolver = ResolveSymbolAsset,
+            LineStyleProvider = LineStyleProvider,
+            PatternResolver = GetPatternTilePng,
+            PatternClipCache = BuildPatternClipMemoizer(),
+            SymbolScale = SymbolScale,
+            TextScale = TextScale,
+            OutOfBandMinDisplayScale = OutOfBandMinDisplayScale,
+            PreferLiveDrawing = PreferLiveDrawing,
+        };
+        var scene = sceneBuilder.Build(instructions, geometryProvider);
+
+        // The layer is portrayed by the TiledScene renderer rasterising the
+        // VectorScene IR on a worker, so bind the scene to the layer. The Phase-2
+        // tiled renderer is the default; S100_VECTOR_SCENE_MODE=single selects
+        // the Phase-1 single-surface arm. Both consume the same scene.
+        //
+        // A tiled layer is drawn and picked through the chart session from the
+        // bound scene, so it carries no Mapsui features: its extent comes from
+        // the scene. The single-surface arm still picks through Mapsui, so it
+        // keeps one pick-identity feature per paint op.
+        InstrumentedMemoryLayer layer;
+        if (TiledSceneModeIsTiled)
+        {
+            layer = new InstrumentedMemoryLayer(Product)
+            {
+                Name = LayerName,
+                Style = null,
+                CustomLayerRendererName = S100VectorTileRenderer.RendererName,
+                SceneExtent = SceneExtent(scene),
+            };
+
+            S100Diag.Telemetry.FrameDuration.Record(
+                (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
+
+            var (productLayerSet, styleStateHash) = DiskCacheKey(instructions);
+            S100VectorTileRenderer.BindScene(layer, scene, productLayerSet, styleStateHash);
+            LastTiledScene = (scene, productLayerSet, styleStateHash);
+        }
+        else
+        {
+            var mapFeatures = BuildPickFeatures(scene);
+
+            S100Diag.Telemetry.StylesApplied.Add(mapFeatures.Sum(f => f.Styles.Count));
+            S100Diag.Telemetry.FrameDuration.Record(
+                (Stopwatch.GetTimestamp() - renderStart) * 1000.0 / Stopwatch.Frequency);
+
+            layer = new InstrumentedMemoryLayer(Product)
+            {
+                Name = LayerName,
+                Features = mapFeatures,
+                Style = null,
+                CustomLayerRendererName = S100VectorSceneRenderer.RendererName,
+            };
+
+            S100VectorSceneRenderer.BindScene(layer, scene);
+        }
+
+        return layer;
+    }
+
+    /// <summary>
+    /// Lowers the display list into self-styled Mapsui features (symbol
+    /// images, labels, lines and areas, in Part 9 draw order) without binding
+    /// a tiled scene renderer. Each feature carries its
+    /// <see cref="FeatureRefKey"/> and scale limits.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Render"/> paints its layer with the tiled scene renderer and
+    /// keeps the features only for picking. These features draw on their own,
+    /// so they can go into any plain <see cref="MemoryLayer"/>, such as a
+    /// dynamic source's overlay layer (see
+    /// <see cref="DynamicSources.PortrayedDynamicFeatureRenderer"/>). Use it for
+    /// a handful of features, not a chart.
+    /// </remarks>
+    /// <param name="instructions">The display list.</param>
+    /// <param name="geometryProvider">Resolves the instructions' feature references.</param>
+    /// <returns>The styled features; instructions whose feature can't be resolved are skipped.</returns>
+    public IReadOnlyList<IFeature> RenderFeatures(
+        IReadOnlyList<DrawingInstruction> instructions,
+        IFeatureGeometryProvider geometryProvider)
+    {
+        ArgumentNullException.ThrowIfNull(instructions);
+        ArgumentNullException.ThrowIfNull(geometryProvider);
+
+        var scene = new Scene.VectorSceneBuilder
+        {
+            ResolveColor = Scene.ColorResolver.Create(Palette),
+            SymbolResolver = ResolveSymbolAsset,
+            LineStyleProvider = LineStyleProvider,
+            SymbolScale = SymbolScale,
+            TextScale = TextScale,
+        }.Build(instructions, geometryProvider);
+
+        return BuildPickFeatures(scene);
+    }
+
+    /// <summary>
+    /// Builds one self-styled Mapsui feature per paint op of
+    /// <paramref name="scene"/>, in Part 9 draw order.
+    /// </summary>
+    private List<IFeature> BuildPickFeatures(Scene.VectorScene scene)
+    {
+        var features = new List<IFeature>(scene.Ops.Count);
+        // Tracks the (feature reference, EPSG:3857 X, Y) anchors that have
+        // already been given a pick-target rectangle. A composite point symbol
+        // (e.g. a multi-digit sounding) emits one PointPaintOp per glyph, all
+        // sharing the same feature reference and anchor; stacked, their faint
+        // pick-target rectangles would darken into a visible box, so only the
+        // first symbol at each (feature, anchor) gets one.
+        var pointHitRectKeys = new HashSet<(string FeatureReference, double X, double Y)>();
+        foreach (var op in scene.Ops)
+        {
+            var includePointHitRect = true;
+            if (op is Scene.PointPaintOp { Symbol: not null } point)
+                includePointHitRect = pointHitRectKeys.Add(
+                    (point.FeatureReference, point.World.X, point.World.Y));
+
+            if (CreateMapFeature(op, includePointHitRect) is { } feature)
+                features.Add(feature);
+        }
+
+        return features;
+    }
+
+    /// <summary>
+    /// The EPSG:3857 box around every op of <paramref name="scene"/>, or
+    /// <see langword="null"/> for a scene with no ops.
+    /// </summary>
+    internal static MRect? SceneExtent(Scene.VectorScene scene)
+    {
+        double minX = double.MaxValue, minY = double.MaxValue;
+        double maxX = double.MinValue, maxY = double.MinValue;
+
+        void Add(double x, double y)
+        {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+        }
+
+        foreach (var op in scene.Ops)
+        {
+            switch (op)
+            {
+                case Scene.PointPaintOp p:
+                    Add(p.World.X, p.World.Y);
+                    break;
+                case Scene.TextPaintOp t:
+                    Add(t.World.X, t.World.Y);
+                    break;
+                case Scene.LinePaintOp l:
+                    foreach (var (x, y) in l.World) Add(x, y);
+                    break;
+                case Scene.AreaPaintOp a:
+                    foreach (var (x, y) in a.WorldShell) Add(x, y);
+                    break;
+                case Scene.PatternAreaPaintOp pa:
+                    foreach (var (x, y) in pa.WorldShell) Add(x, y);
+                    break;
+            }
+        }
+
+        return minX <= maxX ? new MRect(minX, minY, maxX, maxY) : null;
+    }
+
+    /// <summary>
+    /// The scene the last <see cref="Render"/> bound to a tiled layer, with the
+    /// pair that keys its tile disk namespace, or <see langword="null"/> when
+    /// it drew single-surface. Read by <see cref="MapsuiDatasetRenderer"/> to
+    /// store the cell's scene.
+    /// </summary>
+    internal (Scene.VectorScene Scene, string? ProductLayerSet, string? StyleStateHash)? LastTiledScene { get; private set; }
+
+    /// <summary>
+    /// The <c>(productLayerSet, styleStateHash)</c> pair that keys this layer's
+    /// warm tile disk-cache namespace, or a pair of <see langword="null"/>s
+    /// (bypass the disk cache) when no <see cref="ContentScope"/> identifies the
+    /// dataset's content.
+    /// </summary>
+    internal (string? ProductLayerSet, string? StyleStateHash) DiskCacheKey(
+        IReadOnlyList<DrawingInstruction> instructions)
+    {
+        if (string.IsNullOrEmpty(ContentScope))
+            return (null, null);
+
+        return ($"{Product ?? LayerName}|{ContentScope}", ComputeStyleStateHash(instructions));
+    }
+
+    /// <summary>
+    /// Computes the <c>styleStateHash</c> that keys the persistent tile disk
+    /// cache (design §3.4). It must change whenever <em>anything</em> that alters
+    /// the rasterised tile pixels changes, so a warm tile is never reused for a
+    /// different style state. It folds:
+    /// <list type="bullet">
+    /// <item>the resolved drawing-instruction list — which already encodes the
+    /// active display category, safety contour, and every other mariner setting
+    /// that selects which features and which portrayal are drawn — serialized
+    /// deterministically via <see cref="DrawingInstructionSerializer"/>;</item>
+    /// <item>the colour palette (Day/Dusk/Night), which the scene builder applies
+    /// on top of the instruction colour tokens;</item>
+    /// <item>the symbol and text scale factors.</item>
+    /// </list>
+    /// The instruction-serializer format version is implicitly folded in (it is
+    /// the first field of the serialized frame), so a serialization change also
+    /// invalidates the namespace.
+    /// </summary>
+    private string ComputeStyleStateHash(IReadOnlyList<DrawingInstruction> instructions)
+    {
+        var instructionBytes = DrawingInstructionSerializer.Serialize(instructions);
+
+        var styleHeader =
+            $"palette:{DescribePalette(Palette)}" +
+            $"|symbolScale:{SymbolScale.ToString("R", CultureInfo.InvariantCulture)}" +
+            $"|textScale:{TextScale.ToString("R", CultureInfo.InvariantCulture)}";
+        var headerBytes = System.Text.Encoding.UTF8.GetBytes(styleHeader);
+
+        using var sha = System.Security.Cryptography.IncrementalHash.CreateHash(
+            System.Security.Cryptography.HashAlgorithmName.SHA256);
+        sha.AppendData(headerBytes);
+        sha.AppendData(instructionBytes);
+        return Convert.ToHexString(sha.GetHashAndReset()).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Produces a deterministic fingerprint of a colour palette for the
+    /// <c>styleStateHash</c>. <see cref="ColorPalette"/> does not override
+    /// <see cref="object.ToString"/>, so using the instance directly collapses
+    /// Day/Dusk/Night (and any two palettes) to the same type-name string —
+    /// which made the tile disk-cache namespace palette-insensitive and caused a
+    /// Night render to serve the previously-persisted Day tiles. The fingerprint
+    /// folds the palette name <em>and</em> its resolved colour entries (ordered)
+    /// so any difference in palette identity or content invalidates the cache.
+    /// </summary>
+    internal static string DescribePalette(ColorPalette? palette)
+    {
+        if (palette is null)
+        {
+            return "none";
+        }
+
+        var builder = new System.Text.StringBuilder(palette.Name);
+        foreach (var entry in palette.Colors.OrderBy(c => c.Key, StringComparer.Ordinal))
+        {
+            builder.Append('|').Append(entry.Key).Append('=').Append(entry.Value);
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// Whether the TiledScene subsystem uses the Phase-2 tiled renderer (default)
+    /// or the Phase-1 single-surface renderer. Explicit
+    /// <see cref="S100MapsuiOptions"/> take precedence; otherwise the mode is
+    /// sourced live from <see cref="ChartSessionOptions.SceneMode"/>.
+    /// </summary>
+    private bool TiledSceneModeIsTiled =>
+        (Options?.SceneMode ?? ChartEngine.Options.SceneMode)
+            == VectorSceneMode.Tiled;
+
+    private static MapsuiColor ToMapsui(RgbaColor c) => new(c.R, c.G, c.B, c.A);
+
+    /// <summary>
+    /// Resolves a symbol name to a processed-SVG asset for the shared
+    /// <see cref="Scene.VectorSceneBuilder"/>, routing through the renderer's
+    /// cache-backed <see cref="GetSymbolEntry"/> so symbol processing is reused
+    /// across re-renders. The cached source carries the Mapsui
+    /// <c>svg-content://</c> prefix; the IR stores the raw processed SVG, so the
+    /// prefix is stripped here and re-applied by <see cref="CreatePointFeature"/>.
+    /// </summary>
+    private Scene.SymbolAsset? ResolveSymbolAsset(string symbolRef)
+    {
+        var entry = GetSymbolEntry(symbolRef);
+        if (entry.Source is null)
+            return null;
+
+        const string prefix = "svg-content://";
+        var processed = entry.Source.StartsWith(prefix, StringComparison.Ordinal)
+            ? entry.Source[prefix.Length..]
+            : entry.Source;
+
+        return new Scene.SymbolAsset(processed, entry.RelativeOffsetX, entry.RelativeOffsetY);
+    }
+
+    /// <summary>
+    /// Converts a single backend-agnostic <see cref="Scene.PaintOp"/> into a
+    /// Mapsui <see cref="IFeature"/>, tagging it with the originating S-100
+    /// feature reference and applying scale-visibility limits. Geometry in the
+    /// op is already projected to EPSG:3857; sizes are already in display pixels.
+    /// </summary>
+    /// <param name="op">The paint op to convert.</param>
+    /// <param name="includePointHitRect">
+    /// When the op is a <see cref="Scene.PointPaintOp"/>, controls whether the
+    /// near-invisible pick-target rectangle is emitted. The caller suppresses it
+    /// for every symbol after the first at a given feature/anchor so that
+    /// composite point symbology (e.g. multi-digit soundings, where one anchor
+    /// spawns several stacked symbols) does not accumulate the rectangle's
+    /// faint fill into a visible box.
+    /// </param>
+    private IFeature? CreateMapFeature(Scene.PaintOp op, bool includePointHitRect = true)
+    {
+        IFeature? feature = op switch
+        {
+            Scene.AreaPaintOp area => CreateAreaFeature(area),
+            Scene.PatternAreaPaintOp pattern => CreatePatternAreaFeature(pattern),
+            Scene.LinePaintOp line => CreateLineFeature(line),
+            Scene.PointPaintOp point => CreatePointFeature(point, includePointHitRect),
+            Scene.TextPaintOp text => CreateTextFeature(text),
+            _ => null,
+        };
+
+        if (feature is not null)
+        {
+            feature[FeatureRefKey] = op.FeatureReference;
+            ApplyScaleVisibility(feature, op.ScaleMinimum, op.ScaleMaximum);
+        }
+
+        return feature;
+    }
+
+    /// <summary>
+    /// S-100 Part 9 scale denominator → ground metres per display pixel at
+    /// 96 DPI: 1 px = 0.28 mm = 0.00028 m on the nominal display surface, so
+    /// <i>ground</i> resolution ≈ scaleDenominator × 0.00028. To obtain the
+    /// Mapsui EPSG:3857 resolution (metres/pixel at the equator) this must be
+    /// divided by <c>cos(latitude)</c> to undo web-mercator scale distortion —
+    /// see <see cref="DenominatorToResolution"/>.
+    /// </summary>
+    public const double DenomToResolutionMetres = 0.00028;
+
+    /// <summary>
+    /// Converts an EPSG:3857 northing (metres) to its geodetic latitude in
+    /// radians, used to undo web-mercator scale distortion when mapping an
+    /// S-100 true-scale denominator to a Mapsui resolution.
+    /// </summary>
+    internal static double WebMercatorYToLatitudeRadians(double y)
+        => ScaleResolution.WebMercatorYToLatitudeRadians(y);
+
+    /// <summary>
+    /// Converts an S-100 Part 9 §11.1 scale denominator (a <i>true-scale</i>
+    /// value, e.g. SCAMIN / <c>minimumDisplayScale</c>) to the equivalent Mapsui
+    /// EPSG:3857 resolution (metres/pixel at the equator) at
+    /// <paramref name="latitudeRadians"/>: <c>denom × 0.00028 / cos φ</c>,
+    /// because web-mercator inflates ground distances by <c>1/cos φ</c>. Matches
+    /// the Skia headless backend, which applies <c>cos(midLat)</c> too (see
+    /// <see cref="EncDotNet.S100.Renderers.Skia.Scene.HeadlessVectorRenderer"/>).
+    /// </summary>
+    /// <param name="scaleDenominator">The S-100 true-scale denominator.</param>
+    /// <param name="latitudeRadians">
+    /// The representative latitude (radians) of the feature/cell the limit
+    /// applies to; <c>0</c> (the equator) yields the uncorrected conversion.
+    /// </param>
+    /// <returns>The Mapsui EPSG:3857 resolution (m/px at the equator).</returns>
+    internal static double DenominatorToResolution(double scaleDenominator, double latitudeRadians)
+        => ScaleResolution.DenominatorToResolution(scaleDenominator, latitudeRadians);
+
+    /// <summary>
+    /// The representative latitude (radians) of a feature, taken from the centre
+    /// of its EPSG:3857 extent. Geometry-less features (no extent) fall back to
+    /// the equator, i.e. no web-mercator correction.
+    /// </summary>
+    private static double FeatureLatitudeRadians(IFeature feature)
+    {
+        var extent = feature.Extent;
+        return extent is null
+            ? 0.0
+            : WebMercatorYToLatitudeRadians((extent.MinY + extent.MaxY) / 2.0);
+    }
+
+    /// <summary>
+    /// Maps the S-100 Part 9 §11.1 scale denominators carried on a
+    /// <see cref="Scene.PaintOp"/> onto each Mapsui style.  <c>ScaleMinimum</c>
+    /// is the most zoomed-out limit (largest allowed denominator) and maps to
+    /// Mapsui's <c>MaxVisible</c>; <c>ScaleMaximum</c> is the most zoomed-in
+    /// limit (smallest allowed denominator) and maps to <c>MinVisible</c>. Both
+    /// denominators are converted at the feature's latitude so the web-mercator
+    /// resolution cutoffs line up with the feature's true scale.
+    /// </summary>
+    private static void ApplyScaleVisibility(IFeature feature, double? scaleMinimum, double? scaleMaximum)
+    {
+        if (!scaleMinimum.HasValue && !scaleMaximum.HasValue)
+            return;
+
+        var latitudeRadians = FeatureLatitudeRadians(feature);
+
+        double? maxRes = scaleMinimum.HasValue
+            ? DenominatorToResolution(scaleMinimum.Value, latitudeRadians)
+            : (double?)null;
+        double? minRes = scaleMaximum.HasValue
+            ? DenominatorToResolution(scaleMaximum.Value, latitudeRadians)
+            : (double?)null;
+
+        foreach (var style in feature.Styles)
+        {
+            if (style is null) continue;
+            if (maxRes.HasValue) style.MaxVisible = maxRes.Value;
+            if (minRes.HasValue) style.MinVisible = minRes.Value;
+        }
+    }
+
+    private static IFeature? CreateAreaFeature(Scene.AreaPaintOp op)
+    {
+        var polygon = CreatePolygonFromWorld(op.WorldShell, op.WorldHoles);
+        if (polygon is null)
+            return null;
+
+        var style = new VectorStyle
+        {
+            Fill = new Brush { Color = ToMapsui(op.Fill) },
+            Outline = new Pen { Color = ToMapsui(op.OutlineColor), Width = op.OutlineWidthPx },
+        };
+
+        var feature = new GeometryFeature(polygon);
+        feature.Styles.Add(style);
+        return feature;
+    }
+
+    /// <summary>
+    /// A pick target for a pattern fill: the area's geometry with a
+    /// near-invisible fill, like the point hit rectangles. Mapsui's hit test
+    /// only registers painted pixels, and the layer is painted by the tiled
+    /// renderer, not by this style (issue #604).
+    /// </summary>
+    private static IFeature? CreatePatternAreaFeature(Scene.PatternAreaPaintOp op)
+    {
+        var polygon = CreatePolygonFromWorld(op.WorldShell, op.WorldHoles);
+        if (polygon is null)
+            return null;
+
+        var feature = new GeometryFeature(polygon);
+        feature.Styles.Add(new VectorStyle
+        {
+            Fill = new Brush { Color = new MapsuiColor(0, 0, 0, 1) },
+            Outline = null,
+        });
+        return feature;
+    }
+
+    private static IFeature? CreateLineFeature(Scene.LinePaintOp op)
+    {
+        // A line style with no pen only places symbols, which this path
+        // doesn't draw; the tile renderer does.
+        if (op.World.Count < 2 || !op.Stroke)
+            return null;
+
+        var coords = new Coordinate[op.World.Count];
+        for (int i = 0; i < op.World.Count; i++)
+            coords[i] = new Coordinate(op.World[i].X, op.World[i].Y);
+        var lineString = new LineString(coords);
+
+        var pen = new Pen
+        {
+            Color = ToMapsui(op.Color),
+            Width = op.WidthPx,
+        };
+        if (op.DashArrayPx is { Count: > 0 } dashes)
+        {
+            pen.DashArray = dashes.ToArray();
+            pen.PenStyle = PenStyle.UserDefined;
+        }
+        else if (op.DefaultDash)
+        {
+            pen.PenStyle = PenStyle.Dash;
+        }
+
+        var style = new VectorStyle
+        {
+            Line = pen,
+            Fill = null,
+            Outline = null,
+        };
+
+        var feature = new GeometryFeature(lineString);
+        feature.Styles.Add(style);
+        return feature;
+    }
+
+    private static IFeature CreatePointFeature(Scene.PointPaintOp op, bool includeHitRect = true)
+    {
+        var feature = new PointFeature(op.World.X, op.World.Y);
+
+        var hasSymbolOffset = op.OffsetXpx != 0 || op.OffsetYpx != 0;
+
+        if (op.Symbol is { } sym)
+        {
+            // The IR stores the raw processed SVG; Mapsui consumes it via the
+            // svg-content:// pseudo-scheme.
+            var svgSource = "svg-content://" + sym.ProcessedSvg;
+            var svgScale = sym.Scale;
+
+            // Mapsui's RelativeOffset uses +Y = up (map frame); the IR carries
+            // the pivot in screen-space (+Y = down), so the Y component is
+            // negated here.
+            var pivotRelX = sym.PivotRelativeX;
+            var pivotRelY = -sym.PivotRelativeY;
+            var hasPivotRelative = pivotRelX != 0 || pivotRelY != 0;
+
+            // Add a nearly-invisible rectangle as a hit-test area so that
+            // tapping on a transparent portion of the SVG still picks this
+            // feature.  The rectangle is slightly larger than the SVG to
+            // provide a comfortable tap target.  Mapsui's pick is pixel-based,
+            // so the fill must paint at least one alpha step; that means every
+            // emitted rectangle contributes a faint darkening.  Composite point
+            // symbology (e.g. a multi-digit sounding) places several symbols on
+            // the same anchor, so the caller emits the rectangle for only the
+            // first symbol at each feature/anchor (see the render loop's
+            // dedupe).  Without that, the stacked rectangles accumulate into a
+            // visible box around the sounding.
+            if (includeHitRect)
+            {
+                var hitStyle = new SymbolStyle
+                {
+                    SymbolType = SymbolType.Rectangle,
+                    SymbolScale = svgScale * 1.2,
+                    Fill = new Brush { Color = new MapsuiColor(0, 0, 0, 1) },
+                    Line = null,
+                    Outline = null,
+                };
+                if (op.Rotation.HasValue)
+                    hitStyle.SymbolRotation = op.Rotation.Value;
+                hitStyle.RotateWithMap = op.RotationCrs == SymbolRotationCrs.Geographic;
+                if (hasSymbolOffset)
+                    hitStyle.Offset = new Offset(op.OffsetXpx, op.OffsetYpx);
+                if (hasPivotRelative)
+                    hitStyle.RelativeOffset = new RelativeOffset(pivotRelX, pivotRelY);
+                feature.Styles.Add(hitStyle);
+            }
+
+            var style = new ImageStyle
+            {
+                Image = new Image { Source = svgSource, RasterizeSvg = true },
+            };
+            style.SymbolScale = svgScale;
+            if (op.Rotation.HasValue)
+                style.SymbolRotation = op.Rotation.Value;
+            // A north-relative (GeographicCRS) symbol turns with a rotated map;
+            // a screen-relative one keeps its angle (issue #652).
+            style.RotateWithMap = op.RotationCrs == SymbolRotationCrs.Geographic;
+            if (hasSymbolOffset)
+                style.Offset = new Offset(op.OffsetXpx, op.OffsetYpx);
+            if (hasPivotRelative)
+                style.RelativeOffset = new RelativeOffset(pivotRelX, pivotRelY);
+            feature.Styles.Add(style);
+        }
+        else
+        {
+            // Fallback: colored dot
+            var style = new SymbolStyle
+            {
+                SymbolScale = op.FallbackScale,
+                Fill = new Brush { Color = ToMapsui(op.FallbackColor) },
+                Line = null,
+            };
+            if (op.Rotation.HasValue)
+                style.SymbolRotation = op.Rotation.Value;
+            // A north-relative (GeographicCRS) symbol turns with a rotated map;
+            // a screen-relative one keeps its angle (issue #652).
+            style.RotateWithMap = op.RotationCrs == SymbolRotationCrs.Geographic;
+            if (hasSymbolOffset)
+                style.Offset = new Offset(op.OffsetXpx, op.OffsetYpx);
+            feature.Styles.Add(style);
+        }
+
+        return feature;
+    }
+
+    private static IFeature CreateTextFeature(Scene.TextPaintOp op)
+    {
+        var style = new LabelStyle
+        {
+            Text = op.Text,
+            ForeColor = ToMapsui(op.ForeColor),
+            Font = new Font { Size = op.FontSizePx },
+            HorizontalAlignment = MapHAlign(op.HorizontalAlignment),
+            VerticalAlignment = MapVAlign(op.VerticalAlignment),
+            Offset = new Offset(op.OffsetXpx, op.OffsetYpx),
+            BackColor = op.BackColor is { } b ? new Brush { Color = ToMapsui(b) } : null,
+            // Only seen where Mapsui paints the feature itself (RenderFeatures);
+            // Render's layer is painted by the tiled scene renderer.
+            Halo = op.HaloColor is { } h && op.HaloWidthPx > 0
+                ? new Pen { Color = ToMapsui(h), Width = op.HaloWidthPx }
+                : null,
+        };
+
+        var feature = new PointFeature(op.World.X, op.World.Y);
+        feature.Styles.Add(style);
+        return feature;
+    }
+
+    private static LabelStyle.HorizontalAlignmentEnum MapHAlign(TextHorizontalAlignment a) => a switch
+    {
+        TextHorizontalAlignment.Start => LabelStyle.HorizontalAlignmentEnum.Left,
+        TextHorizontalAlignment.End => LabelStyle.HorizontalAlignmentEnum.Right,
+        _ => LabelStyle.HorizontalAlignmentEnum.Center,
+    };
+
+    private static LabelStyle.VerticalAlignmentEnum MapVAlign(TextVerticalAlignment a) => a switch
+    {
+        TextVerticalAlignment.Top => LabelStyle.VerticalAlignmentEnum.Top,
+        TextVerticalAlignment.Bottom => LabelStyle.VerticalAlignmentEnum.Bottom,
+        _ => LabelStyle.VerticalAlignmentEnum.Center,
+    };
+
+    // ── Coordinate projection ──────────────────────────────────────────
+
+    /// <summary>
+    /// Builds an NTS polygon from already-projected EPSG:3857 ring coordinates
+    /// carried by an <see cref="Scene.AreaPaintOp"/> (closing + minimum-vertex
+    /// guards), skipping the lat/lon → EPSG:3857 projection the IR already
+    /// performed so degenerate rings are dropped consistently.
+    /// </summary>
+    private static Polygon? CreatePolygonFromWorld(
+        IReadOnlyList<(double X, double Y)> shell,
+        IReadOnlyList<IReadOnlyList<(double X, double Y)>> holes)
+    {
+        var shellRing = BuildLinearRingFromWorld(shell);
+        if (shellRing is null)
+            return null;
+
+        if (holes.Count == 0)
+            return new Polygon(shellRing);
+
+        var holeRings = new List<LinearRing>(holes.Count);
+        foreach (var hole in holes)
+        {
+            var ring = BuildLinearRingFromWorld(hole);
+            if (ring is not null)
+                holeRings.Add(ring);
+        }
+
+        return holeRings.Count == 0
+            ? new Polygon(shellRing)
+            : new Polygon(shellRing, holeRings.ToArray());
+    }
+
+    private static LinearRing? BuildLinearRingFromWorld(IReadOnlyList<(double X, double Y)> coords)
+    {
+        if (coords.Count < 3)
+            return null;
+
+        var ring = new List<Coordinate>(coords.Count + 1);
+        foreach (var (x, y) in coords)
+            ring.Add(new Coordinate(x, y));
+
+        // Close the ring if not already closed.
+        if (ring.Count > 0 && !ring[0].Equals2D(ring[^1]))
+            ring.Add(new Coordinate(ring[0].X, ring[0].Y));
+
+        if (ring.Count < 4)
+            return null;
+
+        return new LinearRing(ring.ToArray());
+    }
+
+    /// <summary>
+    /// Returns a cached <see cref="SymbolEntry"/> for the given symbol name,
+    /// processing and caching the raw SVG on first access.  The entry's
+    /// <c>Source</c> is <c>null</c> when no <see cref="SymbolProvider"/> is
+    /// configured or the symbol cannot be resolved.
+    /// </summary>
+    private SymbolEntry GetSymbolEntry(string? symbolRef)
+    {
+        if (string.IsNullOrEmpty(symbolRef) || SymbolProvider is null)
+            return default;
+
+        var resolveStart = Stopwatch.GetTimestamp();
+        var cache = AssetCache ?? _localAssetCache;
+
+        var entry = cache.GetOrAddSymbol(Palette, symbolRef, out var wasCached, ProduceSymbolEntry);
+
+        // Tag cache + resolve metrics with the active product (when known)
+        // so dashboards can attribute hit/miss counts to S-101 vs. S-131
+        // vs. an unconfigured caller.
+        var productTag = new KeyValuePair<string, object?>(TelemetryTags.Product, Product);
+
+        if (wasCached)
+        {
+            S100Diag.Telemetry.SymbolCacheHit.Add(1, productTag);
+            S100Diag.Telemetry.SymbolResolveDuration.Record(
+                (Stopwatch.GetTimestamp() - resolveStart) * 1000.0 / Stopwatch.Frequency,
+                productTag,
+                new KeyValuePair<string, object?>(TelemetryTags.SymbolResult, "hit"));
+            return entry;
+        }
+
+        S100Diag.Telemetry.SymbolCacheMiss.Add(1, productTag);
+        S100Diag.Telemetry.SymbolResolveDuration.Record(
+            (Stopwatch.GetTimestamp() - resolveStart) * 1000.0 / Stopwatch.Frequency,
+            productTag,
+            new KeyValuePair<string, object?>(TelemetryTags.SymbolResult, entry.Source is null ? "fallback" : "miss"));
+        return entry;
+    }
+
+    private SymbolEntry ProduceSymbolEntry(string symbolRef)
+    {
+        try
+        {
+            var svgContent = SymbolProvider!(symbolRef);
+            if (svgContent is not null)
+            {
+                // Recover S-100 Part 9 §11.5 pivot placement from the *raw*
+                // SVG before SvgProcessor strips the pivotPoint layout
+                // element.  Without this, Mapsui centres the SVG bbox on the
+                // anchor and composite symbols (e.g. multi-digit soundings)
+                // collapse onto the same point.
+                var pivot = SvgPivotMetrics.TryParse(svgContent);
+                var processed = SvgProcessor.Process(svgContent, Palette);
+                return new SymbolEntry(
+                    "svg-content://" + processed,
+                    pivot?.PivotToBoundsCenterMm.X ?? 0.0,
+                    pivot?.PivotToBoundsCenterMm.Y ?? 0.0,
+                    pivot?.RelativeOffset.X ?? 0.0,
+                    pivot?.RelativeOffset.Y ?? 0.0);
+            }
+        }
+        catch
+        {
+            // Symbol not found or malformed — fall back to dot
+        }
+
+        return default;
+    }
+
+    // ── Pattern tile rasterization ─────────────────────────────────────
+
+    /// <summary>
+    /// Returns rasterized pattern tile PNG bytes for the given area fill name,
+    /// processing and caching on first access.
+    /// </summary>
+    private byte[]? GetPatternTilePng(string? fillName)
+    {
+        if (string.IsNullOrEmpty(fillName) || AreaFillProvider is null || SymbolProvider is null)
+            return null;
+
+        var cache = AssetCache ?? _localAssetCache;
+        var tile = cache.GetOrAddPatternTile(Palette, fillName, out var wasCached, ProducePatternTile);
+
+        // Pattern cache counters (PR-CACHE-7 in the asset-caching audit) so
+        // every reuse of a rasterised pattern tile is visible alongside the
+        // symbol cache counters.
+        var productTag = new KeyValuePair<string, object?>(TelemetryTags.Product, Product);
+        if (wasCached)
+        {
+            S100Diag.Telemetry.PatternCacheHit.Add(1, productTag);
+        }
+        else
+        {
+            S100Diag.Telemetry.PatternCacheMiss.Add(1, productTag);
+        }
+        return tile;
+    }
+
+    private byte[]? ProducePatternTile(string fillName)
+    {
+        try
+        {
+            var areaFill = AreaFillProvider!(fillName);
+            if (areaFill?.PatternSymbol is not null)
+            {
+                var svgContent = SymbolProvider!(areaFill.PatternSymbol);
+                if (svgContent is not null)
+                {
+                    var processed = SvgProcessor.Process(svgContent, Palette);
+                    return SkiaSvgRasterizer.RasterizePatternTile(processed, areaFill);
+                }
+            }
+        }
+        catch
+        {
+            // Area fill or symbol not found — skip pattern
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Adapts this renderer's <see cref="PatternClipCache"/> (an
+    /// <see cref="IPatternClipCache"/> keyed by <see cref="PatternClipCacheKey"/>)
+    /// into the <see cref="Scene.PatternClipMemoizer"/> consumed by
+    /// <see cref="Scene.VectorSceneBuilder"/>, so the default TiledScene ("B") arm
+    /// memoizes its pattern priority-clip exactly like the Mapsui feature ("A")
+    /// arm. Returns <see langword="null"/> when no cache or key is configured, in
+    /// which case the builder clips on every build. The clip result is
+    /// palette-independent, so a Day/Dusk/Night switch (which recolours the
+    /// pattern tiles applied after clipping) reuses the cached geometry.
+    /// </summary>
+    private Scene.PatternClipMemoizer? BuildPatternClipMemoizer()
+    {
+        if (PatternClipCache is not { } cache || PatternClipCacheKey is not { } key)
+            return null;
+
+        return compute =>
+        {
+            // One span per clip lookup, tagged hit or miss, so a warm cell
+            // load's trace shows whether the clip came from the cache.
+            using var activity = S100Diag.Telemetry.ActivitySource.StartActivity("s100.cell.pattern_clip");
+            var missed = false;
+            var result = cache
+                .GetOrCompute(key, () =>
+                {
+                    missed = true;
+                    var clipped = compute();
+                    var tuples = new List<(string PatternRef, int Priority, Geometry Geometry)>(clipped.Count);
+                    foreach (var c in clipped)
+                        tuples.Add((c.PatternRef, c.Priority, c.Geometry));
+                    return tuples;
+                })
+                .Select(t => new Scene.PatternPriorityClipper.ClippedPattern(t.PatternRef, t.Priority, t.Geometry))
+                .ToList();
+            activity?.SetTag(TelemetryTags.CacheResult, missed ? "miss" : "hit");
+            return result;
+        };
+    }
+}

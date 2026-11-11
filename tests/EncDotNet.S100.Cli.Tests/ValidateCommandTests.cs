@@ -1,0 +1,230 @@
+using System.Text.Json;
+using EncDotNet.S100.Cli.Infrastructure;
+using EncDotNet.S100.TestSupport;
+using Spectre.Console;
+
+namespace EncDotNet.S100.Cli.Tests;
+
+/// <summary>
+/// End-to-end smoke tests that run the <c>s100 validate</c> command in-process
+/// against a committed synthetic dataset fixture.
+/// </summary>
+[Collection(ConsoleCollection.Name)]
+public sealed class ValidateCommandTests
+{
+    private static string FixturePath(string fileName) =>
+        Path.Combine(AppContext.BaseDirectory, "TestData", fileName);
+
+    [Fact]
+    public void Validate_conformant_dataset_returns_success()
+    {
+        var dataset = FixturePath("marine_curve.gml");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        int exit = CliApp.Build().Run(["validate", dataset], TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, exit);
+    }
+
+    [Fact]
+    public void Validate_conformant_dataset_with_strict_returns_success()
+    {
+        var dataset = FixturePath("marine_curve.gml");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        int exit = CliApp.Build().Run(["validate", dataset, "--strict"], TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, exit);
+    }
+
+    [Fact]
+    public void Validate_conformant_dataset_text_summary_has_no_literal_markup()
+    {
+        // #762: the "no findings" suffix was passed as an interpolated argument,
+        // so Spectre escaped it and printed "[grey]...[/]" literally.
+        var dataset = FixturePath("marine_curve.gml");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var (exit, stdout) = RunCapturingAnsiConsole(["validate", dataset]);
+
+        Assert.Equal(0, exit);
+        Assert.Contains("Valid — S-127", stdout);
+        Assert.Contains("rule(s) evaluated, no findings)", stdout);
+        Assert.DoesNotContain("[grey]", stdout);
+        Assert.DoesNotContain("[/]", stdout);
+    }
+
+    [Fact]
+    public void Validate_emits_well_formed_json()
+    {
+        var dataset = FixturePath("marine_curve.gml");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        var (exit, stdout) = RunCapturingStdout(["validate", dataset, "--format", "json"]);
+
+        Assert.Equal(0, exit);
+
+        using var doc = JsonDocument.Parse(stdout);
+        var root = doc.RootElement;
+        Assert.Equal("S-127", root.GetProperty("specification").GetString());
+        Assert.True(root.GetProperty("rulesAvailable").GetBoolean());
+        Assert.True(root.GetProperty("valid").GetBoolean());
+        Assert.Equal(JsonValueKind.Array, root.GetProperty("findings").ValueKind);
+    }
+
+    [Fact]
+    public void Validate_json_stays_well_formed_when_s101_updates_are_applied()
+    {
+        // #854: validate now applies sibling updates like render and info; the
+        // update summary must not land in the JSON on stdout.
+        var basePath = RenderCommandTests.FindS101BaseCellWithUpdate();
+        Assert.SkipWhen(basePath is null,
+            "No S-101 base cell (.000) with a sibling .001 update found under IC-ENC sample data.");
+
+        var (_, stdout) = RunCapturingStdout(["validate", basePath!, "--format", "json"]);
+
+        using var doc = JsonDocument.Parse(stdout);
+        Assert.Equal("S-101", doc.RootElement.GetProperty("specification").GetString());
+    }
+
+    [Fact]
+    public void Validate_with_no_updates_flag_validates_s101_base_cell()
+    {
+        var basePath = RenderCommandTests.FindS101BaseCellWithUpdate();
+        Assert.SkipWhen(basePath is null,
+            "No S-101 base cell (.000) with a sibling .001 update found under IC-ENC sample data.");
+
+        var (_, stdout) = RunCapturingStdout(["validate", basePath!, "--format", "json", "--no-updates"]);
+
+        using var doc = JsonDocument.Parse(stdout);
+        Assert.Equal("S-101", doc.RootElement.GetProperty("specification").GetString());
+    }
+
+    [Fact]
+    public void Validate_with_missing_dataset_returns_nonzero()
+    {
+        int exit = CliApp.Build().Run(["validate", "does-not-exist.gml"], TestContext.Current.CancellationToken);
+        Assert.NotEqual(0, exit);
+    }
+
+    [Fact]
+    public void Validate_with_bad_format_returns_nonzero()
+    {
+        var dataset = FixturePath("marine_curve.gml");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        int exit = CliApp.Build().Run(["validate", dataset, "--format", "bogus"], TestContext.Current.CancellationToken);
+        Assert.NotEqual(0, exit);
+    }
+
+    [Fact]
+    public void Validate_with_empty_suppress_returns_nonzero()
+    {
+        var dataset = FixturePath("marine_curve.gml");
+        Assert.SkipUnless(File.Exists(dataset), $"Fixture not found: {dataset}");
+
+        int exit = CliApp.Build().Run(["validate", dataset, "--suppress", ","], TestContext.Current.CancellationToken);
+        Assert.NotEqual(0, exit);
+    }
+
+    [Fact]
+    public void Validate_suppressing_all_rules_drops_findings_and_passes()
+    {
+        // The S-57 cell is translated to S-101; its duplicate FOID is flagged
+        // by the "S101-as-S57/*" rule family. Suppressing that family should
+        // leave no effective findings and flip the dataset to valid (exit 0).
+        var dir = Directory.CreateTempSubdirectory("s100-validate-").FullName;
+        try
+        {
+            var dataset = SyntheticS57Cell.WriteWithSourceErrors(dir, "US5MA1BO.000");
+
+            var (baselineExit, baselineOut) = RunCapturingStdout(["validate", dataset, "--format", "json"]);
+            using var baseline = JsonDocument.Parse(baselineOut);
+            int baselineFindings = baseline.RootElement.GetProperty("findings").GetArrayLength();
+            Assert.True(baselineFindings > 0, "Expected the duplicate FOID to be reported.");
+            Assert.Equal(6, baselineExit);
+
+            var (exit, stdout) = RunCapturingStdout(
+                ["validate", dataset, "--format", "json", "--suppress", "S101-as-S57/*"]);
+
+            using var doc = JsonDocument.Parse(stdout);
+            var root = doc.RootElement;
+            Assert.True(root.GetProperty("valid").GetBoolean());
+            Assert.Equal(0, root.GetProperty("findings").GetArrayLength());
+            Assert.Equal(baselineFindings, root.GetProperty("suppressedCount").GetInt32());
+            Assert.Equal(0, exit);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Validate_suppressing_one_rule_keeps_other_errors_failing()
+    {
+        var dir = Directory.CreateTempSubdirectory("s100-validate-").FullName;
+        try
+        {
+            var dataset = SyntheticS57Cell.WriteWithSourceErrors(dir, "US5MA1BO.000", zeroCompilationScale: true);
+
+            var (baselineExit, _) = RunCapturingStdout(["validate", dataset, "--format", "json"]);
+            Assert.Equal(6, baselineExit);
+
+            // Suppress just one of the flagged rules; the zero compilation scale
+            // (S57-R-1.1) keeps it failing.
+            int exit = CliApp.Build().Run(
+                ["validate", dataset, "--suppress", "S101-as-S57/S101-R-2.1"], TestContext.Current.CancellationToken);
+            Assert.Equal(6, exit);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Runs the CLI with the static <see cref="AnsiConsole"/> (which the text
+    /// output writes through) redirected to a wide, colourless in-memory console,
+    /// as when output is piped or <c>NO_COLOR</c> is set.
+    /// </summary>
+    private static (int Exit, string Stdout) RunCapturingAnsiConsole(string[] args)
+    {
+        var writer = new StringWriter();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(writer),
+        });
+        console.Profile.Width = 1000;
+
+        var original = AnsiConsole.Console;
+        AnsiConsole.Console = console;
+        try
+        {
+            int exit = CliApp.Build(console: console).Run(args);
+            return (exit, writer.ToString());
+        }
+        finally
+        {
+            AnsiConsole.Console = original;
+        }
+    }
+
+    private static (int Exit, string Stdout) RunCapturingStdout(string[] args)
+    {
+        var original = Console.Out;
+        var buffer = new StringWriter();
+        Console.SetOut(buffer);
+        try
+        {
+            int exit = CliApp.Build().Run(args);
+            return (exit, buffer.ToString());
+        }
+        finally
+        {
+            Console.SetOut(original);
+        }
+    }
+}

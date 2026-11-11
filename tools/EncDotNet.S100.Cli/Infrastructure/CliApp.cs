@@ -1,0 +1,157 @@
+using EncDotNet.S100.Cli.Commands;
+using Spectre.Console;
+using Spectre.Console.Cli;
+using Spectre.Console.Cli.Help;
+
+namespace EncDotNet.S100.Cli.Infrastructure;
+
+/// <summary>
+/// Builds the configured <see cref="CommandApp"/> for the <c>s100</c> CLI.
+/// Shared by the executable entry point and the test suite.
+/// </summary>
+internal static class CliApp
+{
+    public static CommandApp Build(
+        string? applicationVersion = null,
+        IAnsiConsole? console = null,
+        IHelpProvider? helpProvider = null)
+    {
+        var app = new CommandApp();
+        app.Configure(config =>
+        {
+            config.SetApplicationName("s100");
+            config.SetApplicationVersion(
+                applicationVersion ?? CliVersionInfo.FromAssembly(typeof(CliApp).Assembly).InformationalVersion);
+            if (console is not null)
+            {
+                config.ConfigureConsole(console);
+            }
+            config.SetHelpProvider(helpProvider ?? new S100HelpProvider(config.Settings));
+
+            config.AddCommand<RenderCommand>("render")
+                .WithDescription("Render one S-100 dataset — or composite several (with --layer, or an entire exchange set) — to an image (PNG, JPEG, or WebP).")
+                .WithExample("render", "dataset.h5", "out.png")
+                .WithExample("render", "warnings.gml", "out.png", "--width", "2048", "--height", "1536")
+                .WithExample("render", "currents.h5", "out.png", "--time-step", "2", "--palette", "night")
+                .WithExample("render", "--layer", "enc.000", "--layer", "bathy.h5", "--layer", "warnings.gml", "chart.png")
+                .WithExample("render", "--layer", "enc.000", "--layer", "bathy.h5", "-o", "chart.png", "--bbox", "-1.5,50.0,-1.0,50.5")
+                .WithExample("render", "exchange-set/", "chart.png")
+                .WithExample("render", "--exchange-set", "exchange-set.zip", "-o", "chart.png", "--only", "S101,S102");
+
+            config.AddBranch("tiles", tiles =>
+            {
+                tiles.SetDescription("Make and serve XYZ Web-Mercator raster tiles of S-100 datasets for web maps.");
+
+                tiles.AddCommand<TilesExportCommand>("export")
+                    .WithDescription("Render one or more S-100 datasets as an XYZ Web-Mercator raster tile pyramid (a {z}/{x}/{y} directory, a PMTiles archive or an MBTiles database) for web maps such as MapLibre, Leaflet and OpenLayers.")
+                    .WithExample("tiles", "export", "enc.000", "-o", "tiles/")
+                    .WithExample("tiles", "export", "enc.000", "-o", "chart.pmtiles", "--min-zoom", "10", "--max-zoom", "15")
+                    .WithExample("tiles", "export", "--layer", "enc.000", "--layer", "bathy.h5", "-o", "chart.pmtiles", "--tile-size", "512")
+                    .WithExample("tiles", "export", "exchange-set/", "-o", "tiles/", "--format", "webp", "--skip-empty")
+                    .WithExample("tiles", "export", "enc.000", "-o", "chart.mbtiles", "--max-zoom", "16")
+                    .WithExample("tiles", "export", "--from", "exchange-set.zip", "-o", "chart.pmtiles", "--bbox", "-1.5,50.0,-1.0,50.5", "--palette", "night");
+
+                tiles.AddCommand<TilesServeCommand>("serve")
+                    .WithDescription("Serve XYZ raster tiles with a TileJSON document, as a tile source for local web maps: a built tile set (a {z}/{x}/{y} directory, a PMTiles archive or an MBTiles database), or datasets rendered on demand in the day, dusk and night palettes and, for S-104/S-111, at the time step a ?t= query parameter names.")
+                    .WithExample("tiles", "serve", "chart.pmtiles")
+                    .WithExample("tiles", "serve", "chart.mbtiles", "--port", "9000")
+                    .WithExample("tiles", "serve", "tiles/", "--host", "0.0.0.0")
+                    .WithExample("tiles", "serve", "enc.000")
+                    .WithExample("tiles", "serve", "--layer", "enc.000", "--layer", "bathy.h5", "--palette", "night")
+                    .WithExample("tiles", "serve", "exchange-set/", "--only", "S101", "--max-zoom", "16")
+                    .WithExample("tiles", "serve", "exchange-set/", "--cache-dir", "tile-cache")
+                    .WithExample("tiles", "serve", "--layer", "enc.000", "--layer", "currents.h5");
+            });
+
+            config.AddBranch("route", route =>
+            {
+                route.SetDescription("Check routes against S-100 data.");
+
+                route.AddCommand<RouteCheckCommand>("check")
+                    .WithDescription("Check an RTZ or S-421 route against datasets headlessly: land, drying ground, the safety contour, charted dangers, restricted and protected areas, S-124 warnings, chart coverage and, with a draft, under-keel clearance. Exits with code 7 on Must review findings, for CI.")
+                    .WithExample("route", "check", "route.rtz", "exchange-set/")
+                    .WithExample("route", "check", "route.gml", "enc.000", "bathy.h5", "warnings.gml", "--draft", "7", "--required-ukc", "1")
+                    .WithExample("route", "check", "route.rtz", "exchange-set.zip", "--safety-contour", "10", "--safety-depth", "10", "--corridor", "100")
+                    .WithExample("route", "check", "route.gml", "exchange-set/", "--departure", "2026-03-01T06:00Z", "--speed", "8", "--format", "json");
+            });
+
+            config.AddCommand<ValidateCommand>("validate")
+                .WithDescription("Validate an S-100 dataset against its product specification's normative rule pack, or verify an exchange set's integrity (S-100 Part 15 signatures, or S-57 / S-63 CATALOG.031 CRCs).")
+                .WithExample("validate", "warnings.gml")
+                .WithExample("validate", "route.gml", "--strict")
+                .WithExample("validate", "chart.000", "--suppress", "S101-R-1.2,S101-R-3.2")
+                .WithExample("validate", "currents.h5", "--format", "json")
+                .WithExample("validate", "exchangeset/CATALOG.XML")
+                .WithExample("validate", "exchangeset.zip", "--format", "json")
+                .WithExample("validate", "s57set/CATALOG.031");
+
+            config.AddCommand<InfoCommand>("info")
+                .WithDescription("Show the detected spec, edition, and available time steps for a dataset.")
+                .WithExample("info", "dataset.h5");
+
+            config.AddCommand<IdentifyCommand>("identify")
+                .WithDescription("Headless ECDIS-style pick: identify vector features and sample coverage values at a lat/lon across one or more dataset layers.")
+                .WithExample("identify", "warnings.gml", "--lat", "50.1", "--lon", "-1.3")
+                .WithExample("identify", "--layer", "enc.000", "--layer", "bathy.h5", "--lat", "50.1", "--lon", "-1.3")
+                .WithExample("identify", "--from", "exchange-set.zip", "--lat", "50.1", "--lon", "-1.3", "--format", "json");
+
+            config.AddCommand<ListSpecsCommand>("list-specs")
+                .WithDescription("List supported product specifications and headless-render capability.")
+                .WithExample("list-specs");
+
+            config.AddBranch("s57", s57 =>
+            {
+                s57.SetDescription("S-57 (IHO S-57 / ENC) specific operations.");
+
+                s57.AddCommand<S57ConvertCommand>("convert")
+                    .WithDescription("Convert an S-57 base cell to an S-101 dataset, or an inland ENC cell to an S-401 dataset (ISO/IEC 8211).")
+                    .WithExample("s57", "convert", "-o", "my-s101-dataset.000", "my-s57-dataset.000")
+                    .WithExample("s57", "convert", "-o", "my-s401-dataset.000", "my-inland-s57-dataset.000")
+                    .WithExample("s57", "convert", "--target", "s101", "-o", "my-s101-dataset.000", "my-inland-s57-dataset.000");
+            });
+
+            config.AddBranch("s101", s101 =>
+            {
+                s101.SetDescription("S-101 (IHO S-101 ENC) specific operations.");
+
+                s101.AddCommand<S101ConvertCommand>("convert")
+                    .WithDescription("Convert an S-101 base dataset to an S-57 base cell, following S-65 Annex C, for testing and for tools that read only S-57. The output is not a production ENC.")
+                    .WithExample("s101", "convert", "--to", "s57", "-o", "XX5CELL1.000", "101XX00CELL1.000")
+                    .WithExample("s101", "convert", "--to", "s57", "-o", "XX5CELL1.000", "101XX00CELL1.000", "--report", "report.json")
+                    .WithExample("s101", "convert", "--to", "s57", "--exchange-set", "--cell-name", "XX5CELL1", "-o", "s57set", "101XX00CELL1.000")
+                    .WithExample("s101", "convert", "--to", "s57", "--no-optional-inform", "--inform-length", "truncate", "-o", "XX5CELL1.000", "101XX00CELL1.000");
+            });
+
+            config.AddBranch("feed", feed =>
+            {
+                feed.SetDescription("Publish datasets to other machines as an S-100 feed.");
+
+                feed.AddCommand<FeedServeCommand>("serve")
+                    .WithDescription("Serve a folder, exchange set or dataset as an S-100 feed over HTTP; add the printed URL in another machine's viewer (Library → Online Catalogue → Add URL).")
+                    .WithExample("feed", "serve", "charts/")
+                    .WithExample("feed", "serve", "exchange-set.zip", "--port", "9000")
+                    .WithExample("feed", "serve", "charts/", "--host", "0.0.0.0");
+
+                feed.AddCommand<FeedExportCommand>("export")
+                    .WithDescription("Write a folder, exchange set or dataset as a static S-100 feed (feed.json plus one zip per dataset) for any web host; re-running updates it incrementally.")
+                    .WithExample("feed", "export", "charts/", "--out", "site/charts")
+                    .WithExample("feed", "export", "exchange-set.zip", "-o", "export", "--title", "Harbour survey");
+            });
+
+            config.AddBranch("mcp", mcp =>
+            {
+                mcp.SetDescription("Model Context Protocol (MCP) server operations.");
+
+                mcp.AddCommand<McpServeCommand>("serve")
+                    .WithDescription("Serve the S-100 MCP tools over stdio, with a headless session and a dataset-collection Library, so an agent that spawns this process can query, sample, render and fetch data without a GUI.")
+                    .WithExample("mcp", "serve", "dataset.h5")
+                    .WithExample("mcp", "serve", "--layer", "enc.000", "--layer", "bathy.h5")
+                    .WithExample("mcp", "serve", "--from", "exchange-set.zip", "--only", "S101,S102")
+                    .WithExample("mcp", "serve", "charts/")
+                    .WithExample("mcp", "serve", "--collection", "noaa-s111#sfbofs", "--data-dir", "s100-data")
+                    .WithExample("mcp", "serve", "--collection", "charts.s100collection.json");
+            });
+        });
+        return app;
+    }
+}

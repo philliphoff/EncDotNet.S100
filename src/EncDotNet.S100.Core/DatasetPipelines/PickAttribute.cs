@@ -1,0 +1,183 @@
+namespace EncDotNet.S100.Datasets.Pipelines;
+
+/// <summary>
+/// One row in a feature's pick / object-info attribute display. Carries
+/// both the raw on-the-wire shape (<see cref="Code"/> /
+/// <see cref="RawValue"/>) and a Feature-Catalogue-decoded shape
+/// (<see cref="Name"/> / <see cref="DisplayValue"/>) so a viewer can show
+/// the friendly form by default while keeping the raw values available
+/// in tooltips.
+/// </summary>
+/// <remarks>
+/// Trees are formed by populating <see cref="Children"/>: complex
+/// attributes are surfaced as a parent <c>PickAttribute</c> (with the
+/// complex-attribute code/name and an empty value) plus one child per
+/// sub-attribute. Decoding obeys the S-100 Edition 5.2.1 Part 5 Feature
+/// Catalogue (ISO 19110): simple-attribute codes resolve to their
+/// human-readable name, listed-value codes resolve to their label.
+/// </remarks>
+public sealed class PickAttribute
+{
+    /// <summary>The raw on-the-wire attribute or sub-attribute code (e.g. <c>"OBJNAM"</c>, <c>"CATPIB"</c>).</summary>
+    public required string Code { get; init; }
+
+    /// <summary>
+    /// Human-readable attribute name resolved through the dataset's
+    /// Feature Catalogue, or <c>null</c> when no FC was available or the
+    /// code is not defined.
+    /// </summary>
+    public string? Name { get; init; }
+
+    /// <summary>The unmodified value as written in the dataset.</summary>
+    public required string RawValue { get; init; }
+
+    /// <summary>
+    /// Friendly display value resolved through the dataset's Feature
+    /// Catalogue (e.g. listed-value label), or <c>null</c> when no
+    /// decoding applies.
+    /// </summary>
+    public string? DisplayValue { get; init; }
+
+    /// <summary>
+    /// Optional typed timestamp value backing this attribute. When set,
+    /// presentation layers should re-format the value through their own
+    /// date/time formatter rather than relying on <see cref="RawValue"/>
+    /// or <see cref="DisplayValue"/>. <see cref="RawValue"/> still
+    /// carries an ISO 8601 representation for non-UI consumers
+    /// (serialization, MCP, tests).
+    /// </summary>
+    public DateTime? DateTimeValue { get; init; }
+
+    /// <summary>
+    /// Optional typed time-range backing this attribute (start, end).
+    /// Same contract as <see cref="DateTimeValue"/>.
+    /// </summary>
+    public (DateTime Start, DateTime End)? DateTimeRangeValue { get; init; }
+
+    /// <summary>
+    /// Optional typed depth value (canonical metres) backing this attribute.
+    /// When set, presentation layers should re-format the value through the
+    /// active mariner <c>DepthUnit</c> setting (S-100 Part 9 §4.2) rather
+    /// than relying on <see cref="RawValue"/> or <see cref="DisplayValue"/>.
+    /// <see cref="RawValue"/> still carries the unit-less numeric metres
+    /// representation for non-UI consumers (serialization, MCP, tests).
+    /// </summary>
+    public double? DepthMetresValue { get; init; }
+
+    /// <summary>
+    /// A short outlined mark shown before the attribute's name, or
+    /// <see langword="null"/> for none: <c>"AML"</c> on an attribute that a
+    /// NATO Additional Military Layers catalogue adds to a standard S-57
+    /// object class (<see cref="AmlMark"/>).
+    /// </summary>
+    public string? Mark { get; init; }
+
+    /// <summary>The <see cref="Mark"/> of an AML-only attribute on a standard S-57 class: <c>"AML"</c>.</summary>
+    public const string AmlMark = "AML";
+
+    /// <summary>
+    /// Sub-attributes of a complex attribute. Empty for simple attributes
+    /// and for leaf rows of a complex attribute.
+    /// </summary>
+    public IReadOnlyList<PickAttribute> Children { get; init; } = [];
+
+    /// <summary>
+    /// The <see cref="Code"/> of a not-for-navigation notice row
+    /// (<see cref="NavigationNotice"/>): <c>"notice"</c>.
+    /// </summary>
+    public const string NavigationNoticeCode = "notice";
+
+    /// <summary>
+    /// <c>true</c> when this row is the product's not-for-navigation notice
+    /// rather than a value of the feature, e.g. "Weather model data, not for
+    /// navigation." on a weather grid pick. Non-viewer callers (MCP, CLI)
+    /// show it as an ordinary row; a host that already leads its pick report
+    /// with its own notice for the product hides it so the notice reads once
+    /// (#1096).
+    /// </summary>
+    public bool IsNavigationNotice { get; init; }
+
+    /// <summary>
+    /// A not-for-navigation notice row: <see cref="NavigationNoticeCode"/>,
+    /// named "Notice", with <paramref name="text"/> as its value and
+    /// <see cref="IsNavigationNotice"/> set.
+    /// </summary>
+    /// <param name="text">The notice, e.g. "Weather model data, not for navigation.".</param>
+    /// <returns>The notice row.</returns>
+    public static PickAttribute NavigationNotice(string text)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        return new PickAttribute
+        {
+            Code = NavigationNoticeCode,
+            Name = "Notice",
+            RawValue = text,
+            DisplayValue = text,
+            IsNavigationNotice = true,
+        };
+    }
+
+    /// <summary>
+    /// The <see cref="Code"/> of a stale-data line (<see cref="StaleNotice"/>):
+    /// <c>"stale"</c>.
+    /// </summary>
+    public const string StaleNoticeCode = "stale";
+
+    /// <summary>
+    /// <c>true</c> when this row says the data picked is old, e.g. "This
+    /// analysis is 9 h old. A newer one is likely." on a stale
+    /// surface analysis. Non-viewer callers show it as an ordinary row; the
+    /// viewer shows it as a warning line under the notice.
+    /// </summary>
+    public bool IsStaleNotice { get; init; }
+
+    /// <summary>
+    /// A stale-data row: <see cref="StaleNoticeCode"/>, named "Stale", with
+    /// <paramref name="text"/> as its value and <see cref="IsStaleNotice"/> set.
+    /// </summary>
+    /// <param name="text">What is old and how old.</param>
+    /// <returns>The row.</returns>
+    public static PickAttribute StaleNotice(string text)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        return new PickAttribute
+        {
+            Code = StaleNoticeCode,
+            Name = "Stale",
+            RawValue = text,
+            DisplayValue = text,
+            IsStaleNotice = true,
+        };
+    }
+
+    /// <summary>
+    /// The resolved textual content of the external text file named by a
+    /// <c>fileReference</c> attribute (S-100 Edition 5.2.1 Part 5; S-101
+    /// Feature Catalogue simple attribute <c>fileReference</c>, aliases
+    /// <c>TXTDSC</c> / <c>NTXTDS</c>), or <c>null</c> when this row is not a
+    /// file reference or the referenced file could not be resolved from the
+    /// dataset's exchange set. <see cref="RawValue"/> still carries the
+    /// referenced file name. Presentation layers (e.g. the viewer's pick
+    /// report) surface this as expandable text, mirroring how an ECDIS lets
+    /// the mariner read an externally referenced textual description.
+    /// </summary>
+    public string? ExternalText { get; init; }
+
+    /// <summary>
+    /// <c>true</c> when <see cref="ExternalText"/> carries resolved content
+    /// from an external text file referenced by this attribute.
+    /// </summary>
+    public bool HasExternalText => !string.IsNullOrEmpty(ExternalText);
+
+    /// <summary>
+    /// The label most viewers want to render: <see cref="Name"/> when
+    /// available, otherwise <see cref="Code"/>.
+    /// </summary>
+    public string DisplayName => Name ?? Code;
+
+    /// <summary>
+    /// The value most viewers want to render: <see cref="DisplayValue"/>
+    /// when available, otherwise <see cref="RawValue"/>.
+    /// </summary>
+    public string DisplayText => DisplayValue ?? RawValue;
+}

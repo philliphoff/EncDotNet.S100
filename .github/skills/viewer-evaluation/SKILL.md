@@ -1,0 +1,226 @@
+---
+name: viewer-evaluation
+description: |
+  Procedure for running an independent, automated evaluation loop
+  against the EncDotNet.S100 Avalonia viewer. The CLI launches and
+  isolates the process; its embedded MCP server drives everything after
+  that. Lets an agent launch the viewer headlessly, then over MCP load
+  datasets, drive viewport / palette / display-category / time-step /
+  own-ship, capture screenshots, await render-idle, and read render
+  stats — then iterate. USE FOR: visually verifying a rendering or
+  portrayal change; designing or reproducing integration/regression
+  scenarios; measuring load/render performance; capturing reference
+  images; deriving test fixtures from real datasets; any "does it
+  actually look/behave right in the viewer?" question — INCLUDING from
+  renderer (Renderers.Mapsui / Renderers.Skia), Core pipeline, or
+  Datasets.SXXX work, not only when editing the Viewer project.
+  DO NOT USE FOR: pure library logic unit tests (write xunit directly),
+  viewer XAML/localization conventions (see viewer.instructions.md),
+  or the MCP tool catalogue reference (see docs/mcp-server.md).
+---
+
+# Viewer evaluation loop (CLI + MCP)
+
+The viewer hosts an MCP server and a rich CLI so an agent can drive it
+**headlessly** to verify behaviour, capture images, and measure
+performance — independent of the GUI and the user's settings. Reach for
+this whenever a change needs *seeing* or *exercising end-to-end*, not
+just unit-testing. The canonical tool reference is
+[`docs/mcp-server.md`](../../../docs/mcp-server.md); this skill is the
+operating procedure.
+
+> The viewer is a GUI app — there is **no fully headless windowing
+> mode**. It still needs a display server (a real desktop, or X11 /
+> XWayland / Xvfb in CI). "Headless" here means *agent-driven without a
+> human at the keyboard*.
+
+## Pick the right tool first
+- **Library logic** (parsers, geometry, coverage sampling, display-list
+  building): write an **xunit test** in the matching `tests/` project.
+  Do not spin up the viewer for something a unit test can pin.
+- **Visual / portrayal / end-to-end behaviour** (does the chart layer,
+  colour, declutter, project, pan, or re-render correctly?): use this
+  loop. Capture the finding, then **back it with a unit test or a
+  small synthetic fixture** wherever the root cause lives in a library.
+
+## How to drive it: MCP is the single control surface
+
+**Image capture and all live state changes go over MCP — not CLI
+flags.** The CLI's job is to *launch and isolate* the process; once the
+window is up, an MCP client loads data, reframes, toggles
+palette/category/time-step/own-ship, and captures images. There is
+deliberately **no** one-shot "load → screenshot → exit" CLI mode: it
+existed once (`--screenshot` / `--exit-after-screenshot` /
+`--window-size` / …) but was **removed** because it was unreliable and
+duplicated the MCP tools. Do not look for those flags — they are gone.
+(There is likewise no MCP *shutdown* tool: when the run is done, stop
+the process from the OS with `kill -9 <pid>` — the viewer ignores
+SIGTERM.)
+
+The core capture loop is always:
+
+> `open_dataset` → `set_viewport` → `await_render_idle` →
+> `render_to_image` (map surface) or `capture_app_screenshot` (whole
+> window)
+
+with `set_palette` / `set_display_category` / `set_time_step` /
+`set_own_ship` interleaved as the scenario needs, and
+`close_all_datasets` when done. Within one running process, reframe with
+`set_viewport` rather than relaunching between captures. For a
+before/after image diff across a code change you *do* relaunch — build,
+launch, run the loop, capture; then rebuild and repeat — driving both
+runs to the **same** viewport so the two images are comparable.
+
+The CLI flags that remain are launch-time presets and isolation only:
+`--ephemeral` / `--data-dir` (profile/cache isolation), `--mcp*` (enable
++ discover the server), `--bbox` / `--center`+`--zoom` / `--palette` /
+`--display-category` / `--time-step` / `--own-ship-*` (preset the
+*initial* view — the MCP tools change it thereafter), `--fc` / `--pc`
+(catalogue overrides, no MCP counterpart), `--basemap`, and the
+logging flags. Follow the procedure below.
+
+### Hand-off to a human for manual GUI testing
+When you launch the viewer for the **user** to click through (e.g. to
+verify a dialog or interaction), it must outlive your shell session. A
+plain `nohup … & disown` from a sync/attached command is killed when the
+command's session is torn down — the GUI window dies seconds later.
+**Always launch detached** so the process is fully independent:
+
+- Use the `bash` tool with `mode: "async"` **and** `detach: true`. Do
+  *not* rely on `& disown` in a sync command for hand-off runs.
+- The process survives session shutdown; stop it explicitly with
+  `kill -9 <pid>` (never name-based kills) when the user is done.
+- Confirm it stayed up (`pgrep -f EncDotNet.S100.Viewer/bin/.*/SoundCharts`) before
+  telling the user it's ready.
+
+## Procedure: launch, then drive over MCP
+
+### 1. Build, then launch the binary (not `dotnet run`)
+Build `Release` first so the PID you drive/trace is the app itself, not
+a `dotnet` host:
+
+```bash
+dotnet build -c Release src/EncDotNet.S100.Viewer
+mkdir -p /tmp/eval
+nohup src/EncDotNet.S100.Viewer/bin/Release/net10.0/<rid>/SoundCharts \
+  --data-dir /tmp/eval/data --mcp --mcp-port-file /tmp/eval/mcp.url \
+  >/tmp/eval/viewer.log 2>&1 & disown
+```
+
+> **Always launch the viewer fully detached.** From the agent's bash
+> tool, use `mode: "async"` **with `detach: true`** (this `setsid`-wraps
+> the process so it survives the bash session). A plain sync call — even
+> with `nohup … & disown` — leaves the viewer parented to the bash
+> session, so it gets **reaped the moment that call returns** and the
+> window dies on its own with no error in the log. The `nohup …& disown`
+> form above is only correct inside an already-detached async shell. When
+> done, stop it explicitly with `kill -9 <pid>` (see below).
+
+- `--data-dir <PATH>` → **fully isolated instance**: settings, crash
+  markers, and all disk caches are re-rooted under the folder. Point it
+  at an empty temp dir for a guaranteed-fresh viewer (no local profile
+  or cache is read), and `rm -rf` the folder to dispose of it
+  completely. Prefer this over `--ephemeral` for evaluation runs that
+  must not be influenced by — or leave traces in — the developer's real
+  data. It can also be set via the `S100_DATA_DIR` env var, and you can
+  pre-seed the folder to launch with mocked-up settings/caches.
+- `--ephemeral` → throwaway settings only (still reads the user's other
+  on-disk state); use `--data-dir` when you need a clean cache too.
+- `--mcp` enables the server; default `--mcp-port 0` picks a free port.
+  Any MCP flag implies `--mcp`. A CLI-driven MCP run **never** persists
+  the bound port.
+- **Poll `/tmp/eval/mcp.url`** for the endpoint URI (also printed to
+  stdout as `[MCP] listening on …`). It appears only once the server is
+  listening.
+- The app ignores SIGTERM (GUI process). **Stop it with `kill -9
+  <pid>`** when done.
+
+### 2. Connect an MCP Streamable-HTTP client
+The server speaks **MCP over Streamable HTTP**. A throwaway Python
+client (initialize handshake → `tools/call`, parsing both SSE framing
+and `structuredContent`) is enough. Keep it in the session-state
+`files/` dir — **do not commit it**. For manual poking,
+`npx @modelcontextprotocol/inspector` (transport: Streamable HTTP) works.
+
+Quirks that bite:
+- A dataset id comes back as `{"value":"<id>"}`. Tools like
+  `list_time_steps` / `describe_feature` want
+  `{"datasetId":{"value":"<id>"}}`, but `close_dataset` wants the
+  **bare string** id.
+- `open_dataset` on an S-101 **exchange-set folder** may report world
+  bounds and not portray; point it at the concrete `.000` cell file and
+  supply your own viewport.
+
+### 3. Drive the evaluation loop
+Core read-only/mutating tools (full table in `docs/mcp-server.md`):
+
+| Tool | Use |
+|---|---|
+| `open_dataset {path, spec?}` | Load a cell/tile/exchange-set. Returns bbox + `loadDurationMs`. |
+| `list_datasets` | Enumerate loaded datasets + ids. |
+| `set_viewport {south,west,north,east}`, `{centerLat,centerLon,zoom}`, *or* `{centerLat,centerLon,scaleDenominator}` | Frame the data (forms are mutually exclusive). Prefer `scaleDenominator` when checking a cell's display band or SCAMIN; the result echoes the scale the live map actually applied. |
+| `set_palette {palette}` | Day / Dusk / Night — full re-render. |
+| `set_display_category {category}` | DisplayBase / Standard / OtherInformation / All. |
+| `set_time_step {index|timestamp}` | S-104 / S-111 / S-411 time-aware datasets. |
+| `set_own_ship {lat,lon,cog,sog,heading,hold}` | Position/steer simulated own-ship. |
+| `await_render_idle {quietPeriodMs,timeoutMs}` | Block until the live map settles — the harness clock. |
+| `render_to_image` | Capture the framebuffer (PNG `ImageContentBlock`) for visual eval / diffing. Map surface only. |
+| `capture_app_screenshot` | Capture the **whole app window** (chart + docks/panels/timeline/status bar) as a PNG. Use to *see* non-render UX, e.g. verify `set_panel` opened a panel. |
+| `get_render_stats` | Last on-screen paint: `frameDurationMs`, draw calls, per-style breakdown. |
+| `close_dataset {id}` / `close_all_datasets` | Unload (retention loops without restarting). |
+| `list_panels` | Read-only — enumerate activity panels (left/right/bottom dock tabs) + `available`/`selected`/`dockOpen`/`showing` state. |
+| `set_panel {panel, visible?}` | Show/hide a panel by id (`Datasets`, `LayerStack`, `PickReport`, `Timeline`, …) to drive & verify non-render UX. |
+| `get_timeline_state` | Read-only (with the dock closed the Time HUD shows the same readout at the bottom of the map; `set_panel Timeline` opens the dock) — Timeline mode (`live`/`pinned`), now, view time, coverage gaps, runs, and per layer the sample it draws (null = hidden, no data near the view time). |
+| `set_view_time {time, snap?}` | `now`, an ISO-8601 time, or an offset (`+6h`); `snap: exact` (default) can land between samples, unlike `set_time_step`. `await_render_idle` before reading layer times. |
+| `step_time {direction, unit?, count?}` / `set_timeline_view {preset|zoom|start,end, inMapView?, showOnline?, layout?}` | Step the Timeline by 10min/1h/6h/1d, driver samples, boundaries or data clusters; change the axis window (presets incl. `in_view`, zoom, custom), the In map view lane filter, Show online (Library data not loaded), and lanes vs strip. `get_timeline_state.lanes` lists what the lanes show, with Library item ids for `library_action`. |
+| `set_dataset_state {datasetId, visible?, opacity?}` | Show/hide a loaded dataset (e.g. gridded S-104, which loads hidden). |
+| `select_dataset {datasetId, tab?, timeoutMs?}` | Select a dataset's row in the Datasets panel (inspector + on-map validation overlay follow) and pick the inspector tab (`dataset`/`layers`/`validation`). Returns finding counts by severity. Doesn't open the panel: `set_panel Datasets` first, `await_render_idle` before a screenshot. |
+| `list_notifications` / `dismiss_notification {id?}` | Read or clear notifications, e.g. before a screenshot. |
+| `get_recent_logs {minLevel?, limit?, afterSequence?, search?}` | Read the viewer's recent log messages (the Logs tab) without `--log-file`, e.g. to explain a failed load. |
+| `set_test_clock {now?, advance?, freeze?, reset?}` | Only with `--mcp-test-hooks`: move or freeze "now" to test Live, ageing forecasts and Expired runs without waiting. |
+| `ui_tree {root?, filter?, depth?, maxNodes?}` | Only with `--mcp-test-hooks`: list the UI (windows and open popups) as an accessibility client sees it: each element's `ref`, automation `id`, role, name or visible text, supported actions and their state. Start here for any UI path the domain tools don't cover. `depth` is at most 25; an element marked `more: true` has children past it, so call again with its `ref` as `root` (or start from a nearer `root`, which is also smaller). |
+| `ui_invoke` / `ui_set_value` / `ui_toggle` / `ui_select` / `ui_expand` / `ui_collapse` / `ui_focus` / `ui_context_menu` `{id\|ref, within?}` | Only with `--mcp-test-hooks`: click, type, toggle, select, expand, focus or right-click one element, as the user does. Target by automation id (`Datasets.DatasetsTab`, `Library.Filter`, `ActivityBar.Library`…) or by a `ref` from `ui_tree`; scope a per-row id (`Datasets.Row.Remove`) with `within: <row ref>`. Prefer the domain tools (`set_viewport`, `set_view_time`, `set_panel`, `select_dataset`…) when one does the job; use these for everything else. If a control you need has no id, add one to the view (`<View>.<Element>`, see `tests/EncDotNet.S100.Viewer.Tests/README.md`). |
+| `list_library_sources` / `query_library_items` / `describe_library_item` / `list_known_sources` | Read the Library as its panel shows it: sources, item states (`online`, `local`, `loaded`, `update`, `expired`, …), what covers a point, details, and the Online Catalogue directory. |
+| `add_library_source {knownSourceId|path|url, preview?, choices?, includeAll?, collectionId?, sync?, showOnMap?}` / `refresh_library_source` / `library_action {action, itemIds|filters, dryRun?, maxBytes?}` / `remove_library_source {id, confirm}` / `set_library_source_options {id, sync?, showOnMap?}` / `list_secom_services {product?, probe?}` / `set_secom_identity {path?, password?, clear?}` / `await_library_idle` | Change the Library as its dialogs and buttons do: preview then add a source, refresh, load / download / update / cancel items (dry run first for downloads), remove, and wait for indexing and downloads. |
+
+**Canonical visual-eval loop:**
+`open_dataset` → `set_viewport` → `await_render_idle` →
+`render_to_image` → inspect the image → adjust code/params → repeat.
+Always `await_render_idle` **before** `render_to_image` or
+`get_render_stats`, or you race the paint pass.
+
+**Performance loop:** `open_dataset` (read `loadDurationMs`) →
+`set_viewport` → `await_render_idle` (cold) → `await_render_idle` (warm)
+→ toggle `set_palette`/`set_time_step` N times, timing each round-trip;
+read `get_render_stats` for per-style cost. Palette/display/time-step
+wall time is dominated by fixed settle latency — to attribute CPU,
+profile with `dotnet-trace collect -p <viewer-pid>` (default profile;
+attach the `…/<rid>/SoundCharts` PID, not a `dotnet` host).
+See the cartography skill for the rendering cost model.
+
+## Turning a finding into a test
+- Reproduce the issue in the loop, then isolate the **smallest dataset
+  and viewport** that triggers it.
+- If the cause is in a library (display-list build, geometry,
+  simplification, coverage sampling): add an **xunit** test there with a
+  synthetic fixture under `tests/datasets/…`. Gate fixtures that need
+  real ENC/HDF5 data with `Assert.SkipUnless(...)` (xunit v3) so CI
+  passes without them.
+- If it is panel / dialog / control behaviour (clicks, selection, keyboard,
+  what a view shows for a given state): add an `[AvaloniaFact]` view test in
+  `tests/EncDotNet.S100.Viewer.Tests` that drives the real view through
+  `ViewHost`, finding controls by automation id. See that project's README.
+- If it is genuinely render-output behaviour, keep a documented
+  repro recipe (dataset path + flags + expected image) in the
+  session-state notes — **not** a committed binary screenshot.
+
+## Hygiene (do not commit)
+- Real-world datasets for manual runs live under
+  `~/Downloads/Complete S10X datasets` (S-101/102/104/111 trial cells).
+  **Never commit** dataset files, captured images, traces, or the
+  throwaway MCP harness.
+- If you add a temporary env-gated `Stopwatch`/timing switch (e.g.
+  `S100_*_TIMING=1`) to attribute a stage, **remove it before
+  committing** — no diagnostic env switches in shipped code.
+- Always `kill -9` the launched viewer when the loop ends; do not leave
+  orphaned GUI processes or bound MCP ports behind.

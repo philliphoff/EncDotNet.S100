@@ -1,0 +1,205 @@
+# EncDotNet.S100.VisualRegression.Tests
+
+Visual regression tests for the S-100 rendering pipelines. Each test runs a
+representative dataset through its production pipeline + renderer, captures
+the output as a PNG, and compares it against a checked-in baseline.
+
+Built on the [`EncDotNet.S100.VisualRegression`](../EncDotNet.S100.VisualRegression/)
+harness (which uses `Mapsui.Rendering.Skia` headlessly for vector products and
+`SkiaCoverageRenderer` directly for coverage products) and
+[Verify.XunitV3](https://github.com/VerifyTests/Verify) for snapshot management.
+
+## Layout
+
+```
+Snapshots/
+  S101RenderingTests/
+    S101RenderingTests.EncCell_DayPalette.verified.png   ← committed baseline
+  S57RenderingTests/
+    S57RenderingTests.EncCell_DayPalette.verified.png    ← S-57 → S-101 translation path
+  S102RenderingTests/
+    S102RenderingTests.BathymetricSurface_DepthShading_DefaultPalette.verified.png
+  S104RenderingTests/
+    ...
+  ...
+```
+
+Each `*.verified.png` is the committed baseline. When a test fails, Verify
+writes a sibling `*.received.png` (the new output) and the harness writes a
+`*.diff.png` (red-highlighted pixel deltas) into the same directory.
+
+## Running
+
+```bash
+dotnet test tests/EncDotNet.S100.VisualRegression.Tests
+```
+
+Tests call `Assert.SkipUnless(...)` so they auto-skip when the
+required dataset under `tests/datasets/` is missing — they will not fail CI
+for missing fixtures.
+
+## When a test fails
+
+1. Open the failing test's `Snapshots/<TestClass>/` directory.
+2. View the `*.received.png` (new render) and `*.diff.png` (red highlights).
+3. Decide:
+   - **Rendering regression** — fix the production code, re-run the test until
+     it passes against the existing `*.verified.png`.
+   - **Intentional change** — promote the received output:
+     ```bash
+     mv path/to/Foo.received.png path/to/Foo.verified.png
+     ```
+     and commit. (You can also use the `dotnet verify` global tool's
+     `accept` command if installed.)
+
+## Tolerances
+
+`PerceptualImageComparer` defaults:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `MaxChannelDelta` | 4 | Max absolute per-channel (R/G/B/A) diff before a pixel counts as different |
+| `MaxDifferentPixelFraction` | 0.05 | Max fraction (5 %) of pixels that may differ |
+
+These are tuned to absorb sub-pixel anti-aliasing and **cross-platform font
+hinting drift** (the same dataset rendered on macOS vs Linux can disagree on
+~1–2 % of pixels in label glyphs alone) while still catching real rendering
+regressions in geometry, colour, or symbology.
+
+### Sparse renders
+
+The whole-image fraction only works for dense renders. On a 600x600 snapshot
+5 % is 18 000 px, more than all the ink in a few symbols on a white chart, so a
+sparse snapshot could lose or gain every symbol (or be approved blank) and still
+pass. Sparse renders — S-111 and most of S-122, S-124, S-125, S-127, S-129,
+S-131, S-201, S-411 and S-421 — use `TestHelpers.VerifySparseBitmap(bitmap,
+minimumInkPixels, maxDifferentInkFraction)` instead, which:
+
+- asserts a minimum count of non-background ("ink") pixels, so a blank render
+  can never become a baseline; and
+- sets `PerceptualImageComparer.MaxDifferentInkFraction`, limiting the
+  differing pixels to a share of the **verified** image's ink. A blank or
+  near-blank baseline therefore has (almost) no budget.
+
+Size the budget from measured macOS/Linux drift: unlabelled geometry is stable
+to within a few pixels (use 0.25), but label glyphs shift a pixel or two between
+platforms, so every glyph pixel of a labelled render can differ. Give labelled
+fixtures about 1.5× their measured drift. A very sparse fixture can go lower:
+S-111's five arrows (~325 px of ink) render identically across platforms, so
+it uses 0.1, small enough that one missing or moved arrow fails.
+
+The harness draws Mapsui `ImageStyle` symbols (the S-111 arrow SVGs) only
+after loading every image source, then renders a second frame. Do not make that
+second frame depend on a fetch job still being pending: the map's own
+background fetcher can load the images first, and returning the first frame
+then drops every symbol, intermittently.
+
+## Adding a new test
+
+1. Place the dataset under `tests/datasets/<spec>/...` (small fixtures only).
+2. Add a method to the matching `S<NNN>RenderingTests` class:
+   ```csharp
+   [Fact]
+   public Task MyScenario()
+   {
+       var path = Path.Combine(TestHelpers.DatasetsRoot, "S101", "myCell.000");
+       Assert.SkipUnless(File.Exists(path), $"Dataset not present: {path}");
+
+       using var harness = new RenderHarness();
+       var bitmap = harness.Render(path, new HarnessOptions { Width = 800, Height = 600 });
+
+       return TestHelpers.VerifyBitmap(bitmap);
+   }
+   ```
+3. Run the test once → inspect `*.received.png` → if correct, rename to
+   `*.verified.png` and commit.
+
+## Base-plane golden regression (`RenderParityTests`)
+
+`RenderParityTests` is the headless half of the issue #347 "golden-image set":
+it guards the tiled base-plane renderer — the sole base-plane path since the
+legacy Mapsui arm was retired (#600). Two things run against the committed
+S-101 cell:
+
+- **Base-plane goldens** (`BMode_EncCell_Palette`, Day/Dusk/Night) — render the
+  cell and compare to committed snapshots. This is the durable regression guard:
+  any change that moves a pixel in the tiled renderer fails here.
+- **Dense labels+symbols** (`BMode_DenseCell_LabelsAndSymbols`) — local-only,
+  golden-free: zooms into a labelled harbour area and asserts the frame is
+  non-blank and richly multi-coloured (area fills + point symbols + labels),
+  proving the tiled overlay composites headlessly. Skipped in CI (real ENC data
+  is never committed).
+
+Rendering uses `EcdisDisplayCategory.Standard`, the live viewer's default
+display mode and, since #357, the harness default. (`S101RenderingTests` render
+the same cell with `DisplayCategory = null`, i.e. no display-mode filter, on
+purpose: they guard the supplementary `OtherInformation` content, including the
+pattern fills whose boundaries their Dusk/Night snapshots pin, which the live
+product hides at `Standard`. So those baselines are **not** comparable
+pixel-for-pixel with these goldens.)
+
+### What the headless path does *not* cover
+
+The base plane rasterises **north-up on a software surface**, so:
+
+- viewport **rotation** uprightness (a rotated render returns blank headlessly), and
+- **GPU residency** (Metal/ANGLE-backed tile upload),
+
+are out of scope for these tests and must be checked in the viewer.
+
+## Multi-product golden guard (`MultiProductParityTests`)
+
+Where `RenderParityTests` covers the S-101 cell, `MultiProductParityTests`
+extends the #347 "Multi-product / multi-dataset validation" item across the
+non-S-101 products, turning the one-off fidelity survey into committed CI gates.
+The guard has two tiers matched to what can actually diverge (coverage products
+S-102/104/111 are golden-guarded by their own `S1xxRenderingTests`):
+
+- **Per-product goldens** (`Vector_BArmGolden`) — one representative
+  committed GML fixture per vector product (S-122/124/125/127/128/129/131/201/
+  411/421) is rendered and compared to a committed snapshot, guarding
+  the tiled renderer against self-drift across every product family.
+- **Label preservation** (`Vector_PointSymbolsDoNotSuppressLabels`, S-421/S-124)
+  — a structural, pixel-free assertion: it reads the real per-product overlay
+  scene back from the tiled renderer (`S100VectorTileRenderer.TryGetPartitionedScene`)
+  and decluttered both with and without the point symbols, asserting the symbols
+  never change which labels survive. This catches the dropped-label class of bug
+  (the S-421 route labels anchored on waypoint circles) that the coarse
+  perceptual gate cannot see.
+
+The structural tier runs with `DisplayCategory = null` ("All") so no label is
+hidden by the Standard filter, and derives a viewport that encloses every
+overlay anchor so the comparison is never vacuous. It is the strong signal placed
+exactly where the labels+symbols declutter risk lives.
+
+## In-viewer Metal capture recipe
+
+For the rotation / GPU cases the headless harness cannot cover, drive the
+Avalonia viewer headlessly (per the `viewer-evaluation` skill /
+`docs/mcp-server.md`). The CLI presets the initial view (`--bbox` / `--palette`
+/ `--display-category`) and enables the MCP server; the capture itself is an MCP
+call — there is no one-shot `--screenshot` CLI flag (it was removed in favour of
+the MCP tools):
+
+```bash
+VIEW=src/EncDotNet.S100.Viewer/bin/Release/net10.0/<rid>/SoundCharts
+CELL=tests/datasets/S101/S-101/DATASET_FILES/101AA0000DS0009.000
+mkdir -p /tmp/eval
+
+"$VIEW" \
+  --ephemeral --mcp --mcp-port-file /tmp/eval/mcp.url \
+  --bbox -32.466667,61.5,-32.4417611,61.6145761 \
+  --palette Day --display-category Standard \
+  "$CELL" &
+PID=$!
+# Poll /tmp/eval/mcp.url for the endpoint, connect an MCP client, then:
+#   await_render_idle  →  render_to_image (save /tmp/eval/committed.png)
+kill -9 "$PID"   # once the capture is written
+```
+
+`--bbox` is `south,west,north,east`. For rotation, set a rotated viewport via
+`set_viewport` before `render_to_image`; the headless harness cannot (a rotated
+render yields a blank base plane by design). The viewer ignores SIGTERM — stop
+it with `kill -9 <pid>`. See the `viewer-evaluation` skill / `docs/mcp-server.md`
+for the full capture loop. **Never commit** captured images, traces, or real
+ENC datasets.

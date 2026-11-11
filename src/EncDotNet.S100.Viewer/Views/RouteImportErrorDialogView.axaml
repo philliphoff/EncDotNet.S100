@@ -1,0 +1,24 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             x:Class="EncDotNet.S100.Viewer.Views.RouteImportErrorDialogView"
+             x:DataType="vm:RouteImportErrorDialogViewModel"
+             AutomationProperties.AutomationId="RouteImport.Error"
+             Width="420">
+
+    <!-- Import route…'s open errors (#960, F3): one line and Close. -->
+    <Grid RowDefinitions="Auto,Auto,Auto" Margin="18,14,18,14" RowSpacing="10">
+        <TextBlock Text="{Binding Title}" FontSize="14.5" FontWeight="SemiBold" />
+        <TextBlock Grid.Row="1"
+                   AutomationProperties.AutomationId="RouteImport.Message"
+                   Text="{Binding Message}"
+                   FontSize="12.5"
+                   TextWrapping="Wrap" />
+        <Button Grid.Row="2"
+                Classes="Outline"
+                HorizontalAlignment="Right"
+                AutomationProperties.AutomationId="RouteImport.Close"
+                Content="{Binding CloseLabel}"
+                Command="{Binding CloseCommand}" />
+    </Grid>
+</UserControl>

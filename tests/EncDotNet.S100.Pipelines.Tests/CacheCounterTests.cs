@@ -1,0 +1,154 @@
+using System.Diagnostics.Metrics;
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.S101;
+using EncDotNet.S100.Features;
+using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Specifications;
+
+namespace EncDotNet.S100.Pipelines.Tests;
+
+/// <summary>
+/// Verifies that the cache hit / miss <see cref="Counter{T}"/> instruments
+/// fire from the catalogue-level caches added by PRs #64/#66/#67/#68.
+/// The audit (<c>docs/internal/asset-caching-audit.md</c> §6 PR-CACHE-7)
+/// recommended these counters so a per-scenario perf summary can confirm
+/// the caches are actually being reused, instead of silently rebuilt every
+/// call.
+/// </summary>
+public sealed class CacheCounterTests
+{
+    [Fact]
+    public async Task S101_GetLuaSource_emits_one_miss_and_subsequent_hits_with_product_tag()
+    {
+        using var inner = Specification.CreatePortrayalCatalogueSource("S-101");
+        var provider = await PortrayalCatalogueProvider.OpenAsync(inner, cancellationToken: TestContext.Current.CancellationToken);
+        var catalogue = new S101PortrayalCatalogue(provider);
+
+        // Subscribe AFTER catalogue construction so any internal warm-up
+        // reads do not leak into the assertion. main.lua may already be
+        // cached by other initialisation; use a different Lua file.
+        var hits = new List<KeyValuePair<string, object?>[]>();
+        var misses = new List<KeyValuePair<string, object?>[]>();
+        using var listener = StartListening(
+            "s100.lua.source.cache.hit.count", hits,
+            "s100.lua.source.cache.miss.count", misses);
+
+        const string fileName = "S100Scripting.lua";
+        _ = await catalogue.GetLuaSourceAsync(fileName, TestContext.Current.CancellationToken);
+        _ = await catalogue.GetLuaSourceAsync(fileName, TestContext.Current.CancellationToken);
+        _ = await catalogue.GetLuaSourceAsync(fileName, TestContext.Current.CancellationToken);
+
+        listener.Dispose();
+        KeyValuePair<string, object?>[][] hitSnap;
+        KeyValuePair<string, object?>[][] missSnap;
+        lock (hits) hitSnap = hits.ToArray();
+        lock (misses) missSnap = misses.ToArray();
+
+        // Other parallel tests may also exercise S-101 Lua sources, so we
+        // assert at-least bounds plus correct product tagging.
+        var s101Misses = missSnap.Count(HasS101ProductTag);
+        var s101Hits = hitSnap.Count(HasS101ProductTag);
+        Assert.True(s101Misses >= 1, $"expected at least 1 S-101 miss, got {s101Misses}");
+        Assert.True(s101Hits >= 2, $"expected at least 2 S-101 hits, got {s101Hits}");
+    }
+
+    [Fact]
+    public async Task S101_GetCompiledRule_emits_portrayal_cache_counters_with_xslt_kind()
+    {
+        // S-101 portrayal is Lua, but the cache slot still exists; we exercise
+        // the SVG slot instead since it's used by every S-101 rule. Same
+        // counter, different asset-kind.
+        using var inner = Specification.CreatePortrayalCatalogueSource("S-101");
+        var provider = await PortrayalCatalogueProvider.OpenAsync(inner, cancellationToken: TestContext.Current.CancellationToken);
+        var catalogue = new S101PortrayalCatalogue(provider);
+
+        var hits = new List<KeyValuePair<string, object?>[]>();
+        var misses = new List<KeyValuePair<string, object?>[]>();
+        using var listener = StartListening(
+            "s100.portrayal.cache.hit.count", hits,
+            "s100.portrayal.cache.miss.count", misses);
+
+        // Find a real symbol id to ensure we hit the cache miss/hit path.
+        var symbolId = provider.Catalogue.Symbols.First().Id;
+        _ = await catalogue.GetSymbolAsync(symbolId, TestContext.Current.CancellationToken);
+        _ = await catalogue.GetSymbolAsync(symbolId, TestContext.Current.CancellationToken);
+
+        listener.Dispose();
+        KeyValuePair<string, object?>[][] hitSnap;
+        KeyValuePair<string, object?>[][] missSnap;
+        lock (hits) hitSnap = hits.ToArray();
+        lock (misses) missSnap = misses.ToArray();
+
+        Assert.Contains(missSnap, tags =>
+            tags.Any(t => t.Key == "s100.product" && (string?)t.Value == "S-101") &&
+            tags.Any(t => t.Key == "s100.asset.kind" && (string?)t.Value == "svg"));
+        Assert.Contains(hitSnap, tags =>
+            tags.Any(t => t.Key == "s100.product" && (string?)t.Value == "S-101") &&
+            tags.Any(t => t.Key == "s100.asset.kind" && (string?)t.Value == "svg"));
+    }
+
+    [Fact]
+    public void FeatureCatalogueManager_emits_miss_then_hit_per_spec()
+    {
+        var hits = new List<KeyValuePair<string, object?>[]>();
+        var misses = new List<KeyValuePair<string, object?>[]>();
+        using var listener = StartListening(
+            "s100.featurecatalogue.cache.hit.count", hits,
+            "s100.featurecatalogue.cache.miss.count", misses);
+
+        using var manager = new FeatureCatalogueManager();
+        using var source = Specification.CreateFeatureCatalogueSource("S-101");
+        manager.SetSource("S-101", source);
+
+        var spec = new SpecRef("S-101", default);
+        var first = manager.GetCatalogue(spec);
+        var second = manager.GetCatalogue(spec);
+        var third = manager.GetCatalogue(spec);
+
+        Assert.NotNull(first);
+        Assert.Same(first, second);
+        Assert.Same(first, third);
+
+        listener.Dispose();
+        KeyValuePair<string, object?>[][] hitSnap;
+        KeyValuePair<string, object?>[][] missSnap;
+        lock (hits) hitSnap = hits.ToArray();
+        lock (misses) missSnap = misses.ToArray();
+
+        var s101Misses = missSnap.Count(HasS101ProductTag);
+        var s101Hits = hitSnap.Count(HasS101ProductTag);
+        Assert.True(s101Misses >= 1, $"expected at least 1 S-101 miss, got {s101Misses}");
+        Assert.True(s101Hits >= 2, $"expected at least 2 S-101 hits, got {s101Hits}");
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────
+
+    private static MeterListener StartListening(
+        string hitName, List<KeyValuePair<string, object?>[]> hitSink,
+        string missName, List<KeyValuePair<string, object?>[]> missSink)
+    {
+        var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (instrument.Name == hitName || instrument.Name == missName)
+            {
+                l.EnableMeasurementEvents(instrument);
+            }
+        };
+
+        listener.SetMeasurementEventCallback<long>((instrument, measurement, tags, _) =>
+        {
+            var sink = instrument.Name == hitName ? hitSink : missSink;
+            lock (sink)
+            {
+                sink.Add(tags.ToArray());
+            }
+        });
+
+        listener.Start();
+        return listener;
+    }
+
+    private static bool HasS101ProductTag(KeyValuePair<string, object?>[] tags) =>
+        tags.Any(t => t.Key == "s100.product" && (string?)t.Value == "S-101");
+}

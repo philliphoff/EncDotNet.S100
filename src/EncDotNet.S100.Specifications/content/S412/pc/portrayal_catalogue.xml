@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<portrayalCatalog productId="S-412" version="1.0">
+	<pixmaps/>
+	<colorProfiles>
+		<colorProfile id="837">
+			<description>
+				<name>Color Profile</name>
+				<description>Color Profile</description>
+				<language>en</language>
+			</description>
+			<fileName>colorProfile.xml</fileName>
+			<fileType>ColorProfile</fileType>
+			<fileFormat>XML</fileFormat>
+		</colorProfile>
+	</colorProfiles>
+	<symbols>
+		</symbols>
+	<lineStyles>
+		</lineStyles>
+	<areaFills>
+		</areaFills>
+	<fonts/>
+	<viewingGroups>
+		<viewingGroup id="1">
+			<description>
+				<name>21010</name>
+				<description/>
+				<language>en</language>
+			</description>
+		</viewingGroup>
+	</viewingGroups>
+	<viewingGroupLayers/>
+	<displayModes>
+	</displayModes>
+	<displayPlane>
+		<displayPlane id="2">
+			<description>
+				<name>underRadar</name>
+				<description>Content displayed underneath Radar image</description>
+				<language>en</language>
+			</description>
+		</displayPlane>
+	</displayPlane>
+	<context/>
+	<rules>
+		<ruleFile id="1">
+			<description>
+				<name>main</name>
+				<description>main</description>
+			</description>
+			<fileName>main.xsl</fileName>
+			<fileType>Rule</fileType>
+			<fileFormat>XSLT</fileFormat>
+			<ruleType>TopLevelTemplate</ruleType>
+		</ruleFile>
+		<ruleFile id="2">
+			<description>
+				<name>_Default_COMMON</name>
+				<description>_Default_COMMON</description>
+			</description>
+			<fileName>_Default_COMMON.xsl</fileName>
+			<fileType>Rule</fileType>
+			<fileFormat>XSLT</fileFormat>
+			<ruleType>SubTemplate</ruleType>
+		</ruleFile>
+		<ruleFile id="3">
+			<description>
+				<name>attributeRules</name>
+				<description>attributeRules</description>
+			</description>
+			<fileName>attributeRules.xsl</fileName>
+			<fileType>Rule</fileType>
+			<fileFormat>XSLT</fileFormat>
+			<ruleType>SubTemplate</ruleType>
+		</ruleFile>
+		<ruleFile id="4">
+			<description>
+				<name>IceAccretionWarning</name>
+				<description>IceAccretionWarning</description>
+			</description>
+			<fileName>IceAccretionWarning.xsl</fileName>
+			<fileType>Rule</fileType>
+			<fileFormat>XSLT</fileFormat>
+			<ruleType>SubTemplate</ruleType>
+		</ruleFile>
+		<ruleFile id="5">
+			<description>
+				<name>RestrictedVisibilityWarning</name>
+				<description>RestrictedVisibilityWarning</description>
+			</description>
+			<fileName>RestrictedVisibilityWarning.xsl</fileName>
+			<fileType>Rule</fileType>
+			<fileFormat>XSLT</fileFormat>
+			<ruleType>SubTemplate</ruleType>
+		</ruleFile>
+		<ruleFile id="6">
+			<description>
+				<name>simpleLineStyle</name>
+				<description>simpleLineStyle</description>
+			</description>
+			<fileName>simpleLineStyle.xsl</fileName>
+			<fileType>Rule</fileType>
+			<fileFormat>XSLT</fileFormat>
+			<ruleType>SubTemplate</ruleType>
+		</ruleFile>
+		<ruleFile id="7">
+			<description>
+				<name>textStyle</name>
+				<description>textStyle</description>
+			</description>
+			<fileName>textStyle.xsl</fileName>
+			<fileType>Rule</fileType>
+			<fileFormat>XSLT</fileFormat>
+			<ruleType>SubTemplate</ruleType>
+		</ruleFile>
+		<ruleFile id="8">
+			<description>
+				<name>ThunderstormWarning</name>
+				<description>ThunderstormWarning</description>
+			</description>
+			<fileName>ThunderstormWarning.xsl</fileName>
+			<fileType>Rule</fileType>
+			<fileFormat>XSLT</fileFormat>
+			<ruleType>SubTemplate</ruleType>
+		</ruleFile>
+		<ruleFile id="9">
+			<description>
+				<name>SignificantWaveHeightWarning</name>
+				<description>SignificantWaveHeightWarning</description>
+			</description>
+			<fileName>SignificantWaveHeightWarning.xsl</fileName>
+			<fileType>Rule</fileType>
+			<fileFormat>XSLT</fileFormat>
+			<ruleType>SubTemplate</ruleType>
+		</ruleFile>
+		<ruleFile id="10">
+			<description>
+				<name>WindWarning</name>
+				<description>WindWarning</description>
+			</description>
+			<fileName>WindWarning.xsl</fileName>
+			<fileType>Rule</fileType>
+			<fileFormat>XSLT</fileFormat>
+			<ruleType>SubTemplate</ruleType>
+		</ruleFile>
+	</rules>
+</portrayalCatalog>

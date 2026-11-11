@@ -1,0 +1,262 @@
+using System.Collections.ObjectModel;
+using System.Text.Json.Serialization;
+
+namespace EncDotNet.S100.Collections;
+
+/// <summary>
+/// One dataset described by a collection source: its identification,
+/// currency, scale and coverage metadata, and where its data lives. Indexing
+/// produces items without loading the datasets.
+/// </summary>
+public sealed record CollectionItem
+{
+    /// <summary>
+    /// The item's identifier, stable within its source (an S-57 cell name, an
+    /// exchange-set-relative dataset path, a loose file's source-relative
+    /// path, or an S-128 product number).
+    /// </summary>
+    public required string Key { get; init; }
+
+    /// <summary>
+    /// The product specification in canonical short form (<c>"S-57"</c>,
+    /// <c>"S-101"</c>, <c>"S-102"</c>, …), or <c>"Unknown"</c>.
+    /// </summary>
+    public required string ProductSpec { get; init; }
+
+    /// <summary>The product specification edition, if known (e.g. <c>"2.0.0"</c>).</summary>
+    public string? ProductSpecVersion { get; init; }
+
+    /// <summary>The dataset name (e.g. <c>"US5AK1AM"</c>), usually the file stem.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>A human-readable title, when the source supplies one.</summary>
+    public string? Title { get; init; }
+
+    /// <summary>
+    /// Identifies the exchange set this item belongs to within its source, or
+    /// <see langword="null"/> for a loose dataset. Items with the same group
+    /// key share a <see cref="LocalItemLocation.RootPath"/> and catalogue.
+    /// </summary>
+    public string? GroupKey { get; init; }
+
+    /// <summary>The edition number.</summary>
+    public int? Edition { get; init; }
+
+    /// <summary>The number of the latest update applied to (or available for) this edition.</summary>
+    public int? Update { get; init; }
+
+    /// <summary>The issue date of the latest file in the dataset (base edition or its latest update).</summary>
+    public DateOnly? IssueDate { get; init; }
+
+    /// <summary>The update application date of the edition, when the source declares one.</summary>
+    public DateOnly? UpdateApplicationDate { get; init; }
+
+    /// <summary>The compilation scale denominator (S-57 <c>CSCL</c>), if known.</summary>
+    public int? CompilationScale { get; init; }
+
+    /// <summary>The coarsest scale denominator at which the dataset is intended to display.</summary>
+    public int? MinimumDisplayScale { get; init; }
+
+    /// <summary>The finest scale denominator at which the dataset is intended to display.</summary>
+    public int? MaximumDisplayScale { get; init; }
+
+    /// <summary>The ENC usage band 1–6 (from the S-57 cell name), if applicable.</summary>
+    public int? UsageBand { get; init; }
+
+    /// <summary>The item's currency status as declared by the source.</summary>
+    public CollectionItemStatus Status { get; init; } = CollectionItemStatus.Unknown;
+
+    /// <summary>
+    /// The item's geographic bounds, or <see langword="null"/> when the source
+    /// could not supply them cheaply (the item is then listed but not drawn).
+    /// </summary>
+    public GeoBounds? Bounds { get; init; }
+
+    /// <summary>
+    /// The item's coverage polygons, or <see langword="null"/> when only
+    /// <see cref="Bounds"/> are known.
+    /// </summary>
+    public GeoCoverage? Coverage { get; init; }
+
+    /// <summary>Where the item's data lives.</summary>
+    public required ItemLocation Location { get; init; }
+
+    /// <summary>
+    /// Source-specific facts that have no dedicated property (producing
+    /// agency, classification, protection, …), for generic display.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> Properties { get; init; }
+        = ReadOnlyDictionary<string, string>.Empty;
+}
+
+/// <summary>The currency status of a <see cref="CollectionItem"/>.</summary>
+public enum CollectionItemStatus
+{
+    /// <summary>The source does not declare a status.</summary>
+    Unknown = 0,
+
+    /// <summary>The product is current.</summary>
+    Active,
+
+    /// <summary>The product has been replaced by a newer edition.</summary>
+    Superseded,
+
+    /// <summary>The product has been cancelled or withdrawn.</summary>
+    Cancelled,
+
+    /// <summary>The product is announced but not yet released.</summary>
+    Planned,
+}
+
+/// <summary>Where a <see cref="CollectionItem"/>'s data lives.</summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "kind")]
+[JsonDerivedType(typeof(LocalItemLocation), "local")]
+[JsonDerivedType(typeof(RemoteItemLocation), "remote")]
+[JsonDerivedType(typeof(NoItemLocation), "none")]
+public abstract record ItemLocation;
+
+/// <summary>
+/// The item's data is on the local file system, either in a folder or inside
+/// a ZIP archive.
+/// </summary>
+/// <remarks>
+/// Relative paths use forward slashes regardless of platform, so a persisted
+/// index is portable; hosts convert them when opening files.
+/// </remarks>
+/// <param name="RootPath">
+/// The absolute path of the folder or ZIP that relative paths resolve
+/// against (the root of an asset source).
+/// </param>
+/// <param name="RelativePath">The base dataset file, relative to <paramref name="RootPath"/>.</param>
+/// <param name="UpdateRelativePaths">Sequential update files in application order, relative to <paramref name="RootPath"/>.</param>
+/// <param name="CatalogueRelativePath">
+/// The exchange-set catalogue the item was read from, relative to
+/// <paramref name="RootPath"/>, or <see langword="null"/> for a loose dataset.
+/// </param>
+/// <param name="IsZip">True when <paramref name="RootPath"/> is a ZIP archive.</param>
+public sealed record LocalItemLocation(
+    string RootPath,
+    string RelativePath,
+    IReadOnlyList<string> UpdateRelativePaths,
+    string? CatalogueRelativePath = null,
+    bool IsZip = false) : ItemLocation;
+
+/// <summary>The item's data is available for download.</summary>
+/// <param name="Uri">The download location.</param>
+/// <param name="SizeBytes">The download size, if known.</param>
+/// <param name="LastModified">When the download was last published, if known.</param>
+/// <param name="DownloadFolder">
+/// The managed folder downloads go to, relative to the host's downloads
+/// root (e.g. <c>community/ro-ienc</c>), or <see langword="null"/> to let the
+/// host choose by provider.
+/// </param>
+/// <param name="Package">
+/// For a download that holds several datasets (a package), the name it is
+/// saved under; the item is then the dataset named <see cref="CollectionItem.Name"/>
+/// within it. <see langword="null"/> when the download is the item's own cell.
+/// </param>
+/// <param name="Layout">
+/// Where the item's files lie within the download, when the publisher states
+/// it (S-100 feeds, issue #680); <see langword="null"/> to discover the layout.
+/// </param>
+/// <param name="Envelope">
+/// How the download wraps the data: <see langword="null"/> when the response
+/// is the file itself, <see cref="RemoteEnvelope.Secom"/> for a SECOM
+/// <c>Get</c> response (issue #804).
+/// </param>
+public sealed record RemoteItemLocation(
+    Uri Uri,
+    long? SizeBytes = null,
+    DateTimeOffset? LastModified = null,
+    string? DownloadFolder = null,
+    string? Package = null,
+    PackageLayout? Layout = null,
+    RemoteEnvelope? Envelope = null)
+    : ItemLocation
+{
+    /// <summary>
+    /// For a SECOM object (<see cref="RemoteEnvelope.Secom"/> or
+    /// <see cref="RemoteEnvelope.SecomPost"/>): its source's
+    /// <see cref="SecomSource.Identity"/> setting, which the download presents
+    /// and signs with (#883); <see langword="null"/> reads as the default.
+    /// </summary>
+    public string? Identity { get; init; }
+
+    /// <summary>
+    /// An opaque revision of the download, for a publisher that states no
+    /// <see cref="LastModified"/> (AMSA's SECOM exchange sets, #916): a copy
+    /// downloaded at another revision is outdated. <see langword="null"/> when
+    /// the publication date says it.
+    /// </summary>
+    public string? Revision { get; init; }
+
+    /// <summary>
+    /// For a dataset assembled from several requests (a weather model run,
+    /// #1075): each request in order, whose responses are appended into the one
+    /// file <see cref="Layout"/> names. <see cref="Uri"/> is then the first
+    /// part's. <see langword="null"/> when <see cref="Uri"/> alone is the download.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<RemotePart>? Parts { get; init; }
+
+    /// <summary>The media type to ask for (<c>Accept</c>), e.g. <c>application/geo+json</c> for <c>api.weather.gov</c>; null for any.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Accept { get; init; }
+}
+
+/// <summary>One request of a download assembled from several (#1075).</summary>
+/// <param name="Uri">What to fetch.</param>
+/// <param name="GribFields">
+/// For a whole GRIB2 file with an <c>.idx</c> inventory beside it (NOAA's GFS
+/// on AWS): the fields to read, as <c>.idx</c> matches (<c>:UGRD:10 m above ground:</c>),
+/// fetched with HTTP byte ranges. <see langword="null"/> to fetch the whole response.
+/// </param>
+/// <param name="FileName">
+/// The name the part is saved under, beside the download's other parts,
+/// rather than appended into one file: an NHC advisory's forecast, wind radii
+/// and best track zips (#1298). Either every part of a download names its
+/// file, or none does. <see langword="null"/> to append.
+/// </param>
+public sealed record RemotePart(Uri Uri, IReadOnlyList<string>? GribFields = null, string? FileName = null);
+
+/// <summary>How a <see cref="RemoteItemLocation"/>'s download wraps its data.</summary>
+public enum RemoteEnvelope
+{
+    /// <summary>
+    /// A SECOM <c>Get</c> response: JSON holding the base64 data and its
+    /// signature; the data is saved as the file the item's
+    /// <see cref="RemoteItemLocation.Layout"/> names.
+    /// </summary>
+    Secom = 1,
+
+    /// <summary>
+    /// A SECOM 2.0 <c>Get</c> through the signed POST form (#838): a signed
+    /// filter naming the object's <c>dataReference</c> (from the location's
+    /// GET URI) is posted to <c>…/v2/object/search</c>; the response is a
+    /// <c>Get</c> response, handled as <see cref="Secom"/>. It needs an MCP identity.
+    /// </summary>
+    SecomPost = 2,
+}
+
+/// <summary>
+/// Where a dataset's files lie within a downloaded package, relative to its
+/// root (forward slashes): the same shape as a <see cref="LocalItemLocation"/>
+/// without the root.
+/// </summary>
+/// <param name="RelativePath">The base dataset file.</param>
+/// <param name="UpdateRelativePaths">Sequential update files, in application order.</param>
+/// <param name="CatalogueRelativePath">The exchange-set catalogue, or <see langword="null"/> for a loose dataset.</param>
+public sealed record PackageLayout(
+    string RelativePath,
+    IReadOnlyList<string> UpdateRelativePaths,
+    string? CatalogueRelativePath = null);
+
+/// <summary>
+/// The source describes the product but has no data for it (for example an
+/// S-128 catalogue entry).
+/// </summary>
+public sealed record NoItemLocation : ItemLocation
+{
+    /// <summary>The shared instance.</summary>
+    public static NoItemLocation Instance { get; } = new();
+}

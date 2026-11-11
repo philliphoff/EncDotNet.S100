@@ -1,0 +1,2083 @@
+using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Windows.Input;
+using CommunityToolkit.Mvvm.Input;
+using EncDotNet.S100.Collections;
+using EncDotNet.S100.Collections.Library;
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Viewer.Library;
+using EncDotNet.S100.Viewer.Resources;
+
+namespace EncDotNet.S100.Viewer.ViewModels;
+
+/// <summary>Which datasets the Library list shows, by where their data is and what is new.</summary>
+internal enum LibraryStateFilter
+{
+    /// <summary>Every dataset.</summary>
+    All,
+
+    /// <summary>On disk and current: local, loaded or loading on pan.</summary>
+    Local,
+
+    /// <summary>Downloadable, not yet downloaded.</summary>
+    Online,
+
+    /// <summary>Downloaded, with a newer edition or update available.</summary>
+    Updates,
+}
+
+/// <summary>
+/// View model for the Library panel (issue #655), which replaces the former
+/// S-128 Catalog panel. Shows the user's dataset collections as a tree of
+/// collections and sources, the indexed datasets of the selected node as a
+/// filterable list, and the selected dataset's metadata — without loading any
+/// dataset.
+/// </summary>
+internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
+{
+    private readonly CollectionLibrary _library;
+    private readonly ILibraryImporter _importer;
+    private readonly ILibraryLoader _loader;
+    private readonly ILibraryDownloader _downloader;
+    private readonly LibraryRows _rows;
+    private readonly OpenLibraryItemsWorkflow _open;
+    private readonly DownloadLibraryItemsWorkflow _download;
+    private readonly OpenLibraryItemAsRouteWorkflow _openAsRoute;
+    private readonly Library.LoadLatestWeatherRunWorkflow _loadLatest;
+    private readonly Library.PinWeatherRunWorkflow _pinRun;
+    private readonly Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? _feedHealth;
+    private readonly LibrarySync? _sync;
+    private bool _availabilityRefreshPosted;
+    private bool _progressRefreshPosted;
+    private readonly Dictionary<Guid, List<CollectionItem>> _downloadingBySource = [];
+    private readonly HashSet<(Guid Source, string Package)> _expandedPackages = [];
+    private readonly Dictionary<(Guid Source, string Package), LibraryItemViewModel> _packageHeaders = [];
+    private readonly HashSet<Guid> _collapsedAml = [];
+    private string? _amlFilter;
+    private readonly Action<Action> _dispatch;
+
+    // Runs a coalesced refresh. Unlike _dispatch it always defers, even on the
+    // UI thread, so a burst of changes raised there (a pass that evicts or loads
+    // many cells) collapses into one refresh instead of one per cell.
+    private readonly Action<Action> _coalesce;
+    private readonly TimeProvider _time;
+    private readonly ITimer? _clock;
+    private readonly Services.GlobalTimeService? _viewTime;
+    private readonly Func<TimeFormat>? _runFormat;
+    private bool _atViewTime;
+    private IReadOnlyList<LibraryItemViewModel> _textMatched = [];
+
+    private LibraryNodeViewModel? _selectedNode;
+    private bool _hasSynced;
+    private IReadOnlyList<SourceIndex?>? _itemsBasis;
+    private IReadOnlyList<LibraryItemViewModel> _allItems = [];
+    private IReadOnlyList<LibraryItemViewModel> _items = [];
+    private LibraryItemViewModel? _selectedItem;
+    private string _filterText = string.Empty;
+    private bool _showCancelled;
+    private LibraryStateFilter _stateFilter;
+    private IReadOnlyList<LibraryItemViewModel> _textFiltered = [];
+    private int _listedDatasets;
+    private bool _refreshPosted;
+    private bool _showCoverage = true;
+    private GeoPosition? _location;
+    private GeoPosition? _tapPosition;
+    private IReadOnlyList<LibraryItemViewModel>? _tapHits;
+    private bool _selectingTapHit;
+
+    /// <param name="library">The Library the panel shows.</param>
+    /// <param name="importer">Adds sources interactively.</param>
+    /// <param name="loader">Loads datasets and reports their state.</param>
+    /// <param name="downloader">Says whether items are downloaded, and how their downloads go.</param>
+    /// <param name="rows">Builds the list's rows.</param>
+    /// <param name="open">Opens items (Load, Load as you pan).</param>
+    /// <param name="download">Downloads items (Download, Download listed, Retry).</param>
+    /// <param name="openAsRoute">Opens an S-421 item as a route (Open as route).</param>
+    /// <param name="loadLatest">Loads a weather source's latest run (Load latest run).</param>
+    /// <param name="pinRun">Pins and unpins weather runs.</param>
+    /// <param name="dispatch">Runs a change on the UI thread (the app passes <see cref="Services.UiThread.RunOrPost"/>).</param>
+    /// <param name="coalesce">Queues a refresh for later on the UI thread, even from it, so a burst of changes refreshes once (the app passes <see cref="Services.UiThread.Post"/>).</param>
+    /// <param name="time">The clock (forecast ages, staleness).</param>
+    /// <param name="feedHealth">A shared feed's last reachability; <see langword="null"/> shows none.</param>
+    /// <param name="viewTime">The time the map shows; <see langword="null"/> without a timeline.</param>
+    /// <param name="timeFormat">The Local/UTC setting; <see langword="null"/> shows UTC.</param>
+    /// <param name="sync">Keeps synced sources downloaded; <see langword="null"/> without syncing.</param>
+    public LibraryPanelViewModel(
+        CollectionLibrary library,
+        ILibraryImporter importer,
+        ILibraryLoader loader,
+        ILibraryDownloader downloader,
+        LibraryRows rows,
+        OpenLibraryItemsWorkflow open,
+        DownloadLibraryItemsWorkflow download,
+        OpenLibraryItemAsRouteWorkflow openAsRoute,
+        Library.LoadLatestWeatherRunWorkflow loadLatest,
+        Library.PinWeatherRunWorkflow pinRun,
+        Action<Action> dispatch,
+        Action<Action> coalesce,
+        TimeProvider time,
+        Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth,
+        Services.GlobalTimeService? viewTime,
+        Services.ITimeFormatProvider? timeFormat,
+        LibrarySync? sync)
+    {
+        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(coalesce);
+        _time = time;
+        _sync = sync;
+        if (sync is not null)
+            sync.Synced += (_, _) => dispatch(UpdateCatalogueCounts);
+        _viewTime = viewTime;
+        _runFormat = timeFormat is null ? null : () => timeFormat.Current;
+        if (timeFormat is not null)
+            timeFormat.TimeFormatChanged += _ => dispatch(OnTimeFormatChanged);
+        _feedHealth = feedHealth;
+        ArgumentNullException.ThrowIfNull(downloader);
+        ArgumentNullException.ThrowIfNull(rows);
+        ArgumentNullException.ThrowIfNull(open);
+        ArgumentNullException.ThrowIfNull(download);
+        ArgumentNullException.ThrowIfNull(openAsRoute);
+        ArgumentNullException.ThrowIfNull(loadLatest);
+        ArgumentNullException.ThrowIfNull(pinRun);
+        _downloader = downloader;
+        _rows = rows;
+        _open = open;
+        _download = download;
+        _openAsRoute = openAsRoute;
+        _loadLatest = loadLatest;
+        _pinRun = pinRun;
+        ArgumentNullException.ThrowIfNull(library);
+        ArgumentNullException.ThrowIfNull(importer);
+        ArgumentNullException.ThrowIfNull(loader);
+        ArgumentNullException.ThrowIfNull(dispatch);
+        _library = library;
+        _importer = importer;
+        _loader = loader;
+        _dispatch = dispatch;
+        _coalesce = coalesce;
+
+        AddFolderCommand = new AsyncRelayCommand(() => _importer.AddFolderAsync(TargetCollectionId));
+        AddExchangeSetZipCommand = new AsyncRelayCommand(() => _importer.AddExchangeSetZipAsync(TargetCollectionId));
+        AddOnlineCatalogueCommand = new AsyncRelayCommand(() => _importer.AddOnlineCatalogueAsync(TargetCollectionId));
+        AddS128CatalogueCommand = new AsyncRelayCommand(() => _importer.AddS128CatalogueAsync(TargetCollectionId));
+        AddSharedFeedCommand = new AsyncRelayCommand(() => _importer.AddSharedFeedAsync(TargetCollectionId));
+        AddCollectionManifestCommand = new AsyncRelayCommand(() => _importer.AddCollectionManifestAsync(TargetCollectionId));
+        ChooseGroupsCommand = new AsyncRelayCommand(ChooseGroupsAsync, () => _selectedNode?.CanChooseGroups == true);
+        AddCurrentsForAreaCommand = new AsyncRelayCommand(AddCurrentsForAreaAsync, () => CanAddCurrentsForArea);
+        OpenSecomFixCommand = new RelayCommand<LibraryNodeViewModel>(OpenSecomFix);
+        SetAmlFilterCommand = new RelayCommand<string>(product => AmlFilter = product switch
+        {
+            null or AmlFilterOff => null,
+            AmlFilterAllProducts => string.Empty,
+            _ => product,
+        });
+        RefreshCommand = new RelayCommand(Refresh);
+        RefreshAllCommand = new RelayCommand(() => _library.Refresh());
+        RenameCommand = new RelayCommand(BeginRename, () => _selectedNode?.CanRename == true);
+        ToggleShowOnMapCommand = new RelayCommand(ToggleShowOnMap, () => CanShowOnMap);
+        ToggleSyncCommand = new RelayCommand(ToggleSync, () => CanSyncSelected);
+        CommitRenameCommand = new RelayCommand(CommitRename);
+        CancelRenameCommand = new RelayCommand(CancelRename);
+        RemoveCommand = new RelayCommand(Remove, () => _selectedNode?.CanRemove == true);
+        KeepInLibraryCommand = new RelayCommand(Keep, () => _selectedNode?.CanKeep == true);
+        ZoomToCommand = new RelayCommand(ZoomToSelected, () => _selectedItem?.HasBounds == true);
+        ClearLocationCommand = new RelayCommand(() => SetLocation(null));
+        NextAtLocationCommand = new RelayCommand(NextAtLocation, () => _location is not null && _items.Count > 1);
+        NextTapHitCommand = new RelayCommand(NextTapHit, () => TapHitCount > 1);
+        ListTapHitsCommand = new RelayCommand(ListTapHits, () => _tapPosition is not null);
+        ClearTapCommand = new RelayCommand(ClearTap);
+        LoadCommand = new AsyncRelayCommand(LoadSelectedAsync, () => _selectedItem?.CanLoad == true);
+        LoadAsYouPanCommand = new AsyncRelayCommand(LoadListedAsYouPanAsync, () => _items.Count > 0);
+        DownloadCommand = new AsyncRelayCommand(DownloadSelectedAsync, () => _selectedItem?.CanDownload == true);
+        DownloadOnlyCommand = new AsyncRelayCommand(() => DownloadSelectedAsync(load: false), () => _selectedItem?.CanDownload == true);
+        LoadOrDownloadCommand = new AsyncRelayCommand(
+            () => _selectedItem?.CanLoadAfterDownload == true ? DownloadSelectedAsync(load: true) : LoadSelectedAsync(),
+            () => _selectedItem is { } item && (item.CanLoad || item.CanLoadAfterDownload));
+        OpenAsRouteCommand = new AsyncRelayCommand(OpenSelectedAsRouteAsync, () => CanOpenAsRoute);
+        LoadLatestRunCommand = new AsyncRelayCommand(LoadLatestRunAsync, () => _selectedItem?.CanLoadLatestRun == true);
+        PinRunCommand = new RelayCommand(PinSelectedRun, () => _selectedItem?.CanPinRun == true);
+        UnpinRunCommand = new RelayCommand(UnpinSelectedRun, () => _selectedItem?.IsPinnedRun == true);
+        DownloadListedCommand = new AsyncRelayCommand(DownloadListedAsync, () => DownloadableCount > 0);
+        CancelDownloadsCommand = new RelayCommand(() => _downloader.CancelAll(), () => IsBulkDownloading);
+        ShowOnTimelineCommand = new RelayCommand(
+            () =>
+            {
+                if (_selectedItem?.ValidWindow is { } window)
+                    ShowOnTimelineRequested?.Invoke(this, window);
+            },
+            () => HasViewTime && _selectedItem?.ValidWindow is not null);
+        GoToRunStartCommand = new RelayCommand(
+            () =>
+            {
+                if (_selectedItem?.ValidWindow is { } window)
+                    GoToTimeRequested?.Invoke(this, window.Start);
+            },
+            () => HasViewTime && _selectedItem?.ValidWindow is not null);
+        if (_viewTime is not null)
+        {
+            // The "At view time" facet follows the Timeline (#711, handoff G2).
+            _viewTime.CurrentTimeChanged += _ => _dispatch(OnViewTimeChanged);
+            _viewTime.RangeChanged += () => _dispatch(OnViewTimeChanged);
+        }
+        _loader.Changed += OnLoaderChanged;
+        _downloader.Changed += OnLoaderChanged;
+        _downloader.ProgressChanged += OnDownloadProgress;
+        _download.Starting += OnDownloadStarting;
+        _download.PackagesUnpacked += OnPackagesUnpacked;
+
+        _library.Changed += OnLibraryChanged;
+
+        // Forecast runs age by the minute: time left, and Expired (#685).
+        _clock = _time.CreateTimer(_ => _dispatch(OnClockTick), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+        Sync();
+    }
+
+    /// <summary>Collection nodes, each with its source nodes as children.</summary>
+    public ObservableCollection<LibraryNodeViewModel> Nodes { get; } = [];
+
+    /// <summary>True when the library has no collection.</summary>
+    public bool IsEmpty => Nodes.Count == 0;
+
+    /// <summary>The selected collection or source.</summary>
+    public LibraryNodeViewModel? SelectedNode
+    {
+        get => _selectedNode;
+        set
+        {
+            if (SetProperty(ref _selectedNode, value))
+            {
+                OnPropertyChanged(nameof(HasSelectedNode));
+                ((RelayCommand)RemoveCommand).NotifyCanExecuteChanged();
+                ((RelayCommand)KeepInLibraryCommand).NotifyCanExecuteChanged();
+                ((RelayCommand)RenameCommand).NotifyCanExecuteChanged();
+                ((RelayCommand)ToggleShowOnMapCommand).NotifyCanExecuteChanged();
+                OnPropertyChanged(nameof(CanShowOnMap));
+                OnPropertyChanged(nameof(SelectedShowsOnMap));
+                ((RelayCommand)ToggleSyncCommand).NotifyCanExecuteChanged();
+                OnPropertyChanged(nameof(CanSyncSelected));
+                OnPropertyChanged(nameof(SelectedSyncs));
+                ((AsyncRelayCommand)ChooseGroupsCommand).NotifyCanExecuteChanged();
+                ((AsyncRelayCommand)AddCurrentsForAreaCommand).NotifyCanExecuteChanged();
+                OnPropertyChanged(nameof(CanAddCurrentsForArea));
+                ShowSecomDetails();
+                EndTap();
+                if (_location is not null)
+                    SetLocation(null);
+                else
+                    RebuildItems(force: true);
+            }
+        }
+    }
+
+    /// <summary>True when a node is selected.</summary>
+    public bool HasSelectedNode => _selectedNode is not null;
+
+    /// <summary>The datasets of <see cref="SelectedNode"/> passing the filters.</summary>
+    public IReadOnlyList<LibraryItemViewModel> Items
+    {
+        get => _items;
+        private set => SetProperty(ref _items, value);
+    }
+
+    /// <summary>The selected dataset.</summary>
+    public LibraryItemViewModel? SelectedItem
+    {
+        get => _selectedItem;
+        set
+        {
+            if (SetProperty(ref _selectedItem, value))
+            {
+                // Picking a row by hand keeps the tap while the row is one of its hits.
+                if (!_selectingTapHit && _tapHits is not null && (value is null || TapHitIndexOf(value) < 0))
+                    EndTap();
+
+                OnPropertyChanged(nameof(HasSelectedItem));
+                OnPropertyChanged(nameof(ShowsSecomDetails));
+                OnPropertyChanged(nameof(ShowsItemPlaceholder));
+                OnPropertyChanged(nameof(LocationHitIndex));
+                OnPropertyChanged(nameof(LocationPositionText));
+                OnPropertyChanged(nameof(TapPositionText));
+                ((RelayCommand)ZoomToCommand).NotifyCanExecuteChanged();
+                ((AsyncRelayCommand)LoadCommand).NotifyCanExecuteChanged();
+                ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
+                ((AsyncRelayCommand)DownloadOnlyCommand).NotifyCanExecuteChanged();
+                ((AsyncRelayCommand)LoadOrDownloadCommand).NotifyCanExecuteChanged();
+                ((AsyncRelayCommand)OpenAsRouteCommand).NotifyCanExecuteChanged();
+                NotifyWeatherRunCommands();
+                ((RelayCommand)ShowOnTimelineCommand).NotifyCanExecuteChanged();
+                ((RelayCommand)GoToRunStartCommand).NotifyCanExecuteChanged();
+                OnPropertyChanged(nameof(HasValidWindow));
+                OnPropertyChanged(nameof(CanOpenAsRoute));
+                UpdatePairing();
+            }
+        }
+    }
+
+    /// <summary>
+    /// For a selected S-102 area node: opens the S-111 wizard at its models
+    /// step with the models covering the area ticked (#685, handoff B8).
+    /// </summary>
+    public ICommand AddCurrentsForAreaCommand { get; }
+
+    /// <summary>
+    /// Follows a SECOM source's link (#880, #883 D2); the parameter is the node.
+    /// "Choose identity…" and "Choose another identity…" select the source and
+    /// open its picker (a row action never changes the setting by itself);
+    /// the others open Settings → Keys &amp; certificates on the right tab.
+    /// </summary>
+    public ICommand OpenSecomFixCommand { get; }
+
+    /// <summary>Opens Settings → Keys &amp; certificates on a tab; set by the host.</summary>
+    internal Action<Keys.KeysTab>? OpenKeys { get; set; }
+
+    /// <summary>
+    /// The progress line for background chart preparation (#1266), shown under
+    /// the bulk bar; <see langword="null"/> where the host runs no warmer.
+    /// </summary>
+    public PortrayalWarmStatusViewModel? PortrayalWarm { get; set; }
+
+    /// <summary>
+    /// The identities SECOM sources choose from (#883); set by the host. With
+    /// it, SECOM rows show their identity and the details pane shows a selected
+    /// source's Connection.
+    /// </summary>
+    internal Services.Secom.SecomIdentityDirectory? Identities
+    {
+        get => _identities;
+        set
+        {
+            _identities = value;
+            if (value is null)
+                return;
+            value.Changed += (_, _) => _dispatch(UpdateSecomIdentities);
+            SecomDetails = new Secom.SecomSourceDetailsViewModel(
+                value, (collectionId, source) => _library.UpdateSource(collectionId, source), tab => OpenKeys?.Invoke(tab), _time);
+            OnPropertyChanged(nameof(SecomDetails));
+            UpdateSecomIdentities();
+        }
+    }
+
+    private Services.Secom.SecomIdentityDirectory? _identities;
+
+    /// <summary>A selected SECOM source's Connection details (#883 D3); null without <see cref="Identities"/>.</summary>
+    public Secom.SecomSourceDetailsViewModel? SecomDetails { get; private set; }
+
+    /// <summary>True when the details pane shows a SECOM source's Connection: one is selected and no dataset is.</summary>
+    public bool ShowsSecomDetails => SecomDetails?.SourceId is not null && _selectedItem is null;
+
+    /// <summary>True when the details pane shows its "select a dataset" placeholder.</summary>
+    public bool ShowsItemPlaceholder => _selectedItem is null && !ShowsSecomDetails;
+
+    private void OpenSecomFix(LibraryNodeViewModel? node)
+    {
+        switch (node?.SecomFixKind)
+        {
+            case SecomFix.ChooseIdentity or SecomFix.ChooseAnotherIdentity when SecomDetails is not null:
+                SelectedNode = node;
+                SelectedItem = null;
+                SecomDetails.OpenPicker();
+                break;
+            case SecomFix.TrustedAuthorities:
+                OpenKeys?.Invoke(Keys.KeysTab.Authorities);
+                break;
+            case not null:
+                OpenKeys?.Invoke(Keys.KeysTab.Identities);
+                break;
+        }
+    }
+
+    /// <summary>Gives SECOM source nodes their identity line, and refreshes the details pane.</summary>
+    private void UpdateSecomIdentities()
+    {
+        if (_identities is not { } identities)
+            return;
+        var hasIdentities = identities.HasIdentities;
+        foreach (var node in Nodes.SelectMany(n => n.SelfAndDescendants()))
+        {
+            var only = node.IsGroup ? null : node.Source ?? (node.Collection.Sources is [var single] ? single : null);
+            node.SecomIdentity = only?.Definition is SecomSource secom
+                ? new SecomNodeIdentity(
+                    identities.RowLabel(secom.Identity),
+                    hasIdentities,
+                    identities.Resolve(secom.Identity) is { } entry ? identities.EndsInDays(entry) : null)
+                : null;
+        }
+
+        ShowSecomDetails();
+    }
+
+    /// <summary>Shows the selected node's SECOM source (if it is one) in the details pane.</summary>
+    private void ShowSecomDetails()
+    {
+        if (SecomDetails is null)
+            return;
+        var node = _selectedNode;
+        var source = node is null || node.IsGroup ? null : node.Source ?? (node.Collection.Sources is [var single] ? single : null);
+        SecomDetails.Show(node?.Collection, source);
+        OnPropertyChanged(nameof(ShowsSecomDetails));
+        OnPropertyChanged(nameof(ShowsItemPlaceholder));
+    }
+
+    /// <summary>True when the selected node is an area of a remote S-100 catalogue (S-102).</summary>
+    public bool CanAddCurrentsForArea => _selectedNode is { IsGroup: true, Source.Definition: S100CatalogueFeedSource };
+
+    private Task AddCurrentsForAreaAsync()
+    {
+        if (!CanAddCurrentsForArea
+            || GeoBounds.UnionAll(_selectedNode!.EnumerateItems().Select(p => p.Item.Bounds).OfType<GeoBounds>()) is not { } area)
+        {
+            return Task.CompletedTask;
+        }
+
+        return _importer.AddCurrentsForAreaAsync(area, targetCollectionId: null);
+    }
+
+    private LibraryPairing? _pairing;
+
+    /// <summary>
+    /// For a selected S-111 tile, its S-102 twin in the same grid cell, when an
+    /// S-102 collection lists it (#685, handoff B7); otherwise <see langword="null"/>.
+    /// </summary>
+    public LibraryPairing? Pairing
+    {
+        get => _pairing;
+        private set
+        {
+            if (SetProperty(ref _pairing, value))
+                OnPropertyChanged(nameof(HasPairing));
+        }
+    }
+
+    /// <summary>True when <see cref="Pairing"/> is shown.</summary>
+    public bool HasPairing => _pairing is not null;
+
+    private void UpdatePairing()
+    {
+        if (_selectedItem is not { IsForecast: true, IsModelHeader: false } tile
+            || ForecastRuns.BathymetryTwinOf(tile.Item.Name) is not { } twin)
+        {
+            Pairing = null;
+            return;
+        }
+
+        var match = _library.Collections
+            .SelectMany(c => c.Sources)
+            .Where(s => s.Definition is S100CatalogueFeedSource && s.Index is not null)
+            .SelectMany(s => s.Index!.Items)
+            .FirstOrDefault(i => string.Equals(i.Name, twin, StringComparison.OrdinalIgnoreCase));
+        if (match is null)
+        {
+            Pairing = null;
+            return;
+        }
+
+        var local = _downloader.Localize(match).Location is LocalItemLocation;
+        var size = (match.Location as RemoteItemLocation)?.SizeBytes;
+        var detail = string.Join(" · ", new[]
+        {
+            $"{match.ProductSpec} {match.Name}",
+            Strings.Library_Pairing_SameCell,
+            local ? Strings.Library_Availability_Local : Strings.Library_Availability_Online,
+            size is { } bytes && !local ? LibraryItemViewModel.FormatBytes(bytes) : null,
+        }.OfType<string>());
+        Pairing = new LibraryPairing(Strings.Library_Pairing_Bathymetry, detail, local,
+            new AsyncRelayCommand(async () =>
+            {
+                await _downloader.DownloadAsync([match]).ConfigureAwait(true);
+                UpdatePairing();
+            }, () => !local && _downloader.CanDownload(match)));
+    }
+
+    /// <summary>True when a dataset is selected.</summary>
+    public bool HasSelectedItem => _selectedItem is not null;
+
+    /// <summary>Free text matched against name, title, spec and properties.</summary>
+    public string FilterText
+    {
+        get => _filterText;
+        set
+        {
+            if (SetProperty(ref _filterText, value ?? string.Empty))
+            {
+                EndTap();
+                ApplyFilter();
+            }
+        }
+    }
+
+    /// <summary>Whether cancelled datasets are listed.</summary>
+    public bool ShowCancelled
+    {
+        get => _showCancelled;
+        set
+        {
+            if (SetProperty(ref _showCancelled, value))
+            {
+                EndTap();
+                ApplyFilter();
+            }
+        }
+    }
+
+    /// <summary>Which datasets are listed by state (the segments under the filter box).</summary>
+    public LibraryStateFilter StateFilter
+    {
+        get => _stateFilter;
+        set
+        {
+            if (SetProperty(ref _stateFilter, value))
+            {
+                OnPropertyChanged(nameof(IsStateAll));
+                OnPropertyChanged(nameof(IsStateLocal));
+                OnPropertyChanged(nameof(IsStateOnline));
+                OnPropertyChanged(nameof(IsStateUpdates));
+                EndTap();
+                ApplyFilter();
+            }
+        }
+    }
+
+    public bool IsStateAll { get => _stateFilter == LibraryStateFilter.All; set { if (value) StateFilter = LibraryStateFilter.All; } }
+
+    public bool IsStateLocal { get => _stateFilter == LibraryStateFilter.Local; set { if (value) StateFilter = LibraryStateFilter.Local; } }
+
+    public bool IsStateOnline { get => _stateFilter == LibraryStateFilter.Online; set { if (value) StateFilter = LibraryStateFilter.Online; } }
+
+    public bool IsStateUpdates { get => _stateFilter == LibraryStateFilter.Updates; set { if (value) StateFilter = LibraryStateFilter.Updates; } }
+
+    /// <summary><see cref="SetAmlFilterCommand"/>'s parameter that turns the AML filter off.</summary>
+    internal const string AmlFilterOff = "off";
+
+    /// <summary><see cref="SetAmlFilterCommand"/>'s parameter for every AML product.</summary>
+    internal const string AmlFilterAllProducts = "all";
+
+    /// <summary>
+    /// The AML filter (#1370, decision 5): <see langword="null"/> when off,
+    /// empty for every AML product, else a product code or
+    /// <see cref="AmlLibraryRows.Aml30"/>. While on, only AML cells are listed.
+    /// </summary>
+    internal string? AmlFilter
+    {
+        get => _amlFilter;
+        set
+        {
+            if (string.Equals(_amlFilter, value, StringComparison.Ordinal))
+                return;
+            _amlFilter = value;
+            RaiseAmlFilter();
+            EndTap();
+            ApplyFilter();
+        }
+    }
+
+    /// <summary>Sets the AML filter: <see cref="AmlFilterOff"/>, <see cref="AmlFilterAllProducts"/> or a product.</summary>
+    public ICommand SetAmlFilterCommand { get; }
+
+    /// <summary>True when the listed node holds AML cells, so the AML chip shows (decision 5).</summary>
+    public bool HasAml { get; private set; }
+
+    /// <summary>True while the AML filter narrows the list.</summary>
+    public bool IsAmlFilterActive => _amlFilter is not null;
+
+    /// <summary>The AML chip: "AML", or "AML · All products" / "AML · CLB" while it filters.</summary>
+    public string AmlFilterText => _amlFilter switch
+    {
+        null => Strings.Aml_Chip,
+        "" => $"{Strings.Aml_Chip} · {Strings.Aml_Filter_AllProducts}",
+        var product => $"{Strings.Aml_Chip} · {product}",
+    };
+
+    private void RaiseAmlFilter()
+    {
+        OnPropertyChanged(nameof(AmlFilter));
+        OnPropertyChanged(nameof(IsAmlFilterActive));
+        OnPropertyChanged(nameof(AmlFilterText));
+    }
+
+    /// <summary>Whether an item passes the AML filter (everything does while it is off).</summary>
+    private bool PassesAml(LibraryItemViewModel item) =>
+        _amlFilter is null
+        || (item.Aml is { } aml && AmlLibraryRows.MatchesProduct(aml, _amlFilter.Length == 0 ? null : _amlFilter));
+
+    /// <summary>
+    /// Lists only data valid at the Timeline's view time (#711, handoff G2):
+    /// a toggle beside the filter box that narrows whichever segment is chosen.
+    /// </summary>
+    public bool IsAtViewTime
+    {
+        get => _atViewTime;
+        set
+        {
+            if (SetProperty(ref _atViewTime, value))
+            {
+                EndTap();
+                ApplyFilter();
+            }
+        }
+    }
+
+    /// <summary>"Only data valid at the view time · 12".</summary>
+    public string AtViewTimeTooltip => string.Format(CultureInfo.CurrentCulture, Strings.Tooltip_LibraryAtViewTimeFormat, AtViewTimeCount);
+
+    /// <summary>True when the Timeline has a view time, so "At view time" and the row's Timeline actions apply.</summary>
+    public bool HasViewTime => _viewTime?.CurrentTime is not null && _viewTime.IsActive;
+
+    /// <summary>Of the datasets matching the text, how many hold data at the view time.</summary>
+    public int AtViewTimeCount { get; private set; }
+
+    /// <summary>True when the selected dataset has a time window (forecast run or time coverage).</summary>
+    public bool HasValidWindow => _selectedItem?.ValidWindow is not null;
+
+    /// <summary>Shows the selected dataset's window on the Timeline (#711, handoff G3).</summary>
+    public ICommand ShowOnTimelineCommand { get; }
+
+    /// <summary>Moves the Timeline's view time to the start of the selected dataset's run or window.</summary>
+    public ICommand GoToRunStartCommand { get; }
+
+    /// <summary>Raised with a window the Timeline should show.</summary>
+    public event EventHandler<(DateTime Start, DateTime End)>? ShowOnTimelineRequested;
+
+    /// <summary>Raised with a time the Timeline should move to.</summary>
+    public event EventHandler<DateTime>? GoToTimeRequested;
+
+    /// <summary>Raised after <see cref="Reveal"/> selected a dataset, so the view can show the panel and scroll to it.</summary>
+    public event EventHandler<LibraryItemViewModel>? Revealed;
+
+    /// <summary>
+    /// Selects a dataset by its source and key, as "Reveal in Library" does
+    /// from the Timeline (#711, handoff G3): its source node, every state,
+    /// no text filter, and its model's group opened.
+    /// </summary>
+    internal bool Reveal(Guid sourceId, string key)
+    {
+        var node = Nodes.SelectMany(n => n.SelfAndDescendants())
+            .FirstOrDefault(n => !n.IsGroup && n.Source?.Id == sourceId && n.EnumerateItems().Any(p => p.Item.Key == key))
+            ?? Nodes.FirstOrDefault(n => n.EnumerateItems().Any(p => p.Source.Id == sourceId && p.Item.Key == key));
+        if (node is null)
+            return false;
+        if (_location is not null)
+            SetLocation(null);
+        _filterText = string.Empty;
+        OnPropertyChanged(nameof(FilterText));
+        _stateFilter = LibraryStateFilter.All;
+        _atViewTime = false;
+        _amlFilter = null;
+        _collapsedAml.Remove(sourceId);
+        RaiseAmlFilter();
+        OnPropertyChanged(nameof(StateFilter));
+        OnPropertyChanged(nameof(IsStateAll));
+        OnPropertyChanged(nameof(IsStateLocal));
+        OnPropertyChanged(nameof(IsStateOnline));
+        OnPropertyChanged(nameof(IsStateUpdates));
+        OnPropertyChanged(nameof(IsAtViewTime));
+        if (_selectedNode != node)
+            SelectedNode = node;
+        else
+            ApplyFilter();
+        var row = _allItems.FirstOrDefault(i => i.Source.Id == sourceId && i.Item.Key == key);
+        if (row is not null && PackageOf(row) is { } package && _expandedPackages.Add(package))
+            ApplyFilter();
+        SelectedItem = _items.FirstOrDefault(i => i.Source.Id == sourceId && i.Item.Key == key);
+        if (_selectedItem is { } selected)
+            Revealed?.Invoke(this, selected);
+        return _selectedItem is not null;
+    }
+
+    private void OnViewTimeChanged()
+    {
+        OnPropertyChanged(nameof(HasViewTime));
+        ((RelayCommand)ShowOnTimelineCommand).NotifyCanExecuteChanged();
+        ((RelayCommand)GoToRunStartCommand).NotifyCanExecuteChanged();
+        if (_atViewTime)
+            ApplyFilter();
+        else
+            Recount();
+    }
+
+    /// <summary>Datasets passing the text filter (the "All" segment's count).</summary>
+    public int AllCount => _textFiltered.Count;
+
+    /// <summary>Of those, how many are local and current (local, loaded or on pan).</summary>
+    public int LocalCount { get; private set; }
+
+    /// <summary>Of those, how many are online.</summary>
+    public int OnlineCount { get; private set; }
+
+    /// <summary>Of those, how many have an update available.</summary>
+    public int UpdatesCount { get; private set; }
+
+    /// <summary>Whether the listed datasets' coverage is drawn on the map.</summary>
+    public bool ShowCoverage
+    {
+        get => _showCoverage;
+        set => SetProperty(ref _showCoverage, value);
+    }
+
+    /// <summary>
+    /// The map location the list is filtered to (set by the tap banner's "List these"), or
+    /// <see langword="null"/> to list the selected node's datasets.
+    /// </summary>
+    public GeoPosition? Location => _location;
+
+    /// <summary>True when the list shows the datasets at a map location.</summary>
+    public bool HasLocation => _location is not null;
+
+    /// <summary>"Datasets at 57°N 152°W" for the location chip.</summary>
+    public string LocationSummary => _location is { } p
+        ? string.Format(CultureInfo.CurrentCulture, Strings.Library_AtLocationFormat, LatLonFormatter.Format(p.Latitude, p.Longitude))
+        : string.Empty;
+
+    /// <summary>Raised when the user asks to zoom the map to a dataset's bounds.</summary>
+    public event EventHandler<GeoBounds>? ZoomRequested;
+
+    /// <summary>Raised when the user asks to centre the map on a dataset without changing the zoom.</summary>
+    public event EventHandler<GeoPosition>? CenterRequested;
+
+    /// <summary>
+    /// Centres the map on the selected dataset (its bounds' centre), keeping
+    /// the zoom — e.g. when its row is double-clicked and it may be off screen.
+    /// </summary>
+    public void CenterOnSelected()
+    {
+        if (_selectedItem is { IsGroupHeader: false, Item.Bounds: { } bounds })
+            CenterRequested?.Invoke(this, CenterOf(bounds));
+    }
+
+    /// <summary>The centre of <paramref name="bounds"/>, across the antimeridian when they cross it.</summary>
+    internal static GeoPosition CenterOf(GeoBounds bounds)
+    {
+        var east = bounds.CrossesAntimeridian ? bounds.East + 360 : bounds.East;
+        return new GeoPosition((bounds.South + bounds.North) / 2, GeoBounds.NormalizeLongitude((bounds.West + east) / 2));
+    }
+
+    /// <summary>"116", or "8 of 116" when filtered, shown inside the filter box.</summary>
+    public string ItemsSummary =>
+        ListedCount == _allItems.Count
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Library_ItemCountFormat, _allItems.Count)
+            : string.Format(CultureInfo.CurrentCulture, Strings.Library_FilteredItemCountFormat, ListedCount, _allItems.Count);
+
+    /// <summary>
+    /// How many datasets pass the filters — including those inside a collapsed
+    /// package group, and never the groups' header rows.
+    /// </summary>
+    private int ListedCount => _listedDatasets;
+
+    public ICommand AddFolderCommand { get; }
+
+    public ICommand AddExchangeSetZipCommand { get; }
+
+    /// <summary>Opens the directory of known online catalogues (NOAA, USACE, …).</summary>
+    public ICommand AddOnlineCatalogueCommand { get; }
+
+    public ICommand AddS128CatalogueCommand { get; }
+
+    /// <summary>Connects to a feed served by <c>s100 feed serve</c> on another computer.</summary>
+    public ICommand AddSharedFeedCommand { get; }
+
+    /// <summary>Picks a collection manifest (<c>*.s100collection.json</c>).</summary>
+    public ICommand AddCollectionManifestCommand { get; }
+
+    /// <summary>Changes which groups the selected collection-manifest source includes.</summary>
+    public ICommand ChooseGroupsCommand { get; }
+
+    /// <summary>Re-indexes every source.</summary>
+    public ICommand RefreshAllCommand { get; }
+
+    /// <summary>Starts renaming the selected collection or source in place.</summary>
+    public ICommand RenameCommand { get; }
+
+    /// <summary>Turns "Show on map" on or off for the selected source (or every source of the selected collection), #809.</summary>
+    public ICommand ToggleShowOnMapCommand { get; }
+
+    /// <summary>True when the selected node is a kept source or collection, whose datasets can be kept on the map.</summary>
+    public bool CanShowOnMap => SelectedSources().Length > 0;
+
+    /// <summary>True when every source of the selected node shows on the map (the menu item's tick).</summary>
+    public bool SelectedShowsOnMap => SelectedSources() is { Length: > 0 } sources && sources.All(s => s.Definition.ShowOnMap);
+
+    /// <summary>The sources a node-level action applies to: the source node's, or every source of a collection node.</summary>
+    private LibrarySource[] SelectedSources() => _selectedNode switch
+    {
+        null or { IsGroup: true } => [],
+        { Collection.IsSession: true } => [],
+        { Source: { } source } => [source],
+        { } node => [.. node.Collection.Sources],
+    };
+
+    private void ToggleShowOnMap()
+    {
+        var sources = SelectedSources();
+        if (sources.Length == 0 || _selectedNode is not { } node)
+            return;
+        var show = !sources.All(s => s.Definition.ShowOnMap);
+        foreach (var source in sources)
+            _library.UpdateSource(node.Collection.Id, source.Definition with { ShowOnMap = show });
+        OnPropertyChanged(nameof(SelectedShowsOnMap));
+    }
+
+    /// <summary>Turns "Keep downloaded" (sync) on or off for the selected online source, or a collection's online sources (#809).</summary>
+    public ICommand ToggleSyncCommand { get; }
+
+    /// <summary>True when the selected node has online sources that can be kept downloaded.</summary>
+    public bool CanSyncSelected => SyncableSelectedSources().Length > 0;
+
+    /// <summary>True when every online source of the selected node is kept downloaded (the menu item's tick).</summary>
+    public bool SelectedSyncs => SyncableSelectedSources() is { Length: > 0 } sources && sources.All(s => s.Definition.Sync);
+
+    private LibrarySource[] SyncableSelectedSources() =>
+        _sync is null ? [] : [.. SelectedSources().Where(s => _sync.CanSync(s.Definition))];
+
+    private void ToggleSync()
+    {
+        var sources = SyncableSelectedSources();
+        if (sources.Length == 0 || _selectedNode is not { } node)
+            return;
+        var sync = !sources.All(s => s.Definition.Sync);
+        foreach (var source in sources)
+            _library.UpdateSource(node.Collection.Id, source.Definition with { Sync = sync });
+        OnPropertyChanged(nameof(SelectedSyncs));
+    }
+
+    /// <summary>Applies the name typed while renaming.</summary>
+    public ICommand CommitRenameCommand { get; }
+
+    /// <summary>Leaves renaming without changing the name.</summary>
+    public ICommand CancelRenameCommand { get; }
+
+    /// <summary>Re-indexes the selected node (or everything when nothing is selected).</summary>
+    public ICommand RefreshCommand { get; }
+
+    /// <summary>Removes the selected collection or source from the library (never the data).</summary>
+    public ICommand RemoveCommand { get; }
+
+    /// <summary>Persists the selected session S-128 catalogue as a collection.</summary>
+    public ICommand KeepInLibraryCommand { get; }
+
+    /// <summary>Zooms the map to the selected dataset.</summary>
+    public ICommand ZoomToCommand { get; }
+
+    /// <summary>Returns the list to the selected node's datasets.</summary>
+    public ICommand ClearLocationCommand { get; }
+
+    /// <summary>Selects the next dataset covering the tapped point (as tapping the same spot again does).</summary>
+    public ICommand NextAtLocationCommand { get; }
+
+    /// <summary>How many listed datasets cover the tapped point.</summary>
+    public int LocationHitCount => _location is null ? 0 : ListedCount;
+
+    /// <summary>The selected dataset's 1-based position among them, or 0 when none is selected.</summary>
+    public int LocationHitIndex => _location is null || _selectedItem is null ? 0 : IndexOf(_selectedItem) + 1;
+
+    /// <summary>"3 datasets" for the map-tap banner.</summary>
+    public string LocationHitsText => LocationHitCount == 1
+        ? Strings.Library_LocationHitsOne
+        : string.Format(CultureInfo.CurrentCulture, Strings.Library_LocationHitsFormat, LocationHitCount);
+
+    /// <summary>"cover this point" (or "covers" for one).</summary>
+    public string LocationCoverText => LocationHitCount == 1 ? Strings.Library_LocationCovers : Strings.Library_LocationCover;
+
+    /// <summary>"1 / 3" for the map-tap banner.</summary>
+    public string LocationPositionText =>
+        string.Format(CultureInfo.CurrentCulture, Strings.Library_LocationIndexFormat, LocationHitIndex, LocationHitCount);
+
+    /// <summary>
+    /// True while a map tap is active and the list is not already the point
+    /// list: the tap banner ("2 here · 1 of 2") shows.
+    /// </summary>
+    public bool HasTap => _tapHits is not null && _location is null;
+
+    /// <summary>How many outlined datasets the active tap hit.</summary>
+    public int TapHitCount => _tapHits?.Count ?? 0;
+
+    /// <summary>"2 here" for the tap banner.</summary>
+    public string TapHitsText => string.Format(CultureInfo.CurrentCulture, Strings.Library_TapHereFormat, TapHitCount);
+
+    /// <summary>"· 1 of 2" for the tap banner.</summary>
+    public string TapPositionText => string.Format(CultureInfo.CurrentCulture, Strings.Library_TapIndexFormat,
+        _selectedItem is null ? 0 : TapHitIndexOf(_selectedItem) + 1, TapHitCount);
+
+    /// <summary>Selects the next dataset the tap hit, wrapping round (as tapping the same spot again does).</summary>
+    public ICommand NextTapHitCommand { get; }
+
+    /// <summary>Lists the datasets at the tapped point, from every collection (what a tap used to do).</summary>
+    public ICommand ListTapHitsCommand { get; }
+
+    /// <summary>Ends the tap: hides the banner and clears the selection.</summary>
+    public ICommand ClearTapCommand { get; }
+
+    /// <summary>Loads the selected dataset now.</summary>
+    public ICommand LoadCommand { get; }
+
+    /// <summary>Registers every listed local dataset to load as it comes into view.</summary>
+    public ICommand LoadAsYouPanCommand { get; }
+
+    /// <summary>Downloads the selected online dataset, then loads it ("Load after download").</summary>
+    public ICommand DownloadCommand { get; }
+
+    /// <summary>Downloads the selected online dataset without loading it.</summary>
+    public ICommand DownloadOnlyCommand { get; }
+
+    /// <summary>
+    /// The details header's one Load button: loads a local dataset, or
+    /// downloads an online one and then loads it.
+    /// </summary>
+    public ICommand LoadOrDownloadCommand { get; }
+
+    /// <summary>Loads the selected S-421 dataset (if it isn't) and opens it as a route in the Routes panel.</summary>
+    public ICommand OpenAsRouteCommand { get; }
+
+    /// <summary>True when the selected dataset is an S-421 route on disk, which Open as route opens.</summary>
+    public bool CanOpenAsRoute =>
+        _selectedItem is { IsGroupHeader: false } item
+        && string.Equals(item.Item.ProductSpec, "S-421", StringComparison.OrdinalIgnoreCase)
+        && (item.CanLoad || item.IsLoadedNow);
+
+    /// <summary>Downloads every listed online (or outdated) dataset.</summary>
+    public ICommand DownloadListedCommand { get; }
+
+    /// <summary>Cancels the running bulk download.</summary>
+    public ICommand CancelDownloadsCommand { get; }
+
+    /// <summary>True while a bulk download runs (the bulk bar shows its progress and Cancel).</summary>
+    public bool IsBulkDownloading => _downloader.Progress is not null;
+
+    /// <summary>True when there are listed datasets for the bulk bar to act on.</summary>
+    public bool HasBulkBar => _items.Count > 0 || IsBulkDownloading;
+
+    /// <summary>
+    /// The bulk bar's first line: "6 to download · 16,4 MB" (or, while
+    /// downloading, what is left).
+    /// </summary>
+    public string BulkSummary
+    {
+        get
+        {
+            if (_downloader.Progress is { } progress)
+            {
+                return string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkToDownloadFormat,
+                    progress.Remaining, LibraryItemViewModel.FormatBytes(progress.BytesLeft));
+            }
+
+            if (IsBulkOffline)
+                return string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkOfflineFormat, LocalListedCount());
+
+            var c = CultureInfo.CurrentCulture;
+            if (NewRunModels() is { Count: > 0 } newRuns)
+            {
+                var bytes = LibraryItemViewModel.FormatBytes(Downloadable().Sum(i => (i.Item.Location as RemoteItemLocation)?.SizeBytes ?? 0));
+                return string.Format(c, newRuns.Count == 1 ? Strings.Library_BulkNewRunFormat : Strings.Library_BulkNewRunsFormat, newRuns.Count, bytes);
+            }
+
+            if (ExpiredModels() is { Count: > 0 } expired)
+                return string.Format(c, expired.Count == 1 ? Strings.Library_BulkRunExpired : Strings.Library_BulkRunsExpiredFormat, expired.Count);
+
+            var downloadable = Downloadable().ToArray();
+            if (IsUpdateMode)
+            {
+                return string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkUpdatesFormat, downloadable.Length,
+                    LibraryItemViewModel.FormatBytes(downloadable.Sum(i => (i.Item.Location as RemoteItemLocation)?.SizeBytes ?? 0)));
+            }
+
+            return downloadable.Length == 0
+                ? string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkListedFormat, ListedCount)
+                : string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkToDownloadFormat, downloadable.Length,
+                    LibraryItemViewModel.FormatBytes(downloadable.Sum(i => (i.Item.Location as RemoteItemLocation)?.SizeBytes ?? 0)));
+        }
+    }
+
+    /// <summary>
+    /// The bulk bar's second line: what the buttons act on ("Filtered set · 2
+    /// already local"), or the download's progress.
+    /// </summary>
+    public string BulkScope
+    {
+        get
+        {
+            if (_downloader.Progress is { } progress)
+            {
+                return string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkDownloadingFormat,
+                    Math.Min(progress.Total, progress.Completed + progress.Failed + 1), progress.Total, progress.Fraction);
+            }
+
+            if (IsBulkOffline)
+                return Strings.Library_BulkOfflineScope;
+
+            if (NewRunModels() is { Count: > 0 } newRuns)
+            {
+                // "cbofs 18:00Z replaces 12:00Z" for one model; the models otherwise.
+                var first = ListedDatasets().First(i => i.IsForecast && i.Availability == LibraryAvailability.Outdated);
+                return newRuns.Count == 1
+                    && EncDotNet.S100.Collections.Indexing.S100ForecastFeedIndexer.RunOf(first.Item) is { } onlineRun
+                    && _downloader.LocalPublishedAtOf(first.Item) is { } localRun
+                    ? string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkRunReplacesFormat, newRuns[0],
+                        ShortRun(onlineRun),
+                        ShortRun(localRun))
+                    : string.Join(", ", newRuns);
+            }
+
+            if (ExpiredModels() is { Count: > 0 })
+                return string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkLastCheckedFormat, LastChecked());
+
+            if (IsUpdateMode)
+            {
+                return string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkUpdatesScopeFormat,
+                    LocalListedCount(), _items.Count(i => !i.IsGroupHeader));
+            }
+
+            if (DownloadableCount == 0)
+                return Strings.Library_BulkNothing;
+
+            var scope = IsFiltered ? Strings.Library_BulkScopeFiltered : Strings.Library_BulkScopeAll;
+            var local = ListedDatasets().Count(i => i.PrimaryAvailability == LibraryPrimaryAvailability.Local && !_downloader.IsOutdated(i.Item));
+            return local == 0 ? scope : string.Format(CultureInfo.CurrentCulture, Strings.Library_BulkAlreadyLocalFormat, scope, local);
+        }
+    }
+
+    /// <summary>True when the list is narrowed by text, state or a map tap.</summary>
+    private bool IsFiltered => _filterText.Trim().Length > 0 || _stateFilter != LibraryStateFilter.All || _location is not null || _amlFilter is not null;
+
+    /// <summary>How many listed datasets can be downloaded.</summary>
+    public int DownloadableCount => Downloadable().Count();
+
+    private IEnumerable<LibraryItemViewModel> Downloadable() =>
+        IsBulkOffline ? []
+        : NewRunModels().Count > 0
+            ? ListedDatasets().Where(i => i.IsForecast && i.Availability == LibraryAvailability.Outdated && _downloader.CanDownload(i.Item))
+        : ExpiredModels().Count > 0 ? []
+        : IsUpdateMode ? ListedDatasets().Where(i => i.QuietUpdates && i.Availability == LibraryAvailability.Outdated && _downloader.CanDownload(i.Item))
+        : ListedDatasets().Where(i => _downloader.CanDownload(i.Item) && (i.EffectiveItem.Location is RemoteItemLocation || _downloader.IsOutdated(i.Item)));
+
+    /// <summary>
+    /// The listed datasets, including the tiles under a collapsed forecast
+    /// model's row (an unpacked package's rows are local already).
+    /// </summary>
+    private IEnumerable<LibraryItemViewModel> ListedDatasets() =>
+        _items.SelectMany(i => i.IsModelHeader || i.IsAmlSection ? i.Members : i.IsGroupHeader ? [] : [i]).Distinct();
+
+    /// <summary>The listed forecast models with a newer run than the one downloaded (#685).</summary>
+    private IReadOnlyList<string> NewRunModels() => ForecastModelsIn(LibraryAvailability.Outdated);
+
+    /// <summary>The listed forecast models whose downloaded run has ended, with nothing newer known.</summary>
+    private IReadOnlyList<string> ExpiredModels() => ForecastModelsIn(LibraryAvailability.Expired);
+
+    private IReadOnlyList<string> ForecastModelsIn(LibraryAvailability state) =>
+        ListedDatasets()
+            .Where(i => i.IsForecast && i.Availability == state)
+            .Select(i => ForecastRuns.ModelOf(i.Item))
+            .OfType<string>()
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+    /// <summary>
+    /// True when listed forecast runs have ended and no newer run is known:
+    /// the bulk bar offers "Check for new runs" (Refresh) instead of a download.
+    /// </summary>
+    public bool IsCheckForRuns => !IsBulkDownloading && !IsBulkOffline && NewRunModels().Count == 0 && ExpiredModels().Count > 0;
+
+    /// <summary>When the selected node's catalogues were last checked ("21:04" today, else the date).</summary>
+    private string LastChecked()
+    {
+        var sources = _selectedNode is { } node ? node.Source is { } s ? [s] : node.Collection.Sources : [];
+        var checkedAt = sources
+            .Select(x => _feedHealth?.Invoke(x.Definition)?.CheckedAt ?? x.Index?.IndexedAt)
+            .OfType<DateTimeOffset>()
+            .DefaultIfEmpty(_time.GetUtcNow())
+            .Max()
+            .ToLocalTime();
+        return checkedAt.Date == _time.GetLocalNow().Date
+            ? checkedAt.ToString("t", CultureInfo.CurrentCulture)
+            : checkedAt.ToString("d", CultureInfo.CurrentCulture);
+    }
+
+    /// <summary>
+    /// True when listed remote-catalogue datasets have newer editions online:
+    /// the bulk bar then offers "Update downloaded (N)" for those alone (#685),
+    /// rather than mixing updates into a download of everything listed.
+    /// </summary>
+    public bool IsUpdateMode => ListedDatasets().Any(i => i.QuietUpdates && !i.IsForecast && i.Availability == LibraryAvailability.Outdated);
+
+    /// <summary>
+    /// True when the selected node is remote catalogues whose server could not
+    /// be reached: the cached index still lists and loads, but nothing downloads.
+    /// </summary>
+    public bool IsBulkOffline =>
+        !IsBulkDownloading
+        && _selectedNode is { } node
+        && (node.Source is { } source ? [source] : node.Collection.Sources) is { Count: > 0 } sources
+        && sources.All(s => s.Definition is S100CatalogueFeedSource or S100ForecastFeedSource
+            && _feedHealth?.Invoke(s.Definition) is { IsReachable: false });
+
+    /// <summary>How many listed datasets have a copy on disk (current or not).</summary>
+    private int LocalListedCount() =>
+        ListedDatasets().Count(i => i.PrimaryAvailability is LibraryPrimaryAvailability.Local
+            or LibraryPrimaryAvailability.Update or LibraryPrimaryAvailability.Expired);
+
+    /// <summary>True when some listed dataset can be downloaded (and no bulk download is running).</summary>
+    public bool HasDownloadable => !IsBulkDownloading && DownloadableCount > 0;
+
+    /// <summary>"Download 1,193 (203 MB)" for the bulk download button.</summary>
+    public string DownloadListedText
+    {
+        get
+        {
+            if (NewRunModels() is { Count: > 0 } newRuns)
+                return string.Format(CultureInfo.CurrentCulture, Strings.Library_UpdateDownloadedFormat, newRuns.Count);
+            return string.Format(CultureInfo.CurrentCulture,
+                IsUpdateMode ? Strings.Library_UpdateDownloadedFormat : Strings.Library_DownloadListedFormat, DownloadableCount);
+        }
+    }
+
+    /// <summary>
+    /// Selects the tree node of a remote catalogue's area (a map tap on it
+    /// when zoomed out; #685): its group node, or the source when it shows no
+    /// area nodes. The collection and source open so the node is visible.
+    /// </summary>
+    public void SelectArea(Guid sourceId, string folder)
+    {
+        foreach (var collection in Nodes)
+        {
+            if (collection.Children.FirstOrDefault(c => c.Id == sourceId) is not { } source)
+                continue;
+
+            collection.IsExpanded = true;
+            source.IsExpanded = true;
+            SelectedNode = source.Children.FirstOrDefault(c => c.GroupId == folder) ?? source;
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Lists what covers a tapped point inside forecast model domains (#685,
+    /// handoff E1): the list is filtered to the point, so each model there shows
+    /// with its tiles, and the smallest domain's model (listed first in
+    /// <paramref name="smallestFirst"/>) is selected.
+    /// </summary>
+    public void ListModelsAt(GeoPosition position, IReadOnlyList<(Guid SourceId, string Model)> smallestFirst)
+    {
+        ArgumentNullException.ThrowIfNull(smallestFirst);
+        EndTap();
+        SetLocation(position);
+        SelectedItem = smallestFirst
+            .Select(m => _items.FirstOrDefault(i => i.Source.Id == m.SourceId && i.IsForecast
+                && (i.IsModelHeader || i.IsForecastRunRow) && ForecastRuns.ModelOf(i.Item) == m.Model))
+            .FirstOrDefault(i => i is not null) ?? _selectedItem;
+    }
+
+    /// <summary>
+    /// Handles a map tap that hit <paramref name="hits"/> (listed, outlined
+    /// datasets, most detailed first): selects the first, or — when the same
+    /// spot was tapped again — the one after the current selection. The list
+    /// itself does not change; the tap banner offers Next and "List these".
+    /// </summary>
+    public void SelectTapHits(GeoPosition position, IReadOnlyList<LibraryItemViewModel> hits, bool sameSpot)
+    {
+        ArgumentNullException.ThrowIfNull(hits);
+        if (hits.Count == 0)
+        {
+            ClearTap();
+            return;
+        }
+
+        var current = _selectedItem is null ? -1 : IndexIn(hits, _selectedItem);
+        _tapPosition = position;
+        _tapHits = hits;
+        SelectTapHit(sameSpot && current >= 0 ? (current + 1) % hits.Count : 0);
+        OnTapChanged();
+    }
+
+    /// <summary>Ends any map tap and clears the selection (a tap where nothing is outlined, or the banner's ×).</summary>
+    public void ClearTap()
+    {
+        EndTap();
+        SelectedItem = null;
+    }
+
+    private void NextTapHit()
+    {
+        if (_tapHits is not { Count: > 0 } hits)
+            return;
+        var current = _selectedItem is null ? -1 : IndexIn(hits, _selectedItem);
+        SelectTapHit((current + 1) % hits.Count);
+    }
+
+    private void SelectTapHit(int index)
+    {
+        var hit = _tapHits![index];
+        _selectingTapHit = true;
+        try
+        {
+            // The list may have been rebuilt since the tap; select the row as listed now.
+            SelectedItem = _items.FirstOrDefault(i => SameItem(i, hit)) ?? hit;
+        }
+        finally
+        {
+            _selectingTapHit = false;
+        }
+    }
+
+    private void ListTapHits()
+    {
+        if (_tapPosition is not { } position)
+            return;
+        EndTap();
+        SetLocation(position);
+    }
+
+    /// <summary>Forgets the map tap (the banner hides); the selection is left alone.</summary>
+    private void EndTap()
+    {
+        if (_tapHits is null)
+            return;
+        _tapHits = null;
+        _tapPosition = null;
+        OnTapChanged();
+    }
+
+    private void OnTapChanged()
+    {
+        OnPropertyChanged(nameof(HasTap));
+        OnPropertyChanged(nameof(TapHitCount));
+        OnPropertyChanged(nameof(TapHitsText));
+        OnPropertyChanged(nameof(TapPositionText));
+        ((RelayCommand)NextTapHitCommand).NotifyCanExecuteChanged();
+        ((RelayCommand)ListTapHitsCommand).NotifyCanExecuteChanged();
+    }
+
+    private int TapHitIndexOf(LibraryItemViewModel item) => _tapHits is { } hits ? IndexIn(hits, item) : -1;
+
+    private static int IndexIn(IReadOnlyList<LibraryItemViewModel> items, LibraryItemViewModel item)
+    {
+        for (var i = 0; i < items.Count; i++)
+        {
+            if (SameItem(items[i], item))
+                return i;
+        }
+
+        return -1;
+    }
+
+    /// <summary>Selects the next dataset at the tapped point, wrapping round.</summary>
+    private void NextAtLocation()
+    {
+        if (_location is null || _items.Count == 0)
+            return;
+        var next = _selectedItem is null ? 0 : (IndexOf(_selectedItem) + 1) % _items.Count;
+        SelectedItem = _items[next];
+    }
+
+    private int IndexOf(LibraryItemViewModel item)
+    {
+        for (var i = 0; i < _items.Count; i++)
+        {
+            if (SameItem(_items[i], item))
+                return i;
+        }
+
+        return -1;
+    }
+
+    public void Dispose()
+    {
+        _clock?.Dispose();
+        _library.Changed -= OnLibraryChanged;
+        _loader.Changed -= OnLoaderChanged;
+        _downloader.Changed -= OnLoaderChanged;
+        _downloader.ProgressChanged -= OnDownloadProgress;
+    }
+
+    private void OnDownloadProgress(object? sender, EventArgs e)
+    {
+        lock (Nodes)
+        {
+            if (_progressRefreshPosted)
+                return;
+            _progressRefreshPosted = true;
+        }
+
+        _dispatch(() =>
+        {
+            lock (Nodes)
+                _progressRefreshPosted = false;
+            RefreshDownloadProgress();
+        });
+    }
+
+    /// <summary>Updates rows, the bulk bar and the tree's download lines — without re-resolving availability.</summary>
+    private void RefreshDownloadProgress()
+    {
+        foreach (var item in _items)
+            item.RefreshDownload();
+        OnPropertyChanged(nameof(IsBulkDownloading));
+        OnPropertyChanged(nameof(HasDownloadable));
+        OnPropertyChanged(nameof(HasBulkBar));
+        OnPropertyChanged(nameof(BulkSummary));
+        OnPropertyChanged(nameof(BulkScope));
+        OnPropertyChanged(nameof(IsBulkOffline));
+        OnPropertyChanged(nameof(IsCheckForRuns));
+        OnPropertyChanged(nameof(DownloadListedText));
+        ((RelayCommand)CancelDownloadsCommand).NotifyCanExecuteChanged();
+        UpdateNodeDownloadStatus();
+    }
+
+    /// <summary>
+    /// Every minute: forecast runs lose time and may expire (#685), so their
+    /// rows, the counts, the status lines and the bulk bar are re-evaluated.
+    /// </summary>
+    private void OnClockTick()
+    {
+        var forecasts = _allItems.Where(i => i.IsForecast).ToArray();
+        if (forecasts.Length == 0)
+            return;
+
+        foreach (var item in forecasts)
+            item.RefreshClock();
+        foreach (var header in _packageHeaders.Values.Where(h => h.IsModelHeader))
+            header.Members = header.Members;
+        UpdateCatalogueCounts();
+        if (_stateFilter == LibraryStateFilter.All)
+            Recount();
+        else
+            ApplyFilter();
+        RefreshDownloadProgress();
+        ((AsyncRelayCommand)DownloadListedCommand).NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(HasDownloadable));
+    }
+
+    /// <summary>
+    /// Gives each remote S-100 catalogue node its local and update counts for
+    /// its status line ("Catalogue 30.09 · 140 updates"); a one-source
+    /// collection shows its source's.
+    /// </summary>
+    private void UpdateCatalogueCounts()
+    {
+        foreach (var collection in Nodes)
+        {
+            LibraryCatalogueCounts? only = null;
+            LibraryForecastCounts? onlyForecast = null;
+            LibrarySyncStatus? onlySync = null;
+            foreach (var child in collection.Children)
+            {
+                // A synced source's last sync (#807, #809); its kind's own counts follow.
+                child.SyncStatus = _sync is not null && child.Source is { } synced && _sync.IsSynced(synced.Definition)
+                    ? _sync.StatusOf(synced.Id)
+                    : null;
+                if (collection.Children.Count == 1)
+                    onlySync = child.SyncStatus;
+
+                if (child.Source is { Definition: S100ForecastFeedSource, Index: { } runs })
+                {
+                    child.ForecastCounts = LibraryNodeText.ForecastCounts(runs, _downloader, _time.GetUtcNow());
+                    if (collection.Children.Count == 1)
+                        onlyForecast = child.ForecastCounts;
+                    continue;
+                }
+
+                if (child.Source is not { Definition: S100CatalogueFeedSource, Index: { } index })
+                    continue;
+
+                child.CatalogueCounts = LibraryNodeText.CatalogueCounts(index, _downloader);
+                if (collection.Children.Count == 1)
+                    only = child.CatalogueCounts;
+            }
+
+            collection.CatalogueCounts = only;
+            collection.ForecastCounts = onlyForecast;
+            collection.SyncStatus = onlySync;
+        }
+    }
+
+    /// <summary>Sets "Downloading 2 of 5 · 4,3 MB left" on the nodes whose datasets are downloading.</summary>
+    private void UpdateNodeDownloadStatus()
+    {
+        var bySource = new Dictionary<Guid, string?>();
+        lock (_downloadingBySource)
+        {
+            foreach (var (sourceId, items) in _downloadingBySource.ToArray())
+            {
+                var statuses = items.Select(_downloader.StatusOf).ToArray();
+                var pending = statuses.Count(s => s is { State: not LibraryDownloadItemState.Failed });
+                if (pending == 0 || _downloader.Progress is null)
+                {
+                    _downloadingBySource.Remove(sourceId);
+                    bySource[sourceId] = null;
+                    continue;
+                }
+
+                var left = items.Zip(statuses)
+                    .Where(p => p.Second is { State: not LibraryDownloadItemState.Failed })
+                    .Sum(p => Math.Max(0, ((p.First.Location as RemoteItemLocation)?.SizeBytes ?? 0) - p.Second!.BytesReceived));
+                bySource[sourceId] = LibraryNodeText.Downloading(items.Count - pending + 1, items.Count, left);
+            }
+        }
+
+        foreach (var collection in Nodes)
+        {
+            string? collectionStatus = null;
+            foreach (var child in collection.Children)
+            {
+                if (bySource.TryGetValue(child.Id, out var status))
+                    child.DownloadStatus = status;
+                collectionStatus ??= child.DownloadStatus;
+            }
+
+            collection.DownloadStatus = collectionStatus;
+        }
+    }
+
+    private void OnLoaderChanged(object? sender, EventArgs e)
+    {
+        // Coalesce bursts (e.g. one notification per downloaded cell).
+        lock (Nodes)
+        {
+            if (_availabilityRefreshPosted)
+                return;
+            _availabilityRefreshPosted = true;
+        }
+
+        _coalesce(() =>
+        {
+            lock (Nodes)
+                _availabilityRefreshPosted = false;
+            // Every row, not only the listed ones: the state segments count them all.
+            // (A row whose availability was never resolved returns at once.)
+            foreach (var item in _allItems)
+                item.RefreshAvailability();
+            foreach (var header in _packageHeaders.Values.Where(h => h.IsModelHeader))
+                header.Members = header.Members;
+            UpdateCatalogueCounts();
+            UpdatePairing();
+            RefreshDownloadProgress();
+            // A dataset whose state changed may now belong to another segment.
+            if (_stateFilter == LibraryStateFilter.All)
+                Recount();
+            else
+                ApplyFilter();
+            ((AsyncRelayCommand)LoadCommand).NotifyCanExecuteChanged();
+            ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
+            ((AsyncRelayCommand)DownloadOnlyCommand).NotifyCanExecuteChanged();
+            ((AsyncRelayCommand)LoadOrDownloadCommand).NotifyCanExecuteChanged();
+            ((AsyncRelayCommand)OpenAsRouteCommand).NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(CanOpenAsRoute));
+            ((AsyncRelayCommand)DownloadListedCommand).NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(DownloadListedText));
+            OnPropertyChanged(nameof(HasDownloadable));
+            OnPropertyChanged(nameof(BulkSummary));
+            OnPropertyChanged(nameof(BulkScope));
+            // The coverage overlay styles by availability; let it redraw.
+            OnPropertyChanged(nameof(Items));
+        });
+    }
+
+    private Task LoadSelectedAsync() =>
+        _selectedItem is { } item ? LoadRowsAsync([item], defer: false) : Task.CompletedTask;
+
+    private async Task OpenSelectedAsRouteAsync()
+    {
+        if (!CanOpenAsRoute || _selectedItem is not { } item)
+            return;
+        await _openAsRoute.RunAsync(item.State).ConfigureAwait(true);
+    }
+
+    private Task LoadListedAsYouPanAsync() =>
+        LoadRowsAsync(ListedDatasets().ToArray(), defer: true);
+
+    /// <summary>Opens <paramref name="rows"/> now, or as the map pans to them when <paramref name="defer"/> is true.</summary>
+    private Task<LibraryLoadResult> LoadRowsAsync(IReadOnlyList<LibraryItemViewModel> rows, bool defer) =>
+        _open.RunAsync([.. rows.Select(row => row.State)], defer);
+
+    private Task DownloadSelectedAsync() => DownloadSelectedAsync(load: true);
+
+    private Task DownloadSelectedAsync(bool load) =>
+        _selectedItem is { } item ? DownloadRowsAsync([item], load) : Task.CompletedTask;
+
+    /// <summary>Downloads <paramref name="rows"/> (the details' Download, "Load after download"), then optionally opens them.</summary>
+    private async Task DownloadRowsAsync(IReadOnlyList<LibraryItemViewModel> rows, bool load)
+    {
+        var outcome = await _download.RunAsync([.. rows.Select(row => (row.Item, row.Source))], load).ConfigureAwait(true);
+        if (outcome.Download.Downloaded > 0 && outcome.ReindexedSources.Count == 0)
+        {
+            foreach (var row in rows)
+                row.RefreshAvailability();
+        }
+    }
+
+    private Task DownloadListedAsync() =>
+        _download.RunAsync([.. Downloadable().Select(row => (row.Item, row.Source))], load: false);
+
+    /// <summary>Notes the sources a download starts on, for the tree's status lines (also for downloads the Timeline or MCP start).</summary>
+    private void OnDownloadStarting(object? sender, IReadOnlyList<(CollectionItem Item, LibrarySource Source)> items) =>
+        TrackDownloads(items);
+
+    /// <summary>Opens the groups of packages whose datasets the Library now lists (once).</summary>
+    private void OnPackagesUnpacked(object? sender, IReadOnlyList<(Guid Source, string Package)> packages)
+    {
+        foreach (var package in packages)
+            _expandedPackages.Add(package);
+        _dispatch(() => RebuildItems(force: true));
+    }
+
+    /// <summary>Remembers which sources' datasets are downloading, for the tree's status lines.</summary>
+    private void TrackDownloads(IEnumerable<(CollectionItem Item, LibrarySource Source)> items)
+    {
+        lock (_downloadingBySource)
+        {
+            foreach (var group in items.GroupBy(i => i.Source.Id))
+                _downloadingBySource[group.Key] = group.Select(i => i.Item).ToList();
+        }
+    }
+
+    /// <summary>
+    /// The persisted collection new sources are added to by default: the
+    /// selected node's collection, unless it is the session collection.
+    /// </summary>
+    private Guid? TargetCollectionId =>
+        _selectedNode is { Collection.IsSession: false } node ? node.Collection.Id : null;
+
+    private void OnLibraryChanged(object? sender, EventArgs e)
+    {
+        // Coalesce bursts of indexing notifications into one UI update.
+        lock (Nodes)
+        {
+            if (_refreshPosted)
+                return;
+            _refreshPosted = true;
+        }
+
+        _dispatch(() =>
+        {
+            lock (Nodes)
+                _refreshPosted = false;
+            Sync();
+        });
+    }
+
+    /// <summary>Brings <see cref="Nodes"/> in line with the library snapshot.</summary>
+    internal void Sync()
+    {
+        var snapshot = _library.Collections;
+        var knownSources = Nodes.SelectMany(n => n.Children).Select(c => c.Id).ToHashSet();
+
+        for (var i = Nodes.Count - 1; i >= 0; i--)
+        {
+            if (!snapshot.Any(c => c.Id == Nodes[i].Id))
+            {
+                if (_selectedNode is not null && Nodes[i].SelfAndDescendants().Contains(_selectedNode))
+                    SelectedNode = null;
+                Nodes.RemoveAt(i);
+            }
+        }
+
+        for (var i = 0; i < snapshot.Count; i++)
+        {
+            var collection = snapshot[i];
+            var existing = Nodes.FirstOrDefault(n => n.Id == collection.Id);
+            if (existing is null)
+            {
+                Nodes.Insert(i, LibraryNodeViewModel.ForCollection(collection, _feedHealth, _runFormat));
+                continue;
+            }
+
+            var selected = _selectedNode is { IsCollection: false } node && existing.SelfAndDescendants().Contains(node)
+                ? node
+                : null;
+            existing.Update(collection);
+            if (selected is not null && !existing.SelfAndDescendants().Contains(selected))
+            {
+                // A vanished group falls back to its source, a vanished source to its collection.
+                SelectedNode = selected.IsGroup
+                    ? existing.Children.FirstOrDefault(c => c.Id == selected.Id) ?? existing
+                    : existing;
+            }
+
+            var at = Nodes.IndexOf(existing);
+            if (at != i)
+                Nodes.Move(at, i);
+        }
+
+        // A newly added collection manifest opens expanded, with its collection, once.
+        if (_hasSynced)
+        {
+            foreach (var collection in Nodes)
+            {
+                foreach (var source in collection.Children.Where(
+                    c => c.Source?.Definition is LocalManifestSource && !knownSources.Contains(c.Id)))
+                {
+                    collection.IsExpanded = true;
+                    source.IsExpanded = true;
+                }
+            }
+        }
+
+        _hasSynced = true;
+
+        SelectedNode ??= Nodes.FirstOrDefault();
+        UpdateCatalogueCounts();
+        UpdateSecomIdentities();
+        OnPropertyChanged(nameof(IsEmpty));
+        ((RelayCommand)RemoveCommand).NotifyCanExecuteChanged();
+        ((RelayCommand)KeepInLibraryCommand).NotifyCanExecuteChanged();
+        ((RelayCommand)RenameCommand).NotifyCanExecuteChanged();
+        RebuildItems(force: false);
+    }
+
+    private void SetLocation(GeoPosition? position)
+    {
+        _location = position;
+        OnPropertyChanged(nameof(Location));
+        OnPropertyChanged(nameof(HasLocation));
+        OnPropertyChanged(nameof(HasTap));
+        OnPropertyChanged(nameof(LocationSummary));
+        ((RelayCommand)NextAtLocationCommand).NotifyCanExecuteChanged();
+
+        var selected = _selectedItem;
+        _itemsBasis = null;
+        _allItems = position is { } p ? HitsAt(p) : BuildNodeItems(_selectedNode);
+        UpdateHasAml();
+        ApplyFilter();
+        SelectedItem = selected is null ? null : _items.FirstOrDefault(i => SameItem(i, selected));
+    }
+
+    /// <summary>
+    /// Every library dataset covering <paramref name="position"/>, most
+    /// detailed (highest usage band, then smallest extent) first.
+    /// </summary>
+    internal List<LibraryItemViewModel> HitsAt(GeoPosition position) =>
+        LibraryQuery.HitsAt(_library.Collections, position)
+            .Select(p => _rows.Create(p.Item, p.Source))
+            .ToList();
+
+    /// <summary>The collections the Library holds now, sources and indexes included.</summary>
+    internal IReadOnlyList<LibraryCollection> Collections => _library.Collections;
+
+    private IReadOnlyList<LibraryItemViewModel> BuildNodeItems(LibraryNodeViewModel? node) =>
+        node is null
+            ? []
+            : node.EnumerateItems()
+                .Select(p => _rows.Create(p.Item, p.Source, node.Collection.Definition.Name))
+                .ToArray();
+
+    private static bool SameItem(LibraryItemViewModel a, LibraryItemViewModel b) =>
+        a.Source.Id == b.Source.Id && a.Item.Key == b.Item.Key;
+
+    private void ZoomToSelected()
+    {
+        if (_selectedItem?.Item.Bounds is { } bounds)
+            ZoomRequested?.Invoke(this, bounds);
+    }
+
+    private void RebuildItems(bool force)
+    {
+        if (_location is { } location)
+        {
+            // Listing datasets at a map location: refresh the hits only when
+            // the library itself changed.
+            if (force)
+                return;
+            SetLocation(location);
+            return;
+        }
+
+        var node = _selectedNode;
+        var basis = node?.ItemIndexes;
+        if (!force && basis is not null && _itemsBasis is not null
+            && basis.Count == _itemsBasis.Count && basis.Zip(_itemsBasis).All(p => ReferenceEquals(p.First, p.Second)))
+        {
+            return;
+        }
+
+        _itemsBasis = basis;
+        var selectedKey = _selectedItem is { } sel ? (sel.Source.Id, sel.Item.Key) : default;
+        _allItems = BuildNodeItems(node);
+        UpdateHasAml();
+        ApplyFilter();
+
+        SelectedItem = selectedKey == default
+            ? null
+            : _items.FirstOrDefault(i => i.Source.Id == selectedKey.Id && i.Item.Key == selectedKey.Key);
+    }
+
+    private void ApplyFilter()
+    {
+        var filter = _filterText.Trim();
+        _textMatched = _allItems
+            .Where(i => _showCancelled || !i.IsCancelled)
+            .Where(i => filter.Length == 0 || i.Matches(filter))
+            .Where(PassesAml)
+            .ToArray();
+        var viewTime = ViewTime;
+        _textFiltered = _atViewTime ? [.. _textMatched.Where(i => IsValidAt(i, viewTime))] : _textMatched;
+        var listed = _textFiltered.Where(i => InState(i, _stateFilter)).ToArray();
+        _listedDatasets = listed.Length;
+        Items = SectionAml(GroupPackages(listed, expandAll: filter.Length > 0), expandAll: filter.Length > 0);
+        Recount();
+        OnPropertyChanged(nameof(LocationHitCount));
+        OnPropertyChanged(nameof(LocationHitsText));
+        OnPropertyChanged(nameof(LocationCoverText));
+        OnPropertyChanged(nameof(LocationPositionText));
+        ((RelayCommand)NextAtLocationCommand).NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(ItemsSummary));
+        OnPropertyChanged(nameof(HasBulkBar));
+        OnPropertyChanged(nameof(IsBulkOffline));
+        OnPropertyChanged(nameof(IsUpdateMode));
+        OnPropertyChanged(nameof(IsCheckForRuns));
+        OnPropertyChanged(nameof(BulkSummary));
+        OnPropertyChanged(nameof(BulkScope));
+        ((AsyncRelayCommand)LoadAsYouPanCommand).NotifyCanExecuteChanged();
+        ((AsyncRelayCommand)DownloadListedCommand).NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(DownloadListedText));
+        OnPropertyChanged(nameof(HasDownloadable));
+
+        if (_selectedItem is not null && !_items.Contains(_selectedItem))
+            SelectedItem = null;
+    }
+
+    /// <summary>
+    /// Lists the datasets an unpacked community-list package holds under a
+    /// header row named by the package (collapsed unless it was just
+    /// unpacked, or the text filter matched inside it), so the entry the user
+    /// downloaded does not simply disappear.
+    /// </summary>
+    private IReadOnlyList<LibraryItemViewModel> GroupPackages(IEnumerable<LibraryItemViewModel> items, bool expandAll)
+    {
+        var rows = new List<LibraryItemViewModel>();
+        var groups = new Dictionary<(Guid, string), List<LibraryItemViewModel>>();
+        foreach (var item in items)
+        {
+            if (PackageOf(item) is { } key)
+            {
+                if (!groups.TryGetValue(key, out var members))
+                {
+                    groups[key] = members = [];
+                    rows.Add(item);  // the group's place in the list
+                }
+
+                members.Add(item);
+            }
+            else
+            {
+                rows.Add(item);
+            }
+        }
+
+        if (groups.Count == 0)
+            return rows;
+
+        var result = new List<LibraryItemViewModel>(rows.Count + groups.Count);
+        foreach (var row in rows)
+        {
+            if (PackageOf(row) is not { } key)
+            {
+                result.Add(row);
+                continue;
+            }
+
+            var members = groups[key];
+            var expanded = expandAll || _expandedPackages.Contains(key);
+            if (row.IsForecast)
+            {
+                if (!_packageHeaders.TryGetValue(key, out var model) || !ReferenceEquals(model.Source, row.Source))
+                {
+                    _packageHeaders[key] = model = LibraryItemViewModel.ForModelGroup(
+                        row.Source, members, expanded, TogglePackage, _loader.StateOf, _downloader, _time, _runFormat);
+                }
+                else
+                {
+                    model.Members = members;
+                }
+
+                model.IsExpanded = expanded;
+                result.Add(model);
+                if (expanded)
+                {
+                    foreach (var member in members)
+                        member.IsGroupChild = true;
+                    result.AddRange(members);
+                }
+
+                continue;
+            }
+
+            if (!_packageHeaders.TryGetValue(key, out var header) || !ReferenceEquals(header.Source, row.Source))
+            {
+                _packageHeaders[key] = header = LibraryItemViewModel.ForPackageGroup(
+                    row.Source, key.Item2, row.Item.Properties.GetValueOrDefault("packageTitle"), members.Count, expanded, TogglePackage, _time,
+                    members.Select(m => (m.Item.Location as RemoteItemLocation)?.LastModified).Max(),
+                    members.Select(m => m.Item.ProductSpec).Distinct(StringComparer.Ordinal).SingleOrDefault() ?? "S-57");
+            }
+
+            header.GroupCount = members.Count;
+            header.IsExpanded = expanded;
+            result.Add(header);
+            if (expanded)
+            {
+                foreach (var member in members)
+                    member.IsGroupChild = true;
+                result.AddRange(members);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Lists each source's NATO Additional Military Layers cells under a
+    /// header of their own, below the source's charts (#1370, decision 5), so
+    /// an ENC and an AML cell of the same area are never neighbours by
+    /// accident. Rows inside a package stay where they are.
+    /// </summary>
+    private IReadOnlyList<LibraryItemViewModel> SectionAml(IReadOnlyList<LibraryItemViewModel> rows, bool expandAll)
+    {
+        if (!rows.Any(IsSectionedAml))
+            return rows;
+
+        var result = new List<LibraryItemViewModel>(rows.Count + 1);
+        foreach (var bySource in rows.GroupBy(r => r.Source.Id))
+        {
+            var aml = bySource.Where(IsSectionedAml).ToArray();
+            result.AddRange(aml.Length == 0 ? bySource : bySource.Where(r => !IsSectionedAml(r)));
+            if (aml.Length == 0)
+                continue;
+
+            var key = (bySource.Key, LibraryItemViewModel.AmlSectionKey);
+            var expanded = expandAll || !_collapsedAml.Contains(bySource.Key);
+            if (!_packageHeaders.TryGetValue(key, out var header) || !ReferenceEquals(header.Source, aml[0].Source))
+            {
+                _packageHeaders[key] = header = LibraryItemViewModel.ForAmlSection(aml[0].Source, aml, expanded, ToggleAmlSection, _time);
+            }
+            else
+            {
+                header.GroupCount = aml.Length;
+                header.Members = aml;
+            }
+
+            header.IsExpanded = expanded;
+            result.Add(header);
+            if (expanded)
+                result.AddRange(aml);
+        }
+
+        return result;
+
+        static bool IsSectionedAml(LibraryItemViewModel row) => row.IsAml && !row.IsGroupChild;
+    }
+
+    /// <summary>
+    /// Shows the AML chip only while the listed datasets hold AML cells; with
+    /// none, its filter is turned off so it can't empty the list unseen.
+    /// </summary>
+    private void UpdateHasAml()
+    {
+        var hasAml = _allItems.Any(i => i.IsAml);
+        if (hasAml != HasAml)
+        {
+            HasAml = hasAml;
+            OnPropertyChanged(nameof(HasAml));
+        }
+
+        if (!hasAml && _amlFilter is not null)
+        {
+            _amlFilter = null;
+            RaiseAmlFilter();
+        }
+    }
+
+    private void ToggleAmlSection(LibraryItemViewModel header)
+    {
+        if (!_collapsedAml.Remove(header.Source.Id))
+            _collapsedAml.Add(header.Source.Id);
+        var selected = _selectedItem;
+        ApplyFilter();
+        SelectedItem = selected is null ? null : _items.FirstOrDefault(i => SameItem(i, selected));
+    }
+
+    /// <summary>
+    /// The row a dataset is listed under: the unpacked package a community-list
+    /// dataset or a SECOM exchange-set dataset (#916) came from, or the model of
+    /// a forecast run's tile (#685); else <see langword="null"/>.
+    /// </summary>
+    private static (Guid, string)? PackageOf(LibraryItemViewModel item) =>
+        item.IsForecast && item.Source.Definition is S100ForecastFeedSource { Shape: ForecastShape.Tiles }
+            && ForecastRuns.ModelOf(item.Item) is { } model
+            ? (item.Source.Id, "model:" + model)
+        : item.Source.Definition is ChartCatalogsFeedSource or SecomSource
+        && item.Item.Properties.TryGetValue("package", out var package)
+        && !LibraryItemText.IsPackageEntry(item.Item)
+            ? (item.Source.Id, package)
+            : null;
+
+    private void TogglePackage(LibraryItemViewModel header)
+    {
+        if (!_expandedPackages.Remove(header.GroupKey))
+            _expandedPackages.Add(header.GroupKey);
+        var selected = _selectedItem;
+        ApplyFilter();
+        SelectedItem = selected is null ? null : _items.FirstOrDefault(i => SameItem(i, selected));
+    }
+
+    /// <summary>"18:00Z", or the local short time, as the user reads runs (#730).</summary>
+    private string ShortRun(DateTimeOffset run) =>
+        Services.ForecastRunNames.FormatRun(run.UtcDateTime, _runFormat?.Invoke() ?? TimeFormat.Utc, _time.LocalTimeZone, _time.GetUtcNow().UtcDateTime);
+
+    /// <summary>The user switched Local/UTC: re-read every run time shown (#730).</summary>
+    private void OnTimeFormatChanged()
+    {
+        foreach (var node in Nodes)
+            node.RefreshTimeFormat();
+        foreach (var item in _items)
+            item.RefreshTimeFormat();
+        foreach (var header in _packageHeaders.Values)
+            header.RefreshTimeFormat();
+        OnPropertyChanged(nameof(BulkScope));
+    }
+
+    private DateTime? ViewTime => _viewTime?.IsActive == true ? _viewTime.CurrentTime : null;
+
+    /// <summary>The Timeline's view time, while it has one (for the MCP <c>validAt</c> filter).</summary>
+    internal DateTime? CurrentViewTime => ViewTime;
+
+    /// <summary>True when the item's data covers <paramref name="viewTime"/>.</summary>
+    private static bool IsValidAt(LibraryItemViewModel item, DateTime? viewTime) =>
+        viewTime is { } at && item.ValidWindow is { } window && at >= window.Start && at <= window.End;
+
+    private static bool InState(LibraryItemViewModel item, LibraryStateFilter state) => state switch
+    {
+        LibraryStateFilter.Local => item.Availability is LibraryAvailability.Local or LibraryAvailability.Loaded or LibraryAvailability.Deferred,
+        LibraryStateFilter.Updates when item.IsForecast => item.Availability is LibraryAvailability.Outdated or LibraryAvailability.Expired,
+        LibraryStateFilter.Online => item.Availability == LibraryAvailability.Online,
+        LibraryStateFilter.Updates => item.Availability == LibraryAvailability.Outdated,
+        _ => true,
+    };
+
+    /// <summary>Updates the segment counts (availability can change without the list changing).</summary>
+    private void Recount()
+    {
+        LocalCount = _textFiltered.Count(i => InState(i, LibraryStateFilter.Local));
+        OnlineCount = _textFiltered.Count(i => InState(i, LibraryStateFilter.Online));
+        UpdatesCount = _textFiltered.Count(i => InState(i, LibraryStateFilter.Updates));
+        var viewTime = ViewTime;
+        AtViewTimeCount = viewTime is null ? 0 : _textMatched.Count(i => IsValidAt(i, viewTime));
+        OnPropertyChanged(nameof(AtViewTimeCount));
+        OnPropertyChanged(nameof(AtViewTimeTooltip));
+        OnPropertyChanged(nameof(AllCount));
+        OnPropertyChanged(nameof(LocalCount));
+        OnPropertyChanged(nameof(OnlineCount));
+        OnPropertyChanged(nameof(UpdatesCount));
+    }
+
+    private Task ChooseGroupsAsync() =>
+        _selectedNode is { CanChooseGroups: true, Source.Definition: LocalManifestSource source } node
+            ? _importer.ChooseManifestGroupsAsync(node.Collection.Id, source)
+            : Task.CompletedTask;
+
+    private void Refresh()
+    {
+        if (_selectedNode is { Collection.IsSession: false } node)
+            _library.Refresh(node.Collection.Id, node.Source?.Id);
+        else
+            _library.Refresh();
+    }
+
+    private void Remove()
+    {
+        if (_selectedNode is not { CanRemove: true } node)
+            return;
+
+        if (node.IsCollection)
+            _library.RemoveCollection(node.Collection.Id);
+        else
+            _library.RemoveSource(node.Collection.Id, node.Id);
+    }
+
+    private void BeginRename()
+    {
+        if (_selectedNode is not { CanRename: true } node)
+            return;
+        foreach (var other in Nodes.SelectMany(n => n.SelfAndDescendants()).Where(n => n.IsRenaming))
+            other.IsRenaming = false;
+        node.RenameText = node.Name;
+        node.IsRenaming = true;
+    }
+
+    private void CommitRename()
+    {
+        var node = Nodes.SelectMany(n => n.SelfAndDescendants()).FirstOrDefault(n => n.IsRenaming);
+        if (node is null)
+            return;
+
+        node.IsRenaming = false;
+        var name = node.RenameText.Trim();
+        if (name.Length == 0 || name == node.Name)
+            return;
+
+        if (node.IsCollection)
+            _library.RenameCollection(node.Collection.Id, name);
+        else
+            _library.RenameSource(node.Collection.Id, node.Id, name);
+    }
+
+    private void CancelRename()
+    {
+        foreach (var node in Nodes.SelectMany(n => n.SelfAndDescendants()).Where(n => n.IsRenaming))
+            node.IsRenaming = false;
+    }
+
+    private void Keep()
+    {
+        if (_selectedNode is { CanKeep: true, Source: { } source })
+            _library.KeepSessionCatalogue(source.Id);
+    }
+
+}
+
+/// <summary>
+/// Adds sources to the library interactively: picks a path (or online feed)
+/// and confirms the target collection. Implemented by
+/// <see cref="Services.LibraryImportCoordinator"/>.
+/// </summary>
+internal interface ILibraryImporter
+{
+    /// <summary>Picks a folder to scan for exchange sets and datasets.</summary>
+    Task AddFolderAsync(Guid? targetCollectionId);
+
+    /// <summary>Picks a zipped exchange set.</summary>
+    Task AddExchangeSetZipAsync(Guid? targetCollectionId);
+
+    /// <summary>
+    /// Opens the directory of known online catalogues (issue #670), then the
+    /// chosen catalogue's scope picker.
+    /// </summary>
+    Task AddOnlineCatalogueAsync(Guid? targetCollectionId);
+
+    /// <summary>
+    /// Asks for the URL of a feed served by <c>s100 feed serve</c> on another
+    /// computer, checks it, then opens its product picker (issue #680).
+    /// </summary>
+    Task AddSharedFeedAsync(Guid? targetCollectionId);
+
+    /// <summary>Opens the scope picker for a known online catalogue directly.</summary>
+    Task AddKnownCatalogueAsync(EncDotNet.S100.Collections.KnownSources.KnownCatalogueSource source, Guid? targetCollectionId);
+
+    /// <summary>Picks an S-128 catalogue file.</summary>
+    Task AddS128CatalogueAsync(Guid? targetCollectionId);
+
+    /// <summary>Picks a collection manifest (<c>*.s100collection.json</c>) and opens its group picker.</summary>
+    Task AddCollectionManifestAsync(Guid? targetCollectionId);
+
+    /// <summary>Reopens a collection manifest's group picker to change an existing source's selection.</summary>
+    Task ChooseManifestGroupsAsync(Guid collectionId, LocalManifestSource source);
+
+    /// <summary>
+    /// Opens the S-111 surface-currents catalogue at its models step with the
+    /// models covering <paramref name="area"/> ticked (#685, handoff B8).
+    /// </summary>
+    Task AddCurrentsForAreaAsync(GeoBounds area, Guid? targetCollectionId) => Task.CompletedTask;
+
+    /// <summary>Adds a known path (for example a dropped folder), confirming the target collection.</summary>
+    Task AddPathAsync(string path, Guid? targetCollectionId);
+
+    /// <summary>
+    /// True when <paramref name="path"/> is already a library source or lies
+    /// inside a folder source.
+    /// </summary>
+    bool IsInLibrary(string path);
+}

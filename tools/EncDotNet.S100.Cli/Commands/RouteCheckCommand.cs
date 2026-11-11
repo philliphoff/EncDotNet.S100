@@ -1,0 +1,528 @@
+using System.ComponentModel;
+using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using EncDotNet.S100.Cli.Infrastructure;
+using EncDotNet.S100.Crs.ProjNet;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Navigation;
+using EncDotNet.S100.Mcp;
+using EncDotNet.S100.Mcp.Tools;
+using EncDotNet.S100.Navigation;
+using EncDotNet.S100.Quantities;
+using Spectre.Console;
+using Spectre.Console.Cli;
+
+namespace EncDotNet.S100.Cli.Commands;
+
+/// <summary>
+/// <c>s100 route check</c> checks an RTZ or S-421 route against datasets
+/// headlessly: the chart check (land, drying ground, the safety contour,
+/// charted dangers and chart coverage), restricted and protected areas,
+/// S-124 warnings, when the route has a draft the under-keel clearance, and
+/// with wind or wave limits the forecast weather along the route.
+/// </summary>
+/// <remarks>
+/// The command reads the route into a <see cref="PassagePlan"/> with its
+/// format package's conversion, runs a <see cref="RouteChecker"/> over a
+/// headless catalog, and maps the verdict to the exit code. The JSON report
+/// is the <see cref="RouteCheckReport"/> as <c>check_route</c> returns it
+/// (<see cref="CheckRouteResult"/>), so its findings, codes and ids are the
+/// MCP tool's and SoundCharts'. Not for navigation.
+/// </remarks>
+internal sealed class RouteCheckCommand : Command<RouteCheckCommand.Settings>
+{
+    /// <summary>Exit code returned when the check has findings at or above <c>--fail-on</c>.</summary>
+    internal const int FindingsExitCode = 7;
+
+    internal sealed class Settings : CommandSettings
+    {
+        [CommandArgument(0, "<route>")]
+        [Description("The route: an RTZ file (1.0, 1.1 or 1.2) or an S-421 GML dataset.")]
+        public string Route { get; init; } = "";
+
+        [CommandArgument(1, "<datasets>")]
+        [Description("The datasets to check against: dataset files, at most one exchange set (a directory containing a CATALOG.XML, a CATALOG.XML file, or a .zip), and at most one plain folder of datasets.")]
+        public string[] Datasets { get; init; } = [];
+
+        [CommandOption("--draft <METERS>")]
+        [Description("Draft in metres, for every leg; overrides the route's. With a draft the under-keel clearance check runs too, and dangers are also judged against draft + squat + required UKC.")]
+        public double? DraftMeters { get; init; }
+
+        [CommandOption("--squat <METERS>")]
+        [Description("Squat allowance in metres, for every leg. RTZ and S-421 have none, so the default is 0.")]
+        public double? SquatMeters { get; init; }
+
+        [CommandOption("--speed <KNOTS>")]
+        [Description("Speed over ground in knots, for every leg; overrides the route's schedule. Speeds give ETAs, which time-dependent checks (S-124 warnings, seasonal areas, S-104 water levels) use.")]
+        public double? SpeedKnots { get; init; }
+
+        [CommandOption("--departure <ISO8601>")]
+        [Description("Departure time (ISO 8601; UTC when no offset is given); overrides the route's. Default: the route's planning schedule's first ETD, else now.")]
+        public string? Departure { get; init; }
+
+        [CommandOption("--required-ukc <METERS>")]
+        [Description("Required under-keel clearance in metres, for every leg; overrides the route's static UKC.")]
+        public double? RequiredUkcMeters { get; init; }
+
+        [CommandOption("--corridor <METERS>")]
+        [Description("The corridor's half-width in metres: how far it reaches to port, and to starboard, of the track. Overrides every leg's cross-track limits. Without it each leg's XTDs are used, and an unset side is 50 m.")]
+        public double? CorridorMeters { get; init; }
+
+        [CommandOption("--safety-contour <METERS>")]
+        [Description("Safety contour in metres, as the mariner setting (S-101 SafetyContour). Default 30.")]
+        [DefaultValue(30.0)]
+        public double SafetyContourMeters { get; init; } = 30.0;
+
+        [CommandOption("--safety-depth <METERS>")]
+        [Description("Safety depth in metres, for soundings, as the mariner setting (S-101 SafetyDepth). Default 30.")]
+        [DefaultValue(30.0)]
+        public double SafetyDepthMeters { get; init; } = 30.0;
+
+        [CommandOption("--track-clearance <METERS>")]
+        [Description("How close to the track line, in metres, an aid to navigation, structure or overhead feature counts as on the track. Default 30.")]
+        public double? TrackClearanceMeters { get; init; }
+
+        [CommandOption("--nearby <METERS>")]
+        [Description("How far beyond the cross-track limits, in metres, a danger or hazard counts as near the route. Default 185.2 (0.1 NM).")]
+        public double? NearbyMeters { get; init; }
+
+        [CommandOption("--areas-off <KINDS>")]
+        [Description("Comma-separated kinds of prohibited area and area with special conditions to turn off, e.g. anchorage_area,marine_farm (the S-101 alert catalogue's ProhAre kinds). One finding per kind says the route meets them.")]
+        public string? AreasOff { get; init; }
+
+        [CommandOption("--max-wind <KNOTS>")]
+        [Description("Wind limit in knots for the weather check: stretches where a loaded GRIB2 or NetCDF forecast has a higher 10 m wind at the ETA are reported (check). Overrides an RTZ route's vesselMaxWind.")]
+        public double? MaxWindKnots { get; init; }
+
+        [CommandOption("--max-wave <METERS>")]
+        [Description("Significant wave height limit in metres for the weather check. Overrides an RTZ route's vesselMaxWave.")]
+        public double? MaxWaveMeters { get; init; }
+
+        [CommandOption("--cyclone-radius <KNOTS>")]
+        [Description("Tropical cyclones (loaded NHC advisories): the outermost wind radius the weather check tests at each ETA, 34 (default), 50 or 64 kt. The cone is always tested.")]
+        public int? CycloneRadiusKnots { get; init; }
+
+        [CommandOption("--cyclone-must-review <KNOTS>")]
+        [Description("Tropical cyclones: the weakest wind radius whose findings are Must review: 64, 50 (default), 34 or 'never'. Weaker radii and the cone are Check.")]
+        public string? CycloneMustReview { get; init; }
+
+        [CommandOption("--no-cyclone-cpa")]
+        [Description("Tropical cyclones: don't report the route's closest approach to each storm.")]
+        [DefaultValue(false)]
+        public bool NoCycloneClosestApproach { get; init; }
+
+        [CommandOption("--window")]
+        [Description("Also sweep departures across the S-104 time range that covers the route, to find the departure window (needs a draft), and across the forecast for the weather check (needs a wind or wave limit).")]
+        [DefaultValue(false)]
+        public bool Window { get; init; }
+
+        [CommandOption("--only <SPECS>")]
+        [Description("Exchange-set datasets only: restrict loading to a comma-separated list of product specifications (e.g. --only S101,S102,S124).")]
+        public string? Only { get; init; }
+
+        [CommandOption("--fail-on <LEVEL>")]
+        [Description("When to exit with code 7, by the verdict: 'must-review' (default: a Must review finding, a clearance below the UKC setting, or water level ending before arrival), 'check' (any verdict but clear: also Check findings and a tight or incomplete clearance), or 'never'.")]
+        [DefaultValue("must-review")]
+        public string FailOn { get; init; } = "must-review";
+
+        [CommandOption("--format <FORMAT>")]
+        [Description("Output format: 'text' (default) or 'json'.")]
+        [DefaultValue("text")]
+        public string Format { get; init; } = "text";
+
+        [CommandOption("--debug")]
+        [Description("Show full stack traces on error.")]
+        public bool Debug { get; init; }
+
+        // The kinds --areas-off names, each with the kind it parses to, or null.
+        internal static IEnumerable<(string Name, int? Kind)> AreaKindsOff(string? text) =>
+            (text ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(name => (name, RouteAreaKinds.Parse(name)));
+
+        public override ValidationResult Validate()
+        {
+            if (string.IsNullOrWhiteSpace(Route))
+                return ValidationResult.Error("A route file is required.");
+            if (Datasets.Length == 0)
+                return ValidationResult.Error("At least one dataset, exchange set or folder is required.");
+
+            foreach (var (name, value, allowZero) in new (string, double?, bool)[]
+            {
+                ("--draft", DraftMeters, false),
+                ("--squat", SquatMeters, true),
+                ("--speed", SpeedKnots, false),
+                ("--required-ukc", RequiredUkcMeters, true),
+                ("--corridor", CorridorMeters, true),
+                ("--safety-contour", SafetyContourMeters, true),
+                ("--safety-depth", SafetyDepthMeters, true),
+                ("--track-clearance", TrackClearanceMeters, true),
+                ("--nearby", NearbyMeters, true),
+                ("--max-wind", MaxWindKnots, false),
+                ("--max-wave", MaxWaveMeters, false),
+            })
+            {
+                if (value is { } v && (!double.IsFinite(v) || v < 0 || (!allowZero && v == 0)))
+                    return ValidationResult.Error($"{name} must be {(allowZero ? "zero or more" : "a positive number")}.");
+            }
+
+            if (CycloneRadiusKnots is { } radius && CheckRouteTool.CycloneRadius(radius) is null)
+                return ValidationResult.Error("--cyclone-radius must be 34, 50 or 64.");
+            if (CycloneMustReview is { } inside && !string.Equals(inside, "never", StringComparison.OrdinalIgnoreCase)
+                && !(int.TryParse(inside, NumberStyles.None, CultureInfo.InvariantCulture, out var knots) && CheckRouteTool.CycloneRadius(knots) is not null))
+                return ValidationResult.Error("--cyclone-must-review must be 34, 50, 64 or never.");
+            if (AreaKindsOff(AreasOff).FirstOrDefault(k => k.Kind is null) is { Name: { } unknown })
+                return ValidationResult.Error($"--areas-off: '{unknown}' isn't a kind: {string.Join(", ", RouteAreaKinds.Names.Values)}.");
+            if (Departure is not null && !TryParseTime(Departure, out _))
+                return ValidationResult.Error("--departure must be an ISO 8601 time.");
+            if (ParseFailLevel(FailOn) is null)
+                return ValidationResult.Error("--fail-on must be 'must-review', 'check' or 'never'.");
+            if (!string.Equals(Format, "text", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(Format, "json", StringComparison.OrdinalIgnoreCase))
+                return ValidationResult.Error("--format must be 'text' or 'json'.");
+
+            return ValidationResult.Success();
+        }
+    }
+
+    private enum FailLevel
+    {
+        Never,
+        MustReview,
+        Check,
+    }
+
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    {
+        RouteFile route;
+        try
+        {
+            route = RouteFileReader.Read(settings.Route);
+        }
+        catch (RouteFileException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 2;
+        }
+
+        var warnings = new List<string>();
+        IDisposable? resolution = null;
+        try
+        {
+            if (!TryResolveDatasets(settings, route.Path, warnings, out var inputs, out resolution, out var inputError))
+            {
+                Console.Error.WriteLine(inputError);
+                return 2;
+            }
+
+            var transforms = new ProjNetCrsTransformFactory();
+            // The engine lets the check portray the corridor's features for their
+            // S-101 alerts (#1127).
+            var catalog = FileDatasetCatalog.Build(inputs, transforms, LuaEngineFactory.Create());
+            warnings.AddRange(catalog.Warnings);
+            foreach (var warning in warnings)
+                Console.Error.WriteLine(warning);
+            if (catalog.Datasets.Count == 0)
+            {
+                Console.Error.WriteLine("No datasets could be loaded to check the route against.");
+                return 2;
+            }
+
+            DateTimeOffset? departureOverride = settings.Departure is { } text && TryParseTime(text, out var parsed) ? parsed : null;
+            var departure = departureOverride ?? route.Departure ?? DateTimeOffset.UtcNow;
+            var plan = Plan(route, settings, departure);
+            var checkSettings = new RouteCheckSettings
+            {
+                At = departure,
+                SafetyContour = Depth.FromMetres(settings.SafetyContourMeters),
+                SafetyDepth = Depth.FromMetres(settings.SafetyDepthMeters),
+                CorridorOverride = settings.CorridorMeters is { } corridor ? Length.FromMetres(corridor) : null,
+                TrackClearance = settings.TrackClearanceMeters is { } clearance ? Length.FromMetres(clearance) : null,
+                NearbyDistance = settings.NearbyMeters is { } nearby ? Length.FromMetres(nearby) : null,
+                AreaKindsOff = Settings.AreaKindsOff(settings.AreasOff).Select(k => k.Kind!.Value).ToList(),
+                DepartureWindow = settings.Window ? DepartureRange.WaterLevelData(WindowStep) : null,
+                WeatherLimits = settings.MaxWindKnots is null && settings.MaxWaveMeters is null ? null : new WeatherLimits
+                {
+                    MaxWind = settings.MaxWindKnots is { } wind ? Speed.FromKnots(wind) : null,
+                    MaxWaveHeight = settings.MaxWaveMeters is { } wave ? Length.FromMetres(wave) : null,
+                },
+                TropicalCyclones = new TropicalCycloneCheckSettings
+                {
+                    CheckAgainst = settings.CycloneRadiusKnots is { } radius ? CheckRouteTool.CycloneRadius(radius)!.Value : TropicalCycloneRadius.Knots34,
+                    ReportClosestApproach = !settings.NoCycloneClosestApproach,
+                    MustReviewInside = settings.CycloneMustReview is not { } inside ? TropicalCycloneRadius.Knots50
+                        : string.Equals(inside, "never", StringComparison.OrdinalIgnoreCase) ? null
+                        : CheckRouteTool.CycloneRadius(int.Parse(inside, CultureInfo.InvariantCulture)),
+                },
+            };
+
+            var sources = new RouteCheckSourceCache(transforms).Get(catalog.Datasets);
+            RouteCheckReport report;
+            try
+            {
+                report = new RouteChecker(sources).Check(plan, checkSettings);
+            }
+            catch (ArgumentException ex)
+            {
+                Console.Error.WriteLine($"Route check failed: {ex.Message}");
+                return 2;
+            }
+
+            var exitCode = Fails(ParseFailLevel(settings.FailOn)!.Value, report.Verdict.Kind) ? FindingsExitCode : 0;
+            if (string.Equals(settings.Format, "json", StringComparison.OrdinalIgnoreCase))
+                Console.Out.WriteLine(ToJson(route, settings, departure, report, warnings).ToJsonString(IndentedJson));
+            else
+                WriteText(route, departure, report);
+            return exitCode;
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLineInterpolated($"[red]Error:[/] {ex.Message}");
+            if (settings.Debug)
+                AnsiConsole.WriteException(ex);
+            return 1;
+        }
+        finally
+        {
+            resolution?.Dispose();
+        }
+    }
+
+    /// <summary>The time between swept departures for <c>--window</c>.</summary>
+    private static readonly TimeSpan WindowStep = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// The route's plan with the command's overrides applied to every leg
+    /// and the departure set.
+    /// </summary>
+    internal static PassagePlan Plan(RouteFile route, Settings settings, DateTimeOffset departure) => new(
+        route.Plan.Legs.Select(l => new PassageLeg
+        {
+            Points = l.Points,
+            Geometry = l.Geometry,
+            PortLimit = l.PortLimit,
+            StarboardLimit = l.StarboardLimit,
+            Draft = settings.DraftMeters is { } draft ? Depth.FromMetres(draft) : l.Draft,
+            Speed = settings.SpeedKnots is { } knots ? Speed.FromKnots(knots) : l.Speed,
+            Squat = settings.SquatMeters is { } squat ? Depth.FromMetres(squat) : l.Squat,
+            RequiredUkc = settings.RequiredUkcMeters is { } ukc ? Depth.FromMetres(ukc) : l.RequiredUkc,
+            Name = l.Name,
+        }).ToList(),
+        departure)
+    {
+        VesselLimits = route.Plan.VesselLimits,
+    };
+
+    private static bool TryResolveDatasets(
+        Settings settings,
+        string routePath,
+        List<string> warnings,
+        out List<FileDatasetInput> inputs,
+        out IDisposable? resolution,
+        out string? error)
+    {
+        inputs = [];
+        resolution = null;
+        error = null;
+
+        var exchangeSets = settings.Datasets.Where(ExchangeSetInput.LooksLikeExchangeSet).ToList();
+        var folders = settings.Datasets.Where(p => !ExchangeSetInput.LooksLikeExchangeSet(p) && Directory.Exists(p)).ToList();
+        var routeFull = Path.GetFullPath(routePath);
+        var files = settings.Datasets
+            .Where(p => !ExchangeSetInput.LooksLikeExchangeSet(p) && !Directory.Exists(p))
+            .Where(p => !string.Equals(Path.GetFullPath(p), routeFull, StringComparison.Ordinal))
+            .ToArray();
+        if (exchangeSets.Count > 1)
+        {
+            error = "Pass at most one exchange set.";
+            return false;
+        }
+
+        if (folders.Count > 1)
+        {
+            error = "Pass at most one folder of datasets.";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.Only) && exchangeSets.Count == 0 && folders.Count == 0)
+        {
+            error = "--only applies only to an exchange set or a folder of datasets.";
+            return false;
+        }
+
+        inputs = DatasetInputResolver.Resolve(
+            folders.SingleOrDefault(), files, exchangeSets.SingleOrDefault(), settings.Only, warnings, out resolution);
+        if (inputs.Count == 0)
+        {
+            foreach (var warning in warnings)
+                Console.Error.WriteLine(warning);
+            warnings.Clear();
+            error = "No datasets could be resolved from the inputs.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool Fails(FailLevel level, RouteCheckVerdictKind verdict) => level switch
+    {
+        FailLevel.Never => false,
+        FailLevel.MustReview => verdict is RouteCheckVerdictKind.MustReview or RouteCheckVerdictKind.WaterLevelEndsBeforeArrival,
+        _ => verdict != RouteCheckVerdictKind.Clear,
+    };
+
+    private static FailLevel? ParseFailLevel(string value) => value.ToLowerInvariant() switch
+    {
+        "must-review" or "must_review" => FailLevel.MustReview,
+        "check" => FailLevel.Check,
+        "never" => FailLevel.Never,
+        _ => null,
+    };
+
+    private static bool TryParseTime(string text, out DateTimeOffset value) =>
+        DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out value);
+
+    private static readonly JsonSerializerOptions IndentedJson = new(McpJson.Options) { WriteIndented = true };
+
+    /// <summary>The JSON report: the route, the settings, and the report as <c>check_route</c> returns it.</summary>
+    internal static JsonObject ToJson(
+        RouteFile route,
+        Settings settings,
+        DateTimeOffset departure,
+        RouteCheckReport report,
+        IReadOnlyList<string> warnings)
+    {
+        var options = McpJson.Options;
+        var settingsNode = new JsonObject
+        {
+            ["safetyContourMeters"] = settings.SafetyContourMeters,
+            ["safetyDepthMeters"] = settings.SafetyDepthMeters,
+        };
+        void Add(string name, double? value)
+        {
+            if (value is { } v)
+                settingsNode[name] = v;
+        }
+
+        Add("corridorHalfWidthMeters", settings.CorridorMeters);
+        Add("trackClearanceMeters", settings.TrackClearanceMeters);
+        Add("nearbyDistanceMeters", settings.NearbyMeters);
+        if (settings.AreasOff is { Length: > 0 } areasOff)
+            settingsNode["areaKindsOff"] = new JsonArray(Settings.AreaKindsOff(areasOff).Select(k => (JsonNode?)k.Name).ToArray());
+        Add("draftMeters", settings.DraftMeters);
+        Add("squatMeters", settings.SquatMeters);
+        Add("speedKnots", settings.SpeedKnots);
+        Add("requiredUkcMeters", settings.RequiredUkcMeters);
+        Add("maxWindKnots", settings.MaxWindKnots);
+        Add("maxWaveHeightMeters", settings.MaxWaveMeters);
+        if (settings.CycloneRadiusKnots is { } cycloneRadius)
+            settingsNode["cycloneCheckAgainstKnots"] = cycloneRadius;
+        if (settings.CycloneMustReview is { } mustReview)
+            settingsNode["cycloneMustReviewInside"] = mustReview.ToLowerInvariant();
+        if (settings.NoCycloneClosestApproach)
+            settingsNode["cycloneReportClosestApproach"] = false;
+
+        var check = CheckRouteResult.From(report, route.RouteId ?? Path.GetFileName(route.Path), route.Name);
+        var root = new JsonObject
+        {
+            ["route"] = new JsonObject
+            {
+                ["file"] = route.Path,
+                ["format"] = route.Format,
+                ["version"] = route.Version,
+                ["routeId"] = route.RouteId,
+                ["name"] = route.Name,
+                ["waypoints"] = route.Waypoints.Count,
+                ["departure"] = departure.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
+            },
+            ["settings"] = settingsNode,
+            ["check"] = JsonSerializer.SerializeToNode(check, options.GetTypeInfo(typeof(CheckRouteResult))),
+        };
+        if (warnings.Count > 0)
+            root["loadWarnings"] = new JsonArray(warnings.Select(w => (JsonNode)JsonValue.Create(w)).ToArray());
+        return root;
+    }
+
+    private static void WriteText(RouteFile route, DateTimeOffset departure, RouteCheckReport report)
+    {
+        // Through Console.Out as it is now, so redirected output (and tests) see it.
+        var console = AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(Console.Out) });
+        var check = CheckRouteResult.From(report, route.RouteId, route.Name);
+        var format = route.Format == "rtz" ? $"RTZ {route.Version}" : $"S-421{(route.Version is null ? "" : " " + route.Version)}";
+        console.MarkupLineInterpolated($"[bold]{route.Name ?? Path.GetFileName(route.Path)}[/] ({format}, {route.Waypoints.Count} waypoints, {check.DistanceNm.ToString("0.00", CultureInfo.InvariantCulture)} NM)");
+        console.MarkupLineInterpolated($"Departure {departure.ToUniversalTime().ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture)}");
+        console.WriteLine();
+        console.MarkupLineInterpolated($"[bold]Verdict:[/] {check.Verdict.Title} ({check.Verdict.Kind})");
+        console.MarkupLineInterpolated($"[bold]Route check:[/] {check.Summary.Text} ({check.Summary.MustReview} must review, {check.Summary.Check} check, {check.Summary.Info} info)");
+        foreach (var status in check.Checks.Where(c => c.State != "ran"))
+            console.MarkupLineInterpolated($"  [grey]{status.Name}: {status.State} ({status.Reason})[/]");
+
+        foreach (var (group, label, colour) in new[] { ("must_review", "MUST REVIEW", "red"), ("check", "CHECK", "yellow"), ("info", "INFO", "grey") })
+        {
+            var findings = check.Findings.Where(f => f.Group == group).ToList();
+            if (findings.Count == 0)
+                continue;
+            console.MarkupLineInterpolated($"  [{colour}]{label}[/]");
+            foreach (var finding in findings)
+            {
+                console.MarkupLineInterpolated($"    {finding.Title}");
+                console.MarkupLineInterpolated($"      [grey]{finding.Meta} · {finding.Code}[/]");
+            }
+        }
+
+        console.WriteLine();
+        if (check.Clearance is { } clearance)
+        {
+            console.MarkupLineInterpolated($"[bold]Under-keel clearance:[/] {clearance.VerdictTitle} ({clearance.Verdict})");
+            if (clearance.Minimum is { } min)
+                console.MarkupLineInterpolated($"  Minimum UKC {min.UkcMeters.ToString("0.00", CultureInfo.InvariantCulture)} m (required {min.RequiredUkcMeters.ToString("0.00", CultureInfo.InvariantCulture)} m) at {min.DistanceNm.ToString("0.00", CultureInfo.InvariantCulture)} NM, leg {min.Leg + 1}");
+            if (clearance.Confidence.Count > 0)
+                console.MarkupLineInterpolated($"  Lower confidence: {string.Join(", ", clearance.Confidence)}");
+            if (clearance.Window is { } window)
+            {
+                var runs = window.Windows.Select(w => $"{w.First.ToUniversalTime():yyyy-MM-dd HH:mm}–{w.Last.ToUniversalTime():HH:mm} UTC").ToList();
+                console.MarkupLineInterpolated($"  Departure window: {(runs.Count == 0 ? "none" : string.Join(", ", runs))}");
+            }
+        }
+        else
+        {
+            var reason = report.Status(ClearanceCheck.CheckName)?.Reason == RouteCheckReasons.DraftMissing
+                ? "The route has no draft on every leg; pass --draft for the under-keel clearance check."
+                : $"No charted depth or water level to check against ({report.Status(ClearanceCheck.CheckName)?.Reason}).";
+            console.MarkupLineInterpolated($"[bold]Under-keel clearance:[/] not checked. {reason}");
+        }
+
+        if (check.Weather is { } weather)
+        {
+            console.WriteLine();
+            var limits = string.Join(", ", weather.Limits.Select(l =>
+                $"{(l.Quantity == "wind_speed" ? "wind" : "waves")} {l.Value.ToString("0.#", CultureInfo.InvariantCulture)} {l.Unit}{(l.Origin == "route" ? " (route)" : string.Empty)}"));
+            console.MarkupLineInterpolated($"[bold]Weather:[/] {weather.Verdict} (limits {(limits.Length == 0 ? "none" : limits)})");
+            if (weather.MaxWind is { } wind)
+                console.MarkupLineInterpolated($"  Max wind {wind.Value.ToString("0", CultureInfo.InvariantCulture)} kn at {wind.DistanceNm.ToString("0.00", CultureInfo.InvariantCulture)} NM, leg {wind.LegIndex + 1}");
+            if (weather.MaxWaveHeight is { } wave)
+                console.MarkupLineInterpolated($"  Max significant wave height {wave.Value.ToString("0.0", CultureInfo.InvariantCulture)} m at {wave.DistanceNm.ToString("0.00", CultureInfo.InvariantCulture)} NM, leg {wave.LegIndex + 1}");
+            if (weather.NotCheckedCount > 0)
+                console.MarkupLineInterpolated($"  Not checked at {weather.NotCheckedCount} of {weather.SampleCount} places along the track");
+            foreach (var storm in weather.Cyclones)
+            {
+                var met = storm.StrongestRadiusKnots is { } r ? $"inside the {r} kt radius" : "outside the tested radii";
+                var cone = storm.InCone ? ", in the cone" : string.Empty;
+                var cpa = storm.ClosestApproach is { } c
+                    ? $", closest {c.DistanceNm.ToString("0", CultureInfo.InvariantCulture)} NM{(c.Eta is { } eta ? $" at {eta.ToUniversalTime():yyyy-MM-dd HH:mm} UTC" : string.Empty)}, leg {c.LegIndex + 1}"
+                    : string.Empty;
+                var beyond = storm.BeyondForecast ? ", beyond the forecast in part (not checked)" : string.Empty;
+                console.MarkupLineInterpolated($"  {storm.Name} adv {storm.Advisory}: {met}{cone}{cpa}{beyond}");
+            }
+
+            if (weather.Window is { } window)
+            {
+                var runs = window.Windows.Select(w => $"{w.First.ToUniversalTime():yyyy-MM-dd HH:mm}–{w.Last.ToUniversalTime():HH:mm} UTC").ToList();
+                console.MarkupLineInterpolated($"  Departures within the limits: {(runs.Count == 0 ? "none" : string.Join(", ", runs))}");
+            }
+        }
+
+        console.WriteLine();
+        console.MarkupLineInterpolated($"[grey]{check.Disclaimer}[/]");
+    }
+}

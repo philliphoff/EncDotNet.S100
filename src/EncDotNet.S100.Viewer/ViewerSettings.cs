@@ -1,0 +1,987 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace EncDotNet.S100.Viewer;
+
+/// <summary>
+/// Persists user settings to a JSON file in the app's local data directory.
+/// </summary>
+internal sealed partial class ViewerSettings
+{
+    private static readonly string DefaultSettingsDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "EncDotNet.S100.Viewer");
+
+    private static readonly string DefaultSettingsPath = Path.Combine(DefaultSettingsDir, "settings.json");
+
+    /// <summary>
+    /// Filesystem path used by <see cref="Save"/> and <see cref="Load"/>.
+    /// Defaults to the per-user application-data location; tests override
+    /// this with a temp path so they don't pollute the real settings file.
+    /// </summary>
+    [JsonIgnore]
+    public string SettingsFilePath { get; set; } = DefaultSettingsPath;
+
+    /// <summary>
+    /// When <see langword="true"/>, <see cref="Save"/> is a no-op. Set
+    /// for <c>--ephemeral</c> agent runs so nothing is persisted and
+    /// the user's real profile is left untouched.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsReadOnly { get; set; }
+
+    /// <summary>
+    /// When <see langword="true"/>, the MCP server was configured from
+    /// the command line for this run; the host must not persist the
+    /// bound (ephemeral) port back to the settings file. Prevents an
+    /// automation run from mutating the user's persisted MCP port.
+    /// </summary>
+    [JsonIgnore]
+    public bool McpConfiguredFromCommandLine { get; set; }
+
+    /// <summary>
+    /// Optional path the MCP host writes the bound endpoint URI to once
+    /// it is listening (set from <c>--mcp-port-file</c>). Lets an agent
+    /// discover an ephemeral port without scraping the status bar.
+    /// </summary>
+    [JsonIgnore]
+    public string? McpPortFilePath { get; set; }
+
+    /// <summary>
+    /// When <see langword="true"/> (set from <c>--mcp-test-hooks</c>), the MCP
+    /// host registers test-only tools such as <c>set_test_clock</c>, and the
+    /// viewer's clock is an <see cref="Services.AdjustableTimeProvider"/>.
+    /// Never persisted.
+    /// </summary>
+    [JsonIgnore]
+    public bool McpTestHooks { get; set; }
+
+    /// <summary>Portrayal catalogue folder paths keyed by product spec (e.g. "S-101", "S-102").</summary>
+    public Dictionary<string, string> CataloguePaths { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Feature catalogue file paths keyed by product spec (e.g. "S-101").</summary>
+    public Dictionary<string, string> FeatureCataloguePaths { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Legacy single path — migrated to <see cref="CataloguePaths"/> on load.</summary>
+    public string? PortrayalCataloguePath { get; set; }
+
+    /// <summary>Custom accent color hex string (e.g. "#007ACC"). Defaults to VS Code blue.</summary>
+    public string AccentColor { get; set; } = "#007ACC";
+
+    /// <summary>Selected color profile name: "Day", "Dusk", or "Night".</summary>
+    public string ColorProfile { get; set; } = "Day";
+
+    /// <summary>
+    /// Persisted chrome theme name — one of "Light", "Dark",
+    /// "S100Night", "S100Dusk". Independent of <see cref="ColorProfile"/>
+    /// (which drives map portrayal colours). Default "Light" so first-launch
+    /// users get a familiar Avalonia chrome.
+    /// </summary>
+    public string ChromeTheme { get; set; } = "Light";
+
+    /// <summary>
+    /// Whether the viewer checks GitHub for a newer release. Default
+    /// <see langword="true"/>; the user can turn it off from the About
+    /// dialog. See issue #379.
+    /// </summary>
+    public bool UpdateCheckEnabled { get; set; } = true;
+
+    /// <summary>
+    /// The release version the user chose to "skip"; the update prompt stays
+    /// silent for it but still fires for any later release. <c>null</c> when
+    /// nothing has been skipped. Stored without the leading <c>v</c>.
+    /// </summary>
+    public string? SkippedUpdateVersion { get; set; }
+
+    /// <summary>
+    /// UTC timestamp of the last completed update check, used to throttle
+    /// network checks to roughly once per day. <c>null</c> until the first
+    /// check runs.
+    /// </summary>
+    public DateTimeOffset? LastUpdateCheckUtc { get; set; }
+
+    /// <summary>
+    /// The latest release version seen by the most recent check (tag without
+    /// the leading <c>v</c>), cached for display. <c>null</c> until a check
+    /// has succeeded.
+    /// </summary>
+    public string? LastKnownLatestVersion { get; set; }
+
+    /// <summary>
+    /// Id of the last-selected left-dock activity tab, or <c>null</c> if
+    /// none was open. Name kept for back-compat with pre-PR-M3 settings
+    /// files; the corresponding right- and bottom-dock fields are
+    /// <see cref="LastSelectedRightTab"/> and <see cref="LastSelectedBottomTab"/>.
+    /// </summary>
+    public string? LastSelectedActivity { get; set; }
+
+    /// <summary>Id of the last-selected right-dock activity tab (PR-M3).</summary>
+    public string? LastSelectedRightTab { get; set; }
+
+    /// <summary>Id of the last-selected bottom-dock activity tab (PR-M3).</summary>
+    public string? LastSelectedBottomTab { get; set; }
+
+    /// <summary>Whether the left dock (activity pane) was open at last shutdown. Default <c>true</c>.</summary>
+    public bool IsLeftDockOpen { get; set; } = true;
+
+    /// <summary>Whether the right dock was open at last shutdown. Default <c>false</c>.</summary>
+    public bool IsRightDockOpen { get; set; } = false;
+
+    /// <summary>Whether the bottom dock was open at last shutdown. Default <c>false</c>.</summary>
+    public bool IsBottomDockOpen { get; set; } = false;
+
+    /// <summary>
+    /// Persisted panel sizes — outer dock widths/height plus inner
+    /// splitter fractions for the Datasets and Catalog tabs.
+    /// Writes are debounced (500 ms) via <see cref="Services.DebouncedSettingsSaver"/>
+    /// so dragging splitters doesn't hammer the disk.
+    /// </summary>
+    public PanelSizes Panels { get; set; } = new();
+
+    /// <summary>
+    /// The main window's size, position and maximized state at last
+    /// shutdown (#825); <c>null</c> until the window has been closed once,
+    /// which makes the next launch use the first-run placement.
+    /// </summary>
+    public WindowPlacement? MainWindowPlacement { get; set; }
+
+    /// <summary>Global symbol scale factor (1.0 = default). Scales all point symbols.</summary>
+    public double SymbolScale { get; set; } = 1.0;
+
+    /// <summary>Global text scale factor (1.0 = default). Scales all text labels.</summary>
+    public double TextScale { get; set; } = 1.0;
+
+    /// <summary>Distance unit used by the map scale bar.</summary>
+    public string DistanceUnit { get; set; } = "NauticalMiles";
+
+    /// <summary>
+    /// Display format for date/time values across the viewer
+    /// ("Local" or "Utc"). Defaults to <c>"Local"</c>. Stored as a
+    /// string for forward-compat with other enum-shaped settings.
+    /// </summary>
+    public string? TimeFormat { get; set; }
+
+    /// <summary>
+    /// Active ECDIS display category — one of "DisplayBase",
+    /// "Standard", "OtherInformation", "All". Defaults to Standard
+    /// (S-100 Part 9 §11.7).
+    /// </summary>
+    public string EcdisDisplayCategory { get; set; } = "Standard";
+
+    // Mariner settings (S-100 Part 9 §4.2). Depth values are stored in
+    // metres regardless of the user's chosen DepthUnit. All fields are
+    // nullable so older settings.json files keep working — defaults are
+    // applied by SettingsViewModel / MarinerSettingsProvider when null.
+
+    /// <summary>Safety contour depth in metres.</summary>
+    public double? SafetyContour { get; set; }
+
+    /// <summary>Safety depth in metres for sounding selection.</summary>
+    public double? SafetyDepth { get; set; }
+
+    /// <summary>Shallow contour depth in metres.</summary>
+    public double? ShallowContour { get; set; }
+
+    /// <summary>Deep contour depth in metres.</summary>
+    public double? DeepContour { get; set; }
+
+    /// <summary>Display unit name ("Metres", "Feet", "FathomsFeet", "Fathoms").</summary>
+    public string? DepthUnit { get; set; }
+
+    public bool? FourShades { get; set; }
+    public bool? ShallowWaterDangers { get; set; }
+    public bool? PlainBoundaries { get; set; }
+    public bool? SimplifiedSymbols { get; set; }
+    public bool? FullLightLines { get; set; }
+    public bool? RadarOverlay { get; set; }
+    public bool? IgnoreScaleMinimum { get; set; }
+
+    /// <summary>
+    /// Chart-wide water level adjustment (#1132): "Off" or "AtViewTime".
+    /// Null (older files) is Off.
+    /// </summary>
+    public string? WaterLevelAdjustment { get; set; }
+
+    /// <summary>
+    /// Whether chart-wide adjustment applies water level where either
+    /// vertical datum isn't declared (#1132 Q2). Null is false.
+    /// </summary>
+    public bool? WaterLevelApplyUndeclaredDatum { get; set; }
+
+    /// <summary>
+    /// Check route's wind limit in knots for the weather check (#1093), or
+    /// null when wind isn't checked (the default).
+    /// </summary>
+    public double? RouteMaxWindKnots { get; set; }
+
+    /// <summary>
+    /// Check route's significant wave height limit in metres for the weather
+    /// check (#1093), or null when waves aren't checked (the default).
+    /// </summary>
+    public double? RouteMaxWaveHeightMetres { get; set; }
+
+    /// <summary>
+    /// The tropical cyclone wind radius Check route tests (#1299): 34, 50 or
+    /// 64 knots. Null is 34.
+    /// </summary>
+    public int? RouteCycloneCheckAgainstKnots { get; set; }
+
+    /// <summary>Whether Check route reports the closest approach to each tropical cyclone (#1299). Null is on.</summary>
+    public bool? RouteCycloneReportClosestApproach { get; set; }
+
+    /// <summary>
+    /// The weakest tropical cyclone radius whose findings are Must review
+    /// (#1299): 34, 50 or 64 knots, or 0 for never. Null is 50.
+    /// </summary>
+    public int? RouteCycloneMustReviewInsideKnots { get; set; }
+
+    /// <summary>
+    /// The base-plane scene mode (issue #331).
+    /// One of "Tiled" (Phase-2 default) or "Single" (Phase-1 single surface),
+    /// matching <see cref="Rendering.Engine.VectorSceneMode"/>.
+    /// <see langword="null"/> → best default ("Tiled"). Mirrors
+    /// <c>ChartEngine.Options.SceneMode</c> / <c>S100_VECTOR_SCENE_MODE</c>.
+    /// </summary>
+    public string? VectorSceneMode { get; set; }
+
+    /// <summary>
+    /// Tiled-base-plane gutter, in DIP (issue #331). <see langword="null"/> →
+    /// best default. Mirrors <c>ChartEngine.Options.TileGutterDip</c> /
+    /// <c>S100_VECTOR_TILE_GUTTER</c>.
+    /// </summary>
+    public double? TileGutterDip { get; set; }
+
+    /// <summary>
+    /// Process-wide hot-cache native budget, in MB (issue #331, map rendering slice 4).
+    /// <see langword="null"/> → best default. Mirrors
+    /// <c>ChartEngine.Options.TileBudgetMb</c> /
+    /// <c>S100_VECTOR_TILE_BUDGET_MB</c>.
+    /// </summary>
+    public double? TileBudgetMb { get; set; }
+
+    /// <summary>
+    /// Whether tiled-base-plane speculative prediction / pre-warm is enabled
+    /// (issue #331). <see langword="null"/> → best default (on). Mirrors
+    /// <c>ChartEngine.Options.TilePredictionEnabled</c> /
+    /// <c>S100_VECTOR_TILE_PREDICT</c>.
+    /// </summary>
+    public bool? TilePredictionEnabled { get; set; }
+
+    /// <summary>
+    /// Whether idle cross-band (±1) pre-warm is enabled (issue&#160;#428).
+    /// <see langword="null"/> → best default (on, except off by default on the
+    /// LowEnd tier; an explicit opt-in is still honoured there). Mirrors
+    /// <c>ChartEngine.Options.TileCrossBandPrewarmEnabled</c> /
+    /// <c>S100_VECTOR_TILE_XBAND</c>.
+    /// </summary>
+    public bool? TileCrossBandPrewarmEnabled { get; set; }
+
+    /// <summary>
+    /// Whether adjacent cold tile misses may be rasterised as a 2&#215;2
+    /// metatile and sliced into tile-granular cache entries (issue&#160;#427).
+    /// <see langword="null"/> → conservative default (off). Mirrors
+    /// <c>ChartEngine.Options.TileMetatileEnabled</c> /
+    /// <c>S100_VECTOR_TILE_METATILE</c>.
+    /// </summary>
+    public bool? TileMetatileEnabled { get; set; }
+
+    /// <summary>
+    /// Whether the warm disk tile cache is enabled (issue #331).
+    /// <see langword="null"/> → best default (on). Mirrors
+    /// <c>ChartEngine.Options.TileDiskCacheEnabled</c> /
+    /// <c>S100_VECTOR_TILE_DISK</c>.
+    /// </summary>
+    public bool? TileDiskCacheEnabled { get; set; }
+
+    /// <summary>
+    /// Warm disk tile-cache budget, in MB (issue #331). <see langword="null"/> →
+    /// best default. Mirrors <c>ChartEngine.Options.TileDiskMb</c> /
+    /// <c>S100_VECTOR_TILE_DISK_MB</c>.
+    /// </summary>
+    public double? TileDiskMb { get; set; }
+
+    /// <summary>
+    /// Whether tiled-base-plane GPU texture residency is enabled (issue #331).
+    /// <see langword="null"/> → best default (on). Mirrors
+    /// <c>ChartEngine.Options.TileGpuResidencyEnabled</c> /
+    /// <c>S100_VECTOR_TILE_GPU</c>.
+    /// </summary>
+    public bool? TileGpuResidencyEnabled { get; set; }
+
+    /// <summary>
+    /// Process-wide GPU-residency budget, in MB (issue #331, map rendering slice 4).
+    /// <see langword="null"/> → best default. Mirrors
+    /// <c>ChartEngine.Options.TileGpuBudgetMb</c> /
+    /// <c>S100_VECTOR_TILE_GPU_MB</c>.
+    /// </summary>
+    public double? TileGpuBudgetMb { get; set; }
+
+    /// <summary>
+    /// Overall performance profile that sets the default tile budgets + worker
+    /// cap. One of <c>Auto</c> / <c>HighEnd</c> / <c>Balanced</c> / <c>LowEnd</c>;
+    /// <see langword="null"/> → Auto (derive from cores + RAM). Mirrors
+    /// <c>ChartEngine.Options.Profile</c> / <c>S100_PERF_PROFILE</c>.
+    /// </summary>
+    public string? PerformanceProfile { get; set; }
+
+    /// <summary>3-letter ISO 639-2/B language code; empty = catalogue default.</summary>
+    public string? NationalLanguage { get; set; }
+
+    /// <summary>
+    /// Per-spec viewing-group ids the user has explicitly hidden via
+    /// the ECDIS panel. Keys are spec codes (e.g. "S-101"); values
+    /// are comma-separated viewing-group ids. Empty by default.
+    /// </summary>
+    public Dictionary<string, string> EcdisHiddenViewingGroups { get; set; }
+        = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Display planes the user has hidden in the ECDIS panel.
+    /// Stored as a comma-separated list of enum names so the JSON
+    /// stays human-editable (S-100 Part 9 §11.6).
+    /// </summary>
+    public string EcdisHiddenDisplayPlanes { get; set; } = "";
+
+    /// <summary>
+    /// The ECDIS panel's Navigational warnings switch: whether the map draws
+    /// S-124 warnings at all (S-98 Edition 2.0.0 §6.1.1, §12.12.2; #995).
+    /// On by default.
+    /// </summary>
+    public bool EcdisShowNavigationalWarnings { get; set; } = true;
+
+    /// <summary>
+    /// The AML products the display panel's Additional Military Layers section
+    /// has switched off, as a comma-separated list of product codes
+    /// (<c>CLB</c>, <c>RAL</c>, …, <c>3.0</c>). Empty by default: every
+    /// product shows (AML handoff decision 24).
+    /// </summary>
+    public string EcdisHiddenAmlProducts { get; set; } = "";
+
+    /// <summary>
+    /// The Additional Military Layers section's Follow AML scale bands switch
+    /// (AML handoff decision 26). On by default.
+    /// </summary>
+    public bool EcdisFollowAmlScaleBands { get; set; } = true;
+
+    /// <summary>
+    /// The Display controls' map-wide switches for optional product layers,
+    /// keyed by the processor's sub-layer key: today the Weather section's
+    /// <c>weather.pressure.isobars</c>, <c>weather.wind.speed</c> and
+    /// <c>weather.wave.direction</c> (#1072), and
+    /// <c>weather.sea.temperature.isotherms</c> (#1227),
+    /// <c>weather.current.arrows</c> (#1228) and
+    /// <c>weather.air.temperature.isotherms</c> (#1231), and
+    /// <c>weather.precipitation</c>, <c>weather.cape</c> and
+    /// <c>weather.cloud</c> (#1230). A missing key follows the layer's default
+    /// (isobars and currents on; the wind speed fill, wave arrows, both kinds
+    /// of isotherms, precipitation, thunderstorm risk and cloud cover off).
+    /// </summary>
+    public Dictionary<string, bool> EcdisLayerVisibility { get; set; }
+        = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The mariner's own display combinations, saved with <b>Save current view
+    /// as…</b> (design note <c>predefined-display-combinations.md</c> §3.2).
+    /// Built-ins aren't written here. Empty by default.
+    /// </summary>
+    public List<Services.DisplayCombinations.DisplayCombinationSettings> DisplayCombinations { get; set; } = new();
+
+    /// <summary>
+    /// The id of the display combination selected in the View menu, or
+    /// <see langword="null"/> for <b>Custom</b> (none). A fresh install starts
+    /// in <b>Everything loaded</b>, which shows every loaded product as before
+    /// combinations existed (design note §6, Q6). Restored at startup but
+    /// not reapplied: the persisted display settings are the truth, and the
+    /// modified marker is worked out against them.
+    /// </summary>
+    public string? ActiveDisplayCombinationId { get; set; } = Services.DisplayCombinations.BuiltInDisplayCombinations.AllLoadedId;
+
+    /// <summary>
+    /// Per-spec explicit S-100 Part 9 §11.7 display-mode selections. Keys
+    /// are spec codes (e.g. "S-411"); values are the spec-native mode id
+    /// (e.g. "IceScientificIcesodDisplayMode"). Populated by the per-dataset
+    /// display-mode selector for products declaring more than one mode.
+    /// Empty by default (each catalogue renders its default mode).
+    /// </summary>
+    public Dictionary<string, string> EcdisActiveDisplayModes { get; set; }
+        = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether the viewer's default ECDIS viewing-group visibility has
+    /// been seeded into <see cref="EcdisHiddenViewingGroups"/>. Applied
+    /// once per profile (see
+    /// <see cref="Services.EcdisDisplayDefaults.Apply"/>) so the noisy
+    /// S-101 "Independent Mariner Selector" patterns (shallow water
+    /// pattern, survey accuracy/quality, low-accuracy marker) start off
+    /// — including in the "All" category — while the mariner's later
+    /// choices are never overridden on subsequent launches.
+    /// </summary>
+    public bool EcdisDefaultsApplied { get; set; }
+
+    public bool IsStatusBarVisible { get; set; } = true;
+
+    /// <summary>
+    /// Whether the Check route map legend is open; folded, it's a 28 px
+    /// "Legend" chip (#959, handoff C8).
+    /// </summary>
+    public bool IsRouteCheckLegendOpen { get; set; } = true;
+
+    /// <summary>
+    /// The geometry the measure tool measures along, "Rhumb" or "GreatCircle"
+    /// (#1130, D3): the last choice, starting at Rhumb.
+    /// </summary>
+    public string MeasureGeometry { get; set; } = "Rhumb";
+
+    /// <summary>
+    /// The Range &amp; bearing tool's geometry, <c>"Rhumb"</c> or
+    /// <c>"GreatCircle"</c>; <c>null</c> (the first run) is Rhumb (#1130 D15).
+    /// </summary>
+    public string? RangeBearingGeometry { get; set; }
+
+    /// <summary>
+    /// Whether an accent-coloured border is drawn around the extent of a loaded
+    /// dataset that has zoomed out past its display-scale minimum (and therefore
+    /// renders no content). Enabled by default so a mariner who frames a
+    /// wide-spread exchange set still sees where the member datasets are and has
+    /// a target to zoom toward (issue #446). No effect when the
+    /// <see cref="IgnoreScaleMinimum"/> mariner override is set, since datasets
+    /// then never drop out on zoom-out.
+    /// </summary>
+    public bool ShowOutOfScaleExtentIndicators { get; set; } = true;
+
+    /// <summary>
+    /// Whether cells of load-as-you-pan sets are portrayed in the background,
+    /// while the map is idle, so panning to them later is quick (#1266). On by
+    /// default; turning it off stops the background work at once.
+    /// </summary>
+    public bool PortrayalPrewarmEnabled { get; set; } = true;
+
+    /// <summary>
+    /// The Lua engine that runs the portrayal rules: <c>luacsharp</c> or
+    /// <c>moonsharp</c> (see <see cref="Scripting.LuaEngineKinds"/>).
+    /// <see langword="null"/> or an unknown name means the default,
+    /// Lua-CSharp. The <c>S100_LUA_ENGINE</c> environment variable overrides
+    /// it. Read when the viewer starts, so a change applies after a restart.
+    /// </summary>
+    public string? LuaEngine { get; set; }
+
+    /// <summary>
+    /// The Lua engine this session runs: the one <c>S100_LUA_ENGINE</c> names
+    /// when it's set, otherwise <see cref="LuaEngine"/>.
+    /// </summary>
+    /// <returns>The engine.</returns>
+    public Scripting.LuaEngineKind ResolveLuaEngine()
+    {
+        if (ViewerLuaEngine.IsPinnedByEnvironment)
+        {
+            return Scripting.LuaEngineKinds.FromEnvironment();
+        }
+
+        return Scripting.LuaEngineKinds.TryParse(LuaEngine, out var kind) ? kind : Scripting.LuaEngineKinds.Default;
+    }
+
+    /// <summary>
+    /// Whether the on-chart overscale "curtain" (a subtle vertical-line pattern,
+    /// S-52 / S-101 <c>AP(OVERSC01)</c>) is drawn over the region of a cell that
+    /// is being displayed beyond its compilation scale (issue #441, Form A).
+    /// Enabled by default, matching type-approved ECDIS where overscale
+    /// indication is mandatory and on by default; the mariner may switch it off
+    /// here (it belongs to the S-52 "chart display" information set, viewing
+    /// group 21030).
+    /// </summary>
+    public bool ShowOverscaleIndication { get; set; } = true;
+
+    /// <summary>
+    /// Whether the map also draws S-124 navigational warnings not yet in
+    /// force at the view time, from their publication time until their
+    /// validity starts (S-98 Edition 2.0.0 §12.12.2 Example 1; #993). Off by
+    /// default: the map draws only warnings in force. Ended and cancelled
+    /// warnings are never drawn, whatever this says.
+    /// </summary>
+    public bool ShowWarningsNotYetInForce { get; set; }
+
+    /// <summary>
+    /// Whether the online OpenStreetMap basemap tile layer is shown
+    /// beneath the chart data. Enabled by default. Disabling it removes
+    /// the remote tile fetch entirely — useful for offline operation
+    /// and for agent-driven performance runs that want to measure only
+    /// dataset-related rendering without basemap tile activity (issue
+    /// #295). Can be overridden per-run with the <c>--basemap</c>
+    /// command-line flag.
+    /// </summary>
+    public bool BasemapEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Which basemap is drawn beneath the chart data: <see
+    /// cref="BasemapMode.None"/>, <see cref="BasemapMode.Offline"/>
+    /// (bundled Natural Earth land — the zero-network default), or
+    /// <see cref="BasemapMode.Online"/> (OpenStreetMap tiles). Replaces
+    /// the legacy boolean <see cref="BasemapEnabled"/>; defaults to
+    /// <see cref="BasemapMode.Offline"/> so a fresh install needs no
+    /// network. Can be overridden per-run with <c>--basemap</c> (issue
+    /// #295).
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter<BasemapMode>))]
+    public BasemapMode BasemapMode { get; set; } = BasemapMode.Offline;
+
+    /// <summary>
+    /// Whether the own-ship overlay (PR-D2) is visible. The synthetic
+    /// driver is always running; this flag controls whether the
+    /// source publishes the glyph to the dynamic-source overlay tier.
+    /// </summary>
+    /// <remarks>
+    /// PR-D2.1 supersedes this field with the per-source
+    /// <see cref="DynamicSourceVisibility"/> dictionary. The field is
+    /// kept on the POCO so a downgrade still reads the user's choice;
+    /// <see cref="Load"/> migrates its value into the dictionary on
+    /// first load, and <see cref="Save"/> mirrors the dictionary
+    /// entry back so the legacy field stays in sync for one release.
+    /// </remarks>
+    public bool OwnShipVisible { get; set; } = true;
+
+    /// <summary>
+    /// Whether the simulated ("mocked") own-ship position overlay is
+    /// active. When <see langword="false"/> (the default) the
+    /// <c>OwnShipSource</c> publishes no features so the synthetic
+    /// own-location glyph never appears. Distinct from the per-source
+    /// layer visibility tracked in <see cref="DynamicSourceVisibility"/>:
+    /// this gate is authoritative for the synthetic source — when it is
+    /// off, nothing is published regardless of layer visibility.
+    /// </summary>
+    public bool OwnShipOverlayEnabled { get; set; } = false;
+
+    /// <summary>
+    /// Show NEW only on navigational warnings received within this many
+    /// hours (#997, S-98 §12.12.1 item 4); <c>null</c>, the default, for no limit.
+    /// </summary>
+    public double? NavigationalWarningsNewWithinHours { get; set; }
+
+    /// <summary>
+    /// Show NEW only on navigational warnings within this many nautical miles
+    /// of own ship or the active route (#997); <c>null</c>, the default, for no limit.
+    /// </summary>
+    public double? NavigationalWarningsNewWithinNm { get; set; }
+
+    /// <summary>
+    /// Per-source visibility for dynamic feature sources (PR-D2.1),
+    /// keyed by <c>IDynamicFeatureSource.Id</c>. Drives the Layer
+    /// Stack panel's visibility toggle for the
+    /// <c>DynamicArrows</c> plane.
+    /// </summary>
+    public Dictionary<string, bool> DynamicSourceVisibility { get; set; }
+        = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// User-configured own-ship vessel dimensions (length, beam,
+    /// CCRP / GPS antenna offsets). <see langword="null"/> in legacy
+    /// settings files; the consuming
+    /// <c>IOwnShipVesselGeometryProvider</c> materialises a default
+    /// instance when absent. Pure additive — no migration needed.
+    /// </summary>
+    public OwnShipSettings? OwnShip { get; set; }
+
+    /// <summary>
+    /// Selects which driver supplies the own-ship position — the
+    /// steerable simulator (<c>"Simulated"</c>, the default) or pirate
+    /// mode following a live AIS target (<c>"FollowAisTarget"</c>).
+    /// Stored as the <see cref="OwnShipPositionSource"/> enum's string
+    /// name. Absent / legacy settings default to the simulator, so the
+    /// original dead-reckoned behaviour is preserved with no explicit
+    /// migration. Unrecognised values fall back to the simulator.
+    /// </summary>
+    public string OwnShipPositionSource { get; set; } = "Simulated";
+
+    /// <summary>
+    /// MMSI of the AIS target impersonated in pirate mode, or
+    /// <see langword="null"/> when no target is selected. Only
+    /// meaningful while <see cref="OwnShipPositionSource"/> is
+    /// <c>"FollowAisTarget"</c>.
+    /// </summary>
+    public uint? OwnShipFollowMmsi { get; set; }
+
+    /// <summary>
+    /// Optional AIS overlay configuration (PR-D3). When present and
+    /// <see cref="AisOverlaySettings.Enabled"/> is <see langword="true"/>,
+    /// the viewer registers an <c>AisDynamicFeatureSource</c> backed
+    /// by the aisstream.io WebSocket driver. <see langword="null"/>
+    /// — and the matching environment variable being unset — means
+    /// the overlay is silently disabled. Pure additive; no migration.
+    /// </summary>
+    public AisOverlaySettings? AisOverlay { get; set; }
+
+    /// <summary>
+    /// User preference for whether the bottom timeline panel is shown.
+    /// When true the panel surfaces (in either an empty state or with
+    /// a global slider, depending on whether any time-varying dataset
+    /// is loaded). When false the panel is hidden regardless of
+    /// dataset state.
+    /// </summary>
+    public bool IsTimelineVisible { get; set; } = true;
+
+    /// <summary>
+    /// Whether the Timeline dock shows the single strip rather than one lane
+    /// per layer ("Collapse to strip", #710 handoff E6). Default <c>false</c>.
+    /// </summary>
+    public bool IsTimelineCollapsedToStrip { get; set; }
+
+    /// <summary>
+    /// Whether the Pick Report (Object Information) side panel auto-opens
+    /// when a feature is picked. The user can also explicitly hide it via
+    /// the View menu.
+    /// </summary>
+    public bool IsPickPanelVisible { get; set; } = true;
+
+    /// <summary>Whether the embedded MCP server should start when the viewer launches.</summary>
+    public bool McpEnabled { get; set; } = false;
+
+    /// <summary>
+    /// TCP port for the MCP server. 0 = pick an ephemeral port at
+    /// bind time (recommended).
+    /// </summary>
+    public int McpPort { get; set; } = 0;
+
+    /// <summary>
+    /// MCP server bind address. Loopback-only by default; not surfaced
+    /// in the settings UI to enforce the loopback-only stance for v1.
+    /// Power users can edit settings.json directly if they need to
+    /// pin to a specific loopback variant.
+    /// </summary>
+    public string McpBindAddress { get; set; } = "127.0.0.1";
+
+    /// <summary>
+    /// Whether "open in S-100 Feature Catalogue eXaminer" deep-links are
+    /// surfaced from the Feature Catalogues and Object Information panels
+    /// (issue #442). Enabled by default; can be turned off for air-gapped
+    /// or otherwise restricted deployments where opening a third-party
+    /// site is undesirable.
+    /// </summary>
+    public bool S100ExaminerLinksEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Base URL of the S-100 Feature Catalogue eXaminer used to build the
+    /// deep-links (issue #442). Configurable so an operator can point the
+    /// links at a self-hosted mirror. The builder appends
+    /// <c>?catalog=&amp;feature=&amp;attribute=</c> query parameters; an
+    /// empty or malformed value disables the links.
+    /// </summary>
+    public string S100ExaminerBaseUrl { get; set; } = DefaultS100ExaminerBaseUrl;
+
+    /// <summary>Default S-100 Examiner base URL.</summary>
+    public const string DefaultS100ExaminerBaseUrl = "https://s100examiner.com/";
+
+    /// <summary>
+    /// MCP identities the user imported (#845): references only. Each private
+    /// key lives in the platform key store (<see cref="SecomIdentityReference.KeyStore"/>);
+    /// neither key nor password is ever written here.
+    /// </summary>
+    public List<SecomIdentityReference> SecomIdentities { get; set; } = new();
+
+    /// <summary>
+    /// The <see cref="SecomIdentityReference.Id"/> of the default identity (#883):
+    /// the one SECOM sources set to <c>default</c> present to services that ask
+    /// for a certificate, or <c>null</c> for none. The first identity imported
+    /// becomes it.
+    /// </summary>
+    public string? SecomDefaultIdentity { get; set; }
+
+    /// <summary>
+    /// Round 1's single identity in use (#845), read only to migrate it: on
+    /// load it becomes <see cref="SecomDefaultIdentity"/> (#883).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SecomIdentityInUse { get; set; }
+
+    /// <summary>Trust anchors the user added from PEM files (#845): public certificates, no secrets.</summary>
+    public List<TrustedAuthorityReference> TrustedAuthorities { get; set; } = new();
+
+    /// <summary>SHA-256 fingerprints (hex) of built-in trust anchors the user turned off (#845).</summary>
+    public List<string> DisabledBuiltInAuthorities { get; set; } = new();
+
+    /// <summary>Maximum number of dataset paths kept in <see cref="RecentDatasetPaths"/>.</summary>
+    public const int MaxRecentDatasets = 10;
+
+    /// <summary>
+    /// Most-recently-opened dataset file paths, ordered most-recent first.
+    /// Capped at <see cref="MaxRecentDatasets"/>.
+    /// </summary>
+    public List<string> RecentDatasetPaths { get; set; } = new();
+
+    /// <summary>
+    /// Records <paramref name="path"/> as the most-recently-opened dataset, removing any
+    /// prior occurrence and trimming the list to <see cref="MaxRecentDatasets"/>.
+    /// </summary>
+    public void AddRecentDataset(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        RecentDatasetPaths.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
+        RecentDatasetPaths.Insert(0, path);
+
+        if (RecentDatasetPaths.Count > MaxRecentDatasets)
+        {
+            RecentDatasetPaths.RemoveRange(MaxRecentDatasets, RecentDatasetPaths.Count - MaxRecentDatasets);
+        }
+    }
+
+    /// <summary>Clears the recently-opened dataset list.</summary>
+    public void ClearRecentDatasets() => RecentDatasetPaths.Clear();
+
+    /// <summary>
+    /// Prepares a "reset all" clean slate: suppresses any further
+    /// persistence for the remainder of this session (so the in-flight
+    /// shutdown save cannot resurrect the old values) and deletes the
+    /// settings file so the next launch starts from defaults. Best-effort:
+    /// a delete failure is swallowed so the restart still proceeds.
+    /// </summary>
+    public void ResetForRestart()
+    {
+        IsReadOnly = true;
+        try
+        {
+            if (File.Exists(SettingsFilePath))
+                File.Delete(SettingsFilePath);
+        }
+        catch
+        {
+            // Best-effort: the next launch still falls back to defaults if
+            // the (now unreadable/locked) file cannot be removed.
+        }
+    }
+
+    public static ViewerSettings Load() => Load(DefaultSettingsPath);
+
+    /// <summary>
+    /// Loads settings from <paramref name="path"/>. The returned instance
+    /// remembers the path so subsequent <see cref="Save"/> calls write back
+    /// to the same file.
+    /// </summary>
+    public static ViewerSettings Load(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                var json = File.ReadAllText(path);
+                var settings = JsonSerializer.Deserialize(json, SettingsJsonContext.Default.ViewerSettings) ?? new ViewerSettings();
+                settings.SettingsFilePath = path;
+
+                // Issue #295: migrate legacy boolean BasemapEnabled to
+                // the tri-state BasemapMode. Existing installs had an
+                // online OSM basemap when enabled, so map true → Online
+                // and false → None. Fresh installs (no key) keep the
+                // Offline default.
+                if (!json.Contains("\"BasemapMode\"", StringComparison.Ordinal))
+                {
+                    settings.BasemapMode = settings.BasemapEnabled ? BasemapMode.Online : BasemapMode.None;
+                }
+                settings.BasemapEnabled = settings.BasemapMode != BasemapMode.None;
+
+                // Migrate legacy single-path setting to S-102 entry
+                if (settings.PortrayalCataloguePath is { } legacy && !settings.CataloguePaths.ContainsKey("S-102"))
+                {
+                    settings.CataloguePaths["S-102"] = legacy;
+                    settings.PortrayalCataloguePath = null;
+                }
+
+                // PR-D2.1: migrate legacy OwnShipVisible bool into the
+                // per-source DynamicSourceVisibility dictionary so the
+                // own-ship row in the Layer Stack picks up the user's
+                // pre-PR-D2.1 choice on first load.
+                if (!settings.DynamicSourceVisibility.ContainsKey(OwnShipVisibilityKey))
+                {
+                    settings.DynamicSourceVisibility[OwnShipVisibilityKey] = settings.OwnShipVisible;
+                }
+
+                // #883: round 1's identity in use becomes the default.
+                if (settings.SecomIdentityInUse is { } inUse)
+                {
+                    settings.SecomDefaultIdentity ??= inUse;
+                    settings.SecomIdentityInUse = null;
+                }
+
+                return settings;
+            }
+        }
+        catch
+        {
+            // If settings are corrupt, start fresh.
+        }
+
+        return new ViewerSettings { SettingsFilePath = path };
+    }
+
+    public void Save()
+    {
+        if (IsReadOnly)
+            return;
+
+        var dir = Path.GetDirectoryName(SettingsFilePath);
+        if (!string.IsNullOrEmpty(dir))
+            Directory.CreateDirectory(dir);
+
+        // PR-D2.1: keep legacy OwnShipVisible in sync with the
+        // per-source visibility dictionary so a downgrade still
+        // picks up the user's current choice.
+        if (DynamicSourceVisibility.TryGetValue(OwnShipVisibilityKey, out var ownShipVisible))
+        {
+            OwnShipVisible = ownShipVisible;
+        }
+
+        // Keep legacy BasemapEnabled consistent with BasemapMode for
+        // forward/backward compatibility (issue #295).
+        BasemapEnabled = BasemapMode != BasemapMode.None;
+
+        var json = JsonSerializer.Serialize(this, SettingsJsonContext.Indented.ViewerSettings);
+        File.WriteAllText(SettingsFilePath, json);
+    }
+
+    /// <summary>
+    /// Source id of the own-ship dynamic source (matches
+    /// <c>OwnShipSource.FeatureId</c>). Used by the PR-D2.1
+    /// migration / mirror logic.
+    /// </summary>
+    internal const string OwnShipVisibilityKey = "ownship";
+
+    /// <summary>Source-generated metadata for the settings file (issue #764).</summary>
+    [JsonSerializable(typeof(ViewerSettings))]
+    [JsonSerializable(typeof(Services.DisplayCombinations.DisplayCombinationSettings))]
+    private sealed partial class SettingsJsonContext : JsonSerializerContext
+    {
+        /// <summary>Metadata bound to indented output, for saving.</summary>
+        public static SettingsJsonContext Indented { get; } = new(new JsonSerializerOptions { WriteIndented = true });
+    }
+}
+
+/// <summary>
+/// Persisted panel-size container (PR-M3). All fields are nullable;
+/// <c>null</c> means "use the XAML-defined default". Sizes are written
+/// through <see cref="Services.DebouncedSettingsSaver"/> so rapid
+/// splitter drags coalesce into a single disk write 500 ms after the
+/// last move.
+/// </summary>
+public sealed class PanelSizes
+{
+    /// <summary>Absolute pixel width of the left activity dock.</summary>
+    public double? LeftDockWidth { get; set; }
+
+    /// <summary>Absolute pixel width of the right dock.</summary>
+    public double? RightDockWidth { get; set; }
+
+    /// <summary>Absolute pixel height of the bottom dock.</summary>
+    public double? BottomDockHeight { get; set; }
+
+    /// <summary>
+    /// Fraction <c>[0, 1]</c> of the Datasets-tab inner splitter — the
+    /// share of vertical space occupied by the master list (top row).
+    /// </summary>
+    public double? DatasetsInnerSplit { get; set; }
+
+    /// <summary>
+    /// Fraction <c>[0, 1]</c> of the Catalog-tab inner splitter — the
+    /// share of vertical space occupied by the entry list (top row).
+    /// </summary>
+    public double? CatalogInnerSplit { get; set; }
+
+    /// <summary>
+    /// Fraction <c>[0, 1]</c> of the Vessels-tab inner splitter — the
+    /// share of vertical space occupied by the vessel list (top row).
+    /// </summary>
+    public double? VesselsInnerSplit { get; set; }
+
+    /// <summary>
+    /// Height of the Routes-tab route list, in device-independent pixels, once
+    /// the user has dragged its splitter; <c>null</c> sizes the list to its routes.
+    /// </summary>
+    public double? RoutesListHeight { get; set; }
+
+    /// <summary>
+    /// Width of the Logs-tab details pane, in device-independent pixels, once
+    /// its splitter is dragged (#1174); <c>null</c> is the default 380.
+    /// </summary>
+    public double? LogsDetailsWidth { get; set; }
+}
+
+/// <summary>
+/// Persisted window placement (#825). Position is in physical pixels of the
+/// virtual desktop (Avalonia's <c>Window.Position</c>); size is the client
+/// size in device-independent units (<c>Window.Width</c>/<c>Height</c>).
+/// The bounds are always the <em>normal</em> (restored) bounds, so a window
+/// saved maximized still has somewhere sensible to un-maximize to.
+/// </summary>
+public sealed class WindowPlacement
+{
+    /// <summary>Left edge of the normal bounds, in physical pixels.</summary>
+    public int X { get; set; }
+
+    /// <summary>Top edge of the normal bounds, in physical pixels.</summary>
+    public int Y { get; set; }
+
+    /// <summary>Client width of the normal bounds, in device-independent units.</summary>
+    public double Width { get; set; }
+
+    /// <summary>Client height of the normal bounds, in device-independent units.</summary>
+    public double Height { get; set; }
+
+    /// <summary>Whether the window was maximized.</summary>
+    public bool IsMaximized { get; set; }
+}
+
+/// <summary>
+/// A stored MCP identity (#845): what the Keys &amp; certificates page shows and
+/// how to find the key again. Never the private key or its password.
+/// </summary>
+public sealed class SecomIdentityReference
+{
+    /// <summary>The reference id for the CLI and MCP server: <c>sc-ident:</c> and the first 8 hex digits of the thumbprint.</summary>
+    public string Id { get; set; } = "";
+
+    /// <summary>The name the user gave it.</summary>
+    public string DisplayName { get; set; } = "";
+
+    /// <summary>The MRN it was issued to, when the certificate carries one.</summary>
+    public string? Mrn { get; set; }
+
+    /// <summary>The certificate's subject common name.</summary>
+    public string? Subject { get; set; }
+
+    /// <summary>The issuing CA's common name.</summary>
+    public string? Issuer { get; set; }
+
+    /// <summary>The certificate's SHA-1 thumbprint (hex), by which the key store finds it.</summary>
+    public string Thumbprint { get; set; } = "";
+
+    /// <summary>When the certificate becomes valid.</summary>
+    public DateTimeOffset NotBefore { get; set; }
+
+    /// <summary>When the certificate expires.</summary>
+    public DateTimeOffset NotAfter { get; set; }
+
+    /// <summary>What it identifies: <c>Vessel</c>, <c>Organisation</c>, <c>Device</c>, <c>Service</c>, <c>Person</c> or <c>Test</c>.</summary>
+    public string Kind { get; set; } = "";
+
+    /// <summary>The key store holding the private key, e.g. <c>x509:CurrentUser/My</c>.</summary>
+    public string KeyStore { get; set; } = "";
+
+    /// <summary>When its CA reported it revoked, once a revocation check found it so.</summary>
+    public DateTimeOffset? RevokedAt { get; set; }
+}
+
+/// <summary>A trust anchor the user added from a PEM file (#845).</summary>
+public sealed class TrustedAuthorityReference
+{
+    /// <summary>A stable id: the root's SHA-256 fingerprint (hex).</summary>
+    public string Id { get; set; } = "";
+
+    /// <summary>The name the user gave it, reported as the anchor of what chains to it.</summary>
+    public string Name { get; set; } = "";
+
+    /// <summary>What it is trusted for: <c>Secom</c> (Part 15 authorities come later).</summary>
+    public string Kind { get; set; } = "Secom";
+
+    /// <summary>The PEM certificates: the root and any intermediates.</summary>
+    public string Pem { get; set; } = "";
+
+    /// <summary>When it was added.</summary>
+    public DateTimeOffset AddedAt { get; set; }
+}

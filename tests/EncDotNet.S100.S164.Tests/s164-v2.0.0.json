@@ -1,0 +1,241 @@
+{
+  "release": "v2.0.0",
+  "source": "https://github.com/iho-ohi/S-164-Sub-Group/releases/tag/v2.0.0",
+  "downloadBase": "https://github.com/iho-ohi/S-164-Sub-Group/releases/download/v2.0.0/",
+  "exchangeSets": [
+    {
+      "name": "Chart1",
+      "file": "Chart1.zip",
+      "bytes": 110882,
+      "sha256": "059d18391f4b5633c9e33acbf9b6abddce76c418f85f139da4d8ad42d9f045e0"
+    },
+    {
+      "name": "DisplayBase",
+      "file": "DisplayBase.zip",
+      "bytes": 13584,
+      "sha256": "073714b584309314e1f1eee3291f0623ce423cbf2c9891a77b89e9f90dc11c16"
+    },
+    {
+      "name": "DisplayOther",
+      "file": "DisplayOther.zip",
+      "bytes": 19013,
+      "sha256": "890cc5d93f5b356121d998b13c086a828e79a43d4cb45466f6dd60b6691b4850"
+    },
+    {
+      "name": "DisplayOther_FC210",
+      "file": "DisplayOther_FC210.zip",
+      "bytes": 18948,
+      "sha256": "5a91ab934e81d6fbbffe38ab78b395e4671bb54acb03f8050a460b8ee876ceaf"
+    },
+    {
+      "name": "DisplayStandard",
+      "file": "DisplayStandard.zip",
+      "bytes": 16918,
+      "sha256": "929505c30b7f589dec65f08ada66948cee781a92bca2eb0fbd00e00a1134a3ec"
+    },
+    {
+      "name": "EnhancedSafetyContour",
+      "file": "EnhancedSafetyContour.zip",
+      "bytes": 493315,
+      "sha256": "c659c40baece8078387bac6954f1a34be4b89d110c187d15a5a701760888d17a"
+    },
+    {
+      "name": "GoodBaseCells",
+      "file": "GoodBaseCells.zip",
+      "bytes": 113767,
+      "sha256": "34ef2c37e75e69e7a7f5d53db39dd319961d7a57a3ab9ea93101509701556ab1"
+    },
+    {
+      "name": "InitialCatalogues",
+      "file": "InitialCatalogues.zip",
+      "bytes": 2523858,
+      "sha256": "6f8eda7debca452d9e4b357dd90ef8b0c663b3c7bee1a5dd9803c9d4f7a7c3c0"
+    },
+    {
+      "name": "InitialPowerUp",
+      "file": "InitialPowerUp.zip",
+      "bytes": 1487242,
+      "sha256": "12b9bd1ae63a36a1bcf31ab4cbaba8cce7a91e6a2584126c9f3b3128e0d63670"
+    },
+    {
+      "name": "InvalidSequence001",
+      "file": "InvalidSequence001.zip",
+      "bytes": 5093,
+      "sha256": "cb6c3cb90dd3823e1f01601f736d21794603fcf8d9e0242709944895941674c0"
+    },
+    {
+      "name": "InvalidSequence002",
+      "file": "InvalidSequence002.zip",
+      "bytes": 5089,
+      "sha256": "73797b5a893983d8ed6549230f8477f23dc2659856b28ed8be1615ffbb2ef2f2"
+    },
+    {
+      "name": "InvalidSequence003",
+      "file": "InvalidSequence003.zip",
+      "bytes": 5124,
+      "sha256": "612acfc6f67ee43faa69eadac6f18ac6a8223347d40f86ec3136fba1aba34832"
+    },
+    {
+      "name": "MultipleRevisions",
+      "file": "MultipleRevisions.zip",
+      "bytes": 15876,
+      "sha256": "94741b6e7f408bdf16a130fda083335de05453cec306487e30450c2ac8f1c5a3"
+    },
+    {
+      "name": "NavigationalHazards",
+      "file": "NavigationalHazards.zip",
+      "bytes": 14430,
+      "sha256": "b57eb68b2f5373c08ae99c1edacea84b22b7198b9791cc3d906f35dcd22d4996"
+    },
+    {
+      "name": "NavigationalHazardsOverview",
+      "file": "NavigationalHazardsOverview.zip",
+      "bytes": 12433,
+      "sha256": "075d75c12bd367821909f428f61e880f37d4dcfc9f2ffd766dcb8dedcd34f0c2"
+    },
+    {
+      "name": "NewUpdate",
+      "file": "NewUpdate.zip",
+      "bytes": 5084,
+      "sha256": "e1734764d16d2c88978b69f953bd60afb4500a5f0f09db13d6de0254a343dbc1"
+    },
+    {
+      "name": "OldUpdate",
+      "file": "OldUpdate.zip",
+      "bytes": 5080,
+      "sha256": "39dac4f089974c6853bc3740231d5704b78f1329c50689025e5de67931252df0"
+    },
+    {
+      "name": "OutOfCatalogueSequenceDataset",
+      "file": "OutOfCatalogueSequenceDataset.zip",
+      "bytes": 40076,
+      "sha256": "c053d3db9567592eb4ab53cab42e97e2c26b67ac53ff479a871d8690f576ea56"
+    },
+    {
+      "name": "OverlayS129",
+      "file": "OverlayS129.zip",
+      "bytes": 15434,
+      "sha256": "dcc53285869c6b2dad851596c2045e529af557a360b58607a4bc2c6a55b4b110"
+    },
+    {
+      "name": "Overlays",
+      "file": "Overlays.zip",
+      "bytes": 37242,
+      "sha256": "3a4aacdcc1bc31d4bf87687dd81f39dc094c92ad541cd39eb162a58aa56190f5"
+    },
+    {
+      "name": "PowerUp",
+      "file": "PowerUp.zip",
+      "bytes": 563596,
+      "sha256": "a8c05fe09ce92ee1ef3e4314b128e29de5fc1407ece91f6339a6ff0c4e1522eb"
+    },
+    {
+      "name": "PowerUpCatalogues",
+      "file": "PowerUpCatalogues.zip",
+      "bytes": 1414135,
+      "sha256": "618c0fed3e9b3f86597302925ef813308e1f863a32616f7afb9de79fa17fdc18"
+    },
+    {
+      "name": "S102",
+      "file": "S102.zip",
+      "bytes": 13586714,
+      "sha256": "6a0b161d733186cdfdc168f1df5023e10f7c24bb5aaa641e5da48d30b1618f5d"
+    },
+    {
+      "name": "S111",
+      "file": "S111.zip",
+      "bytes": 845652,
+      "sha256": "974e33efb79374ce3974dc635d35cd65ae1355467ea5d3291a047f703e42b97e"
+    },
+    {
+      "name": "S124MessageManagement",
+      "file": "S124MessageManagement.zip",
+      "bytes": 14535,
+      "sha256": "ba09674b4e8ead3e335276a16889dfd8347aa51ee6464132598c13715f88730d"
+    },
+    {
+      "name": "S124NAVARNSelection",
+      "file": "S124NAVARNSelection.zip",
+      "bytes": 8004,
+      "sha256": "ec065b5a3047f0d3ad8bd85fc34f123ff72cb17423bbd99a579190f95548c9e4"
+    },
+    {
+      "name": "S124NewNAVWARN",
+      "file": "S124NewNAVWARN.zip",
+      "bytes": 6568,
+      "sha256": "02f26499df8829727d7710939433505e10275ee39458360f731501bafd04360a"
+    },
+    {
+      "name": "SafetyContour",
+      "file": "SafetyContour.zip",
+      "bytes": 8027,
+      "sha256": "fcb8dac6ec0eaed569a65255212f77624874b574fcd307332f39e31b34bf5244"
+    },
+    {
+      "name": "SequentialUpdate1",
+      "file": "SequentialUpdate1.zip",
+      "bytes": 5092,
+      "sha256": "a2c7d41288bb198ff4db21d5e60c9d02920bdda1d045257b4605a3bf008543ab"
+    },
+    {
+      "name": "SequentialUpdate2",
+      "file": "SequentialUpdate2.zip",
+      "bytes": 5092,
+      "sha256": "81dd3a6a21662666fce72e58191df6d0395a7f9d49c94a97285a253ae4123c9f"
+    },
+    {
+      "name": "SequentialUpdate3",
+      "file": "SequentialUpdate3.zip",
+      "bytes": 5087,
+      "sha256": "6570c02d2d777481b193f09bc4ff27338fc196acee02b49846b2e9fd854df139"
+    },
+    {
+      "name": "SequentialUpdate4",
+      "file": "SequentialUpdate4.zip",
+      "bytes": 4986,
+      "sha256": "c7146839a8e47a7cfe123d194b1a2557c2e026ed1093e24ec5c9c28232004588"
+    },
+    {
+      "name": "SequentialUpdate5",
+      "file": "SequentialUpdate5.zip",
+      "bytes": 5114,
+      "sha256": "9acad473b3c5c5cb680039b14ec7ea0d0b634270011f09102d70a292505837df"
+    },
+    {
+      "name": "Settings",
+      "file": "Settings.zip",
+      "bytes": 14739,
+      "sha256": "d4d2f98121276862de5bb83946e124e382cf03658a2168c5e05dcf63ea19ade3"
+    },
+    {
+      "name": "SpecialConditions",
+      "file": "SpecialConditions.zip",
+      "bytes": 7451,
+      "sha256": "3d05197d6028c3c5f114783bee1bb026c1a0b405fd79224f4e5d1e2b91f957c0"
+    },
+    {
+      "name": "UpdateInformation",
+      "file": "UpdateInformation.zip",
+      "bytes": 113753,
+      "sha256": "88b66fd55f914c8e8e68a43c006b47ceda10bd27ed58dd2aff3685c29b6f0484"
+    },
+    {
+      "name": "UpdatedCatalogueData",
+      "file": "UpdatedCatalogueData.zip",
+      "bytes": 40045,
+      "sha256": "7ff43e1a14706617530e210718a797ed05e023e870092a81cf4a7842d33095d9"
+    },
+    {
+      "name": "WLAOverlap",
+      "file": "WLAOverlap.zip",
+      "bytes": 4052672,
+      "sha256": "59475a59ae9bcfe8dfdb291ec4efea30dc9695fd81109ceea7c97117b78a4d89"
+    },
+    {
+      "name": "WaterLevelAdjustment",
+      "file": "WaterLevelAdjustment.zip",
+      "bytes": 4253890,
+      "sha256": "1a2dc3dd7ad4a0d6646a1c8d791a0354a816a73e57f7b12ea40d201cc63ea7ce"
+    }
+  ]
+}

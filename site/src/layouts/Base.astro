@@ -1,0 +1,65 @@
+---
+import '@fontsource-variable/inter';
+import '@fontsource-variable/fraunces';
+import '@fontsource-variable/jetbrains-mono';
+import '../styles/global.css';
+// The viewer's app icon (src/EncDotNet.S100.Viewer/Branding) is the site mark.
+import iconSvg from '../../../src/EncDotNet.S100.Viewer/Branding/icon.svg?url';
+import iconPng from '../../../src/EncDotNet.S100.Viewer/Branding/png/AppIcon-256.png?url';
+
+interface Props {
+  title: string;
+  description: string;
+  /** schema.org structured data for the page, emitted as JSON-LD. */
+  jsonLd?: Record<string, unknown>;
+}
+
+const { title, description, jsonLd } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+// The 1200×630 social card, rendered from og/card.html by og/render.sh.
+const ogImage = new URL(`${import.meta.env.BASE_URL.replace(/\/?$/, '/')}og-card.png`, Astro.site);
+const ogImageAlt = 'SoundCharts: S-100 marine charts on your desktop, over a NOAA chart of Elliott Bay, Seattle.';
+const dev = import.meta.env.DEV;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href={iconSvg} />
+    <link rel="apple-touch-icon" href={iconPng} />
+    <meta name="theme-color" content="#0a1826" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="SoundCharts" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={ogImageAlt} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content={ogImageAlt} />
+    {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
+    <script is:inline>
+      // A theme picked with the nav toggle (Nav.astro); without one the page follows the system.
+      try {
+        const theme = localStorage.getItem('theme');
+        if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+      } catch {}
+    </script>
+    <script is:inline define:vars={{ dev }}>
+      if (dev || new URLSearchParams(location.search).has('review')) document.documentElement.classList.add('review');
+    </script>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

@@ -1,0 +1,270 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             x:Class="EncDotNet.S100.Viewer.Views.TimeHudView"
+             x:DataType="vm:TimelineViewModel"
+             Focusable="True">
+
+    <!-- The Time HUD (#712, handoff Part F): the Timeline's everyday surface
+         on the map while the Timeline tab isn't shown. A 40 px bar with a
+         status dot, the view time, its offset, ‹ ›, Live / Go live and the
+         dock toggle; the status message as a chip 8 px above it. -->
+    <UserControl.Styles>
+        <!-- F4: the chip's amber and red tints. -->
+        <Style Selector="Border.HudTint">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Border.HudTint.warning">
+            <Setter Property="IsVisible" Value="True" />
+            <Setter Property="Background" Value="{DynamicResource MapOverlayWarningTintBrush}" />
+        </Style>
+        <Style Selector="Border.HudTint.error">
+            <Setter Property="IsVisible" Value="True" />
+            <Setter Property="Background" Value="{DynamicResource MapOverlayErrorTintBrush}" />
+        </Style>
+        <Style Selector="Button.HudText">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style Selector="Button.HudText /template/ ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.HudText.warning /template/ ContentPresenter">
+            <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
+        </Style>
+        <Style Selector="Button.HudText.error /template/ ContentPresenter">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+        <Style Selector="Button.HudText.warning">
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.HudAction /template/ ContentPresenter">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Border.HudSeparator">
+            <Setter Property="Width" Value="1" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Margin" Value="4,0" />
+            <Setter Property="Background" Value="{DynamicResource BorderColor}" />
+        </Style>
+        <Style Selector="Button.HudIcon">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <!-- D5: one fixed-size Live / Go live toggle in place of the mode pill and the
+             Live button that came and went. -->
+        <!-- Min and max as well as the size: the Icon class sizes its buttons square. -->
+        <Style Selector="Button#LiveToggle">
+            <Setter Property="Width" Value="64" />
+            <Setter Property="MinWidth" Value="64" />
+            <Setter Property="MaxWidth" Value="64" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="MaxHeight" Value="28" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button#LiveToggle.pinned">
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+        </Style>
+        <Style Selector="Button#LiveToggle:not(.pinned)">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
+        <Style Selector="TextBlock#Offset">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="TextBlock#Offset.live">
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+        </Style>
+        <!-- D7: the status dot pulses while the map draws, instead of text joining the row. -->
+        <Style Selector="Ellipse#DrawingDot">
+            <Style.Animations>
+                <Animation Duration="0:0:1.2" IterationCount="Infinite" PlaybackDirection="Alternate">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="Opacity" Value="1" />
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="Opacity" Value="0.35" />
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+        <!-- D10: narrow maps swap whole slots: compact drops the offset, tiny also
+             shortens Go live to an icon. Each class has fixed widths. -->
+        <Style Selector="views|TimeHudView.compact TextBlock#Offset">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="views|TimeHudView.tiny Button#LiveToggle">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="MinWidth" Value="28" />
+            <Setter Property="MaxWidth" Value="28" />
+        </Style>
+        <Style Selector="Panel.LiveIcon">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="views|TimeHudView.tiny Panel.LiveIcon">
+            <Setter Property="IsVisible" Value="True" />
+        </Style>
+        <Style Selector="views|TimeHudView.tiny TextBlock.LiveText">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+    </UserControl.Styles>
+
+    <StackPanel Spacing="8" HorizontalAlignment="Center">
+        <!-- F4: the message chip, with the status line's text and action (B3). -->
+        <Panel HorizontalAlignment="Center" IsVisible="{Binding HasStatusMessage}">
+            <!-- F2: the map tool buttons' see-through surface (as the map stamp). -->
+            <Border Background="{DynamicResource MapOverlaySurfaceBrush}" CornerRadius="10" />
+            <Border Classes="HudTint" CornerRadius="10"
+                    Classes.warning="{Binding IsStatusWarning}"
+                    Classes.error="{Binding IsStatusError}" />
+            <StackPanel Orientation="Horizontal" Spacing="10" Margin="12,6">
+                <Button Classes="HudText"
+                        Content="{Binding StatusMessage}"
+                        Command="{Binding ShowLayersCommand}"
+                        AutomationProperties.AutomationId="TimeHud.Status"
+                        IsHitTestVisible="{Binding IsStatusWarning}"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimelineShowLayers}"
+                        Classes.warning="{Binding IsStatusWarning}"
+                        Classes.error="{Binding IsStatusError}"
+                        VerticalAlignment="Center" />
+                <Button Classes="HudText HudAction"
+                        IsVisible="{Binding HasStatusAction}"
+                        Content="{Binding StatusActionText}"
+                        Command="{Binding StatusActionCommand}"
+                        AutomationProperties.AutomationId="TimeHud.StatusAction"
+                        FontWeight="SemiBold"
+                        VerticalAlignment="Center" />
+            </StackPanel>
+        </Panel>
+
+        <!-- F3: the 40 px bar. Every slot has a fixed width (design note
+             time-overlays D4), so stepping, going live or drawing never changes
+             the bar's width and ‹ › stay under the pointer. The variable text
+             is on the left, the controls on the right. -->
+        <Grid x:Name="Bar" HorizontalAlignment="Center" RowDefinitions="Auto,40"
+              AutomationProperties.Name="{x:Static loc:Strings.Label_TimeHud}">
+            <Border Grid.RowSpan="2" Background="{DynamicResource MapOverlaySurfaceBrush}" CornerRadius="10" />
+            <!-- D2: Display Not Real Time (S-98 §12.7.2; #993) on its own line above the
+                 controls. The HUD is anchored at the bottom, so the line grows the bar
+                 upward and the controls don't move. -->
+            <StackPanel Grid.Row="0"
+                        AutomationProperties.AutomationId="TimeHud.NotRealTime"
+                        IsVisible="{Binding IsNotRealTime}"
+                        Orientation="Horizontal" Spacing="5" Margin="12,7,12,0">
+                <Ellipse Width="7" Height="7" Fill="{DynamicResource WarningColor}" VerticalAlignment="Center" />
+                <TextBlock Text="{x:Static loc:Strings.TimelinePanel_DisplayNotRealTime}"
+                           FontSize="11.5" FontWeight="SemiBold"
+                           Foreground="{DynamicResource WarningColor}"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+            <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6" Margin="8,0" VerticalAlignment="Center">
+                <!-- Status: green Live, accent pinned, warning not real time, grey pulsing while drawing. -->
+                <Panel Width="14" VerticalAlignment="Center"
+                       AutomationProperties.AutomationId="TimeHud.StatusDot">
+                    <Ellipse Width="8" Height="8" IsVisible="{Binding !IsLive}" Fill="{DynamicResource AccentBrush}" />
+                    <Ellipse Width="8" Height="8" IsVisible="{Binding IsNotRealTime}" Fill="{DynamicResource WarningColor}" />
+                    <Ellipse Width="8" Height="8" IsVisible="{Binding IsLive}" Fill="{DynamicResource SuccessColor}" />
+                    <Ellipse x:Name="DrawingDot" Width="8" Height="8" IsVisible="{Binding IsDrawing}" Fill="{DynamicResource MutedColor}" />
+                </Panel>
+                <!-- D6: the time slot is as wide as the longest time the format can
+                     produce (an invisible sizer), not the time shown. F6: clicking the
+                     time focuses the bar for the keyboard; there is no picker. A button
+                     (styled as text) so keyboard users and automation clients reach it
+                     too (#784); its name is the time itself. -->
+                <Panel VerticalAlignment="Center">
+                    <TextBlock Text="{Binding WidestTimeLabel}"
+                               FontFamily="{StaticResource MonoFontFamily}"
+                               FontSize="13" FontWeight="SemiBold"
+                               Opacity="0" IsHitTestVisible="False"
+                               AutomationProperties.AccessibilityView="Raw" />
+                    <Button x:Name="TimeText"
+                            Classes="HudText"
+                            HorizontalAlignment="Left"
+                            AutomationProperties.AutomationId="TimeHud.Time"
+                            AutomationProperties.Name="{Binding TimeReading}"
+                            AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimeHudTime}"
+                            Content="{Binding CurrentTimeLabel}"
+                            FontFamily="{StaticResource MonoFontFamily}"
+                            FontSize="13" FontWeight="SemiBold"
+                            Cursor="Hand"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimeHudTime}"
+                            VerticalAlignment="Center" />
+                </Panel>
+                <!-- A fixed 84 px slot; a longer offset ends in an ellipsis, in full in the tooltip. -->
+                <TextBlock x:Name="Offset"
+                           AutomationProperties.AutomationId="TimeHud.Offset"
+                           Classes.live="{Binding IsLive}"
+                           Width="84"
+                           Text="{Binding OffsetText}"
+                           ToolTip.Tip="{Binding OffsetText}"
+                           TextTrimming="CharacterEllipsis"
+                           FontFamily="{StaticResource MonoFontFamily}"
+                           FontSize="12"
+                           VerticalAlignment="Center" />
+                <Border Classes="HudSeparator" />
+                <Button Classes="Icon HudIcon"
+                        AutomationProperties.Name="{x:Static loc:Strings.Label_PreviousStep}"
+                        AutomationProperties.HelpText="{Binding PreviousStepTooltip}"
+                        Command="{Binding PreviousStepCommand}"
+                        AutomationProperties.AutomationId="TimeHud.Previous"
+                        ToolTip.Tip="{Binding PreviousStepTooltip}">
+                    <ic:FluentIcon Icon="ChevronLeft" IconVariant="Regular" FontSize="14" />
+                </Button>
+                <Button Classes="Icon HudIcon"
+                        AutomationProperties.Name="{x:Static loc:Strings.Label_NextStep}"
+                        AutomationProperties.HelpText="{Binding NextStepTooltip}"
+                        Command="{Binding NextStepCommand}"
+                        AutomationProperties.AutomationId="TimeHud.Next"
+                        ToolTip.Tip="{Binding NextStepTooltip}">
+                    <ic:FluentIcon Icon="ChevronRight" IconVariant="Regular" FontSize="14" />
+                </Button>
+                <!-- D5: always there, always the same size. Live: quiet, with a green dot;
+                     clicking it does nothing. Pinned: outlined "Go live". -->
+                <Button x:Name="LiveToggle"
+                        Classes="Icon"
+                        Classes.pinned="{Binding !IsLive}"
+                        AutomationProperties.AutomationId="TimeHud.Live"
+                        AutomationProperties.Name="{Binding LiveToggleText}"
+                        Command="{Binding LiveToggleCommand}"
+                        ToolTip.Tip="{Binding LiveToggleTooltip}">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <Ellipse Width="7" Height="7" IsVisible="{Binding IsLive}"
+                                 Fill="{DynamicResource SuccessColor}" VerticalAlignment="Center" />
+                        <Panel Classes="LiveIcon" VerticalAlignment="Center">
+                            <ic:FluentIcon Icon="Live" IconVariant="Regular" FontSize="14"
+                                           IsVisible="{Binding !IsLive}" />
+                        </Panel>
+                        <TextBlock Classes="LiveText" Text="{Binding LiveToggleText}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <!-- D9: the dock button says what it does (open the dock, or show the
+                     Timeline tab in it) and is hidden where the dock can't show. -->
+                <Border x:Name="DockSeparator" Classes="HudSeparator" />
+                <Button x:Name="DockToggle"
+                        AutomationProperties.Name="{x:Static loc:Strings.Label_OpenTimeline}"
+                        AutomationProperties.HelpText="{x:Static loc:Strings.Tooltip_TimeHudOpenTimeline}"
+                        AutomationProperties.AcceleratorKey="T"
+                        AutomationProperties.AutomationId="TimeHud.DockToggle"
+                        Classes="Icon HudIcon"
+                        ToolTip.Tip="{x:Static loc:Strings.Tooltip_TimeHudOpenTimeline}">
+                    <ic:FluentIcon Icon="PanelBottom" IconVariant="Regular" FontSize="16" />
+                </Button>
+            </StackPanel>
+        </Grid>
+    </StackPanel>
+</UserControl>

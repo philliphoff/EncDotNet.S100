@@ -1,0 +1,43 @@
+{
+  "description": "Performance corpus inventory for EncDotNet.S100.PerfRunner scenarios.",
+  "entries": [
+    {
+      "id": "s101/AA-exchange-set",
+      "path": "tests/datasets/S101/S-101/DATASET_FILES",
+      "pattern": "*.000",
+      "source": "synthetic — bundled in repository",
+      "license": "MIT (project license)",
+      "sha256": null,
+      "size": "~600 KB (19 files)",
+      "scenarios": ["s101-portray-cold", "s101-portray-warm", "s101-render-warm"]
+    },
+    {
+      "id": "s102/102US004MI1CI262227",
+      "path": "tests/datasets/S102/102US004MI1CI262227.h5",
+      "source": "synthetic — bundled in repository",
+      "license": "MIT (project license)",
+      "sha256": "42d652a4d9c8454e79772e09b23ef08680fa8b41e34e176b24509d5dff92095d",
+      "size": "30 KB",
+      "scenarios": ["s102-coverage"]
+    },
+    {
+      "id": "s124/navwarn-fixtures",
+      "path": "tests/datasets/S124",
+      "pattern": "*.gml",
+      "source": "synthetic — bundled in repository",
+      "license": "MIT (project license)",
+      "sha256": null,
+      "size": "~13 KB (4 files)",
+      "scenarios": ["s124-vector"]
+    },
+    {
+      "id": "exchange-sets/synthetic-mixed",
+      "path": "tests/datasets/ExchangeSets/Synthetic-Mixed",
+      "source": "synthetic — bundled in repository",
+      "license": "MIT (project license)",
+      "sha256": null,
+      "size": "~4 KB (CATALOG.XML)",
+      "scenarios": ["exchange-set-open"]
+    }
+  ]
+}

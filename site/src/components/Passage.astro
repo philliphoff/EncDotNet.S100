@@ -1,0 +1,110 @@
+---
+import Permalink from './Permalink.astro';
+import Shot from './Shot.astro';
+import { docs, withBase } from '../data/content';
+
+const sizes = '(max-width: 900px) 100vw, 690px';
+const miniSizes = '(max-width: 900px) 100vw, 540px';
+---
+<section id="passage" aria-labelledby="passage-title">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Passage planning</span>
+      <div class="anchored"><h2 id="passage-title">Plan it, check it, stay warned.</h2><Permalink to="passage" label="Passage planning" /></div>
+      <p class="lede">
+        A route in SoundCharts is checked against everything you've loaded: charts, depths, tides, regulated areas and
+        navigational warnings. Each point is judged at the time you'd get there, not just the time you leave.
+      </p>
+    </div>
+
+    <div class="features">
+      <div id="passage-plan" class="feature">
+        <div class="feature-copy">
+          <span class="eyebrow">Plan</span>
+          <div class="anchored"><h3>Sketch a passage.</h3><Permalink to="passage-plan" label="Plan" /></div>
+          <p>
+            Drop waypoints on the chart and drag them around. Each leg can be great-circle or rhumb-line, distance and
+            bearing update as you edit, and routes are stored in the S-421 route model. RTZ routes open too.
+          </p>
+        </div>
+        <Shot id="F4" alt="A route from Colman Dock round West Point to Shilshole Bay Marina, with the leg table open" sizes={sizes} />
+      </div>
+
+      <div id="passage-check" class="feature flip">
+        <div class="feature-copy">
+          <span class="eyebrow">Check</span>
+          <div class="anchored"><h3>See what's on the way.</h3><Permalink to="passage-check" label="Check route" /></div>
+          <p>
+            Check route sweeps a corridor along every leg and lists what it finds, worst first. Findings are marked on the
+            map, and selecting one takes you to it.
+          </p>
+          <ul>
+            <li>Land, drying ground, the safety contour and charted dangers</li>
+            <li>Prohibited, caution, traffic and protected areas</li>
+            <li>Navigational warnings in force while you're there</li>
+            <li>Under-keel clearance along the route with S-104 water levels, and the departures that meet it</li>
+          </ul>
+        </div>
+        <Shot
+          id="F10"
+          alt="Check route for a deep-draft passage into Charleston Harbor: the verdict, the clearance profile with tide, and the map zoomed to a stretch below the UKC setting"
+          title="Check route"
+          detail="Verdict + clearance profile with S-104 tide + departure window + map legend"
+          sizes={sizes}
+        />
+      </div>
+
+      <div id="passage-warnings" class="feature">
+        <div class="feature-copy">
+          <span class="eyebrow">Warnings</span>
+          <div class="anchored"><h3>Warnings that know your route.</h3><Permalink to="passage-warnings" label="Warnings" /></div>
+          <p>
+            S-124 navigational warnings are drawn only while they're in force, stay marked NEW until you've read them, and
+            can be set to on chart, off chart or information, as S-98 asks. While you check a route, the list narrows to the
+            warnings on it and shows when you'll meet each one.
+          </p>
+          <ul>
+            <li>Warnings from files or live SECOM services</li>
+            <li>Each card links to its route finding, and back</li>
+          </ul>
+        </div>
+        <Shot
+          id="F11"
+          alt="The Navigational warnings panel showing the warnings on a route, with a warning card open"
+          title="Navigational warnings"
+          detail="On route scope · open Warning card · classification glyphs"
+          sizes={sizes}
+        />
+      </div>
+    </div>
+
+    <div class="minis">
+      <div id="passage-warning-findings" class="mini">
+        <Shot
+          id="F12"
+          alt="A warning card showing it crosses the route between legs 3 and 4"
+          title="Warning card"
+          detail="“Crosses route · leg 3 → 4”"
+          sizes={miniSizes}
+        />
+        <div class="body">
+          <div class="anchored"><h3>From warning to finding</h3><Permalink to="passage-warning-findings" label="From warning to finding" /></div>
+          <p>A warning's card says where it meets the route. Select it to open that finding.</p>
+        </div>
+      </div>
+      <div id="passage-ci" class="mini">
+        <div class="body">
+          <div class="anchored"><h3>The same checks in CI</h3><Permalink to="passage-ci" label="The same checks in CI" /></div>
+          <p>
+            <code>s100 route check</code> runs the same checks on RTZ and S-421 routes, with the same findings, and fails
+            the build when something needs review.
+          </p>
+          <pre><span class="c"># exits 7 on a Must review finding</span>
+s100 route check route.rtz charts/ \
+  --draft 7 --safety-contour 10</pre>
+          <a class="more" href={withBase(docs.routeChecks)}>Route checks guide</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,61 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.PlaceholderView"
+             x:Name="Root">
+
+    <!--
+      Shared empty-state placeholder used by every panel that can be empty,
+      so the "nothing here yet" UX is identical across the viewer: a centered
+      icon, a bold primary message, and an optional descriptive secondary
+      line. Modeled on the Timeline empty state. Consumers set Icon, Header
+      and (optionally) Description; the panel decides when to show it via the
+      usual IsVisible binding.
+
+      The content is vertically centered when the host has room, and the whole
+      thing is wrapped in a ScrollViewer so it never clips: in a short host
+      (e.g. the timeline dock at its minimum height) the panel scrolls instead.
+
+      The centre-or-scroll behaviour comes from the inner Panel's MinHeight,
+      bound to the ScrollViewer's own Bounds.Height (NOT Viewport.Height, whose
+      sub-path change-notification is unreliable in Avalonia 12). The Panel is
+      therefore always at least as tall as the viewport, so the centred content
+      sits in the middle; when the content's natural height exceeds the
+      viewport the Panel grows past it and the ScrollViewer scrolls. The
+      ScrollViewer Padding is 0 so MinHeight matches the viewport exactly and no
+      phantom scrollbar appears.
+    -->
+    <ScrollViewer x:Name="Scroll"
+                  Padding="0"
+                  HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto">
+        <Panel MinHeight="{Binding #Scroll.Bounds.Height}">
+        <StackPanel Spacing="6"
+                    Margin="12,16"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    MaxWidth="280">
+            <ic:FluentIcon Icon="{Binding #Root.Icon}"
+                           IconVariant="Regular"
+                           FontSize="28"
+                           Opacity="0.45"
+                           HorizontalAlignment="Center" />
+            <TextBlock Text="{Binding #Root.Header}"
+                       FontSize="13"
+                       FontWeight="SemiBold"
+                       Opacity="0.7"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap" />
+            <TextBlock Text="{Binding #Root.Description}"
+                       FontSize="11"
+                       Opacity="0.55"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       TextWrapping="Wrap"
+                       IsVisible="{Binding #Root.Description,
+                                   Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+        </Panel>
+    </ScrollViewer>
+</UserControl>

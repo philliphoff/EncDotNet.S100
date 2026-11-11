@@ -1,0 +1,114 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             x:Class="EncDotNet.S100.Viewer.Views.AmlMarkingIndicatorView"
+             x:DataType="vm:AmlMarkingIndicatorViewModel"
+             IsVisible="{Binding IsVisible}">
+    <!--
+      The status bar's MARKING pill (#1371, decision 10): the highest
+      protective marking of the AML data loaded. Solid ink with a shield when
+      it's above UNCLASSIFIED, outlined when everything loaded is
+      UNCLASSIFIED. Never red, and the marking is never shortened: short of
+      room, the pill drops its MARKING label instead.
+    -->
+    <UserControl.Styles>
+        <Style Selector="Button#AmlMarkingButton">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+        </Style>
+        <Style Selector="Button#AmlMarkingButton.elevated">
+            <Setter Property="Background" Value="{DynamicResource ForegroundColor}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource ForegroundColor}" />
+            <Setter Property="Foreground" Value="{DynamicResource WindowBackgroundColor}" />
+        </Style>
+        <Style Selector="Button#AmlMarkingButton.elevated:pointerover /template/ ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource ForegroundColor}" />
+            <Setter Property="Opacity" Value="0.9" />
+        </Style>
+        <!-- The button template doesn't pass its Foreground on, so the pill's
+             text and glyph take the ink (or, elevated, the paper) directly. -->
+        <Style Selector="Button#AmlMarkingButton TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+        </Style>
+        <Style Selector="Button#AmlMarkingButton ic|FluentIcon">
+            <Setter Property="Foreground" Value="{DynamicResource ForegroundColor}" />
+        </Style>
+        <Style Selector="Button#AmlMarkingButton.elevated TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource WindowBackgroundColor}" />
+        </Style>
+        <Style Selector="Button#AmlMarkingButton.elevated ic|FluentIcon">
+            <Setter Property="Foreground" Value="{DynamicResource WindowBackgroundColor}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Button x:Name="AmlMarkingButton"
+            AutomationProperties.AutomationId="Map.AmlMarking"
+            AutomationProperties.Name="{Binding AccessibleName}"
+            AutomationProperties.HelpText="{x:Static loc:Strings.Aml_Pill_ToolTip}"
+            AutomationProperties.LiveSetting="Polite"
+            Classes.elevated="{Binding IsElevated}"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Center"
+            Margin="10,0,0,0"
+            Padding="8,1"
+            CornerRadius="10"
+            BorderThickness="1"
+            ToolTip.Tip="{x:Static loc:Strings.Aml_Pill_ToolTip}">
+        <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+            <ic:FluentIcon Icon="Shield" IconVariant="Regular" FontSize="13"
+                           VerticalAlignment="Center" />
+            <TextBlock Text="{x:Static loc:Strings.Aml_MarkingPill}"
+                       IsVisible="{Binding ShowsLabel}"
+                       FontSize="11"
+                       FontWeight="SemiBold"
+                       LetterSpacing="0.5"
+                       Opacity="0.85"
+                       VerticalAlignment="Center" />
+            <TextBlock Text="{Binding DisplayedText}"
+                       AutomationProperties.AutomationId="Map.AmlMarking.Value"
+                       FontSize="12"
+                       FontWeight="SemiBold"
+                       TextWrapping="NoWrap"
+                       TextTrimming="None"
+                       VerticalAlignment="Center" />
+        </StackPanel>
+        <Button.Flyout>
+            <Flyout Placement="Top">
+                <Border Padding="14,12" MaxWidth="420">
+                    <StackPanel MinWidth="240" Spacing="8">
+                        <TextBlock Text="{x:Static loc:Strings.Aml_Pill_FlyoutHeader}"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   LetterSpacing="0.8"
+                                   Opacity="0.7" />
+                        <ItemsControl ItemsSource="{Binding Lines}"
+                                      AutomationProperties.AutomationId="Map.AmlMarking.Lines">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:AmlMarkingLine">
+                                    <StackPanel Margin="0,3" Spacing="3">
+                                        <views:AmlMarkingChip Marking="{Binding Marking}" HorizontalAlignment="Left" />
+                                        <ItemsControl ItemsSource="{Binding Sets}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="x:String">
+                                                    <TextBlock Text="{Binding}" FontSize="13" TextWrapping="Wrap" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Text="{x:Static loc:Strings.Aml_Pill_FlyoutRule}"
+                                   FontSize="12"
+                                   Opacity="0.7"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </Flyout>
+        </Button.Flyout>
+    </Button>
+</UserControl>

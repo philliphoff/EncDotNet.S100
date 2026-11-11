@@ -1,0 +1,220 @@
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
+
+namespace EncDotNet.S100.Datasets.Pipelines;
+
+/// <summary>
+/// The render options passed to dataset processors. One record serves every
+/// product; each processor reads the options it honours and ignores the rest.
+/// </summary>
+/// <remarks>
+/// Use <see cref="MapPresentationState.CreateRenderContext"/> to create a
+/// context carrying map-wide palette, scale, ECDIS, mariner, and
+/// product-display choices. Use <see cref="MapPresentationState.ApplyTo"/> when
+/// projecting those choices onto a caller-constructed request context.
+/// </remarks>
+public sealed record RenderContext
+{
+    /// <summary>
+    /// The water level to add to charted depths (S-98 Appendix D), or
+    /// <see langword="null"/> to portray depths as charted. The S-102 and
+    /// S-101 processors honour it; other products ignore it.
+    /// </summary>
+    public IDepthAdjustment? DepthAdjustment { get; init; }
+
+    /// <summary>
+    /// Whether the chart's safety contour gets a halo in the palette's
+    /// background, so it stays the strongest line while another product
+    /// draws many contours over the chart (AML CLB, AML design handoff
+    /// decision 22). The contour keeps its weight and draw order.
+    /// </summary>
+    /// <remarks>
+    /// Honoured by S-101 and S-57, which add the halo to the display list
+    /// after the portrayal rules (<see cref="EncDotNet.S100.Pipelines.Vector.SafetyContourHalo"/>), so it
+    /// never re-runs them. Other products ignore it.
+    /// </remarks>
+    public bool SafetyContourHalo { get; init; }
+
+    /// <summary>The color palette (Day/Dusk/Night) to use for rendering.</summary>
+    public PaletteType Palette { get; init; } = PaletteType.Day;
+
+    /// <summary>Global symbol scale factor (1.0 = default).</summary>
+    public double SymbolScale { get; init; } = 1.0;
+
+    /// <summary>Global text scale factor (1.0 = default).</summary>
+    public double TextScale { get; init; } = 1.0;
+
+    /// <summary>
+    /// Cross-spec ECDIS display settings (S-100 Part 9 §11.7
+    /// display-mode selection plus per-spec viewing-group overrides).
+    /// When <c>null</c> processors render with no mode filter and no
+    /// user overrides — equivalent to "All" with an empty hidden set.
+    /// </summary>
+    public EcdisDisplaySettings? EcdisDisplay { get; init; }
+
+    /// <summary>
+    /// This dataset's own narrowing of viewing-group visibility, applied on
+    /// top of <see cref="EcdisDisplay"/>, or <c>null</c> for none. A host sets
+    /// it from <see cref="MapDataset.ViewingGroups"/>.
+    /// </summary>
+    /// <remarks>
+    /// Honoured by the XSLT (GML) vector processors, such as S-421, S-122 and
+    /// S-124. S-101 and S-57 ignore it for now.
+    /// </remarks>
+    public ViewingGroupFilter? ViewingGroups { get; init; }
+
+    /// <summary>
+    /// Ids of this dataset's features the host doesn't want drawn, or
+    /// <c>null</c> for none. A host sets it from
+    /// <see cref="MapDataset.HiddenFeatures"/>.
+    /// </summary>
+    /// <remarks>
+    /// Honoured by S-124, where the host hides navigational warning parts
+    /// that aren't in force at the view time (S-98 Edition 2.0.0 §12.12; see
+    /// <see cref="NavigationalWarningSet.IsDrawnAt"/>). The processor drops
+    /// the features before portrayal, together with the features only they
+    /// reference, so the portrayal rules see the dataset as if they weren't
+    /// there. Other products ignore it for now.
+    /// </remarks>
+    public IReadOnlySet<string>? HiddenFeatures { get; init; }
+
+    /// <summary>
+    /// The time the map shows, for drawing instructions valid only at some
+    /// times (S-100 Part 9 <c>timeValid</c>), or <c>null</c> to draw every
+    /// instruction whatever its time intervals. A host sets it from
+    /// <see cref="MapDataset.PortrayalTime"/>.
+    /// </summary>
+    /// <remarks>
+    /// Honoured by S-101 and S-401 (see <see cref="IDateDependentDatasetProcessor"/>),
+    /// which filter the portrayed display list without running the portrayal
+    /// rules again (<see cref="PortrayalTimeFilter.Apply"/>). Other products
+    /// ignore it.
+    /// </remarks>
+    public PortrayalTime? PortrayalTime { get; init; }
+
+    /// <summary>
+    /// Mariner-configurable display preferences (S-100 Part 9 §4.2 —
+    /// safety/shallow/deep contours, S-101 boolean toggles, depth display
+    /// unit, etc.). When <c>null</c> processors fall back to
+    /// <see cref="MarinerSettings.Default"/>. Only consumed by processors
+    /// whose portrayal pipeline honours mariner selections (S-101, S-102,
+    /// S-104, S-111 today); other processors carry it transparently for
+    /// future use.
+    /// </summary>
+    public MarinerSettings? Mariner { get; init; }
+
+    /// <summary>
+    /// Bitmask of <see cref="DrawingInstruction"/> categories to suppress from
+    /// the rendered output (S-100 Part 9 instruction types — areas, lines,
+    /// points, text). Hiding text is the canonical use case: at preview
+    /// scales, label-dense products such as S-411 sea-ice draw the full
+    /// "egg-code" labels which obscure the underlying fills, and a flag-driven
+    /// suppression delivers a BSIS-style "clean fill" preview without
+    /// re-running the portrayal pipeline. Defaults to
+    /// <see cref="DrawingInstructionCategory.None"/> (render everything).
+    /// </summary>
+    /// <remarks>
+    /// Honoured by the headless render path
+    /// (<c>HeadlessVectorRenderer.Render</c>); the Mapsui path is not yet
+    /// affected. The filter is applied after the portrayal pipeline produces
+    /// the display list, so suppressing one category never re-flows the
+    /// remaining instructions (areas → lines → points → text ordering and
+    /// scale visibility are preserved).
+    /// </remarks>
+    public DrawingInstructionCategory HiddenInstructionCategories { get; init; }
+        = DrawingInstructionCategory.None;
+
+    /// <summary>
+    /// Basemap drawn beneath the chart data in the headless render path (issue
+    /// #411). When <see cref="BasemapKind.Offline"/>, the bundled Natural Earth
+    /// 1:10m land layer is composited under the dataset, projected with the
+    /// dataset's own auto-fitted viewport so it registers exactly. Defaults to
+    /// <see cref="BasemapKind.None"/> (no basemap; output unchanged).
+    /// </summary>
+    /// <remarks>
+    /// Honoured by the headless render path (<c>HeadlessVectorRenderer.Render</c>
+    /// for vector products and <c>CoverageHeadlessRenderer.Render</c> for
+    /// coverage products); the Mapsui viewer path selects its basemap
+    /// independently via <c>BasemapMode</c>.
+    /// </remarks>
+    public BasemapKind Basemap { get; init; } = BasemapKind.None;
+
+    /// <summary>
+    /// The S-100 Part 9 §11.7 display-mode id to activate for this render,
+    /// or <c>null</c> to leave the catalogue's current/default mode in place.
+    /// Unlike <see cref="EcdisDisplay"/>'s ECDIS category (which maps to a
+    /// display mode only for specs that declare the canonical DisplayBase /
+    /// StandardDisplay / OtherInformation ids), this is an explicit,
+    /// spec-native mode id — used by products whose modes select a
+    /// <em>portrayal</em> rather than a viewing-group filter. S-411 uses it to
+    /// choose between its concentration
+    /// (<c>IceScientificIceactDisplayMode</c>), stage-of-development
+    /// (<c>IceScientificIcesodDisplayMode</c>) and navigational
+    /// (<c>IceNavigationalDisplayMode</c>) portrayals. When set, it wins over
+    /// the ECDIS-category-derived mode. Ignored by processors whose catalogue
+    /// does not declare the id.
+    /// </summary>
+    public string? DisplayModeId { get; init; }
+
+    /// <summary>
+    /// An explicit display window (geographic bounds + pixel size + scale
+    /// denominator) to render, or <c>null</c> to auto-fit the viewport to the
+    /// dataset extent (the historical single-dataset headless behaviour).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Supplying a viewport brings the single-dataset headless render path into
+    /// alignment with the composite/GUI paths, which have always accepted an
+    /// explicit viewport (CLI <c>--bbox</c> / <c>--center</c>+<c>--scale</c>).
+    /// It lets a caller frame an exact window — e.g. to reproduce a viewer
+    /// screenshot or capture a fixed scene — instead of the padded auto-fit.
+    /// </para>
+    /// <para>
+    /// Honoured by the vector headless path
+    /// (<c>HeadlessVectorRenderer.Render</c>) for S-101, S-57 and the GML
+    /// products. Because an explicit viewport carries a meaningful
+    /// <see cref="Viewport.ScaleDenominator"/>, the vector path additionally
+    /// enables S-100 Part 9 scale-visibility culling when it is set (the
+    /// auto-fit path leaves culling disabled, as the fitted scale is not a real
+    /// compilation scale). The coverage processors (S-102/S-104/S-111) forward
+    /// the viewport (and, for non-EPSG:4326 grids, a WGS-84 → native transform)
+    /// to <see cref="EncDotNet.S100.Pipelines.Coverage.CoveragePipeline"/> so
+    /// only the cells that fall inside the viewport at the viewport's ground
+    /// resolution are sampled (issue #487). Coverage sampling applies on the
+    /// initial dataset load; live pan/zoom re-sampling of the Mapsui coverage
+    /// layer is a follow-up (see issue #486).
+    /// </para>
+    /// </remarks>
+    public Viewport? Viewport { get; init; }
+
+    /// <summary>
+    /// The time step to portray, or <see langword="null"/> for none. Static
+    /// products ignore it.
+    /// </summary>
+    /// <remarks>
+    /// S-104 and S-111 select the matching time step, or the nearest available
+    /// one, and render their first time step when this is <c>null</c>. Each
+    /// S-411 file is a single snapshot, so S-411 hides the dataset while this
+    /// is earlier than its issue date and always renders it when this is
+    /// <c>null</c>.
+    /// </remarks>
+    public DateTime? TimeStep { get; init; }
+
+    /// <summary>
+    /// The time zone that times drawn on the chart are written in, such as a
+    /// tropical cyclone's forecast times; <see langword="null"/> for UTC. A
+    /// host sets the zone the user reads times in: SoundCharts passes the
+    /// machine's zone or UTC, as its Local/UTC preference says.
+    /// </summary>
+    public TimeZoneInfo? DisplayTimeZone { get; init; }
+
+    /// <summary>
+    /// How old <see cref="TimeStep"/> is at the map time, to the nearest hour, once
+    /// it is past the dataset's <see cref="TimeSemantics.StaleAfter"/>, or how
+    /// old the dataset is since it was issued once past its
+    /// <see cref="TimeSemantics.StaleAfterIssue"/>; <see langword="null"/> while
+    /// it is current or the dataset has no such limit. A processor draws stale
+    /// data as old (faded, or a storm with its age).
+    /// </summary>
+    public TimeSpan? TimeStepAge { get; init; }
+}

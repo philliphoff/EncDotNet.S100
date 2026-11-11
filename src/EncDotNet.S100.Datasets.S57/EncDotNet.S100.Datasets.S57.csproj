@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="EncDotNet.Iso8211" />
+    <PackageReference Include="EncDotNet.S57" />
+    <PackageReference Include="NetTopologySuite" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.Datasets.S57.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EncDotNet.S100.Datasets.S101\EncDotNet.S100.Datasets.S101.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.ExchangeSets\EncDotNet.S100.ExchangeSets.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Specifications\EncDotNet.S100.Specifications.csproj" />
+  </ItemGroup>
+
+</Project>

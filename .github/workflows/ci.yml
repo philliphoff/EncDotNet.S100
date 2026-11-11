@@ -1,0 +1,343 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          # The git tag is the source of truth for the released version. On a
+          # tag build (refs/tags/v*) derive the version from the tag name; on
+          # branch/PR builds fall back to the dev placeholder in props.
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [[ "${GITHUB_REF_NAME}" == v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="$(grep -oE '<Version>[^<]+' src/Directory.Build.props | sed 's/<Version>//')"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Cache S-164 test data
+        # The IHO S-164 exchange sets (about 30 MB) aren't committed. The S-164
+        # tests download them into ~/.cache when S100_S164_DOWNLOAD is set, and
+        # skip without them (as in the arm64 jobs). The key follows the pinned
+        # manifest, so a new release is fetched afresh.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/EncDotNet.S100/s164
+          key: s164-${{ hashFiles('tests/EncDotNet.S100.S164.Tests/s164-*.json') }}
+
+      - name: Cache S-64 test data
+        # The IHO S-64:100 unencrypted S-57 test data (about 17 MB), used by the
+        # S-164 Part 8 tests in the same project and downloaded under the same
+        # switch. Keyed on its own manifest.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/EncDotNet.S100/s64
+          key: s64-${{ hashFiles('tests/EncDotNet.S100.S164.Tests/S64/s64-*.json') }}
+
+      - name: Test
+        env:
+          S100_S164_DOWNLOAD: '1'
+        run: dotnet test --no-build --configuration Release --logger trx --results-directory TestResults
+
+      - name: Run route check sample
+        run: dotnet run --no-build --configuration Release --project samples/EncDotNet.S100.Samples.RouteCheck
+
+      - name: Smoke start viewer on X11
+        # The X11 and FreeDesktop (D-Bus) backends only load on Linux, so a
+        # dependency that breaks them passes every test and still kills the
+        # viewer at startup. The MCP endpoint file is written only after the
+        # platform and the app are initialized, so its appearance means the
+        # viewer started.
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          command -v xvfb-run >/dev/null || { sudo apt-get update && sudo apt-get install -y xvfb; }
+          url_file="$RUNNER_TEMP/viewer-mcp.url"
+          log="$RUNNER_TEMP/viewer-smoke.log"
+          # Its own session and process group, so xvfb-run, Xvfb, dotnet run
+          # and the viewer can be stopped together; the viewer doesn't exit
+          # on SIGTERM alone.
+          setsid xvfb-run -a dotnet run --no-build --configuration Release --project src/EncDotNet.S100.Viewer -- \
+            --ephemeral --mcp-port-file "$url_file" --crash-log "$RUNNER_TEMP/viewer-crash.log" >"$log" 2>&1 &
+          pid=$!
+          stop_viewer() { kill -KILL -- "-$pid" 2>/dev/null || true; }
+          for _ in $(seq 1 90); do
+            if [ -s "$url_file" ]; then
+              echo "Viewer started: $(cat "$url_file")"
+              stop_viewer
+              exit 0
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo "::error::Viewer exited during startup"
+              cat "$log"
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "::error::Viewer did not start within 90 seconds"
+          cat "$log"
+          stop_viewer
+          exit 1
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results
+          path: TestResults/*.trx
+
+      - name: Upload visual regression diffs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rendering-snapshots
+          path: |
+            tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.received.png
+            tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.diff.png
+            tests/EncDotNet.S100.Viewer.Tests/Snapshots/**/*.received.png
+            tests/EncDotNet.S100.Viewer.Tests/Snapshots/**/*.diff.png
+          if-no-files-found: ignore
+
+      - name: Pack NuGet packages
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        # Pack every packable project in the solution. Projects opt out via
+        # <IsPackable>false</IsPackable> (hosts, tooling, tests), so new
+        # Datasets.SXXX libraries are published automatically with no edit here.
+        run: dotnet pack EncDotNet.S100.slnx --no-build --configuration Release --output nupkgs -p:Version=$VERSION
+
+      - name: Upload NuGet packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: nupkgs
+          # Include symbol packages; `dotnet nuget push *.nupkg` pushes each
+          # matching .snupkg to the NuGet.org symbol server alongside it.
+          path: |
+            nupkgs/*.nupkg
+            nupkgs/*.snupkg
+
+  format:
+    name: Format check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Verify formatting and naming
+        # The root command verifies whitespace while the diagnostic filter
+        # limits code-style analysis to using directives (IDE0005) and naming
+        # (IDE1006). Keeping one invocation avoids loading the solution
+        # separately for each rule.
+        run: >
+          dotnet format EncDotNet.S100.slnx
+          --diagnostics IDE0005 IDE1006
+          --severity warn
+          --no-restore
+          --verify-no-changes
+
+  test-arm64:
+    strategy:
+      matrix:
+        include:
+          - os: windows-11-arm
+            name: win-arm64
+          - os: ubuntu-22.04-arm
+            name: linux-arm64
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release --logger trx --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.name }}
+          path: TestResults/*.trx
+
+      - name: Upload visual regression diffs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rendering-snapshots-${{ matrix.name }}
+          path: |
+            tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.received.png
+            tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.diff.png
+            tests/EncDotNet.S100.Viewer.Tests/Snapshots/**/*.received.png
+            tests/EncDotNet.S100.Viewer.Tests/Snapshots/**/*.diff.png
+          if-no-files-found: ignore
+
+  test-net11:
+    # Forward-compatibility check: the packages target net10.0 only, so on
+    # .NET 11 consumers run the net10.0 build. Build with the .NET 10 SDK as
+    # usual, then run the same tests on the newest runtime installed.
+    name: Test on .NET 11
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      # global.json keeps the build and test commands on the .NET 10 SDK;
+      # this adds the .NET 11 runtime the tests roll forward to. Drop
+      # dotnet-quality once .NET 11 is generally available.
+      - name: Setup .NET 11
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '11.0.x'
+          dotnet-quality: 'preview'
+
+      - name: Test
+        env:
+          # Run the net10.0 test hosts on the latest installed runtime, even
+          # when it's a prerelease, instead of the .NET 10 runtime.
+          DOTNET_ROLL_FORWARD: LatestMajor
+          DOTNET_ROLL_FORWARD_TO_PRERELEASE: '1'
+        run: dotnet test --no-build --configuration Release --logger trx --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-net11
+          path: TestResults/*.trx
+
+      - name: Upload visual regression diffs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rendering-snapshots-net11
+          path: |
+            tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.received.png
+            tests/EncDotNet.S100.VisualRegression.Tests/Snapshots/**/*.diff.png
+            tests/EncDotNet.S100.Viewer.Tests/Snapshots/**/*.received.png
+            tests/EncDotNet.S100.Viewer.Tests/Snapshots/**/*.diff.png
+          if-no-files-found: ignore
+
+  publish:
+    needs: build
+    permissions:
+      contents: read
+    uses: ./.github/workflows/publish.yml
+    with:
+      version: ${{ needs.build.outputs.version }}
+    secrets: inherit
+
+  publish-nuget:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Download NuGet packages
+        uses: actions/download-artifact@v8
+        with:
+          name: nupkgs
+          path: nupkgs
+
+      - name: NuGet login
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push to NuGet.org
+        run: dotnet nuget push "nupkgs/*.nupkg" --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json
+
+  create-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/nupkgs/*.nupkg
+            artifacts/SoundCharts-*/*.tar.gz
+            artifacts/SoundCharts-*/*.zip
+            artifacts/s100-cli-*/*.tar.gz
+            artifacts/s100-cli-*/*.zip
+            artifacts/SoundCharts-*-dmg/*.dmg

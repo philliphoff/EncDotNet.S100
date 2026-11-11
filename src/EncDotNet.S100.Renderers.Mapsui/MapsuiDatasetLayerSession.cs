@@ -1,0 +1,3025 @@
+using System.Runtime.CompilerServices;
+using EncDotNet.S100.Core.Scheduling;
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
+using EncDotNet.S100.Rendering.Engine;
+using Mapsui;
+using Mapsui.Layers;
+
+namespace EncDotNet.S100.Renderers.Mapsui;
+
+/// <summary>
+/// Owns the ordinary lifecycle of processor-rendered dataset layers in a
+/// Mapsui map.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The session owns generated layer replacement, removal, bottom-to-top order,
+/// dataset and sub-layer display state, S-98 cross-product ordering and
+/// suppression, whole-cell scale windows, and overlapping-cell suppression.
+/// Processor lifetime remains protected by the supplied
+/// <see cref="DatasetProcessorOwner"/>; every render uses a lease.
+/// Cross-product composition follows S-98 Edition 2.0.0 Main §9.2.1 and
+/// Annex A §8.4.1.
+/// </para>
+/// <para>
+/// This is the innermost of three tiers, and the narrowest: it knows only about
+/// dataset layers. Above it, <see cref="IS100MapSession"/> composes this session
+/// with processor ownership, navigation, layer bands, and dynamic sources into
+/// the library's public entry point; above that, an application supplies its own
+/// host (e.g. the Viewer's <c>MapsuiMapHost</c>). Reach for this type directly
+/// only when you need dataset-layer lifecycle without the rest.
+/// </para>
+/// <para>
+/// Rendering work runs on a worker thread. The continuation that installs
+/// layers must resume on the map-owning thread; UI hosts should call and await
+/// <see cref="RenderAsync"/> from that thread.
+/// </para>
+/// <para>
+/// With a stack marshal (map rendering slice 6), a rendered cell's arrival
+/// composes the layer stack — the S-98 projection, overlap suppression and
+/// the layer diff — as a <see cref="WorkStage.Stack"/> job on the work
+/// scheduler, and applies the result to the map in one marshalled post.
+/// Arrivals while a compose is in flight join the next one, and a result older
+/// than the stack on the map is dropped. <see cref="RenderAsync"/> completes
+/// once a stack that includes its cell is on the map. Every other change
+/// (order, display state, removal) still composes synchronously on the calling
+/// thread.
+/// </para>
+/// </remarks>
+public sealed partial class MapsuiDatasetLayerSession : IDisposable
+{
+    private readonly object _sync = new();
+    private readonly MapsuiLayerBands _layerBands;
+    private readonly DatasetProcessorOwner _processorOwner;
+    private readonly MapsuiDatasetRenderer _renderer;
+    private readonly IInteroperabilityAuthorityProvider _authorityProvider;
+    private readonly Action? _redrawRequested;
+    private readonly List<InstrumentedMemoryLayer> _stampedRedrawLayers = [];
+    private readonly Dictionary<MapDatasetId, Entry> _entries = [];
+    private readonly List<MapDatasetId> _order = [];
+    private readonly ConditionalWeakTable<ILayer, LayerBaseState> _baseStates = new();
+    // Single-dataset renders hold this shared, so different datasets render in
+    // parallel; bulk refreshes hold it exclusively so they never interleave
+    // with a single render. Each entry's RenderLock keeps two renders of one
+    // dataset from overlapping.
+    private readonly SharedExclusiveGate _renderGate = new();
+    private IReadOnlyList<LayerStackEntry> _stackEntries = [];
+    private IReadOnlyList<ILayer> _stackedLayers = [];
+    private MapsuiMapTimeSnapshot _time = MapsuiMapTimeSnapshot.Empty;
+    private MarinerSettings _mariner = MarinerSettings.Default;
+    private CancellationTokenSource? _timeRefreshCts;
+    private CancellationTokenSource? _presentationRefreshCts;
+    private CancellationTokenSource? _depthRefreshCts;
+    private bool _ignoreScaleMinimum;
+    private bool _disposed;
+
+    private static readonly TimeSpan TimeRefreshDebounceWindow =
+        TimeSpan.FromMilliseconds(100);
+
+    /// <summary>
+    /// The maximum number of datasets re-portrayed concurrently during a bulk
+    /// refresh. Capped at half the core count (minimum 2) to leave head-room for
+    /// the tile render subsystem's own worker threads, mirroring the exchange-set
+    /// lazy loader's concurrency policy.
+    /// </summary>
+    private static readonly int MaxRefreshConcurrency =
+        Math.Max(2, Environment.ProcessorCount / 2);
+
+    /// <summary>
+    /// The fraction of the viewport's width/height added as a margin on each
+    /// side when gating which cells a presentation refresh re-portrays now, so a
+    /// cell whose symbols or over-render reach just outside the visible box is
+    /// still refreshed eagerly rather than deferred to a reveal.
+    /// </summary>
+    private const double ViewportRefreshMarginFraction = 0.5;
+
+    /// <summary>
+    /// The most recent presentation applied by <see cref="RefreshAsync"/>, used
+    /// to re-portray a cell that was deferred as off-view when it later scrolls
+    /// into view (<see cref="RefreshRevealedAsync"/>). Immutable; a plain
+    /// reference read/write under <c>_sync</c> is sufficient.
+    /// </summary>
+    private MapPresentationState? _currentPresentation;
+
+    /// <summary>Creates a Mapsui dataset-layer session.</summary>
+    /// <param name="layerBands">The map layer bands the session will mutate.</param>
+    /// <param name="processorOwner">The owner from which render leases are acquired.</param>
+    /// <param name="renderer">The processor-to-Mapsui renderer.</param>
+    public MapsuiDatasetLayerSession(
+        MapsuiLayerBands layerBands,
+        DatasetProcessorOwner processorOwner,
+        MapsuiDatasetRenderer renderer)
+        : this(
+            layerBands,
+            processorOwner,
+            renderer,
+            new InteroperabilityAuthorityProvider(new InteroperabilityAuthority()))
+    {
+    }
+
+    /// <summary>Creates a Mapsui dataset-layer session.</summary>
+    /// <param name="layerBands">The map layer bands the session will mutate.</param>
+    /// <param name="processorOwner">The owner from which render leases are acquired.</param>
+    /// <param name="renderer">The processor-to-Mapsui renderer.</param>
+    /// <param name="authorityProvider">
+    /// The runtime S-98 cross-product ordering and suppression authority.
+    /// </param>
+    /// <param name="redrawRequested">
+    /// Optional per-session redraw action, invoked (possibly from a background
+    /// thread) when a vector renderer publishes a settled cached / scene / tile
+    /// image so the host can repaint the map. The session stamps it onto every
+    /// dataset layer it installs. When <see langword="null"/> the renderers fall
+    /// back to <c>BaseLayer.DataHasChanged()</c>. Typically invalidates the
+    /// attached map (e.g. <c>Map.RefreshGraphics()</c>), optionally marshalled
+    /// onto a UI thread.
+    /// </param>
+    /// <param name="stackMarshal">
+    /// Optional post to the map-owning (UI) thread. When set, a rendered cell's
+    /// arrival composes the layer stack on the work scheduler and applies it
+    /// through this post (see the remarks on the type). When
+    /// <see langword="null"/>, every compose runs inline on the calling thread,
+    /// which suits headless and single-threaded hosts.
+    /// </param>
+    /// <param name="chartSession">
+    /// The map's chart session (map rendering slice&#160;8), which draws the
+    /// session's tiled layers as chart tiles through one chart layer per run.
+    /// When <see langword="null"/>, a session over the process-wide
+    /// <see cref="ChartEngine.Options"/>.
+    /// </param>
+    public MapsuiDatasetLayerSession(
+        MapsuiLayerBands layerBands,
+        DatasetProcessorOwner processorOwner,
+        MapsuiDatasetRenderer renderer,
+        IInteroperabilityAuthorityProvider authorityProvider,
+        Action? redrawRequested = null,
+        Action<Action>? stackMarshal = null,
+        ChartSession? chartSession = null)
+    {
+        ArgumentNullException.ThrowIfNull(layerBands);
+        ArgumentNullException.ThrowIfNull(processorOwner);
+        ArgumentNullException.ThrowIfNull(renderer);
+        ArgumentNullException.ThrowIfNull(authorityProvider);
+        _layerBands = layerBands;
+        _processorOwner = processorOwner;
+        _renderer = renderer;
+        _authorityProvider = authorityProvider;
+        _redrawRequested = redrawRequested;
+        _stackMarshal = stackMarshal;
+        _chartSession = chartSession ?? new ChartSession(ChartEngine.Options);
+        _authorityProvider.CurrentChanged += OnAuthorityChanged;
+        Query = new S100MapQuery(this);
+    }
+
+    /// <summary>
+    /// Reusable geographic query surface (feature / coverage picking) over the
+    /// session's currently-shown datasets.
+    /// </summary>
+    public IS100MapQuery Query { get; }
+
+    /// <summary>
+    /// Raised after the final dataset-band projection changes.
+    /// </summary>
+    public event EventHandler? LayersChanged;
+
+    /// <summary>Raised after the aggregate registered time range changes.</summary>
+    public event EventHandler? TimeRangeChanged;
+
+    /// <summary>Raised after the global map clock changes.</summary>
+    public event EventHandler<MapSessionCurrentTimeEventArgs>? CurrentTimeChanged;
+
+    /// <summary>
+    /// Raised once a processor lease is held and a registered dataset is about
+    /// to render, for single renders and each dataset of a coalesced refresh.
+    /// A dataset removed or unregistered before its lease is acquired raises no
+    /// lifecycle event.
+    /// </summary>
+    public event EventHandler<MapSessionDatasetRenderEventArgs>? DatasetRenderStarted;
+
+    /// <summary>
+    /// Raised after a successful render installs a registered dataset's
+    /// generated layers. Not raised when the render throws, is cancelled, or is
+    /// superseded/removed mid-flight — those leave a
+    /// <see cref="DatasetRenderStarted"/> with no matching completion (a
+    /// swallowed refresh failure instead raises <see cref="DatasetRenderFailed"/>).
+    /// </summary>
+    public event EventHandler<MapSessionDatasetRenderEventArgs>? DatasetRenderCompleted;
+
+    /// <summary>
+    /// Raised when one dataset fails during a coalesced time or presentation
+    /// refresh. Other registered datasets continue refreshing. A single
+    /// <see cref="RenderAsync"/> surfaces its error by throwing instead.
+    /// </summary>
+    public event EventHandler<MapSessionDatasetRenderFailedEventArgs>? DatasetRenderFailed;
+
+    /// <summary>
+    /// Sets the mariner choices consumed by S-98 cross-product rules and
+    /// dataset scale-window projection.
+    /// </summary>
+    /// <param name="mariner">The current immutable mariner settings.</param>
+    public void SetMarinerSettings(MarinerSettings mariner)
+    {
+        ArgumentNullException.ThrowIfNull(mariner);
+
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            var previousMariner = _mariner;
+            var previousIgnoreScaleMinimum = _ignoreScaleMinimum;
+            _mariner = mariner;
+            _ignoreScaleMinimum = mariner.IgnoreScaleMinimum;
+            try
+            {
+                ComposeLayers();
+            }
+            catch
+            {
+                _mariner = previousMariner;
+                _ignoreScaleMinimum = previousIgnoreScaleMinimum;
+                throw;
+            }
+        }
+
+        LayersChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Adds or updates renderer-neutral state for a dataset.
+    /// </summary>
+    /// <param name="dataset">The authoritative host state.</param>
+    /// <param name="minimumDisplayScale">
+    /// Optional catalogue coarsest display-scale denominator.
+    /// </param>
+    /// <param name="maximumDisplayScale">
+    /// Optional catalogue compilation-scale denominator.
+    /// </param>
+    public void SetDataset(
+        MapDataset dataset,
+        int? minimumDisplayScale = null,
+        int? maximumDisplayScale = null)
+    {
+        ArgumentNullException.ThrowIfNull(dataset);
+
+        TimePolicy? timePolicy = null;
+        var adjustsDepths = false;
+        DateTime? issueTime = null;
+        DateTime? nextIssueTime = null;
+        string? timelineLabel = null;
+        string? timelineDetail = null;
+        DatasetForecastRun? forecastRun = null;
+        if (_processorOwner.TryAcquire(dataset.Id, out var processorLease))
+        {
+            using (processorLease)
+            {
+                adjustsDepths = processorLease.Processor is IDepthAdjustableProcessor;
+                if (processorLease.Processor is ITimeAwareDatasetProcessor timeAware)
+                {
+                    timePolicy = TimePolicy.TryCreate(
+                        timeAware.TimeSemantics,
+                        timeAware.AvailableTimes);
+                    issueTime = timeAware.IssueTime;
+                    nextIssueTime = timeAware.NextIssueTime;
+                    timelineLabel = timeAware.TimelineLabel;
+                    timelineDetail = timeAware.TimelineDetail;
+                    forecastRun = timeAware.ForecastRun;
+                }
+            }
+        }
+
+        var rangeChanged = false;
+        DateTime? changedCurrent = null;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            var created = false;
+            if (!_entries.TryGetValue(dataset.Id, out var entry))
+            {
+                entry = new Entry(dataset);
+                _entries.Add(dataset.Id, entry);
+                _order.Add(dataset.Id);
+                created = true;
+            }
+
+            var previousDataset = entry.Dataset;
+            var previousTimePolicy = entry.TimePolicy;
+            var previousRenderedTime = entry.RenderedTime;
+            var previousMinimum = entry.CatalogueMinimumDisplayScale;
+            var previousMaximum = entry.MaximumDisplayScale;
+            entry.Dataset = ReconcileDatasetState(
+                dataset,
+                entry.LayerKeys,
+                entry.Dataset.SubLayers);
+            entry.TimePolicy = timePolicy;
+            entry.AdjustsDepths = adjustsDepths;
+            entry.IssueTime = issueTime;
+            entry.NextIssueTime = nextIssueTime;
+            entry.TimelineLabel = timelineLabel;
+            entry.TimelineDetail = timelineDetail;
+            entry.ForecastRun = forecastRun;
+            if (timePolicy is not null)
+            {
+                entry.Dataset = CopyDataset(
+                    entry.Dataset,
+                    entry.Dataset.SubLayers,
+                    timePolicy.AvailableTimes,
+                    created ? null : previousDataset.CurrentTime);
+            }
+            else
+            {
+                entry.Dataset = CopyDataset(
+                    entry.Dataset,
+                    entry.Dataset.SubLayers,
+                    [],
+                    currentTime: null);
+                entry.RenderedTime = null;
+            }
+            entry.CatalogueMinimumDisplayScale = minimumDisplayScale;
+            entry.MaximumDisplayScale = maximumDisplayScale;
+            try
+            {
+                (rangeChanged, changedCurrent) = RecomputeTimeState();
+                if (entry.TimePolicy is not null
+                    && (created || previousTimePolicy is null))
+                {
+                    entry.Dataset = CopyDataset(
+                        entry.Dataset,
+                        entry.Dataset.SubLayers,
+                        entry.TimePolicy.AvailableTimes,
+                        _time.Current is { } clock
+                            ? SelectTime(entry, clock)
+                            : entry.TimePolicy.AvailableTimes.FirstOrDefault());
+                }
+
+                // Hosts re-apply a dataset's state often (after each load
+                // step, after validation), mostly without changing anything
+                // the stack is built from, and rebuilding the whole S-98
+                // stack each time made every load cost as much as all the
+                // loaded datasets together.
+                if (ChangesComposition(
+                        entry,
+                        previousDataset,
+                        previousMinimum != minimumDisplayScale || previousMaximum != maximumDisplayScale))
+                {
+                    ComposeLayers();
+                }
+            }
+            catch
+            {
+                if (created)
+                {
+                    _entries.Remove(dataset.Id);
+                    _order.Remove(dataset.Id);
+                }
+                else
+                {
+                    entry.Dataset = previousDataset;
+                    entry.TimePolicy = previousTimePolicy;
+                    entry.RenderedTime = previousRenderedTime;
+                    entry.CatalogueMinimumDisplayScale = previousMinimum;
+                    entry.MaximumDisplayScale = previousMaximum;
+                }
+                RecomputeTimeState();
+                throw;
+            }
+        }
+
+        LayersChanged?.Invoke(this, EventArgs.Empty);
+        RaiseTimeEvents(rangeChanged, changedCurrent);
+    }
+
+    /// <summary>
+    /// Renders a registered processor through a safe lease and atomically
+    /// replaces its generated layers.
+    /// </summary>
+    /// <param name="datasetId">The dataset identity.</param>
+    /// <param name="presentation">
+    /// The immutable map presentation used to construct the product context.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>
+    /// The installed result, or <see langword="null"/> when the dataset was
+    /// removed or its processor changed while rendering.
+    /// </returns>
+    public async Task<MapsuiDatasetResult?> RenderAsync(
+        MapDatasetId datasetId,
+        MapPresentationState presentation,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        CancellationTokenSource localCts;
+        DateTime? selectedTime;
+        SemaphoreSlim datasetLock;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            if (!_entries.TryGetValue(datasetId, out var entry))
+                return null;
+            datasetLock = entry.RenderLock;
+            entry.RenderCts?.Cancel();
+            localCts = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken);
+            entry.RenderCts = localCts;
+            selectedTime = entry.TimePolicy is not null
+                ? entry.Dataset.CurrentTime
+                : null;
+        }
+
+        var enteredGate = false;
+        var enteredDatasetLock = false;
+        try
+        {
+            await _renderGate.EnterSharedAsync(localCts.Token).ConfigureAwait(true);
+            enteredGate = true;
+            await datasetLock.WaitAsync(localCts.Token).ConfigureAwait(true);
+            enteredDatasetLock = true;
+            return await RenderCoreAsync(
+                datasetId,
+                presentation,
+                selectedTime,
+                MapSessionRenderKind.Render,
+                localCts.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+        finally
+        {
+            if (enteredDatasetLock)
+                datasetLock.Release();
+            if (enteredGate)
+                _renderGate.ExitShared();
+
+            lock (_sync)
+            {
+                if (_entries.TryGetValue(datasetId, out var entry)
+                    && ReferenceEquals(entry.RenderCts, localCts))
+                {
+                    entry.RenderCts = null;
+                }
+            }
+            localCts.Dispose();
+        }
+    }
+
+    /// <summary>Gets the aggregate time state for all registered datasets.</summary>
+    /// <returns>An immutable materialized snapshot.</returns>
+    public MapsuiMapTimeSnapshot GetTimeSnapshot()
+    {
+        lock (_sync)
+        {
+            return _time;
+        }
+    }
+
+    /// <summary>
+    /// Updates the global map clock without rendering. Hosts should then call
+    /// <see cref="RefreshTimeAsync"/> to apply the new time to dataset layers.
+    /// The clock is not clamped to the loaded range: it can sit in a gap or
+    /// past all data (a live timeline after every forecast has ended), where
+    /// each dataset's time policy hides it (#713).
+    /// </summary>
+    /// <param name="time">Requested global clock value; ignored while no dataset has time samples.</param>
+    public void SetCurrentTime(DateTime time)
+    {
+        DateTime? changedCurrent = null;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            if (!_time.IsActive || _time.Current == time)
+                return;
+
+            _time = CopyTimeSnapshot(_time, time);
+            changedCurrent = time;
+        }
+
+        if (changedCurrent is { } current)
+            CurrentTimeChanged?.Invoke(this, new MapSessionCurrentTimeEventArgs(current));
+    }
+
+    /// <summary>
+    /// Coalesces rapid clock changes, cancels the preceding time refresh, and
+    /// applies product-specific time gating while holding the render gate
+    /// exclusively.
+    /// </summary>
+    /// <param name="presentation">
+    /// The immutable map presentation used to construct product contexts.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the requested refresh.</param>
+    /// <returns>A task that completes when the applied refresh finishes.</returns>
+    public async Task RefreshTimeAsync(
+        MapPresentationState presentation,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        CancellationTokenSource localCts;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            _timeRefreshCts?.Cancel();
+            localCts = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken);
+            _timeRefreshCts = localCts;
+        }
+
+        try
+        {
+            await Task.Delay(TimeRefreshDebounceWindow, localCts.Token)
+                .ConfigureAwait(true);
+            await RefreshCoreAsync(
+                presentation,
+                timeAwareOnly: true,
+                viewport: null,
+                staleOnly: false,
+                localCts.Token).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            lock (_sync)
+            {
+                if (ReferenceEquals(_timeRefreshCts, localCts))
+                    _timeRefreshCts = null;
+            }
+            localCts.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Applies <paramref name="presentation"/> and re-renders only the datasets
+    /// whose processor honours <see cref="RenderContext.DepthAdjustment"/>
+    /// (<see cref="IDepthAdjustableProcessor"/>), for a change of the water
+    /// level applied to charted depths. Cancels the preceding depth refresh.
+    /// Off-view cells are deferred as <see cref="RefreshAsync"/> defers them.
+    /// </summary>
+    /// <param name="presentation">The presentation carrying the new adjustment.</param>
+    /// <param name="viewport">The current EPSG:3857 viewport, or <see langword="null"/> to re-render every such dataset.</param>
+    /// <param name="cancellationToken">Cancels the requested refresh.</param>
+    /// <returns>
+    /// <see langword="true"/> when this refresh was applied, or
+    /// <see langword="false"/> when a newer depth refresh superseded it.
+    /// </returns>
+    public async Task<bool> RefreshDepthAdjustedAsync(
+        MapPresentationState presentation,
+        MRect? viewport = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        CancellationTokenSource localCts;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            _currentPresentation = presentation;
+            _depthRefreshCts?.Cancel();
+            localCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _depthRefreshCts = localCts;
+        }
+
+        try
+        {
+            await RefreshCoreAsync(
+                presentation,
+                timeAwareOnly: false,
+                viewport,
+                staleOnly: false,
+                localCts.Token,
+                depthAdjustedOnly: true).ConfigureAwait(true);
+            return true;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        finally
+        {
+            lock (_sync)
+            {
+                if (ReferenceEquals(_depthRefreshCts, localCts))
+                    _depthRefreshCts = null;
+            }
+
+            localCts.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Cancels the preceding full refresh and re-renders registered datasets
+    /// while holding the render gate exclusively, preserving time gating.
+    /// </summary>
+    /// <param name="presentation">
+    /// The immutable map presentation used to construct product contexts.
+    /// </param>
+    /// <param name="viewport">
+    /// The current EPSG:3857 viewport, or <see langword="null"/> to re-portray
+    /// every registered dataset (the legacy behaviour). When supplied, only
+    /// cells whose extent intersects the viewport (grown by a margin) are
+    /// re-portrayed now; off-view cells are marked stale and re-portrayed lazily
+    /// by <see cref="RefreshRevealedAsync"/> when they scroll into view. This
+    /// keeps a presentation change over a large exchange set proportional to the
+    /// visible cell count rather than the loaded cell count.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the requested refresh.</param>
+    /// <returns>
+    /// A task that returns <see langword="true"/> when this refresh was applied,
+    /// or <see langword="false"/> when a newer refresh superseded it.
+    /// </returns>
+    public async Task<bool> RefreshAsync(
+        MapPresentationState presentation,
+        MRect? viewport = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        CancellationTokenSource localCts;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            _currentPresentation = presentation;
+            _presentationRefreshCts?.Cancel();
+            localCts = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken);
+            _presentationRefreshCts = localCts;
+        }
+
+        try
+        {
+            await RefreshCoreAsync(
+                presentation,
+                timeAwareOnly: false,
+                viewport,
+                staleOnly: false,
+                localCts.Token).ConfigureAwait(true);
+            return true;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        finally
+        {
+            lock (_sync)
+            {
+                if (ReferenceEquals(_presentationRefreshCts, localCts))
+                    _presentationRefreshCts = null;
+            }
+            localCts.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Re-portrays the cells that a prior viewport-gated <see cref="RefreshAsync"/>
+    /// deferred as off-view (<see cref="Entry.NeedsRefresh"/>) and that now
+    /// intersect <paramref name="viewport"/>, using the most recently applied
+    /// presentation. A no-op when no presentation has been applied yet or no
+    /// stale cell is in view. Intended to be driven (debounced) from the host's
+    /// viewport-changed signal so a deferred cell refreshes as it scrolls in.
+    /// </summary>
+    /// <param name="viewport">The current EPSG:3857 viewport.</param>
+    /// <param name="cancellationToken">Cancels the requested refresh.</param>
+    /// <returns>
+    /// <see langword="true"/> when the pass ran to completion, or
+    /// <see langword="false"/> when it was cancelled/superseded.
+    /// </returns>
+    public async Task<bool> RefreshRevealedAsync(
+        MRect viewport,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(viewport);
+
+        MapPresentationState? presentation;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            presentation = _currentPresentation;
+        }
+
+        if (presentation is null)
+            return false;
+
+        try
+        {
+            await RefreshCoreAsync(
+                presentation,
+                timeAwareOnly: false,
+                viewport,
+                staleOnly: true,
+                cancellationToken).ConfigureAwait(true);
+            return true;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+    }
+
+    private async Task RefreshCoreAsync(
+        MapPresentationState presentation,
+        bool timeAwareOnly,
+        MRect? viewport,
+        bool staleOnly,
+        CancellationToken cancellationToken,
+        bool depthAdjustedOnly = false)
+    {
+        var kind = timeAwareOnly
+            ? MapSessionRenderKind.TimeRefresh
+            : MapSessionRenderKind.PresentationRefresh;
+
+        // Grow the viewport by a margin so a cell whose symbols/over-render reach
+        // just outside the visible box is refreshed eagerly rather than deferred.
+        var gate = viewport?.Grow(
+            viewport.Width * ViewportRefreshMarginFraction,
+            viewport.Height * ViewportRefreshMarginFraction);
+
+        await _renderGate.EnterExclusiveAsync(cancellationToken).ConfigureAwait(true);
+        try
+        {
+            MapDatasetId[] datasetIds;
+            lock (_sync)
+            {
+                datasetIds = _order.ToArray();
+            }
+
+            // Re-portray the datasets concurrently (bounded), then compose once.
+            //
+            // The heavy portrayal runs on worker threads and the pipeline is
+            // thread-safe across cells — per-cell processors and catalogues,
+            // per-context Lua, and lock/ConcurrentDictionary-guarded shared caches
+            // and catalogue managers — so re-portraying different cells in
+            // parallel is safe. Each cell applies its rendering with compose:false
+            // (its own _sync-guarded critical section, touching no Map.Layers);
+            // the whole stack is composed exactly once after the loop (see the
+            // compose parameter on RenderCoreAsync). Composing once turns an
+            // N-cell refresh from N whole-stack projections + overlap-suppression
+            // passes (and N Map.Layers rebuilds) into one, and — via the
+            // ConfigureAwait(true) resume below — keeps that single Map.Layers
+            // mutation on the caller's (UI) thread. Concurrency is capped well
+            // below the core count to leave head-room for the tile render
+            // subsystem's own workers.
+            var needsCompose = 0;
+            await Parallel.ForEachAsync(
+                datasetIds,
+                new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = MaxRefreshConcurrency,
+                    CancellationToken = cancellationToken,
+                },
+                async (datasetId, ct) =>
+                {
+                    if (await RefreshDatasetAsync(
+                        datasetId, presentation, timeAwareOnly, gate, staleOnly, kind, ct, depthAdjustedOnly)
+                        .ConfigureAwait(false))
+                    {
+                        Interlocked.Exchange(ref needsCompose, 1);
+                    }
+                }).ConfigureAwait(true);
+
+            // Compose the deferred renderings (and any deferred clears) once, on
+            // this — the caller's UI — thread. Nothing to do when no dataset
+            // applied a new rendering or clear (e.g. a time refresh where every
+            // cell was already current, or a viewport-gated pass that deferred
+            // every off-view cell). Skipped silently if the session was disposed
+            // mid-refresh.
+            if (needsCompose != 0)
+            {
+                var composed = false;
+                lock (_sync)
+                {
+                    if (!_disposed)
+                    {
+                        ComposeLayers();
+                        composed = true;
+                    }
+                }
+
+                if (composed)
+                    LayersChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+        finally
+        {
+            _renderGate.ExitExclusive();
+        }
+    }
+
+    /// <summary>
+    /// Refreshes one dataset as part of a bulk <see cref="RefreshCoreAsync"/>
+    /// pass: applies the viewport and time-policy gates, clears a time-aware cell
+    /// that has no sample for the current clock, or re-portrays the cell with
+    /// deferred composition (<c>compose: false</c>).
+    /// <para>
+    /// Viewport gating (presentation refreshes only): when <paramref name="gate"/>
+    /// is non-null, a cell whose extent falls outside it is <em>not</em>
+    /// re-portrayed — a normal pass marks it stale (<see cref="Entry.NeedsRefresh"/>)
+    /// and a <paramref name="staleOnly"/> reveal pass skips any cell that is not
+    /// both stale and in view. Time refreshes pass a null gate and never touch
+    /// the stale flag, so presentation-staleness survives a time scrub.
+    /// </para>
+    /// <para>
+    /// A per-dataset failure is surfaced as <see cref="DatasetRenderFailed"/> and
+    /// swallowed so siblings keep refreshing; a cancellation still propagates.
+    /// Safe to run concurrently for distinct datasets — it touches only this
+    /// dataset's entry (under <c>_sync</c>) and the thread-safe portrayal
+    /// pipeline. Returns <see langword="true"/> when a new rendering was applied
+    /// and the stack therefore needs composing.
+    /// </para>
+    /// </summary>
+    private async Task<bool> RefreshDatasetAsync(
+        MapDatasetId datasetId,
+        MapPresentationState presentation,
+        bool timeAwareOnly,
+        MRect? gate,
+        bool staleOnly,
+        MapSessionRenderKind kind,
+        CancellationToken cancellationToken,
+        bool depthAdjustedOnly = false)
+    {
+        TimePolicy? policy;
+        DateTime? selectedTime;
+        bool alreadyCurrent;
+        lock (_sync)
+        {
+            if (!_entries.TryGetValue(datasetId, out var entry))
+                return false;
+            policy = entry.TimePolicy;
+            if (timeAwareOnly && policy is null)
+                return false;
+            if (depthAdjustedOnly && !entry.AdjustsDepths)
+                return false;
+
+            // Viewport gating and stale tracking apply to presentation refreshes
+            // and their reveal passes, never to time refreshes (gate is null and
+            // the stale flag is left untouched, so a time scrub does not clear a
+            // cell's presentation-staleness).
+            if (!timeAwareOnly)
+            {
+                var visible = gate is null
+                    || entry.Extent is null
+                    || entry.Extent.Intersects(gate);
+
+                if (staleOnly)
+                {
+                    // Reveal pass: only re-portray a cell previously deferred and
+                    // now back in view.
+                    if (!entry.NeedsRefresh || !visible)
+                        return false;
+                }
+                else if (!visible)
+                {
+                    // Off-view during a presentation change: defer it.
+                    entry.NeedsRefresh = true;
+                    return false;
+                }
+
+                // Committing to re-portray with the current presentation.
+                entry.NeedsRefresh = false;
+            }
+
+            selectedTime = policy is not null && _time.Current is { } clock
+                ? SelectTime(entry, clock)
+                : null;
+            alreadyCurrent = policy is not null
+                && entry.RenderedTime == selectedTime
+                && entry.RenderedAge == StaleAgeOf(entry, selectedTime)
+                && (selectedTime is null || entry.Layers.Count > 0);
+        }
+
+        if (timeAwareOnly && alreadyCurrent)
+            return false;
+
+        try
+        {
+            if (policy is not null && selectedTime is null)
+            {
+                // Hide the time-aware cell that has no sample for the current
+                // clock, but defer composition to RefreshCoreAsync's single
+                // UI-thread pass: this runs on a Parallel.ForEachAsync worker and
+                // must not mutate Map.Layers here. Returning the clear result sets
+                // needsCompose so the final compose reflects the removal.
+                return ClearLayersCore(datasetId, updateTime: true, compose: false);
+            }
+
+            var rendered = await RenderCoreAsync(
+                datasetId,
+                presentation,
+                selectedTime,
+                kind,
+                cancellationToken,
+                compose: false).ConfigureAwait(false);
+            return rendered is not null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            DatasetRenderFailed?.Invoke(
+                this,
+                new MapSessionDatasetRenderFailedEventArgs(
+                    datasetId,
+                    kind,
+                    exception));
+            return false;
+        }
+    }
+
+    /// <summary>Renders one registered dataset and applies its layers to the map.</summary>
+    /// <param name="datasetId">The registered dataset to render.</param>
+    /// <param name="presentation">Presentation state (palette, mariner settings, viewport) to render with.</param>
+    /// <param name="selectedTime">Time step to render for time-varying data, or <see langword="null"/>.</param>
+    /// <param name="kind">Why the render was requested; reported on the lifecycle events.</param>
+    /// <param name="cancellationToken">Cancels the render.</param>
+    /// <param name="compose">
+    /// When <see langword="true"/> (the default, single-dataset path) the layer
+    /// stack is recomposed and <see cref="LayersChanged"/> raised as soon as this
+    /// dataset's rendering is applied. A bulk refresh passes
+    /// <see langword="false"/> so composition — which rebuilds the <em>whole</em>
+    /// projected stack and recomputes cross-layer overlap suppression — runs once
+    /// after every dataset is applied instead of once per dataset (O(N) instead
+    /// of O(N²) for an N-cell exchange set). The per-dataset
+    /// <see cref="DatasetRenderCompleted"/> lifecycle event is always raised.
+    /// </param>
+    private async Task<MapsuiDatasetResult?> RenderCoreAsync(
+        MapDatasetId datasetId,
+        MapPresentationState presentation,
+        DateTime? selectedTime,
+        MapSessionRenderKind kind,
+        CancellationToken cancellationToken,
+        bool compose = true)
+    {
+        Entry renderEntry;
+        long generation;
+        ViewingGroupFilter? viewingGroups;
+        IReadOnlySet<string>? hiddenFeatures;
+        PortrayalTime? portrayalTime;
+        TimeSpan? staleAge;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            if (!_entries.TryGetValue(datasetId, out var entry))
+                return null;
+            renderEntry = entry;
+            generation = ++entry.Generation;
+            viewingGroups = entry.Dataset.ViewingGroups;
+            hiddenFeatures = entry.Dataset.HiddenFeatures;
+            portrayalTime = entry.Dataset.PortrayalTime;
+            staleAge = StaleAgeOf(entry, selectedTime);
+        }
+
+        if (!_processorOwner.TryAcquire(datasetId, out var lease))
+            return null;
+
+        MapsuiDatasetResult result;
+        long? stackVersion = null;
+        RenderingState? restore = null;
+        using (lease)
+        {
+            // Raise Started only once a lease is held, so it reliably means a
+            // render is about to run. A dataset removed/unregistered before this
+            // point yields no lifecycle events at all (rather than a Started that
+            // is never followed by Completed/Failed). Raised inside the using so
+            // a throwing subscriber still releases the lease.
+            DatasetRenderStarted?.Invoke(
+                this,
+                new MapSessionDatasetRenderEventArgs(datasetId, kind));
+
+            var context = presentation.CreateRenderContext(
+                lease.Processor,
+                selectedTime) with
+            {
+                ViewingGroups = viewingGroups,
+                HiddenFeatures = hiddenFeatures,
+                PortrayalTime = portrayalTime,
+                TimeStepAge = staleAge,
+            };
+            // Portrayal runs on the work scheduler at the priority of the
+            // load that asked for it (a lazy load's tier), else as visible
+            // work (map rendering slice 5).
+            var processor = lease.Processor;
+            var layout = renderEntry.CoverageLayout;
+            // Layers a stored scene put on the map before the cell was parsed
+            // are reused when the fresh portrayal keys them the same, so the
+            // swap to the parsed cell re-renders nothing (slice 11).
+            IReadOnlyList<ILayer> reusable;
+            lock (_sync)
+                reusable = renderEntry.Layers;
+            result = await WorkScheduler.Shared.RunAsync(
+                WorkStage.Portray,
+                token => _renderer.RenderAsync(processor, context, layout, reusable, token),
+                cancellationToken).ConfigureAwait(true);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            if (!_entries.TryGetValue(datasetId, out var entry)
+                || !ReferenceEquals(entry, renderEntry)
+                || entry.Generation != generation
+                || !_processorOwner.Owns(datasetId, lease.Processor))
+            {
+                return null;
+            }
+
+            var previous = entry.CaptureRendering();
+            entry.Apply(result);
+            entry.RenderedTime = entry.TimePolicy is null ? null : selectedTime;
+            entry.RenderedAge = entry.TimePolicy is null ? null : staleAge;
+            CaptureBaseStates(entry.Layers);
+            entry.Dataset = ReconcileDatasetState(
+                entry.Dataset,
+                entry.LayerKeys,
+                entry.Dataset.SubLayers);
+            if (entry.TimePolicy is not null)
+            {
+                entry.Dataset = CopyDataset(
+                    entry.Dataset,
+                    entry.Dataset.SubLayers,
+                    entry.TimePolicy.AvailableTimes,
+                    selectedTime);
+            }
+            if (compose && _stackMarshal is not null)
+            {
+                stackVersion = RequestStackCompose();
+                restore = previous;
+            }
+            else if (compose)
+            {
+                try
+                {
+                    ComposeLayers();
+                }
+                catch
+                {
+                    entry.RestoreRendering(previous);
+                    throw;
+                }
+            }
+        }
+
+        if (stackVersion is { } version)
+        {
+            // The stack job raises LayersChanged when it applies.
+            using var stackWait = Rendering.Engine.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.stack_wait");
+            await AwaitStackAsync(datasetId, renderEntry, generation, version, restore!).ConfigureAwait(true);
+        }
+        else if (compose)
+        {
+            LayersChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        DatasetRenderCompleted?.Invoke(
+            this,
+            new MapSessionDatasetRenderEventArgs(datasetId, kind));
+        return result;
+    }
+
+    /// <summary>
+    /// Puts a registered dataset's stored rendering on the map without a
+    /// processor: the layers <see cref="MapsuiDatasetRenderer.FromStoredScene"/>
+    /// built from a cell scene stored by an earlier session. The dataset draws
+    /// and joins the chart stack, but isn't picked until a processor is
+    /// registered and rendered, which then reuses these layers when its keys
+    /// match (map rendering slice 11).
+    /// </summary>
+    /// <param name="datasetId">The registered dataset.</param>
+    /// <param name="result">The stored rendering.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>
+    /// <see langword="true"/> once the stack holding the rendering is on the
+    /// map; <see langword="false"/> when the dataset isn't registered, already
+    /// has a processor, or rendered again meanwhile.
+    /// </returns>
+    public async Task<bool> PublishStoredAsync(
+        MapDatasetId datasetId,
+        MapsuiDatasetResult result,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        Entry publishEntry;
+        long generation;
+        long? stackVersion = null;
+        RenderingState? restore = null;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            if (!_entries.TryGetValue(datasetId, out var entry)
+                || _processorOwner.TryAcquire(datasetId, out var lease) && DisposeLease(lease))
+            {
+                return false;
+            }
+
+            publishEntry = entry;
+            generation = ++entry.Generation;
+            var previous = entry.CaptureRendering();
+            entry.Apply(result);
+            entry.RenderedTime = null;
+            entry.RenderedAge = null;
+            CaptureBaseStates(entry.Layers);
+            entry.Dataset = ReconcileDatasetState(
+                entry.Dataset,
+                entry.LayerKeys,
+                entry.Dataset.SubLayers);
+            if (_stackMarshal is not null)
+            {
+                stackVersion = RequestStackCompose();
+                restore = previous;
+            }
+            else
+            {
+                try
+                {
+                    ComposeLayers();
+                }
+                catch
+                {
+                    entry.RestoreRendering(previous);
+                    throw;
+                }
+            }
+        }
+
+        if (stackVersion is { } version)
+        {
+            using var stackWait = Rendering.Engine.Diagnostics.Telemetry.ActivitySource.StartActivity("s100.cell.stack_wait");
+            await AwaitStackAsync(datasetId, publishEntry, generation, version, restore!).ConfigureAwait(true);
+        }
+        else
+        {
+            LayersChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        return true;
+
+        static bool DisposeLease(DatasetProcessorLease lease)
+        {
+            lease.Dispose();
+            return true;
+        }
+    }
+
+    /// <summary>Removes a registered dataset's rendered layers from the map.</summary>
+    /// <param name="datasetId">The registered dataset whose layers are cleared.</param>
+    /// <param name="updateTime">
+    /// Whether to also reset the dataset's rendered time step, so a
+    /// time-varying dataset is re-rendered at the current time next pass.
+    /// </param>
+    /// <param name="compose">
+    /// When <see langword="true"/> (the default) the layer stack is recomposed
+    /// and <see cref="LayersChanged"/> raised inline on the calling thread. A
+    /// bulk refresh passes <see langword="false"/> — it may invoke this from a
+    /// <c>Parallel.ForEachAsync</c> worker thread, where composing
+    /// <see cref="Map.Layers"/> would run off the UI thread and defeat the
+    /// once-per-refresh composition — and uses the return value to drive the
+    /// single deferred compose instead.
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> when a registered dataset's rendering was cleared
+    /// (so a deferred caller must recompose), otherwise <see langword="false"/>.
+    /// </returns>
+    private bool ClearLayersCore(
+        MapDatasetId datasetId,
+        bool updateTime,
+        bool compose = true)
+    {
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            if (!_entries.TryGetValue(datasetId, out var entry))
+                return false;
+
+            var previous = entry.CaptureRendering();
+            var previousGeneration = entry.Generation;
+            entry.Generation++;
+            entry.ClearRendering();
+            if (updateTime && entry.TimePolicy is not null)
+            {
+                entry.RenderedTime = null;
+                entry.Dataset = CopyDataset(
+                    entry.Dataset,
+                    entry.Dataset.SubLayers,
+                    entry.TimePolicy.AvailableTimes,
+                    currentTime: null);
+            }
+
+            if (compose)
+            {
+                try
+                {
+                    ComposeLayers();
+                }
+                catch
+                {
+                    entry.RestoreRendering(previous);
+                    entry.Generation = previousGeneration;
+                    throw;
+                }
+            }
+        }
+
+        if (compose)
+            LayersChanged?.Invoke(this, EventArgs.Empty);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Removes generated layers while retaining dataset state and ordinary
+    /// ordering for lazy reload.
+    /// </summary>
+    /// <param name="datasetId">The dataset identity.</param>
+    public void ClearLayers(MapDatasetId datasetId)
+    {
+        ClearLayersCore(datasetId, updateTime: false);
+    }
+
+    /// <summary>
+    /// Removes a dataset's generated layers and optionally its retained state.
+    /// </summary>
+    /// <param name="datasetId">The dataset identity.</param>
+    /// <param name="preserveState">
+    /// Whether to retain renderer-neutral state and its order slot for a future
+    /// lazy reload.
+    /// </param>
+    /// <param name="removeProcessor">
+    /// Whether to retire the corresponding processor from the supplied owner.
+    /// </param>
+    /// <returns><see langword="true"/> when managed state existed.</returns>
+    public bool RemoveDataset(
+        MapDatasetId datasetId,
+        bool preserveState = false,
+        bool removeProcessor = true) =>
+        RemoveDatasets([datasetId], preserveState, removeProcessor) > 0;
+
+    /// <summary>
+    /// Removes several datasets' generated layers, and optionally their retained
+    /// state, recomposing the layer stack and the time state once for the whole
+    /// set rather than once per dataset. Removing many cells at once (a lazy-load
+    /// eviction pass) otherwise rebuilds the full S-98 stack for each of them.
+    /// </summary>
+    /// <param name="datasetIds">The dataset identities; unknown ones are skipped.</param>
+    /// <param name="preserveState">
+    /// Whether to retain renderer-neutral state and order slots for a future
+    /// lazy reload.
+    /// </param>
+    /// <param name="removeProcessor">
+    /// Whether to retire the corresponding processors from the supplied owner.
+    /// </param>
+    /// <returns>The number of datasets that had managed state.</returns>
+    /// <remarks>
+    /// All or nothing: when recomposition fails, every dataset is restored and
+    /// the exception propagates.
+    /// </remarks>
+    public int RemoveDatasets(
+        IReadOnlyCollection<MapDatasetId> datasetIds,
+        bool preserveState = false,
+        bool removeProcessor = true)
+    {
+        ArgumentNullException.ThrowIfNull(datasetIds);
+
+        var leases = new List<DatasetProcessorLease>();
+        var rangeChanged = false;
+        DateTime? changedCurrent = null;
+        var removed = 0;
+        try
+        {
+            lock (_sync)
+            {
+                ThrowIfDisposed();
+
+                // Detach every dataset first, recording how to restore it.
+                var undo = new List<RemovedDataset>();
+                foreach (var datasetId in datasetIds)
+                {
+                    if (!_entries.TryGetValue(datasetId, out var entry))
+                        continue;
+
+                    var removal = new RemovedDataset(
+                        datasetId,
+                        entry,
+                        entry.CaptureRendering(),
+                        entry.Generation,
+                        entry.TimePolicy,
+                        entry.RenderedTime,
+                        _order.IndexOf(datasetId));
+                    entry.Generation++;
+                    entry.ClearRendering();
+                    if (!preserveState)
+                    {
+                        _entries.Remove(datasetId);
+                        _order.Remove(datasetId);
+                    }
+                    else
+                    {
+                        entry.TimePolicy = null;
+                        entry.RenderedTime = null;
+                        entry.Dataset = CopyDataset(
+                            entry.Dataset,
+                            entry.Dataset.SubLayers,
+                            availableTimes: [],
+                            currentTime: null);
+                    }
+                    undo.Add(removal);
+                }
+
+                if (undo.Count == 0)
+                    return 0;
+
+                try
+                {
+                    (rangeChanged, changedCurrent) = RecomputeTimeState();
+                    ComposeLayers();
+                }
+                catch
+                {
+                    // Restore in reverse so each order slot is reinserted where it was.
+                    for (var i = undo.Count - 1; i >= 0; i--)
+                    {
+                        var removal = undo[i];
+                        removal.Entry.RestoreRendering(removal.Rendering);
+                        removal.Entry.Generation = removal.Generation;
+                        removal.Entry.TimePolicy = removal.TimePolicy;
+                        removal.Entry.RenderedTime = removal.RenderedTime;
+                        if (!preserveState)
+                        {
+                            _entries.Add(removal.DatasetId, removal.Entry);
+                            _order.Insert(removal.OrderIndex, removal.DatasetId);
+                        }
+                    }
+                    RecomputeTimeState();
+                    throw;
+                }
+
+                foreach (var removal in undo)
+                {
+                    // Retire the processor before cancelling the in-flight render.
+                    // Cancellation can complete the render, and a caller awaiting it,
+                    // synchronously; that caller must already see the processor as no
+                    // longer owned, or it reports success for a dataset this call just
+                    // removed (#873). The lease defers the processor's disposal until
+                    // it is released below.
+                    if (removeProcessor
+                        && _processorOwner.TryAcquire(removal.DatasetId, out var processorLease))
+                    {
+                        leases.Add(processorLease);
+                        _processorOwner.Remove(removal.DatasetId, processorLease.Processor);
+                    }
+
+                    removal.Entry.RenderCts?.Cancel();
+                }
+                removed = undo.Count;
+            }
+        }
+        finally
+        {
+            // Disposes the processors, when these were their last leases,
+            // outside the lock.
+            foreach (var lease in leases)
+                lease.Dispose();
+        }
+
+        LayersChanged?.Invoke(this, EventArgs.Empty);
+        RaiseTimeEvents(rangeChanged, changedCurrent);
+        return removed;
+    }
+
+    private sealed record RemovedDataset(
+        MapDatasetId DatasetId,
+        Entry Entry,
+        RenderingState Rendering,
+        long Generation,
+        TimePolicy? TimePolicy,
+        DateTime? RenderedTime,
+        int OrderIndex);
+
+    /// <summary>
+    /// Replaces ordinary dataset order.
+    /// </summary>
+    /// <param name="datasetIds">
+    /// Dataset identities in bottom-to-top paint order. Managed identities not
+    /// supplied are retained after the supplied sequence.
+    /// </param>
+    public void SetOrder(IReadOnlyList<MapDatasetId> datasetIds)
+    {
+        ArgumentNullException.ThrowIfNull(datasetIds);
+
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            var seen = new HashSet<MapDatasetId>();
+            var replacement = new List<MapDatasetId>(_order.Count);
+            foreach (var datasetId in datasetIds)
+            {
+                if (_entries.ContainsKey(datasetId) && seen.Add(datasetId))
+                    replacement.Add(datasetId);
+            }
+            foreach (var datasetId in _order)
+            {
+                if (seen.Add(datasetId))
+                    replacement.Add(datasetId);
+            }
+
+            var previous = _order.ToArray();
+            _order.Clear();
+            _order.AddRange(replacement);
+            try
+            {
+                ComposeLayers();
+            }
+            catch
+            {
+                _order.Clear();
+                _order.AddRange(previous);
+                throw;
+            }
+        }
+
+        LayersChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Enables or disables whole-cell scale minima and overlap suppression.
+    /// </summary>
+    /// <param name="ignoreScaleMinimum">
+    /// <see langword="true"/> to ignore minimum-display-scale windows.
+    /// </param>
+    public void SetIgnoreScaleMinimum(bool ignoreScaleMinimum)
+    {
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            if (_ignoreScaleMinimum == ignoreScaleMinimum)
+                return;
+
+            var previous = _ignoreScaleMinimum;
+            _ignoreScaleMinimum = ignoreScaleMinimum;
+            try
+            {
+                ComposeLayers();
+            }
+            catch
+            {
+                _ignoreScaleMinimum = previous;
+                throw;
+            }
+        }
+
+        LayersChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Gets a snapshot for one managed dataset.</summary>
+    /// <param name="datasetId">The dataset identity.</param>
+    /// <returns>The snapshot, or <see langword="null"/> when unknown.</returns>
+    public MapsuiMapDatasetSnapshot? GetDataset(MapDatasetId datasetId)
+    {
+        lock (_sync)
+        {
+            return _entries.TryGetValue(datasetId, out var entry)
+                ? CreateSnapshot(entry)
+                : null;
+        }
+    }
+
+    /// <summary>
+    /// Gets all managed datasets in ordinary bottom-to-top paint order.
+    /// </summary>
+    /// <returns>A materialized immutable snapshot.</returns>
+    public IReadOnlyList<MapsuiMapDatasetSnapshot> GetDatasets()
+    {
+        lock (_sync)
+        {
+            return CreateOrderedSnapshots();
+        }
+    }
+
+    /// <summary>
+    /// Gets the complete S-98-ordered and suppression-applied layer stack,
+    /// including entries from inactive datasets for inspection UI.
+    /// </summary>
+    /// <returns>A materialized bottom-to-top snapshot.</returns>
+    public IReadOnlyList<LayerStackEntry> GetLayerStackEntries()
+    {
+        lock (_sync)
+        {
+            return _stackEntries.ToArray();
+        }
+    }
+
+    /// <summary>
+    /// Gets the active S-98-projected Mapsui dataset band.
+    /// </summary>
+    /// <returns>A materialized bottom-to-top layer snapshot.</returns>
+    public IReadOnlyList<ILayer> GetStackedLayers()
+    {
+        lock (_sync)
+        {
+            return _stackedLayers.ToArray();
+        }
+    }
+
+    /// <summary>
+    /// Picks features and coverage samples at a geographic point, ranked
+    /// topmost-first by the S-98 paint stack. Backs <see cref="Query"/>.
+    /// </summary>
+    internal async Task<IReadOnlyList<S100Pick>> PickAsync(
+        GeographicPickQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        // Snapshot the pick inputs under the lock: the pickable datasets (active,
+        // visible, currently rendered/in-time) and each one's top-most position
+        // in the S-98 paint stack, plus the current clock for coverage sampling.
+        // An optional viewport resolution (metres/pixel) lets the pick match
+        // what is actually painted at the current zoom. Non-finite / non-positive
+        // values mean "no scale filtering", matching a null query resolution.
+        double? scaleResolution =
+            query.Resolution is { } r && double.IsFinite(r) && r > 0 ? r : null;
+
+        List<(MapDatasetId Id, int StackRank, HashSet<string>? Suppressed)> pickable = [];
+        DateTime? currentTime;
+        lock (_sync)
+        {
+            ThrowIfDisposed();
+            currentTime = _time.Current;
+            var topStackIndex = new Dictionary<string, int>(StringComparer.Ordinal);
+            // Features an S-98 rule suppressed (R-101-102-B: S-101 depth
+            // areas under a visible S-102) aren't drawn, so they aren't picked.
+            var suppressed = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+            for (var i = 0; i < _stackEntries.Count; i++)
+            {
+                var stackEntry = _stackEntries[i];
+                topStackIndex[stackEntry.SourceDatasetId] = i; // last wins = topmost
+                if (stackEntry.SuppressedFeatures is { Count: > 0 } dropped)
+                {
+                    if (!suppressed.TryGetValue(stackEntry.SourceDatasetId, out var set))
+                    {
+                        set = new HashSet<string>(StringComparer.Ordinal);
+                        suppressed[stackEntry.SourceDatasetId] = set;
+                    }
+
+                    set.UnionWith(dropped);
+                }
+            }
+
+            foreach (var id in _order)
+            {
+                if (!_entries.TryGetValue(id, out var entry))
+                    continue;
+                // Only datasets actually painted right now are pickable:
+                // IsDrawing covers active/visible/opacity and per-sub-layer
+                // visibility, and a missing stack index means the dataset is
+                // absent from the current S-98 projected stack (e.g. fully
+                // overlap-suppressed), so it is not on screen to pick.
+                if (!IsDrawing(entry) || !topStackIndex.TryGetValue(id.Value, out var index))
+                    continue;
+                // Whole-cell scale window: when the caller supplied a resolution
+                // and this cell's content is entirely scaled out at that zoom
+                // (the same ApplyCellScaleWindow cutoff that drops the finer cell
+                // when you zoom past its smallest-scale edge), it is not on screen
+                // to pick. A null cutoff means the cell has no minimum-display-scale
+                // window, so it is always pickable regardless of zoom.
+                if (scaleResolution is { } res
+                    && entry.ContentMaxVisibleResolution is { } cutoff
+                    && res > cutoff)
+                    continue;
+                pickable.Add((id, index, suppressed.GetValueOrDefault(id.Value)));
+            }
+        }
+
+        if (pickable.Count == 0)
+            return [];
+
+        var radius = double.IsFinite(query.RadiusMeters) && query.RadiusMeters > 0
+            ? query.RadiusMeters
+            : 0.0;
+
+        return await Task.Run(
+            () => PickCore(query, radius, currentTime, pickable, cancellationToken),
+            cancellationToken).ConfigureAwait(true);
+    }
+
+    private IReadOnlyList<S100Pick> PickCore(
+        GeographicPickQuery query,
+        double radius,
+        DateTime? currentTime,
+        List<(MapDatasetId Id, int StackRank, HashSet<string>? Suppressed)> pickable,
+        CancellationToken cancellationToken)
+    {
+        var ranked = new List<(int StackRank, int PrimitiveRank, double Distance, S100Pick Pick)>();
+        foreach (var (id, stackRank, suppressed) in pickable)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_processorOwner.TryAcquire(id, out var lease))
+                continue;
+
+            using (lease)
+            {
+                var processor = lease.Processor;
+                // The dataset draws at every world copy in view (issue #773),
+                // so a pick on a copy hits the data one world east or west of
+                // the pointer. The first longitude with a hit wins.
+                var extent = processor.Metadata.Extent;
+                foreach (var longitude in WorldCopies.CandidateLongitudes(
+                    query.Longitude, extent?.WestLongitude, extent?.EastLongitude))
+                {
+                    if (PickDataset(processor, id, stackRank, query.Latitude, longitude, radius, currentTime, suppressed, ranked))
+                        break;
+                }
+            }
+        }
+
+        ranked.Sort(static (a, b) =>
+        {
+            // Higher stack index = painted later = on top → topmost first.
+            var byStack = b.StackRank.CompareTo(a.StackRank);
+            if (byStack != 0)
+                return byStack;
+            // Point (1) before Curve (2) before Surface (3).
+            var byPrimitive = a.PrimitiveRank.CompareTo(b.PrimitiveRank);
+            return byPrimitive != 0 ? byPrimitive : a.Distance.CompareTo(b.Distance);
+        });
+
+        IEnumerable<S100Pick> ordered = ranked.Select(entry => entry.Pick);
+        if (query.MaxResults is { } max)
+            ordered = ordered.Take(Math.Max(0, max));
+        return ordered.ToArray();
+    }
+
+    /// <summary>
+    /// Adds <paramref name="processor"/>'s feature picks at the point to
+    /// <paramref name="ranked"/>, or its coverage pick when no feature is hit.
+    /// Returns whether anything was picked.
+    /// </summary>
+    private static bool PickDataset(
+        IDatasetProcessor processor,
+        MapDatasetId id,
+        int stackRank,
+        double latitude,
+        double longitude,
+        double radius,
+        DateTime? currentTime,
+        HashSet<string>? suppressed,
+        List<(int StackRank, int PrimitiveRank, double Distance, S100Pick Pick)> ranked)
+    {
+        var hits = processor.HitTestFeatures(latitude, longitude, radius);
+        if (suppressed is not null)
+            hits = [.. hits.Where(hit => !suppressed.Contains(hit.FeatureRef))];
+        if (hits.Count > 0)
+        {
+            foreach (var hit in hits)
+            {
+                var info = processor.GetFeatureInfoAt(hit.Ordinal)
+                    ?? processor.GetFeatureInfo(hit.FeatureRef);
+                if (info is null)
+                    continue;
+                ranked.Add((
+                    stackRank,
+                    (int)hit.Primitive,
+                    hit.DistanceMeters,
+                    new S100Pick
+                    {
+                        DatasetId = id,
+                        Info = info,
+                        Geometry = processor.GetFeatureGeometryAt(hit.Ordinal),
+                        IsCoverage = false,
+                        FeatureType = hit.FeatureType,
+                        Primitive = hit.Primitive,
+                        Inside = hit.Inside,
+                        DistanceMeters = hit.DistanceMeters,
+                    }));
+            }
+
+            return true;
+        }
+
+        if (processor.GetCoverageInfo(latitude, longitude, currentTime) is { } coverage)
+        {
+            // Coverage picks sort after a dataset's feature picks.
+            ranked.Add((
+                stackRank,
+                int.MaxValue,
+                double.MaxValue,
+                new S100Pick
+                {
+                    DatasetId = id,
+                    Info = coverage,
+                    IsCoverage = true,
+                    Inside = true,
+                    DistanceMeters = 0.0,
+                }));
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Removes every managed dataset layer and subscription.</summary>
+    public void Dispose()
+    {
+        lock (_sync)
+        {
+            if (_disposed)
+                return;
+
+            _disposed = true;
+            _timeRefreshCts?.Cancel();
+            _presentationRefreshCts?.Cancel();
+            _depthRefreshCts?.Cancel();
+            CancelEntryRenders();
+            _authorityProvider.CurrentChanged -= OnAuthorityChanged;
+            _entries.Clear();
+            _order.Clear();
+            _stackEntries = [];
+            _stackedLayers = [];
+            _time = MapsuiMapTimeSnapshot.Empty;
+            foreach (var layer in _stampedRedrawLayers)
+            {
+                layer.RequestRedraw = null;
+            }
+
+            _stampedRedrawLayers.Clear();
+            _layerBands.ReplaceDatasetLayers([]);
+            RemoveChartLayers();
+            CancelStackWaiters();
+        }
+    }
+
+    /// <summary>
+    /// Composes the layer stack now, on the calling thread, under
+    /// <c>_sync</c>: captures, computes and applies it in one go. It counts as
+    /// a stack version, so a background compose captured before it never
+    /// overwrites it.
+    /// </summary>
+    private void ComposeLayers()
+    {
+        var input = CaptureStackInput(++_stackRequested);
+        ApplyStack(ComputeStack(input));
+    }
+
+    /// <summary>
+    /// Applies a computed stack to the layers and the map. Runs under
+    /// <c>_sync</c> on the map-owning thread: everything here is cheap
+    /// (display state, scale windows, clip attachment and the layer diff).
+    /// </summary>
+    private void ApplyStack(StackPlan plan)
+    {
+        var snapshots = plan.Input.Snapshots;
+        ApplyDisplayAndScaleToSourceLayers(snapshots);
+        ApplyDisplayAndScaleToProjectedLayers(plan.Input, plan.Projected);
+        ApplyOverlapSuppression(plan);
+        UpdateContentCutoffs(plan.Projected);
+        var datasetLayers = BuildMapLayers(plan.Input.Version, plan.Projected);
+        StampRedrawSink([.. plan.Projected.Select(item => item.Layer), .. datasetLayers.OfType<ChartLayer>()]);
+        _layerBands.ReplaceDatasetLayers(datasetLayers);
+        _stackEntries = plan.StackEntries;
+        _stackedLayers = plan.StackedLayers;
+        _stackApplied = Math.Max(_stackApplied, plan.Input.Version);
+        CompleteStackWaiters();
+    }
+
+    /// <summary>
+    /// Stamps the session's redraw action onto every installed vector dataset
+    /// layer so the background cached / scene / tile renderers can request a
+    /// repaint through the layer rather than a process-global hook, and clears it
+    /// from any previously-stamped layer that is no longer installed (so a stray
+    /// post-removal worker publish cannot invalidate the map and the redraw
+    /// delegate is released with the orphaned layer). No-op when the session was
+    /// created without a redraw action.
+    /// </summary>
+    private void StampRedrawSink(IReadOnlyList<ILayer> datasetLayers)
+    {
+        // Drop the sink from layers that were installed before but are not in the
+        // new set (a re-render replaces a layer instance; a removal drops one).
+        // Reorder / visibility recompositions keep the same instances, so those
+        // stay stamped.
+        foreach (var prior in _stampedRedrawLayers)
+        {
+            if (!datasetLayers.Contains(prior))
+            {
+                prior.RequestRedraw = null;
+            }
+        }
+
+        _stampedRedrawLayers.Clear();
+        if (_redrawRequested is not { } redraw)
+        {
+            return;
+        }
+
+        foreach (var layer in datasetLayers)
+        {
+            if (layer is InstrumentedMemoryLayer instrumented)
+            {
+                instrumented.RequestRedraw = redraw;
+                _stampedRedrawLayers.Add(instrumented);
+            }
+            else if (layer is ChartLayer chart)
+            {
+                chart.RequestRedraw = redraw;
+            }
+        }
+    }
+
+    private void ApplyDisplayAndScaleToSourceLayers(
+        IReadOnlyList<MapsuiMapDatasetSnapshot> snapshots)
+    {
+        foreach (var snapshot in snapshots)
+        {
+            for (var index = 0; index < snapshot.Layers.Count; index++)
+            {
+                var key = LayerKeyAt(snapshot, index);
+                var layer = snapshot.Layers[index];
+                RestoreBaseState(layer);
+                ApplyDisplayState(snapshot.Dataset, key, layer);
+            }
+
+            if (!_ignoreScaleMinimum
+                && snapshot.MinimumDisplayScale is int minimumDisplayScale)
+            {
+                MapsuiDatasetRenderer.ApplyCellScaleWindow(
+                    snapshot.Layers,
+                    minimumDisplayScale);
+            }
+        }
+    }
+
+    private void ApplyDisplayAndScaleToProjectedLayers(
+        StackInput input,
+        IReadOnlyList<MapsuiProjectedDatasetLayer> projected)
+    {
+        foreach (var item in projected)
+        {
+            if (!_entries.TryGetValue(item.DatasetId, out var entry)
+                || !input.Entries.TryGetValue(item.DatasetId, out var info))
+            {
+                continue;
+            }
+
+            RestoreProjectedBaseState(item, info.Snapshot);
+            ApplyDisplayState(entry.Dataset, item.LayerKey, item.Layer);
+            if (!_ignoreScaleMinimum
+                && EffectiveMinimumDisplayScale(entry) is int minimumDisplayScale)
+            {
+                MapsuiDatasetRenderer.ApplyCellScaleWindow(
+                    [item.Layer],
+                    minimumDisplayScale);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The overlap-suppression cells of a projected stack, one per dataset in
+    /// the order the projection first lists it, with the finer coverages that
+    /// clip each (computed off the map thread through
+    /// <see cref="CoverageOverlapIndex"/>; the same answer as
+    /// <see cref="OverlapSuppression.Apply"/>).
+    /// </summary>
+    private IReadOnlyList<(IReadOnlyList<ILayer> Layers, FinerCoverage[]? Finer)> ComputeOverlapSuppression(
+        StackInput input,
+        IReadOnlyList<MapsuiProjectedDatasetLayer> projected)
+    {
+        var cells = new List<OverlapSuppressionCell>();
+        // The engine's cells hold opaque owners; keep the typed layers alongside.
+        var cellLayers = new List<ILayer[]>();
+        foreach (var group in projected.GroupBy(item => item.DatasetId))
+        {
+            if (!input.Entries.TryGetValue(group.Key, out var info))
+                continue;
+
+            var layers = group.Select(item => item.Layer).ToArray();
+            // Whether any of the cell's layers draws once its display state is
+            // applied (Enabled and Opacity > 0), worked out without touching
+            // the layers, which the map may be drawing from.
+            var drawing = group.Any(item => DrawsWithDisplayState(info, item));
+            cellLayers.Add(layers);
+            cells.Add(new OverlapSuppressionCell
+            {
+                Layers = layers,
+                Coverage = drawing ? info.Snapshot.CoverageGeometry : null,
+                Rank = drawing ? info.Rank : null,
+                CutoffScaleDenominator = drawing ? info.Snapshot.MinimumDisplayScale : null,
+            });
+        }
+
+        var result = new (IReadOnlyList<ILayer>, FinerCoverage[]?)[cells.Count];
+        if (input.IgnoreScaleMinimum)
+        {
+            for (var i = 0; i < cells.Count; i++)
+                result[i] = (cellLayers[i], null);
+            return result;
+        }
+
+        FinerCoverage[]?[] finer;
+        lock (_overlapIndex)
+        {
+            _overlapIndex.Retain(input.Snapshots.Select(snapshot => snapshot.CoverageGeometry));
+            finer = _overlapIndex.Collect(cells);
+        }
+
+        for (var i = 0; i < cells.Count; i++)
+            result[i] = (cellLayers[i], finer[i]);
+        return result;
+    }
+
+    /// <summary>
+    /// Attaches a plan's overlap-suppression clips: clears every managed
+    /// layer that isn't in a cell, then sets each cell's finer coverages,
+    /// keeping a layer's attached set when it hasn't changed so its prepared
+    /// hidden region (<see cref="CoverageClip.GetHiddenCoverage"/>) survives.
+    /// </summary>
+    private void ApplyOverlapSuppression(StackPlan plan)
+    {
+        var inCell = new HashSet<ILayer>(ReferenceEqualityComparer.Instance);
+        foreach (var (layers, _) in plan.Suppression)
+        {
+            foreach (var layer in layers)
+                inCell.Add(layer);
+        }
+
+        foreach (var layer in _entries.Values
+            .SelectMany(entry => entry.Layers)
+            .Concat(plan.Projected.Select(item => item.Layer)))
+        {
+            if (!inCell.Contains(layer))
+                CoverageClip.Set(layer, null);
+        }
+
+        foreach (var (layers, finer) in plan.Suppression)
+        {
+            var attach = finer;
+            if (finer is not null
+                && layers.Count > 0
+                && CoverageClip.Get(layers[0]) is { } existing
+                && SameCoverages(existing, finer))
+            {
+                attach = existing;
+            }
+
+            foreach (var layer in layers)
+            {
+                if (attach is null || !ReferenceEquals(CoverageClip.Get(layer), attach))
+                    CoverageClip.Set(layer, attach);
+            }
+        }
+    }
+
+    private static bool SameCoverages(FinerCoverage[] a, FinerCoverage[] b)
+    {
+        if (a.Length != b.Length)
+            return false;
+        for (var i = 0; i < a.Length; i++)
+        {
+            if (!ReferenceEquals(a[i].Coverage, b[i].Coverage)
+                || !a[i].CutoffResolution.Equals(b[i].CutoffResolution))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="item"/>'s layer is enabled with a positive
+    /// opacity once <see cref="ApplyDisplayState"/> runs, from the same inputs:
+    /// the dataset and sub-layer state and the layer's portrayal opacity, which
+    /// a projected (S-98 rebuilt) layer takes from its source layer
+    /// (<see cref="RestoreProjectedBaseState"/>).
+    /// </summary>
+    private bool DrawsWithDisplayState(StackEntryInfo info, MapsuiProjectedDatasetLayer item)
+    {
+        var dataset = info.Snapshot.Dataset;
+        var subLayer = dataset.SubLayers.FirstOrDefault(
+            candidate => string.Equals(candidate.Key, item.LayerKey, StringComparison.Ordinal));
+        if (!dataset.IsActive || !dataset.IsVisible || !(subLayer?.IsVisible ?? true))
+            return false;
+
+        double portrayalOpacity;
+        if (item.Layer is not BaseLayer)
+        {
+            portrayalOpacity = _baseStates.TryGetValue(item.Layer, out var own) ? own.Opacity : 1.0;
+        }
+        else
+        {
+            var source = FindSourceLayer(item.LayerKey, info.Snapshot.LayerKeys, info.Snapshot.Layers, info.Snapshot.StackEntries);
+            var baseLayer = source is BaseLayer && !ReferenceEquals(source, item.Layer) ? source : item.Layer;
+            portrayalOpacity = _baseStates.TryGetValue(baseLayer, out var state) ? state.Opacity : baseLayer.Opacity;
+        }
+
+        return portrayalOpacity * dataset.Opacity * (subLayer?.Opacity ?? 1.0) > 0;
+    }
+
+    private void UpdateContentCutoffs(
+        IReadOnlyList<MapsuiProjectedDatasetLayer> projected)
+    {
+        foreach (var entry in _entries.Values)
+            entry.ContentMaxVisibleResolution = null;
+
+        if (_ignoreScaleMinimum)
+            return;
+
+        foreach (var group in projected.GroupBy(item => item.DatasetId))
+        {
+            if (!_entries.TryGetValue(group.Key, out var entry)
+                || EffectiveMinimumDisplayScale(entry) is null)
+            {
+                continue;
+            }
+
+            var cutoff = group
+                .Select(item => item.Layer)
+                .OfType<BaseLayer>()
+                .Where(layer => layer.MaxVisible < double.MaxValue)
+                .Select(layer => layer.MaxVisible)
+                .DefaultIfEmpty()
+                .Max();
+            entry.ContentMaxVisibleResolution = cutoff > 0 ? cutoff : null;
+        }
+    }
+
+    private (
+        IReadOnlyList<MapsuiProjectedDatasetLayer> Projected,
+        IReadOnlyList<LayerStackEntry> StackEntries,
+        IReadOnlyList<ILayer> StackedLayers) ProjectLayerStack(StackInput input)
+    {
+        var snapshots = input.Snapshots;
+        var authority = input.Authority;
+        var perDataset = new List<IReadOnlyList<SubLayerStackItem>>(snapshots.Count);
+        var prebuilt = new Dictionary<(string DatasetId, string LayerKey), LayerStackEntry>();
+
+        // Stack items carry the processor's own SourceDatasetId, not the
+        // session key, so map it back to the entry whose layout cache an S-98
+        // coverage rebuild should reuse (issue #855).
+        var layoutCaches = new Dictionary<string, CoverageLayoutCache>(StringComparer.Ordinal);
+        foreach (var snapshot in snapshots)
+        {
+            var layers = snapshot.Layers;
+            var datasetId = snapshot.Dataset.Id.Value;
+
+            if (snapshot.StackEntries is { Count: > 0 } stack)
+            {
+                var items = new List<SubLayerStackItem>(stack.Count);
+                var layoutCache = input.Entries.GetValueOrDefault(snapshot.Dataset.Id)?.CoverageLayout;
+                foreach (var stackEntry in stack)
+                {
+                    items.Add(stackEntry.Item);
+                    prebuilt[LayerStackProjector.KeyOf(stackEntry.Item)] = stackEntry;
+                    if (layoutCache is not null)
+                        layoutCaches[stackEntry.Item.SourceDatasetId] = layoutCache;
+                }
+                perDataset.Add(items);
+                continue;
+            }
+
+            var plane = authority.GetDefaultPlane(
+                snapshot.Dataset.Metadata.Spec.Name);
+            var syntheticItems = new List<SubLayerStackItem>(layers.Count);
+            for (var layerIndex = 0; layerIndex < layers.Count; layerIndex++)
+            {
+                var layerKey = FormattableString.Invariant($"__synth__{layerIndex}");
+                var item = new SubLayerStackItem(
+                    new SyntheticStackPayload(layerKey),
+                    plane,
+                    WithinPlanePriority: 0,
+                    SourceDatasetId: datasetId);
+                syntheticItems.Add(item);
+                prebuilt[(datasetId, layerKey)] =
+                    new LayerStackEntry(layers[layerIndex], item);
+            }
+            perDataset.Add(syntheticItems);
+        }
+
+        var topFirst = perDataset.AsEnumerable().Reverse().ToArray();
+        var sorted = LayerStackBuilder.Build(authority, topFirst);
+        var loaded = BuildLoadedDatasetInfos(snapshots);
+        var ruled = authority.ApplyRules(sorted, loaded, input.Mariner);
+        var stackEntries = LayerStackProjector.Project(
+            ruled,
+            prebuilt,
+            (item, subLayer) => _renderer.BuildCoverageLayer(
+                subLayer,
+                layoutCaches.GetValueOrDefault(item.SourceDatasetId)));
+
+        var activeById = snapshots.ToDictionary(
+            snapshot => snapshot.Dataset.Id.Value,
+            snapshot => snapshot.Dataset.IsActive,
+            StringComparer.Ordinal);
+        var activeEntries = stackEntries
+            .Where(entry => activeById.GetValueOrDefault(entry.SourceDatasetId))
+            .ToArray();
+        var projected = activeEntries
+            .Select(entry =>
+            {
+                var key = LayerStackProjector.KeyOf(entry.Item);
+                return new MapsuiProjectedDatasetLayer(
+                    new MapDatasetId(entry.SourceDatasetId),
+                    key.LayerKey,
+                    entry.Layer)
+                {
+                    SuppressedFeatures = entry.SuppressedFeatures,
+                };
+            })
+            .ToArray();
+        return (
+            projected,
+            stackEntries.ToArray(),
+            LayerStackProjector.ToLayerList(activeEntries));
+    }
+
+    private static IReadOnlyList<LoadedDatasetInfo> BuildLoadedDatasetInfos(
+        IReadOnlyList<MapsuiMapDatasetSnapshot> snapshots)
+    {
+        var result = new List<LoadedDatasetInfo>(snapshots.Count);
+        foreach (var snapshot in snapshots)
+        {
+            var dataset = snapshot.Dataset;
+            var active = dataset.IsActive
+                && dataset.IsVisible
+                && snapshot.IsDrawing;
+            result.Add(new LoadedDatasetInfo(
+                dataset.Id.Value,
+                dataset.Metadata.Spec.Name,
+                active));
+        }
+        return result;
+    }
+
+    private static void ValidateProjection(
+        IReadOnlyList<MapsuiProjectedDatasetLayer> projected,
+        IReadOnlyList<MapsuiMapDatasetSnapshot> snapshots)
+    {
+        ArgumentNullException.ThrowIfNull(projected);
+        var known = snapshots.Select(snapshot => snapshot.Dataset.Id).ToHashSet();
+        var layers = new HashSet<ILayer>();
+        foreach (var item in projected)
+        {
+            if (item is null)
+                throw new ArgumentException("The layer projection cannot contain null values.", nameof(projected));
+            if (!known.Contains(item.DatasetId))
+                throw new ArgumentException("The layer projection references an unknown dataset.", nameof(projected));
+            if (!layers.Add(item.Layer))
+                throw new ArgumentException("The layer projection cannot contain duplicate layers.", nameof(projected));
+        }
+    }
+
+    private IReadOnlyList<MapsuiMapDatasetSnapshot> CreateOrderedSnapshots()
+    {
+        var snapshots = new List<MapsuiMapDatasetSnapshot>(_order.Count);
+        foreach (var datasetId in _order)
+        {
+            if (_entries.TryGetValue(datasetId, out var entry))
+                snapshots.Add(CreateSnapshot(entry));
+        }
+        return snapshots;
+    }
+
+    private static MapsuiMapDatasetSnapshot CreateSnapshot(Entry entry)
+    {
+        var isDrawing = IsDrawing(entry);
+        return new MapsuiMapDatasetSnapshot
+        {
+            Dataset = entry.Dataset,
+            Layers = entry.Layers,
+            LayerKeys = entry.LayerKeys,
+            StackEntries = entry.StackEntries,
+            Extent = entry.Extent,
+            Info = entry.Info,
+            CoverageGeometry = entry.CoverageGeometry,
+            MinimumDisplayScale = EffectiveMinimumDisplayScale(entry),
+            MaximumDisplayScale = entry.MaximumDisplayScale,
+            ContentMaxVisibleResolution = entry.ContentMaxVisibleResolution,
+            IsDrawing = isDrawing,
+        };
+    }
+
+    private static MapDataset ReconcileDatasetState(
+        MapDataset dataset,
+        IReadOnlyList<string>? layerKeys,
+        IReadOnlyList<MapDatasetSubLayer> fallbackSubLayers)
+    {
+        if (layerKeys is null)
+        {
+            return CopyDataset(
+                dataset,
+                dataset.SubLayers.Count > 0
+                    ? dataset.SubLayers
+                    : fallbackSubLayers);
+        }
+        if (layerKeys.Count <= 1)
+            return CopyDataset(dataset, []);
+
+        var existing = fallbackSubLayers.ToDictionary(layer => layer.Key);
+        foreach (var layer in dataset.SubLayers)
+            existing[layer.Key] = layer;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var subLayers = new List<MapDatasetSubLayer>(layerKeys.Count);
+        foreach (var sourceKey in layerKeys)
+        {
+            var key = sourceKey;
+            var suffix = 1;
+            while (!seen.Add(key))
+                key = $"{sourceKey}#{++suffix}";
+
+            subLayers.Add(existing.TryGetValue(key, out var state)
+                ? state
+                : new MapDatasetSubLayer(key, key));
+        }
+        return CopyDataset(dataset, subLayers);
+    }
+
+    private static MapDataset CopyDataset(
+        MapDataset dataset,
+        IReadOnlyList<MapDatasetSubLayer> subLayers) =>
+        CopyDataset(
+            dataset,
+            subLayers,
+            dataset.AvailableTimes,
+            dataset.CurrentTime);
+
+    private static MapDataset CopyDataset(
+        MapDataset dataset,
+        IReadOnlyList<MapDatasetSubLayer> subLayers,
+        IReadOnlyList<DateTime> availableTimes,
+        DateTime? currentTime) =>
+        new(
+            dataset.Id,
+            dataset.Name,
+            dataset.Metadata,
+            dataset.IsVisible,
+            dataset.IsActive,
+            dataset.Opacity,
+            availableTimes,
+            currentTime,
+            subLayers,
+            dataset.Validation,
+            dataset.VersionAssessment,
+            dataset.ViewingGroups,
+            dataset.HiddenFeatures,
+            dataset.PortrayalTime);
+
+    private (bool RangeChanged, DateTime? CurrentChanged) RecomputeTimeState()
+    {
+        var previous = _time;
+        var samples = _entries.Values
+            .Select(entry => entry.TimePolicy)
+            .Where(policy => policy is not null)
+            .SelectMany(policy => policy!.AvailableTimes)
+            .Distinct()
+            .OrderBy(time => time)
+            .ToArray();
+        var minimum = samples.Length > 0 ? samples[0] : (DateTime?)null;
+        // A continuous dataset draws before its first step (a storm's past
+        // track), so the range starts where it does.
+        foreach (var policy in _entries.Values.Select(entry => entry.TimePolicy))
+        {
+            if (policy is { Selection: MapsuiTimeSelectionKind.Continuous } && minimum is { } lowest && policy.First < lowest)
+                minimum = policy.First;
+        }
+        var maximum = samples.Length > 0 ? samples[^1] : (DateTime?)null;
+        // The clock starts at the first sample and is kept as datasets come
+        // and go, even outside the new range (#713).
+        var current = minimum is null ? null : previous.Current ?? minimum;
+
+        var segments = ComputeCoverageSegments(minimum, maximum);
+        var datasets = _entries.Values
+            .Where(entry => entry.TimePolicy is { AvailableTimes.Count: > 0 })
+            .Select(entry => new MapsuiMapTimedDataset(
+                entry.Dataset.Name,
+                entry.TimePolicy!.First,
+                entry.TimePolicy.AvailableTimes.Max())
+            {
+                ProductSpec = entry.Dataset.Metadata.Spec.Name,
+                DatasetId = entry.Dataset.Id.Value,
+                IssueTime = entry.IssueTime,
+                NextIssueTime = entry.NextIssueTime,
+                TimelineLabel = entry.TimelineLabel,
+                TimelineDetail = entry.TimelineDetail,
+                ForecastRun = entry.ForecastRun,
+                Selection = entry.TimePolicy.Selection,
+                Tolerance = entry.TimePolicy.Tolerance,
+                StepKind = entry.TimePolicy.StepKind,
+                StaleAfter = entry.TimePolicy.StaleAfter,
+                StaleAfterIssue = entry.TimePolicy.StaleAfterIssue,
+                Supersession = entry.TimePolicy.Supersession,
+                Coverage = entry.TimePolicy.CoverageSegments,
+                Samples = entry.TimePolicy.AvailableTimes,
+            })
+            .ToArray();
+        _time = new MapsuiMapTimeSnapshot
+        {
+            Minimum = minimum,
+            Maximum = maximum,
+            Current = current,
+            Samples = samples,
+            CoverageSegments = segments,
+            Datasets = datasets,
+        };
+        var rangeChanged = previous.Minimum != minimum
+            || previous.Maximum != maximum
+            || !previous.Samples.SequenceEqual(samples)
+            || !previous.CoverageSegments.SequenceEqual(segments)
+            || !previous.Datasets.SequenceEqual(datasets);
+        return (rangeChanged, previous.Current != current ? current : null);
+    }
+
+    private IReadOnlyList<MapsuiMapTimeSegment> ComputeCoverageSegments(
+        DateTime? minimum,
+        DateTime? maximum)
+    {
+        if (minimum is not { } lower || maximum is not { } upper)
+            return [];
+
+        var intervals = new List<MapsuiMapTimeSegment>();
+        foreach (var policy in _entries.Values
+            .Select(entry => entry.TimePolicy)
+            .Where(policy => policy is not null))
+        {
+            foreach (var segment in policy!.CoverageSegments)
+            {
+                var start = segment.Start < lower ? lower : segment.Start;
+                var end = segment.End > upper ? upper : segment.End;
+                if (end >= start)
+                    intervals.Add(new MapsuiMapTimeSegment(start, end));
+            }
+        }
+        if (intervals.Count == 0)
+            return [];
+
+        intervals.Sort((left, right) => left.Start.CompareTo(right.Start));
+        var merged = new List<MapsuiMapTimeSegment>();
+        var currentStart = intervals[0].Start;
+        var currentEnd = intervals[0].End;
+        for (var index = 1; index < intervals.Count; index++)
+        {
+            var next = intervals[index];
+            if (next.Start <= currentEnd)
+            {
+                if (next.End > currentEnd)
+                    currentEnd = next.End;
+            }
+            else
+            {
+                merged.Add(new MapsuiMapTimeSegment(currentStart, currentEnd));
+                currentStart = next.Start;
+                currentEnd = next.End;
+            }
+        }
+        merged.Add(new MapsuiMapTimeSegment(currentStart, currentEnd));
+        return merged;
+    }
+
+    private static MapsuiMapTimeSnapshot CopyTimeSnapshot(
+        MapsuiMapTimeSnapshot source,
+        DateTime current) =>
+        new()
+        {
+            Minimum = source.Minimum,
+            Maximum = source.Maximum,
+            Current = current,
+            Samples = source.Samples,
+            CoverageSegments = source.CoverageSegments,
+            Datasets = source.Datasets,
+        };
+
+    private void RaiseTimeEvents(bool rangeChanged, DateTime? changedCurrent)
+    {
+        if (rangeChanged)
+            TimeRangeChanged?.Invoke(this, EventArgs.Empty);
+        if (changedCurrent is { } current)
+            CurrentTimeChanged?.Invoke(this, new MapSessionCurrentTimeEventArgs(current));
+    }
+
+    private void CancelEntryRenders()
+    {
+        foreach (var entry in _entries.Values)
+            entry.RenderCts?.Cancel();
+    }
+
+    private void ApplyDisplayState(
+        MapDataset dataset,
+        string layerKey,
+        ILayer layer)
+    {
+        var subLayer = dataset.SubLayers.FirstOrDefault(
+            candidate => string.Equals(candidate.Key, layerKey, StringComparison.Ordinal));
+        layer.Enabled = dataset.IsActive
+            && dataset.IsVisible
+            && (subLayer?.IsVisible ?? true);
+        var portrayalOpacity = _baseStates.TryGetValue(layer, out var baseState)
+            ? baseState.Opacity
+            : 1.0;
+        layer.Opacity = portrayalOpacity * dataset.Opacity * (subLayer?.Opacity ?? 1.0);
+    }
+
+    private void RestoreBaseState(ILayer layer)
+    {
+        if (layer is not BaseLayer baseLayer)
+            return;
+
+        var range = _baseStates.GetValue(
+            layer,
+            static source => new LayerBaseState(
+                ((BaseLayer)source).MinVisible,
+                ((BaseLayer)source).MaxVisible,
+                source.Opacity));
+        baseLayer.MinVisible = range.MinVisible;
+        baseLayer.MaxVisible = range.MaxVisible;
+    }
+
+    private void RestoreProjectedBaseState(
+        MapsuiProjectedDatasetLayer item,
+        MapsuiMapDatasetSnapshot rendering)
+    {
+        if (item.Layer is not BaseLayer projectedBase)
+            return;
+
+        var source = FindSourceLayer(item.LayerKey, rendering.LayerKeys, rendering.Layers, rendering.StackEntries);
+        if (source is not BaseLayer sourceBase || ReferenceEquals(source, item.Layer))
+        {
+            RestoreBaseState(item.Layer);
+            return;
+        }
+
+        var range = _baseStates.GetValue(
+            source,
+            static layer => new LayerBaseState(
+                ((BaseLayer)layer).MinVisible,
+                ((BaseLayer)layer).MaxVisible,
+                layer.Opacity));
+        projectedBase.MinVisible = range.MinVisible;
+        projectedBase.MaxVisible = range.MaxVisible;
+        _baseStates.Remove(item.Layer);
+        _baseStates.Add(item.Layer, range);
+    }
+
+    private static ILayer? FindSourceLayer(
+        string layerKey,
+        IReadOnlyList<string>? layerKeys,
+        IReadOnlyList<ILayer> layers,
+        IReadOnlyList<LayerStackEntry>? stackEntries)
+    {
+        if (layerKeys is not null)
+        {
+            for (var index = 0; index < layerKeys.Count; index++)
+            {
+                if (string.Equals(
+                        layerKeys[index],
+                        layerKey,
+                        StringComparison.Ordinal)
+                    && index < layers.Count)
+                {
+                    return layers[index];
+                }
+            }
+        }
+
+        if (stackEntries is not null)
+        {
+            foreach (var stackEntry in stackEntries)
+            {
+                if (string.Equals(
+                    LayerStackProjector.KeyOf(stackEntry.Item).LayerKey,
+                    layerKey,
+                    StringComparison.Ordinal))
+                {
+                    return stackEntry.Layer;
+                }
+            }
+        }
+
+        const string syntheticPrefix = "__synth__";
+        if (layerKey.StartsWith(syntheticPrefix, StringComparison.Ordinal)
+            && int.TryParse(
+                layerKey[syntheticPrefix.Length..],
+                System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var syntheticIndex)
+            && syntheticIndex < layers.Count)
+        {
+            return layers[syntheticIndex];
+        }
+
+        return null;
+    }
+
+    private void CaptureBaseStates(IEnumerable<ILayer> layers)
+    {
+        foreach (var layer in layers)
+        {
+            if (layer is BaseLayer baseLayer)
+            {
+                _baseStates.GetValue(
+                    layer,
+                    _ => new LayerBaseState(
+                        baseLayer.MinVisible,
+                        baseLayer.MaxVisible,
+                        baseLayer.Opacity));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether a change to one dataset's state (<see cref="SetDataset"/>) can
+    /// change the composed stack. A dataset with no rendered layers contributes
+    /// nothing to it: no layers or stack entries, and it never counts as active
+    /// in the S-98 rules (<see cref="LoadedDatasetInfo.Active"/>). Otherwise
+    /// composition reads the dataset's activity, visibility, opacity, product,
+    /// sub-layer display state and scale window.
+    /// </summary>
+    private static bool ChangesComposition(
+        Entry entry,
+        MapDataset previous,
+        bool scaleChanged)
+    {
+        if (entry.Layers.Count == 0 && entry.StackEntries is not { Count: > 0 })
+            return false;
+        var current = entry.Dataset;
+        if (scaleChanged)
+            return true;
+        if (previous.IsActive != current.IsActive
+            || previous.IsVisible != current.IsVisible
+            || previous.Opacity != current.Opacity
+            || !string.Equals(previous.Metadata.Spec.Name, current.Metadata.Spec.Name, StringComparison.Ordinal)
+            || previous.SubLayers.Count != current.SubLayers.Count)
+        {
+            return true;
+        }
+        for (var i = 0; i < previous.SubLayers.Count; i++)
+        {
+            var before = previous.SubLayers[i];
+            var after = current.SubLayers[i];
+            if (!string.Equals(before.Key, after.Key, StringComparison.Ordinal)
+                || before.IsVisible != after.IsVisible
+                || before.Opacity != after.Opacity)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool IsDrawing(Entry entry)
+    {
+        if (entry.Layers.Count == 0
+            || !entry.Dataset.IsActive
+            || !entry.Dataset.IsVisible
+            || entry.Dataset.Opacity <= 0)
+        {
+            return false;
+        }
+
+        if (entry.LayerKeys is null || entry.Dataset.SubLayers.Count == 0)
+            return true;
+
+        var subLayers = entry.Dataset.SubLayers.ToDictionary(layer => layer.Key);
+        for (var index = 0; index < entry.Layers.Count; index++)
+        {
+            var key = index < entry.LayerKeys.Count
+                ? entry.LayerKeys[index]
+                : string.Empty;
+            if (!subLayers.TryGetValue(key, out var subLayer)
+                || (subLayer.IsVisible && subLayer.Opacity > 0))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static string LayerKeyAt(
+        MapsuiMapDatasetSnapshot snapshot,
+        int index) =>
+        snapshot.LayerKeys is not null && index < snapshot.LayerKeys.Count
+            ? snapshot.LayerKeys[index]
+            : $"__layer__{index}";
+
+    private static int? EffectiveMinimumDisplayScale(Entry entry) =>
+        entry.CatalogueMinimumDisplayScale ?? entry.CellMinimumDisplayScale;
+
+    // Overlap ranking prefers the cell's compilation scale (S-57 CSCL) over its
+    // zoom-out window, which for S-57 extends to the largest SCAMIN. Cells of
+    // the same window are told apart by their finest display scale.
+    private static CellRank? Rank(Entry entry) =>
+        CellScaleRanking.Rank(
+            entry.CellCompilationScale,
+            EffectiveMinimumDisplayScale(entry),
+            entry.MaximumDisplayScale ?? entry.CellMaximumDisplayScale);
+
+    private void OnAuthorityChanged()
+    {
+        lock (_sync)
+        {
+            if (_disposed)
+                return;
+            ComposeLayers();
+        }
+
+        LayersChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Returns the dataset's coverage layout cache, or <see langword="null"/>
+    /// when the dataset is not in the session. Test seam for issue #855.
+    /// </summary>
+    internal CoverageLayoutCache? GetCoverageLayoutCache(MapDatasetId datasetId)
+    {
+        lock (_sync)
+        {
+            return _entries.TryGetValue(datasetId, out var entry)
+                ? entry.CoverageLayout
+                : null;
+        }
+    }
+
+    private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
+
+    /// <summary>
+    /// Per-product time policy: which sample a time-aware dataset draws for
+    /// the clock, and when it draws nothing. A dataset never draws data from
+    /// outside its tolerance as if current (#706, handoff D1).
+    /// </summary>
+    private sealed class TimePolicy
+    {
+        /// <summary>Tolerance when a dataset has a single sample and so no step.</summary>
+        private static readonly TimeSpan SingleSampleTolerance = TimeSpan.FromHours(1);
+
+        private readonly TimePolicyKind _kind;
+        private readonly DateTime[] _times;
+        private readonly TimeSpan _tolerance;
+
+        private TimePolicy(
+            TimePolicyKind kind,
+            DateTime[] times,
+            TimeSpan tolerance,
+            TimeSemantics semantics)
+        {
+            _kind = kind;
+            _times = times;
+            _tolerance = tolerance;
+            StepKind = semantics.Kind;
+            StaleAfter = semantics.StaleAfter;
+            StaleAfterIssue = semantics.StaleAfterIssue;
+            Supersession = semantics.Supersession;
+            CoverageSegments = ComputeSegments();
+        }
+
+        /// <summary>What the steps are.</summary>
+        public TimeStepKind StepKind { get; }
+
+        /// <summary>How long after its step the data is stale (<see cref="TimeSemantics.StaleAfter"/>).</summary>
+        public TimeSpan? StaleAfter { get; }
+
+        /// <summary>How long after its issue the data is stale (<see cref="TimeSemantics.StaleAfterIssue"/>).</summary>
+        public TimeSpan? StaleAfterIssue { get; }
+
+        /// <summary>The key of the datasets of which only one draws at a time (<see cref="TimeSemantics.Supersession"/>).</summary>
+        public string? Supersession { get; }
+
+        public IReadOnlyList<DateTime> AvailableTimes => _times;
+
+        /// <summary>
+        /// The windows in which the dataset draws: one per cluster of
+        /// samples, so gaps inside a dataset are gaps on the timeline too.
+        /// </summary>
+        public IReadOnlyList<MapsuiMapTimeSegment> CoverageSegments { get; }
+
+        public static TimePolicy? TryCreate(
+            TimeSemantics semantics,
+            IReadOnlyList<DateTime> availableTimes)
+        {
+            ArgumentNullException.ThrowIfNull(semantics);
+            ArgumentNullException.ThrowIfNull(availableTimes);
+            var times = availableTimes
+                .Distinct()
+                .Order()
+                .ToArray();
+            if (times.Length == 0)
+                return null;
+
+            var kind = semantics.Selection switch
+            {
+                TimeStepSelection.AtOrBefore => TimePolicyKind.AtOrBefore,
+                TimeStepSelection.Continuous => TimePolicyKind.Continuous,
+                _ => TimePolicyKind.Nearest,
+            };
+            var tolerance = kind == TimePolicyKind.Continuous
+                ? semantics.Validity is { } lead && lead > TimeSpan.Zero ? lead : TimeSpan.Zero
+                : semantics.Validity ?? TypicalStep(times);
+            return new TimePolicy(kind, times, tolerance, semantics);
+        }
+
+        /// <summary>
+        /// The sample to draw at <paramref name="time"/>, or <c>null</c>
+        /// when no sample lies within the tolerance and the dataset hides.
+        /// </summary>
+        public DateTime? SnapTo(DateTime time) => MapsuiTimeSelection.Select(_times, Selection, _tolerance, time);
+
+        /// <summary>How this policy picks a sample.</summary>
+        public MapsuiTimeSelectionKind Selection => _kind switch
+        {
+            TimePolicyKind.AtOrBefore => MapsuiTimeSelectionKind.AtOrBefore,
+            TimePolicyKind.Continuous => MapsuiTimeSelectionKind.Continuous,
+            _ => MapsuiTimeSelectionKind.Nearest,
+        };
+
+        /// <summary>The first time the dataset draws: its first sample, or before it for a continuous dataset.</summary>
+        public DateTime First => CoverageSegments[0].Start < _times[0] ? CoverageSegments[0].Start : _times[0];
+
+        /// <summary>How far from the clock a sample may be.</summary>
+        public TimeSpan Tolerance => _tolerance;
+
+        private IReadOnlyList<MapsuiMapTimeSegment> ComputeSegments()
+        {
+            // A continuous dataset draws every time in its range: one window.
+            if (_kind == TimePolicyKind.Continuous)
+                return [new MapsuiMapTimeSegment(AddClamped(_times[0], -_tolerance), _times[^1])];
+
+            var before = _kind == TimePolicyKind.Nearest ? _tolerance : TimeSpan.Zero;
+            var segments = new List<MapsuiMapTimeSegment>();
+            var start = AddClamped(_times[0], -before);
+            var end = AddClamped(_times[0], _tolerance);
+            for (var index = 1; index < _times.Length; index++)
+            {
+                var sampleStart = AddClamped(_times[index], -before);
+                if (sampleStart > end)
+                {
+                    segments.Add(new MapsuiMapTimeSegment(start, end));
+                    start = sampleStart;
+                }
+                end = AddClamped(_times[index], _tolerance);
+            }
+            segments.Add(new MapsuiMapTimeSegment(start, end));
+            return segments;
+        }
+
+        /// <summary>
+        /// The median interval between samples: robust to the long gaps of
+        /// multi-window exchange sets, which an average would turn into a
+        /// tolerance of weeks.
+        /// </summary>
+        private static TimeSpan TypicalStep(DateTime[] times)
+        {
+            if (times.Length < 2)
+                return SingleSampleTolerance;
+            var steps = new TimeSpan[times.Length - 1];
+            for (var index = 1; index < times.Length; index++)
+                steps[index - 1] = times[index] - times[index - 1];
+            Array.Sort(steps);
+            return steps[steps.Length / 2];
+        }
+
+        private static DateTime AddClamped(DateTime value, TimeSpan delta)
+        {
+            if (delta > TimeSpan.Zero
+                && DateTime.MaxValue - value < delta)
+            {
+                return DateTime.MaxValue;
+            }
+            if (delta < TimeSpan.Zero
+                && value - DateTime.MinValue < -delta)
+            {
+                return DateTime.MinValue;
+            }
+            return value + delta;
+        }
+    }
+
+    /// <summary>
+    /// The step <paramref name="entry"/> draws at <paramref name="clock"/>: its
+    /// policy's, unless another dataset with the same
+    /// <see cref="TimeSemantics.Supersession"/> takes over (V30). Call under <c>_sync</c>.
+    /// </summary>
+    private DateTime? SelectTime(Entry entry, DateTime clock)
+    {
+        if (entry.TimePolicy is not { } policy)
+            return null;
+        var sample = policy.SnapTo(clock);
+        if (policy.Supersession is null || sample is null)
+            return sample;
+        var candidate = new MapsuiTimeCandidate(entry.Dataset.Id.Value, policy.Supersession, policy.StepKind, sample);
+        var rivals = _entries.Values
+            .Where(e => e.TimePolicy?.Supersession is not null)
+            .Select(e => new MapsuiTimeCandidate(e.Dataset.Id.Value, e.TimePolicy!.Supersession, e.TimePolicy.StepKind, e.TimePolicy.SnapTo(clock)));
+        return MapsuiTimeSupersession.IsSuperseded(candidate, rivals) ? null : sample;
+    }
+
+    /// <summary>
+    /// The age of <paramref name="selectedTime"/> at the clock once stale, or of
+    /// the dataset since its issue (<see cref="TimeSemantics.StaleAfterIssue"/>,
+    /// taken at <see cref="Clock"/> when the map time is later), for
+    /// <see cref="RenderContext.TimeStepAge"/>. Call under <c>_sync</c>.
+    /// </summary>
+    private TimeSpan? StaleAgeOf(Entry entry, DateTime? selectedTime)
+    {
+        if (_time.Current is not { } clock || selectedTime is null)
+            return null;
+        if (entry.TimePolicy is { StaleAfterIssue: { } fromIssue })
+            return MapsuiTimeSupersession.StaleAgeFromIssue(entry.IssueTime, clock, Clock.GetUtcNow().UtcDateTime, fromIssue);
+        return entry.TimePolicy is { StaleAfter: { } limit }
+            ? MapsuiTimeSupersession.StaleAge(selectedTime, clock, limit)
+            : null;
+    }
+
+    /// <summary>
+    /// The host's clock, which an issue-based stale age
+    /// (<see cref="TimeSemantics.StaleAfterIssue"/>) is taken at while the map
+    /// time is ahead of it: the system clock unless the host has its own (a
+    /// test clock, as SoundCharts' <c>set_test_clock</c> sets).
+    /// </summary>
+    public TimeProvider Clock { get; set; } = TimeProvider.System;
+
+    private enum TimePolicyKind
+    {
+        /// <summary>The nearest sample, within the tolerance either side (<see cref="TimeStepSelection.Nearest"/>).</summary>
+        Nearest,
+
+        /// <summary>The latest sample at or before the clock, held for the tolerance (<see cref="TimeStepSelection.AtOrBefore"/>).</summary>
+        AtOrBefore,
+
+        /// <summary>The clock itself, within the range (<see cref="TimeStepSelection.Continuous"/>).</summary>
+        Continuous,
+    }
+
+    private sealed class Entry(MapDataset dataset)
+    {
+        public MapDataset Dataset { get; set; } = dataset;
+
+        public TimePolicy? TimePolicy { get; set; }
+
+        /// <summary>Whether the processor honours <see cref="RenderContext.DepthAdjustment"/>.</summary>
+        public bool AdjustsDepths { get; set; }
+
+        /// <summary>When the dataset was issued, from its data (#720).</summary>
+        public DateTime? IssueTime { get; set; }
+
+        /// <summary>When a newer dataset is next expected (<see cref="ITimeAwareDatasetProcessor.NextIssueTime"/>).</summary>
+        public DateTime? NextIssueTime { get; set; }
+
+        /// <summary>The dataset's short name on a timeline (<see cref="ITimeAwareDatasetProcessor.TimelineLabel"/>).</summary>
+        public string? TimelineLabel { get; set; }
+
+        /// <summary>The words after it (<see cref="ITimeAwareDatasetProcessor.TimelineDetail"/>).</summary>
+        public string? TimelineDetail { get; set; }
+
+        /// <summary>The model run the dataset belongs to, from its processor, or null.</summary>
+        public DatasetForecastRun? ForecastRun { get; set; }
+
+        public DateTime? RenderedTime { get; set; }
+
+        /// <summary>The <see cref="RenderContext.TimeStepAge"/> the current layers were rendered with.</summary>
+        public TimeSpan? RenderedAge { get; set; }
+
+        public CancellationTokenSource? RenderCts { get; set; }
+
+        public IReadOnlyList<ILayer> Layers { get; set; } = [];
+
+        public IReadOnlyList<string>? LayerKeys { get; set; }
+
+        public IReadOnlyList<LayerStackEntry>? StackEntries { get; set; }
+
+        public MRect? Extent { get; set; }
+
+        /// <summary>
+        /// Set when a presentation refresh deferred this cell because it was
+        /// off-view; a subsequent <see cref="RefreshRevealedAsync"/> re-portrays
+        /// it with <see cref="_currentPresentation"/> once it scrolls into view.
+        /// </summary>
+        public bool NeedsRefresh { get; set; }
+
+        public string? Info { get; set; }
+
+        public NetTopologySuite.Geometries.Geometry? CoverageGeometry { get; set; }
+
+        public int? CatalogueMinimumDisplayScale { get; set; }
+
+        public int? CellMinimumDisplayScale { get; set; }
+
+        public int? CellCompilationScale { get; set; }
+
+        public int? CellMaximumDisplayScale { get; set; }
+
+        public int? MaximumDisplayScale { get; set; }
+
+        public double? ContentMaxVisibleResolution { get; set; }
+
+        public long Generation { get; set; }
+
+        /// <summary>
+        /// Serializes single renders of this dataset; renders of different
+        /// datasets run in parallel under the shared render gate.
+        /// </summary>
+        public SemaphoreSlim RenderLock { get; } = new(1, 1);
+
+        /// <summary>
+        /// The dataset's gridded-coverage projection layout, reused across
+        /// re-renders (time step, palette, display mode) and S-98 rebuilds of
+        /// the same grid, and released with the entry (issue #855).
+        /// </summary>
+        public CoverageLayoutCache CoverageLayout { get; } = new();
+
+        public void Apply(MapsuiDatasetResult result)
+        {
+            Layers = result.Layers.ToArray();
+            LayerKeys = result.LayerNames?.ToArray();
+            StackEntries = result.StackEntries?.Select(StampDatasetId).ToArray();
+            Extent = result.Extent;
+            Info = result.Info;
+            CoverageGeometry = result.CoverageGeometry;
+            CellMinimumDisplayScale = result.CellMinimumDisplayScale;
+            CellCompilationScale = result.CellCompilationScale;
+            CellMaximumDisplayScale = result.CellMaximumDisplayScale;
+        }
+
+        /// <summary>
+        /// Processors name their stack items after their source file, but the
+        /// session joins the stack, the S-98 rules and picking by its own
+        /// dataset id. Restamp each item so one file opened under two ids (or
+        /// under any id other than its file name) keeps its own entries.
+        /// </summary>
+        private LayerStackEntry StampDatasetId(LayerStackEntry stackEntry) =>
+            string.Equals(stackEntry.Item.SourceDatasetId, Dataset.Id.Value, StringComparison.Ordinal)
+                ? stackEntry
+                : stackEntry with
+                {
+                    Item = stackEntry.Item with { SourceDatasetId = Dataset.Id.Value },
+                };
+
+        public void ClearRendering()
+        {
+            Layers = [];
+            LayerKeys = null;
+            StackEntries = null;
+            Extent = null;
+            Info = null;
+            CoverageGeometry = null;
+            CellMinimumDisplayScale = null;
+            CellCompilationScale = null;
+            CellMaximumDisplayScale = null;
+            ContentMaxVisibleResolution = null;
+        }
+
+        public RenderingState CaptureRendering() => new(
+            Dataset,
+            Layers,
+            LayerKeys,
+            StackEntries,
+            Extent,
+            Info,
+            CoverageGeometry,
+            CellMinimumDisplayScale,
+            CellCompilationScale,
+            CellMaximumDisplayScale,
+            ContentMaxVisibleResolution,
+            RenderedTime);
+
+        public void RestoreRendering(RenderingState state)
+        {
+            Dataset = state.Dataset;
+            Layers = state.Layers;
+            LayerKeys = state.LayerKeys;
+            StackEntries = state.StackEntries;
+            Extent = state.Extent;
+            Info = state.Info;
+            CoverageGeometry = state.CoverageGeometry;
+            CellMinimumDisplayScale = state.CellMinimumDisplayScale;
+            CellCompilationScale = state.CellCompilationScale;
+            CellMaximumDisplayScale = state.CellMaximumDisplayScale;
+            ContentMaxVisibleResolution = state.ContentMaxVisibleResolution;
+            RenderedTime = state.RenderedTime;
+        }
+    }
+
+    private sealed record RenderingState(
+        MapDataset Dataset,
+        IReadOnlyList<ILayer> Layers,
+        IReadOnlyList<string>? LayerKeys,
+        IReadOnlyList<LayerStackEntry>? StackEntries,
+        MRect? Extent,
+        string? Info,
+        NetTopologySuite.Geometries.Geometry? CoverageGeometry,
+        int? CellMinimumDisplayScale,
+        int? CellCompilationScale,
+        int? CellMaximumDisplayScale,
+        double? ContentMaxVisibleResolution,
+        DateTime? RenderedTime);
+
+    // A layer's state as its renderer built it, before the session applies
+    // the mariner's display state: the scale window and the portrayal opacity
+    // (e.g. the partly transparent S-104 band), which the dataset and
+    // sub-layer opacity multiply rather than replace.
+    private sealed record LayerBaseState(
+        double MinVisible,
+        double MaxVisible,
+        double Opacity);
+}

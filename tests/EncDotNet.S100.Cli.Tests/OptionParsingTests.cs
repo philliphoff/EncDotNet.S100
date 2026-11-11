@@ -1,0 +1,232 @@
+using EncDotNet.S100.Cli.Commands;
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
+using SkiaSharp;
+
+namespace EncDotNet.S100.Cli.Tests;
+
+/// <summary>
+/// Unit tests for the option-parsing helpers on <see cref="RenderCommand"/>.
+/// </summary>
+public sealed class OptionParsingTests
+{
+    [Theory]
+    [InlineData("day", PaletteType.Day)]
+    [InlineData("Day", PaletteType.Day)]
+    [InlineData("DUSK", PaletteType.Dusk)]
+    [InlineData("night", PaletteType.Night)]
+    public void TryParsePalette_accepts_known_palettes(string input, PaletteType expected)
+    {
+        Assert.True(RenderCommand.TryParsePalette(input, out var palette));
+        Assert.Equal(expected, palette);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("twilight")]
+    public void TryParsePalette_rejects_unknown(string input)
+    {
+        Assert.False(RenderCommand.TryParsePalette(input, out _));
+    }
+
+    [Fact]
+    public void TryParseHexColor_parses_rrggbb_as_opaque()
+    {
+        Assert.True(RenderCommand.TryParseHexColor("#102030", out var c));
+        Assert.Equal(new RgbaColor(0x10, 0x20, 0x30, 0xFF), c);
+    }
+
+    [Fact]
+    public void TryParseHexColor_parses_aarrggbb()
+    {
+        Assert.True(RenderCommand.TryParseHexColor("80FF0000", out var c));
+        Assert.Equal(new RgbaColor(0xFF, 0x00, 0x00, 0x80), c);
+    }
+
+    [Theory]
+    [InlineData("12345")]
+    [InlineData("xyzxyz")]
+    [InlineData("#1234567")]
+    public void TryParseHexColor_rejects_invalid(string input)
+    {
+        Assert.False(RenderCommand.TryParseHexColor(input, out _));
+    }
+
+    [Theory]
+    [InlineData("text", DrawingInstructionCategory.Text)]
+    [InlineData("Labels", DrawingInstructionCategory.Text)]
+    [InlineData("points", DrawingInstructionCategory.Points)]
+    [InlineData("symbols", DrawingInstructionCategory.Points)]
+    [InlineData("lines", DrawingInstructionCategory.Lines)]
+    [InlineData("areas", DrawingInstructionCategory.Areas)]
+    [InlineData("fills", DrawingInstructionCategory.Areas)]
+    [InlineData("text,points", DrawingInstructionCategory.Text | DrawingInstructionCategory.Points)]
+    [InlineData(" text , areas ", DrawingInstructionCategory.Text | DrawingInstructionCategory.Areas)]
+    [InlineData("text,text", DrawingInstructionCategory.Text)]
+    public void TryParseHideCategories_accepts_known_tokens(string input, DrawingInstructionCategory expected)
+    {
+        Assert.True(RenderCommand.TryParseHideCategories(input, out var categories, out _));
+        Assert.Equal(expected, categories);
+    }
+
+    [Theory]
+    [InlineData("bogus", "bogus")]
+    [InlineData("text,bogus", "bogus")]
+    [InlineData("nope,text", "nope")]
+    public void TryParseHideCategories_rejects_unknown_tokens(string input, string expectedBadToken)
+    {
+        Assert.False(RenderCommand.TryParseHideCategories(input, out var categories, out var badToken));
+        Assert.Equal(DrawingInstructionCategory.None, categories);
+        Assert.Equal(expectedBadToken, badToken);
+    }
+
+    [Theory]
+    [InlineData("none", BasemapKind.None)]
+    [InlineData("None", BasemapKind.None)]
+    [InlineData("off", BasemapKind.None)]
+    [InlineData("offline", BasemapKind.Offline)]
+    [InlineData("OFFLINE", BasemapKind.Offline)]
+    [InlineData(" offline ", BasemapKind.Offline)]
+    [InlineData("land", BasemapKind.Offline)]
+    public void TryParseBasemap_accepts_known_tokens(string input, BasemapKind expected)
+    {
+        Assert.True(RenderCommand.TryParseBasemap(input, out var basemap));
+        Assert.Equal(expected, basemap);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void TryParseBasemap_treats_blank_as_none(string? input)
+    {
+        Assert.True(RenderCommand.TryParseBasemap(input, out var basemap));
+        Assert.Equal(BasemapKind.None, basemap);
+    }
+
+    [Theory]
+    [InlineData("osm")]
+    [InlineData("online")]
+    [InlineData("satellite")]
+    public void TryParseBasemap_rejects_unknown(string input)
+    {
+        Assert.False(RenderCommand.TryParseBasemap(input, out var basemap));
+        Assert.Equal(BasemapKind.None, basemap);
+    }
+
+    [Theory]
+    [InlineData("ice-concentration", "IceScientificIceactDisplayMode")]
+    [InlineData("concentration", "IceScientificIceactDisplayMode")]
+    [InlineData("ICE-CONCENTRATION", "IceScientificIceactDisplayMode")]
+    [InlineData("ice-sod", "IceScientificIcesodDisplayMode")]
+    [InlineData("sod", "IceScientificIcesodDisplayMode")]
+    [InlineData(" ice-navigational ", "IceNavigationalDisplayMode")]
+    [InlineData("navigational", "IceNavigationalDisplayMode")]
+    public void TryParseDisplayMode_accepts_known_tokens(string input, string expected)
+    {
+        Assert.True(RenderCommand.TryParseDisplayMode(input, out var modeId));
+        Assert.Equal(expected, modeId);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void TryParseDisplayMode_treats_blank_as_default(string? input)
+    {
+        Assert.True(RenderCommand.TryParseDisplayMode(input, out var modeId));
+        Assert.Null(modeId);
+    }
+
+    [Theory]
+    [InlineData("ice")]
+    [InlineData("polaris")]
+    [InlineData("stage")]
+    public void TryParseDisplayMode_rejects_unknown(string input)
+    {
+        Assert.False(RenderCommand.TryParseDisplayMode(input, out var modeId));
+        Assert.Null(modeId);
+    }
+
+    [Theory]
+    [InlineData("S101-R-1.2", new[] { "S101-R-1.2" })]
+    [InlineData(" S101-R-1.2 , S101-R-3.2 ", new[] { "S101-R-1.2", "S101-R-3.2" })]
+    [InlineData("S101-*,,S102-*", new[] { "S101-*", "S102-*" })]
+    public void TryParseSuppressPatterns_splits_and_trims(string input, string[] expected)
+    {
+        Assert.True(ValidateCommand.TryParseSuppressPatterns(input, out var patterns));
+        Assert.Equal(expected, patterns);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(",")]
+    [InlineData("  ,  ")]
+    public void TryParseSuppressPatterns_rejects_empty(string input)
+    {
+        Assert.False(ValidateCommand.TryParseSuppressPatterns(input, out var patterns));
+        Assert.Empty(patterns);
+    }
+
+    [Theory]
+    [InlineData("S101-R-1.2", "S101-R-1.2", true)]   // exact
+    [InlineData("S101-R-1.2", "s101-r-1.2", true)]   // case-insensitive
+    [InlineData("S101-R-1.2", "S101-R-1.3", false)]  // dot is literal, not wildcard
+    [InlineData("S101-R-1.2", "S101-*", true)]       // prefix glob
+    [InlineData("S111-PROJ-UNSUPPORTED", "*-PROJ-UNSUPPORTED", true)] // suffix glob
+    [InlineData("S101-R-1.2", "S101-R-1.*", true)]   // mid glob
+    [InlineData("S102-R-4.1", "S101-*", false)]      // non-match
+    [InlineData("anything", "*", true)]              // match-all
+    public void RuleIdMatches_supports_case_insensitive_globs(string ruleId, string pattern, bool expected)
+    {
+        Assert.Equal(expected, ValidateCommand.RuleIdMatches(ruleId, pattern));
+    }
+
+    [Fact]
+    public void IsSuppressed_matches_any_pattern()
+    {
+        string[] patterns = ["S101-R-1.2", "S102-*"];
+        Assert.True(ValidateCommand.IsSuppressed("S101-R-1.2", patterns));
+        Assert.True(ValidateCommand.IsSuppressed("S102-R-9.9", patterns));
+        Assert.False(ValidateCommand.IsSuppressed("S104-R-1.1", patterns));
+    }
+
+    [Theory]
+    [InlineData(null, "chart.png", SKEncodedImageFormat.Png)]
+    [InlineData(null, "chart.jpg", SKEncodedImageFormat.Jpeg)]
+    [InlineData(null, "chart.webp", SKEncodedImageFormat.Webp)]
+    [InlineData("webp", "chart", SKEncodedImageFormat.Webp)]
+    public void TryResolveOutput_resolves_image_kinds(
+        string? format, string output, SKEncodedImageFormat expected)
+    {
+        Assert.True(RenderCommand.TryResolveOutput(format, output, out var kind, out var image, out _));
+        Assert.Equal(RenderCommand.RenderOutputKind.Image, kind);
+        Assert.Equal(expected, image);
+    }
+
+    [Theory]
+    [InlineData(null, "chart.json")]   // inferred from extension
+    [InlineData("json", "chart.txt")]  // explicit, non-image extension
+    [InlineData("json", "chart")]      // explicit, no extension
+    public void TryResolveOutput_resolves_display_list_kind(string? format, string output)
+    {
+        Assert.True(RenderCommand.TryResolveOutput(format, output, out var kind, out _, out _));
+        Assert.Equal(RenderCommand.RenderOutputKind.DisplayList, kind);
+    }
+
+    [Fact]
+    public void TryResolveOutput_rejects_format_json_against_image_extension()
+    {
+        Assert.False(
+            RenderCommand.TryResolveOutput("json", "chart.png", out _, out _, out var error));
+        Assert.Contains("json", error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void TryResolveOutput_rejects_unknown_format()
+    {
+        Assert.False(
+            RenderCommand.TryResolveOutput("tiff", "chart.tiff", out _, out _, out var error));
+        Assert.Contains("json", error, StringComparison.OrdinalIgnoreCase);
+    }
+}

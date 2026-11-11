@@ -1,0 +1,169 @@
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
+using EncDotNet.S100.Interoperability;
+using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
+using EncDotNet.S100.Viewer.ViewModels;
+using Mapsui;
+using Mapsui.Layers;
+using ControllableLoader = EncDotNet.S100.Viewer.Tests.LayerStackViewModelTests.ControllableLoader;
+
+namespace EncDotNet.S100.Viewer.Tests.ViewModels;
+
+/// <summary>
+/// PR-D2.1: dynamic-source rows in <see cref="LayerStackViewModel"/>.
+/// </summary>
+public class LayerStackViewModelDynamicSourceTests
+{
+    [Fact]
+    public void Rebuild_NoDynamicSources_NoDynamicArrowsPlane()
+    {
+        var loader = new ControllableLoader();
+        loader.SetEntries(Entry("a.000", S98DisplayPlane.BaseChartUnder, 10));
+        var registry = new FakeRegistry();
+
+        var vm = new LayerStackViewModel(loader, registry, timeFormat: null, displayCombinations: null, datasets: null, legend: null);
+
+        Assert.DoesNotContain(vm.Planes, p => p.Plane == S98DisplayPlane.DynamicArrows);
+    }
+
+    [Fact]
+    public void Rebuild_DynamicSources_AppearInDynamicArrowsPlane_InRegistrationOrder()
+    {
+        var loader = new ControllableLoader();
+        loader.SetEntries(Entry("a.000", S98DisplayPlane.BaseChartUnder, 10));
+        var registry = new FakeRegistry();
+        registry.Add(new DynamicSourceRegistrationInfo("ownship", "Own Ship", null));
+        registry.Add(new DynamicSourceRegistrationInfo("ais", "AIS", "Other vessels"));
+
+        var vm = new LayerStackViewModel(loader, registry, timeFormat: null, displayCombinations: null, datasets: null, legend: null);
+
+        var plane = vm.Planes.Single(p => p.Plane == S98DisplayPlane.DynamicArrows);
+        var dyn = plane.Children.OfType<LayerStackDynamicEntryViewModel>().ToList();
+        Assert.Equal(new[] { "ownship", "ais" }, dyn.Select(d => d.SourceId));
+        Assert.Equal("Own Ship", dyn[0].DisplayName);
+    }
+
+    [Fact]
+    public void Rebuild_DynamicSource_AppearsInItsMetadataPlane()
+    {
+        var loader = new ControllableLoader();
+        var registry = new FakeRegistry();
+        registry.Add(new DynamicSourceRegistrationInfo("ais", "AIS", null));
+        registry.Add(new DynamicSourceRegistrationInfo("ndbc", "NDBC buoy observations", null)
+        {
+            Plane = S98DisplayPlane.OtherChartOverlays,
+            WithinPlanePriority = 100,
+        });
+
+        var vm = new LayerStackViewModel(loader, registry, timeFormat: null, displayCombinations: null, datasets: null, legend: null);
+
+        var overlays = vm.Planes.Single(p => p.Plane == S98DisplayPlane.OtherChartOverlays);
+        var ndbc = Assert.Single(overlays.Children.OfType<LayerStackDynamicEntryViewModel>());
+        Assert.Equal("ndbc", ndbc.SourceId);
+        Assert.Equal("LayerStack.DynamicEntry.ndbc.Active", ndbc.AutomationId);
+        var arrows = vm.Planes.Single(p => p.Plane == S98DisplayPlane.DynamicArrows);
+        Assert.Equal("ais", Assert.Single(arrows.Children.OfType<LayerStackDynamicEntryViewModel>()).SourceId);
+    }
+
+    [Fact]
+    public void DynamicEntry_IsActive_TogglesThroughRegistry()
+    {
+        var loader = new ControllableLoader();
+        var registry = new FakeRegistry();
+        registry.Add(new DynamicSourceRegistrationInfo("ownship", "Own Ship", null));
+
+        var vm = new LayerStackViewModel(loader, registry, timeFormat: null, displayCombinations: null, datasets: null, legend: null);
+        var entry = vm.Planes.Single(p => p.Plane == S98DisplayPlane.DynamicArrows)
+            .Children.OfType<LayerStackDynamicEntryViewModel>().Single();
+
+        Assert.True(entry.IsActive);
+        entry.IsActive = false;
+        Assert.False(registry.GetVisible("ownship"));
+        Assert.False(entry.IsActive);
+    }
+
+    [AvaloniaFact]
+    public void SourcesChanged_TriggersRebuild_AddingNewRow()
+    {
+        var loader = new ControllableLoader();
+        var registry = new FakeRegistry();
+        var vm = new LayerStackViewModel(loader, registry, timeFormat: null, displayCombinations: null, datasets: null, legend: null);
+
+        Assert.DoesNotContain(vm.Planes, p => p.Plane == S98DisplayPlane.DynamicArrows);
+
+        registry.Add(new DynamicSourceRegistrationInfo("ownship", "Own Ship", null));
+
+        var plane = vm.Planes.Single(p => p.Plane == S98DisplayPlane.DynamicArrows);
+        Assert.Single(plane.Children.OfType<LayerStackDynamicEntryViewModel>());
+    }
+
+    [AvaloniaFact]
+    public void SourcesChanged_TriggersRebuild_RemovingRow()
+    {
+        var loader = new ControllableLoader();
+        var registry = new FakeRegistry();
+        registry.Add(new DynamicSourceRegistrationInfo("ownship", "Own Ship", null));
+        var vm = new LayerStackViewModel(loader, registry, timeFormat: null, displayCombinations: null, datasets: null, legend: null);
+
+        registry.RemoveAt(0);
+
+        Assert.DoesNotContain(vm.Planes, p => p.Plane == S98DisplayPlane.DynamicArrows);
+    }
+
+    [Fact]
+    public void MixedPlane_DatasetAndDynamicRowsCoexist_DatasetsFirst()
+    {
+        var loader = new ControllableLoader();
+        loader.SetEntries(Entry("s111-arrows", S98DisplayPlane.DynamicArrows, 50));
+        var registry = new FakeRegistry();
+        registry.Add(new DynamicSourceRegistrationInfo("ownship", "Own Ship", null));
+
+        var vm = new LayerStackViewModel(loader, registry, timeFormat: null, displayCombinations: null, datasets: null, legend: null);
+        var plane = vm.Planes.Single(p => p.Plane == S98DisplayPlane.DynamicArrows);
+
+        Assert.Equal(2, plane.Children.Count);
+        Assert.IsType<LayerStackEntryViewModel>(plane.Children[0]);
+        Assert.IsType<LayerStackDynamicEntryViewModel>(plane.Children[1]);
+    }
+
+    private static LayerStackEntry Entry(string id, S98DisplayPlane plane, int priority)
+        => new(new MemoryLayer(id), new SubLayerStackItem(new SyntheticStackPayload(id), plane, priority, id));
+
+    private sealed class FakeRegistry : IS100DynamicSourceRegistry
+    {
+        private readonly List<DynamicSourceRegistrationInfo> _list = new();
+        private readonly Dictionary<string, bool> _visible = new(StringComparer.Ordinal);
+
+        public IDisposable Register(EncDotNet.S100.DynamicSources.IDynamicFeatureSource source) =>
+            throw new NotSupportedException();
+
+        public IReadOnlyList<DynamicSourceRegistrationInfo> Sources => _list;
+        public event Action? SourcesChanged;
+
+        public bool GetVisible(string sourceId) =>
+            !_visible.TryGetValue(sourceId, out var v) || v;
+
+        public void SetVisible(string sourceId, bool visible)
+        {
+            _visible[sourceId] = visible;
+            SourcesChanged?.Invoke();
+        }
+
+        public IReadOnlyList<EncDotNet.S100.DynamicSources.IDynamicFeatureSource> GetVisibleSourceInstances() =>
+            Array.Empty<EncDotNet.S100.DynamicSources.IDynamicFeatureSource>();
+
+        public IReadOnlyList<DynamicSourceHit> HitTest(MPoint mapPoint, double resolution) =>
+            Array.Empty<DynamicSourceHit>();
+
+        public void Add(DynamicSourceRegistrationInfo info)
+        {
+            _list.Add(info);
+            SourcesChanged?.Invoke();
+        }
+
+        public void RemoveAt(int index)
+        {
+            _list.RemoveAt(index);
+            SourcesChanged?.Invoke();
+        }
+    }
+}

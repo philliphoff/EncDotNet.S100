@@ -1,0 +1,130 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:EncDotNet.S100.Viewer.ViewModels.Secom"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             x:Class="EncDotNet.S100.Viewer.Views.Secom.IdentityPicker"
+             x:DataType="vm:IdentityPickerViewModel">
+
+    <!--
+      The Identity picker (#883 B): a 40 px field showing the setting (icon,
+      name, sub-line, chevron) whose flyout lists Default, None and each
+      identity, with hints when the service asks, then "Manage identities…".
+    -->
+    <UserControl.Styles>
+        <!-- Own templates, so the content stretches (the chevron and the hints sit at the right). -->
+        <Style Selector="Button.identityField">
+            <Setter Property="MinHeight" Value="40" />
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}" BorderBrush="{DynamicResource BorderColor}"
+                            BorderThickness="1" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}" HorizontalContentAlignment="Stretch"
+                                          VerticalContentAlignment="Center" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.identityField:pointerover">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
+        <Style Selector="Button.identityItem">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter Content="{TemplateBinding Content}" HorizontalContentAlignment="Stretch" />
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="Button.identityItem:pointerover">
+            <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+        </Style>
+        <Style Selector="Button.identityItem:disabled">
+            <Setter Property="Opacity" Value="0.5" />
+            <Setter Property="Cursor" Value="Arrow" />
+        </Style>
+        <Style Selector="TextBlock.identityName">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.identitySub">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style Selector="TextBlock.identityHint">
+            <Setter Property="FontSize" Value="10.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+        </Style>
+        <Style Selector="TextBlock.identityHint.success">
+            <Setter Property="Foreground" Value="{DynamicResource SuccessColor}" />
+        </Style>
+        <Style Selector="TextBlock.identityHint.destructive">
+            <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+        </Style>
+    </UserControl.Styles>
+
+    <Button x:Name="Field" Classes="identityField"
+            AutomationProperties.AutomationId="Secom.IdentityPicker"
+            AutomationProperties.Name="{x:Static loc:Strings.Secom_Picker_Label}"
+            AutomationProperties.HelpText="{Binding Name}">
+        <Button.Flyout>
+            <Flyout Placement="BottomEdgeAlignedLeft">
+                <StackPanel Width="320" Spacing="2">
+                    <ItemsControl ItemsSource="{Binding Items}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:IdentityPickerItemViewModel">
+                                <Button Classes="identityItem" Command="{Binding ChooseCommand}" IsEnabled="{Binding IsEnabled}"
+                                        AutomationProperties.AutomationId="Secom.IdentityPicker.Item"
+                                        AutomationProperties.Name="{Binding Name}"
+                                        AutomationProperties.HelpText="{Binding HelpText}">
+                                    <Grid ColumnDefinitions="16,*,Auto" ColumnSpacing="8">
+                                        <ic:FluentIcon Grid.Column="0" Icon="Checkmark" FontSize="13" VerticalAlignment="Center"
+                                                       IsVisible="{Binding IsSelected}" />
+                                        <StackPanel Grid.Column="1" Spacing="1">
+                                            <TextBlock Classes="identityName" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Classes="identitySub" Text="{Binding Sub}" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="2" Classes="identityHint"
+                                                   Classes.success="{Binding HintIsSuccess}"
+                                                   Classes.destructive="{Binding HintIsDestructive}"
+                                                   Text="{Binding HintText}" IsVisible="{Binding HasHint}" />
+                                    </Grid>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <Separator Margin="0,2" />
+                    <Button Classes="identityItem" Command="{Binding ManageCommand}"
+                            AutomationProperties.AutomationId="Secom.IdentityPicker.Manage"
+                            AutomationProperties.Name="{x:Static loc:Strings.Keys_Fix_ManageIdentities}">
+                        <TextBlock Margin="24,0,0,0" FontSize="12.5" Text="{x:Static loc:Strings.Keys_Fix_ManageIdentities}" />
+                    </Button>
+                </StackPanel>
+            </Flyout>
+        </Button.Flyout>
+        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+            <Panel Grid.Column="0" VerticalAlignment="Center">
+                <ic:FluentIcon Icon="Globe" FontSize="15" Foreground="{DynamicResource MutedColor}" IsVisible="{Binding IsAnonymous}" />
+                <ic:FluentIcon Icon="ContactCard" FontSize="15" Foreground="{DynamicResource MutedColor}" IsVisible="{Binding !IsAnonymous}" />
+            </Panel>
+            <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                <TextBlock Classes="identityName" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Classes="identitySub" Text="{Binding Sub}" />
+            </StackPanel>
+            <ic:FluentIcon Grid.Column="2" Icon="ChevronDown" FontSize="12" VerticalAlignment="Center"
+                           Foreground="{DynamicResource MutedColor}" />
+        </Grid>
+    </Button>
+</UserControl>

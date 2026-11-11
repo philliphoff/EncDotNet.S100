@@ -1,0 +1,1204 @@
+using System.Globalization;
+using EncDotNet.S100.Features;
+using EncDotNet.S100.Pipelines.Vector.Lua;
+using EncDotNet.S100.Scripting;
+
+namespace EncDotNet.S100.Datasets.S101;
+
+/// <summary>
+/// Implements the S-100 Lua Host API functions by bridging an <see cref="S101Dataset"/>
+/// and <see cref="FeatureCatalogue"/> to an <see cref="ILuaContext"/>. This is the C#
+/// side of the S-100 Part 9A Lua Portrayal Model host interface.
+/// </summary>
+public sealed class S101LuaDataProvider : ILuaDataProvider
+{
+    private const byte RcnmPoint = 110;
+    private const byte RcnmMultiPoint = 115;
+    private const byte RcnmCurveSegment = 120;
+    private const byte RcnmCompositeCurve = 125;
+    private const byte RcnmSurface = 130;
+    private const byte OrientationReverse = 2;
+
+    private readonly S101Document _doc;
+    private readonly FeatureCatalogue _fc;
+    private readonly Action<string> _trace;
+    private S101SpatialRelate? _spatialRelate;
+
+    // Lookup indices built lazily
+    private Dictionary<uint, S101FeatureRecord>? _featureById;
+    private Dictionary<string, FeatureType>? _featureTypeByCode;
+    private Dictionary<string, InformationType>? _infoTypeByCode;
+    private Dictionary<string, SimpleAttribute>? _simpleAttrByCode;
+    private Dictionary<string, ComplexAttribute>? _complexAttrByCode;
+    private HashSet<ushort>? _complexAttrNumericCodes;
+    private Dictionary<ushort, HashSet<ushort>>? _nestedChildComplexCodes;
+    private Dictionary<(byte Rcnm, uint Rcid), List<double>>? _featureIdsBySpatial;
+    private static readonly HashSet<ushort> EmptyComplexCodes = new();
+
+    // Collected drawing instruction output
+    private readonly List<EmittedInstruction> _emitted = new();
+    private readonly S101DepthShift? _depthShift;
+
+    /// <summary>
+    /// Initialises the provider.
+    /// </summary>
+    /// <param name="dataset">The S-101 dataset to portray.</param>
+    /// <param name="featureCatalogue">The S-101 feature catalogue (ISO 19110).</param>
+    /// <param name="trace">
+    /// Optional sink for host/Lua diagnostic trace output (the S-100 Part 9A
+    /// <c>Debug.Trace</c> / <c>HostDebuggerEntry</c> "trace" channel, plus host
+    /// type-binding diagnostics). When <c>null</c>, messages are routed to
+    /// <see cref="System.Diagnostics.Trace"/>, which is silent on standard output
+    /// unless a listener is attached. This keeps expected, spec-compliant
+    /// portrayal fallbacks (for example the <c>OBSTRN07</c> rule selecting Default
+    /// symbology when a feature legitimately carries neither <c>valueOfSounding</c>
+    /// nor <c>defaultClearanceDepth</c>) from polluting console output.
+    /// </param>
+    public S101LuaDataProvider(S101Dataset dataset, FeatureCatalogue featureCatalogue, Action<string>? trace = null)
+        : this(dataset, featureCatalogue, depthShift: null, trace)
+    {
+    }
+
+    /// <summary>
+    /// Creates a provider that presents depths with a water level added
+    /// (chart-wide water level adjustment).
+    /// </summary>
+    /// <param name="dataset">The S-101 dataset.</param>
+    /// <param name="featureCatalogue">The S-101 feature catalogue.</param>
+    /// <param name="depthShift">The water level to add to depth values, or <see langword="null"/> for charted depths.</param>
+    /// <param name="trace">Optional trace sink.</param>
+    public S101LuaDataProvider(S101Dataset dataset, FeatureCatalogue featureCatalogue, S101DepthShift? depthShift, Action<string>? trace = null)
+    {
+        _depthShift = depthShift;
+        ArgumentNullException.ThrowIfNull(dataset);
+        ArgumentNullException.ThrowIfNull(featureCatalogue);
+        _doc = dataset.Document;
+        _fc = featureCatalogue;
+        _trace = trace ?? (message => System.Diagnostics.Trace.WriteLine(message));
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<EmittedInstruction> EmittedInstructions => _emitted;
+
+    /// <inheritdoc/>
+    public IReadOnlyList<string> PostLoadScripts =>
+        string.Equals(_fc.ProductId, S401PortrayalPatches.ProductId, StringComparison.Ordinal)
+            ? [.. CommonPostLoadScripts, .. S401PortrayalPatches.Scripts]
+            : CommonPostLoadScripts;
+
+    private static readonly IReadOnlyList<string> CommonPostLoadScripts =
+    [
+        SpatialAssociationShim,
+        HostGetSpatialShim,
+        HostSpatialRelateShim,
+        ContainsGuard,
+        FeatureNamePatch,
+    ];
+
+    /// <summary>
+    /// Lua shim that wraps HostFeatureGetSpatialAssociations to convert
+    /// the raw host data (List of {SpatialID, SpatialType, Orientation})
+    /// into proper SpatialAssociation objects via CreateSpatialAssociation().
+    /// </summary>
+    internal const string SpatialAssociationShim = """
+        local _rawHostGetSpatial = HostFeatureGetSpatialAssociations
+        HostFeatureGetSpatialAssociations = function(featureID)
+            local raw = _rawHostGetSpatial(featureID)
+            if raw == nil then return nil end
+            local result = {}
+            for i, sa in ipairs(raw) do
+                result[i] = CreateSpatialAssociation(sa.SpatialType, sa.SpatialID, sa.Orientation)
+            end
+            if #result == 0 then return nil end
+            result.Type = 'array:SpatialAssociation'
+            return result
+        end
+        """;
+
+    /// <summary>
+    /// Lua shim that implements HostGetSpatial by calling the C# HostGetSpatialData
+    /// to get raw data, then constructing proper Spatial Lua objects via the
+    /// Create* functions from PortrayalAPI.lua.
+    /// </summary>
+    internal const string HostGetSpatialShim = """
+        local _rawHostGetSpatialData = HostGetSpatialData
+        function HostGetSpatial(spatialID)
+            local data = _rawHostGetSpatialData(spatialID)
+            if data == nil then return nil end
+
+            if data.RecordType == 'Point' then
+                return CreatePoint(data.X, data.Y)
+            elseif data.RecordType == 'MultiPoint' then
+                local points = {}
+                for _, pt in ipairs(data.Points) do
+                    points[#points + 1] = CreatePoint(pt.X, pt.Y, pt.Z)
+                end
+                points.Type = 'array:Spatial'
+                return CreateMultiPoint(points)
+            elseif data.RecordType == 'Curve' then
+                local startSA = CreateSpatialAssociation('Point', data.StartPointID, 'Forward')
+                local endSA = CreateSpatialAssociation('Point', data.EndPointID, 'Forward')
+                local controlPoints = {}
+                if data.ControlPoints then
+                    for _, cp in ipairs(data.ControlPoints) do
+                        controlPoints[#controlPoints + 1] = CreatePoint(cp.X, cp.Y)
+                    end
+                end
+                local segment = CreateCurveSegment(controlPoints)
+                return CreateCurve(startSA, endSA, { segment })
+            elseif data.RecordType == 'CompositeCurve' then
+                local curveAssocs = {}
+                for _, ca in ipairs(data.CurveAssociations) do
+                    curveAssocs[#curveAssocs + 1] = CreateSpatialAssociation(ca.SpatialType, ca.SpatialID, ca.Orientation)
+                end
+                curveAssocs.Type = 'array:SpatialAssociation'
+                return CreateCompositeCurve(curveAssocs)
+            elseif data.RecordType == 'Surface' then
+                local exteriorRing = nil
+                if data.ExteriorRing then
+                    exteriorRing = CreateSpatialAssociation(data.ExteriorRing.SpatialType, data.ExteriorRing.SpatialID, data.ExteriorRing.Orientation)
+                end
+                local interiorRings = {}
+                if data.InteriorRings then
+                    for _, ir in ipairs(data.InteriorRings) do
+                        interiorRings[#interiorRings + 1] = CreateSpatialAssociation(ir.SpatialType, ir.SpatialID, ir.Orientation)
+                    end
+                end
+                interiorRings.Type = 'array:SpatialAssociation'
+                return CreateSurface(exteriorRing, interiorRings)
+            end
+            return nil
+        end
+        """;
+
+    /// <summary>
+    /// Lua shim that implements <c>HostSpatialRelate</c> (S-100 Part 13
+    /// §13-8.2.3.1) over the C# <c>HostSpatialRelateCore</c>, which returns
+    /// either the relation or an error message. The message is raised as a
+    /// Lua error so an unsupported relation fails the calling rule (Default
+    /// symbology plus a trace naming the feature) instead of reading as
+    /// <c>false</c>.
+    /// </summary>
+    internal const string HostSpatialRelateShim = """
+        local _rawHostSpatialRelate = HostSpatialRelateCore
+        function HostSpatialRelate(spatialID1, spatialID2, intersectionPatternMatrix)
+            local result = _rawHostSpatialRelate(spatialID1, spatialID2, intersectionPatternMatrix)
+            if type(result) == 'string' then
+                error(result, 2)
+            end
+            return result
+        end
+        """;
+
+    /// <summary>
+    /// Patches <c>contains</c> to handle nil/void gracefully. MoonSharp may
+    /// return <c>DynValue.Void</c> (rather than nil) from <c>__index</c> when an
+    /// attribute is missing, causing <c>type()</c> to error.
+    /// </summary>
+    /// <remarks>
+    /// It also accepts a single value where a rule expects an array. The rules
+    /// pass attributes straight to <c>contains</c>, and the scripting framework
+    /// delivers a single-valued attribute as a scalar, so a rule written for an
+    /// S-101 <c>0..*</c> attribute fails at <c>#array</c> on a catalogue that
+    /// binds it <c>1..1</c>. The S-401 <c>Dolphin</c> rule does this with
+    /// <c>contains(2, categoryOfDolphin)</c>.
+    /// </remarks>
+    internal const string ContainsGuard = """
+        local _orig_contains = contains
+        function contains(value, array)
+            if value == nil then return false end
+            if array ~= nil and type(array) ~= 'table' then
+                if type(value) == 'table' then
+                    for i = 1, #value do
+                        if value[i] == array then return true end
+                    end
+                    return false
+                end
+                return value == array
+            end
+            return _orig_contains(value, array)
+        end
+        """;
+
+    /// <summary>
+    /// Lua patch that corrects the upstream <c>GetFeatureName</c> and
+    /// <c>PortrayFeatureName</c> functions in <c>PortrayalModel.lua</c>. The
+    /// upstream implementation requires both <c>name</c> AND <c>nameUsage</c>
+    /// on every <c>featureName</c> entry, but the S-101 Feature Catalogue
+    /// (Edition 1.x) declares <c>nameUsage</c> with multiplicity <c>0..1</c>
+    /// — it is optional. FC-conformant ENCs that omit <c>nameUsage</c> for
+    /// a single default-display name currently get no label rendered at all.
+    /// <para/>
+    /// This patch reimplements the global <c>GetFeatureName</c> (and the
+    /// <c>PortrayFeatureName</c> helper that wraps it) so a missing
+    /// <c>nameUsage</c> is treated as <c>1</c> (Default Name Display),
+    /// matching the FC's optional semantics. When <c>nameUsage</c> is
+    /// present, the original <c>1</c>/<c>2</c> branching is preserved.
+    /// </summary>
+    internal const string FeatureNamePatch = """
+        function GetFeatureName(feature, contextParameters)
+            -- Match upstream featurePortrayal:GetFeatureName side effect so
+            -- main.lua's fallback PortrayFeatureName guard sees this call and
+            -- does not re-emit the name with a different default offset.
+            if feature._featurePortrayal then
+                feature._featurePortrayal.GetFeatureNameCalled = true
+            end
+
+            if not feature['!featureName'] or #feature.featureName == 0 then
+                return nil
+            end
+
+            local defaultName
+            for _, featureName in ipairs(feature.featureName) do
+                if featureName.name then
+                    local nameUsage = featureName.nameUsage
+                    local languageMatches = (featureName.language and featureName.language == contextParameters.NationalLanguage)
+
+                    if nameUsage == nil or nameUsage == 1 then
+                        if languageMatches then
+                            return featureName.name
+                        end
+                        defaultName = defaultName or featureName.name
+                    elseif nameUsage == 2 and languageMatches then
+                        return featureName.name
+                    end
+                end
+            end
+
+            return defaultName
+        end
+
+        function PortrayFeatureName(feature, featurePortrayal, contextParameters, textViewingGroup, textPriority, viewingGroup, priority, textStyleInstructions)
+            local name = GetFeatureName(feature, contextParameters)
+            if name then
+                local textStyle = textStyleInstructions or 'FontColor:CHBLK'
+                featurePortrayal:AddInstructions(textStyle)
+                featurePortrayal:AddTextInstruction(EncodeString(name, '%s'), textViewingGroup, textPriority, viewingGroup, priority)
+            end
+        end
+        """;
+
+    /// <summary>
+    /// Resolves a Lua-side feature reference (the stringified record id
+    /// passed to <c>HostPortrayalEmit</c>) to its S-101 feature-type code
+    /// (e.g. <c>DEPCNT</c>, <c>BCNCAR</c>) using the dataset's record
+    /// index and feature-type catalogue.
+    /// </summary>
+    /// <returns>
+    /// The human-readable FC code on success, or <see langword="null"/>
+    /// when <paramref name="featureRef"/> cannot be parsed or the
+    /// record is not present.
+    /// </returns>
+    public string? GetFeatureTypeCode(string featureRef)
+    {
+        if (string.IsNullOrEmpty(featureRef)) return null;
+        // Lua marshals doubles as e.g. "12345" or "12345.0"; trim the
+        // fractional part if present.
+        var dot = featureRef.IndexOf('.');
+        var idText = dot >= 0 ? featureRef[..dot] : featureRef;
+        if (!uint.TryParse(idText, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var id))
+        {
+            return null;
+        }
+
+        EnsureFeatureIndex();
+        if (!_featureById!.TryGetValue(id, out var feat)) return null;
+        return _doc.FeatureTypeCatalogue.TryGetValue(feat.FeatureTypeCode, out var name)
+            ? name
+            : feat.FeatureTypeCode.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Registers all Host* functions and the Debug table on the given Lua context.
+    /// </summary>
+    public void RegisterHostFunctions(ILuaContext lua)
+    {
+        // Debug table — route Trace to the host diagnostic sink
+        lua.SetGlobal("HostDebugTrace", (Action<string>)(msg => _trace($"[Lua] {msg}")));
+        lua.Execute("""
+            Debug = {
+                Trace = function(msg) if msg then HostDebugTrace(tostring(msg)) end end,
+                Break = function() end,
+                StartPerformance = function(...) end,
+                StopPerformance = function(...) end,
+                ResetPerformance = function(...) end,
+                FirstChanceError = function(...) end,
+            }
+            """);
+
+        // Feature data access
+        lua.SetGlobal("HostGetFeatureIDs", (Func<List<object>>)HostGetFeatureIDs);
+        lua.SetGlobal("HostFeatureGetCode", (Func<double, string>)HostFeatureGetCode);
+        lua.SetGlobal("HostFeatureGetSimpleAttribute",
+            (Func<double, string, string, List<object>>)HostFeatureGetSimpleAttribute);
+        lua.SetGlobal("HostFeatureGetComplexAttributeCount",
+            (Func<double, string, string, double>)HostFeatureGetComplexAttributeCount);
+        lua.SetGlobal("HostFeatureGetSpatialAssociations",
+            (Func<double, object?>)HostFeatureGetSpatialAssociations);
+        lua.SetGlobal("HostFeatureGetAssociatedFeatureIDs",
+            (Func<double, string, string?, List<object>>)HostFeatureGetAssociatedFeatureIDs);
+        lua.SetGlobal("HostFeatureGetAssociatedInformationIDs",
+            (Func<double, string, string?, List<object>>)HostFeatureGetAssociatedInformationIDs);
+
+        // Information type data access
+        lua.SetGlobal("HostInformationTypeGetCode", (Func<double, string>)HostInformationTypeGetCode);
+        lua.SetGlobal("HostInformationTypeGetSimpleAttribute",
+            (Func<double, string, string, List<object>>)HostInformationTypeGetSimpleAttribute);
+        lua.SetGlobal("HostInformationTypeGetComplexAttributeCount",
+            (Func<double, string, string, double>)HostInformationTypeGetComplexAttributeCount);
+
+        // Spatial data access — HostGetSpatial is implemented as a Lua shim that
+        // calls HostGetSpatialData (C#) to get raw data, then constructs proper Lua
+        // Spatial objects via CreatePoint/CreateCurve/etc.
+        lua.SetGlobal("HostGetSpatialData", (Func<string, object?>)HostGetSpatialData);
+        lua.SetGlobal("HostSpatialGetAssociatedFeatureIDs",
+            (Func<string, List<object>>)HostSpatialGetAssociatedFeatureIDs);
+        lua.SetGlobal("HostSpatialGetAssociatedInformationIDs",
+            (Func<string, string, string?, List<object>>)HostSpatialGetAssociatedInformationIDs);
+        lua.SetGlobal("HostSpatialRelateCore", (Func<string, string, string, object>)HostSpatialRelateCore);
+
+        // Type system (Feature catalogue)
+        lua.SetGlobal("HostGetFeatureTypeCodes", (Func<List<object>>)HostGetFeatureTypeCodes);
+        lua.SetGlobal("HostGetInformationTypeCodes", (Func<List<object>>)HostGetInformationTypeCodes);
+        lua.SetGlobal("HostGetSimpleAttributeTypeCodes", (Func<List<object>>)HostGetSimpleAttributeTypeCodes);
+        lua.SetGlobal("HostGetComplexAttributeTypeCodes", (Func<List<object>>)HostGetComplexAttributeTypeCodes);
+        lua.SetGlobal("HostGetRoleTypeCodes", (Func<List<object>>)HostGetRoleTypeCodes);
+        lua.SetGlobal("HostGetInformationAssociationTypeCodes", (Func<List<object>>)HostGetInformationAssociationTypeCodes);
+        lua.SetGlobal("HostGetFeatureAssociationTypeCodes", (Func<List<object>>)HostGetFeatureAssociationTypeCodes);
+        lua.SetGlobal("HostGetFeatureTypeInfo",
+            (Func<string, IReadOnlyDictionary<string, object?>>)HostGetFeatureTypeInfo);
+        lua.SetGlobal("HostGetInformationTypeInfo",
+            (Func<string, IReadOnlyDictionary<string, object?>>)HostGetInformationTypeInfo);
+        lua.SetGlobal("HostGetSimpleAttributeTypeInfo",
+            (Func<string, IReadOnlyDictionary<string, object?>>)HostGetSimpleAttributeTypeInfo);
+        lua.SetGlobal("HostGetComplexAttributeTypeInfo",
+            (Func<string, IReadOnlyDictionary<string, object?>>)HostGetComplexAttributeTypeInfo);
+
+        // Output
+        lua.SetGlobal("HostPortrayalEmit",
+            (Func<string, string, string, bool>)HostPortrayalEmit);
+
+        // Debugger — HostDebuggerEntry(action, [message, [depth]])
+        lua.SetGlobal("HostDebuggerEntry", (Action<string, string?>)((action, message) =>
+        {
+            if (action == "trace" && message is not null)
+                _trace($"[Lua] {message}");
+        }));
+    }
+
+    // ── Feature Data Access ────────────────────────────────────────────
+
+    private List<object> HostGetFeatureIDs()
+    {
+        return _doc.Features.Select(f => (object)(double)f.RecordId).ToList();
+    }
+
+    private string HostFeatureGetCode(double featureId)
+    {
+        var feat = GetFeature((uint)featureId);
+        var raw = _doc.FeatureTypeCatalogue.TryGetValue(feat.FeatureTypeCode, out var name)
+            ? name : feat.FeatureTypeCode.ToString();
+
+        // Normalize legacy (pre-2.0.0) S-101 feature class names to their
+        // Edition 2.0.0 equivalents so the bundled 2.0.0 Portrayal Catalogue's
+        // Lua rule modules can be dispatched (S-100 Part 9A). Applied only here,
+        // at the portrayal boundary; names are left as-authored elsewhere.
+        return S101LegacyFeatureNames.Normalize(
+            raw,
+            attributeCode => GetSimpleAttributeValues(feat.Attributes, attributeCode)
+                .OfType<string>()
+                .FirstOrDefault());
+    }
+
+    private List<object> HostFeatureGetSimpleAttribute(double featureId, string attributePath, string attributeCode)
+    {
+        var feat = GetFeature((uint)featureId);
+        var attrs = ResolveAttributeScope(feat.Attributes, attributePath);
+        var values = GetSimpleAttributeValues(attrs, attributeCode);
+        if (_depthShift?.ForFeature((uint)featureId) is { } height && S101DepthShift.DepthAttributes.Contains(attributeCode))
+        {
+            for (var i = 0; i < values.Count; i++)
+            {
+                if (values[i] is string value)
+                    values[i] = S101DepthShift.Shift(value, height);
+            }
+        }
+
+        return values;
+    }
+
+    private double HostFeatureGetComplexAttributeCount(double featureId, string attributePath, string attributeCode)
+    {
+        var feat = GetFeature((uint)featureId);
+        var attrs = ResolveAttributeScope(feat.Attributes, attributePath);
+        return CountComplexAttributes(attrs, attributeCode);
+    }
+
+    private object? HostFeatureGetSpatialAssociations(double featureId)
+    {
+        var feat = GetFeature((uint)featureId);
+        if (feat.SpatialAssociations.Count == 0) return null;
+
+        // Return raw spatial association data as a List<object> (marshals to
+        // a 1-indexed Lua table). Each element is a dictionary with string
+        // SpatialType/Orientation names so the Lua side can look them up
+        // against the global SpatialType/Orientation tables.
+        var result = new List<object>();
+        foreach (var spa in feat.SpatialAssociations)
+        {
+            var dict = new Dictionary<string, object?>
+            {
+                ["SpatialID"] = $"{spa.RecordName}:{spa.RecordId}",
+                ["SpatialType"] = ResolveSpatialTypeName(spa.RecordName),
+                ["Orientation"] = spa.Orientation == OrientationReverse ? "Reverse" : "Forward",
+            };
+            result.Add(dict);
+        }
+
+        return result;
+    }
+
+    private List<object> HostFeatureGetAssociatedFeatureIDs(double featureId, string associationCode, string? roleCode)
+    {
+        var feat = GetFeature((uint)featureId);
+        var result = new List<object>();
+
+        foreach (var facs in feat.FeatureAssociations)
+        {
+            // Match on association code from the catalogue
+            var assocName = _doc.FeatureAssociationCatalogue.TryGetValue(facs.NumericCode, out var name) ? name : "";
+            if (!string.Equals(assocName, associationCode, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            result.Add((double)facs.RecordId);
+        }
+
+        return result;
+    }
+
+    private List<object> HostFeatureGetAssociatedInformationIDs(double featureId, string associationCode, string? roleCode)
+    {
+        var feat = GetFeature((uint)featureId);
+        var result = new List<object>();
+
+        foreach (var inas in feat.InformationAssociations)
+        {
+            var assocName = _doc.InformationAssociationCatalogue.TryGetValue(inas.NumericCode, out var name) ? name : "";
+            if (!string.Equals(assocName, associationCode, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            result.Add((double)inas.RecordId);
+        }
+
+        return result;
+    }
+
+    // ── Information Type Data Access ───────────────────────────────────
+
+    private string HostInformationTypeGetCode(double infoId)
+    {
+        if (_doc.InformationTypes.TryGetValue((uint)infoId, out var info))
+        {
+            return _doc.InformationTypeCatalogue.TryGetValue(info.InformationTypeCode, out var name)
+                ? name : info.InformationTypeCode.ToString();
+        }
+        return "";
+    }
+
+    private List<object> HostInformationTypeGetSimpleAttribute(double infoId, string attributePath, string attributeCode)
+    {
+        if (_doc.InformationTypes.TryGetValue((uint)infoId, out var info))
+        {
+            var attrs = ResolveAttributeScope(info.Attributes, attributePath);
+            return GetSimpleAttributeValues(attrs, attributeCode);
+        }
+        return new List<object>();
+    }
+
+    private double HostInformationTypeGetComplexAttributeCount(double infoId, string attributePath, string attributeCode)
+    {
+        if (_doc.InformationTypes.TryGetValue((uint)infoId, out var info))
+        {
+            var attrs = ResolveAttributeScope(info.Attributes, attributePath);
+            return CountComplexAttributes(attrs, attributeCode);
+        }
+        return 0;
+    }
+
+    // ── Type System (Feature Catalogue) ───────────────────────────────
+
+    private List<object> HostGetFeatureTypeCodes()
+        => _fc.FeatureTypes.Select(ft => (object)ft.Code).ToList();
+
+    private List<object> HostGetInformationTypeCodes()
+        => _fc.InformationTypes.Select(it => (object)it.Code).ToList();
+
+    private List<object> HostGetSimpleAttributeTypeCodes()
+        => _fc.SimpleAttributes.Select(a => (object)a.Code).ToList();
+
+    private List<object> HostGetComplexAttributeTypeCodes()
+        => _fc.ComplexAttributes.Select(a => (object)a.Code).ToList();
+
+    private List<object> HostGetRoleTypeCodes()
+        => _fc.Roles.Select(r => (object)r.Code).ToList();
+
+    private List<object> HostGetInformationAssociationTypeCodes()
+        => _fc.InformationAssociations.Select(a => (object)a.Code).ToList();
+
+    private List<object> HostGetFeatureAssociationTypeCodes()
+        => _fc.FeatureAssociations.Select(a => (object)a.Code).ToList();
+
+    private IReadOnlyDictionary<string, object?> HostGetFeatureTypeInfo(string code)
+    {
+        EnsureFeatureTypeLookup();
+        if (!_featureTypeByCode!.TryGetValue(code, out var ft))
+        {
+            _trace($"[Host] FeatureTypeInfo not found: {code}");
+            return new Dictionary<string, object?>();
+        }
+
+        var result = BuildObjectTypeInfo(ft.Code, ft.Name, ft.AttributeBindings, ft.IsAbstract);
+        if (code == "DepthArea")
+        {
+            var bindings = (IReadOnlyDictionary<string, object?>)result["AttributeBindings"]!;
+            _trace($"[Host] DepthArea bindings: {string.Join(", ", bindings.Keys.Where(k => k != "Type"))}");
+        }
+        return result;
+    }
+
+    private IReadOnlyDictionary<string, object?> HostGetInformationTypeInfo(string code)
+    {
+        EnsureInfoTypeLookup();
+        if (!_infoTypeByCode!.TryGetValue(code, out var it))
+            return new Dictionary<string, object?>();
+
+        return BuildObjectTypeInfo(it.Code, it.Name, it.AttributeBindings, it.IsAbstract);
+    }
+
+    private IReadOnlyDictionary<string, object?> HostGetSimpleAttributeTypeInfo(string code)
+    {
+        EnsureSimpleAttrLookup();
+        if (!_simpleAttrByCode!.TryGetValue(code, out var sa))
+            return new Dictionary<string, object?>();
+
+        return new Dictionary<string, object?>
+        {
+            ["Type"] = "SimpleAttribute",
+            ["Code"] = sa.Code,
+            ["Name"] = sa.Name,
+            ["ValueType"] = sa.ValueType,
+            ["ListedValues"] = BuildListedValues(sa.ListedValues),
+        };
+    }
+
+    private IReadOnlyDictionary<string, object?> HostGetComplexAttributeTypeInfo(string code)
+    {
+        EnsureComplexAttrLookup();
+        if (!_complexAttrByCode!.TryGetValue(code, out var ca))
+            return new Dictionary<string, object?>();
+
+        var bindings = new Dictionary<string, object?> { ["Type"] = "array:AttributeBinding" };
+        foreach (var ab in ca.SubAttributeBindings)
+        {
+            bindings[ab.AttributeRef] = new Dictionary<string, object?>
+            {
+                ["Type"] = "AttributeBinding",
+                ["AttributeCode"] = ab.AttributeRef,
+                ["LowerMultiplicity"] = (double)ab.Multiplicity.Lower,
+                ["UpperMultiplicity"] = ab.Multiplicity.Upper is int u ? (double)u : null,
+            };
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["Type"] = "ComplexAttribute",
+            ["Code"] = ca.Code,
+            ["Name"] = ca.Name,
+            ["AttributeBindings"] = bindings,
+        };
+    }
+
+    // ── Output ─────────────────────────────────────────────────────────
+
+    private bool HostPortrayalEmit(string featureRef, string drawingInstructions, string observedParams)
+    {
+        _emitted.Add(new EmittedInstruction
+        {
+            FeatureRef = featureRef,
+            InstructionString = drawingInstructions,
+            ObservedParameters = observedParams,
+        });
+        return true;
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────
+
+    private S101FeatureRecord GetFeature(uint id)
+    {
+        EnsureFeatureIndex();
+        return _featureById!.TryGetValue(id, out var feat)
+            ? feat
+            : throw new KeyNotFoundException($"Feature {id} not found.");
+    }
+
+    private void EnsureFeatureIndex()
+    {
+        if (_featureById is not null) return;
+        _featureById = _doc.Features.ToDictionary(f => f.RecordId);
+    }
+
+    private void EnsureFeatureTypeLookup()
+    {
+        _featureTypeByCode ??= _fc.FeatureTypes
+            .ToDictionary(ft => ft.Code, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private void EnsureInfoTypeLookup()
+    {
+        _infoTypeByCode ??= _fc.InformationTypes
+            .ToDictionary(it => it.Code, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private void EnsureSimpleAttrLookup()
+    {
+        _simpleAttrByCode ??= _fc.SimpleAttributes
+            .ToDictionary(a => a.Code, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private void EnsureComplexAttrLookup()
+    {
+        _complexAttrByCode ??= _fc.ComplexAttributes
+            .ToDictionary(a => a.Code, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Returns the set of this document's numeric attribute codes that name a
+    /// complex attribute in the feature catalogue. Used by
+    /// <see cref="ResolveAttributeScope"/> to delimit one complex-attribute
+    /// instance from the next sibling instance in the flat attribute list.
+    /// </summary>
+    private HashSet<ushort> GetComplexAttributeNumericCodes()
+    {
+        if (_complexAttrNumericCodes is not null)
+            return _complexAttrNumericCodes;
+
+        EnsureComplexAttrLookup();
+        var set = new HashSet<ushort>();
+        foreach (var (code, name) in _doc.AttributeTypeCatalogue)
+        {
+            if (_complexAttrByCode!.ContainsKey(name))
+                set.Add(code);
+        }
+
+        _complexAttrNumericCodes = set;
+        return set;
+    }
+
+    /// <summary>
+    /// Returns the numeric codes of the complex attributes that the feature
+    /// catalogue declares as (transitive) complex descendants of the complex
+    /// attribute named by <paramref name="parentCode"/> — i.e. every complex
+    /// nested at any depth beneath it. Used by <see cref="ResolveAttributeScope"/>
+    /// so that a nested complex instance is collected within its ancestor's
+    /// scope (and can be navigated into with a multi-segment path such as
+    /// <c>rhythmOfLight:1;signalSequence:1</c> or the three-level
+    /// <c>sectorCharacteristics:1;lightSector:1;sectorLimit:1</c>) instead of
+    /// terminating the ancestor's sub-attribute run the way a sibling complex
+    /// marker does. Transitive closure (rather than direct children only) is
+    /// required because a descendant marker such as <c>sectorLimit</c> is a
+    /// grandchild of <c>sectorCharacteristics</c> via <c>lightSector</c> and
+    /// would otherwise wrongly terminate the ancestor scope.
+    /// </summary>
+    private HashSet<ushort> GetNestedDescendantComplexCodes(ushort parentCode)
+    {
+        if (_nestedChildComplexCodes is null)
+        {
+            EnsureComplexAttrLookup();
+            var complexCodes = GetComplexAttributeNumericCodes();
+
+            // Reverse map: attribute name → numeric code (first occurrence).
+            var codeByName = new Dictionary<string, ushort>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (code, name) in _doc.AttributeTypeCatalogue)
+                codeByName.TryAdd(name, code);
+
+            // Direct-children map (complex → its immediate complex sub-attributes).
+            var direct = new Dictionary<ushort, HashSet<ushort>>();
+            foreach (var (code, name) in _doc.AttributeTypeCatalogue)
+            {
+                if (!_complexAttrByCode!.TryGetValue(name, out var ca))
+                    continue;
+
+                var children = new HashSet<ushort>();
+                foreach (var ab in ca.SubAttributeBindings)
+                {
+                    if (codeByName.TryGetValue(ab.AttributeRef, out var childCode)
+                        && complexCodes.Contains(childCode))
+                        children.Add(childCode);
+                }
+
+                if (children.Count > 0)
+                    direct[code] = children;
+            }
+
+            // Transitive closure with a cycle guard (the FC nesting is a DAG,
+            // but guard defensively against self-references / cycles).
+            var map = new Dictionary<ushort, HashSet<ushort>>();
+            foreach (var parent in direct.Keys)
+            {
+                var closure = new HashSet<ushort>();
+                var stack = new Stack<ushort>(direct[parent]);
+                while (stack.Count > 0)
+                {
+                    var cur = stack.Pop();
+                    if (!closure.Add(cur))
+                        continue;
+                    if (direct.TryGetValue(cur, out var grand))
+                    {
+                        foreach (var g in grand)
+                            stack.Push(g);
+                    }
+                }
+
+                if (closure.Count > 0)
+                    map[parent] = closure;
+            }
+
+            _nestedChildComplexCodes = map;
+        }
+
+        return _nestedChildComplexCodes.TryGetValue(parentCode, out var set)
+            ? set
+            : EmptyComplexCodes;
+    }
+
+    /// <summary>
+    /// Navigate into the flat attribute list to find sub-attributes under the
+    /// complex attribute path. Path format: "complexCode:index;complexCode:index;..."
+    /// Returns the sub-attributes within the specified complex attribute scope.
+    /// </summary>
+    private IReadOnlyList<S101Attribute> ResolveAttributeScope(IReadOnlyList<S101Attribute> attributes, string attributePath)
+    {
+        if (string.IsNullOrEmpty(attributePath))
+            return attributes;
+
+        // Parse path segments like "verticalClearanceFixed:1"
+        var segments = attributePath.Split(';');
+        var current = attributes;
+        foreach (var segment in segments)
+        {
+            var colonIdx = segment.IndexOf(':');
+
+            // Guard against malformed path segments: a rule script could pass a
+            // scope string that lacks a colon, has an empty complex code, or a
+            // non-numeric instance index. Rather than throwing (which would
+            // crash the portrayal pipeline), treat any malformed segment as an
+            // unresolvable scope and return no sub-attributes.
+            if (colonIdx <= 0 || colonIdx >= segment.Length - 1)
+                return [];
+
+            var complexCode = segment[..colonIdx];
+            if (!int.TryParse(segment[(colonIdx + 1)..], out var instanceIndex))
+                return [];
+
+            // Resolve complex attribute numeric code
+            ushort? numericCode = null;
+            foreach (var (code, name) in _doc.AttributeTypeCatalogue)
+            {
+                if (string.Equals(name, complexCode, StringComparison.OrdinalIgnoreCase))
+                {
+                    numericCode = code;
+                    break;
+                }
+            }
+
+            if (numericCode is null) return [];
+
+            var complexCodes = GetComplexAttributeNumericCodes();
+            var nestedDescendants = GetNestedDescendantComplexCodes(numericCode.Value);
+
+            // Find the nth instance of this complex attribute and collect sub-attributes
+            int found = 0;
+            var subAttrs = new List<S101Attribute>();
+            bool collecting = false;
+            foreach (var attr in current)
+            {
+                if (attr.NumericCode == numericCode && attr.Index == 1)
+                {
+                    found++;
+                    if (found == instanceIndex)
+                    {
+                        collecting = true;
+                        continue; // Skip the complex attribute marker itself
+                    }
+                    else if (collecting)
+                    {
+                        break; // Next instance of same complex attribute — done
+                    }
+                }
+                else if (collecting)
+                {
+                    // A subsequent complex-attribute marker (Index == 1 whose code
+                    // names a complex attribute in the FC) normally begins a
+                    // sibling complex instance and therefore terminates the
+                    // current instance's sub-attribute run. Without this, the
+                    // sub-attributes of a following complex would be wrongly
+                    // absorbed into this scope, since distinct complexes share
+                    // sub-attribute codes such as `language` (information /
+                    // featureName), `dateStart`, and `dateEnd` (fixedDateRange /
+                    // periodicDateRange / surveyDateRange).
+                    //
+                    // A marker whose code the FC declares to be a *nested*
+                    // descendant complex (at any depth) of the current parent
+                    // (e.g. `signalSequence` within `rhythmOfLight`, or
+                    // `lightSector`/`sectorLimit` beneath `sectorCharacteristics`)
+                    // is instead collected into this scope so it — and its
+                    // sub-attributes — can be navigated into with further path
+                    // segments (`rhythmOfLight:1;signalSequence:1` or
+                    // `sectorCharacteristics:1;lightSector:1;sectorLimit:1`).
+                    if (attr.Index == 1
+                        && complexCodes.Contains(attr.NumericCode)
+                        && !nestedDescendants.Contains(attr.NumericCode))
+                        break;
+                    subAttrs.Add(attr);
+                }
+            }
+
+            current = subAttrs;
+        }
+
+        return current;
+    }
+
+    private List<object> GetSimpleAttributeValues(IReadOnlyList<S101Attribute> attributes, string attributeCode)
+    {
+        // Resolve attribute code from name to numeric code
+        ushort? numericCode = null;
+        foreach (var (code, name) in _doc.AttributeTypeCatalogue)
+        {
+            if (string.Equals(name, attributeCode, StringComparison.OrdinalIgnoreCase))
+            {
+                numericCode = code;
+                break;
+            }
+        }
+
+        if (numericCode is null) return new List<object>();
+
+        var result = new List<object>();
+        foreach (var attr in attributes)
+        {
+            if (attr.NumericCode == numericCode && attr.Value.Length > 0)
+            {
+                result.Add(attr.Value);
+            }
+        }
+
+        return result;
+    }
+
+    private double CountComplexAttributes(IReadOnlyList<S101Attribute> attributes, string attributeCode)
+    {
+        // For complex attributes, count instances with the matching code
+        ushort? numericCode = null;
+        foreach (var (code, name) in _doc.AttributeTypeCatalogue)
+        {
+            if (string.Equals(name, attributeCode, StringComparison.OrdinalIgnoreCase))
+            {
+                numericCode = code;
+                break;
+            }
+        }
+
+        if (numericCode is null) return 0;
+
+        int count = 0;
+        foreach (var attr in attributes)
+        {
+            if (attr.NumericCode == numericCode && attr.Index == 1)
+                count++;
+        }
+
+        return count;
+    }
+
+    private static string ResolveSpatialTypeName(byte rcnm)
+    {
+        return rcnm switch
+        {
+            RcnmPoint => "Point",
+            RcnmMultiPoint => "MultiPoint",
+            RcnmCurveSegment => "Curve",
+            RcnmCompositeCurve => "CompositeCurve",
+            RcnmSurface => "Surface",
+            _ => "None",
+        };
+    }
+
+    // ── Spatial Data Access ────────────────────────────────────────────
+
+    private static (byte Rcnm, uint Rcid) ParseSpatialId(string spatialId)
+    {
+        var idx = spatialId.IndexOf(':');
+        var rcnm = byte.Parse(spatialId.AsSpan(0, idx));
+        var rcid = uint.Parse(spatialId.AsSpan(idx + 1));
+        return (rcnm, rcid);
+    }
+
+    /// <summary>
+    /// Returns raw spatial data as a dictionary that the Lua shim can use
+    /// to construct the proper Spatial objects via Create* functions.
+    /// </summary>
+    private object? HostGetSpatialData(string spatialId)
+    {
+        var (rcnm, rcid) = ParseSpatialId(spatialId);
+        double cmfx = _doc.StructureInfo.CoordinateMultiplicationFactorX;
+        double cmfy = _doc.StructureInfo.CoordinateMultiplicationFactorY;
+        double cmfz = _doc.StructureInfo.CoordinateMultiplicationFactorZ;
+        // Defensive divide-by-zero guards only. Valid S-101 datasets populate the
+        // coordinate multiplication factors in the DSSI record (S-100 Part 10a
+        // §10a-6.1.2.2) — typically COMF=1e7 for lat/lon and SOMF=100 for depth — so
+        // these fallbacks do not fire for well-formed data. They protect against a
+        // missing/partial DSSI yielding an Infinity coordinate. (The factors are
+        // parsed correctly as of EncDotNet.Iso8211 0.5.1, which fixed the b48
+        // 8-byte binary-control parse; the SOMF=10 default is an S-57 holdover.)
+        if (cmfx == 0) cmfx = 10_000_000;
+        if (cmfy == 0) cmfy = 10_000_000;
+        if (cmfz == 0) cmfz = 10;
+
+        if (rcnm == RcnmPoint && _doc.Points.TryGetValue(rcid, out var pt))
+        {
+            return new Dictionary<string, object?>
+            {
+                ["RecordType"] = "Point",
+                ["X"] = (pt.X / cmfx).ToString(CultureInfo.InvariantCulture),
+                ["Y"] = (pt.Y / cmfy).ToString(CultureInfo.InvariantCulture),
+            };
+        }
+
+        if (rcnm == RcnmMultiPoint && _doc.MultiPoints.TryGetValue(rcid, out var mp))
+        {
+            var points = new List<object>(mp.Points.Count);
+            foreach (var (y, x, z) in mp.Points)
+            {
+                var depth = z / cmfz;
+                if (_depthShift?.ForSounding(y / cmfy, x / cmfx) is { } height)
+                    depth = Math.Round(depth + height, 2);
+
+                points.Add(new Dictionary<string, object?>
+                {
+                    ["X"] = (x / cmfx).ToString(CultureInfo.InvariantCulture),
+                    ["Y"] = (y / cmfy).ToString(CultureInfo.InvariantCulture),
+                    ["Z"] = depth.ToString(CultureInfo.InvariantCulture),
+                });
+            }
+
+            return new Dictionary<string, object?>
+            {
+                ["RecordType"] = "MultiPoint",
+                ["Points"] = points,
+            };
+        }
+
+        if (rcnm == RcnmCurveSegment && _doc.CurveSegments.TryGetValue(rcid, out var curve))
+        {
+            // Start and end point associations
+            string? startPointId = null;
+            string? endPointId = null;
+            foreach (var pta in curve.PointAssociations)
+            {
+                var ptId = $"{pta.RecordName}:{pta.RecordId}";
+                if (pta.Topology == 1) startPointId = ptId;      // TOPI=1 begin
+                else if (pta.Topology == 2) endPointId = ptId;   // TOPI=2 end
+            }
+
+            // Intermediate coordinates as list of {X, Y} dictionaries
+            var controlPoints = new List<object>();
+            foreach (var (y, x) in curve.IntermediateCoordinates)
+            {
+                controlPoints.Add(new Dictionary<string, object?>
+                {
+                    ["X"] = (x / cmfx).ToString(CultureInfo.InvariantCulture),
+                    ["Y"] = (y / cmfy).ToString(CultureInfo.InvariantCulture),
+                });
+            }
+
+            return new Dictionary<string, object?>
+            {
+                ["RecordType"] = "Curve",
+                ["StartPointID"] = startPointId,
+                ["EndPointID"] = endPointId,
+                ["ControlPoints"] = controlPoints,
+            };
+        }
+
+        if (rcnm == RcnmCompositeCurve && _doc.CompositeCurves.TryGetValue(rcid, out var cc))
+        {
+            var components = new List<object>();
+            foreach (var comp in cc.CurveComponents)
+            {
+                components.Add(new Dictionary<string, object?>
+                {
+                    ["SpatialID"] = $"{comp.RecordName}:{comp.RecordId}",
+                    ["SpatialType"] = ResolveSpatialTypeName(comp.RecordName),
+                    ["Orientation"] = comp.Orientation == OrientationReverse ? "Reverse" : "Forward",
+                });
+            }
+
+            return new Dictionary<string, object?>
+            {
+                ["RecordType"] = "CompositeCurve",
+                ["CurveAssociations"] = components,
+            };
+        }
+
+        if (rcnm == RcnmSurface && _doc.Surfaces.TryGetValue(rcid, out var surface))
+        {
+            Dictionary<string, object?>? exteriorRing = null;
+            var interiorRings = new List<object>();
+
+            foreach (var ring in surface.RingAssociations)
+            {
+                var ringData = new Dictionary<string, object?>
+                {
+                    ["SpatialID"] = $"{ring.RecordName}:{ring.RecordId}",
+                    ["SpatialType"] = ResolveSpatialTypeName(ring.RecordName),
+                    ["Orientation"] = ring.Orientation == OrientationReverse ? "Reverse" : "Forward",
+                };
+
+                if (ring.Usage == 1) // Exterior
+                    exteriorRing = ringData;
+                else                 // Interior
+                    interiorRings.Add(ringData);
+            }
+
+            return new Dictionary<string, object?>
+            {
+                ["RecordType"] = "Surface",
+                ["ExteriorRing"] = exteriorRing,
+                ["InteriorRings"] = interiorRings,
+            };
+        }
+
+        return null;
+    }
+
+    private object HostSpatialRelateCore(string spatialId1, string spatialId2, string intersectionPatternMatrix)
+    {
+        _spatialRelate ??= new S101SpatialRelate(_doc);
+        var result = _spatialRelate.Relate(spatialId1, spatialId2, intersectionPatternMatrix);
+        if (result is string error)
+            _trace(error);
+        return result;
+    }
+
+    private List<object> HostSpatialGetAssociatedFeatureIDs(string spatialId)
+    {
+        var key = ParseSpatialId(spatialId);
+        _featureIdsBySpatial ??= BuildFeatureIdsBySpatial(_doc);
+        return _featureIdsBySpatial.TryGetValue(key, out var ids)
+            ? ids.ConvertAll(static id => (object)id)
+            : new List<object>();
+    }
+
+    /// <summary>
+    /// Indexes, for each spatial record, the features that use it, so that
+    /// <c>HostSpatialGetAssociatedFeatureIDs</c> is a lookup rather than a scan of
+    /// every feature. A feature uses the records it references and, through them,
+    /// the members of its composite curves and the rings of its surfaces: the
+    /// S-101 <c>DEPARE03</c> rule finds the depth area across each edge of a depth
+    /// area's ring from the edge's features, and the neighbour references only its
+    /// surface. Records are keyed by record name and id (point 5 and curve 5 are
+    /// different records); each list keeps dataset order and holds a feature once.
+    /// </summary>
+    internal static Dictionary<(byte Rcnm, uint Rcid), List<double>> BuildFeatureIdsBySpatial(S101Document doc)
+    {
+        var index = new Dictionary<(byte Rcnm, uint Rcid), List<double>>();
+        var used = new HashSet<(byte Rcnm, uint Rcid)>();
+        foreach (var feat in doc.Features)
+        {
+            used.Clear();
+            foreach (var spa in feat.SpatialAssociations)
+                AddUse(spa.RecordName, spa.RecordId);
+
+            double featureId = feat.RecordId;
+            foreach (var key in used)
+            {
+                if (!index.TryGetValue(key, out var ids))
+                    index[key] = ids = new List<double>();
+                ids.Add(featureId);
+            }
+        }
+
+        return index;
+
+        void AddUse(byte rcnm, uint rcid)
+        {
+            if (!used.Add((rcnm, rcid)))
+                return;
+
+            if (rcnm == RcnmCompositeCurve && doc.CompositeCurves.TryGetValue(rcid, out var cc))
+            {
+                foreach (var comp in cc.CurveComponents)
+                    AddUse(comp.RecordName, comp.RecordId);
+            }
+            else if (rcnm == RcnmSurface && doc.Surfaces.TryGetValue(rcid, out var surface))
+            {
+                foreach (var ring in surface.RingAssociations)
+                    AddUse(ring.RecordName, ring.RecordId);
+            }
+        }
+    }
+
+    private List<object> HostSpatialGetAssociatedInformationIDs(string spatialId, string associationCode, string? roleCode)
+    {
+        // S-101 spatial records don't directly carry information associations
+        // in our current model. Return empty for now.
+        return new List<object>();
+    }
+
+    private static IReadOnlyDictionary<string, object?> BuildObjectTypeInfo(
+        string code,
+        string name,
+        IReadOnlyList<AttributeBinding> attributeBindings,
+        bool isAbstract)
+    {
+        var bindings = new Dictionary<string, object?> { ["Type"] = "array:AttributeBinding" };
+        foreach (var ab in attributeBindings)
+        {
+            bindings[ab.AttributeRef] = new Dictionary<string, object?>
+            {
+                ["Type"] = "AttributeBinding",
+                ["AttributeCode"] = ab.AttributeRef,
+                ["LowerMultiplicity"] = (double)ab.Multiplicity.Lower,
+                ["UpperMultiplicity"] = ab.Multiplicity.Upper is int u ? (double)u : null,
+                ["Sequential"] = ab.Sequential,
+            };
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["Type"] = "FeatureType",
+            ["Code"] = code,
+            ["Name"] = name,
+            ["Abstract"] = isAbstract,
+            ["AttributeBindings"] = bindings,
+        };
+    }
+
+    private static IReadOnlyDictionary<string, object?> BuildListedValues(IReadOnlyList<ListedValue> values)
+    {
+        var dict = new Dictionary<string, object?> { ["Type"] = "array:ListedValue" };
+        for (int i = 0; i < values.Count; i++)
+        {
+            var lv = values[i];
+            dict[(i + 1).ToString(CultureInfo.InvariantCulture)] = new Dictionary<string, object?>
+            {
+                ["Type"] = "ListedValue",
+                ["Label"] = lv.Label,
+                ["Code"] = double.TryParse(lv.Code, CultureInfo.InvariantCulture, out var code) ? code : 0.0,
+            };
+        }
+        return dict;
+    }
+}

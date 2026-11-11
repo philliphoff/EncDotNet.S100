@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <RootNamespace>EncDotNet.S100.Samples.MapHost</RootNamespace>
+    <AssemblyName>EncDotNet.S100.Samples.MapHost</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The Avalonia UI framework this sample host is built on. -->
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Skia" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <!-- The Mapsui Avalonia map control the S-100 session renders into. -->
+    <PackageReference Include="Mapsui.Avalonia12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      The whole point of this sample is what it references and what it does
+      NOT. It embeds the reusable S-100 Mapsui extension WITHOUT referencing
+      EncDotNet.S100.Viewer or any Viewer service:
+
+        * Renderers.Mapsui          - the Map.AddS100(...) extension + IS100MapSession
+        * Renderers.Mapsui.Avalonia - the pointer/redraw/capture adapter + MapControl.AddS100 (this sample
+                                      uses a stock Mapsui MapControl; the capture-synchronized subclass is optional)
+        * Crs.ProjNet               - the ICrsTransformFactory AddS100 requires (the reusable assembly ships none)
+        * EncDotNet.S100            - the convenience package's BundledDatasetProcessorFactory,
+                                      the one-call IDatasetProcessorFactory used by Datasets.LoadAsync
+
+      As of issue #512 step 9, Renderers.Mapsui no longer references any S-100
+      product: Map.AddS100 takes an IDatasetProcessorFactory. This sample gets one
+      from BundledDatasetProcessorFactory (in the EncDotNet.S100 convenience
+      package), so the host no longer hand-wires Portrayals / Specifications /
+      Features / Scripting.MoonSharp or references Datasets.Pipelines directly -
+      the multi-project bootstrap this sample used to carry collapsed to a single
+      call. (The convenience package still pulls the products in transitively;
+      that is the batteries-included trade-off a host opts into by using it.)
+    -->
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Renderers.Mapsui\EncDotNet.S100.Renderers.Mapsui.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Renderers.Mapsui.Avalonia\EncDotNet.S100.Renderers.Mapsui.Avalonia.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Crs.ProjNet\EncDotNet.S100.Crs.ProjNet.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100\EncDotNet.S100.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Bundle a single real IHO S-101 test cell (the same one the headless Skia
+      render tests use) as the sample dataset, copied to the output directory.
+      Linked from the existing test corpus so there is one source of truth.
+    -->
+    <None Include="..\..\tests\datasets\S101\S-101\DATASET_FILES\101AA00DS0008.000" Link="sample-cell.000">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.Weather\EncDotNet.S100.Datasets.Weather.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.Grib\EncDotNet.S100.Datasets.Grib.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\_shared\GribFixtures.cs" Link="TestSupport\GribFixtures.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- NOAA GFS and GFS-Wave subsets; see tests/datasets/GRIB2/README.md. -->
+    <Content Include="..\datasets\GRIB2\*.grib2" CopyToOutputDirectory="PreserveNewest" Link="TestData\%(Filename)%(Extension)" />
+    <!-- OpenJPEG codestreams and their expected samples; see the same README. -->
+    <Content Include="..\datasets\GRIB2\jpeg2000\*.*" Exclude="..\datasets\GRIB2\jpeg2000\*.md" CopyToOutputDirectory="PreserveNewest" Link="TestData\jpeg2000\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

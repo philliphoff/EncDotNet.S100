@@ -1,0 +1,87 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+    <!-- See Directory.Build.targets: ship the NoDependencies Skia native on Linux (issue #23). -->
+    <UseSkiaSharpLinuxNoDependencies>true</UseSkiaSharpLinuxNoDependencies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="PureHDF" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\_shared\MapsuiDependencyClosure.cs" Link="TestSupport\MapsuiDependencyClosure.cs" />
+    <Compile Include="..\_shared\TestContentKinds.cs" Link="TestSupport\TestContentKinds.cs" />
+    <Compile Include="..\_shared\TestLuaEngine.cs" Link="TestSupport\TestLuaEngine.cs" />
+    <Compile Include="..\_shared\ReferenceLuaSort.cs" Link="TestSupport\ReferenceLuaSort.cs" />
+    <Compile Include="..\_shared\SyntheticS57Cell.cs" Link="TestSupport\SyntheticS57Cell.cs" />
+    <Compile Include="..\_shared\SyntheticAmlCell.cs" Link="TestSupport\SyntheticAmlCell.cs" />
+    <Compile Include="..\_shared\AmlFixtures.cs" Link="TestSupport\AmlFixtures.cs" />
+    <Compile Include="..\_shared\SyntheticS128Catalogue.cs" Link="TestSupport\SyntheticS128Catalogue.cs" />
+    <Compile Include="..\_shared\FakeWeatherProduct.cs" Link="TestSupport\FakeWeatherProduct.cs" />
+    <Compile Include="..\_shared\NetCdfFixtures.cs" Link="TestSupport\NetCdfFixtures.cs" />
+    <Compile Include="..\_shared\GribFixtures.cs" Link="TestSupport\GribFixtures.cs" />
+    <Compile Include="..\_shared\CapFixtures.cs" Link="TestSupport\CapFixtures.cs" />
+    <Compile Include="..\_shared\TropicalCycloneFixtures.cs" Link="TestSupport\TropicalCycloneFixtures.cs" />
+    <Compile Include="..\_shared\FrontPipFixtures.cs" Link="TestSupport\FrontPipFixtures.cs" />
+    <Compile Include="..\_shared\CodsusFixtures.cs" Link="TestSupport\CodsusFixtures.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S101\EncDotNet.S100.Datasets.S101.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S102\EncDotNet.S100.Datasets.S102.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S104\EncDotNet.S100.Datasets.S104.csproj" />
+    <ProjectReference Include="..\EncDotNet.S100.Testing.Scenarios\EncDotNet.S100.Testing.Scenarios.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.S111\EncDotNet.S100.Datasets.S111.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Hdf5.PureHdf\EncDotNet.S100.Hdf5.PureHdf.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Portrayals\EncDotNet.S100.Portrayals.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Renderers.Skia\EncDotNet.S100.Renderers.Skia.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Scripting.LuaCSharp\EncDotNet.S100.Scripting.LuaCSharp.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Scripting.MoonSharp\EncDotNet.S100.Scripting.MoonSharp.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Specifications\EncDotNet.S100.Specifications.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Crs.ProjNet\EncDotNet.S100.Crs.ProjNet.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Renderers.Mapsui\EncDotNet.S100.Renderers.Mapsui.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.Pipelines\EncDotNet.S100.Datasets.Pipelines.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Features\EncDotNet.S100.Features.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\datasets\S102\*.h5" CopyToOutputDirectory="PreserveNewest" Link="TestData\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S111\*.h5" CopyToOutputDirectory="PreserveNewest" Link="TestData\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S57\US5MA1BO\US5MA1BO.000" CopyToOutputDirectory="PreserveNewest" Link="TestData\US5MA1BO.000" />
+    <Content Include="..\datasets\S102\PortrayalCatalogue\**\*" CopyToOutputDirectory="PreserveNewest" Link="TestData\PortrayalCatalogue\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S411\display_modes.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S411\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S411\display_modes_list.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S411\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S411\empty_iceact_total_concentration.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S411\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S124\navwarn_ccg_ed2*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S124\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S412\synthetic_all_warnings.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S412\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S124\navwarn_bulletin_*.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S124\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S124\navwarn_point.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S124\%(Filename)%(Extension)" />
+    <Content Include="..\datasets\S124\navwarn_drawing_*.gml;..\datasets\S124\navwarn_with_xlinks.gml" CopyToOutputDirectory="PreserveNewest" Link="TestData\S124\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <!-- NOAA GFS and GFS-Wave subsets (issue #1074); see tests/datasets/GRIB2/README.md. -->
+    <Content Include="..\datasets\GRIB2\*.grib2" CopyToOutputDirectory="PreserveNewest" Link="TestData\GRIB2\%(Filename)%(Extension)" />
+    <!-- NWS marine CAP alerts and a hand-written circle alert (issue #1069); see tests/datasets/CAP/README.md. -->
+    <Content Include="..\datasets\CAP\*.*" Exclude="..\datasets\CAP\*.md" CopyToOutputDirectory="PreserveNewest" Link="TestData\CAP\%(Filename)%(Extension)" />
+    <!-- NHC's archived GIS zips for Hurricane Ian, advisory 20 (issue #1294); see tests/datasets/TC/README.md. -->
+    <Content Include="..\datasets\TC\**\*.zip" CopyToOutputDirectory="PreserveNewest" Link="TestData\TC\%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- WPC coded surface bulletins, three real and one hand-written (issue #1295); see tests/datasets/CODSUS/README.md. -->
+    <Content Include="..\datasets\CODSUS\*.txt" CopyToOutputDirectory="PreserveNewest" Link="TestData\CODSUS\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

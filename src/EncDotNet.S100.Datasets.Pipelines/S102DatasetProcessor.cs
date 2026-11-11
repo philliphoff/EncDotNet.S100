@@ -1,0 +1,758 @@
+using System.Globalization;
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Datasets.Pipelines.Sampling;
+using EncDotNet.S100.Datasets.S102;
+using EncDotNet.S100.Datasets.S102.Validation;
+using EncDotNet.S100.Hdf5;
+using EncDotNet.S100.Hdf5.PureHdf;
+using EncDotNet.S100.Interoperability;
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Renderers.Skia;
+using EncDotNet.S100.Scripting;
+using EncDotNet.S100.Validation;
+using SkiaSharp;
+
+namespace EncDotNet.S100.Datasets.Pipelines;
+
+/// <summary>
+/// <see cref="IDatasetProcessor"/> for IHO S-102 Bathymetric Surface HDF5
+/// datasets. Exposes the depth grid as an <see cref="ICoveragePortrayalSource"/>
+/// portrayed through the S-102 Lua portrayal catalogue, and renders headless
+/// images through the Skia coverage core.
+/// </summary>
+/// <remarks>
+/// <para>
+/// NODATA cells are portrayed transparent rather than with the NODTA fill, so
+/// the bathymetry can overlay other layers (e.g. an S-101 ENC) without the
+/// unsurveyed remainder of the grid hiding the chart beneath.
+/// </para>
+/// <para>
+/// Normally created through the <see cref="S100Products.S102"/> registration
+/// (used by <see cref="DatasetPipelineFactory"/>) rather than constructed
+/// directly.
+/// </para>
+/// </remarks>
+public sealed class S102DatasetProcessor : IDatasetProcessor, IDepthAdjustableProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, IDisposable, ILoadedDatasetProjection, ICoverageSampler
+{
+    private readonly S102Dataset _dataset;
+    private readonly S102CoverageSource _source;
+    private readonly int? _cellMinimumDisplayScale;
+    private readonly S102PortrayalCatalogue _catalogue;
+    private readonly ICrsTransformFactory _crsTransformFactory;
+    private readonly string _fileName;
+    private readonly PortrayalPipeline _pipeline;
+    private readonly SemaphoreSlim _renderGate = new(1, 1);
+    private GeographicBounds? _coverageExtent;
+
+    // The last traced depth lines and what they were traced from. The S-102
+    // values never change, so the same overview level, sampled region and
+    // safety contour give the same lines; redraws and palette switches reuse
+    // them. Read and written under the render gate.
+    private (DepthLineKey Key, double Safety, IReadOnlyList<Isoline> Lines)? _safetyLines;
+    private (DepthLineKey Key, IReadOnlyList<Isoline> Lines)? _limitLines;
+    private ValidationReport? _validationReport;
+    private bool _validationCached;
+
+    /// <inheritdoc/>
+    public SpecRef Spec { get; }
+
+    private DatasetMetadata? _metadata;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Derived from the coverage source's already-read georeferencing
+    /// metadata (root attributes + coverage extent) and the dataset's
+    /// horizontal CRS — no HDF5 payload is re-read (issue #467, WS1).
+    /// </remarks>
+    public DatasetMetadata Metadata => _metadata ??= BuildMetadata();
+
+    /// <inheritdoc />
+    public LoadedDatasetData CreateLoadedData() => new S102CoverageData(_source);
+
+    /// <inheritdoc />
+    /// <remarks>Depth and uncertainty at the cell containing the point; no time dimension.</remarks>
+    public CoverageSiteSearch FindSites(CoverageSampleQuery query) => new S102CoverageSampler(_source).FindSites(query);
+
+    private DatasetMetadata BuildMetadata()
+    {
+        // Native CRS units, labelled by HorizontalCrsEpsg — the same value
+        // S102DatasetReader.ReadMetadata probes, so a probed and a loaded
+        // dataset agree. Consumers reproject via GetGeographicExtent.
+        var extent = _source.Metadata.NativeExtent;
+        return new DatasetMetadata
+        {
+            Spec = Spec,
+            Extent = new BoundingBox(
+                extent.SouthLatitude,
+                extent.WestLongitude,
+                extent.NorthLatitude,
+                extent.EastLongitude),
+            HorizontalCrsEpsg = _dataset.HorizontalCRS,
+        };
+    }
+
+    /// <inheritdoc/>
+    public SpecVersionAssessment? VersionAssessment { get; }
+
+    /// <inheritdoc/>
+    public EncDotNet.S100.DataModel.AxisOrderAssessment? AxisOrder => _dataset.AxisOrder;
+
+    /// <summary>
+    /// Always empty: an S-102 bathymetric surface has no time steps. The
+    /// processor is an <see cref="ITimeAwareDatasetProcessor"/> only to report
+    /// <see cref="IssueTime"/>.
+    /// </summary>
+    public IReadOnlyList<DateTime> AvailableTimes => [];
+
+    /// <inheritdoc />
+    public DateTime? IssueTime => S100IssueTime.Parse(_dataset.IssueDate, _dataset.IssueTime);
+
+    /// <summary>
+    /// The vertical datum the surface's depths are relative to: the root
+    /// <c>verticalDatum</c> as an S-100 vertical datum code (S-102 Ed 3.0.0
+    /// §10.2.1), or <see langword="null"/> when it isn't declared.
+    /// </summary>
+    public int? VerticalDatum => _dataset.VerticalDatum;
+
+    /// <summary>
+    /// Initializes a new <see cref="S102DatasetProcessor"/> by reading and
+    /// parsing the HDF5 dataset file at <paramref name="path"/>. The file is
+    /// read in full and closed before the constructor returns.
+    /// </summary>
+    /// <param name="path">Path to the S-102 HDF5 dataset file.</param>
+    /// <param name="catalogueManager">Supplies the S-102 portrayal catalogue.</param>
+    /// <param name="luaEngine">Lua engine that executes the portrayal catalogue's rules.</param>
+    /// <param name="crsTransformFactory">
+    /// Creates the WGS84-to-native CRS transforms used when sampling the grid
+    /// for <see cref="GetCoverageInfo"/>.
+    /// </param>
+    /// <exception cref="S100DatasetSchemaException">
+    /// The file does not match the S-102 HDF5 schema. The exception carries the file name.
+    /// </exception>
+    /// <exception cref="S100DatasetNotSupportedException">
+    /// The file uses an S-102 feature this reader does not support. The exception carries the file name.
+    /// </exception>
+    public S102DatasetProcessor(
+        string path,
+        PortrayalCatalogueManager catalogueManager,
+        ILuaEngine luaEngine,
+        ICrsTransformFactory crsTransformFactory)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, luaEngine, crsTransformFactory)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new <see cref="S102DatasetProcessor"/> by reading
+    /// the dataset file <paramref name="relativePath"/> from
+    /// <paramref name="source"/> (e.g. a <c>FileSystemAssetSource</c> or
+    /// <c>ZipAssetSource</c>). Used by exchange-set bulk loading where
+    /// a dataset's bytes live inside a ZIP archive.
+    /// </summary>
+    public S102DatasetProcessor(
+        IAssetSource source,
+        string relativePath,
+        PortrayalCatalogueManager catalogueManager,
+        ILuaEngine luaEngine,
+        ICrsTransformFactory crsTransformFactory)
+        : this(
+            AssetSourceHelpers.OpenSeekable(source, relativePath),
+            AssetSourceHelpers.GetFileName(relativePath),
+            catalogueManager,
+            luaEngine,
+            crsTransformFactory)
+    {
+    }
+
+    private S102DatasetProcessor(
+        Stream datasetStream,
+        string fileName,
+        PortrayalCatalogueManager catalogueManager,
+        ILuaEngine luaEngine,
+        ICrsTransformFactory crsTransformFactory)
+    {
+        ArgumentNullException.ThrowIfNull(datasetStream);
+        _fileName = fileName;
+        _crsTransformFactory = crsTransformFactory;
+
+        using (datasetStream)
+        using (var hdf5 = PureHdfFile.Open(datasetStream))
+        {
+            try
+            {
+                _dataset = S102DatasetReader.Read(hdf5);
+            }
+            catch (S100DatasetSchemaException ex) when (ex.File is null)
+            {
+                throw ex.WithFile(_fileName);
+            }
+            catch (S100DatasetNotSupportedException ex) when (ex.File is null)
+            {
+                throw ex.WithFile(_fileName);
+            }
+        }
+        _source = new S102CoverageSource(_dataset);
+
+        // Read before any overview level is selected: the cutoff follows the
+        // full-resolution grid.
+        _cellMinimumDisplayScale = GridDisplayScale.FromGrid(
+            _source.Metadata.GridMetadata,
+            geographic: (_dataset.HorizontalCRS ?? 4326) == 4326);
+
+        Spec = HdfDeclaredSpec.Resolve(_dataset.DeclaredProductSpecification, "S-102");
+
+        var provider = catalogueManager.GetProvider("S-102");
+        // The viewer overlays S-102 bathymetry on other layers (e.g. an
+        // S-101 ENC), so NODATA cells must be transparent rather than
+        // painted with the opaque NODTA grey; otherwise the un-surveyed
+        // remainder of the rectangular coverage extent obscures the chart
+        // beneath. (Standalone S-102 portrayal keeps the default fill.)
+        _catalogue = new S102PortrayalCatalogue(luaEngine, provider) { RenderNoDataFill = false };
+
+        // Hoist pipeline to a field: BuildCoveragePortrayalAsync is invoked
+        // many times (each redraw) but the pipeline holds no per-render state,
+        // so a single instance is safe and avoids repeated allocation on the
+        // hot path. The Mapsui coverage renderer lives in the renderer package.
+        _pipeline = new PortrayalPipeline();
+
+        Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
+        VersionAssessment = SupportedSpecEditions.Assess(Spec, _catalogue.CatalogueRef);
+    }
+
+    /// <summary>Releases the render gate that serializes portrayal and headless rendering.</summary>
+    public void Dispose()
+    {
+        // PortrayalPipeline is not currently disposable, but keep Dispose
+        // explicit so future allocations to these fields can be cleaned up
+        // here without further plumbing.
+        _renderGate.Dispose();
+    }
+
+    /// <inheritdoc/>
+    public async Task<CoveragePortrayalResult> BuildCoveragePortrayalAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
+
+            var previousLevel = _source.SelectedOverviewLevel;
+
+            int crs = _dataset.HorizontalCRS ?? 4326;
+            ICrsTransform? wgs84ToNative = null;
+            if (context?.Viewport is not null && crs != 4326)
+            {
+                wgs84ToNative = _crsTransformFactory.Create("EPSG:4326", $"EPSG:{crs}");
+            }
+
+            // Select the coarsest shoal-biased overview that does not exceed
+            // the viewport's cells-per-pixel ratio. Deriving the ratio through
+            // GridRegion accounts for how much of the viewport the tile
+            // occupies; comparing only full-grid dimensions to viewport pixels
+            // would incorrectly choose level 0 when zoomed beyond the tile.
+            // Ordering matters: selection precedes this Metadata read so the
+            // pipeline computes its residual region against level-L geometry.
+            SelectOverviewLevelForViewport(context?.Viewport, wgs84ToNative);
+            var metadata = _source.Metadata;
+
+            var viewport = context?.Viewport
+                ?? CoverageExtent.FullGridViewport(metadata, _crsTransformFactory);
+
+            try
+            {
+                var pipeline = _pipeline;
+
+                // Viewport-scoped sampling (issue #487): when the render context
+                // supplies a live map viewport, pass it (and the WGS84→native
+                // transform for non-4326 grids) through so the pipeline samples
+                // only cells that fall inside the viewport at the viewport's
+                // ground resolution. Falls back to full-grid sampling when the
+                // caller doesn't specify a viewport (e.g. RenderHeadlessAsync,
+                // CLI tools). Composes with the overview pyramid selection
+                // above: the region math runs against the level-L metadata
+                // exposed by _source.Metadata (issue #486).
+                var layer = await pipeline.ProcessAsync(
+                    _source,
+                    _catalogue,
+                    viewport: context?.Viewport,
+                    wgs84ToNative: wgs84ToNative,
+                    mariner: context?.Mariner ?? MarinerSettings.Default,
+                    cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
+                var styledLayer = (StyledCoverageLayer)layer;
+                var mariner = context?.Mariner ?? MarinerSettings.Default;
+                var depthLegend = styledLayer.ColorScheme is { } scheme ? S102PortrayalCatalogue.BuildDepthLegend(scheme) : null;
+                var nativeToWgs84 = NativeToWgs84(crs);
+                string? adjustmentKey = null;
+                if (context?.DepthAdjustment is { } adjustment)
+                {
+                    // S-98 Appendix D: band and trace the adjusted depths.
+                    // The depth lines are traced from the adjusted values, so
+                    // the safety contour follows the water level too.
+                    var (adjusted, count) = S102DepthAdjuster.Apply(styledLayer, adjustment, _dataset.VerticalDatum, () => NativeToWgs84(crs), cancellationToken);
+                    styledLayer = adjusted;
+                    adjustmentKey = count > 0 ? adjustment.Key : null;
+                }
+
+                // Optional relief shading (off by default; not part of the
+                // S-102 portrayal): a hillshade over the band colours.
+                if (S102Relief.IsOn(context?.EcdisDisplay))
+                    styledLayer = S102Relief.Apply(styledLayer, nativeToWgs84, ReliefShading.Default);
+
+                var depthLines = BuildDepthLineSubLayers(
+                    styledLayer, mariner, crs, nativeToWgs84, adjustmentKey);
+
+                var geoId = _dataset.GeographicIdentifier ?? _fileName;
+                var info = $"{geoId} — {metadata.GridMetadata.NumColumns}×{metadata.GridMetadata.NumRows} grid, CRS: EPSG:{crs}";
+
+                return new CoveragePortrayalResult
+                {
+                    // S-102 → S98DisplayPlane.Bathymetry. S-98 Annex A §A-6.9.1
+                    // ("gridded bathymetry replaces depth area and depth
+                    // contours"). S-102 always emits a single coverage layer;
+                    // PR-L1 leaves WithinPlanePriority at 0.
+                    SubLayers = new CoverageSubLayerBase[]
+                    {
+                        new GridCoverageSubLayer
+                        {
+                            LayerKey = "s102.surface",
+                            LayerName = $"S-102: {_fileName}",
+                            Plane = S98DisplayPlane.Bathymetry,
+                            WithinPlanePriority = 0,
+                            Coverage = styledLayer,
+                            Viewport = viewport,
+                            Legend = depthLegend,
+                            LegendCaption = S102PortrayalCatalogue.SafetyContourCaption(mariner),
+                        },
+                        depthLines.SafetyContour,
+                        depthLines.CoverageLimit,
+                    },
+                    Spec = Spec,
+                    SourceDatasetId = _fileName,
+                    Info = info,
+                    CoverageExtent = ResolveCoverageExtent(),
+                    CellMinimumDisplayScale = _cellMinimumDisplayScale,
+                };
+            }
+            catch
+            {
+                _source.SelectOverviewLevel(previousLevel);
+                throw;
+            }
+        }
+        finally
+        {
+            _renderGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// The safety contour traced from the grid at the mariner's value (S-164
+    /// UserSelectedSafetyContour), and the border along the limit of the
+    /// S-102 data (S-98 Part A §A-6.9.1), on
+    /// <see cref="S98DisplayPlane.BaseChartOver"/> with the S-101 line work.
+    /// Neither is adjusted for water level. Called under the render gate.
+    /// </summary>
+    private Func<double, double, (double Longitude, double Latitude)>? NativeToWgs84(int crs)
+    {
+        if (crs == 4326)
+        {
+            return null;
+        }
+
+        var transform = _crsTransformFactory.Create($"EPSG:{crs}", "EPSG:4326");
+        return transform.IsIdentity ? null : (x, y) => transform.Transform(x, y);
+    }
+
+    private (IsolineCoverageSubLayer SafetyContour, IsolineCoverageSubLayer CoverageLimit) BuildDepthLineSubLayers(
+        StyledCoverageLayer layer,
+        MarinerSettings mariner,
+        int crs,
+        Func<double, double, (double Longitude, double Latitude)>? nativeToWgs84,
+        string? adjustmentKey)
+    {
+        var mercatorExtent = S102DepthLines.SurfaceExtent(layer, nativeToWgs84);
+        var halo = RgbaColor.FromHex(_catalogue.ActivePalette.Resolve("CHWHT"));
+
+        var safety = _catalogue.SafetyContourStyle(mariner);
+        var limit = _catalogue.CoverageLimitStyle;
+        double[] limitDashes = [.. limit.DashPattern!.Select(d => (double)d)];
+        var grid = layer.Coverage.Metadata;
+        var key = new DepthLineKey(
+            _source.SelectedOverviewLevel, crs, grid.OriginLongitude, grid.OriginLatitude,
+            grid.SpacingLongitudinal, grid.SpacingLatitudinal, grid.NumRows, grid.NumColumns, adjustmentKey);
+        return (
+            new IsolineCoverageSubLayer
+            {
+                LayerKey = SafetyContourLayerKey,
+                LayerName = $"S-102 safety contour: {_fileName}",
+                Plane = S98DisplayPlane.BaseChartOver,
+                WithinPlanePriority = 1,
+                SourceFeatureType = SafetyContourLayerKey,
+                Isolines = SafetyLines(key, layer, safety.Value, nativeToWgs84),
+                Extent = mercatorExtent,
+                Ink = RgbaColor.FromHex(safety.Color),
+                LabelHalo = halo,
+                LineWidth = safety.LineWidth,
+                DashPattern = [],
+                Legend = [new LineLegendEntry(LegendLineSample.FromPixels(RgbaColor.FromHex(safety.Color), safety.LineWidth, []), "Safety contour")],
+            },
+            new IsolineCoverageSubLayer
+            {
+                LayerKey = CoverageLimitLayerKey,
+                LayerName = $"S-102 coverage limit: {_fileName}",
+                Plane = S98DisplayPlane.BaseChartOver,
+                WithinPlanePriority = 0,
+                SourceFeatureType = CoverageLimitLayerKey,
+                Isolines = LimitLines(key, layer, nativeToWgs84),
+                Extent = mercatorExtent,
+                Ink = RgbaColor.FromHex(limit.Color),
+                LabelHalo = halo,
+                LineWidth = limit.LineWidth,
+                DashPattern = limitDashes,
+                Legend = [new LineLegendEntry(LegendLineSample.FromPixels(RgbaColor.FromHex(limit.Color), limit.LineWidth, limitDashes), "Limit of S-102 data")],
+            });
+    }
+
+    private IReadOnlyList<Isoline> SafetyLines(
+        DepthLineKey key, StyledCoverageLayer layer, double safety, Func<double, double, (double, double)>? nativeToWgs84)
+    {
+        if (_safetyLines is { } cached && cached.Key == key && cached.Safety == safety)
+        {
+            return cached.Lines;
+        }
+
+        var lines = S102DepthLines.SafetyContour(layer, safety, nativeToWgs84);
+        _safetyLines = (key, safety, lines);
+        return lines;
+    }
+
+    private IReadOnlyList<Isoline> LimitLines(
+        DepthLineKey key, StyledCoverageLayer layer, Func<double, double, (double, double)>? nativeToWgs84)
+    {
+        if (_limitLines is { } cached && cached.Key == key)
+        {
+            return cached.Lines;
+        }
+
+        var lines = S102DepthLines.CoverageLimit(layer, nativeToWgs84);
+        _limitLines = (key, lines);
+        return lines;
+    }
+
+    /// <summary>What a traced depth line depends on besides the safety contour.</summary>
+    private readonly record struct DepthLineKey(
+        int OverviewLevel,
+        int Crs,
+        double OriginLongitude,
+        double OriginLatitude,
+        double SpacingLongitudinal,
+        double SpacingLatitudinal,
+        int Rows,
+        int Columns,
+        string? AdjustmentKey);
+
+    /// <summary>Layer key of the S-102 safety contour sub-layer.</summary>
+    public const string SafetyContourLayerKey = "s102.safetycontour";
+
+    /// <summary>Layer key of the S-102 coverage-limit sub-layer.</summary>
+    public const string CoverageLimitLayerKey = "s102.coveragelimit";
+
+    /// <summary>
+    /// The WGS-84 envelope of the full grid (all four reprojected corners for a
+    /// projected grid), computed once: the S-98 depth-feature rule suppresses
+    /// S-101 depth areas and contours only inside it. Called under the render
+    /// gate.
+    /// </summary>
+    private GeographicBounds ResolveCoverageExtent()
+    {
+        if (_coverageExtent is { } cached)
+        {
+            return cached;
+        }
+
+        var extent = _source.Metadata.GetGeographicExtent(_crsTransformFactory);
+        var bounds = new GeographicBounds(
+            extent.WestLongitude, extent.SouthLatitude, extent.EastLongitude, extent.NorthLatitude);
+        _coverageExtent = bounds;
+        return bounds;
+    }
+
+    /// <summary>
+    /// Selects the pyramid level whose native cell spacing best matches the
+    /// viewport's ground resolution (issues #486 and #496). Falls back to
+    /// level 0 when no viewport is supplied. Formula:
+    /// <code>
+    ///   nativeRegion  = GridRegion.FromViewport(viewport, nativeMetadata)
+    ///   cellsPerPixel = min(nativeRegion.RowStride, nativeRegion.ColStride)
+    ///   level         = clamp(floor(log2(cellsPerPixel)), 0, maxLevel)
+    /// </code>
+    /// The selected overview has already min-pooled depth and max-pooled
+    /// uncertainty. Any non-power-of-two remainder is handled by the source's
+    /// residual block reducer, so no stride lattice can skip a shoal.
+    /// </summary>
+    private void SelectOverviewLevelForViewport(
+        EncDotNet.S100.Pipelines.Viewport? viewport,
+        ICrsTransform? wgs84ToNative)
+    {
+        if (viewport is null)
+        {
+            _source.SelectOverviewLevel(0);
+            return;
+        }
+
+        if (viewport.WidthPixels <= 0 || viewport.HeightPixels <= 0)
+        {
+            _source.SelectOverviewLevel(0);
+            return;
+        }
+
+        _source.SelectOverviewLevel(0);
+        var nativeMetadata = _source.Metadata;
+        var nativeRegion = GridRegion.FromViewport(
+            viewport,
+            nativeMetadata.GridMetadata,
+            nativeMetadata.HorizontalCRS,
+            wgs84ToNative);
+        int cellsPerPixel = Math.Min(nativeRegion.RowStride, nativeRegion.ColStride);
+
+        int desiredLevel = cellsPerPixel <= 1
+            ? 0
+            : (int)Math.Floor(Math.Log2(cellsPerPixel));
+
+        var available = _source.AvailableOverviewLevels;
+        int maxLevel = available.Count - 1;
+        int level = Math.Clamp(desiredLevel, 0, maxLevel);
+        _source.SelectOverviewLevel(level);
+    }
+
+    /// <summary>
+    /// Always returns <see langword="null"/>: an S-102 grid has no discrete
+    /// features. Use <see cref="GetCoverageInfo"/> to sample depth at a point.
+    /// </summary>
+    /// <param name="featureRef">Ignored.</param>
+    /// <returns><see langword="null"/>.</returns>
+    public FeatureInfo? GetFeatureInfo(string featureRef) => null;
+
+    /// <summary>
+    /// Renders the bathymetric surface to a standalone <see cref="SKBitmap"/>
+    /// through the headless, Mapsui-free Skia coverage core
+    /// (<see cref="CoverageHeadlessRenderer"/> → <see cref="SkiaCoverageRenderer"/>).
+    /// The depth-band colour fill is fitted to the requested pixel rectangle,
+    /// preserving aspect against <paramref name="background"/>.
+    /// </summary>
+    /// <param name="widthPixels">Output bitmap width in pixels.</param>
+    /// <param name="heightPixels">Output bitmap height in pixels.</param>
+    /// <param name="context">Optional render context (palette, mariner settings).</param>
+    /// <param name="background">Optional background fill; defaults to opaque white.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A newly allocated bitmap owned by the caller.</returns>
+    public async Task<SKBitmap> RenderHeadlessAsync(
+        int widthPixels,
+        int heightPixels,
+        RenderContext? context = null,
+        RgbaColor? background = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widthPixels);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await _catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
+
+        var styledLayer = (StyledCoverageLayer)await _pipeline
+            .ProcessAsync(_source, _catalogue, mariner: context?.Mariner ?? MarinerSettings.Default, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        // The grid extent is expressed in the dataset's native CRS, which for
+        // S-102 may be a projected UTM zone (EPSG:326xx/327xx) — typical of
+        // Edition 2.1 cells. CoverageHeadlessRenderer expects WGS84 lon/lat
+        // (it projects through Web Mercator), so frame the render with the
+        // WGS-84 envelope of all four reprojected corners; the transform is
+        // identity for geographic (EPSG:4326) grids. (See issue #239.)
+        int crs = _dataset.HorizontalCRS ?? 4326;
+        var nativeToWgs84 = _crsTransformFactory.Create($"EPSG:{crs}", "EPSG:4326");
+        if (S102Relief.IsOn(context?.EcdisDisplay))
+        {
+            styledLayer = S102Relief.Apply(
+                styledLayer,
+                nativeToWgs84.IsIdentity ? null : (x, y) => nativeToWgs84.Transform(x, y),
+                ReliefShading.Default);
+        }
+
+        var extent = _source.Metadata.GetGeographicExtent(_crsTransformFactory);
+        var (west, south, east, north) =
+            (extent.WestLongitude, extent.SouthLatitude, extent.EastLongitude, extent.NorthLatitude);
+
+        var renderer = new CoverageHeadlessRenderer
+        {
+            Background = background ?? new RgbaColor(255, 255, 255, 255),
+            NativeToWgs84 = nativeToWgs84,
+        };
+
+        return renderer.Render(
+            styledLayer,
+            west,
+            east,
+            south,
+            north,
+            widthPixels,
+            heightPixels,
+            context?.Basemap ?? BasemapKind.None);
+    }
+
+    /// <summary>
+    /// Samples the bathymetric surface at the supplied geographic
+    /// position. Returns a synthetic feature carrying depth and
+    /// uncertainty pick attributes; the <paramref name="time"/> argument
+    /// is ignored because S-102 surfaces are time-invariant.
+    /// </summary>
+    /// <remarks>
+    /// NoData cells (S-100 Part 10c §11; S-102 sentinel
+    /// <c>1_000_000f</c>) yield <c>"—"</c> for the affected attribute
+    /// rather than the raw fill value. Out-of-extent clicks return
+    /// <c>null</c>.
+    /// </remarks>
+    public FeatureInfo? GetCoverageInfo(double latitude, double longitude, DateTime? time)
+    {
+        var sample = CoveragePickHelper.Sample(_source, _crsTransformFactory, latitude, longitude);
+        if (sample is null)
+            return null;
+
+        var depth = sample.Values.TryGetValue("depth", out var d) ? d : sample.NoDataValue;
+        var uncertainty = sample.Values.TryGetValue("uncertainty", out var u) ? u : sample.NoDataValue;
+        var attrs = new List<PickAttribute>
+        {
+            new()
+            {
+                Code = "depth",
+                Name = "Depth",
+                RawValue = FormatFloat(depth, sample.NoDataValue),
+                DisplayValue = depth == sample.NoDataValue ? "—" : $"{depth.ToString("0.##", CultureInfo.InvariantCulture)} m",
+                // Surface the metres value so the viewer can re-format it
+                // through the mariner's DepthUnit (S-100 Part 9 §4.2).
+                // NoData cells keep DepthMetresValue null and remain rendered
+                // as the localised em-dash placeholder.
+                DepthMetresValue = depth == sample.NoDataValue ? null : (double?)depth,
+            },
+            new()
+            {
+                Code = "uncertainty",
+                Name = "Uncertainty",
+                RawValue = FormatFloat(uncertainty, sample.NoDataValue),
+                DisplayValue = uncertainty == sample.NoDataValue ? "—" : $"{uncertainty.ToString("0.##", CultureInfo.InvariantCulture)} m",
+                DepthMetresValue = uncertainty == sample.NoDataValue ? null : (double?)uncertainty,
+            },
+        };
+
+        return new FeatureInfo
+        {
+            FeatureRef = $"({sample.Row},{sample.Col})",
+            FeatureType = "BathymetryCoverage",
+            FeatureTypeName = "Bathymetry Coverage",
+            Attributes = attrs,
+        };
+    }
+
+    private static string FormatFloat(float value, float noData)
+        => value == noData
+            ? "NoData"
+            : value.ToString("0.##########", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Samples this S-102 bathymetric surface at a WGS-84 point and returns the
+    /// depth (and co-located uncertainty) in metres, or <c>null</c> when the
+    /// point falls outside the grid or the depth cell is NoData. Unlike
+    /// <see cref="GetCoverageInfo"/> this returns raw quantities (not a display
+    /// <see cref="FeatureInfo"/>) for the viewer's depth-assimilation pipeline
+    /// (S-102 §10.2 BathymetryCoverage; S-100 Part 4a vertical datum).
+    /// </summary>
+    /// <param name="latitude">Latitude in decimal degrees (WGS-84).</param>
+    /// <param name="longitude">Longitude in decimal degrees (WGS-84).</param>
+    /// <returns>The bathymetric sample, or <c>null</c>.</returns>
+    public S102DepthProbe? SampleBaseDepth(double latitude, double longitude)
+    {
+        var sample = CoveragePickHelper.Sample(_source, _crsTransformFactory, latitude, longitude);
+        if (sample is null)
+            return null;
+
+        if (!sample.Values.TryGetValue("depth", out var depth) || depth == sample.NoDataValue)
+            return null;
+
+        double? uncertainty = sample.Values.TryGetValue("uncertainty", out var u) && u != sample.NoDataValue
+            ? u
+            : null;
+
+        return new S102DepthProbe(depth, uncertainty, _dataset.VerticalDatum);
+    }
+
+    /// <summary>
+    /// Runs the S-102 normative rule pack
+    /// (<see cref="S102DatasetRules.Default"/>) against the parsed
+    /// dataset and returns the cached report.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Per <c>docs/design/non-gml-validation.md</c> §5.1, this override
+    /// defensively wraps the rule-pack call in a try/catch for
+    /// <see cref="S100DatasetSchemaException"/>. The realistic failure
+    /// mode is the reader throwing inside the constructor (in which
+    /// case the processor never exists and this method is never
+    /// reached); the wrapper is therefore forward-compatible only,
+    /// surfacing a single <c>S102-PROJ-SCHEMA</c> finding carrying
+    /// the exception's <c>GroupPath</c>, <c>AttributeOrDataset</c>,
+    /// and <c>SpecReference</c> per design §5.3.
+    /// </para>
+    /// <para>
+    /// Validation is a pure function of the parsed dataset; the
+    /// report is cached after the first call (mirroring the GML
+    /// processors' pattern, see <c>S124DatasetProcessor</c>).
+    /// </para>
+    /// </remarks>
+    public ValidationReport? Validate()
+    {
+        if (!_validationCached)
+        {
+            try
+            {
+                _validationReport = S102DatasetRules.Default.Run(_dataset, new ValidationContext { CrsTransformFactory = _crsTransformFactory });
+            }
+            catch (S100DatasetSchemaException ex)
+            {
+                _validationReport = BuildSchemaSurrogateReport(ex);
+            }
+            _validationReport = AxisOrderFindings.Append(_validationReport, AxisOrder, "S-102");
+            _validationCached = true;
+        }
+        return _validationReport;
+    }
+
+    private static ValidationReport BuildSchemaSurrogateReport(S100DatasetSchemaException ex)
+    {
+        var details = new List<string>();
+        details.Add($"GroupPath='{ex.GroupPath}'");
+        if (!string.IsNullOrEmpty(ex.AttributeOrDataset))
+            details.Add($"AttributeOrDataset='{ex.AttributeOrDataset}'");
+        if (!string.IsNullOrEmpty(ex.SpecReference))
+            details.Add($"SpecReference='{ex.SpecReference}'");
+
+        var finding = new ValidationFinding
+        {
+            RuleId = "S102-PROJ-SCHEMA",
+            Severity = ValidationSeverity.Error,
+            Message = $"S102 reader raised S100DatasetSchemaException: {ex.Message} ({string.Join(", ", details)}).",
+            RelatedFeatureId = ex.GroupPath,
+        };
+
+        return new ValidationReport(
+            [finding],
+            RulesEvaluated: 1,
+            RulesWithFindings: 1);
+    }
+}

@@ -1,0 +1,1028 @@
+{
+ "generator": "tools/grib-fixtures/make_jpeg2000_fixtures.py",
+ "openjpeg": {
+  "pillow": "2.5.4 (Pillow 13.0.0)",
+  "imagecodecs": "openjpeg 2.5.4 (imagecodecs 2026.10.10)",
+  "glymur": "2.5.0 (glymur 0.14.8)"
+ },
+ "cases": [
+  {
+   "name": "depth-01",
+   "file": "depth-01.j2k",
+   "encoder": "imagecodecs",
+   "width": 37,
+   "height": 19,
+   "precision": 1,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {},
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "depth-04",
+   "file": "depth-04.j2k",
+   "encoder": "imagecodecs",
+   "width": 37,
+   "height": 19,
+   "precision": 4,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {},
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "depth-08",
+   "file": "depth-08.j2k",
+   "encoder": "imagecodecs",
+   "width": 37,
+   "height": 19,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {},
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "depth-12",
+   "file": "depth-12.j2k",
+   "encoder": "imagecodecs",
+   "width": 37,
+   "height": 19,
+   "precision": 12,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {},
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "depth-16",
+   "file": "depth-16.j2k",
+   "encoder": "imagecodecs",
+   "width": 37,
+   "height": 19,
+   "precision": 16,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {},
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "depth-20",
+   "file": "depth-20.j2k",
+   "encoder": "imagecodecs",
+   "width": 37,
+   "height": 19,
+   "precision": 20,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {},
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "depth-24",
+   "file": "depth-24.j2k",
+   "encoder": "imagecodecs",
+   "width": 37,
+   "height": 19,
+   "precision": 24,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {},
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "depth-12-signed",
+   "file": "depth-12-signed.j2k",
+   "encoder": "imagecodecs",
+   "width": 37,
+   "height": 19,
+   "precision": 12,
+   "signed": true,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {},
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "size-1x1",
+   "file": "size-1x1.j2k",
+   "encoder": "pillow",
+   "width": 1,
+   "height": 1,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "num_resolutions": 1
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "size-3x5",
+   "file": "size-3x5.j2k",
+   "encoder": "pillow",
+   "width": 3,
+   "height": 5,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "num_resolutions": 2
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "size-37x19",
+   "file": "size-37x19.j2k",
+   "encoder": "pillow",
+   "width": 37,
+   "height": 19,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "num_resolutions": 4
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "size-1x40",
+   "file": "size-1x40.j2k",
+   "encoder": "pillow",
+   "width": 1,
+   "height": 40,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "num_resolutions": 1
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "size-200x1",
+   "file": "size-200x1.j2k",
+   "encoder": "imagecodecs",
+   "width": 200,
+   "height": 1,
+   "precision": 12,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {},
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "levels-0",
+   "file": "levels-0.j2k",
+   "encoder": "pillow",
+   "width": 41,
+   "height": 33,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "num_resolutions": 1
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "levels-1",
+   "file": "levels-1.j2k",
+   "encoder": "pillow",
+   "width": 41,
+   "height": 33,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "num_resolutions": 2
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "levels-2",
+   "file": "levels-2.j2k",
+   "encoder": "pillow",
+   "width": 41,
+   "height": 33,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "num_resolutions": 3
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "levels-3",
+   "file": "levels-3.j2k",
+   "encoder": "pillow",
+   "width": 41,
+   "height": 33,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "num_resolutions": 4
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "levels-4",
+   "file": "levels-4.j2k",
+   "encoder": "pillow",
+   "width": 41,
+   "height": 33,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "num_resolutions": 5
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "levels-5",
+   "file": "levels-5.j2k",
+   "encoder": "pillow",
+   "width": 41,
+   "height": 33,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "num_resolutions": 6
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "tiles-16x16",
+   "file": "tiles-16x16.j2k",
+   "encoder": "pillow",
+   "width": 50,
+   "height": 40,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "tile_size": [
+     16,
+     16
+    ],
+    "num_resolutions": 3
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "tiles-offset",
+   "file": "tiles-offset.j2k",
+   "encoder": "pillow",
+   "width": 50,
+   "height": 40,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "tile_size": [
+     16,
+     12
+    ],
+    "tile_offset": [
+     3,
+     5
+    ],
+    "offset": [
+     7,
+     9
+    ],
+    "num_resolutions": 3
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "image-offset-odd",
+   "file": "image-offset-odd.j2k",
+   "encoder": "pillow",
+   "width": 29,
+   "height": 23,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "offset": [
+     5,
+     3
+    ],
+    "tile_size": [
+     64,
+     64
+    ],
+    "tile_offset": [
+     1,
+     2
+    ],
+    "num_resolutions": 4
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "progression-lrcp",
+   "file": "progression-lrcp.j2k",
+   "encoder": "pillow",
+   "width": 48,
+   "height": 40,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "progression": "LRCP",
+    "precinct_size": [
+     16,
+     16
+    ],
+    "codeblock_size": [
+     8,
+     8
+    ],
+    "num_resolutions": 3,
+    "quality_mode": "rates",
+    "quality_layers": [
+     20,
+     6,
+     0
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "progression-rlcp",
+   "file": "progression-rlcp.j2k",
+   "encoder": "pillow",
+   "width": 48,
+   "height": 40,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "progression": "RLCP",
+    "precinct_size": [
+     16,
+     16
+    ],
+    "codeblock_size": [
+     8,
+     8
+    ],
+    "num_resolutions": 3,
+    "quality_mode": "rates",
+    "quality_layers": [
+     20,
+     6,
+     0
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "progression-rpcl",
+   "file": "progression-rpcl.j2k",
+   "encoder": "pillow",
+   "width": 48,
+   "height": 40,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "progression": "RPCL",
+    "precinct_size": [
+     16,
+     16
+    ],
+    "codeblock_size": [
+     8,
+     8
+    ],
+    "num_resolutions": 3,
+    "quality_mode": "rates",
+    "quality_layers": [
+     20,
+     6,
+     0
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "progression-pcrl",
+   "file": "progression-pcrl.j2k",
+   "encoder": "pillow",
+   "width": 48,
+   "height": 40,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "progression": "PCRL",
+    "precinct_size": [
+     16,
+     16
+    ],
+    "codeblock_size": [
+     8,
+     8
+    ],
+    "num_resolutions": 3,
+    "quality_mode": "rates",
+    "quality_layers": [
+     20,
+     6,
+     0
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "progression-cprl",
+   "file": "progression-cprl.j2k",
+   "encoder": "pillow",
+   "width": 48,
+   "height": 40,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "progression": "CPRL",
+    "precinct_size": [
+     16,
+     16
+    ],
+    "codeblock_size": [
+     8,
+     8
+    ],
+    "num_resolutions": 3,
+    "quality_mode": "rates",
+    "quality_layers": [
+     20,
+     6,
+     0
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "progression-pcrl-tiles-offset",
+   "file": "progression-pcrl-tiles-offset.j2k",
+   "encoder": "pillow",
+   "width": 45,
+   "height": 39,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "progression": "PCRL",
+    "precinct_size": [
+     8,
+     8
+    ],
+    "codeblock_size": [
+     4,
+     4
+    ],
+    "num_resolutions": 3,
+    "tile_size": [
+     20,
+     16
+    ],
+    "tile_offset": [
+     2,
+     1
+    ],
+    "offset": [
+     5,
+     3
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "progression-rpcl-tiles-offset",
+   "file": "progression-rpcl-tiles-offset.j2k",
+   "encoder": "pillow",
+   "width": 45,
+   "height": 39,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "progression": "RPCL",
+    "precinct_size": [
+     16,
+     8
+    ],
+    "codeblock_size": [
+     4,
+     4
+    ],
+    "num_resolutions": 3,
+    "tile_size": [
+     20,
+     16
+    ],
+    "tile_offset": [
+     2,
+     1
+    ],
+    "offset": [
+     5,
+     3
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "codeblock-4x4",
+   "file": "codeblock-4x4.j2k",
+   "encoder": "pillow",
+   "width": 37,
+   "height": 19,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "codeblock_size": [
+     4,
+     4
+    ],
+    "num_resolutions": 3
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "codeblock-64x16",
+   "file": "codeblock-64x16.j2k",
+   "encoder": "pillow",
+   "width": 70,
+   "height": 40,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "codeblock_size": [
+     16,
+     64
+    ],
+    "num_resolutions": 3
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "style-bypass",
+   "file": "style-bypass.j2k",
+   "encoder": "glymur",
+   "width": 40,
+   "height": 37,
+   "precision": 16,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "modesw": 1,
+    "numres": 3,
+    "cbsize": [
+     16,
+     16
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "style-reset",
+   "file": "style-reset.j2k",
+   "encoder": "glymur",
+   "width": 40,
+   "height": 37,
+   "precision": 16,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "modesw": 2,
+    "numres": 3,
+    "cbsize": [
+     16,
+     16
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "style-termall",
+   "file": "style-termall.j2k",
+   "encoder": "glymur",
+   "width": 40,
+   "height": 37,
+   "precision": 16,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "modesw": 4,
+    "numres": 3,
+    "cbsize": [
+     16,
+     16
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "style-vcausal",
+   "file": "style-vcausal.j2k",
+   "encoder": "glymur",
+   "width": 40,
+   "height": 37,
+   "precision": 16,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "modesw": 8,
+    "numres": 3,
+    "cbsize": [
+     16,
+     16
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "style-pterm",
+   "file": "style-pterm.j2k",
+   "encoder": "glymur",
+   "width": 40,
+   "height": 37,
+   "precision": 16,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "modesw": 16,
+    "numres": 3,
+    "cbsize": [
+     16,
+     16
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "style-segsym",
+   "file": "style-segsym.j2k",
+   "encoder": "glymur",
+   "width": 40,
+   "height": 37,
+   "precision": 16,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "modesw": 32,
+    "numres": 3,
+    "cbsize": [
+     16,
+     16
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "style-all",
+   "file": "style-all.j2k",
+   "encoder": "glymur",
+   "width": 40,
+   "height": 37,
+   "precision": 16,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "modesw": 63,
+    "numres": 3,
+    "cbsize": [
+     16,
+     16
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "style-bypass-termall",
+   "file": "style-bypass-termall.j2k",
+   "encoder": "glymur",
+   "width": 40,
+   "height": 37,
+   "precision": 16,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "modesw": 5,
+    "numres": 3,
+    "cbsize": [
+     16,
+     16
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "style-all-lossy",
+   "file": "style-all-lossy.j2k",
+   "encoder": "glymur",
+   "width": 40,
+   "height": 37,
+   "precision": 8,
+   "signed": false,
+   "lossless": false,
+   "tolerance": 1,
+   "options": {
+    "modesw": 63,
+    "numres": 3,
+    "cbsize": [
+     16,
+     16
+    ],
+    "irreversible": true,
+    "cratios": [
+     12,
+     4
+    ]
+   },
+   "maxErrorVsSource": 21
+  },
+  {
+   "name": "markers-sop-eph",
+   "file": "markers-sop-eph.j2k",
+   "encoder": "glymur",
+   "width": 37,
+   "height": 19,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "sop": true,
+    "eph": true,
+    "numres": 3,
+    "cratios": [
+     10,
+     1
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "markers-plt-tlm",
+   "file": "markers-plt-tlm.j2k",
+   "encoder": "glymur",
+   "width": 37,
+   "height": 19,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "plt": true,
+    "tlm": true,
+    "numres": 3,
+    "tilesize": [
+     16,
+     16
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "subsampling-2x3",
+   "file": "subsampling-2x3.j2k",
+   "encoder": "glymur",
+   "width": 37,
+   "height": 19,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "subsam": [
+     3,
+     2
+    ],
+    "numres": 2
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "tile-parts-interleaved",
+   "file": "tile-parts-interleaved.j2k",
+   "encoder": "glymur",
+   "width": 37,
+   "height": 30,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "split": true,
+    "sop": true,
+    "numres": 3,
+    "tilesize": [
+     16,
+     24
+    ],
+    "cratios": [
+     10,
+     3,
+     1
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "layers-lossless",
+   "file": "layers-lossless.j2k",
+   "encoder": "pillow",
+   "width": 48,
+   "height": 40,
+   "precision": 16,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "quality_mode": "rates",
+    "quality_layers": [
+     40,
+     10,
+     3,
+     0
+    ]
+   },
+   "maxErrorVsSource": 0
+  },
+  {
+   "name": "lossy-97-8bit",
+   "file": "lossy-97-8bit.j2k",
+   "encoder": "pillow",
+   "width": 48,
+   "height": 40,
+   "precision": 8,
+   "signed": false,
+   "lossless": false,
+   "tolerance": 1,
+   "options": {
+    "irreversible": true,
+    "quality_mode": "rates",
+    "quality_layers": [
+     8
+    ]
+   },
+   "maxErrorVsSource": 55
+  },
+  {
+   "name": "lossy-97-layers",
+   "file": "lossy-97-layers.j2k",
+   "encoder": "pillow",
+   "width": 48,
+   "height": 40,
+   "precision": 8,
+   "signed": false,
+   "lossless": false,
+   "tolerance": 1,
+   "options": {
+    "irreversible": true,
+    "quality_mode": "rates",
+    "quality_layers": [
+     30,
+     10,
+     4
+    ]
+   },
+   "maxErrorVsSource": 23
+  },
+  {
+   "name": "lossy-97-16bit",
+   "file": "lossy-97-16bit.j2k",
+   "encoder": "pillow",
+   "width": 48,
+   "height": 40,
+   "precision": 16,
+   "signed": false,
+   "lossless": false,
+   "tolerance": 4,
+   "options": {
+    "irreversible": true,
+    "quality_mode": "rates",
+    "quality_layers": [
+     6
+    ]
+   },
+   "maxErrorVsSource": 5398
+  },
+  {
+   "name": "lossy-97-tiles-offset",
+   "file": "lossy-97-tiles-offset.j2k",
+   "encoder": "pillow",
+   "width": 45,
+   "height": 39,
+   "precision": 8,
+   "signed": false,
+   "lossless": false,
+   "tolerance": 1,
+   "options": {
+    "irreversible": true,
+    "tile_size": [
+     20,
+     16
+    ],
+    "tile_offset": [
+     2,
+     1
+    ],
+    "offset": [
+     5,
+     3
+    ],
+    "num_resolutions": 3,
+    "quality_mode": "rates",
+    "quality_layers": [
+     5
+    ]
+   },
+   "maxErrorVsSource": 37
+  },
+  {
+   "name": "lossy-53-truncated",
+   "file": "lossy-53-truncated.j2k",
+   "encoder": "pillow",
+   "width": 48,
+   "height": 40,
+   "precision": 8,
+   "signed": false,
+   "lossless": false,
+   "tolerance": 1,
+   "options": {
+    "quality_mode": "rates",
+    "quality_layers": [
+     10
+    ]
+   },
+   "maxErrorVsSource": 82
+  },
+  {
+   "name": "container-jp2",
+   "file": "container-jp2.jp2",
+   "encoder": "pillow",
+   "width": 37,
+   "height": 19,
+   "precision": 8,
+   "signed": false,
+   "lossless": true,
+   "tolerance": 0,
+   "options": {
+    "jp2": true,
+    "num_resolutions": 3
+   },
+   "maxErrorVsSource": 0
+  }
+ ]
+}

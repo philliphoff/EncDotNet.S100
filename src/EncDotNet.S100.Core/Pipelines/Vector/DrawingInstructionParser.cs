@@ -1,0 +1,826 @@
+using System.Globalization;
+using EncDotNet.S100.DataModel;
+using EncDotNet.S100.Geodesy;
+
+namespace EncDotNet.S100.Pipelines.Vector;
+
+/// <summary>
+/// Parses the semicolon-separated key:value drawing instruction strings
+/// emitted by the S-101 Lua portrayal pipeline into the unified
+/// <see cref="DrawingInstruction"/> hierarchy.
+/// </summary>
+/// <remarks>
+/// The instruction string is a stateful sequence: property-setting commands
+/// (ViewingGroup, DrawingPriority, DisplayPlane, font/style settings) establish
+/// state that applies to subsequent rendering commands (PointInstruction,
+/// LineInstruction, AreaFillReference, ColorFill, TextInstruction, etc.).
+/// Geometry is NOT encoded in the string — the renderer resolves it from the
+/// feature's spatial associations using the instruction's
+/// <see cref="DrawingInstruction.FeatureReference"/>.
+/// </remarks>
+public static class DrawingInstructionParser
+{
+    /// <summary>
+    /// Parses a single emitted instruction string into zero or more
+    /// <see cref="DrawingInstruction"/> instances.
+    /// </summary>
+    /// <param name="featureRef">Feature reference identifier.</param>
+    /// <param name="instructionString">Semicolon-separated instruction string from Lua.</param>
+    /// <param name="featureAnchor">
+    /// Optional (latitude, longitude) anchor of the feature's primary point
+    /// geometry. Required for tessellating <c>AugmentedRay</c> /
+    /// <c>ArcByRadius</c> / <c>AugmentedPath</c> augmented line geometry.
+    /// When <see langword="null"/>, augmented line geometry is silently skipped.
+    /// </param>
+    /// <param name="spatialReferences">
+    /// Optional resolver for <c>SpatialReference</c> commands. With it, a line
+    /// instruction that follows spatial references is drawn along each
+    /// referenced curve only (one <see cref="LineInstruction"/> per curve, via
+    /// <see cref="LineInstruction.CoordinatesOverride"/>). Without it, spatial
+    /// references are ignored and lines follow the feature's whole geometry.
+    /// </param>
+    public static List<DrawingInstruction> Parse(
+        string featureRef,
+        string instructionString,
+        GeoPosition? featureAnchor = null,
+        ISpatialReferenceResolver? spatialReferences = null)
+    {
+        if (string.IsNullOrEmpty(instructionString))
+            return [];
+
+        var results = new List<DrawingInstruction>();
+
+        // Current state — accumulated as we scan through commands
+        int viewingGroup = 0;
+        IReadOnlyList<int> additionalViewingGroups = [];
+        int drawingPriority = 0;
+        DisplayPlane displayPlane = DisplayPlane.UnderRadar;
+        double? scaleMinimum = null;
+        double? scaleMaximum = null;
+
+        // Point/line style state
+        string? lineStyleRef = null;
+        double lineWidth = 0.32;
+        string lineColor = "CSTLN";
+        var dashes = new List<(double Offset, double Length)>();
+        double dashIntervalMm = 0;
+        double? rotation = null;
+        var rotationCrs = SymbolRotationCrs.Portrayal;
+        double scaleFactor = 1.0;
+        double localOffsetX = 0;
+        double localOffsetY = 0;
+
+        // Text style state
+        double fontSize = 10;
+        string fontColor = "CHBLK";
+        double? fontTransparency = null;
+        string? fontBackgroundColor = null;
+        double? fontBackgroundTransparency = null;
+        double? linePlacementPosition = null;
+        var areaPlacement = AreaPlacementMode.VisibleParts;
+        TextHorizontalAlignment textHAlign = TextHorizontalAlignment.Center;
+        TextVerticalAlignment textVAlign = TextVerticalAlignment.Center;
+
+        // Augmented-geometry state.  S-100 Part 9 §11.5 lets a Lua rule
+        // override the per-instruction anchor with AugmentedPoint, or build
+        // a synthetic line geometry from AugmentedRay/ArcByRadius/AugmentedPath.
+        // AugmentedPoint is a simple GeographicCRS anchor override for
+        // PointInstruction / TextInstruction.
+        // AugmentedRay / ArcByRadius buffer segments that AugmentedPath
+        // resolves into a tessellated coordinate list attached to the next
+        // LineInstruction via CoordinatesOverride.
+        GeoPosition? augmentedAnchor = null;
+
+        // Buffered augmented line segments awaiting AugmentedPath resolution.
+        var augmentedLineSegments = new List<AugmentedSegment>();
+
+        // Resolved augmented line coordinates ready to attach to the next
+        // LineInstruction.  Set by the AugmentedPath command.
+        IReadOnlyList<GeoPosition>? augmentedLineCoords = null;
+
+        // Spatial objects named by SpatialReference since the last
+        // ClearGeometry (S-100 Part 9a §9a-11.2.4), with their direction.
+        var spatialRefs = new List<(string Id, bool Forward)>();
+
+        // Time state (S-100 Part 9a §9a-11.2.6). Date/Time/DateTime set the
+        // pending bounds; each TimeValid adds an interval from them to the
+        // following instructions' timeValid, until ClearTime empties it. The
+        // list is replaced, never changed, so instructions can share it.
+        (PortrayalTimeKind Kind, string? Begin, string? End)? pendingTime = null;
+        IReadOnlyList<PortrayalTimeInterval> timeValid = [];
+
+        // Alert state (S-100 Part 9a §9a-11.2.2.9): AlertReference applies to
+        // the drawing instructions that follow, until another one replaces or
+        // clears it.
+        PortrayalAlertReference? alertReference = null;
+
+        var segments = instructionString.Split(';');
+
+        foreach (var segment in segments)
+        {
+            if (string.IsNullOrWhiteSpace(segment))
+                continue;
+
+            var colonIdx = segment.IndexOf(':');
+            string key, value;
+            if (colonIdx >= 0)
+            {
+                key = segment[..colonIdx];
+                value = segment[(colonIdx + 1)..];
+            }
+            else
+            {
+                key = segment;
+                value = "";
+            }
+
+            switch (key)
+            {
+                // ── State-setting commands ──
+                case "ViewingGroup":
+                    // "ViewingGroup:vg1[,vg2[,…]]" (S-100 Part 9a §9a-11.2.2.1).
+                    // Keep every id: the instruction is disabled when any of
+                    // them is (Part 9 §9-11.1.3), so S-101's trailing 90020 /
+                    // 90021 on INFORM01 must survive parsing to act as a toggle.
+                    ParseViewingGroups(value, ref viewingGroup, ref additionalViewingGroups);
+                    break;
+
+                case "DrawingPriority":
+                    if (int.TryParse(value, CultureInfo.InvariantCulture, out var dp))
+                        drawingPriority = dp;
+                    break;
+
+                case "DisplayPlane":
+                    if (Enum.TryParse<DisplayPlane>(value, ignoreCase: true, out var parsedPlane))
+                        displayPlane = parsedPlane;
+                    break;
+
+                case "ScaleMinimum":
+                    if (double.TryParse(value, CultureInfo.InvariantCulture, out var smin))
+                        scaleMinimum = smin;
+                    break;
+
+                case "ScaleMaximum":
+                    if (double.TryParse(value, CultureInfo.InvariantCulture, out var smax))
+                        scaleMaximum = smax;
+                    break;
+
+                case "Rotation":
+                    var rotParts = value.Split(',');
+                    if (rotParts.Length >= 2)
+                    {
+                        rotationCrs = ParseRotationCrs(rotParts[0]);
+                        if (double.TryParse(rotParts[1], CultureInfo.InvariantCulture, out var angle))
+                            rotation = angle;
+                    }
+                    break;
+
+                case "ScaleFactor":
+                    if (double.TryParse(value, CultureInfo.InvariantCulture, out var sf))
+                        scaleFactor = sf;
+                    break;
+
+                case "LocalOffset":
+                    var loParts = value.Split(',');
+                    if (loParts.Length >= 2)
+                    {
+                        double.TryParse(loParts[0], CultureInfo.InvariantCulture, out localOffsetX);
+                        double.TryParse(loParts[1], CultureInfo.InvariantCulture, out localOffsetY);
+                    }
+                    break;
+
+                // ── Line/dash style state ──
+                case "Dash":
+                    var dashParts = value.Split(',');
+                    if (dashParts.Length >= 2 &&
+                        double.TryParse(dashParts[0], CultureInfo.InvariantCulture, out var dOff) &&
+                        double.TryParse(dashParts[1], CultureInfo.InvariantCulture, out var dLen))
+                    {
+                        dashes.Add((dOff, dLen));
+                    }
+                    break;
+
+                case "LineStyle":
+                    var lsParts = value.Split(',');
+                    if (lsParts.Length >= 4)
+                    {
+                        lineStyleRef = lsParts[0];
+                        if (double.TryParse(lsParts[1], CultureInfo.InvariantCulture, out var dl))
+                            dashIntervalMm = dl;
+                        if (double.TryParse(lsParts[2], CultureInfo.InvariantCulture, out var lw))
+                            lineWidth = lw;
+                        lineColor = lsParts[3];
+                    }
+                    else if (lsParts.Length >= 1)
+                    {
+                        lineStyleRef = lsParts[0];
+                    }
+                    break;
+
+                // ── Text style state ──
+                case "FontSize":
+                    if (double.TryParse(value, CultureInfo.InvariantCulture, out var fs))
+                        fontSize = fs;
+                    break;
+
+                case "FontColor":
+                    {
+                        // FontColor:token[,transparency]
+                        var fcParts = value.Split(',');
+                        fontColor = fcParts[0];
+                        if (fcParts.Length > 1 &&
+                            double.TryParse(fcParts[1], CultureInfo.InvariantCulture, out var fct))
+                        {
+                            fontTransparency = fct;
+                        }
+                        else
+                        {
+                            fontTransparency = null;
+                        }
+                    }
+                    break;
+
+                // ── Rendering commands (emit a parsed instruction) ──
+                case "PointInstruction":
+                    results.Add(new PointInstruction
+                    {
+                        FeatureReference = featureRef,
+                        SymbolReference = value,
+                        ViewingGroup = viewingGroup,
+                        AdditionalViewingGroups = additionalViewingGroups,
+                        DrawingPriority = drawingPriority,
+                        Plane = displayPlane,
+                        Rotation = rotation,
+                        RotationCrs = rotationCrs,
+                        SymbolScale = scaleFactor,
+                        LocalOffsetX = localOffsetX,
+                        LocalOffsetY = localOffsetY,
+                        LinePlacementPosition = linePlacementPosition,
+                        CoordinateOverride = augmentedAnchor,
+                        AreaPlacement = areaPlacement,
+                        ScaleMinimum = scaleMinimum,
+                        ScaleMaximum = scaleMaximum,
+                        TimeValid = timeValid,
+                        AlertReference = alertReference,
+                    });
+                    // Reset per-instruction style state. The augmented anchor is
+                    // a spatial-geometry context (S-100 Part 9 §11.5), not a
+                    // per-instruction style: it persists across every following
+                    // point/text instruction until the next AugmentedPoint
+                    // overwrites it or ClearGeometry clears it. Multipoint
+                    // features (e.g. an S-101 multi-digit sounding array) emit a
+                    // single AugmentedPoint followed by several PointInstructions
+                    // for that point's glyphs, so resetting it here would strand
+                    // every glyph but the first on the feature's primary geometry.
+                    rotation = null;
+                    rotationCrs = SymbolRotationCrs.Portrayal;
+                    scaleFactor = 1.0;
+                    localOffsetX = 0;
+                    localOffsetY = 0;
+                    break;
+
+                case "LineInstruction":
+                case "LineInstructionUnsuppressed":
+                    // If there are pending augmented segments that weren't
+                    // explicitly resolved by AugmentedPath (e.g. a bare
+                    // AugmentedRay → LineInstruction), resolve them now.
+                    if (augmentedLineCoords is null && augmentedLineSegments.Count > 0)
+                    {
+                        augmentedLineCoords = ResolveAugmentedPath(
+                            augmentedLineSegments, augmentedAnchor ?? featureAnchor);
+                        augmentedLineSegments.Clear();
+                    }
+
+                    {
+                        LineInstruction Line(IReadOnlyList<GeoPosition>? coordinates) => new()
+                        {
+                            FeatureReference = featureRef,
+                            LineStyleReference = string.IsNullOrEmpty(value) ? lineStyleRef : value,
+                            ViewingGroup = viewingGroup,
+                            AdditionalViewingGroups = additionalViewingGroups,
+                            DrawingPriority = drawingPriority,
+                            Plane = displayPlane,
+                            LineWidth = lineWidth,
+                            LineColor = lineColor,
+                            Dashes = dashes.Count > 0 ? new List<(double, double)>(dashes) : null,
+                            DashIntervalLength = dashIntervalMm,
+                            CoordinatesOverride = coordinates,
+                            Suppression = key == "LineInstruction",
+                            ScaleMinimum = scaleMinimum,
+                            ScaleMaximum = scaleMaximum,
+                            TimeValid = timeValid,
+                            AlertReference = alertReference,
+                        };
+
+                        if (augmentedLineCoords is null && spatialRefs.Count > 0 && spatialReferences is not null)
+                        {
+                            // Draw along the referenced curves only; a reference
+                            // the dataset can't resolve draws nothing.
+                            foreach (var (id, forward) in spatialRefs)
+                            {
+                                if (spatialReferences.ResolveCurve(id) is not { Count: >= 2 } curve)
+                                    continue;
+                                results.Add(Line(forward ? curve : curve.Reverse().ToList()));
+                            }
+                        }
+                        else
+                        {
+                            results.Add(Line(augmentedLineCoords));
+                        }
+                    }
+                    dashes.Clear();
+                    lineStyleRef = null;
+                    // NOTE: augmentedLineCoords is NOT cleared here — the Lua
+                    // pattern for sector arcs emits multiple LineInstructions
+                    // (outline + colour) against the same resolved geometry.
+                    // ClearGeometry resets it.
+                    break;
+
+                case "ColorFill":
+                    var cfParts = value.Split(',');
+                    results.Add(new AreaInstruction
+                    {
+                        FeatureReference = featureRef,
+                        FillColor = cfParts[0],
+                        ViewingGroup = viewingGroup,
+                        AdditionalViewingGroups = additionalViewingGroups,
+                        DrawingPriority = drawingPriority,
+                        Plane = displayPlane,
+                        Transparency = cfParts.Length > 1 &&
+                            double.TryParse(cfParts[1], CultureInfo.InvariantCulture, out var tr) ? tr : null,
+                        ScaleMinimum = scaleMinimum,
+                        ScaleMaximum = scaleMaximum,
+                        TimeValid = timeValid,
+                        AlertReference = alertReference,
+                    });
+                    break;
+
+                case "AreaFillReference":
+                    results.Add(new AreaInstruction
+                    {
+                        FeatureReference = featureRef,
+                        AreaFillReference = value,
+                        ViewingGroup = viewingGroup,
+                        AdditionalViewingGroups = additionalViewingGroups,
+                        DrawingPriority = drawingPriority,
+                        Plane = displayPlane,
+                        ScaleMinimum = scaleMinimum,
+                        ScaleMaximum = scaleMaximum,
+                        TimeValid = timeValid,
+                        AlertReference = alertReference,
+                    });
+                    break;
+
+                case "TextInstruction":
+                    results.Add(new TextInstruction
+                    {
+                        FeatureReference = featureRef,
+                        Text = DefDecode(value),
+                        ViewingGroup = viewingGroup,
+                        AdditionalViewingGroups = additionalViewingGroups,
+                        DrawingPriority = drawingPriority,
+                        Plane = displayPlane,
+                        FontSize = fontSize,
+                        FontColor = fontColor,
+                        FontTransparency = fontTransparency,
+                        BackgroundColor = fontBackgroundColor,
+                        BackgroundTransparency = fontBackgroundTransparency,
+                        LinePlacementPosition = linePlacementPosition,
+                        HorizontalAlignment = textHAlign,
+                        VerticalAlignment = textVAlign,
+                        OffsetX = localOffsetX != 0 ? localOffsetX : null,
+                        OffsetY = localOffsetY != 0 ? localOffsetY : null,
+                        CoordinateOverride = augmentedAnchor,
+                        AreaPlacement = areaPlacement,
+                        ScaleMinimum = scaleMinimum,
+                        ScaleMaximum = scaleMaximum,
+                        TimeValid = timeValid,
+                        AlertReference = alertReference,
+                    });
+                    // Reset per-instruction text state so the next label
+                    // doesn't inherit alignment / offset from this one. The
+                    // augmented anchor is a spatial-geometry context (see the
+                    // PointInstruction case) and intentionally persists.
+                    textHAlign = TextHorizontalAlignment.Center;
+                    textVAlign = TextVerticalAlignment.Center;
+                    localOffsetX = 0;
+                    localOffsetY = 0;
+                    break;
+
+                case "NullInstruction":
+                    // Intentional no-op
+                    break;
+
+                case "LinePlacement":
+                    // LinePlacement:Relative,0.5[,,true]
+                    var lpParts = value.Split(',');
+                    if (lpParts.Length >= 2 &&
+                        double.TryParse(lpParts[1], CultureInfo.InvariantCulture, out var lpPos))
+                    {
+                        linePlacementPosition = lpPos;
+                    }
+                    break;
+
+                case "SpatialReference":
+                    {
+                        // SpatialReference:id[,false] — false draws against the
+                        // curve's direction.
+                        var srParts = value.Split(',');
+                        var id = DefDecode(srParts[0]);
+                        if (id.Length > 0)
+                        {
+                            var forward = srParts.Length < 2
+                                || !string.Equals(srParts[1], "false", StringComparison.OrdinalIgnoreCase);
+                            spatialRefs.Add((id, forward));
+                        }
+                    }
+                    break;
+
+                case "Date":
+                case "Time":
+                case "DateTime":
+                    {
+                        // Date:begin,end — either bound may be empty (unbounded).
+                        var tParts = value.Split(',');
+                        var begin = DefDecode(tParts[0].Trim());
+                        var end = tParts.Length > 1 ? DefDecode(tParts[1].Trim()) : "";
+                        pendingTime = (
+                            key switch
+                            {
+                                "Date" => PortrayalTimeKind.Date,
+                                "Time" => PortrayalTimeKind.Time,
+                                _ => PortrayalTimeKind.DateTime,
+                            },
+                            begin.Length > 0 ? begin : null,
+                            end.Length > 0 ? end : null);
+                    }
+                    break;
+
+                case "TimeValid":
+                    // TimeValid:closure — adds the pending bounds as one more
+                    // interval; an instruction is drawn in any of them.
+                    if (pendingTime is { } pending
+                        && PortrayalTimeInterval.TryParseClosure(value, out var closure))
+                    {
+                        var interval = new PortrayalTimeInterval(pending.Kind, pending.Begin, pending.End, closure);
+                        if (!timeValid.Contains(interval))
+                            timeValid = [.. timeValid, interval];
+                    }
+                    break;
+
+                case "ClearTime":
+                    pendingTime = null;
+                    timeValid = [];
+                    break;
+
+                case "AreaPlacement":
+                    // AreaPlacement:VisibleParts|Geographic — applies to the
+                    // point and text instructions that follow, until changed.
+                    if (Enum.TryParse<AreaPlacementMode>(value.Trim(), ignoreCase: true, out var placement))
+                        areaPlacement = placement;
+                    break;
+
+                case "AlertReference":
+                    alertReference = PortrayalAlertReference.Parse(value);
+                    break;
+
+                case "Hover":
+                case "AreaCRS":
+                    // Recognised but not yet handled — skip silently
+                    break;
+
+                case "ClearGeometry":
+                    augmentedAnchor = null;
+                    augmentedLineSegments.Clear();
+                    augmentedLineCoords = null;
+                    spatialRefs.Clear();
+                    break;
+
+                case "AugmentedPoint":
+                    {
+                        // AugmentedPoint:CRS,x,y
+                        // GeographicCRS: x = longitude, y = latitude
+                        // (S-101 SOUNDG03 emits feature.X (longitude) then feature.Y (latitude)).
+                        // LocalCRS / PortrayalCRS variants are not yet handled.
+                        var apParts = value.Split(',');
+                        if (apParts.Length >= 3 &&
+                            string.Equals(apParts[0], "GeographicCRS", StringComparison.OrdinalIgnoreCase) &&
+                            double.TryParse(apParts[1], CultureInfo.InvariantCulture, out var apLon) &&
+                            double.TryParse(apParts[2], CultureInfo.InvariantCulture, out var apLat))
+                        {
+                            augmentedAnchor = new GeoPosition(apLat, apLon);
+                        }
+                    }
+                    break;
+
+                case "AugmentedRay":
+                    {
+                        // AugmentedRay:GeographicCRS,bearing,endCrs,length
+                        // S-100 Part 9A §11.5: a ray from the feature's anchor
+                        // at a true bearing for a given length.
+                        var arParts = value.Split(',');
+                        if (arParts.Length >= 4 &&
+                            double.TryParse(arParts[1], CultureInfo.InvariantCulture, out var arBearing) &&
+                            double.TryParse(arParts[3], CultureInfo.InvariantCulture, out var arLength))
+                        {
+                            // A new geometry element invalidates any previously
+                            // resolved coordinates (e.g. from a prior bare-ray
+                            // auto-resolve).  Without this, the second sector
+                            // limit ray would reuse the first ray's coordinates
+                            // because the auto-resolve guard
+                            //   (augmentedLineCoords is null)
+                            // would fail.
+                            augmentedLineCoords = null;
+
+                            string crs = arParts[2]; // end-point CRS
+                            augmentedLineSegments.Add(new AugmentedSegment.Ray(arBearing, arLength, crs));
+                        }
+                    }
+                    break;
+
+                case "ArcByRadius":
+                    {
+                        // ArcByRadius:xOffset,yOffset,radius,startBearing,sweep
+                        // S-100 Part 9A §11.5: a circular arc around the feature
+                        // anchor. Offsets are typically 0,0.
+                        var abParts = value.Split(',');
+                        if (abParts.Length >= 5 &&
+                            double.TryParse(abParts[0], CultureInfo.InvariantCulture, out var abXOff) &&
+                            double.TryParse(abParts[1], CultureInfo.InvariantCulture, out var abYOff) &&
+                            double.TryParse(abParts[2], CultureInfo.InvariantCulture, out var abRadius) &&
+                            double.TryParse(abParts[3], CultureInfo.InvariantCulture, out var abStart) &&
+                            double.TryParse(abParts[4], CultureInfo.InvariantCulture, out var abSweep))
+                        {
+                            // Clear previously resolved coordinates so the arc
+                            // stands on its own (same rationale as AugmentedRay).
+                            augmentedLineCoords = null;
+
+                            augmentedLineSegments.Add(
+                                new AugmentedSegment.Arc(abXOff, abYOff, abRadius, abStart, abSweep));
+                        }
+                    }
+                    break;
+
+                case "AugmentedPath":
+                    {
+                        // AugmentedPath:crs1,crs2,...
+                        // Resolves buffered AugmentedRay/ArcByRadius segments
+                        // into a tessellated coordinate list using the declared CRS
+                        // sequence.  The feature's anchor point is the origin.
+                        if (augmentedLineSegments.Count > 0)
+                        {
+                            augmentedLineCoords = ResolveAugmentedPath(
+                                augmentedLineSegments, augmentedAnchor ?? featureAnchor);
+                            augmentedLineSegments.Clear();
+                        }
+                    }
+                    break;
+
+                case "TextAlignHorizontal":
+                    if (Enum.TryParse<TextHorizontalAlignment>(value, ignoreCase: true, out var parsedHAlign))
+                        textHAlign = parsedHAlign;
+                    break;
+
+                case "TextAlignVertical":
+                    if (Enum.TryParse<TextVerticalAlignment>(value, ignoreCase: true, out var parsedVAlign))
+                        textVAlign = parsedVAlign;
+                    break;
+
+                case "FontBackgroundColor":
+                    {
+                        // FontBackgroundColor:[token[,transparency]]
+                        // An empty value clears any inherited background.
+                        if (string.IsNullOrEmpty(value))
+                        {
+                            fontBackgroundColor = null;
+                            fontBackgroundTransparency = null;
+                        }
+                        else
+                        {
+                            var fbParts = value.Split(',');
+                            fontBackgroundColor = string.IsNullOrEmpty(fbParts[0]) ? null : fbParts[0];
+                            fontBackgroundTransparency = fbParts.Length > 1 &&
+                                double.TryParse(fbParts[1], CultureInfo.InvariantCulture, out var fbt)
+                                ? fbt
+                                : null;
+                        }
+                    }
+                    break;
+
+                case "FontWeight":
+                case "FontSlant":
+                case "FontProportion":
+                case "FontSerifs":
+                case "FontUnderline":
+                case "FontStrikethrough":
+                case "FontUpperline":
+                case "FontReference":
+                case "TextVerticalOffset":
+                    // Recognised but not yet handled — skip silently
+                    break;
+
+                default:
+                    // Unknown command — ignore
+                    break;
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Decodes DEF-encoded text: &amp;a → &amp;, &amp;s → ;, &amp;c → :, &amp;m → ,
+    /// </summary>
+    /// <summary>
+    /// Parses a comma-separated viewing-group list (<c>vg1[,vg2[,…]]</c>) into
+    /// the primary group and any additional groups. Ids that do not parse as
+    /// integers are skipped and repeated ids are kept once; when no id parses,
+    /// both outputs are left unchanged.
+    /// </summary>
+    private static void ParseViewingGroups(
+        string value, ref int primary, ref IReadOnlyList<int> additional)
+    {
+        if (TrySplitViewingGroups(value.Split(','), out var first, out var rest))
+        {
+            primary = first;
+            additional = rest;
+        }
+    }
+
+    /// <summary>
+    /// Splits viewing-group ids into the primary (first parseable) id and the
+    /// distinct remaining ids, in order. Shared by the Lua instruction parser
+    /// and the Part 9 XML display-list reader, whose <c>viewingGroup</c>
+    /// element is likewise <c>1..*</c>.
+    /// </summary>
+    /// <returns><see langword="false"/> when no id parses as an integer.</returns>
+    internal static bool TrySplitViewingGroups(
+        IEnumerable<string> ids, out int primary, out IReadOnlyList<int> additional)
+    {
+        primary = 0;
+        additional = [];
+        List<int>? rest = null;
+        var found = false;
+
+        foreach (var raw in ids)
+        {
+            if (!int.TryParse(raw.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var id))
+                continue;
+
+            if (!found)
+            {
+                primary = id;
+                found = true;
+            }
+            else if (id != primary && (rest is null || !rest.Contains(id)))
+            {
+                (rest ??= []).Add(id);
+            }
+        }
+
+        if (rest is not null)
+            additional = rest;
+        return found;
+    }
+
+    /// <summary>
+    /// Maps an S-100 Part 9 <c>rotationCRS</c> value to its frame. Only
+    /// <c>GeographicCRS</c> turns with the chart; <c>PortrayalCRS</c>, the
+    /// default, and anything unrecognised are screen-relative.
+    /// </summary>
+    internal static SymbolRotationCrs ParseRotationCrs(string? value) =>
+        string.Equals(value?.Trim(), "GeographicCRS", StringComparison.OrdinalIgnoreCase)
+            ? SymbolRotationCrs.Geographic
+            : SymbolRotationCrs.Portrayal;
+
+    private static string DefDecode(string encoded)
+    {
+        if (string.IsNullOrEmpty(encoded) || !encoded.Contains('&'))
+            return encoded;
+
+        return encoded
+            .Replace("&m", ",")
+            .Replace("&c", ":")
+            .Replace("&s", ";")
+            .Replace("&a", "&");
+    }
+
+    /// <summary>
+    /// Nominal S-100 display pixel size in millimetres (S-100 Part 9 §11.3).
+    /// </summary>
+    private const double S100PixelSizeMm = 0.32;
+
+    /// <summary>
+    /// Reference scale denominator used to convert LocalCRS mm radii to
+    /// approximate geographic distances for tessellation. 1:25000 is a
+    /// typical ECDIS display scale for harbour approaches where sector
+    /// lights are most relevant.
+    /// </summary>
+    private const double ReferenceScaleDenominator = 25_000.0;
+
+    /// <summary>
+    /// Resolves buffered augmented line segments into a tessellated coordinate
+    /// list. The feature's anchor point (from <paramref name="anchor"/>) is
+    /// the origin for all geometry.
+    /// </summary>
+    private static IReadOnlyList<GeoPosition>? ResolveAugmentedPath(
+        List<AugmentedSegment> segments,
+        GeoPosition? anchor)
+    {
+        if (segments.Count == 0)
+            return null;
+
+        var allPoints = new List<GeoPosition>();
+
+        foreach (var segment in segments)
+        {
+            IReadOnlyList<GeoPosition> tessellated = segment switch
+            {
+                AugmentedSegment.Ray ray => TessellateRaySegment(ray, anchor),
+                AugmentedSegment.Arc arc => TessellateArcSegment(arc, anchor),
+                _ => [],
+            };
+
+            // Append points, skipping the first if it duplicates the previous
+            // end-point (segments share junction vertices).
+            for (int i = 0; i < tessellated.Count; i++)
+            {
+                if (i == 0 && allPoints.Count > 0 &&
+                    Math.Abs(allPoints[^1].Latitude - tessellated[i].Latitude) < 1e-10 &&
+                    Math.Abs(allPoints[^1].Longitude - tessellated[i].Longitude) < 1e-10)
+                {
+                    continue;
+                }
+
+                allPoints.Add(tessellated[i]);
+            }
+        }
+
+        return allPoints.Count >= 2 ? allPoints : null;
+    }
+
+    private static IReadOnlyList<GeoPosition> TessellateRaySegment(
+        AugmentedSegment.Ray ray,
+        GeoPosition? anchor)
+    {
+        if (anchor is not { } origin)
+            return [];
+
+        double distanceMetres = ray.LengthMetres;
+        if (string.Equals(ray.EndCrs, "LocalCRS", StringComparison.OrdinalIgnoreCase))
+        {
+            // LocalCRS length is in mm on the nominal display surface.
+            // Convert to approximate metres using the reference scale.
+            distanceMetres = ray.LengthMetres * S100PixelSizeMm / 1000.0 * ReferenceScaleDenominator;
+        }
+
+        if (distanceMetres <= 0)
+            return [];
+
+        return GeodesicHelper.TessellateRay(
+            origin.Latitude, origin.Longitude, ray.BearingDeg, distanceMetres);
+    }
+
+    private static IReadOnlyList<GeoPosition> TessellateArcSegment(
+        AugmentedSegment.Arc arc,
+        GeoPosition? anchor)
+    {
+        if (anchor is not { } origin)
+            return [];
+
+        // The arc radius is in LocalCRS units (mm on nominal display).
+        // Convert to approximate metres.
+        double radiusMetres = arc.Radius * S100PixelSizeMm / 1000.0 * ReferenceScaleDenominator;
+
+        if (radiusMetres <= 0)
+            return [];
+
+        return GeodesicHelper.TessellateArc(
+            origin.Latitude, origin.Longitude, radiusMetres,
+            arc.StartBearingDeg, arc.SweepDeg);
+    }
+}
+
+/// <summary>
+/// Discriminated union of augmented line geometry segments buffered by
+/// <see cref="DrawingInstructionParser"/> before <c>AugmentedPath</c>
+/// resolution.
+/// </summary>
+internal abstract record AugmentedSegment
+{
+    private AugmentedSegment() { }
+
+    /// <summary>
+    /// A ray from the feature anchor at a true bearing for a given length
+    /// (S-100 Part 9A §11.5 <c>AugmentedRay</c>).
+    /// </summary>
+    internal sealed record Ray(double BearingDeg, double LengthMetres, string EndCrs) : AugmentedSegment;
+
+    /// <summary>
+    /// A circular arc around the feature anchor (S-100 Part 9A §11.5
+    /// <c>ArcByRadius</c>).
+    /// </summary>
+    internal sealed record Arc(
+        double XOffset, double YOffset, double Radius,
+        double StartBearingDeg, double SweepDeg) : AugmentedSegment;
+}

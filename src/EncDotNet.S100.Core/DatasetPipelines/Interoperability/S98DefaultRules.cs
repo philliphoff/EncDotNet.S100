@@ -1,0 +1,729 @@
+using System.Globalization;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Pipelines.Vector;
+
+namespace EncDotNet.S100.Datasets.Pipelines.Interoperability;
+
+/// <summary>
+/// The inter-product rules shipped in PR-L2 (S-98 Edition 2.0.0), plus the
+/// SoundCharts weather rules <see cref="R_101_WX_B_ClipWeatherFillsToWater"/>
+/// and <see cref="R_111_WX_B_HideModelCurrentsUnderS111"/>. Three
+/// rules (<see cref="R_101_102_A"/>, <see cref="R_104_A"/>,
+/// <see cref="R_111_A"/>) are pure plane-assignment properties already
+/// satisfied by the default plane table; they carry an identity
+/// <see cref="S98InteroperabilityRule.Effect"/> and exist as named property
+/// anchors for tests. <see cref="R_101_124_A"/> is the analogous Level-0
+/// derivation for S-124. The Level-2 rule
+/// <see cref="R_101_102_B_SuppressDepthFeatures"/> is the only one with a
+/// non-identity effect — it removes the S-101 <c>DepthArea</c> and
+/// <c>DepthContour</c> features inside an active S-102 dataset's coverage from
+/// the stack, honouring the MSC.232(82) §5.8 safety-contour exception.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Suppression operates on the encoding-neutral <see cref="DrawingInstruction"/>
+/// slice carried by a <see cref="VectorStackPayload"/>: the rule filters the
+/// affected S-101 sub-layer's instructions and substitutes a payload whose
+/// <see cref="VectorSubLayer"/> carries the surviving instructions. The
+/// per-feature decision is delegated to <see cref="S98SuppressionPolicy"/> so
+/// the headless and Mapsui renderers (which both build from the filtered slice)
+/// can never drift. Cites S-98 Ed.2.0.0 Annex A §8.4.1 + Part B §B-3.1.2 +
+/// Annex A §A-6.9.1 NOTE + MSC.232(82) §5.8.
+/// </para>
+/// </remarks>
+public static class S98DefaultRules
+{
+    /// <summary>
+    /// R-101-102-A (Level 1) — S-102 must render between S-101 area fills
+    /// (<see cref="EncDotNet.S100.Interoperability.S98DisplayPlane.BaseChartUnder"/>)
+    /// and S-101 line work
+    /// (<see cref="EncDotNet.S100.Interoperability.S98DisplayPlane.BaseChartOver"/>).
+    /// Identity effect — satisfied by the default plane assignment. Cites S-98
+    /// Ed.2.0.0 Annex A §A-6.9.1.
+    /// </summary>
+    // TODO PR-L2-RESYNC: confirm against S-100 Part 16 XSD
+    public static readonly S98InteroperabilityRule R_101_102_A = new(
+        RuleId: "R-101-102-A",
+        SpecCitation: "S-98 Ed.2.0.0 Annex A §A-6.9.1",
+        Condition: HasActiveProductSet("S-101", "S-102"),
+        Effect: Identity);
+
+    /// <summary>
+    /// R-101-102-B (Level 2) — when an S-102 dataset is loaded and active,
+    /// suppress the S-101 <c>DepthArea</c> and <c>DepthContour</c> features
+    /// that lie inside its coverage extent so the gridded bathymetric surface
+    /// replaces the legacy depth shading there. Outside every active S-102
+    /// extent the ENC depth features stay: the surface overwrites them only
+    /// where it is displayed (S-98 Part A §A-6.9.1), so suppressing them
+    /// everywhere left a chart without depth shading beyond a small S-102
+    /// tile. A feature that straddles the extent's edge is kept; its fill
+    /// paints under the opaque surface anyway. An active S-102 dataset whose
+    /// stack items report no <see cref="CoveragePortrayalResult.CoverageExtent"/>
+    /// is taken to cover everything. The
+    /// S-101 safety contour (the contour whose <c>VALDCO</c> equals the
+    /// mariner's
+    /// <see cref="EncDotNet.S100.Pipelines.MarinerSettings.SafetyContour"/>) is
+    /// preserved per MSC.232(82) §5.8. Cites S-98 Ed.2.0.0 Annex A §8.4.1 +
+    /// Part B §B-3.1.2 + Annex A §A-6.9.1 NOTE + MSC.232(82) §5.8.
+    /// </summary>
+    // TODO PR-L2-RESYNC: confirm against S-100 Part 16 XSD
+    public static readonly S98InteroperabilityRule R_101_102_B_SuppressDepthFeatures = new(
+        RuleId: "R-101-102-B",
+        SpecCitation: "S-98 Ed.2.0.0 Annex A §8.4.1 + Part B §B-3.1.2 + MSC.232(82) §5.8",
+        Condition: HasActiveProductSet("S-101", "S-102"),
+        Effect: SuppressS101DepthFeatures);
+
+    /// <summary>
+    /// R-101-124-A (Level 0, derived) — S-124 navigational warnings render on
+    /// <see cref="EncDotNet.S100.Interoperability.S98DisplayPlane.CautionsAndWarnings"/>,
+    /// above ENC base data and below mariner overlays. Identity effect.
+    /// </summary>
+    // TODO PR-L2-RESYNC: confirm against S-100 Part 16 XSD
+    public static readonly S98InteroperabilityRule R_101_124_A = new(
+        RuleId: "R-101-124-A",
+        SpecCitation: "S-98 Ed.2.0.0 Main §9.2.1 + IMO MSC.530(106)/Rev.1 §App.2 layer 3",
+        Condition: HasActiveProductSet("S-101", "S-124"),
+        Effect: Identity);
+
+    /// <summary>
+    /// R-104-A (Level 1) — S-104 colour-band surface renders on
+    /// <see cref="EncDotNet.S100.Interoperability.S98DisplayPlane.OnDemandSurface"/>,
+    /// below S-101 line work. Identity effect.
+    /// </summary>
+    // TODO PR-L2-RESYNC: confirm against S-100 Part 16 XSD
+    public static readonly S98InteroperabilityRule R_104_A = new(
+        RuleId: "R-104-A",
+        SpecCitation: "S-98 Ed.2.0.0 Annex A §A-6.9.1 + Main §9.2.1 layer 6",
+        Condition: HasActiveProductSet("S-101", "S-104"),
+        Effect: Identity);
+
+    /// <summary>
+    /// R-111-A (Level 1) — S-111 colour-band surface renders on
+    /// <see cref="EncDotNet.S100.Interoperability.S98DisplayPlane.OnDemandSurface"/>;
+    /// the arrow overlay renders on
+    /// <see cref="EncDotNet.S100.Interoperability.S98DisplayPlane.DynamicArrows"/>
+    /// for every data coding format. S-98 names no arrow plane: Main §9.2.1
+    /// puts surface currents in layer 6 and Part A §A-6.9.1 has gridded data
+    /// go over the ENC; the DynamicArrows placement is this library's
+    /// (see <see cref="EncDotNet.S100.Interoperability.S98DisplayPlane.DynamicArrows"/>).
+    /// Identity effect.
+    /// </summary>
+    // TODO PR-L2-RESYNC: confirm against S-100 Part 16 XSD
+    public static readonly S98InteroperabilityRule R_111_A = new(
+        RuleId: "R-111-A",
+        SpecCitation: "S-98 Ed.2.0.0 Main §9.2.1 layer 6 + Part A §A-6.9.1",
+        Condition: HasActiveProductSet("S-101", "S-111"),
+        Effect: Identity);
+
+    /// <summary>
+    /// R-101-104-B (Level 2) — when both an S-101 ENC and an S-104 water-level
+    /// dataset are loaded and active, clip the (non-normative) S-104 gridded
+    /// surface to water areas by attaching the ENC's <c>LandArea</c> geometry to
+    /// the S-104 surface sub-layer — a colour raster or, for the SoundCharts
+    /// portrayal, water-level isolines. The renderers then clip the surface to
+    /// those polygons at output-pixel resolution, so it — layered like S-102
+    /// bathymetry, beneath ENC line work — never crosses land (issue #483).
+    /// Only the gridded (dcf2) surface is affected;
+    /// station-glyph (dcf8) sub-layers are discrete points and are left
+    /// untouched. Cites S-98 Ed.2.0.0 Annex A §A-6.9.1 + Main §9.2.1 layer 6.
+    /// </summary>
+    // TODO PR-L2-RESYNC: confirm against S-100 Part 16 XSD
+    public static readonly S98InteroperabilityRule R_101_104_B_ClipSurfaceToWater = new(
+        RuleId: "R-101-104-B",
+        SpecCitation: "S-98 Ed.2.0.0 Annex A §A-6.9.1 + Main §9.2.1 layer 6",
+        Condition: HasActiveProductSet("S-101", "S-104"),
+        Effect: ClipS104SurfaceToWater);
+
+    /// <summary>
+    /// R-101-WX-B (Level 2, SoundCharts) — when an S-101 ENC is loaded and
+    /// active, clip every active coverage surface that asks for it
+    /// (<see cref="GridCoverageSubLayer.ClipToWater"/>; today the weather wave
+    /// height fill) to water, exactly as <see cref="R_101_104_B_ClipSurfaceToWater"/>
+    /// clips the S-104 surface: the same ENC <c>LandArea</c> geometry is
+    /// attached as the sub-layer's <see cref="GridCoverageSubLayer.LandAreaMask"/>
+    /// and the renderers clip at output-pixel resolution. Weather grids have no
+    /// S-100 product specification, so the rule keys on the sub-layer's flag
+    /// rather than a product pair; wind fills don't set it, because wind blows
+    /// over land too (design note weather-sources.md §4.2; issue #1072). Cites
+    /// S-98 Ed.2.0.0 Annex A §A-6.9.1 + Main §9.2.1 layer 6 by analogy with
+    /// R-101-104-B.
+    /// </summary>
+    public static readonly S98InteroperabilityRule R_101_WX_B_ClipWeatherFillsToWater = new(
+        RuleId: "R-101-WX-B",
+        SpecCitation: "S-98 Ed.2.0.0 Annex A §A-6.9.1 + Main §9.2.1 layer 6 (by analogy with R-101-104-B)",
+        Condition: HasActiveProductSet("S-101"),
+        Effect: ClipFlaggedSurfacesToWater);
+
+    /// <summary>
+    /// R-111-WX-B (Level 2, SoundCharts) — when an S-111 dataset is loaded and
+    /// active, hide the model current arrows that ask for it
+    /// (<see cref="ArrowCoverageSubLayer.YieldsToS111"/>; the weather current
+    /// arrows, issue #1228) inside the S-111 dataset's
+    /// <see cref="CoveragePortrayalResult.CoverageExtent"/>, so the official
+    /// surface current forecast is the only one drawn there. Outside every
+    /// S-111 extent the model arrows stay. An S-111 dataset that reports no
+    /// extent (the station and mesh formats) hides nothing: its points don't
+    /// cover the area between them. Only arrows on a geographic grid are
+    /// masked, cell by cell on the cell's centre. Cites S-98 Ed.2.0.0 Annex A
+    /// §A-6.9.1 by analogy with <see cref="R_101_102_B_SuppressDepthFeatures"/>:
+    /// the more authoritative product replaces the other where it is displayed.
+    /// </summary>
+    public static readonly S98InteroperabilityRule R_111_WX_B_HideModelCurrentsUnderS111 = new(
+        RuleId: "R-111-WX-B",
+        SpecCitation: "S-98 Ed.2.0.0 Annex A §A-6.9.1 (by analogy with R-101-102-B)",
+        Condition: HasActiveProductSet("S-111"),
+        Effect: HideModelCurrentsUnderS111);
+
+    /// <summary>
+    /// The default rule collection in evaluation order. Declaration order is
+    /// the evaluation order; each rule's output is the next rule's input.
+    /// </summary>
+    public static readonly IReadOnlyList<S98InteroperabilityRule> Default =
+        new[]
+        {
+            R_101_102_A,
+            R_101_102_B_SuppressDepthFeatures,
+            R_101_124_A,
+            R_104_A,
+            R_101_104_B_ClipSurfaceToWater,
+            R_101_WX_B_ClipWeatherFillsToWater,
+            R_111_A,
+            R_111_WX_B_HideModelCurrentsUnderS111,
+        };
+
+    private static Func<S98RuleContext, bool> HasActiveProductSet(params string[] productSpecs)
+    {
+        ArgumentNullException.ThrowIfNull(productSpecs);
+        return context =>
+        {
+            foreach (var spec in productSpecs)
+            {
+                bool found = false;
+                foreach (var ds in context.LoadedDatasets)
+                {
+                    if (ds.Active && string.Equals(ds.ProductSpec, spec, StringComparison.Ordinal))
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) return false;
+            }
+            return true;
+        };
+    }
+
+    private static IReadOnlyList<SubLayerStackItem> Identity(
+        IReadOnlyList<SubLayerStackItem> stack,
+        S98RuleContext context)
+        => stack;
+
+    private static IReadOnlyList<SubLayerStackItem> SuppressS101DepthFeatures(
+        IReadOnlyList<SubLayerStackItem> stack,
+        S98RuleContext context)
+    {
+        var safetyContour = context.EffectiveMariner.SafetyContour.TotalMetres;
+        var coverage = CollectS102Extents(stack, context);
+        if (coverage.Extents.Count == 0 && !coverage.Unbounded)
+        {
+            // No active S-102 dataset: nothing replaces the ENC depth features.
+            return stack;
+        }
+
+        // Many sub-layers share one portrayal result; decide each feature's
+        // containment once per result.
+        var containment = new Dictionary<VectorPortrayalResult, Dictionary<long, bool>>(
+            ReferenceEqualityComparer.Instance);
+
+        var result = new List<SubLayerStackItem>(stack.Count);
+        foreach (var item in stack)
+        {
+            // Only S-101 source datasets are subject to the rule; skip
+            // everything else (incl. S-57 — Annex A §4.1.1 closes the product
+            // list to S-100 specs). Coverage payloads are never S-101.
+            if (!IsS101Item(item, context) || item.Payload is not VectorStackPayload vector)
+            {
+                result.Add(item);
+                continue;
+            }
+
+            Func<long, bool> isCovered = _ => true;
+            if (!coverage.Unbounded)
+            {
+                if (!containment.TryGetValue(vector.Result, out var decided))
+                {
+                    decided = new Dictionary<long, bool>();
+                    containment.Add(vector.Result, decided);
+                }
+                var geometry = vector.Result.GeometryProvider;
+                isCovered = id =>
+                {
+                    if (!decided.TryGetValue(id, out var inside))
+                    {
+                        inside = LiesWithin(
+                            geometry.GetGeometry(id.ToString(CultureInfo.InvariantCulture)),
+                            coverage.Extents);
+                        decided.Add(id, inside);
+                    }
+                    return inside;
+                };
+            }
+
+            var filtered = FilterSubLayer(vector, safetyContour, isCovered);
+            if (ReferenceEquals(filtered, vector.SubLayer))
+            {
+                result.Add(item);
+            }
+            else
+            {
+                result.Add(item with { Payload = vector.WithSubLayer(filtered) });
+            }
+        }
+        return result;
+    }
+
+    private static bool IsS101Item(SubLayerStackItem item, S98RuleContext context)
+        => IsProductItem(item, context, "S-101");
+
+    private static bool IsProductItem(SubLayerStackItem item, S98RuleContext context, string productSpec)
+    {
+        // Match the item back to its source dataset to confirm the product.
+        // SourceDatasetId is the stable join key against LoadedDatasetInfo.
+        foreach (var ds in context.LoadedDatasets)
+        {
+            if (string.Equals(ds.DatasetId, item.SourceDatasetId, StringComparison.Ordinal))
+            {
+                // Inactive datasets must not participate in rule evaluation
+                // (see LoadedDatasetInfo.Active), so an inactive S-101's
+                // LandArea can never clip an active S-104 surface.
+                return ds.Active && string.Equals(ds.ProductSpec, productSpec, StringComparison.Ordinal);
+            }
+        }
+        return false;
+    }
+
+    private static IReadOnlyList<SubLayerStackItem> ClipS104SurfaceToWater(
+        IReadOnlyList<SubLayerStackItem> stack,
+        S98RuleContext context)
+        => ClipSurfacesToWater(
+            stack,
+            context,
+            (item, subLayer) => subLayer is GridCoverageSubLayer or IsolineCoverageSubLayer
+                && IsProductItem(item, context, "S-104"));
+
+    private static IReadOnlyList<SubLayerStackItem> ClipFlaggedSurfacesToWater(
+        IReadOnlyList<SubLayerStackItem> stack,
+        S98RuleContext context)
+        => ClipSurfacesToWater(
+            stack,
+            context,
+            (item, subLayer) => subLayer is GridCoverageSubLayer { ClipToWater: true }
+                && IsActiveItem(item, context));
+
+    /// <summary>
+    /// Attaches the active S-101 datasets' <c>LandArea</c> surfaces as the land
+    /// mask of every coverage surface (<see cref="GridCoverageSubLayer"/> or
+    /// <see cref="IsolineCoverageSubLayer"/>) that <paramref name="applies"/>
+    /// selects. The shared effect of <see cref="R_101_104_B_ClipSurfaceToWater"/>
+    /// and <see cref="R_101_WX_B_ClipWeatherFillsToWater"/>.
+    /// </summary>
+    private static IReadOnlyList<SubLayerStackItem> ClipSurfacesToWater(
+        IReadOnlyList<SubLayerStackItem> stack,
+        S98RuleContext context,
+        Func<SubLayerStackItem, CoverageSubLayerBase, bool> applies)
+    {
+        // Gather the ENC land geometry once. Distinct S-101 portrayal results
+        // may appear on many stack items (one per sub-layer); resolve each
+        // result's LandArea surfaces a single time.
+        List<FeatureGeometry>? landAreas = null;
+        var seenResults = new HashSet<VectorPortrayalResult>(ReferenceEqualityComparer.Instance);
+        foreach (var item in stack)
+        {
+            if (!IsProductItem(item, context, "S-101") || item.Payload is not VectorStackPayload vector)
+            {
+                continue;
+            }
+            if (!seenResults.Add(vector.Result))
+            {
+                continue;
+            }
+            CollectLandAreas(vector.Result, ref landAreas);
+        }
+
+        if (landAreas is null || landAreas.Count == 0)
+        {
+            return stack;
+        }
+
+        var result = new List<SubLayerStackItem>(stack.Count);
+        foreach (var item in stack)
+        {
+            if (item.Payload is CoverageStackPayload coverage && applies(item, coverage.SubLayer))
+            {
+                CoverageSubLayerBase? masked = coverage.SubLayer switch
+                {
+                    GridCoverageSubLayer grid => grid.WithLandAreaMask(landAreas),
+                    IsolineCoverageSubLayer isolines => isolines.WithLandAreaMask(landAreas),
+                    _ => null,
+                };
+                result.Add(masked is null ? item : item with { Payload = coverage.WithSubLayer(masked) });
+            }
+            else
+            {
+                result.Add(item);
+            }
+        }
+        return result;
+    }
+
+    private static IReadOnlyList<SubLayerStackItem> HideModelCurrentsUnderS111(
+        IReadOnlyList<SubLayerStackItem> stack,
+        S98RuleContext context)
+    {
+        var extents = new List<GeographicBounds>();
+        var seen = new HashSet<CoveragePortrayalResult>(ReferenceEqualityComparer.Instance);
+        foreach (var item in stack)
+        {
+            if (item.Payload is CoverageStackPayload coverage
+                && seen.Add(coverage.Result)
+                && coverage.Result.CoverageExtent is { } extent
+                && IsProductItem(item, context, "S-111"))
+            {
+                extents.Add(extent);
+            }
+        }
+
+        if (extents.Count == 0)
+        {
+            return stack;
+        }
+
+        var result = new List<SubLayerStackItem>(stack.Count);
+        foreach (var item in stack)
+        {
+            if (item.Payload is CoverageStackPayload { SubLayer: ArrowCoverageSubLayer { YieldsToS111: true } arrows } coverage
+                && IsActiveItem(item, context)
+                && MaskInside(arrows.Coverage, extents) is { } masked)
+            {
+                result.Add(item with { Payload = coverage.WithSubLayer(arrows.WithCoverage(masked)) });
+            }
+            else
+            {
+                result.Add(item);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// A copy of <paramref name="layer"/> whose symbol value field is no-data
+    /// at every cell centred inside one of <paramref name="extents"/>, so no
+    /// arrow is drawn there; <see langword="null"/> when no cell is inside, or
+    /// the grid isn't geographic.
+    /// </summary>
+    internal static StyledCoverageLayer? MaskInside(StyledCoverageLayer layer, IReadOnlyList<GeographicBounds> extents)
+    {
+        if (layer.SymbolScheme is not { } scheme
+            || !string.Equals(layer.Georeferencer.CRS, "EPSG:4326", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var sample = layer.Coverage;
+        var field = scheme.ValueFieldName;
+        if (!sample.HasField(field))
+        {
+            return null;
+        }
+
+        var source = sample.GetValues(field);
+        float[]? masked = null;
+        int rows = sample.Metadata.NumRows;
+        int columns = sample.Metadata.NumColumns;
+        for (int row = 0; row < rows; row++)
+        {
+            for (int col = 0; col < columns; col++)
+            {
+                var (longitude, latitude) = layer.Georeferencer.ToNative(row, col);
+                if (!Inside(extents, longitude, latitude))
+                {
+                    continue;
+                }
+
+                masked ??= (float[])source.Clone();
+                masked[row * columns + col] = layer.NoDataValue;
+            }
+        }
+
+        if (masked is null)
+        {
+            return null;
+        }
+
+        // The masked field is stored, so it can't stay a computed one too.
+        var values = new Dictionary<string, float[]>(sample.Values, StringComparer.Ordinal) { [field] = masked };
+        var maskedSample = new SampledCoverage
+        {
+            Region = sample.Region,
+            Metadata = sample.Metadata,
+            Values = values,
+            ComputedFields = sample.ComputedFields.Where(f => !string.Equals(f.Name, field, StringComparison.Ordinal)).ToArray(),
+        };
+        return new StyledCoverageLayer
+        {
+            Coverage = maskedSample,
+            ColorScheme = layer.ColorScheme,
+            NoDataValue = layer.NoDataValue,
+            Georeferencer = layer.Georeferencer,
+            SymbolScheme = layer.SymbolScheme,
+            ReliefShade = layer.ReliefShade,
+        };
+    }
+
+    // Whether a point is inside one of the extents, whichever way round the
+    // grid counts longitude (−180 to 180, or 0 to 360).
+    private static bool Inside(IReadOnlyList<GeographicBounds> extents, double longitude, double latitude)
+    {
+        foreach (var extent in extents)
+        {
+            if (latitude < extent.MinLatitude || latitude > extent.MaxLatitude)
+            {
+                continue;
+            }
+
+            double width = extent.MaxLongitude - extent.MinLongitude;
+            double east = ((longitude - extent.MinLongitude) % 360 + 360) % 360;
+            if (east <= width)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Whether the item's source dataset is loaded and active, whatever its product.
+    private static bool IsActiveItem(SubLayerStackItem item, S98RuleContext context)
+    {
+        foreach (var ds in context.LoadedDatasets)
+        {
+            if (string.Equals(ds.DatasetId, item.SourceDatasetId, StringComparison.Ordinal))
+            {
+                return ds.Active;
+            }
+        }
+        return false;
+    }
+
+    private static void CollectLandAreas(VectorPortrayalResult result, ref List<FeatureGeometry>? landAreas)
+    {
+        var tags = result.FeatureTags;
+        if (tags is null || tags.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var (id, tag) in tags)
+        {
+            if (!string.Equals(tag.FeatureType, "LandArea", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var geometry = result.GeometryProvider.GetGeometry(id.ToString(CultureInfo.InvariantCulture));
+            if (geometry is { Type: GeometryType.Surface } && geometry.Coordinates.Count >= 3)
+            {
+                (landAreas ??= new List<FeatureGeometry>()).Add(geometry);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gathers the coverage extents of the active S-102 datasets from their
+    /// coverage stack items. <c>Unbounded</c> is set when an active S-102
+    /// dataset reports no extent (no coverage item in the stack, or a result
+    /// without <see cref="CoveragePortrayalResult.CoverageExtent"/>); it is
+    /// then taken to cover everything.
+    /// </summary>
+    private static (List<GeographicBounds> Extents, bool Unbounded) CollectS102Extents(
+        IReadOnlyList<SubLayerStackItem> stack,
+        S98RuleContext context)
+    {
+        var extents = new List<GeographicBounds>();
+        var unbounded = false;
+        foreach (var dataset in context.LoadedDatasets)
+        {
+            if (!dataset.Active || !string.Equals(dataset.ProductSpec, "S-102", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            GeographicBounds? extent = null;
+            foreach (var item in stack)
+            {
+                if (item.Payload is CoverageStackPayload coverage
+                    && string.Equals(item.SourceDatasetId, dataset.DatasetId, StringComparison.Ordinal)
+                    && coverage.Result.CoverageExtent is { } reported)
+                {
+                    extent = reported;
+                    break;
+                }
+            }
+
+            if (extent is { } known)
+            {
+                extents.Add(known);
+            }
+            else
+            {
+                unbounded = true;
+            }
+        }
+        return (extents, unbounded);
+    }
+
+    /// <summary>
+    /// Whether every vertex of <paramref name="geometry"/> lies inside one of
+    /// <paramref name="extents"/>. A feature with no resolvable geometry is
+    /// not covered, so it is kept.
+    /// </summary>
+    private static bool LiesWithin(FeatureGeometry? geometry, List<GeographicBounds> extents)
+    {
+        if (geometry is null || geometry.Coordinates.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var position in geometry.Coordinates)
+        {
+            var inside = false;
+            foreach (var extent in extents)
+            {
+                if (position.Latitude >= extent.MinLatitude && position.Latitude <= extent.MaxLatitude
+                    && position.Longitude >= extent.MinLongitude && position.Longitude <= extent.MaxLongitude)
+                {
+                    inside = true;
+                    break;
+                }
+            }
+            if (!inside)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static VectorSubLayer FilterSubLayer(
+        VectorStackPayload payload, double safetyContour, Func<long, bool> isCovered)
+    {
+        var subLayer = payload.SubLayer;
+        var tags = payload.Result.FeatureTags;
+
+        // No tags means nothing can be identified as a depth feature.
+        if (tags is null || tags.Count == 0)
+        {
+            return subLayer;
+        }
+
+        var kept = new List<DrawingInstruction>(subLayer.Instructions.Count);
+        bool changed = false;
+        foreach (var instruction in subLayer.Instructions)
+        {
+            if (ShouldSuppress(instruction, tags, safetyContour, isCovered))
+            {
+                changed = true;
+                continue;
+            }
+
+            // #1132 Q4: where S-102 is displayed its own safety contour is the
+            // primary one; the S-101 safety contour kept by the MSC.232(82)
+            // exception is drawn faint (thinner, light grey) under it.
+            if (instruction is LineInstruction line && IsCoveredSafetyContour(line, tags, isCovered))
+            {
+                kept.Add(Faint(line));
+                changed = true;
+                continue;
+            }
+
+            kept.Add(instruction);
+        }
+
+        if (!changed)
+        {
+            return subLayer;
+        }
+
+        // Build a new sub-layer that mirrors the source but carries only the
+        // surviving instructions. We do not mutate the source — the caller may
+        // re-render without suppression (e.g. an S-102 deactivation).
+        return new VectorSubLayer
+        {
+            LayerKey = subLayer.LayerKey,
+            LayerName = subLayer.LayerName,
+            Instructions = kept,
+            Plane = subLayer.Plane,
+            WithinPlanePriority = subLayer.WithinPlanePriority,
+            SourceFeatureType = subLayer.SourceFeatureType,
+            PatternClipCacheKey = subLayer.PatternClipCacheKey,
+            ApplyOutOfBandCap = subLayer.ApplyOutOfBandCap,
+            Legend = subLayer.Legend,
+            LegendCaption = subLayer.LegendCaption,
+        };
+    }
+
+    /// <summary>The colour of the S-101 safety contour where S-102 covers it (#1132 Q4).</summary>
+    public const string FaintSafetyContourColor = "CHGRF";
+
+    private static bool IsCoveredSafetyContour(
+        LineInstruction line, IReadOnlyDictionary<long, VectorFeatureTag> tags, Func<long, bool> isCovered) =>
+        long.TryParse(line.FeatureReference, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id)
+        && tags.TryGetValue(id, out var tag)
+        && string.Equals(tag.FeatureType, "DepthContour", StringComparison.Ordinal)
+        && string.Equals(line.LineColor, "DEPSC", StringComparison.Ordinal)
+        && isCovered(id);
+
+    private static LineInstruction Faint(LineInstruction l) => new()
+    {
+        FeatureReference = l.FeatureReference,
+        Plane = l.Plane,
+        ViewingGroup = l.ViewingGroup,
+        AdditionalViewingGroups = l.AdditionalViewingGroups,
+        DrawingPriority = l.DrawingPriority,
+        ScaleMinimum = l.ScaleMinimum,
+        ScaleMaximum = l.ScaleMaximum,
+        TimeValid = l.TimeValid,
+        AlertReference = l.AlertReference,
+        LineStyleReference = l.LineStyleReference,
+        LineWidth = l.LineWidth / 2,
+        LineColor = FaintSafetyContourColor,
+        Dashes = l.Dashes,
+        DashIntervalLength = l.DashIntervalLength,
+        CoordinatesOverride = l.CoordinatesOverride,
+        Suppression = l.Suppression,
+    };
+
+    private static bool ShouldSuppress(
+        DrawingInstruction instruction,
+        IReadOnlyDictionary<long, VectorFeatureTag> tags,
+        double safetyContour,
+        Func<long, bool> isCovered)
+    {
+        if (!long.TryParse(
+                instruction.FeatureReference,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var id))
+        {
+            return false;
+        }
+
+        if (!tags.TryGetValue(id, out var tag))
+        {
+            return false;
+        }
+
+        return S98SuppressionPolicy.ShouldSuppress(tag.FeatureType, tag.DepthContourValue, safetyContour)
+            && isCovered(id);
+    }
+}

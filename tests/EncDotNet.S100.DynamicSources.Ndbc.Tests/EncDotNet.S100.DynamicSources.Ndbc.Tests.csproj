@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+    <!-- See Directory.Build.targets: ship the NoDependencies Skia native on Linux (issue #23). -->
+    <UseSkiaSharpLinuxNoDependencies>true</UseSkiaSharpLinuxNoDependencies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.DynamicSources.Ndbc\EncDotNet.S100.DynamicSources.Ndbc.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Renderers.Skia\EncDotNet.S100.Renderers.Skia.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- NDBC realtime2 files and a station table; see tests/datasets/NDBC/README.md. -->
+    <Content Include="..\datasets\NDBC\*.*" Exclude="..\datasets\NDBC\*.md" CopyToOutputDirectory="PreserveNewest" Link="TestData\NDBC\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

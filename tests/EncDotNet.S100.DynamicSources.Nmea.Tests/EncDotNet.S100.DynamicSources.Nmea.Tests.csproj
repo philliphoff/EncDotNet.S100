@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+    <!-- See Directory.Build.targets: ship the NoDependencies Skia native on Linux (issue #23). -->
+    <UseSkiaSharpLinuxNoDependencies>true</UseSkiaSharpLinuxNoDependencies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.DynamicSources.Nmea\EncDotNet.S100.DynamicSources.Nmea.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Renderers.Skia\EncDotNet.S100.Renderers.Skia.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Hand-written NMEA recordings; see tests/datasets/NMEA/README.md. -->
+    <Content Include="..\datasets\NMEA\*.nmea" CopyToOutputDirectory="PreserveNewest" Link="TestData\NMEA\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

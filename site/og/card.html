@@ -1,0 +1,64 @@
+<!doctype html>
+<!--
+  The 1200×630 Open Graph card (B4 in shot-list.md), rendered to
+  public/og-card.png by render.sh. ?shot=<ID> picks the chart capture.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../node_modules/@fontsource-variable/inter/index.css" />
+<link rel="stylesheet" href="../node_modules/@fontsource-variable/fraunces/index.css" />
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+  body {
+    position: relative; color: #e8f1f8; font-family: "Inter Variable", system-ui, sans-serif;
+    background: radial-gradient(120% 90% at 20% 0%, #12304a, #0a1826 65%);
+    -webkit-font-smoothing: antialiased;
+  }
+  /* The map area of a 2200×1400 capture at 0.55×: the window's title bar,
+     sidebar and toolbar fall outside the card or under the fade. */
+  .chart {
+    position: absolute; left: 280px; top: -38px; width: 1210px; height: 770px;
+    background: center / cover no-repeat;
+    -webkit-mask-image: linear-gradient(90deg, transparent 180px, rgba(0,0,0,.35) 340px, #000 560px);
+            mask-image: linear-gradient(90deg, transparent 180px, rgba(0,0,0,.35) 340px, #000 560px);
+  }
+  .contours { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .contours path { fill: none; stroke: rgba(140, 190, 220, .14); stroke-width: 1.2; }
+  .copy { position: absolute; left: 72px; top: 64px; bottom: 60px; width: 540px; display: flex; flex-direction: column; }
+  .brand { display: flex; align-items: center; gap: 16px; font: 600 38px/1 "Fraunces Variable", Georgia, serif; }
+  .brand img { width: 60px; height: 60px; }
+  h1 {
+    margin: auto 0; font: 600 66px/1.06 "Fraunces Variable", Georgia, serif; letter-spacing: -.015em;
+    text-shadow: 0 2px 24px rgba(10, 24, 38, .8);
+  }
+  h1 em { font-style: normal; color: #7fe0d4; }
+  .foot { display: flex; flex-direction: column; gap: 12px; }
+  .eyebrow { font: 500 16px/1 "Inter Variable", system-ui, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #7fe0d4; }
+  .url { font: 500 22px/1 "Inter Variable", system-ui, sans-serif; color: #9fb6c9; }
+</style>
+</head>
+<body>
+  <svg class="contours" viewBox="0 0 1200 630" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <path d="M-20 120 C 160 80, 300 170, 480 130 S 780 60, 1220 110" />
+    <path d="M-20 200 C 180 160, 320 260, 500 200 S 800 120, 1220 190" />
+    <path d="M-20 300 C 200 250, 340 370, 520 300 S 820 210, 1220 300" />
+    <path d="M-20 420 C 220 370, 360 500, 540 420 S 840 330, 1220 420" />
+    <path d="M-20 540 C 240 490, 380 620, 560 540 S 860 450, 1220 540" />
+  </svg>
+  <div class="chart" id="chart"></div>
+  <div class="copy">
+    <div class="brand"><img src="../../src/EncDotNet.S100.Viewer/Branding/icon.svg" alt="" />SoundCharts</div>
+    <h1>S-100 marine charts <em>on your desktop.</em></h1>
+    <div class="foot">
+      <span class="eyebrow">Free &amp; open source · macOS · Windows · Linux</span>
+      <span class="url">soundcharts.app</span>
+    </div>
+  </div>
+  <script>
+    const shot = new URLSearchParams(location.search).get('shot') || 'H1';
+    document.getElementById('chart').style.backgroundImage = `url(../src/assets/shots/${shot}.png)`;
+  </script>
+</body>
+</html>

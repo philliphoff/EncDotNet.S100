@@ -1,0 +1,169 @@
+using System.ComponentModel;
+using EncDotNet.S100.Datasets.Pipelines.Query;
+
+namespace EncDotNet.S100.Mcp.Tools.Library;
+
+// The Library edit tools (#715 slice 3), shared by every host since #792.
+
+/// <summary>Previews or adds a Library source (MCP <c>add_library_source</c>).</summary>
+public sealed class AddLibrarySourceTool(ILibraryEditor editor)
+{
+    /// <summary>The MCP tool name.</summary>
+    public const string Name = "add_library_source";
+
+    private readonly ILibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+
+    /// <summary>Applies the request.</summary>
+    public async Task<ToolResult<AddSourceResult>> InvokeAsync(AddSourceRequest request, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return Result(await _editor.AddSourceAsync(request, ct).ConfigureAwait(false));
+    }
+
+    public static ToolResult<T> Result<T>(LibraryEditOutcome<T> outcome) =>
+        outcome.Error is { } error ? ToolResult<T>.Err(error) : ToolResult<T>.Ok(outcome.Value!);
+}
+
+/// <summary>Re-indexes Library sources and reports what changed (MCP <c>refresh_library_source</c>).</summary>
+public sealed class RefreshLibrarySourceTool(ILibraryEditor editor)
+{
+    /// <summary>The MCP tool name.</summary>
+    public const string Name = "refresh_library_source";
+
+    /// <summary>How long to wait for indexing when no wait is given.</summary>
+    public static readonly TimeSpan DefaultWait = TimeSpan.FromSeconds(60);
+
+    /// <summary>The longest wait allowed.</summary>
+    public static readonly TimeSpan MaxWait = TimeSpan.FromMinutes(10);
+
+    private readonly ILibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+
+    /// <summary>Refreshes.</summary>
+    public async Task<ToolResult<RefreshResult>> InvokeAsync(string? id, int? waitMs, CancellationToken ct = default)
+    {
+        Guid? target = null;
+        if (!string.IsNullOrWhiteSpace(id))
+        {
+            if (!Guid.TryParse(id.Trim(), out var parsed))
+                return ToolResult<RefreshResult>.Err(new InvalidArgument("id", "expected a collection or source id from list_library_sources"));
+            target = parsed;
+        }
+        var wait = waitMs is { } ms ? TimeSpan.FromMilliseconds(Math.Clamp(ms, 0, (int)MaxWait.TotalMilliseconds)) : DefaultWait;
+        return AddLibrarySourceTool.Result(await _editor.RefreshAsync(target, wait, ct).ConfigureAwait(false));
+    }
+}
+
+/// <summary>Request for <see cref="LibraryActionTool"/>.</summary>
+public sealed record LibraryActionToolRequest(
+    [property: Description("load, load_as_you_pan, download, download_only, update or cancel.")] string Action,
+    [property: Description("Item ids from query_library_items, or null to use the filters.")] IReadOnlyList<string>? ItemIds,
+    [property: Description("The items to act on, as query_library_items filters them.")] QueryLibraryItemsRequest Filter,
+    [property: Description("For cancel only: true cancels every running download.")] bool? All,
+    [property: Description("True reports what would happen without doing it.")] bool? DryRun,
+    [property: Description("Refuse a download larger than this many bytes.")] long? MaxBytes);
+
+/// <summary>Loads, downloads, updates or cancels Library items (MCP <c>library_action</c>).</summary>
+public sealed class LibraryActionTool(ILibraryEditor editor)
+{
+    /// <summary>The MCP tool name.</summary>
+    public const string Name = "library_action";
+
+    /// <summary>The actions it accepts.</summary>
+    public static readonly IReadOnlyList<string> Actions = ["load", "load_as_you_pan", "download", "download_only", "update", "cancel"];
+
+    /// <summary>How many eligible items' names a result lists.</summary>
+    public const int ListedNames = 50;
+
+    private readonly ILibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+
+    /// <summary>Applies the request.</summary>
+    public async Task<ToolResult<LibraryActionResult>> InvokeAsync(LibraryActionToolRequest request, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var action = request.Action?.Trim().ToLowerInvariant() ?? string.Empty;
+
+        if (request.All == true)
+        {
+            if (action != "cancel" || request.ItemIds is { Count: > 0 } || QueryLibraryItemsTool.HasFilter(request.Filter))
+                return ToolResult<LibraryActionResult>.Err(new InvalidArgument("all", "only for action 'cancel', without itemIds or filters"));
+            if (request.DryRun == true)
+                return ToolResult<LibraryActionResult>.Ok(new LibraryActionResult("cancel", true, 0, new Dictionary<string, int>(), 0, 0, [], null, false));
+            await _editor.CancelAllDownloadsAsync(ct).ConfigureAwait(false);
+            return ToolResult<LibraryActionResult>.Ok(new LibraryActionResult("cancel", false, 0, new Dictionary<string, int>(), 0, 0, [], null, false));
+        }
+
+        if (request.MaxBytes is < 0)
+            return ToolResult<LibraryActionResult>.Err(new InvalidArgument("maxBytes", "must be 0 or more"));
+
+        LibraryItemPageQuery? filter = null;
+        if (QueryLibraryItemsTool.HasFilter(request.Filter))
+        {
+            var (query, error) = QueryLibraryItemsTool.Parse(request.Filter);
+            if (error is not null)
+                return ToolResult<LibraryActionResult>.Err(error);
+            filter = query;
+        }
+
+        return AddLibrarySourceTool.Result(await _editor.ActAsync(
+            new LibraryActionRequest(action, request.ItemIds, filter, request.DryRun == true, request.MaxBytes), ct).ConfigureAwait(false));
+    }
+}
+
+/// <summary>Removes a Library collection or source (MCP <c>remove_library_source</c>).</summary>
+public sealed class RemoveLibrarySourceTool(ILibraryEditor editor)
+{
+    /// <summary>The MCP tool name.</summary>
+    public const string Name = "remove_library_source";
+
+    private readonly ILibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+
+    /// <summary>Removes it, when <paramref name="confirm"/> is true.</summary>
+    public async Task<ToolResult<RemoveSourceResult>> InvokeAsync(string id, bool? confirm, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(id) || !Guid.TryParse(id.Trim(), out var target))
+            return ToolResult<RemoveSourceResult>.Err(new InvalidArgument("id", "expected a collection or source id from list_library_sources"));
+        if (confirm != true)
+            return ToolResult<RemoveSourceResult>.Err(new InvalidArgument("confirm", "must be true to remove; removing cannot be undone from here"));
+        return AddLibrarySourceTool.Result(await _editor.RemoveAsync(target, ct).ConfigureAwait(false));
+    }
+}
+
+/// <summary>
+/// Sets a Library source's Keep downloaded and Show on map options (MCP
+/// <c>set_library_source_options</c>, #809), and a SECOM source's identity (#883).
+/// </summary>
+public sealed class SetLibrarySourceOptionsTool(ILibraryEditor editor)
+{
+    /// <summary>The MCP tool name.</summary>
+    public const string Name = "set_library_source_options";
+
+    private readonly ILibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+
+    /// <summary>Sets the options given; options not given are left as they are.</summary>
+    public async Task<ToolResult<SetSourceOptionsResult>> InvokeAsync(
+        string id, bool? sync, bool? showOnMap, string? identity = null, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(id) || !Guid.TryParse(id.Trim(), out var target))
+            return ToolResult<SetSourceOptionsResult>.Err(new InvalidArgument("id", "expected a collection or source id from list_library_sources"));
+        return AddLibrarySourceTool.Result(await _editor.SetOptionsAsync(target, new SourceOptionsChange(sync, showOnMap, identity), ct).ConfigureAwait(false));
+    }
+}
+
+/// <summary>Waits for Library indexing, downloads and dataset opens (MCP <c>await_library_idle</c>).</summary>
+public sealed class AwaitLibraryIdleTool(ILibraryEditor editor)
+{
+    /// <summary>The MCP tool name.</summary>
+    public const string Name = "await_library_idle";
+
+    private readonly ILibraryEditor _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+
+    /// <summary>Waits.</summary>
+    public async Task<ToolResult<LibraryIdleResult>> InvokeAsync(int? timeoutMs, CancellationToken ct = default)
+    {
+        var timeout = TimeSpan.FromMilliseconds(Math.Clamp(
+            timeoutMs ?? (int)RefreshLibrarySourceTool.DefaultWait.TotalMilliseconds,
+            0,
+            (int)RefreshLibrarySourceTool.MaxWait.TotalMilliseconds));
+        return ToolResult<LibraryIdleResult>.Ok(await _editor.AwaitIdleAsync(timeout, ct).ConfigureAwait(false));
+    }
+}

@@ -1,0 +1,1243 @@
+using System.Globalization;
+using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Catalog;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
+using EncDotNet.S100.Datasets.Pipelines.Query;
+using EncDotNet.S100.Datasets.Pipelines.Sampling;
+using EncDotNet.S100.Datasets.S111;
+using EncDotNet.S100.Datasets.S111.Validation;
+using EncDotNet.S100.Hdf5;
+using EncDotNet.S100.Hdf5.PureHdf;
+using EncDotNet.S100.Interoperability;
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Coverage;
+using EncDotNet.S100.Portrayals;
+using EncDotNet.S100.Renderers.Skia;
+using EncDotNet.S100.Renderers.Skia.Scene;
+using EncDotNet.S100.Validation;
+using SkiaSharp;
+
+namespace EncDotNet.S100.Datasets.Pipelines;
+
+/// <summary>
+/// Pipeline processor for S-111 surface-currents datasets. Branches
+/// between dcf2 (regular grid → coverage + arrow layers) and dcf1/dcf3/dcf8
+/// positioned station/node series (station-arrow point layers; S-111 Edition
+/// 2.0.0 §10.2.2.6–10.2.2.9).
+/// </summary>
+public sealed class S111DatasetProcessor : IDatasetProcessor, ICoveragePortrayalSource, IHeadlessImageRenderer, ITimeAwareDatasetProcessor, IDisposable, ILoadedDatasetProjection, ICoverageSampler
+{
+    // dcf2 only
+    private readonly S111CoverageSource? _source;
+    private readonly S111PortrayalCatalogue? _catalogue;
+    private readonly PortrayalCatalogueProvider? _provider;
+    private readonly S111Dataset? _dataset;
+
+    // Station-series formats only
+    private readonly S111StationSeriesDataset? _stationSeries;
+    private readonly IReadOnlyList<DateTime> _stationTimes = Array.Empty<DateTime>();
+    private readonly Dictionary<string, SurfaceCurrentStation> _stationsById = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Last time-step selected via <see cref="RenderHeadlessAsync"/> for a station
+    /// series. Cached so <see cref="GetFeatureInfo"/> reports the sample
+    /// at the same time the rendered arrow is showing. <c>null</c> until
+    /// the first render.
+    /// </summary>
+    private DateTime? _stationSelectedTime;
+
+    /// <summary>
+    /// Prefix used on <c>MapsuiDisplayListRenderer.FeatureRefKey</c>
+    /// tags for station-series point features. The remainder is the
+    /// station identifier. <see cref="GetFeatureInfo"/> recognises this
+    /// prefix to route station picks back through this processor.
+    /// </summary>
+    internal const string StationFeatureRefPrefix = "station:";
+
+    private readonly ICrsTransformFactory _crsTransformFactory;
+    private readonly S111DatasetData _data;
+    private readonly string _fileName;
+
+    private readonly SemaphoreSlim _renderGate = new(1, 1);
+    private ValidationReport? _validationReport;
+    private bool _validationCached;
+
+    /// <summary>
+    /// For dcf2 (regular grid) with deferred value reads, the underlying
+    /// HDF5 file and stream are retained for the lifetime of the processor
+    /// so per-time-step <c>values</c> datasets can be read lazily on first
+    /// access. <see langword="null"/> for dcf1/dcf3/dcf8, whose values are read
+    /// eagerly and whose file is closed in the constructor.
+    /// </summary>
+    private readonly IHdf5File? _retainedHdf5;
+    private readonly Stream? _retainedStream;
+
+    /// <summary>
+    /// Guards reads against the shared, retained HDF5 stream. PureHDF reads
+    /// from a single stream are not concurrency-safe; lazy value factories
+    /// and any post-load access lock this object.
+    /// </summary>
+    private readonly object _hdfGate = new();
+    private bool _disposed;
+
+    /// <inheritdoc/>
+    public SpecRef Spec { get; }
+
+    /// <inheritdoc/>
+    public SpecVersionAssessment? VersionAssessment { get; }
+
+    /// <inheritdoc/>
+    public EncDotNet.S100.DataModel.AxisOrderAssessment? AxisOrder => _data switch
+    {
+        S111DatasetData.GriddedCoverage g => g.Dataset.AxisOrder,
+        S111DatasetData.StationSeries s => s.Dataset.AxisOrder,
+        _ => null,
+    };
+
+    private DatasetMetadata? _metadata;
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Derived from the already-parsed dataset: for gridded (dcf2) surfaces
+    /// from the coverage source's georeferencing metadata; for fixed-station
+    /// (dcf8) series from the union of station coordinates. No HDF5 payload is
+    /// re-read (issue #467, WS1).
+    /// </remarks>
+    public DatasetMetadata Metadata => _metadata ??= BuildMetadata();
+
+    /// <inheritdoc />
+    public LoadedDatasetData CreateLoadedData() =>
+        _source is not null ? new S111CoverageData(_source) : new S111StationSeriesData(_stationSeries!);
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Surface current speed and direction: at the grid node nearest the point
+    /// for a regular grid (dcf2), or at every station of a station series
+    /// (dcf8), at the step nearest the requested time.
+    /// </remarks>
+    public CoverageSiteSearch FindSites(CoverageSampleQuery query) => _source is not null
+        ? new S111GridSampler(_source).FindSites(query)
+        : new S111StationSampler(_stationSeries!).FindSites(query);
+
+    private DatasetMetadata BuildMetadata()
+    {
+        if (_source is not null && _dataset is not null)
+        {
+            // Native CRS units, labelled by HorizontalCrsEpsg (matches the
+            // reader's ReadMetadata probe); see DatasetMetadata.GetGeographicExtent.
+            var extent = _source.Metadata.NativeExtent;
+            return new DatasetMetadata
+            {
+                Spec = Spec,
+                Extent = new BoundingBox(
+                    extent.SouthLatitude,
+                    extent.WestLongitude,
+                    extent.NorthLatitude,
+                    extent.EastLongitude),
+                HorizontalCrsEpsg = _dataset.HorizontalCRS,
+            };
+        }
+
+        if (_stationSeries is { Stations.Count: > 0 } series)
+        {
+            double minLat = double.MaxValue, minLon = double.MaxValue;
+            double maxLat = double.MinValue, maxLon = double.MinValue;
+            foreach (var station in series.Stations)
+            {
+                if (station.Latitude < minLat) minLat = station.Latitude;
+                if (station.Latitude > maxLat) maxLat = station.Latitude;
+                if (station.Longitude < minLon) minLon = station.Longitude;
+                if (station.Longitude > maxLon) maxLon = station.Longitude;
+            }
+
+            return new DatasetMetadata
+            {
+                Spec = Spec,
+                Extent = new BoundingBox(minLat, minLon, maxLat, maxLon),
+                HorizontalCrsEpsg = series.HorizontalCRS,
+            };
+        }
+
+        return new DatasetMetadata { Spec = Spec };
+    }
+
+    /// <summary>Available forecast time steps in this dataset.</summary>
+    public IReadOnlyList<DateTime> AvailableTimes =>
+        _source?.AvailableTimes ?? _stationTimes;
+
+    /// <inheritdoc />
+    public DateTime? IssueTime => _data switch
+    {
+        S111DatasetData.GriddedCoverage g => S100IssueTime.Parse(g.Dataset.IssueDate, g.Dataset.IssueTime),
+        S111DatasetData.StationSeries s => S100IssueTime.Parse(s.Dataset.IssueDate, s.Dataset.IssueTime),
+        _ => null,
+    };
+
+    /// <summary>
+    /// S-111 surface currents are always model forecasts, whatever their files
+    /// are named, so the dataset is a run of the <c>S-111</c> product. The data
+    /// carries no run time of its own: a host takes it from the file name, or
+    /// falls back to the later <see cref="IssueTime"/>.
+    /// </summary>
+    public DatasetForecastRun ForecastRun { get; } = new("S-111");
+
+    /// <summary>
+    /// Initializes a new <see cref="S111DatasetProcessor"/> from the HDF5
+    /// dataset file at <paramref name="path"/>. For a regular-grid (dcf2)
+    /// dataset the file stays open and per-time-step values are decoded
+    /// lazily; station-series datasets are read in full and the file closed.
+    /// </summary>
+    /// <param name="path">Path to the S-111 HDF5 dataset file.</param>
+    /// <param name="catalogueManager">Supplies the S-111 portrayal catalogue.</param>
+    /// <param name="crsTransformFactory">
+    /// Creates the WGS84-to-native CRS transforms used when sampling a gridded
+    /// dataset for <see cref="GetCoverageInfo"/>.
+    /// </param>
+    /// <exception cref="S100DatasetSchemaException">
+    /// The file does not match the S-111 HDF5 schema. The exception carries the file name.
+    /// </exception>
+    /// <exception cref="S100DatasetNotSupportedException">
+    /// The file uses an S-111 feature this reader does not support. The exception carries the file name.
+    /// </exception>
+    public S111DatasetProcessor(
+        string path,
+        PortrayalCatalogueManager catalogueManager,
+        ICrsTransformFactory crsTransformFactory)
+        : this(File.OpenRead(path), Path.GetFileName(path), catalogueManager, crsTransformFactory)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new <see cref="S111DatasetProcessor"/> by reading
+    /// the HDF5 dataset <paramref name="relativePath"/> from
+    /// <paramref name="source"/>. Used by exchange-set bulk loading.
+    /// </summary>
+    /// <param name="source">The asset source (e.g. an exchange set) holding the dataset.</param>
+    /// <param name="relativePath">Source-relative path of the S-111 HDF5 dataset file.</param>
+    /// <param name="catalogueManager">Supplies the S-111 portrayal catalogue.</param>
+    /// <param name="crsTransformFactory">
+    /// Creates the WGS84-to-native CRS transforms used when sampling a gridded
+    /// dataset for <see cref="GetCoverageInfo"/>.
+    /// </param>
+    /// <exception cref="S100DatasetSchemaException">
+    /// The file does not match the S-111 HDF5 schema. The exception carries the file name.
+    /// </exception>
+    /// <exception cref="S100DatasetNotSupportedException">
+    /// The file uses an S-111 feature this reader does not support. The exception carries the file name.
+    /// </exception>
+    public S111DatasetProcessor(
+        IAssetSource source,
+        string relativePath,
+        PortrayalCatalogueManager catalogueManager,
+        ICrsTransformFactory crsTransformFactory)
+        : this(
+            AssetSourceHelpers.OpenSeekable(source, relativePath),
+            AssetSourceHelpers.GetFileName(relativePath),
+            catalogueManager,
+            crsTransformFactory)
+    {
+    }
+
+    private S111DatasetProcessor(
+        Stream datasetStream,
+        string fileName,
+        PortrayalCatalogueManager catalogueManager,
+        ICrsTransformFactory crsTransformFactory)
+    {
+        ArgumentNullException.ThrowIfNull(datasetStream);
+        _fileName = fileName;
+        _crsTransformFactory = crsTransformFactory;
+
+        // Open the file and request deferred value reads. The reader only
+        // defers for dcf2 (regular grid); dcf3/dcf8 station series ignore
+        // the flag and materialize fully, so their file can be closed
+        // immediately. For dcf2 we retain the file so per-time-step values
+        // are decoded lazily on first access (S-111 Edition 2.0.0 §10.2.6).
+        Stream? stream = datasetStream;
+        IHdf5File? hdf5 = null;
+        bool retain = false;
+        try
+        {
+            hdf5 = PureHdfFile.Open(stream);
+            try
+            {
+                _data = S111DatasetReader.ReadAny(
+                    hdf5,
+                    new S111ReadOptions
+                    {
+                        DeferValueReads = true,
+                        HdfSyncRoot = _hdfGate,
+                    });
+            }
+            catch (S100DatasetSchemaException ex) when (ex.File is null)
+            {
+                throw ex.WithFile(_fileName);
+            }
+            catch (S100DatasetNotSupportedException ex) when (ex.File is null)
+            {
+                throw ex.WithFile(_fileName);
+            }
+
+            retain = _data is S111DatasetData.GriddedCoverage;
+            if (retain)
+            {
+                _retainedHdf5 = hdf5;
+                _retainedStream = stream;
+            }
+        }
+        finally
+        {
+            if (!retain)
+            {
+                hdf5?.Dispose();
+                stream?.Dispose();
+            }
+        }
+
+        Spec = HdfDeclaredSpec.Resolve(_data.DeclaredProductSpecification, "S-111");
+
+        switch (_data)
+        {
+            case S111DatasetData.GriddedCoverage g:
+                _dataset = g.Dataset;
+                _source = new S111CoverageSource(g.Dataset);
+                _provider = catalogueManager.HasCatalogue("S-111")
+                    ? catalogueManager.GetProvider("S-111")
+                    : throw new InvalidOperationException(
+                        "S-111 portrayal catalogue is not registered. " +
+                        "Ensure the S-111 portrayal catalogue is loaded before opening S-111 datasets.");
+                _catalogue = new S111PortrayalCatalogue(_provider);
+                Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
+                break;
+            case S111DatasetData.StationSeries s:
+                _stationSeries = s.Dataset;
+                _stationTimes = ComputeStationUnionTimes(s.Dataset);
+                foreach (var station in s.Dataset.Stations)
+                {
+                    _stationsById[station.Identifier] = station;
+                }
+
+                // Every station-series DCF (1, 3, 8) is portrayed with the
+                // catalogue's SCAROW arrows, exactly like dcf2 (S-111 Ed 2.0.0
+                // §9.2.4, §9.2.9, §9.3.3), so the catalogue is required.
+                _provider = catalogueManager.HasCatalogue("S-111")
+                    ? catalogueManager.GetProvider("S-111")
+                    : throw new InvalidOperationException(
+                        "S-111 portrayal catalogue is not registered. " +
+                        "Ensure the S-111 portrayal catalogue is loaded before opening S-111 datasets.");
+                _catalogue = new S111PortrayalCatalogue(_provider);
+                Diagnostics.CatalogueResolutionDiagnostics.Report(this, Spec, _catalogue.CatalogueRef, "portrayal");
+                break;
+        }
+
+        VersionAssessment = SupportedSpecEditions.Assess(Spec, _catalogue?.CatalogueRef);
+    }
+
+    /// <summary>
+    /// Disposes the retained HDF5 file and stream, if any. For dcf2
+    /// (regular grid) datasets the file is kept open so per-time-step
+    /// values can be read lazily; this releases it.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        lock (_hdfGate)
+        {
+            _retainedHdf5?.Dispose();
+            _retainedStream?.Dispose();
+        }
+
+        _renderGate.Dispose();
+    }
+
+    /// <inheritdoc/>
+    public async Task<CoveragePortrayalResult> BuildCoveragePortrayalAsync(RenderContext? context = null, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        await _renderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_stationSeries is not null)
+            {
+                return await BuildStationSeriesAsync(_stationSeries, context, cancellationToken).ConfigureAwait(false);
+            }
+            return await BuildGriddedAsync(context, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _renderGate.Release();
+        }
+    }
+
+    private async Task<CoveragePortrayalResult> BuildGriddedAsync(RenderContext? context, CancellationToken cancellationToken)
+    {
+        var source = _source!;
+        var catalogue = _catalogue!;
+        var provider = _provider!;
+        await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
+
+        DateTime selectedTime;
+        if (context?.TimeStep is { } timeStep)
+        {
+            source.SelectTime(timeStep);
+            selectedTime = timeStep;
+        }
+        else
+        {
+            selectedTime = source.AvailableTimes[0];
+            source.SelectTime(selectedTime);
+        }
+
+        var metadata = source.Metadata;
+
+        // Full-grid WGS-84 frame for the sub-layer's extent. The grid extent is
+        // native CRS units, so it must be reprojected for a projected grid.
+        // Arrow thinning does not use it: the renderers thin per frame for the
+        // scale they draw at (SymbolThinning).
+        var viewport = CoverageExtent.FullGridViewport(metadata, _crsTransformFactory);
+
+        var pipeline = new PortrayalPipeline();
+
+        // Viewport-scoped sampling (issue #487).
+        int crs = _dataset!.HorizontalCRS ?? 4326;
+        ICrsTransform? wgs84ToNative = null;
+        if (context?.Viewport is not null && crs != 4326)
+        {
+            wgs84ToNative = _crsTransformFactory.Create("EPSG:4326", $"EPSG:{crs}");
+        }
+
+        var layer = await pipeline.ProcessAsync(
+            source,
+            catalogue,
+            viewport: context?.Viewport,
+            wgs84ToNative: wgs84ToNative,
+            mariner: context?.Mariner ?? MarinerSettings.Default,
+            cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        var styledLayer = (StyledCoverageLayer)layer;
+
+        // NOTE: pre-warm every catalogue symbol so the synchronous Mapsui
+        // arrow renderer's SymbolProvider lambda reads from a memory dict.
+        // The symbol set is small (one entry per S-111 speed band).
+        var symbolSvgs = await PreWarmProviderSymbolsAsync(provider, cancellationToken).ConfigureAwait(false);
+        var legend = SpeedLegend(catalogue, context, symbolSvgs);
+
+        var geoId = _dataset.GeographicIdentifier ?? _fileName;
+        var timeInfo = source.AvailableTimes.Count > 1
+            ? $", time: {selectedTime:u} ({source.AvailableTimes.Count} steps)"
+            : "";
+        var info = $"{geoId} — {metadata.GridMetadata.NumColumns}×{metadata.GridMetadata.NumRows} grid, CRS: EPSG:{crs}{timeInfo}";
+
+        // The bundled S-111 portrayal catalogue
+        // (content/S111/pc/Rules/select_arrow.xsl) defines arrow symbology
+        // only — no coverageFill on surfaceCurrentSpeed. S-111 therefore emits
+        // a single arrow sub-layer; rendering a synthetic colour-band heatmap
+        // on top of S-101 ENC was removed because it obscured the base chart.
+        //
+        // The bundled portrayal catalogue (S-111 Ed 2.0.0, SurfaceCurrent.xsl)
+        // declares the arrows with viewing group 33060, intra-product
+        // displayPlane="UnderRadar" and drawing priority 10. The arrows go on
+        // the DynamicArrows plane (S-98 Main §9.2.1 layer 6 puts surface
+        // currents among on-demand data but names no plane; see
+        // S98DisplayPlane.DynamicArrows). The station / mesh path uses the
+        // same plane and priority.
+        return new CoveragePortrayalResult
+        {
+            SubLayers = new CoverageSubLayerBase[]
+            {
+                new ArrowCoverageSubLayer
+                {
+                    LayerKey = "s111.arrows",
+                    LayerName = $"S-111 Arrows: {_fileName}",
+                    Plane = S98DisplayPlane.DynamicArrows,
+                    WithinPlanePriority = 10,
+                    SourceFeatureType = "s111.arrows",
+                    Coverage = styledLayer,
+                    Viewport = viewport,
+                    Palette = catalogue.ActivePalette,
+                    BaseSymbolScale = context?.SymbolScale ?? 1.0,
+                    SymbolProvider = symbolName =>
+                        symbolSvgs.TryGetValue(symbolName, out var svg) ? svg : null,
+                    FallbackExtent = new GeographicBounds(
+                        viewport.MinLongitude,
+                        viewport.MinLatitude,
+                        viewport.MaxLongitude,
+                        viewport.MaxLatitude),
+                    Legend = legend,
+                    LegendCaption = S111PortrayalCatalogue.LegendCaption,
+                },
+            },
+            Spec = Spec,
+            SourceDatasetId = _fileName,
+            Info = info,
+            LayerNames = new[] { "s111.arrows" },
+            // The whole grid's WGS-84 frame: model current arrows give way to
+            // S-111 inside it (S-98 rule R-111-WX-B, issue #1228).
+            CoverageExtent = new GeographicBounds(
+                viewport.MinLongitude,
+                viewport.MinLatitude,
+                viewport.MaxLongitude,
+                viewport.MaxLatitude),
+            CellMinimumDisplayScale = GridDisplayScale.FromGrid(metadata.GridMetadata, geographic: crs == 4326),
+        };
+    }
+
+    /// <summary>
+    /// Renders the surface-current portrayal to a standalone
+    /// <see cref="SKBitmap"/> through the headless, Mapsui-free Skia path. The
+    /// selected time step is taken from <see cref="RenderContext.TimeStep"/>,
+    /// defaulting to the first available step.
+    /// </summary>
+    /// <param name="widthPixels">Output bitmap width in pixels.</param>
+    /// <param name="heightPixels">Output bitmap height in pixels.</param>
+    /// <param name="context">Optional render context (palette, time step, symbol scale).</param>
+    /// <param name="background">Optional background fill; defaults to opaque white.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A newly allocated bitmap owned by the caller.</returns>
+    public async Task<SKBitmap> RenderHeadlessAsync(
+        int widthPixels,
+        int heightPixels,
+        RenderContext? context = null,
+        RgbaColor? background = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(widthPixels);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heightPixels);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (_stationSeries is { } stationSeries)
+        {
+            var portrayal = await BuildStationSeriesAsync(stationSeries, context, cancellationToken).ConfigureAwait(false);
+            var glyphLayer = portrayal.SubLayers.OfType<GlyphCoverageSubLayer>().Single();
+            if (glyphLayer.Extent is not { } glyphExtent)
+                throw new InvalidOperationException("The S-111 station portrayal has no geographic extent.");
+
+            return PointGlyphHeadlessAdapter.Render(
+                glyphLayer,
+                glyphExtent,
+                widthPixels,
+                heightPixels,
+                background ?? new RgbaColor(255, 255, 255, 255),
+                context?.Basemap ?? BasemapKind.None);
+        }
+
+        if (_source is null || _catalogue is null || _provider is null)
+            throw new InvalidOperationException("The S-111 dataset has no renderable data source.");
+
+        var source = _source;
+        var catalogue = _catalogue;
+        var provider = _provider;
+        await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
+
+        if (context?.TimeStep is { } timeStep)
+            source.SelectTime(timeStep);
+        else
+            source.SelectTime(source.AvailableTimes[0]);
+
+        var styledLayer = (StyledCoverageLayer)await new PortrayalPipeline()
+            .ProcessAsync(source, catalogue, mariner: context?.Mariner ?? MarinerSettings.Default, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        var symbolSvgs = await PreWarmProviderSymbolsAsync(provider, cancellationToken).ConfigureAwait(false);
+
+        var arrowRenderer = new SkiaCoverageArrowRenderer
+        {
+            Palette = catalogue.ActivePalette,
+            BaseSymbolScale = context?.SymbolScale ?? 1.0,
+            SymbolProvider = symbolName =>
+                symbolSvgs.TryGetValue(symbolName, out var svg) ? svg : null,
+        };
+
+        var nativeToWgs84 = _crsTransformFactory.Create(
+            styledLayer.Georeferencer.CRS, "EPSG:4326");
+
+        // Frame the render with the grid's WGS-84 envelope: the native extent
+        // is metres for a projected grid.
+        var extent = source.Metadata.GetGeographicExtent(_crsTransformFactory);
+        var renderer = new CoverageHeadlessRenderer
+        {
+            Background = background ?? new RgbaColor(255, 255, 255, 255),
+            ArrowRenderer = arrowRenderer,
+            NativeToWgs84 = nativeToWgs84,
+        };
+
+        return renderer.Render(
+            styledLayer,
+            extent.WestLongitude,
+            extent.EastLongitude,
+            extent.SouthLatitude,
+            extent.NorthLatitude,
+            widthPixels,
+            heightPixels,
+            context?.Basemap ?? BasemapKind.None);
+    }
+
+    // ---- station-series rendering --------------------------------------
+
+    /// <summary>
+    /// Projects each station/node to a single point feature with an arrow
+    /// glyph oriented along <c>DirectionsDegreesTrue</c> (clockwise from true
+    /// north) and scaled by speed. Every DCF uses the catalogue's SCAROW symbol
+    /// and scale for the speed band — the same arrows as the dcf2 grid path.
+    /// Nodes with a null speed or direction
+    /// get no glyph (Annex H Rule 2). The sub-layer carries point-by-point
+    /// thinning parameters so the renderers draw a legible, non-overlapping
+    /// subset at every zoom. Rebuilt per <see cref="RenderContext.TimeStep"/>.
+    /// </summary>
+    private async Task<CoveragePortrayalResult> BuildStationSeriesAsync(S111StationSeriesDataset ds, RenderContext? context, CancellationToken cancellationToken)
+    {
+        DateTime selectedTime;
+        if (context?.TimeStep is { } timeStep)
+        {
+            selectedTime = timeStep;
+        }
+        else
+        {
+            selectedTime = ds.MinTime ?? DateTime.UtcNow;
+        }
+
+        _stationSelectedTime = selectedTime;
+
+        // Every DCF uses the catalogue's SCAROW arrows: S-111 Ed 2.0.0 §9.2.4
+        // requires the same arrow for the same speed "regardless of the source
+        // of the data", and the 2.0.0 portrayal catalogue treats every DCF as a
+        // coverage (select_arrow.xsl header).
+        var catalogue = _catalogue!;
+        await catalogue.SwitchPaletteAsync(context?.Palette ?? PaletteType.Day, cancellationToken).ConfigureAwait(false);
+        var symbolScheme = catalogue.ResolveSymbolScheme(context?.Mariner ?? MarinerSettings.Default);
+        var resolvedSvgs = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        var prewarmedSvgs = await PreWarmProviderSymbolsAsync(_provider!, cancellationToken).ConfigureAwait(false);
+
+        double baseSymbolScale = context?.SymbolScale ?? 1.0;
+        var nativeToMerc = _crsTransformFactory.Create($"EPSG:{ds.HorizontalCRS ?? 4326}", "EPSG:3857");
+
+        var glyphs = new List<PointGlyph>(ds.Stations.Count);
+        double mercMinX = double.PositiveInfinity, mercMinY = double.PositiveInfinity;
+        double mercMaxX = double.NegativeInfinity, mercMaxY = double.NegativeInfinity;
+
+        foreach (var station in ds.Stations)
+        {
+            double mx, my;
+            if (nativeToMerc.IsIdentity)
+            {
+                mx = station.Longitude;
+                my = station.Latitude;
+            }
+            else
+            {
+                (mx, my) = nativeToMerc.Transform(station.Longitude, station.Latitude);
+            }
+
+            if (mx < mercMinX) mercMinX = mx;
+            if (mx > mercMaxX) mercMaxX = mx;
+            if (my < mercMinY) mercMinY = my;
+            if (my > mercMaxY) mercMaxY = my;
+
+            int idx = station.NearestTimeIndex(selectedTime);
+            var speed = station.SpeedsKnots[idx];
+            var direction = station.DirectionsDegreesTrue[idx];
+
+            // S-111 Annex H Rule 2: no arrow where speed or direction is null
+            // (the -9999 fill value, or NaN).
+            if (!(speed >= 0) || !(direction >= 0) || float.IsInfinity(speed))
+                continue;
+
+            var attributes = new Dictionary<string, object>(StringComparer.Ordinal)
+            {
+                ["StationId"] = station.Identifier,
+                ["SpeedKnots"] = speed,
+                ["DirectionDegreesTrue"] = direction,
+                ["SampleTime"] = station.TimeAt(idx),
+                ["Latitude"] = station.Latitude,
+                ["Longitude"] = station.Longitude,
+            };
+
+            // PC-faithful arrow: the band's SCAROW symbol, scaled exactly as
+            // the catalogue says (0.40 / 0.20 × speed / 2.60, i.e. Eqn 9.1)
+            // times the user's symbol scale — the same as the dcf2 grid path.
+            var band = symbolScheme.Resolve(speed, station.Latitude);
+            if (band is null)
+                continue;
+
+            if (!resolvedSvgs.TryGetValue(band.SymbolRef, out var svgSource))
+            {
+                svgSource = prewarmedSvgs.TryGetValue(band.SymbolRef, out var rawSvg)
+                    ? "svg-content://" + SvgProcessor.Process(rawSvg, catalogue.ActivePalette)
+                    : null;
+                resolvedSvgs[band.SymbolRef] = svgSource;
+            }
+
+            if (svgSource is null)
+                continue;
+
+            glyphs.Add(new PointGlyph
+            {
+                MercatorX = mx,
+                MercatorY = my,
+                FeatureRefTag = StationFeatureRefPrefix + station.Identifier,
+                Attributes = attributes,
+                Symbol = PointGlyphSymbol.Svg,
+                SvgSource = svgSource,
+                SymbolScale = band.ScaleFor(speed) * baseSymbolScale,
+                // Degrees true is clockwise from north, as is PointGlyph.Rotation.
+                Rotation = symbolScheme.RotationFor(direction),
+                ThinningPriority = speed,
+            });
+        }
+
+        var extent = ds.Stations.Count == 0
+            ? (MercatorBounds?)null
+            : new MercatorBounds(mercMinX, mercMinY, mercMaxX, mercMaxY);
+
+        var dcfLabel = ds.DataCodingFormat == 3 ? "nodes" : "stations";
+        var info = $"{ds.GeographicIdentifier ?? _fileName} — {ds.Stations.Count} {dcfLabel}, " +
+                   $"time: {selectedTime:u}";
+
+        return new CoveragePortrayalResult
+        {
+            // S-111 station / mesh arrows (dcf1/dcf3/dcf8). The catalogue's
+            // SurfaceCurrent instruction is the same for every DCF, and S-111
+            // §9.2.9 / §9.3.3 portray these with the grid's arrows, so they
+            // share the dcf2 grid path's plane and priority. The layer key
+            // stays "s111.stations" for the pick router and layer UI.
+            SubLayers = new CoverageSubLayerBase[]
+            {
+                new GlyphCoverageSubLayer
+                {
+                    LayerKey = "s111.stations",
+                    LayerName = $"S-111: {_fileName}",
+                    Plane = S98DisplayPlane.DynamicArrows,
+                    WithinPlanePriority = 10,
+                    SourceFeatureType = "s111.stations",
+                    Glyphs = glyphs,
+                    Legend = new CatalogueLegendBuilder(catalogue.ActivePalette, name => prewarmedSvgs.TryGetValue(name, out var svg) ? svg : null)
+                        .SymbolBands(symbolScheme),
+                    LegendCaption = S111PortrayalCatalogue.LegendCaption,
+                    Extent = extent,
+                    // Point-by-point thinning (S-111 §9.3.2, allowed for
+                    // ungeorectified grids by §9.3.3) with the same arrow
+                    // length and Rmax as the dcf2 grid path, so a mesh and a
+                    // grid of the same density read the same.
+                    Thinning = new GlyphThinning
+                    {
+                        SymbolLengthPixelsPerScale =
+                            symbolScheme.NominalSymbolLengthMillimetres * SymbolThinning.PixelsPerMillimetre,
+                        MaxSymbolToSpacingRatio = symbolScheme.MaxSymbolToSpacingRatio,
+                    },
+                },
+            },
+            Spec = Spec,
+            SourceDatasetId = _fileName,
+            Info = info,
+        };
+    }
+
+    private static IReadOnlyList<DateTime> ComputeStationUnionTimes(S111StationSeriesDataset ds)
+    {
+        var set = new SortedSet<DateTime>();
+        foreach (var s in ds.Stations)
+        {
+            for (int i = 0; i < s.NumberOfTimes; i++)
+            {
+                set.Add(DateTime.SpecifyKind(s.TimeAt(i), DateTimeKind.Utc));
+            }
+        }
+        return set.ToArray();
+    }
+
+    /// <summary>
+    /// Resolves dcf8 station picks routed via the Mapsui
+    /// <c>MapsuiDisplayListRenderer.FeatureRefKey</c> tag the
+    /// arrow layer attaches to each station point. Refs are formatted as
+    /// <c>"station:&lt;id&gt;"</c> (see <see cref="StationFeatureRefPrefix"/>).
+    /// For dcf2 gridded datasets and other refs this returns <c>null</c>;
+    /// callers should fall back to <see cref="GetCoverageInfo"/>.
+    /// </summary>
+    public FeatureInfo? GetFeatureInfo(string featureRef)
+    {
+        ArgumentNullException.ThrowIfNull(featureRef);
+
+        if (_stationSeries is null) return null;
+        if (!featureRef.StartsWith(StationFeatureRefPrefix, StringComparison.Ordinal))
+            return null;
+
+        var id = featureRef[StationFeatureRefPrefix.Length..];
+        if (!_stationsById.TryGetValue(id, out var station))
+            return null;
+
+        return BuildStationFeatureInfo(station, _stationSelectedTime);
+    }
+
+    private FeatureInfo BuildStationFeatureInfo(SurfaceCurrentStation station, DateTime? time)
+    {
+        var selectedTime = time ?? station.StartTime;
+        int idx = station.NearestTimeIndex(selectedTime);
+        var speed = station.SpeedsKnots[idx];
+        var direction = station.DirectionsDegreesTrue[idx];
+        var sampleTime = station.TimeAt(idx);
+
+        return new FeatureInfo
+        {
+            FeatureRef = StationFeatureRefPrefix + station.Identifier,
+            FeatureType = "SurfaceCurrent",
+            FeatureTypeName = "Surface Current (Station)",
+            StationSeries = BuildStationSeriesSnapshot(station),
+            Attributes = new List<PickAttribute>
+            {
+                new()
+                {
+                    Code = "stationIdentification",
+                    Name = "Station",
+                    RawValue = station.Identifier,
+                },
+                new()
+                {
+                    Code = "stationPosition",
+                    Name = "Position",
+                    RawValue = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "{0:0.######},{1:0.######}",
+                        station.Latitude, station.Longitude),
+                    DisplayValue = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "{0:0.####}°, {1:0.####}°",
+                        station.Latitude, station.Longitude),
+                },
+                new()
+                {
+                    Code = "surfaceCurrentSpeed",
+                    Name = "Current Speed",
+                    RawValue = speed.ToString("0.##########", CultureInfo.InvariantCulture),
+                    DisplayValue = $"{speed.ToString("0.##", CultureInfo.InvariantCulture)} kn",
+                },
+                new()
+                {
+                    Code = "surfaceCurrentDirection",
+                    Name = "Current Direction (going to)",
+                    RawValue = direction.ToString("0.##########", CultureInfo.InvariantCulture),
+                    DisplayValue = $"{direction.ToString("0.#", CultureInfo.InvariantCulture)}°",
+                },
+                new()
+                {
+                    Code = "timePoint",
+                    Name = "Time",
+                    RawValue = sampleTime.ToString("u", CultureInfo.InvariantCulture),
+                    DateTimeValue = sampleTime,
+                },
+                new()
+                {
+                    Code = "sampleCount",
+                    Name = "Sample Count",
+                    RawValue = station.NumberOfTimes.ToString(CultureInfo.InvariantCulture),
+                },
+                new()
+                {
+                    Code = "timeRange",
+                    Name = "Time Range",
+                    RawValue = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "{0:u}/{1:u}",
+                        station.StartTime, station.EndTime),
+                    DisplayValue = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "{0:u} → {1:u}",
+                        station.StartTime, station.EndTime),
+                    DateTimeRangeValue = (station.StartTime, station.EndTime),
+                },
+            },
+        };
+    }
+
+    private static StationTimeSeriesSnapshot BuildStationSeriesSnapshot(SurfaceCurrentStation station)
+    {
+        var times = new DateTime[station.NumberOfTimes];
+        for (var i = 0; i < station.NumberOfTimes; i++)
+            times[i] = station.TimeAt(i);
+
+        return new StationTimeSeriesSnapshot
+        {
+            StationId = station.Identifier,
+            StationName = station.Identifier,
+            Latitude = station.Latitude,
+            Longitude = station.Longitude,
+            Times = times,
+            Channels = new[]
+            {
+                new StationTimeSeriesChannel
+                {
+                    Key = "surfaceCurrentSpeed",
+                    DisplayName = "Surface Current Speed",
+                    Unit = "kn",
+                    Values = station.SpeedsKnots,
+                    FillValue = -9999f,
+                },
+                new StationTimeSeriesChannel
+                {
+                    Key = "surfaceCurrentDirection",
+                    DisplayName = "Surface Current Direction",
+                    Unit = "°",
+                    Values = station.DirectionsDegreesTrue,
+                    FillValue = -9999f,
+                },
+            },
+        };
+    }
+
+    /// <summary>
+    /// Samples the surface-current grid at the supplied geographic
+    /// position and time. <paramref name="time"/> is matched to the
+    /// nearest available time step; when <c>null</c> the first
+    /// available step is used. The reported direction is "going to"
+    /// in degrees true (S-111 Edition 2.0.0 §10.2).
+    /// </summary>
+    public FeatureInfo? GetCoverageInfo(double latitude, double longitude, DateTime? time)
+    {
+        if (_stationSeries is not null)
+        {
+            return GetStationInfo(_stationSeries, latitude, longitude, time);
+        }
+
+        var source = _source!;
+        if (source.AvailableTimes.Count == 0)
+            return null;
+
+        var selectedTime = time ?? source.AvailableTimes[0];
+        source.SelectTime(selectedTime);
+
+        var sample = CoveragePickHelper.Sample(source, _crsTransformFactory, latitude, longitude);
+        if (sample is null)
+            return null;
+
+        var speed = sample.Values.TryGetValue("surfaceCurrentSpeed", out var s) ? s : sample.NoDataValue;
+        var direction = sample.Values.TryGetValue("surfaceCurrentDirection", out var dir) ? dir : sample.NoDataValue;
+
+        var speedUnit = source.Metadata.ValueFields
+            .FirstOrDefault(f => string.Equals(f.Name, "surfaceCurrentSpeed", StringComparison.Ordinal))
+            ?.Units ?? "knots";
+
+        var attrs = new List<PickAttribute>
+        {
+            new()
+            {
+                Code = "surfaceCurrentSpeed",
+                Name = "Current Speed",
+                RawValue = speed == sample.NoDataValue
+                    ? "NoData"
+                    : speed.ToString("0.##########", CultureInfo.InvariantCulture),
+                DisplayValue = speed == sample.NoDataValue
+                    ? "—"
+                    : $"{speed.ToString("0.##", CultureInfo.InvariantCulture)} {speedUnit}",
+            },
+            new()
+            {
+                Code = "surfaceCurrentDirection",
+                Name = "Current Direction (going to)",
+                RawValue = direction == sample.NoDataValue
+                    ? "NoData"
+                    : direction.ToString("0.##########", CultureInfo.InvariantCulture),
+                DisplayValue = direction == sample.NoDataValue
+                    ? "—"
+                    : $"{direction.ToString("0.#", CultureInfo.InvariantCulture)}°",
+            },
+            new()
+            {
+                Code = "timePoint",
+                Name = "Time",
+                RawValue = selectedTime.ToString("u", CultureInfo.InvariantCulture),
+                DateTimeValue = selectedTime,
+            },
+        };
+
+        return new FeatureInfo
+        {
+            FeatureRef = $"({sample.Row},{sample.Col})",
+            FeatureType = "SurfaceCurrent",
+            FeatureTypeName = "Surface Current",
+            Attributes = attrs,
+        };
+    }
+
+    private FeatureInfo? GetStationInfo(
+        S111StationSeriesDataset ds,
+        double latitude,
+        double longitude,
+        DateTime? time)
+    {
+        if (ds.Stations.Count == 0) return null;
+
+        SurfaceCurrentStation? best = null;
+        double bestSqDeg = double.PositiveInfinity;
+        foreach (var s in ds.Stations)
+        {
+            var dLat = s.Latitude - latitude;
+            var dLon = (s.Longitude - longitude) * Math.Cos(latitude * Math.PI / 180.0);
+            var d = dLat * dLat + dLon * dLon;
+            if (d < bestSqDeg)
+            {
+                bestSqDeg = d;
+                best = s;
+            }
+        }
+        if (best is null) return null;
+
+        var selectedTime = time ?? best.StartTime;
+        int idx = best.NearestTimeIndex(selectedTime);
+        var speed = best.SpeedsKnots[idx];
+        var direction = best.DirectionsDegreesTrue[idx];
+        var sampleTime = best.TimeAt(idx);
+
+        return new FeatureInfo
+        {
+            FeatureRef = best.Identifier,
+            FeatureType = "SurfaceCurrent",
+            FeatureTypeName = "Surface Current (Station)",
+            Attributes = new List<PickAttribute>
+            {
+                new()
+                {
+                    Code = "stationIdentification",
+                    Name = "Station",
+                    RawValue = best.Identifier,
+                },
+                new()
+                {
+                    Code = "surfaceCurrentSpeed",
+                    Name = "Current Speed",
+                    RawValue = speed.ToString("0.##########", CultureInfo.InvariantCulture),
+                    DisplayValue = $"{speed.ToString("0.##", CultureInfo.InvariantCulture)} kn",
+                },
+                new()
+                {
+                    Code = "surfaceCurrentDirection",
+                    Name = "Current Direction (going to)",
+                    RawValue = direction.ToString("0.##########", CultureInfo.InvariantCulture),
+                    DisplayValue = $"{direction.ToString("0.#", CultureInfo.InvariantCulture)}°",
+                },
+                new()
+                {
+                    Code = "timePoint",
+                    Name = "Time",
+                    RawValue = sampleTime.ToString("u", CultureInfo.InvariantCulture),
+                    DateTimeValue = sampleTime,
+                },
+            },
+        };
+    }
+
+    /// <summary>
+    /// Runs the V-3 S-111 validation rule pack
+    /// (<see cref="S111SurfaceCurrentRules.Default"/>) against the
+    /// gridded <see cref="S111Dataset"/> view of this processor's
+    /// dataset, or returns a single-finding
+    /// <c>S111-PROJ-UNSUPPORTED</c> report when the underlying dataset
+    /// is the station-series (<see cref="S111DatasetData.StationSeries"/>)
+    /// variant (dcf 3 ungeorectified grid or dcf 8 time series at fixed
+    /// stations, both of which the rule pack does not cover).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Per <c>docs/design/non-gml-validation.md</c> §5.1 and §5.3,
+    /// this override surfaces reader-time projection diagnostics under
+    /// reserved rule ids:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><description><c>S111-PROJ-SCHEMA</c> — defensive try/catch for
+    /// <see cref="S100DatasetSchemaException"/>. The realistic failure
+    /// mode is the constructor itself throwing, so this only fires if
+    /// a future reader change moves schema validation later in the
+    /// pipeline.</description></item>
+    /// <item><description>Station-series datasets are checked directly for
+    /// sample shape, explicit timestamp ordering, and speed/direction ranges
+    /// because the gridded V-3 rule pack operates on
+    /// <see cref="S111Dataset"/>.</description></item>
+    /// </list>
+    /// <para>
+    /// Validation is a pure function of the parsed dataset; the
+    /// report is cached after the first call (mirroring the V-1
+    /// S-102 and V-2 S-104 processors).
+    /// </para>
+    /// </remarks>
+    public ValidationReport? Validate()
+    {
+        if (!_validationCached)
+        {
+            _validationReport = AxisOrderFindings.Append(ComputeValidationReport(), AxisOrder, "S-111");
+            _validationCached = true;
+        }
+        return _validationReport;
+    }
+
+    private ValidationReport? ComputeValidationReport()
+    {
+        switch (_data)
+        {
+            case S111DatasetData.GriddedCoverage g:
+                try
+                {
+                    return S111SurfaceCurrentRules.Default.Run(g.Dataset);
+                }
+                catch (S100DatasetSchemaException ex)
+                {
+                    return BuildSchemaSurrogateReport(ex);
+                }
+                catch (S100DatasetNotSupportedException ex)
+                {
+                    return BuildUnsupportedSurrogateReport(ex);
+                }
+
+            case S111DatasetData.StationSeries s:
+                return ValidateStationSeries(s.Dataset);
+
+            default:
+                return null;
+        }
+    }
+
+    private static ValidationReport BuildSchemaSurrogateReport(S100DatasetSchemaException ex)
+    {
+        var details = new List<string> { $"GroupPath='{ex.GroupPath}'" };
+        if (!string.IsNullOrEmpty(ex.AttributeOrDataset))
+            details.Add($"AttributeOrDataset='{ex.AttributeOrDataset}'");
+        if (!string.IsNullOrEmpty(ex.SpecReference))
+            details.Add($"SpecReference='{ex.SpecReference}'");
+
+        var finding = new ValidationFinding
+        {
+            RuleId = "S111-PROJ-SCHEMA",
+            Severity = ValidationSeverity.Error,
+            Message = $"S111 reader raised S100DatasetSchemaException: {ex.Message} ({string.Join(", ", details)}).",
+            RelatedFeatureId = ex.GroupPath,
+        };
+
+        return new ValidationReport(
+            [finding],
+            RulesEvaluated: 1,
+            RulesWithFindings: 1);
+    }
+
+    private static ValidationReport BuildUnsupportedSurrogateReport(S100DatasetNotSupportedException ex)
+    {
+        var details = new List<string>();
+        if (!string.IsNullOrEmpty(ex.Feature))
+            details.Add($"Feature='{ex.Feature}'");
+        if (!string.IsNullOrEmpty(ex.SpecReference))
+            details.Add($"SpecReference='{ex.SpecReference}'");
+
+        var finding = new ValidationFinding
+        {
+            RuleId = "S111-PROJ-UNSUPPORTED",
+            Severity = ValidationSeverity.Error,
+            Message = $"S111 reader raised S100DatasetNotSupportedException: {ex.Message} ({string.Join(", ", details)}).",
+        };
+
+        return new ValidationReport(
+            [finding],
+            RulesEvaluated: 1,
+            RulesWithFindings: 1);
+    }
+
+    private static ValidationReport ValidateStationSeries(S111StationSeriesDataset dataset)
+    {
+        var findings = new List<ValidationFinding>();
+        int rulesEvaluated = dataset.Stations.Any(station => station.SampleTimes.Count > 0) ? 4 : 3;
+
+        foreach (var station in dataset.Stations)
+        {
+            if (station.NumberOfTimes != station.SpeedsKnots.Length ||
+                station.NumberOfTimes != station.DirectionsDegreesTrue.Length ||
+                (station.SampleTimes.Count > 0 && station.NumberOfTimes != station.SampleTimes.Count))
+            {
+                findings.Add(new ValidationFinding
+                {
+                    RuleId = "S111-STATION-SHAPE",
+                    Severity = ValidationSeverity.Error,
+                    Message = $"Station '{station.Identifier}' has inconsistent timestamp, speed, or direction counts.",
+                    RelatedFeatureId = station.Identifier,
+                });
+            }
+
+            if (station.SampleTimes.Count > 0 &&
+                station.SampleTimes.Zip(station.SampleTimes.Skip(1)).Any(pair => pair.First >= pair.Second))
+            {
+                findings.Add(new ValidationFinding
+                {
+                    RuleId = "S111-STATION-TIME",
+                    Severity = ValidationSeverity.Error,
+                    Message = $"Station '{station.Identifier}' explicit timestamps are not strictly increasing.",
+                    RelatedFeatureId = station.Identifier,
+                });
+            }
+
+            if (station.SpeedsKnots.Any(speed =>
+                speed != S111CoverageSource.FillValue && (!float.IsFinite(speed) || speed < 0)))
+            {
+                findings.Add(new ValidationFinding
+                {
+                    RuleId = "S111-STATION-SPEED",
+                    Severity = ValidationSeverity.Error,
+                    Message = $"Station '{station.Identifier}' contains a negative or non-finite surface-current speed.",
+                    RelatedFeatureId = station.Identifier,
+                });
+            }
+
+            if (station.DirectionsDegreesTrue.Any(direction =>
+                direction != S111CoverageSource.FillValue &&
+                (!float.IsFinite(direction) || direction < 0 || direction >= 360)))
+            {
+                findings.Add(new ValidationFinding
+                {
+                    RuleId = "S111-STATION-DIRECTION",
+                    Severity = ValidationSeverity.Error,
+                    Message = $"Station '{station.Identifier}' contains a surface-current direction outside 0 to less than 360 degrees.",
+                    RelatedFeatureId = station.Identifier,
+                });
+            }
+        }
+
+        return new ValidationReport(
+            findings,
+            RulesEvaluated: rulesEvaluated,
+            RulesWithFindings: findings.Select(finding => finding.RuleId).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    /// <summary>
+    /// The speed band legend: one arrow per band of the catalogue's
+    /// <c>select_arrow.xsl</c> table, slowest first, in the catalogue's active palette.
+    /// </summary>
+    private static IReadOnlyList<LegendEntry> SpeedLegend(
+        S111PortrayalCatalogue catalogue, RenderContext? context, Dictionary<string, string> symbolSvgs) =>
+        new CatalogueLegendBuilder(catalogue.ActivePalette, name => symbolSvgs.TryGetValue(name, out var svg) ? svg : null)
+            .SymbolBands(catalogue.ResolveSymbolScheme(context?.Mariner ?? MarinerSettings.Default));
+
+    /// <summary>
+    /// Pre-warms every symbol declared by the given portrayal catalogue
+    /// provider into a name → SVG-content dict so the synchronous arrow
+    /// renderer's <c>SymbolProvider</c> lambda can resolve symbols without
+    /// async I/O. Bounded to the catalogue's symbol manifest, which is small.
+    /// </summary>
+    private static async Task<Dictionary<string, string>> PreWarmProviderSymbolsAsync(
+        PortrayalCatalogueProvider provider, CancellationToken cancellationToken)
+    {
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in provider.Catalogue.Symbols)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                using var stream = await provider.FetchAssetAsync(item, "Symbols", cancellationToken).ConfigureAwait(false);
+                using var reader = new StreamReader(stream);
+                dict[item.Id] = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Skip symbols that fail to load; the renderer treats missing
+                // entries the same as before — no symbol rendered for that name.
+            }
+        }
+        return dict;
+    }
+}

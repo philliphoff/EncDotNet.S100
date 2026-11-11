@@ -1,0 +1,234 @@
+using EncDotNet.S100.ExchangeSets;
+using EncDotNet.S100.Viewer.Services.Notifications;
+
+namespace EncDotNet.S100.Viewer.Services;
+
+/// <summary>
+/// Per-dataset progress snapshot reported by
+/// <see cref="IExchangeSetService.OpenAsync"/> as it works through a
+/// catalogue. Reports are made on a background thread; the UI must
+/// marshal back to the dispatcher before mutating bound state.
+/// </summary>
+/// <param name="SourcePath">The folder or .zip path the user opened.</param>
+/// <param name="Total">Number of catalogued datasets discovered. Zero
+/// before the catalogue has been parsed.</param>
+/// <param name="Completed">Number of datasets the loader has dispatched
+/// (success + failure). Always &lt;= <paramref name="Total"/>.</param>
+/// <param name="Failed">Number of datasets that have errored or been
+/// skipped (unsupported product specification).</param>
+/// <param name="CurrentDataset">Catalogue-relative path of the dataset
+/// being routed right now, or <c>null</c> at the start/end.</param>
+public readonly record struct ExchangeSetProgress(
+    string SourcePath,
+    int Total,
+    int Completed,
+    int Failed,
+    string? CurrentDataset);
+
+/// <summary>
+/// Final summary of an <see cref="IExchangeSetService.OpenAsync"/> run.
+/// Always returned (even on cancellation) so the caller can surface a
+/// partial-success / partial-failure banner without having to subscribe
+/// to progress.
+/// </summary>
+public sealed class ExchangeSetOpenResult
+{
+    /// <summary>The folder or .zip path that was opened.</summary>
+    public required string SourcePath { get; init; }
+
+    /// <summary>Total datasets in the catalogue.</summary>
+    public int Total { get; init; }
+
+    /// <summary>Datasets successfully dispatched to a processor. For a large
+    /// exchange set opened on the lazy (deferred) path, no cell bytes are
+    /// dispatched during the open, so this instead reports the number of cells
+    /// <em>registered</em> for on-demand loading — a non-zero success count the
+    /// open flow (e.g. the MCP <c>open_dataset</c> tool) treats as "opened".
+    /// See issue #458.</summary>
+    public int Loaded { get; init; }
+
+    /// <summary>Datasets skipped because their product identifier is not
+    /// supported (no per-spec processor available).</summary>
+    public int SkippedUnsupported { get; init; }
+
+    /// <summary>Datasets the catalogue parser flagged as a hard failure
+    /// (e.g. missing file, IO error). Always 0 today; reserved for
+    /// future per-dataset failure capture.</summary>
+    public int Failed { get; init; }
+
+    /// <summary>True when the user cancelled before all datasets were
+    /// dispatched.</summary>
+    public bool Cancelled { get; init; }
+
+    /// <summary>True when the catalogue could not be located / parsed.</summary>
+    public bool CatalogueNotFound { get; init; }
+
+    /// <summary>Top-level fatal error (catalogue parse failure or
+    /// unexpected exception). Empty when none.</summary>
+    public string? FailureMessage { get; init; }
+
+    /// <summary>Human-readable per-dataset skip messages (currently all
+    /// "unsupported product spec" entries).</summary>
+    public IReadOnlyList<string> SkipMessages { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Union of every catalogued dataset's
+    /// <see cref="DatasetDiscoveryMetadata.BoundingBox"/> in EPSG:4326
+    /// (the catalogue's declared CRS). <c>null</c> when no dataset
+    /// supplied a bounding box. The viewer reprojects this to web
+    /// mercator to fit the map after a successful bulk load.
+    /// </summary>
+    public BoundingBox? UnionBoundingBox { get; init; }
+
+    /// <summary>
+    /// When set, the non-failure terminal state (success / partial /
+    /// loaded-with-errors) the caller should drive the shared progress
+    /// notification to <em>after</em> the loaded cells have been framed and
+    /// the map has painted them — so the "loaded" notification never
+    /// precedes the charts becoming visible. <c>null</c> for outcomes whose
+    /// terminal state is driven immediately by
+    /// <see cref="IExchangeSetService.OpenAsync"/> (cancellation, empty set,
+    /// catalogue-not-found, and hard failures), which have nothing to
+    /// render and therefore no reason to wait.
+    /// </summary>
+    internal ExchangeSetTerminalInfo? PendingTerminal { get; init; }
+}
+
+/// <summary>
+/// A deferred terminal notification state for an exchange-set open whose
+/// content must be rendered before the notification settles. Carried on
+/// <see cref="ExchangeSetOpenResult.PendingTerminal"/> so the view layer
+/// (which owns the map framing and the render-activity monitor) can drive
+/// the shared progress notification to this state only once the cells are
+/// visible.
+/// </summary>
+/// <param name="Severity">Terminal severity (Success / Warning).</param>
+/// <param name="Title">Terminal notification title.</param>
+/// <param name="Message">Terminal notification body.</param>
+internal sealed record ExchangeSetTerminalInfo(
+    NotificationSeverity Severity,
+    string Title,
+    string Message);
+
+/// <summary>
+/// Opens an S-100 exchange set (a folder containing a
+/// <c>CATALOG.XML</c> or a <c>.zip</c> archive containing one) and
+/// dispatches every catalogued dataset through the existing dataset
+/// loader. Each successfully-routed dataset becomes a regular
+/// <see cref="EncDotNet.S100.Viewer.ViewModels.DatasetEntry"/> in the
+/// Datasets panel and renders through the same code path as a plain
+/// file load.
+/// </summary>
+internal interface IExchangeSetService
+{
+    /// <summary>
+    /// Opens an exchange set rooted at <paramref name="folderOrZipPath"/>,
+    /// which may be either a directory (with a top-level
+    /// <c>CATALOG.XML</c>) or a <c>.zip</c> archive (with the same).
+    /// </summary>
+    /// <param name="folderOrZipPath">Local path to the folder or ZIP archive.</param>
+    /// <param name="progress">Optional progress sink. Reports are raised
+    /// once after the catalogue is parsed and once per dataset thereafter.</param>
+    /// <param name="cancellationToken">Honored between datasets; the loader
+    /// stops dispatching new datasets but does not interrupt one that is
+    /// already loading.</param>
+    /// <param name="notification">
+    /// Optional progress notification handle (created by the caller) that the
+    /// service drives to its terminal state — success, partial, cancelled, or
+    /// error — in place, instead of surfacing a separate notification. When
+    /// <see langword="null"/>, the service surfaces its own notification for
+    /// terminal/failure states.
+    /// </param>
+    /// <param name="onFramingReady">
+    /// Optional callback invoked <em>once</em> as soon as the catalogue's
+    /// union bounding box is known — immediately after the catalogue (S-100)
+    /// or base cells (S-57) are parsed, and <em>before</em> any dataset has
+    /// finished loading. This lets the caller frame the viewport up front so
+    /// that incremental per-dataset paints land in the correctly-framed view
+    /// (issue #448). Not invoked when no dataset declares a bounding box
+    /// (e.g. loose-cell folders); callers should keep a debounce fallback for
+    /// that case. Invoked synchronously on whatever thread /
+    /// synchronization context the catalogue-parse continuation resumes on —
+    /// the caller's context, since the parse is awaited with
+    /// <c>ConfigureAwait(true)</c>. Callers that cannot guarantee that context
+    /// is the UI thread should marshal before touching view state. The same
+    /// bounding box is also returned on
+    /// <see cref="ExchangeSetOpenResult.UnionBoundingBox"/>.
+    /// </param>
+    /// <returns>A summary that is always non-null (even on cancellation
+    /// or fatal error).</returns>
+    Task<ExchangeSetOpenResult> OpenAsync(
+        string folderOrZipPath,
+        IProgress<ExchangeSetProgress>? progress = null,
+        CancellationToken cancellationToken = default,
+        INotificationHandle? notification = null,
+        Action<BoundingBox>? onFramingReady = null);
+
+    /// <summary>
+    /// Opens a chosen subset of an exchange set (or of a folder of loose
+    /// datasets) — for example the datasets picked in the Library panel
+    /// (issue #655) — rather than every catalogue entry.
+    /// </summary>
+    /// <remarks>
+    /// Items are registered under one tracked set per root (reusing the set
+    /// and its Datasets-panel header when that root is already open) and
+    /// de-duplicated by relative path. With <paramref name="defer"/> they are
+    /// handed to the viewport-driven lazy loader; otherwise they are loaded
+    /// now. Never throws for per-item problems.
+    /// </remarks>
+    /// <param name="request">The root and the items to open.</param>
+    /// <param name="defer">True to load the items as they come into view.</param>
+    /// <param name="cancellationToken">Cancels the open.</param>
+    /// <returns>The entries for the requested items, in request order.</returns>
+    Task<IReadOnlyList<ViewModels.DatasetEntry>> OpenSubsetAsync(
+        ExchangeSetSubsetRequest request,
+        bool defer,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Closes <paramref name="entries"/> (#809): they stop loading as you pan
+    /// and leave the Datasets panel; a set left empty is released.
+    /// </summary>
+    void CloseEntries(IReadOnlyList<ViewModels.DatasetEntry> entries) { }
+}
+
+/// <summary>A subset of one exchange set (or loose-dataset folder) to open.</summary>
+/// <param name="RootPath">The exchange-set folder, ZIP, or loose-dataset folder.</param>
+/// <param name="CatalogueRelativePath">
+/// The catalogue within <paramref name="RootPath"/> (<c>CATALOG.XML</c>,
+/// <c>CATALOG.031</c>, possibly under a prefix), or <see langword="null"/> for
+/// loose datasets.
+/// </param>
+/// <param name="Items">The datasets to open.</param>
+/// <param name="LibrarySource">
+/// The Library source the datasets come from, so its sets share one header
+/// (#809); <see langword="null"/> for a set of its own.
+/// </param>
+internal sealed record ExchangeSetSubsetRequest(
+    string RootPath,
+    string? CatalogueRelativePath,
+    IReadOnlyList<ExchangeSetSubsetItem> Items,
+    EncDotNet.S100.Collections.Library.LibrarySourceLabel? LibrarySource = null);
+
+/// <summary>One dataset in an <see cref="ExchangeSetSubsetRequest"/>.</summary>
+/// <param name="RelativePath">The base dataset file, relative to the root (forward slashes).</param>
+/// <param name="UpdateRelativePaths">Sequential update files in application order.</param>
+/// <param name="ProductSpec">The product specification (e.g. <c>"S-57"</c>, <c>"S-101"</c>).</param>
+/// <param name="DisplayName">The name shown in the Datasets panel.</param>
+/// <param name="GeographicBounds">The footprint used for lazy-load culling.</param>
+/// <param name="MinimumDisplayScale">The coarsest display scale, if known.</param>
+/// <param name="MaximumDisplayScale">The finest display scale, if known.</param>
+/// <param name="NotForNavigation">Whether the source's catalogue marks the dataset not for navigation.</param>
+/// <param name="CompilationScale">The catalogue's compilation scale denominator, if known.</param>
+/// <param name="Coverage">The catalogue's coverage polygons, if known; used to defer covered coarse cells (#1265).</param>
+internal sealed record ExchangeSetSubsetItem(
+    string RelativePath,
+    IReadOnlyList<string> UpdateRelativePaths,
+    string ProductSpec,
+    string DisplayName,
+    BoundingBox? GeographicBounds = null,
+    int? MinimumDisplayScale = null,
+    int? MaximumDisplayScale = null,
+    bool NotForNavigation = false,
+    int? CompilationScale = null,
+    EncDotNet.S100.Collections.GeoCoverage? Coverage = null);

@@ -1,0 +1,81 @@
+<!--
+  Styles shared by the Add online catalogue wizard and the Add collection
+  manifest dialog (and the step views nested in them): muted and status text,
+  link buttons, radio cards, bordered panels and skeletons.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Muted secondary text, and the status colours. -->
+    <Style Selector="TextBlock.muted">
+        <Setter Property="Foreground" Value="{DynamicResource MutedColor}" />
+    </Style>
+    <Style Selector="TextBlock.warning">
+        <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
+    </Style>
+    <Style Selector="TextBlock.destructive">
+        <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+    </Style>
+    <Style Selector="TextBlock.success">
+        <Setter Property="Foreground" Value="{DynamicResource SuccessColor}" />
+    </Style>
+
+    <!-- Text-only link buttons ("Change", "Clear", "Select all", "Terms & notices ↗"). -->
+    <Style Selector="Button.link">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="2,0" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="FontSize" Value="12.5" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <ContentPresenter Content="{TemplateBinding Content}" Padding="{TemplateBinding Padding}"
+                                  Background="Transparent" Foreground="{TemplateBinding Foreground}" />
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="Button.link:pointerover">
+        <Setter Property="Opacity" Value="0.8" />
+    </Style>
+    <Style Selector="Button.link.danger">
+        <Setter Property="Foreground" Value="{DynamicResource DestructiveColor}" />
+    </Style>
+
+    <!-- Radio cards (scope and target): bordered, tinted with the accent when chosen. -->
+    <Style Selector="Border.wizardCard">
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="12,10" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.wizardCard.chosen">
+        <Setter Property="BorderBrush" Value="{DynamicResource WizardSelectedBorderBrush}" />
+        <Setter Property="Background" Value="{DynamicResource WizardSelectedBrush}" />
+    </Style>
+    <Style Selector="RadioButton.cardRadio">
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="MinHeight" Value="0" />
+    </Style>
+    <Style Selector=":is(Control).inactive">
+        <Setter Property="Opacity" Value="0.5" />
+    </Style>
+    <Style Selector=":is(Control).dimmed">
+        <Setter Property="Opacity" Value="0.6" />
+    </Style>
+
+    <!-- A bordered panel (the facet panel, the URL panel, the single-entry note). -->
+    <Style Selector="Border.wizardPanel">
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+        <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+    <Style Selector="Border.skeleton">
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Background" Value="{DynamicResource MutedBackgroundColor}" />
+    </Style>
+</Styles>

@@ -1,0 +1,121 @@
+namespace EncDotNet.S100.Datasets.S104;
+
+/// <summary>
+/// Root data model for an S-104 Water Level dataset encoded as fixed-station
+/// time series in data coding format 1 or 8 (S-100 Part 10c §10.2.1).
+/// </summary>
+/// <remarks>
+/// Station-series encodings are structurally different from the gridded dcf2 path
+/// modelled by <see cref="S104Dataset"/>: instead of a 2-D grid of
+/// values per time-step, each station carries an independent 1-D series
+/// of <c>(height, trend)</c> samples plus its own start/end timestamps
+/// and sampling interval. The two shapes share the S-104 Feature
+/// Catalogue's <c>WaterLevel</c> feature; the distinction is encoding,
+/// not taxonomy.
+/// </remarks>
+public sealed class S104StationSeriesDataset
+{
+    /// <summary>EPSG code of the horizontal coordinate reference system.</summary>
+    public int? HorizontalCRS { get; init; }
+
+    /// <summary>
+    /// The S-100 <c>verticalDatum</c> code declared on the dataset root, or
+    /// <c>null</c> when the attribute is absent (S-104 Ed 2.0.0 §10.2.4;
+    /// S-100 register codelist, source identifier 996). Resolve to a label
+    /// with <c>EncDotNet.S100.DataModel.VerticalDatums.GetLabel</c>.
+    /// </summary>
+    public int? VerticalDatum { get; init; }
+
+    /// <summary>Epoch of the coordinate reference system (e.g. "G1762").</summary>
+    public string? Epoch { get; init; }
+
+    /// <summary>A geographic description of the dataset coverage area.</summary>
+    public string? GeographicIdentifier { get; init; }
+
+    /// <summary>Issue date of the dataset (ISO 8601).</summary>
+    public string? IssueDate { get; init; }
+
+    /// <summary>
+    /// Issue time of the dataset as written (<c>issueTime</c>, e.g. <c>135227Z</c>
+    /// or <c>13:45:43.63</c>); <see cref="Pipelines.S100IssueTime"/> combines it with <see cref="IssueDate"/>.
+    /// </summary>
+    public string? IssueTime { get; init; }
+
+    /// <summary>Reference to an associated metadata file.</summary>
+    public string? Metadata { get; init; }
+
+    /// <summary>
+    /// The raw <c>productSpecification</c> string declared on the dataset
+    /// root (e.g. <c>"INT.IHO.S-104.2.0.0"</c>), or <c>null</c> when the
+    /// attribute is absent. S-100 Part 10c §10.2.1. Carried on the dataset
+    /// itself so consumers holding only the dataset (coverage sources, catalog
+    /// payloads) can report its declared edition.
+    /// </summary>
+    public string? DeclaredProductSpecification { get; init; }
+
+    /// <summary>
+    /// Data coding format — <c>1</c> for time-major fixed stations or
+    /// <c>8</c> for station-major fixed stations (S-100 Part 10c §10.2.1).
+    /// </summary>
+    public int DataCodingFormat { get; init; } = 8;
+
+    /// <summary>
+    /// Method or source used to compute water level values (e.g. model
+    /// name or "astronomical prediction").
+    /// </summary>
+    public string? MethodWaterLevelProduct { get; init; }
+
+    /// <summary>
+    /// Threshold (in metres) used by viewer portrayal to distinguish
+    /// "above" vs. "below" water-level reference. Read from the root-level
+    /// <c>waterLevelTrendThreshold</c> attribute when present (UKHO
+    /// astronomical-prediction files supply it); <c>null</c> when absent.
+    /// </summary>
+    public double? WaterLevelTrendThreshold { get; init; }
+
+    /// <summary>
+    /// The outcome of the dataset-level axis-order check on the station
+    /// positions (issue #650), or <c>null</c> when there are no positions.
+    /// When it is <see cref="EncDotNet.S100.DataModel.AxisOrderOutcome.Swapped"/>
+    /// the reader has already swapped every station's latitude and longitude.
+    /// </summary>
+    public EncDotNet.S100.DataModel.AxisOrderAssessment? AxisOrder { get; init; }
+
+    /// <summary>Time-series stations contained in the dataset.</summary>
+    public required IReadOnlyList<WaterLevelStation> Stations { get; init; }
+
+    /// <summary>
+    /// Earliest sample timestamp across all stations, or <c>null</c>
+    /// when <see cref="Stations"/> is empty.
+    /// </summary>
+    public DateTime? MinTime { get; init; }
+
+    /// <summary>
+    /// Latest sample timestamp across all stations, or <c>null</c>
+    /// when <see cref="Stations"/> is empty.
+    /// </summary>
+    public DateTime? MaxTime { get; init; }
+}
+
+/// <summary>
+/// Discriminated union over the two structurally different S-104
+/// dataset shapes the reader emits — gridded coverage (dcf2) and
+/// per-station time series (dcf1/dcf8). See <see cref="S104DatasetReader.ReadAny"/>.
+/// </summary>
+public abstract record S104DatasetData
+{
+    /// <summary>
+    /// The raw <c>productSpecification</c> string declared on the dataset
+    /// root (e.g. <c>"INT.IHO.S-104.2.0.0"</c>), or <c>null</c> when the
+    /// attribute is absent. S-100 Part 10c §10.2.1. Surfaced so the pipeline
+    /// can report the dataset's declared edition and warn on a version
+    /// mismatch (see <c>SpecVersionAssessment</c>).
+    /// </summary>
+    public string? DeclaredProductSpecification { get; init; }
+
+    /// <summary>S-104 dcf2 — regularly-gridded water-level coverage.</summary>
+    public sealed record GriddedCoverage(S104Dataset Dataset) : S104DatasetData;
+
+    /// <summary>S-104 dcf1 or dcf8 — time series at fixed stations.</summary>
+    public sealed record StationSeries(S104StationSeriesDataset Dataset) : S104DatasetData;
+}

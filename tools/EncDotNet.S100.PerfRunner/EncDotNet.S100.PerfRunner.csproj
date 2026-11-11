@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <!-- Trim analyzers run on every build (issue #764); the tool is not published trimmed. -->
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EncDotNet.S100.PerfRunner.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The settle-run manifest is written here and read by PerfReport; one source file keeps them in step. -->
+    <Compile Include="..\EncDotNet.S100.PerfReport\SettleReport.cs" Link="SettleReport.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Diagnostics.NETCore.Client" />
+    <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="OpenTelemetry" />
+    <PackageReference Include="Spectre.Console.Cli" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Core\EncDotNet.S100.Core.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Crs.ProjNet\EncDotNet.S100.Crs.ProjNet.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Datasets.Pipelines\EncDotNet.S100.Datasets.Pipelines.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Diagnostics.Export\EncDotNet.S100.Diagnostics.Export.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.ExchangeSets\EncDotNet.S100.ExchangeSets.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Hdf5.PureHdf\EncDotNet.S100.Hdf5.PureHdf.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Renderers.Mapsui\EncDotNet.S100.Renderers.Mapsui.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Renderers.Skia\EncDotNet.S100.Renderers.Skia.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Scripting.LuaCSharp\EncDotNet.S100.Scripting.LuaCSharp.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Scripting.MoonSharp\EncDotNet.S100.Scripting.MoonSharp.csproj" />
+    <ProjectReference Include="..\..\src\EncDotNet.S100.Specifications\EncDotNet.S100.Specifications.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,1142 @@
+using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.Depth;
+using EncDotNet.S100.Viewer.ViewModels;
+
+namespace EncDotNet.S100.Viewer.Tests;
+
+public class PickReportViewModelTests
+{
+    private static PickAttribute Leaf(string code, string value, string? name = null) =>
+        new() { Code = code, Name = name, RawValue = value, DisplayValue = null, Children = [] };
+
+    [Fact]
+    public void SetPick_PopulatesAllFieldsAndMarksHasPick()
+    {
+        var vm = new PickReportViewModel();
+
+        vm.SetPick(
+            featureType: "DepthArea",
+            featureTypeName: "Depth Area",
+            featureRef: "42",
+            datasetFileName: "test.000",
+            productSpec: "S-101",
+            attributes: new[]
+            {
+                Leaf("DRVAL1", "10.0", "Depth Range Value 1"),
+                Leaf("DRVAL2", "20.0", "Depth Range Value 2"),
+            });
+
+        Assert.True(vm.HasPick);
+        Assert.Equal("DepthArea", vm.FeatureType);
+        Assert.Equal("Depth Area", vm.FeatureTypeName);
+        Assert.Equal("42", vm.FeatureRef);
+        Assert.Equal("test.000", vm.DatasetFileName);
+        Assert.Equal("S-101", vm.ProductSpec);
+        Assert.Equal(2, vm.Attributes.Count);
+        Assert.True(vm.HasAttributes);
+        Assert.Equal("DRVAL1", vm.Attributes[0].Code);
+        Assert.Equal("Depth Range Value 1", vm.Attributes[0].DisplayName);
+        Assert.Equal("10.0", vm.Attributes[0].RawValue);
+    }
+
+    [Fact]
+    public void SetPick_LiftsResolvedFileReferenceIntoTextCards()
+    {
+        var vm = new PickReportViewModel();
+
+        var fileRef = new PickAttribute
+        {
+            Code = "fileReference",
+            Name = "File Reference",
+            RawValue = "CAUTION.TXT",
+            DisplayValue = null,
+            ExternalText = "ANCHORING RESTRICTED\n\nBeware of strong currents.",
+            Children = [],
+        };
+
+        vm.SetPick("CautionArea", "Caution Area", "7", "test.000", "S-101",
+            new[] { Leaf("objectName", "Caution Area"), fileRef });
+
+        // The resolved file reference is pulled out of the attribute table…
+        var row = Assert.Single(vm.Attributes);
+        Assert.Equal("objectName", row.Code);
+
+        // …and surfaced as a referenced-text card with a promoted heading.
+        Assert.True(vm.HasTextCards);
+        var card = Assert.Single(vm.TextCards);
+        Assert.Equal("ANCHORING RESTRICTED", card.Title);
+        Assert.Equal("CAUTION.TXT", card.FileName);
+        Assert.Equal("Beware of strong currents.", card.Body);
+        Assert.Equal(fileRef.ExternalText, card.CopyText);
+    }
+
+    [Fact]
+    public void SetPick_UnresolvedFileReferenceStaysInAttributeTable()
+    {
+        var vm = new PickReportViewModel();
+
+        var fileRef = new PickAttribute
+        {
+            Code = "fileReference",
+            Name = "File Reference",
+            RawValue = "MISSING.TXT",
+            DisplayValue = null,
+            Children = [],
+        };
+
+        vm.SetPick("CautionArea", "Caution Area", "7", "test.000", "S-101", new[] { fileRef });
+
+        Assert.False(vm.HasTextCards);
+        Assert.Empty(vm.TextCards);
+        var row = Assert.Single(vm.Attributes);
+        Assert.Equal("MISSING.TXT", row.RawValue);
+    }
+
+    [Fact]
+    public void Clear_EmptiesTextCards()
+    {
+        var vm = new PickReportViewModel();
+        var fileRef = new PickAttribute
+        {
+            Code = "fileReference",
+            RawValue = "CAUTION.TXT",
+            ExternalText = "Hazard.\nDetails.",
+            Children = [],
+        };
+        vm.SetPick("CautionArea", null, "7", "test.000", "S-101", new[] { fileRef });
+        Assert.True(vm.HasTextCards);
+
+        vm.Clear();
+
+        Assert.False(vm.HasTextCards);
+        Assert.Empty(vm.TextCards);
+    }
+
+    [Fact]
+    public void SetPick_WithEmptyAttributes_ReportsHasAttributesFalse()
+    {
+        var vm = new PickReportViewModel();
+
+        vm.SetPick(
+            featureType: "Authority",
+            featureTypeName: null,
+            featureRef: "auth.1",
+            datasetFileName: "container.gml",
+            productSpec: "S-127",
+            attributes: System.Array.Empty<PickAttribute>());
+
+        Assert.True(vm.HasPick);
+        Assert.False(vm.HasAttributes);
+        Assert.Empty(vm.Attributes);
+    }
+
+    [Fact]
+    public void SetPick_PreservesReferencedTextThroughReformat()
+    {
+        var vm = new PickReportViewModel();
+
+        var fileRef = new PickAttribute
+        {
+            Code = "fileReference",
+            Name = "File Reference",
+            RawValue = "CAUTION.TXT",
+            DisplayValue = null,
+            ExternalText = "Beware of strong currents.",
+            Children = [],
+        };
+
+        vm.SetPick("CautionArea", "Caution Area", "7", "test.000", "S-101", new[] { fileRef });
+
+        Assert.Empty(vm.Attributes);
+        var card = Assert.Single(vm.TextCards);
+        Assert.Equal("CAUTION.TXT", card.FileName);
+        Assert.Equal("Beware of strong currents.", card.Title);
+        Assert.Equal("Beware of strong currents.", card.CopyText);
+    }
+
+    [Fact]
+    public void SetPick_ReplacesPreviousPickContents()
+    {
+        var vm = new PickReportViewModel();
+
+        vm.SetPick("First", null, "1", "a.gml", "S-101", new[] { Leaf("X", "1") });
+        vm.SetPick("Second", null, "2", "b.gml", "S-124", new[] { Leaf("Y", "2") });
+
+        Assert.Equal("Second", vm.FeatureType);
+        Assert.Equal("2", vm.FeatureRef);
+        Assert.Equal("b.gml", vm.DatasetFileName);
+        Assert.Equal("S-124", vm.ProductSpec);
+        Assert.Single(vm.Attributes);
+        Assert.Equal("Y", vm.Attributes[0].Code);
+    }
+
+    [Fact]
+    public void Clear_ResetsAllState()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPick("DepthArea", "Depth Area", "42", "test.000", "S-101",
+            new[] { Leaf("DRVAL1", "10.0") });
+
+        vm.Clear();
+
+        Assert.False(vm.HasPick);
+        Assert.False(vm.HasAttributes);
+        Assert.Null(vm.FeatureType);
+        Assert.Null(vm.FeatureTypeName);
+        Assert.Null(vm.FeatureRef);
+        Assert.Null(vm.DatasetFileName);
+        Assert.Null(vm.ProductSpec);
+        Assert.Empty(vm.Attributes);
+    }
+
+    [Fact]
+    public void ClearCommand_InvokesClear()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPick("X", null, "1", null, null, System.Array.Empty<PickAttribute>());
+
+        Assert.True(vm.HasPick);
+        vm.ClearCommand.Execute(null);
+
+        Assert.False(vm.HasPick);
+    }
+
+    [Fact]
+    public void SetPicks_WithLocation_PopulatesLocationFields()
+    {
+        var vm = new PickReportViewModel();
+
+        vm.SetPicks(
+            new[]
+            {
+                new PickHit { FeatureType = "DepthArea", FeatureRef = "42" },
+            },
+            System.Array.Empty<DynamicPickHit>(),
+            new PickLocation(47.601234, -122.334567));
+
+        Assert.True(vm.HasLocation);
+        Assert.Equal(new PickLocation(47.601234, -122.334567), vm.Location);
+        Assert.False(string.IsNullOrEmpty(vm.LocationDisplay));
+        Assert.True(vm.CopyLocationCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void SetPicks_WithoutLocation_LeavesLocationEmpty()
+    {
+        var vm = new PickReportViewModel();
+
+        vm.SetPicks(new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } });
+
+        Assert.False(vm.HasLocation);
+        Assert.Null(vm.Location);
+        Assert.Null(vm.LocationDisplay);
+        Assert.False(vm.CopyLocationCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void SetPicks_WithLocationDepth_ExposesSeriesAndFlag()
+    {
+        var vm = new PickReportViewModel();
+
+        var depth = MakeDepthViewModel();
+
+        vm.SetPicks(
+            new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } },
+            System.Array.Empty<DynamicPickHit>(),
+            new PickLocation(51.9035, 4.395),
+            depth);
+
+        Assert.True(vm.HasLocationDepthSeries);
+        Assert.Same(depth, vm.LocationDepthSeries);
+    }
+
+    [Fact]
+    public void SetPicks_ReplacingDepth_DisposesPriorSeries()
+    {
+        var vm = new PickReportViewModel();
+
+        var first = MakeDepthViewModel();
+        vm.SetPicks(
+            new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "1" } },
+            System.Array.Empty<DynamicPickHit>(),
+            new PickLocation(51.9, 4.4),
+            first);
+
+        var second = MakeDepthViewModel();
+        vm.SetPicks(
+            new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "2" } },
+            System.Array.Empty<DynamicPickHit>(),
+            new PickLocation(51.9, 4.4),
+            second);
+
+        Assert.True(first.IsDisposed);
+        Assert.Same(second, vm.LocationDepthSeries);
+    }
+
+    [Fact]
+    public void Clear_DisposesAndClearsDepthSeries()
+    {
+        var vm = new PickReportViewModel();
+
+        var depth = MakeDepthViewModel();
+        vm.SetPicks(
+            new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } },
+            System.Array.Empty<DynamicPickHit>(),
+            new PickLocation(51.9, 4.4),
+            depth);
+
+        vm.Clear();
+
+        Assert.False(vm.HasLocationDepthSeries);
+        Assert.Null(vm.LocationDepthSeries);
+        Assert.True(depth.IsDisposed);
+    }
+
+    private static DepthOverTimeViewModel MakeDepthViewModel()
+    {
+        var result = new LocationDepthResult(
+            new BaseDepthResult(10.0, BaseDepthSource.Bathymetry, null, 23, null),
+            null,
+            new[] { new DepthOverTimePoint(new DateTime(2030, 6, 1, 0, 0, 0, DateTimeKind.Utc), 10.0) },
+            null);
+
+        return new DepthOverTimeViewModel(
+            result,
+            "51.9 N, 4.4 E",
+            51.9,
+            4.4,
+            DepthUnit.Metres,
+            safetyDepthMetres: null,
+            globalTime: null,
+            timeFormat: null,
+            themeService: null);
+    }
+
+    [Fact]
+    public void Clear_ResetsLocation()
+    {
+        var vm = new PickReportViewModel();
+
+        vm.SetPicks(
+            new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } },
+            System.Array.Empty<DynamicPickHit>(),
+            new PickLocation(10.0, 20.0));
+
+        vm.Clear();
+
+        Assert.False(vm.HasLocation);
+        Assert.Null(vm.Location);
+        Assert.False(vm.CopyLocationCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void SetPicks_SeaIceWithEggCode_SurfacesEggViewModel()
+    {
+        var vm = new PickReportViewModel();
+        var egg = IceEggCodeBuilder.Build("70", "[30, 30, 10, 4, 4]", "[91, 87, 85, 95, 99]", "[5, 4, 4, 4, 5]");
+
+        vm.SetPicks(new[]
+        {
+            new PickHit
+            {
+                FeatureType = "SeaIce",
+                FeatureRef = "seaice.0007",
+                ProductSpec = "S-411",
+                EggCode = egg,
+            },
+        });
+
+        Assert.True(vm.HasEggCode);
+        Assert.NotNull(vm.SelectedEggCode);
+        Assert.Equal("70", vm.SelectedEggCode!.TotalConcentration!.Text);
+        Assert.Equal(3, vm.SelectedEggCode.PartialConcentrations.Count);
+        Assert.Equal(new[] { "95", "99" }, vm.SelectedEggCode.TrailingStagesOfDevelopment.Select(v => v.Text));
+        Assert.Equal(new[] { "4", "4" }, vm.SelectedEggCode.TrailingPartialConcentrations.Select(v => v.Text));
+    }
+
+    [Fact]
+    public void SetPicks_FeatureWithoutEggCode_HasNoEggCode()
+    {
+        var vm = new PickReportViewModel();
+
+        vm.SetPicks(new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } });
+
+        Assert.False(vm.HasEggCode);
+        Assert.Null(vm.SelectedEggCode);
+    }
+
+    [Fact]
+    public void Clear_ResetsEggCode()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPicks(new[]
+        {
+            new PickHit
+            {
+                FeatureType = "SeaIce",
+                FeatureRef = "seaice.0007",
+                ProductSpec = "S-411",
+                EggCode = IceEggCodeBuilder.Build("70", "[30, 30]", "[91, 87]", "[5, 4]"),
+            },
+        });
+
+        vm.Clear();
+
+        Assert.False(vm.HasEggCode);
+        Assert.Null(vm.SelectedEggCode);
+    }
+
+    [Fact]
+    public void CopyLocationCommand_RaisesRequestWithDecimalDegrees()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPicks(
+            new[] { new PickHit { FeatureType = "DepthArea", FeatureRef = "42" } },
+            System.Array.Empty<DynamicPickHit>(),
+            new PickLocation(47.601234, -122.334567));
+
+        string? copied = null;
+        vm.CopyLocationRequested += (_, text) => copied = text;
+
+        vm.CopyLocationCommand.Execute(null);
+
+        Assert.Equal("47.601234, -122.334567", copied);
+    }
+
+    [Fact]
+    public void HasPickPropertyChanged_FiresOnSetPickAndClear()
+    {
+        var vm = new PickReportViewModel();
+        var changed = new List<string?>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PickReportViewModel.HasPick))
+                changed.Add(e.PropertyName);
+        };
+
+        vm.SetPick("X", null, "1", null, null, System.Array.Empty<PickAttribute>());
+        vm.Clear();
+
+        Assert.Equal(2, changed.Count);
+    }
+
+    private static PickHit Hit(string type, string typeName, string id, params PickAttribute[] attrs) =>
+        new()
+        {
+            FeatureType = type,
+            FeatureTypeName = typeName,
+            FeatureRef = id,
+            DatasetFileName = "ds.gml",
+            ProductSpec = "S-101",
+            Attributes = attrs,
+        };
+
+    [Fact]
+    public void SetPicks_MultipleHits_PopulatesAndSelectsFirst()
+    {
+        var vm = new PickReportViewModel();
+
+        var hits = new[]
+        {
+            Hit("DepthArea", "Depth Area", "1", Leaf("DRVAL1", "10")),
+            Hit("LandArea", "Land Area", "2", Leaf("CATLAR", "1")),
+            Hit("BuoyLateral", "Lateral Buoy", "3"),
+        };
+
+        vm.SetPicks(hits);
+
+        Assert.True(vm.HasPick);
+        Assert.True(vm.HasMultipleHits);
+        Assert.Equal(3, vm.Hits.Count);
+        Assert.Same(hits[0], vm.SelectedHit);
+        Assert.Equal("DepthArea", vm.FeatureType);
+        Assert.Equal("Depth Area", vm.FeatureTypeName);
+        Assert.Equal("1", vm.FeatureRef);
+        Assert.Single(vm.Attributes);
+    }
+
+    [Fact]
+    public void SetPicks_SingleHit_HasMultipleHitsFalse()
+    {
+        var vm = new PickReportViewModel();
+
+        vm.SetPicks(new[] { Hit("DepthArea", "Depth Area", "1") });
+
+        Assert.True(vm.HasPick);
+        Assert.False(vm.HasMultipleHits);
+        Assert.Single(vm.Hits);
+    }
+
+    [Fact]
+    public void SetPicks_EmptyList_ClearsPanel()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPicks(new[] { Hit("X", null!, "1") });
+        Assert.True(vm.HasPick);
+
+        vm.SetPicks(System.Array.Empty<PickHit>());
+
+        Assert.False(vm.HasPick);
+        Assert.False(vm.HasMultipleHits);
+        Assert.Empty(vm.Hits);
+        Assert.Null(vm.SelectedHit);
+    }
+
+    [Fact]
+    public void SelectedHit_Change_UpdatesDetailFields()
+    {
+        var vm = new PickReportViewModel();
+        var hits = new[]
+        {
+            Hit("DepthArea", "Depth Area", "1", Leaf("DRVAL1", "10")),
+            Hit("LandArea", "Land Area", "2", Leaf("CATLAR", "1"), Leaf("OBJNAM", "Foo")),
+        };
+        vm.SetPicks(hits);
+
+        vm.SelectedHit = hits[1];
+
+        Assert.Equal("LandArea", vm.FeatureType);
+        Assert.Equal("Land Area", vm.FeatureTypeName);
+        Assert.Equal("2", vm.FeatureRef);
+        Assert.Equal(2, vm.Attributes.Count);
+        Assert.Equal("CATLAR", vm.Attributes[0].Code);
+        Assert.True(vm.HasAttributes);
+    }
+
+    [Fact]
+    public void Clear_AfterMultiHit_ResetsHitListAndSelection()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPicks(new[]
+        {
+            Hit("A", null!, "1"),
+            Hit("B", null!, "2"),
+        });
+
+        vm.Clear();
+
+        Assert.False(vm.HasPick);
+        Assert.False(vm.HasMultipleHits);
+        Assert.Empty(vm.Hits);
+        Assert.Null(vm.SelectedHit);
+    }
+
+    [Fact]
+    public void HitDisplayLabel_PrefersFeatureTypeName_FallsBackToCode()
+    {
+        var withName = new PickHit
+        {
+            FeatureType = "DepthArea",
+            FeatureTypeName = "Depth Area",
+            FeatureRef = "1",
+        };
+        var withoutName = new PickHit
+        {
+            FeatureType = "DepthArea",
+            FeatureTypeName = null,
+            FeatureRef = "1",
+        };
+
+        Assert.Equal("Depth Area", withName.DisplayLabel);
+        Assert.Equal("DepthArea", withoutName.DisplayLabel);
+    }
+
+    private static FeatureReference Ref(string role, string target, string? arcRole = null)
+        => new() { Role = role, TargetRef = target, ArcRole = arcRole };
+
+    [Fact]
+    public void SetPicks_PopulatesReferencesFromSelectedHit()
+    {
+        var vm = new PickReportViewModel();
+        var hit = new PickHit
+        {
+            FeatureType = "LightLateral",
+            FeatureTypeName = "Lateral Light",
+            FeatureRef = "L1",
+            References = new[] { Ref("AtonStatus", "S1"), Ref("SpatialAccuracy", "A2") },
+        };
+
+        vm.SetPicks(new[] { hit });
+
+        Assert.True(vm.HasReferences);
+        Assert.Equal(2, vm.References.Count);
+        Assert.Equal("AtonStatus", vm.References[0].Role);
+        Assert.Equal("S1", vm.References[0].TargetRef);
+    }
+
+    [Fact]
+    public void ChangingSelectedHit_RefreshesReferences()
+    {
+        var vm = new PickReportViewModel();
+        var hits = new[]
+        {
+            new PickHit
+            {
+                FeatureType = "LightLateral", FeatureRef = "L1",
+                References = new[] { Ref("AtonStatus", "S1") },
+            },
+            new PickHit
+            {
+                FeatureType = "DepthArea", FeatureRef = "D1",
+                References = System.Array.Empty<FeatureReference>(),
+            },
+        };
+        vm.SetPicks(hits);
+        Assert.True(vm.HasReferences);
+
+        vm.SelectedHit = hits[1];
+
+        Assert.False(vm.HasReferences);
+        Assert.Empty(vm.References);
+    }
+
+    [Fact]
+    public void Clear_EmptiesReferences()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPicks(new[]
+        {
+            new PickHit
+            {
+                FeatureType = "X", FeatureRef = "1",
+                References = new[] { Ref("a", "b") },
+            },
+        });
+
+        vm.Clear();
+
+        Assert.False(vm.HasReferences);
+        Assert.Empty(vm.References);
+    }
+
+    [Fact]
+    public void NavigateCommand_RoutesParameterToHandler()
+    {
+        var vm = new PickReportViewModel();
+        FeatureReference? captured = null;
+        vm.NavigateRequested += (_, r) => captured = r;
+
+        var reference = Ref("role", "target");
+        Assert.True(vm.NavigateCommand.CanExecute(reference));
+        vm.NavigateCommand.Execute(reference);
+
+        Assert.NotNull(captured);
+        Assert.Equal("target", captured!.TargetRef);
+    }
+
+    [Fact]
+    public void NavigateCommand_NullParameter_DoesNothing()
+    {
+        var vm = new PickReportViewModel();
+        var invoked = false;
+        vm.NavigateRequested += (_, _) => invoked = true;
+
+        Assert.False(vm.NavigateCommand.CanExecute(null));
+        vm.NavigateCommand.Execute(null);
+
+        Assert.False(invoked);
+    }
+
+    private sealed class StubMarinerSettings : IMarinerSettingsProvider
+    {
+        public MarinerSettings Current { get; private set; }
+        public StubMarinerSettings(MarinerSettings initial) => Current = initial;
+        public event Action<MarinerSettings>? Changed;
+        public void Update(MarinerSettings value)
+        {
+            Current = value;
+            Changed?.Invoke(value);
+        }
+    }
+
+    [Fact]
+    public void SetPick_FormatsDepthAttribute_InCurrentDepthUnit()
+    {
+        var mariner = new StubMarinerSettings(new MarinerSettings { DepthUnit = DepthUnit.Feet });
+        var vm = new PickReportViewModel(timeFormat: null, marinerSettings: mariner);
+
+        vm.SetPick(
+            featureType: "DepthArea",
+            featureTypeName: "Depth Area",
+            featureRef: "1",
+            datasetFileName: "x.000",
+            productSpec: "S-101",
+            attributes: new[]
+            {
+                new PickAttribute
+                {
+                    Code = "DRVAL1",
+                    Name = "Depth Range Min",
+                    RawValue = "10",
+                    DisplayValue = "10",
+                    DepthMetresValue = 10.0,
+                    Children = Array.Empty<PickAttribute>(),
+                },
+            });
+
+        // 10 m → ~32.8 ft via DepthFormatting.
+        Assert.Contains("ft", vm.Attributes[0].DisplayValue!);
+    }
+
+    [Fact]
+    public void DepthUnitChange_Rewrites_DepthAttribute_DisplayValue_Live()
+    {
+        var mariner = new StubMarinerSettings(new MarinerSettings { DepthUnit = DepthUnit.Metres });
+        var vm = new PickReportViewModel(timeFormat: null, marinerSettings: mariner);
+
+        vm.SetPick(
+            featureType: "DepthArea",
+            featureTypeName: "Depth Area",
+            featureRef: "1",
+            datasetFileName: "x.000",
+            productSpec: "S-101",
+            attributes: new[]
+            {
+                new PickAttribute
+                {
+                    Code = "VALDCO",
+                    Name = "Value of Depth Contour",
+                    RawValue = "5",
+                    DisplayValue = "5 m",
+                    DepthMetresValue = 5.0,
+                    Children = Array.Empty<PickAttribute>(),
+                },
+            });
+
+        Assert.Contains("m", vm.Attributes[0].DisplayValue!);
+
+        mariner.Update(new MarinerSettings { DepthUnit = DepthUnit.Feet });
+
+        Assert.Contains("ft", vm.Attributes[0].DisplayValue!);
+    }
+
+    // PR-D4: dynamic-source pick coverage.
+
+    private static DynamicPickHit DynamicHit(string id = "ais.test", string label = "MV ALPHA") => new()
+    {
+        SourceId = "ais",
+        SourceDisplayName = "AIS",
+        FeatureId = id,
+        Kind = "vessel.ais.cargo",
+        DisplayLabel = label,
+        LastUpdated = DateTimeOffset.UtcNow,
+        Latitude = 47.6,
+        Longitude = -122.3,
+    };
+
+    [Fact]
+    public void SetPicks_WithOnlyDynamicHits_MarksHasPickAndPopulatesDynamicSection()
+    {
+        var vm = new PickReportViewModel();
+
+        vm.SetPicks(Array.Empty<PickHit>(), new[] { DynamicHit() });
+
+        Assert.True(vm.HasPick);
+        Assert.True(vm.HasDynamicHits);
+        Assert.False(vm.HasDatasetPick);
+        Assert.Single(vm.DynamicHits);
+        Assert.Equal("MV ALPHA", vm.DynamicHits[0].DisplayLabel);
+        Assert.Null(vm.SelectedHit);
+        // Dataset detail fields stay clear when no dataset hit is present.
+        Assert.Null(vm.FeatureType);
+        Assert.Empty(vm.Attributes);
+    }
+
+    [Fact]
+    public void SetPicks_WithBoth_KeepsDatasetSelectionAndDynamicList()
+    {
+        var vm = new PickReportViewModel();
+        var datasetHit = new PickHit
+        {
+            FeatureType = "DepthArea",
+            FeatureRef = "42",
+            Attributes = Array.Empty<PickAttribute>(),
+        };
+
+        vm.SetPicks(new[] { datasetHit }, new[] { DynamicHit() });
+
+        Assert.True(vm.HasPick);
+        Assert.True(vm.HasDatasetPick);
+        Assert.True(vm.HasDynamicHits);
+        Assert.Same(datasetHit, vm.SelectedHit);
+        Assert.Equal("DepthArea", vm.FeatureType);
+        Assert.Single(vm.DynamicHits);
+    }
+
+    [Fact]
+    public void Clear_AlsoClearsDynamicHits()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPicks(Array.Empty<PickHit>(), new[] { DynamicHit() });
+        Assert.True(vm.HasDynamicHits);
+
+        vm.Clear();
+
+        Assert.False(vm.HasPick);
+        Assert.False(vm.HasDynamicHits);
+        Assert.Empty(vm.DynamicHits);
+    }
+
+    [Fact]
+    public void SetPicks_WithBothEmpty_ClearsState()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPicks(new[] { new PickHit { FeatureType = "X", FeatureRef = "1" } }, Array.Empty<DynamicPickHit>());
+        Assert.True(vm.HasPick);
+
+        vm.SetPicks(Array.Empty<PickHit>(), Array.Empty<DynamicPickHit>());
+
+        Assert.False(vm.HasPick);
+    }
+
+    private static DynamicPickHit Hit(string featureId) => new()
+    {
+        SourceId = "ais.aisstream",
+        SourceDisplayName = "AIS",
+        FeatureId = featureId,
+        DisplayLabel = featureId,
+        LastUpdated = DateTimeOffset.UtcNow,
+        Latitude = 50.0,
+        Longitude = -1.0,
+    };
+
+    [Theory]
+    [InlineData("ais:123456789", true, 123456789u)]
+    [InlineData("ais:1", true, 1u)]
+    [InlineData("ais:0", false, 0u)]
+    [InlineData("ownship", false, 0u)]
+    [InlineData("ais:notanumber", false, 0u)]
+    [InlineData("", false, 0u)]
+    public void TryGetAisMmsi_ParsesOnlyAisFeatureIds(string featureId, bool expected, uint expectedMmsi)
+    {
+        var ok = PickReportViewModel.TryGetAisMmsi(Hit(featureId), out var mmsi);
+
+        Assert.Equal(expected, ok);
+        if (expected)
+            Assert.Equal(expectedMmsi, mmsi);
+    }
+
+    [Fact]
+    public void TakeHelmCommand_OnAisHit_RaisesRequestedWithMmsi()
+    {
+        var vm = new PickReportViewModel();
+        uint? raised = null;
+        vm.TakeHelmRequested += (_, mmsi) => raised = mmsi;
+
+        var hit = Hit("ais:987654321");
+        Assert.True(vm.TakeHelmCommand.CanExecute(hit));
+        vm.TakeHelmCommand.Execute(hit);
+
+        Assert.Equal(987654321u, raised);
+    }
+
+    [Fact]
+    public void TakeHelmCommand_OnNonAisHit_IsDisabledAndDoesNotRaise()
+    {
+        var vm = new PickReportViewModel();
+        var raised = false;
+        vm.TakeHelmRequested += (_, _) => raised = true;
+
+        var hit = Hit("ownship");
+        Assert.False(vm.TakeHelmCommand.CanExecute(hit));
+        vm.TakeHelmCommand.Execute(hit);
+
+        Assert.False(raised);
+    }
+
+    [Fact]
+    public void IsAisTarget_TracksFeatureId()
+    {
+        Assert.True(Hit("ais:42").IsAisTarget);
+        Assert.False(Hit("ownship").IsAisTarget);
+    }
+
+    [Fact]
+    public void Identity_WithNamedFeature_LeadsWithNameAndClassPill()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPick("BeaconLateral", "Beacon, Lateral", "555", "101GB00502793.000", "S-101",
+            new[] { Leaf("name", "Number 10"), Leaf("colour", "3", "Colour") });
+
+        Assert.Equal("Number 10", vm.PrimaryLabel);
+        Assert.Equal("Beacon, Lateral", vm.SecondaryLabel);
+        Assert.True(vm.HasSecondaryLabel);
+        Assert.Equal("ID 555 · S-101 · 101GB00502793.000", vm.IdentityCaption);
+    }
+
+    [Fact]
+    public void Identity_WithoutName_LeadsWithClassAndNoPill()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPick("DepthArea", "Depth Area", "300", "test.000", "S-101",
+            new[] { Leaf("DRVAL1", "10.0") });
+
+        Assert.Equal("Depth Area", vm.PrimaryLabel);
+        Assert.Null(vm.SecondaryLabel);
+        Assert.False(vm.HasSecondaryLabel);
+        Assert.Equal("ID 300 · S-101 · test.000", vm.IdentityCaption);
+    }
+
+    [Fact]
+    public void PortrayalNote_LabelsS104AsSoundChartsPortrayal()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPick("WaterLevel", "Water Level (Station)", "station:8665530", "104US00_ST.h5", "S-104",
+            new[] { Leaf("waterLevelHeight", "1.42") });
+
+        Assert.True(vm.HasPortrayalNote);
+        Assert.Equal("SoundCharts portrayal: S-104 Ed 2.0.0 defines no symbology", vm.PortrayalNote);
+
+        vm.SetPick("DepthArea", "Depth Area", "300", "test.000", "S-101",
+            new[] { Leaf("DRVAL1", "10.0") });
+
+        Assert.False(vm.HasPortrayalNote);
+        Assert.Null(vm.PortrayalNote);
+    }
+
+    [Fact]
+    public void IdentityCaption_OmitsMissingSegments()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPick("Authority", null, "auth.1", null, null, System.Array.Empty<PickAttribute>());
+
+        Assert.Equal("ID auth.1", vm.IdentityCaption);
+    }
+
+    [Fact]
+    public void CopyIdentityCommand_RaisesRequestWithNameAndCaption()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPick("BeaconLateral", "Beacon, Lateral", "555", "f.000", "S-101",
+            new[] { Leaf("name", "Number 10") });
+
+        string? captured = null;
+        vm.CopyIdentityRequested += (_, text) => captured = text;
+
+        Assert.True(vm.CopyIdentityCommand.CanExecute(null));
+        vm.CopyIdentityCommand.Execute(null);
+
+        Assert.Equal("Number 10\nID 555 · S-101 · f.000", captured);
+    }
+
+    [Fact]
+    public void Identity_ClearedAfterClear()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPick("BeaconLateral", "Beacon, Lateral", "555", "f.000", "S-101",
+            new[] { Leaf("name", "Number 10") });
+
+        vm.Clear();
+
+        Assert.Null(vm.PrimaryLabel);
+        Assert.Null(vm.IdentityCaption);
+        Assert.False(vm.CopyIdentityCommand.CanExecute(null));
+    }
+
+    // ---- S-100 Feature Catalogue eXaminer links (issue #442) ----
+
+    private sealed class StubUrlOpener : IUrlOpener
+    {
+        public string? LastUrl { get; private set; }
+        public void Open(string url) => LastUrl = url;
+    }
+
+    private static ViewerSettings ExaminerSettings(bool enabled = true)
+    {
+        var path = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), $"settings-{Guid.NewGuid():N}.json");
+        return new ViewerSettings
+        {
+            SettingsFilePath = path,
+            S100ExaminerLinksEnabled = enabled,
+            S100ExaminerBaseUrl = ViewerSettings.DefaultS100ExaminerBaseUrl,
+        };
+    }
+
+    [Fact]
+    public void Examiner_FeatureCommand_OpensDeepLink()
+    {
+        var opener = new StubUrlOpener();
+        var links = new S100ExaminerLinkBuilder(ExaminerSettings());
+        var vm = new PickReportViewModel(null, null, opener, links);
+        vm.SetPick("Building", "Building", "1", "f.000", "S-101",
+            new[] { Leaf("colour", "1") });
+
+        Assert.True(vm.IsExaminerAvailable);
+        Assert.True(vm.OpenFeatureInExaminerCommand.CanExecute(null));
+        vm.OpenFeatureInExaminerCommand.Execute(null);
+
+        Assert.Equal("https://s100examiner.com/?catalog=S-101&feature=Building", opener.LastUrl);
+    }
+
+    [Fact]
+    public void Examiner_AttributeCommand_OpensDeepLink()
+    {
+        var opener = new StubUrlOpener();
+        var links = new S100ExaminerLinkBuilder(ExaminerSettings());
+        var vm = new PickReportViewModel(null, null, opener, links);
+        var attr = Leaf("colour", "1");
+        vm.SetPick("Building", "Building", "1", "f.000", "S-101", new[] { attr });
+
+        Assert.True(vm.OpenAttributeInExaminerCommand.CanExecute(attr));
+        vm.OpenAttributeInExaminerCommand.Execute(attr);
+
+        Assert.Equal(
+            "https://s100examiner.com/?catalog=S-101&feature=Building&attribute=colour",
+            opener.LastUrl);
+    }
+
+    [Fact]
+    public void Examiner_Unavailable_ForUnsupportedSpec()
+    {
+        var opener = new StubUrlOpener();
+        var links = new S100ExaminerLinkBuilder(ExaminerSettings());
+        var vm = new PickReportViewModel(null, null, opener, links);
+        vm.SetPick("Iceberg", "Iceberg", "1", "f.gml", "S-411",
+            new[] { Leaf("name", "X") });
+
+        Assert.False(vm.IsExaminerAvailable);
+        Assert.False(vm.OpenFeatureInExaminerCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void Examiner_Unavailable_WhenDisabled()
+    {
+        var opener = new StubUrlOpener();
+        var links = new S100ExaminerLinkBuilder(ExaminerSettings(enabled: false));
+        var vm = new PickReportViewModel(null, null, opener, links);
+        vm.SetPick("Building", "Building", "1", "f.000", "S-101",
+            new[] { Leaf("colour", "1") });
+
+        Assert.False(vm.IsExaminerAvailable);
+        Assert.False(vm.OpenFeatureInExaminerCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void Examiner_Unavailable_WithoutLinkBuilder()
+    {
+        var vm = new PickReportViewModel();
+        vm.SetPick("Building", "Building", "1", "f.000", "S-101",
+            new[] { Leaf("colour", "1") });
+
+        Assert.False(vm.IsExaminerAvailable);
+        Assert.False(vm.OpenFeatureInExaminerCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void Examiner_Refresh_UpdatesAvailability_WhenSettingToggled()
+    {
+        var settings = ExaminerSettings();
+        var links = new S100ExaminerLinkBuilder(settings);
+        var vm = new PickReportViewModel(null, null, new StubUrlOpener(), links);
+        vm.SetPick("Building", "Building", "1", "f.000", "S-101",
+            new[] { Leaf("colour", "1") });
+        Assert.True(vm.IsExaminerAvailable);
+
+        var raised = false;
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PickReportViewModel.IsExaminerAvailable))
+                raised = true;
+        };
+
+        // User disables the integration; the pick panel must react without a
+        // fresh pick.
+        settings.S100ExaminerLinksEnabled = false;
+        vm.RefreshExaminerAvailability();
+
+        Assert.True(raised);
+        Assert.False(vm.IsExaminerAvailable);
+        Assert.False(vm.OpenFeatureInExaminerCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void SetPick_LiftsLongValuesIntoTextCardsAndDropsTheirRows()
+    {
+        var vm = new PickReportViewModel();
+        var regulation = string.Join(' ', Enumerable.Repeat("Vessels shall not anchor within the area.", 4));
+        var information = new PickAttribute
+        {
+            Code = "information",
+            Name = "Information",
+            RawValue = "",
+            Children =
+            [
+                new PickAttribute { Code = "language", Name = "Language", RawValue = "eng" },
+                new PickAttribute { Code = "text", Name = "Text", RawValue = regulation },
+            ],
+        };
+        var onlyText = new PickAttribute
+        {
+            Code = "textContent",
+            Name = "Text content",
+            RawValue = "",
+            Children = [new PickAttribute { Code = "text", Name = "Text", RawValue = "Line 1\nLine 2" }],
+        };
+
+        vm.SetPick("Regulation", null, "1", "s122.gml", "S-122",
+            [Leaf("featureName", "Short name", "Feature name"), information, onlyText, Leaf("note", "A\nB", "Note")]);
+
+        // The table keeps short rows; the complex row keeps its short child,
+        // and one left with no children is dropped.
+        Assert.Equal(["featureName", "information"], vm.Attributes.Select(a => a.Code));
+        Assert.Equal(["language"], vm.Attributes[1].Children.Select(c => c.Code));
+
+        Assert.True(vm.HasTextCards);
+        Assert.Equal(["Information · Text", "Text content · Text", "Note"], vm.TextCards.Select(c => c.Title));
+        Assert.Equal(regulation, vm.TextCards[0].CopyText);
+    }
+
+    [Fact]
+    public void SetPicks_CarriesNotForNavigationToTextAndWarningCards()
+    {
+        var vm = new PickReportViewModel();
+        var fileRef = new PickAttribute
+        {
+            Code = "fileReference",
+            RawValue = "CAUTION.TXT",
+            ExternalText = "Hazard.\nDetails.",
+        };
+        vm.SetPicks([
+            new PickHit
+            {
+                FeatureType = "CautionArea",
+                FeatureRef = "7",
+                DatasetFileName = "101GB.000",
+                ProductSpec = "S-101",
+                NotForNavigation = true,
+                Attributes = [fileRef],
+            },
+        ]);
+
+        Assert.True(Assert.Single(vm.TextCards).NotForNavigation);
+
+        vm.SetPicks([
+            new PickHit
+            {
+                FeatureType = "CautionArea",
+                FeatureRef = "8",
+                DatasetFileName = "loose.000",
+                ProductSpec = "S-101",
+                Attributes = [fileRef],
+            },
+        ]);
+
+        Assert.False(Assert.Single(vm.TextCards).NotForNavigation);
+    }
+
+    [Fact]
+    public void TextCardCopy_RaisesCopyIdentityRequested()
+    {
+        var vm = new PickReportViewModel();
+        string? copied = null;
+        vm.CopyIdentityRequested += (_, t) => copied = t;
+        vm.SetPick("Regulation", null, "1", "s122.gml", "S-122", [Leaf("note", "A\nB", "Note")]);
+
+        Assert.Single(vm.TextCards).CopyCommand.Execute(null);
+
+        Assert.Equal("A\nB", copied);
+    }
+}
