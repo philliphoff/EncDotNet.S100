@@ -416,6 +416,7 @@ public partial class App : Application
             var library = _services.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>();
             _ = _services.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>();  // syncs from the first index
             _ = _services.GetRequiredService<Library.LibraryShowOnMapService>();  // and restores sources shown on the map
+            _ = _services.GetRequiredService<Library.WeatherRunMonitor>();  // keeps loaded weather up to date (#1395)
             library.Initialize();
 
             desktop.MainWindow = _services.GetRequiredService<MainWindow>();
@@ -1535,6 +1536,8 @@ public partial class App : Application
                 sp.GetRequiredService<Library.OpenLibraryItemsWorkflow>(),
                 sp.GetRequiredService<Library.DownloadLibraryItemsWorkflow>(),
                 sp.GetRequiredService<Library.OpenLibraryItemAsRouteWorkflow>(),
+                sp.GetRequiredService<Library.LoadLatestWeatherRunWorkflow>(),
+                sp.GetRequiredService<Library.PinWeatherRunWorkflow>(),
                 UiThread.RunOrPost,
                 UiThread.Post,
                 sp.GetRequiredService<TimeProvider>(),
@@ -1547,9 +1550,7 @@ public partial class App : Application
                 },
                 viewTime: sp.GetRequiredService<GlobalTimeService>(),
                 timeFormat: sp.GetService<ITimeFormatProvider>(),
-                sync: sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>(),
-                // Storm-advisory toasts.
-                notifications: sp.GetRequiredService<INotificationService>());
+                sync: sp.GetRequiredService<EncDotNet.S100.Collections.Library.LibrarySync>());
             panel.OpenKeys = sp.GetRequiredService<Services.Secom.KeysNavigator>().Open;
             panel.PortrayalWarm = sp.GetRequiredService<PortrayalWarmStatusViewModel>();
             // SECOM rows name their identity; a selected source's details choose it (#883).
@@ -1584,6 +1585,36 @@ public partial class App : Application
             sp.GetRequiredService<Library.DownloadLibraryItemsWorkflow>(),
             sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<ITimeFormatProvider>()));
+        // Weather runs (#1395): Load latest run, pinning, and keeping loaded
+        // weather up to date on its own.
+        services.AddSingleton(sp => new Library.MarkFinalStormsWorkflow(
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
+            sp.GetRequiredService<Library.ILibraryLoader>(),
+            sp.GetRequiredService<Library.ILibraryDownloader>(),
+            sp.GetRequiredService<Library.OpenLibraryItemsWorkflow>(),
+            sp.GetRequiredService<TimeProvider>()));
+        services.AddSingleton(sp => new Library.LoadLatestWeatherRunWorkflow(
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
+            sp.GetRequiredService<Library.ILibraryDownloader>(),
+            sp.GetRequiredService<Library.LibraryRows>(),
+            sp.GetRequiredService<Library.DownloadLibraryItemsWorkflow>(),
+            sp.GetRequiredService<Library.OpenLibraryItemsWorkflow>(),
+            sp.GetRequiredService<Library.MarkFinalStormsWorkflow>()));
+        services.AddSingleton(sp => new Library.PinWeatherRunWorkflow(
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
+            sp.GetRequiredService<Library.ILibraryDownloader>()));
+        services.AddSingleton(sp => new Library.StormAdvisoryWatch(
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
+            sp.GetRequiredService<Library.MarkFinalStormsWorkflow>(),
+            sp.GetRequiredService<Library.LoadLatestWeatherRunWorkflow>(),
+            sp.GetRequiredService<INotificationService>()));
+        services.AddSingleton(sp => new Library.WeatherRunMonitor(
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
+            sp.GetRequiredService<Library.LibraryRows>(),
+            sp.GetRequiredService<Library.LoadLatestWeatherRunWorkflow>(),
+            sp.GetRequiredService<Library.StormAdvisoryWatch>(),
+            sp.GetRequiredService<TimeProvider>(),
+            UiThread.RunOrPost));
         services.AddSingleton<LibraryTimeSource>(sp => new LibraryTimeSource(
             sp.GetRequiredService<Library.LibraryRows>(),
             sp.GetRequiredService<Library.OpenLibraryItemsWorkflow>(),

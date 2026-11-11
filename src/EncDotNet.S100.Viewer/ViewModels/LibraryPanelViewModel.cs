@@ -43,6 +43,8 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     private readonly OpenLibraryItemsWorkflow _open;
     private readonly DownloadLibraryItemsWorkflow _download;
     private readonly OpenLibraryItemAsRouteWorkflow _openAsRoute;
+    private readonly Library.LoadLatestWeatherRunWorkflow _loadLatest;
+    private readonly Library.PinWeatherRunWorkflow _pinRun;
     private readonly Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? _feedHealth;
     private readonly LibrarySync? _sync;
     private bool _availabilityRefreshPosted;
@@ -52,7 +54,6 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<(Guid Source, string Package), LibraryItemViewModel> _packageHeaders = [];
     private readonly HashSet<Guid> _collapsedAml = [];
     private string? _amlFilter;
-    private readonly Services.Notifications.INotificationService? _notifications;
     private readonly Action<Action> _dispatch;
 
     // Runs a coalesced refresh. Unlike _dispatch it always defers, even on the
@@ -92,11 +93,12 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// <param name="open">Opens items (Load, Load as you pan).</param>
     /// <param name="download">Downloads items (Download, Download listed, Retry).</param>
     /// <param name="openAsRoute">Opens an S-421 item as a route (Open as route).</param>
+    /// <param name="loadLatest">Loads a weather source's latest run (Load latest run).</param>
+    /// <param name="pinRun">Pins and unpins weather runs.</param>
     /// <param name="dispatch">Runs a change on the UI thread (the app passes <see cref="Services.UiThread.RunOrPost"/>).</param>
     /// <param name="coalesce">Queues a refresh for later on the UI thread, even from it, so a burst of changes refreshes once (the app passes <see cref="Services.UiThread.Post"/>).</param>
     /// <param name="time">The clock (forecast ages, staleness).</param>
     /// <param name="feedHealth">A shared feed's last reachability; <see langword="null"/> shows none.</param>
-    /// <param name="notifications">Where storm advisories are announced; <see langword="null"/> for none.</param>
     /// <param name="viewTime">The time the map shows; <see langword="null"/> without a timeline.</param>
     /// <param name="timeFormat">The Local/UTC setting; <see langword="null"/> shows UTC.</param>
     /// <param name="sync">Keeps synced sources downloaded; <see langword="null"/> without syncing.</param>
@@ -109,11 +111,12 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         OpenLibraryItemsWorkflow open,
         DownloadLibraryItemsWorkflow download,
         OpenLibraryItemAsRouteWorkflow openAsRoute,
+        Library.LoadLatestWeatherRunWorkflow loadLatest,
+        Library.PinWeatherRunWorkflow pinRun,
         Action<Action> dispatch,
         Action<Action> coalesce,
         TimeProvider time,
         Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth,
-        Services.Notifications.INotificationService? notifications,
         Services.GlobalTimeService? viewTime,
         Services.ITimeFormatProvider? timeFormat,
         LibrarySync? sync)
@@ -129,17 +132,20 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         if (timeFormat is not null)
             timeFormat.TimeFormatChanged += _ => dispatch(OnTimeFormatChanged);
         _feedHealth = feedHealth;
-        _notifications = notifications;
         ArgumentNullException.ThrowIfNull(downloader);
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(open);
         ArgumentNullException.ThrowIfNull(download);
         ArgumentNullException.ThrowIfNull(openAsRoute);
+        ArgumentNullException.ThrowIfNull(loadLatest);
+        ArgumentNullException.ThrowIfNull(pinRun);
         _downloader = downloader;
         _rows = rows;
         _open = open;
         _download = download;
         _openAsRoute = openAsRoute;
+        _loadLatest = loadLatest;
+        _pinRun = pinRun;
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(importer);
         ArgumentNullException.ThrowIfNull(loader);
@@ -1319,7 +1325,6 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void OnClockTick()
     {
-        _ = RefreshDueWeatherAsync();
         var forecasts = _allItems.Where(i => i.IsForecast).ToArray();
         if (forecasts.Length == 0)
             return;

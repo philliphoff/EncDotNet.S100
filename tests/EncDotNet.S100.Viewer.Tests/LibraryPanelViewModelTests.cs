@@ -410,7 +410,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     {
         await AddS57CollectionAsync();
         var library = new TestLibrary(_library, _loader, _downloader);
-        using var vm = library.CreatePanel(_importer, action => action(), action => action(), TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        using var vm = library.CreatePanel(_importer, action => action(), action => action(), TimeProvider.System, feedHealth: null, viewTime: null, timeFormat: null, sync: null);
         var file = Path.Combine(_context.Root, "RTE-TEST-GBASIC.s421.gml");
         File.Copy(Path.Combine(AppContext.BaseDirectory, "TestData", "S421", "RTE-TEST-GBASIC.s421.gml"), file);
         var folder = new LibrarySource(new LocalFolderSource(Guid.NewGuid(), null, _context.Root), null, LibrarySourceState.Ready);
