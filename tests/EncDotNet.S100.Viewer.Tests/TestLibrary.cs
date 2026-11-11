@@ -109,7 +109,7 @@ internal sealed class TestLibrary
         new TestLibrary(library, loader, downloader, time, timeFormat, notifications)
             .CreatePanel(importer, dispatch, coalesce, time, feedHealth, viewTime, timeFormat, sync);
 
-    /// <summary>A Library panel over these rows and workflows.</summary>
+    /// <summary>A Library panel, and its tree, over these rows and workflows.</summary>
     public LibraryPanelViewModel CreatePanel(
         ILibraryImporter importer,
         Action<Action> dispatch,
@@ -118,9 +118,13 @@ internal sealed class TestLibrary
         Func<CollectionSource, FeedHealth?>? feedHealth,
         GlobalTimeService? viewTime,
         ITimeFormatProvider? timeFormat,
-        LibrarySync? sync) =>
-        new(_library, importer, _loader, _downloader, Rows, Open, Download, OpenAsRoute, LoadLatest, PinRun,
-            dispatch, coalesce, time, feedHealth, viewTime, timeFormat, sync);
+        LibrarySync? sync)
+    {
+        var tree = new LibraryTreeViewModel(
+            _library, importer, new LibraryNodeStatus(_downloader, Download, sync, feedHealth, time), timeFormat, dispatch, time);
+        return new(_library, tree, _loader, _downloader, Rows, Open, Download, OpenAsRoute, LoadLatest, PinRun,
+            dispatch, coalesce, time, viewTime, timeFormat);
+    }
 
     private sealed class UtcFormat : ITimeFormatProvider
     {

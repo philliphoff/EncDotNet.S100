@@ -135,7 +135,7 @@ public sealed class ViewerUiAutomationTests
             sync: null);
         using var host = ViewHost.Show(new LibraryPanelView { DataContext = panel }, width: 420, height: 900);
         var automation = Automation(host);
-        var collection = panel.Nodes.Single();
+        var collection = panel.Tree.Nodes.Single();
 
         var tree = await automation.GetTreeAsync(Interactive with { Root = new UiTarget("Library.Tree", null) });
         var node = Flatten(tree.Roots[0].Element).First(e => e.Role == "treeItem" && e.Name == "Charts");
@@ -151,11 +151,11 @@ public sealed class ViewerUiAutomationTests
         // desktop the menu is a popup root, listed as a root of kind "popup".)
         var source = collection.Children.Single();
         var sourceNode = Flatten(tree.Roots[0].Element).Last(e => e.Role == "treeItem");
-        Assert.Same(collection, panel.SelectedNode);
+        Assert.Same(collection, panel.Tree.SelectedNode);
         await automation.ActAsync(new UiTarget(null, sourceNode.Ref), UiAction.ContextMenu, null);
-        Assert.Same(source, panel.SelectedNode);
+        Assert.Same(source, panel.Tree.SelectedNode);
         await automation.ActAsync(new UiTarget(null, node.Ref), UiAction.ContextMenu, null);
-        Assert.Same(collection, panel.SelectedNode);
+        Assert.Same(collection, panel.Tree.SelectedNode);
         var withMenu = await automation.GetTreeAsync(Interactive);
         Assert.Contains(withMenu.Roots.SelectMany(r => Flatten(r.Element)), e => e.Id == "Library.NodeMenu.Rename");
         await automation.ActAsync(new UiTarget("Library.NodeMenu.Rename", null), UiAction.Invoke, null);

@@ -69,12 +69,12 @@ public sealed class ForecastLibraryTests : IDisposable
             feedHealth: null,
             notifications: null,
             sync: null);
-        panel.Sync();
-        panel.SelectedNode = Source(panel);
+        panel.Tree.Sync();
+        panel.Tree.SelectedNode = Source(panel);
         return panel;
     }
 
-    private static LibraryNodeViewModel Source(LibraryPanelViewModel panel) => Assert.Single(Assert.Single(panel.Nodes).Children);
+    private static LibraryNodeViewModel Source(LibraryPanelViewModel panel) => Assert.Single(Assert.Single(panel.Tree.Nodes).Children);
 
     private static LibraryItemViewModel Model(LibraryPanelViewModel panel, string id) =>
         panel.Items.Single(i => i.IsModelHeader && i.Name == id);

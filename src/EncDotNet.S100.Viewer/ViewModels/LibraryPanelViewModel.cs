@@ -36,7 +36,7 @@ internal enum LibraryStateFilter
 internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
 {
     private readonly CollectionLibrary _library;
-    private readonly ILibraryImporter _importer;
+    private readonly LibraryTreeViewModel _tree;
     private readonly ILibraryLoader _loader;
     private readonly ILibraryDownloader _downloader;
     private readonly LibraryRows _rows;
@@ -45,11 +45,9 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     private readonly OpenLibraryItemAsRouteWorkflow _openAsRoute;
     private readonly Library.LoadLatestWeatherRunWorkflow _loadLatest;
     private readonly Library.PinWeatherRunWorkflow _pinRun;
-    private readonly Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? _feedHealth;
-    private readonly LibrarySync? _sync;
     private bool _availabilityRefreshPosted;
     private bool _progressRefreshPosted;
-    private readonly Dictionary<Guid, List<CollectionItem>> _downloadingBySource = [];
+    private readonly object _gate = new();
     private readonly HashSet<(Guid Source, string Package)> _expandedPackages = [];
     private readonly Dictionary<(Guid Source, string Package), LibraryItemViewModel> _packageHeaders = [];
     private readonly HashSet<Guid> _collapsedAml = [];
@@ -67,8 +65,6 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     private bool _atViewTime;
     private IReadOnlyList<LibraryItemViewModel> _textMatched = [];
 
-    private LibraryNodeViewModel? _selectedNode;
-    private bool _hasSynced;
     private IReadOnlyList<SourceIndex?>? _itemsBasis;
     private IReadOnlyList<LibraryItemViewModel> _allItems = [];
     private IReadOnlyList<LibraryItemViewModel> _items = [];
@@ -78,7 +74,6 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     private LibraryStateFilter _stateFilter;
     private IReadOnlyList<LibraryItemViewModel> _textFiltered = [];
     private int _listedDatasets;
-    private bool _refreshPosted;
     private bool _showCoverage = true;
     private GeoPosition? _location;
     private GeoPosition? _tapPosition;
@@ -86,7 +81,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     private bool _selectingTapHit;
 
     /// <param name="library">The Library the panel shows.</param>
-    /// <param name="importer">Adds sources interactively.</param>
+    /// <param name="tree">The collections and sources; the list shows the selected node's datasets.</param>
     /// <param name="loader">Loads datasets and reports their state.</param>
     /// <param name="downloader">Says whether items are downloaded, and how their downloads go.</param>
     /// <param name="rows">Builds the list's rows.</param>
@@ -98,13 +93,11 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// <param name="dispatch">Runs a change on the UI thread (the app passes <see cref="Services.UiThread.RunOrPost"/>).</param>
     /// <param name="coalesce">Queues a refresh for later on the UI thread, even from it, so a burst of changes refreshes once (the app passes <see cref="Services.UiThread.Post"/>).</param>
     /// <param name="time">The clock (forecast ages, staleness).</param>
-    /// <param name="feedHealth">A shared feed's last reachability; <see langword="null"/> shows none.</param>
     /// <param name="viewTime">The time the map shows; <see langword="null"/> without a timeline.</param>
     /// <param name="timeFormat">The Local/UTC setting; <see langword="null"/> shows UTC.</param>
-    /// <param name="sync">Keeps synced sources downloaded; <see langword="null"/> without syncing.</param>
     public LibraryPanelViewModel(
         CollectionLibrary library,
-        ILibraryImporter importer,
+        LibraryTreeViewModel tree,
         ILibraryLoader loader,
         ILibraryDownloader downloader,
         LibraryRows rows,
@@ -116,22 +109,16 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         Action<Action> dispatch,
         Action<Action> coalesce,
         TimeProvider time,
-        Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth,
         Services.GlobalTimeService? viewTime,
-        Services.ITimeFormatProvider? timeFormat,
-        LibrarySync? sync)
+        Services.ITimeFormatProvider? timeFormat)
     {
         ArgumentNullException.ThrowIfNull(time);
         ArgumentNullException.ThrowIfNull(coalesce);
         _time = time;
-        _sync = sync;
-        if (sync is not null)
-            sync.Synced += (_, _) => dispatch(UpdateCatalogueCounts);
         _viewTime = viewTime;
         _runFormat = timeFormat is null ? null : () => timeFormat.Current;
         if (timeFormat is not null)
             timeFormat.TimeFormatChanged += _ => dispatch(OnTimeFormatChanged);
-        _feedHealth = feedHealth;
         ArgumentNullException.ThrowIfNull(downloader);
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(open);
@@ -147,39 +134,21 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         _loadLatest = loadLatest;
         _pinRun = pinRun;
         ArgumentNullException.ThrowIfNull(library);
-        ArgumentNullException.ThrowIfNull(importer);
+        ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(dispatch);
         _library = library;
-        _importer = importer;
+        _tree = tree;
         _loader = loader;
         _dispatch = dispatch;
         _coalesce = coalesce;
 
-        AddFolderCommand = new AsyncRelayCommand(() => _importer.AddFolderAsync(TargetCollectionId));
-        AddExchangeSetZipCommand = new AsyncRelayCommand(() => _importer.AddExchangeSetZipAsync(TargetCollectionId));
-        AddOnlineCatalogueCommand = new AsyncRelayCommand(() => _importer.AddOnlineCatalogueAsync(TargetCollectionId));
-        AddS128CatalogueCommand = new AsyncRelayCommand(() => _importer.AddS128CatalogueAsync(TargetCollectionId));
-        AddSharedFeedCommand = new AsyncRelayCommand(() => _importer.AddSharedFeedAsync(TargetCollectionId));
-        AddCollectionManifestCommand = new AsyncRelayCommand(() => _importer.AddCollectionManifestAsync(TargetCollectionId));
-        ChooseGroupsCommand = new AsyncRelayCommand(ChooseGroupsAsync, () => _selectedNode?.CanChooseGroups == true);
-        AddCurrentsForAreaCommand = new AsyncRelayCommand(AddCurrentsForAreaAsync, () => CanAddCurrentsForArea);
-        OpenSecomFixCommand = new RelayCommand<LibraryNodeViewModel>(OpenSecomFix);
         SetAmlFilterCommand = new RelayCommand<string>(product => AmlFilter = product switch
         {
             null or AmlFilterOff => null,
             AmlFilterAllProducts => string.Empty,
             _ => product,
         });
-        RefreshCommand = new RelayCommand(Refresh);
-        RefreshAllCommand = new RelayCommand(() => _library.Refresh());
-        RenameCommand = new RelayCommand(BeginRename, () => _selectedNode?.CanRename == true);
-        ToggleShowOnMapCommand = new RelayCommand(ToggleShowOnMap, () => CanShowOnMap);
-        ToggleSyncCommand = new RelayCommand(ToggleSync, () => CanSyncSelected);
-        CommitRenameCommand = new RelayCommand(CommitRename);
-        CancelRenameCommand = new RelayCommand(CancelRename);
-        RemoveCommand = new RelayCommand(Remove, () => _selectedNode?.CanRemove == true);
-        KeepInLibraryCommand = new RelayCommand(Keep, () => _selectedNode?.CanKeep == true);
         ZoomToCommand = new RelayCommand(ZoomToSelected, () => _selectedItem?.HasBounds == true);
         ClearLocationCommand = new RelayCommand(() => SetLocation(null));
         NextAtLocationCommand = new RelayCommand(NextAtLocation, () => _location is not null && _items.Count > 1);
@@ -222,57 +191,40 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         _loader.Changed += OnLoaderChanged;
         _downloader.Changed += OnLoaderChanged;
         _downloader.ProgressChanged += OnDownloadProgress;
-        _download.Starting += OnDownloadStarting;
         _download.PackagesUnpacked += OnPackagesUnpacked;
-
-        _library.Changed += OnLibraryChanged;
+        _tree.SelectedNodeChanged += OnSelectedNodeChanged;
+        _tree.Synced += OnTreeSynced;
+        _tree.SecomDetailsChanged += OnSecomDetailsChanged;
+        _tree.SecomPickerOpening += OnSecomPickerOpening;
 
         // Forecast runs age by the minute: time left, and Expired (#685).
         _clock = _time.CreateTimer(_ => _dispatch(OnClockTick), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
-        Sync();
+        RebuildItems(force: true);
     }
 
-    /// <summary>Collection nodes, each with its source nodes as children.</summary>
-    public ObservableCollection<LibraryNodeViewModel> Nodes { get; } = [];
+    /// <summary>The collections and sources; the list shows the selected node's datasets.</summary>
+    public LibraryTreeViewModel Tree => _tree;
 
-    /// <summary>True when the library has no collection.</summary>
-    public bool IsEmpty => Nodes.Count == 0;
-
-    /// <summary>The selected collection or source.</summary>
-    public LibraryNodeViewModel? SelectedNode
+    private void OnSelectedNodeChanged(object? sender, EventArgs e)
     {
-        get => _selectedNode;
-        set
-        {
-            if (SetProperty(ref _selectedNode, value))
-            {
-                OnPropertyChanged(nameof(HasSelectedNode));
-                ((RelayCommand)RemoveCommand).NotifyCanExecuteChanged();
-                ((RelayCommand)KeepInLibraryCommand).NotifyCanExecuteChanged();
-                ((RelayCommand)RenameCommand).NotifyCanExecuteChanged();
-                ((RelayCommand)ToggleShowOnMapCommand).NotifyCanExecuteChanged();
-                OnPropertyChanged(nameof(CanShowOnMap));
-                OnPropertyChanged(nameof(SelectedShowsOnMap));
-                ((RelayCommand)ToggleSyncCommand).NotifyCanExecuteChanged();
-                OnPropertyChanged(nameof(CanSyncSelected));
-                OnPropertyChanged(nameof(SelectedSyncs));
-                ((AsyncRelayCommand)ChooseGroupsCommand).NotifyCanExecuteChanged();
-                ((AsyncRelayCommand)AddCurrentsForAreaCommand).NotifyCanExecuteChanged();
-                OnPropertyChanged(nameof(CanAddCurrentsForArea));
-                ShowSecomDetails();
-                EndTap();
-                if (_location is not null)
-                    SetLocation(null);
-                else
-                    RebuildItems(force: true);
-            }
-        }
+        EndTap();
+        if (_location is not null)
+            SetLocation(null);
+        else
+            RebuildItems(force: true);
     }
 
-    /// <summary>True when a node is selected.</summary>
-    public bool HasSelectedNode => _selectedNode is not null;
+    private void OnTreeSynced(object? sender, EventArgs e) => RebuildItems(force: false);
 
-    /// <summary>The datasets of <see cref="SelectedNode"/> passing the filters.</summary>
+    private void OnSecomDetailsChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(ShowsSecomDetails));
+        OnPropertyChanged(nameof(ShowsItemPlaceholder));
+    }
+
+    private void OnSecomPickerOpening(object? sender, EventArgs e) => SelectedItem = null;
+
+    /// <summary>The datasets of the tree's selected node passing the filters.</summary>
     public IReadOnlyList<LibraryItemViewModel> Items
     {
         get => _items;
@@ -314,123 +266,16 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// For a selected S-102 area node: opens the S-111 wizard at its models
-    /// step with the models covering the area ticked (#685, handoff B8).
-    /// </summary>
-    public ICommand AddCurrentsForAreaCommand { get; }
-
-    /// <summary>
-    /// Follows a SECOM source's link (#880, #883 D2); the parameter is the node.
-    /// "Choose identity…" and "Choose another identity…" select the source and
-    /// open its picker (a row action never changes the setting by itself);
-    /// the others open Settings → Keys &amp; certificates on the right tab.
-    /// </summary>
-    public ICommand OpenSecomFixCommand { get; }
-
-    /// <summary>Opens Settings → Keys &amp; certificates on a tab; set by the host.</summary>
-    internal Action<Keys.KeysTab>? OpenKeys { get; set; }
-
-    /// <summary>
     /// The progress line for background chart preparation (#1266), shown under
     /// the bulk bar; <see langword="null"/> where the host runs no warmer.
     /// </summary>
     public PortrayalWarmStatusViewModel? PortrayalWarm { get; set; }
 
-    /// <summary>
-    /// The identities SECOM sources choose from (#883); set by the host. With
-    /// it, SECOM rows show their identity and the details pane shows a selected
-    /// source's Connection.
-    /// </summary>
-    internal Services.Secom.SecomIdentityDirectory? Identities
-    {
-        get => _identities;
-        set
-        {
-            _identities = value;
-            if (value is null)
-                return;
-            value.Changed += (_, _) => _dispatch(UpdateSecomIdentities);
-            SecomDetails = new Secom.SecomSourceDetailsViewModel(
-                value, (collectionId, source) => _library.UpdateSource(collectionId, source), tab => OpenKeys?.Invoke(tab), _time);
-            OnPropertyChanged(nameof(SecomDetails));
-            UpdateSecomIdentities();
-        }
-    }
-
-    private Services.Secom.SecomIdentityDirectory? _identities;
-
-    /// <summary>A selected SECOM source's Connection details (#883 D3); null without <see cref="Identities"/>.</summary>
-    public Secom.SecomSourceDetailsViewModel? SecomDetails { get; private set; }
-
     /// <summary>True when the details pane shows a SECOM source's Connection: one is selected and no dataset is.</summary>
-    public bool ShowsSecomDetails => SecomDetails?.SourceId is not null && _selectedItem is null;
+    public bool ShowsSecomDetails => _tree.SecomDetails?.SourceId is not null && _selectedItem is null;
 
     /// <summary>True when the details pane shows its "select a dataset" placeholder.</summary>
     public bool ShowsItemPlaceholder => _selectedItem is null && !ShowsSecomDetails;
-
-    private void OpenSecomFix(LibraryNodeViewModel? node)
-    {
-        switch (node?.SecomFixKind)
-        {
-            case SecomFix.ChooseIdentity or SecomFix.ChooseAnotherIdentity when SecomDetails is not null:
-                SelectedNode = node;
-                SelectedItem = null;
-                SecomDetails.OpenPicker();
-                break;
-            case SecomFix.TrustedAuthorities:
-                OpenKeys?.Invoke(Keys.KeysTab.Authorities);
-                break;
-            case not null:
-                OpenKeys?.Invoke(Keys.KeysTab.Identities);
-                break;
-        }
-    }
-
-    /// <summary>Gives SECOM source nodes their identity line, and refreshes the details pane.</summary>
-    private void UpdateSecomIdentities()
-    {
-        if (_identities is not { } identities)
-            return;
-        var hasIdentities = identities.HasIdentities;
-        foreach (var node in Nodes.SelectMany(n => n.SelfAndDescendants()))
-        {
-            var only = node.IsGroup ? null : node.Source ?? (node.Collection.Sources is [var single] ? single : null);
-            node.SecomIdentity = only?.Definition is SecomSource secom
-                ? new SecomNodeIdentity(
-                    identities.RowLabel(secom.Identity),
-                    hasIdentities,
-                    identities.Resolve(secom.Identity) is { } entry ? identities.EndsInDays(entry) : null)
-                : null;
-        }
-
-        ShowSecomDetails();
-    }
-
-    /// <summary>Shows the selected node's SECOM source (if it is one) in the details pane.</summary>
-    private void ShowSecomDetails()
-    {
-        if (SecomDetails is null)
-            return;
-        var node = _selectedNode;
-        var source = node is null || node.IsGroup ? null : node.Source ?? (node.Collection.Sources is [var single] ? single : null);
-        SecomDetails.Show(node?.Collection, source);
-        OnPropertyChanged(nameof(ShowsSecomDetails));
-        OnPropertyChanged(nameof(ShowsItemPlaceholder));
-    }
-
-    /// <summary>True when the selected node is an area of a remote S-100 catalogue (S-102).</summary>
-    public bool CanAddCurrentsForArea => _selectedNode is { IsGroup: true, Source.Definition: S100CatalogueFeedSource };
-
-    private Task AddCurrentsForAreaAsync()
-    {
-        if (!CanAddCurrentsForArea
-            || GeoBounds.UnionAll(_selectedNode!.EnumerateItems().Select(p => p.Item.Bounds).OfType<GeoBounds>()) is not { } area)
-        {
-            return Task.CompletedTask;
-        }
-
-        return _importer.AddCurrentsForAreaAsync(area, targetCollectionId: null);
-    }
 
     private LibraryPairing? _pairing;
 
@@ -650,9 +495,9 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// </summary>
     internal bool Reveal(Guid sourceId, string key)
     {
-        var node = Nodes.SelectMany(n => n.SelfAndDescendants())
+        var node = _tree.Nodes.SelectMany(n => n.SelfAndDescendants())
             .FirstOrDefault(n => !n.IsGroup && n.Source?.Id == sourceId && n.EnumerateItems().Any(p => p.Item.Key == key))
-            ?? Nodes.FirstOrDefault(n => n.EnumerateItems().Any(p => p.Source.Id == sourceId && p.Item.Key == key));
+            ?? _tree.Nodes.FirstOrDefault(n => n.EnumerateItems().Any(p => p.Source.Id == sourceId && p.Item.Key == key));
         if (node is null)
             return false;
         if (_location is not null)
@@ -670,8 +515,8 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsStateOnline));
         OnPropertyChanged(nameof(IsStateUpdates));
         OnPropertyChanged(nameof(IsAtViewTime));
-        if (_selectedNode != node)
-            SelectedNode = node;
+        if (_tree.SelectedNode != node)
+            _tree.SelectedNode = node;
         else
             ApplyFilter();
         var row = _allItems.FirstOrDefault(i => i.Source.Id == sourceId && i.Item.Key == key);
@@ -761,97 +606,6 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// package group, and never the groups' header rows.
     /// </summary>
     private int ListedCount => _listedDatasets;
-
-    public ICommand AddFolderCommand { get; }
-
-    public ICommand AddExchangeSetZipCommand { get; }
-
-    /// <summary>Opens the directory of known online catalogues (NOAA, USACE, …).</summary>
-    public ICommand AddOnlineCatalogueCommand { get; }
-
-    public ICommand AddS128CatalogueCommand { get; }
-
-    /// <summary>Connects to a feed served by <c>s100 feed serve</c> on another computer.</summary>
-    public ICommand AddSharedFeedCommand { get; }
-
-    /// <summary>Picks a collection manifest (<c>*.s100collection.json</c>).</summary>
-    public ICommand AddCollectionManifestCommand { get; }
-
-    /// <summary>Changes which groups the selected collection-manifest source includes.</summary>
-    public ICommand ChooseGroupsCommand { get; }
-
-    /// <summary>Re-indexes every source.</summary>
-    public ICommand RefreshAllCommand { get; }
-
-    /// <summary>Starts renaming the selected collection or source in place.</summary>
-    public ICommand RenameCommand { get; }
-
-    /// <summary>Turns "Show on map" on or off for the selected source (or every source of the selected collection), #809.</summary>
-    public ICommand ToggleShowOnMapCommand { get; }
-
-    /// <summary>True when the selected node is a kept source or collection, whose datasets can be kept on the map.</summary>
-    public bool CanShowOnMap => SelectedSources().Length > 0;
-
-    /// <summary>True when every source of the selected node shows on the map (the menu item's tick).</summary>
-    public bool SelectedShowsOnMap => SelectedSources() is { Length: > 0 } sources && sources.All(s => s.Definition.ShowOnMap);
-
-    /// <summary>The sources a node-level action applies to: the source node's, or every source of a collection node.</summary>
-    private LibrarySource[] SelectedSources() => _selectedNode switch
-    {
-        null or { IsGroup: true } => [],
-        { Collection.IsSession: true } => [],
-        { Source: { } source } => [source],
-        { } node => [.. node.Collection.Sources],
-    };
-
-    private void ToggleShowOnMap()
-    {
-        var sources = SelectedSources();
-        if (sources.Length == 0 || _selectedNode is not { } node)
-            return;
-        var show = !sources.All(s => s.Definition.ShowOnMap);
-        foreach (var source in sources)
-            _library.UpdateSource(node.Collection.Id, source.Definition with { ShowOnMap = show });
-        OnPropertyChanged(nameof(SelectedShowsOnMap));
-    }
-
-    /// <summary>Turns "Keep downloaded" (sync) on or off for the selected online source, or a collection's online sources (#809).</summary>
-    public ICommand ToggleSyncCommand { get; }
-
-    /// <summary>True when the selected node has online sources that can be kept downloaded.</summary>
-    public bool CanSyncSelected => SyncableSelectedSources().Length > 0;
-
-    /// <summary>True when every online source of the selected node is kept downloaded (the menu item's tick).</summary>
-    public bool SelectedSyncs => SyncableSelectedSources() is { Length: > 0 } sources && sources.All(s => s.Definition.Sync);
-
-    private LibrarySource[] SyncableSelectedSources() =>
-        _sync is null ? [] : [.. SelectedSources().Where(s => _sync.CanSync(s.Definition))];
-
-    private void ToggleSync()
-    {
-        var sources = SyncableSelectedSources();
-        if (sources.Length == 0 || _selectedNode is not { } node)
-            return;
-        var sync = !sources.All(s => s.Definition.Sync);
-        foreach (var source in sources)
-            _library.UpdateSource(node.Collection.Id, source.Definition with { Sync = sync });
-        OnPropertyChanged(nameof(SelectedSyncs));
-    }
-
-    /// <summary>Applies the name typed while renaming.</summary>
-    public ICommand CommitRenameCommand { get; }
-
-    /// <summary>Leaves renaming without changing the name.</summary>
-    public ICommand CancelRenameCommand { get; }
-
-    /// <summary>Re-indexes the selected node (or everything when nothing is selected).</summary>
-    public ICommand RefreshCommand { get; }
-
-    /// <summary>Removes the selected collection or source from the library (never the data).</summary>
-    public ICommand RemoveCommand { get; }
-
-    /// <summary>Persists the selected session S-128 catalogue as a collection.</summary>
-    public ICommand KeepInLibraryCommand { get; }
 
     /// <summary>Zooms the map to the selected dataset.</summary>
     public ICommand ZoomToCommand { get; }
@@ -1077,9 +831,9 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// <summary>When the selected node's catalogues were last checked ("21:04" today, else the date).</summary>
     private string LastChecked()
     {
-        var sources = _selectedNode is { } node ? node.Source is { } s ? [s] : node.Collection.Sources : [];
+        var sources = _tree.SelectedNode is { } node ? node.Source is { } s ? [s] : node.Collection.Sources : [];
         var checkedAt = sources
-            .Select(x => _feedHealth?.Invoke(x.Definition)?.CheckedAt ?? x.Index?.IndexedAt)
+            .Select(x => _tree.HealthOf(x.Definition)?.CheckedAt ?? x.Index?.IndexedAt)
             .OfType<DateTimeOffset>()
             .DefaultIfEmpty(_time.GetUtcNow())
             .Max()
@@ -1102,10 +856,10 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// </summary>
     public bool IsBulkOffline =>
         !IsBulkDownloading
-        && _selectedNode is { } node
+        && _tree.SelectedNode is { } node
         && (node.Source is { } source ? [source] : node.Collection.Sources) is { Count: > 0 } sources
         && sources.All(s => s.Definition is S100CatalogueFeedSource or S100ForecastFeedSource
-            && _feedHealth?.Invoke(s.Definition) is { IsReachable: false });
+            && _tree.HealthOf(s.Definition) is { IsReachable: false });
 
     /// <summary>How many listed datasets have a copy on disk (current or not).</summary>
     private int LocalListedCount() =>
@@ -1134,14 +888,14 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// </summary>
     public void SelectArea(Guid sourceId, string folder)
     {
-        foreach (var collection in Nodes)
+        foreach (var collection in _tree.Nodes)
         {
             if (collection.Children.FirstOrDefault(c => c.Id == sourceId) is not { } source)
                 continue;
 
             collection.IsExpanded = true;
             source.IsExpanded = true;
-            SelectedNode = source.Children.FirstOrDefault(c => c.GroupId == folder) ?? source;
+            _tree.SelectedNode = source.Children.FirstOrDefault(c => c.GroupId == folder) ?? source;
             return;
         }
     }
@@ -1279,7 +1033,10 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     public void Dispose()
     {
         _clock?.Dispose();
-        _library.Changed -= OnLibraryChanged;
+        _tree.SelectedNodeChanged -= OnSelectedNodeChanged;
+        _tree.Synced -= OnTreeSynced;
+        _tree.SecomDetailsChanged -= OnSecomDetailsChanged;
+        _tree.SecomPickerOpening -= OnSecomPickerOpening;
         _loader.Changed -= OnLoaderChanged;
         _downloader.Changed -= OnLoaderChanged;
         _downloader.ProgressChanged -= OnDownloadProgress;
@@ -1287,7 +1044,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     private void OnDownloadProgress(object? sender, EventArgs e)
     {
-        lock (Nodes)
+        lock (_gate)
         {
             if (_progressRefreshPosted)
                 return;
@@ -1296,7 +1053,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
 
         _dispatch(() =>
         {
-            lock (Nodes)
+            lock (_gate)
                 _progressRefreshPosted = false;
             RefreshDownloadProgress();
         });
@@ -1316,7 +1073,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsCheckForRuns));
         OnPropertyChanged(nameof(DownloadListedText));
         ((RelayCommand)CancelDownloadsCommand).NotifyCanExecuteChanged();
-        UpdateNodeDownloadStatus();
+        _tree.RefreshDownloadStatus();
     }
 
     /// <summary>
@@ -1333,7 +1090,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
             item.RefreshClock();
         foreach (var header in _packageHeaders.Values.Where(h => h.IsModelHeader))
             header.Members = header.Members;
-        UpdateCatalogueCounts();
+        _tree.RefreshStatus();
         if (_stateFilter == LibraryStateFilter.All)
             Recount();
         else
@@ -1343,91 +1100,10 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(HasDownloadable));
     }
 
-    /// <summary>
-    /// Gives each remote S-100 catalogue node its local and update counts for
-    /// its status line ("Catalogue 30.09 · 140 updates"); a one-source
-    /// collection shows its source's.
-    /// </summary>
-    private void UpdateCatalogueCounts()
-    {
-        foreach (var collection in Nodes)
-        {
-            LibraryCatalogueCounts? only = null;
-            LibraryForecastCounts? onlyForecast = null;
-            LibrarySyncStatus? onlySync = null;
-            foreach (var child in collection.Children)
-            {
-                // A synced source's last sync (#807, #809); its kind's own counts follow.
-                child.SyncStatus = _sync is not null && child.Source is { } synced && _sync.IsSynced(synced.Definition)
-                    ? _sync.StatusOf(synced.Id)
-                    : null;
-                if (collection.Children.Count == 1)
-                    onlySync = child.SyncStatus;
-
-                if (child.Source is { Definition: S100ForecastFeedSource, Index: { } runs })
-                {
-                    child.ForecastCounts = LibraryNodeText.ForecastCounts(runs, _downloader, _time.GetUtcNow());
-                    if (collection.Children.Count == 1)
-                        onlyForecast = child.ForecastCounts;
-                    continue;
-                }
-
-                if (child.Source is not { Definition: S100CatalogueFeedSource, Index: { } index })
-                    continue;
-
-                child.CatalogueCounts = LibraryNodeText.CatalogueCounts(index, _downloader);
-                if (collection.Children.Count == 1)
-                    only = child.CatalogueCounts;
-            }
-
-            collection.CatalogueCounts = only;
-            collection.ForecastCounts = onlyForecast;
-            collection.SyncStatus = onlySync;
-        }
-    }
-
-    /// <summary>Sets "Downloading 2 of 5 · 4,3 MB left" on the nodes whose datasets are downloading.</summary>
-    private void UpdateNodeDownloadStatus()
-    {
-        var bySource = new Dictionary<Guid, string?>();
-        lock (_downloadingBySource)
-        {
-            foreach (var (sourceId, items) in _downloadingBySource.ToArray())
-            {
-                var statuses = items.Select(_downloader.StatusOf).ToArray();
-                var pending = statuses.Count(s => s is { State: not LibraryDownloadItemState.Failed });
-                if (pending == 0 || _downloader.Progress is null)
-                {
-                    _downloadingBySource.Remove(sourceId);
-                    bySource[sourceId] = null;
-                    continue;
-                }
-
-                var left = items.Zip(statuses)
-                    .Where(p => p.Second is { State: not LibraryDownloadItemState.Failed })
-                    .Sum(p => Math.Max(0, ((p.First.Location as RemoteItemLocation)?.SizeBytes ?? 0) - p.Second!.BytesReceived));
-                bySource[sourceId] = LibraryNodeText.Downloading(items.Count - pending + 1, items.Count, left);
-            }
-        }
-
-        foreach (var collection in Nodes)
-        {
-            string? collectionStatus = null;
-            foreach (var child in collection.Children)
-            {
-                if (bySource.TryGetValue(child.Id, out var status))
-                    child.DownloadStatus = status;
-                collectionStatus ??= child.DownloadStatus;
-            }
-
-            collection.DownloadStatus = collectionStatus;
-        }
-    }
-
     private void OnLoaderChanged(object? sender, EventArgs e)
     {
         // Coalesce bursts (e.g. one notification per downloaded cell).
-        lock (Nodes)
+        lock (_gate)
         {
             if (_availabilityRefreshPosted)
                 return;
@@ -1436,7 +1112,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
 
         _coalesce(() =>
         {
-            lock (Nodes)
+            lock (_gate)
                 _availabilityRefreshPosted = false;
             // Every row, not only the listed ones: the state segments count them all.
             // (A row whose availability was never resolved returns at once.)
@@ -1444,7 +1120,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
                 item.RefreshAvailability();
             foreach (var header in _packageHeaders.Values.Where(h => h.IsModelHeader))
                 header.Members = header.Members;
-            UpdateCatalogueCounts();
+            _tree.RefreshStatus();
             UpdatePairing();
             RefreshDownloadProgress();
             // A dataset whose state changed may now belong to another segment.
@@ -1504,120 +1180,12 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     private Task DownloadListedAsync() =>
         _download.RunAsync([.. Downloadable().Select(row => (row.Item, row.Source))], load: false);
 
-    /// <summary>Notes the sources a download starts on, for the tree's status lines (also for downloads the Timeline or MCP start).</summary>
-    private void OnDownloadStarting(object? sender, IReadOnlyList<(CollectionItem Item, LibrarySource Source)> items) =>
-        TrackDownloads(items);
-
     /// <summary>Opens the groups of packages whose datasets the Library now lists (once).</summary>
     private void OnPackagesUnpacked(object? sender, IReadOnlyList<(Guid Source, string Package)> packages)
     {
         foreach (var package in packages)
             _expandedPackages.Add(package);
         _dispatch(() => RebuildItems(force: true));
-    }
-
-    /// <summary>Remembers which sources' datasets are downloading, for the tree's status lines.</summary>
-    private void TrackDownloads(IEnumerable<(CollectionItem Item, LibrarySource Source)> items)
-    {
-        lock (_downloadingBySource)
-        {
-            foreach (var group in items.GroupBy(i => i.Source.Id))
-                _downloadingBySource[group.Key] = group.Select(i => i.Item).ToList();
-        }
-    }
-
-    /// <summary>
-    /// The persisted collection new sources are added to by default: the
-    /// selected node's collection, unless it is the session collection.
-    /// </summary>
-    private Guid? TargetCollectionId =>
-        _selectedNode is { Collection.IsSession: false } node ? node.Collection.Id : null;
-
-    private void OnLibraryChanged(object? sender, EventArgs e)
-    {
-        // Coalesce bursts of indexing notifications into one UI update.
-        lock (Nodes)
-        {
-            if (_refreshPosted)
-                return;
-            _refreshPosted = true;
-        }
-
-        _dispatch(() =>
-        {
-            lock (Nodes)
-                _refreshPosted = false;
-            Sync();
-        });
-    }
-
-    /// <summary>Brings <see cref="Nodes"/> in line with the library snapshot.</summary>
-    internal void Sync()
-    {
-        var snapshot = _library.Collections;
-        var knownSources = Nodes.SelectMany(n => n.Children).Select(c => c.Id).ToHashSet();
-
-        for (var i = Nodes.Count - 1; i >= 0; i--)
-        {
-            if (!snapshot.Any(c => c.Id == Nodes[i].Id))
-            {
-                if (_selectedNode is not null && Nodes[i].SelfAndDescendants().Contains(_selectedNode))
-                    SelectedNode = null;
-                Nodes.RemoveAt(i);
-            }
-        }
-
-        for (var i = 0; i < snapshot.Count; i++)
-        {
-            var collection = snapshot[i];
-            var existing = Nodes.FirstOrDefault(n => n.Id == collection.Id);
-            if (existing is null)
-            {
-                Nodes.Insert(i, LibraryNodeViewModel.ForCollection(collection, _feedHealth, _runFormat));
-                continue;
-            }
-
-            var selected = _selectedNode is { IsCollection: false } node && existing.SelfAndDescendants().Contains(node)
-                ? node
-                : null;
-            existing.Update(collection);
-            if (selected is not null && !existing.SelfAndDescendants().Contains(selected))
-            {
-                // A vanished group falls back to its source, a vanished source to its collection.
-                SelectedNode = selected.IsGroup
-                    ? existing.Children.FirstOrDefault(c => c.Id == selected.Id) ?? existing
-                    : existing;
-            }
-
-            var at = Nodes.IndexOf(existing);
-            if (at != i)
-                Nodes.Move(at, i);
-        }
-
-        // A newly added collection manifest opens expanded, with its collection, once.
-        if (_hasSynced)
-        {
-            foreach (var collection in Nodes)
-            {
-                foreach (var source in collection.Children.Where(
-                    c => c.Source?.Definition is LocalManifestSource && !knownSources.Contains(c.Id)))
-                {
-                    collection.IsExpanded = true;
-                    source.IsExpanded = true;
-                }
-            }
-        }
-
-        _hasSynced = true;
-
-        SelectedNode ??= Nodes.FirstOrDefault();
-        UpdateCatalogueCounts();
-        UpdateSecomIdentities();
-        OnPropertyChanged(nameof(IsEmpty));
-        ((RelayCommand)RemoveCommand).NotifyCanExecuteChanged();
-        ((RelayCommand)KeepInLibraryCommand).NotifyCanExecuteChanged();
-        ((RelayCommand)RenameCommand).NotifyCanExecuteChanged();
-        RebuildItems(force: false);
     }
 
     private void SetLocation(GeoPosition? position)
@@ -1631,7 +1199,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
 
         var selected = _selectedItem;
         _itemsBasis = null;
-        _allItems = position is { } p ? HitsAt(p) : BuildNodeItems(_selectedNode);
+        _allItems = position is { } p ? HitsAt(p) : BuildNodeItems(_tree.SelectedNode);
         UpdateHasAml();
         ApplyFilter();
         SelectedItem = selected is null ? null : _items.FirstOrDefault(i => SameItem(i, selected));
@@ -1677,7 +1245,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var node = _selectedNode;
+        var node = _tree.SelectedNode;
         var basis = node?.ItemIndexes;
         if (!force && basis is not null && _itemsBasis is not null
             && basis.Count == _itemsBasis.Count && basis.Zip(_itemsBasis).All(p => ReferenceEquals(p.First, p.Second)))
@@ -1921,8 +1489,6 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// <summary>The user switched Local/UTC: re-read every run time shown (#730).</summary>
     private void OnTimeFormatChanged()
     {
-        foreach (var node in Nodes)
-            node.RefreshTimeFormat();
         foreach (var item in _items)
             item.RefreshTimeFormat();
         foreach (var header in _packageHeaders.Values)
@@ -1962,69 +1528,6 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(LocalCount));
         OnPropertyChanged(nameof(OnlineCount));
         OnPropertyChanged(nameof(UpdatesCount));
-    }
-
-    private Task ChooseGroupsAsync() =>
-        _selectedNode is { CanChooseGroups: true, Source.Definition: LocalManifestSource source } node
-            ? _importer.ChooseManifestGroupsAsync(node.Collection.Id, source)
-            : Task.CompletedTask;
-
-    private void Refresh()
-    {
-        if (_selectedNode is { Collection.IsSession: false } node)
-            _library.Refresh(node.Collection.Id, node.Source?.Id);
-        else
-            _library.Refresh();
-    }
-
-    private void Remove()
-    {
-        if (_selectedNode is not { CanRemove: true } node)
-            return;
-
-        if (node.IsCollection)
-            _library.RemoveCollection(node.Collection.Id);
-        else
-            _library.RemoveSource(node.Collection.Id, node.Id);
-    }
-
-    private void BeginRename()
-    {
-        if (_selectedNode is not { CanRename: true } node)
-            return;
-        foreach (var other in Nodes.SelectMany(n => n.SelfAndDescendants()).Where(n => n.IsRenaming))
-            other.IsRenaming = false;
-        node.RenameText = node.Name;
-        node.IsRenaming = true;
-    }
-
-    private void CommitRename()
-    {
-        var node = Nodes.SelectMany(n => n.SelfAndDescendants()).FirstOrDefault(n => n.IsRenaming);
-        if (node is null)
-            return;
-
-        node.IsRenaming = false;
-        var name = node.RenameText.Trim();
-        if (name.Length == 0 || name == node.Name)
-            return;
-
-        if (node.IsCollection)
-            _library.RenameCollection(node.Collection.Id, name);
-        else
-            _library.RenameSource(node.Collection.Id, node.Id, name);
-    }
-
-    private void CancelRename()
-    {
-        foreach (var node in Nodes.SelectMany(n => n.SelfAndDescendants()).Where(n => n.IsRenaming))
-            node.IsRenaming = false;
-    }
-
-    private void Keep()
-    {
-        if (_selectedNode is { CanKeep: true, Source: { } source })
-            _library.KeepSessionCatalogue(source.Id);
     }
 
 }
