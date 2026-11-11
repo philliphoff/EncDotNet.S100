@@ -1,9 +1,9 @@
 # Viewer view model dependencies — Design Note
 
-> Status: **Proposed** (#1392). This note looks at why SoundCharts' view
+> Status: **Accepted** (#1392). This note looks at why SoundCharts' view
 > models still take many services after #1203, tests the idea that they
 > run workflows that belong in command handlers, and proposes slices.
-> Open questions for review are in §6.
+> The review decisions are in §6.
 
 ## 0. Problem
 
@@ -172,6 +172,9 @@ weather workflows.
 
 ### 3.2 Services out of view models
 
+- **Settings pages.** Each page view model implements `ISettingsPage`
+  (title, order) and is registered in DI. The Settings shell takes
+  `IEnumerable<ISettingsPage>`, so adding a page touches no constructor.
 - **`ViewerSettingsService`** owns load, validation, persistence and typed
   change events. It provides `IRouteWeatherLimits` and
   `IWaterLevelAdjustmentSettings`. `App`'s wiring and
@@ -223,32 +226,33 @@ Each slice keeps the UI and the MCP tool list identical (same check as
 #1382: `tools/list` schema hashes). The order puts the ones with outside
 callers first:
 
-1. **Library download and open workflows.**
+1. **Library download and open workfl (#1394).**
    - Add `DownloadLibraryItemsWorkflow` and `OpenLibraryItemsWorkflow`
      over `LibraryOperations`, plus `LibrarySourceNames`.
    - `ViewerLibraryEditor`, `ViewerLibraryController` and
      `LibraryTimeSource` stop taking the panel.
-2. **Weather runs out of the Library panel.** Add `WeatherRunMonitor` plus
+2. **Weather runs out of the Library pa (#1395).** Add `WeatherRunMonitor` plus
    the load-latest, pin and storm-marker workflows. The weather tests stop
    building a panel.
-3. **Library panel split.** Split it into tree, list, details and tap-hit
+3. **Library panel sp (#1396).** Split it into tree, list, details and tap-hit
    child view models, and make `LibraryItemViewModel` plain state.
-4. **Open a navigational warning.**
+4. **Open a navigational warn (#1397).**
    - Add `OpenNavigationalWarningWorkflow` and
      `ObjectInformationSelection`.
    - Pass the warnings panel's dependencies through its constructor only.
    - Split out `RouteScopeViewModel`.
-5. **Settings service and pages.** Add `ViewerSettingsService`, one page
-   view model per Settings page, and `ResetApplicationDataWorkflow`.
-6. **Catalogue directory.** Add `AddCatalogueByUrlWorkflow` and
+5. **Settings service and pa (#1398).** Add `ViewerSettingsService`, one
+   `ISettingsPage` view model per Settings page, and
+   `ResetApplicationDataWorkflow`.
+6. **Catalogue direct (#1399).** Add `AddCatalogueByUrlWorkflow` and
    `SecomServiceDirectory`, shared with MCP `add_library_source` and
    `list_secom_services` (this fixes the Unreachable drift). Remove the
    `Func<>` arguments.
-7. **Routes panel.**
+7. **Routes pa (#1400).**
    - Add `RouteEditCommands`, shared with `McpTools/RouteTools.cs`.
    - Inject `PassageCheckViewModel` directly.
    - Split out `RouteExchangeFooterViewModel`.
-8. **Pick report and station charts.** Leave one constructor, and add
+8. **Pick report and station cha (#1401).** Leave one constructor, and add
    `ExaminerLinks`, `PickAttributeFormatter` and `StationChartContext`.
    `PickService` returns data, not view models.
 
@@ -263,16 +267,17 @@ slice touches the view model.
   here is where logic lives, not how it's dispatched.
 - Behaviour changes.
 
-## 6. Open questions
+## 6. Decisions
 
-- **Q1 Naming.** `…Workflow`, or `…Handler`, or "saga"? This note uses
-  `Workflow` because the classes are called directly and hold no state
-  between calls, which "saga" usually implies.
-- **Q2 Toasts.** Should toasts stay in workflows, so MCP-driven actions
-  show them as they do today? The alternative is to return them in the
-  outcome for the view model to show.
-- **Q3 Settings shell.** Should the shell take its six pages as
-  `IEnumerable<ISettingsPage>`, or as named arguments? Named arguments
-  make seven, over the six-argument guideline.
-- **Q4 Order.** Should slices 1–3 (Library) go first as listed, or should
-  slice 4 (warnings) go first because it removes a dependency cycle?
+Decided in review of #1393 (2026-11-10):
+
+- **Q1 Naming: `…Workflow`.** The classes are called directly and hold no
+  state between calls. "Handler" suggests a dispatcher, and "saga"
+  suggests long-running state, and neither fits.
+- **Q2 Toasts: inside the workflow.** An action started over MCP shows the
+  same toast in the app as a click does. The outcome still carries the
+  error for the caller.
+- **Q3 Settings shell: `IEnumerable<ISettingsPage>`.** The pages are
+  registered in DI with an order, and the shell takes one argument.
+- **Q4 Order: Library first.** Slices 1–3 go first, in order. The other
+  slices follow and don't depend on each other.
