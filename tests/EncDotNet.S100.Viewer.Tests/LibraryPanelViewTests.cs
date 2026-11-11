@@ -61,10 +61,10 @@ public sealed class LibraryPanelViewTests : IDisposable
         using var host = Show(panel);
         Assert.Equal(4, VisibleRows(host).Count);
 
-        var source = panel.Nodes[0].Children[1];
+        var source = panel.Tree.Nodes[0].Children[1];
         host.Click(NodeLabel(host, source));
 
-        Assert.Same(source, panel.SelectedNode);
+        Assert.Same(source, panel.Tree.SelectedNode);
         Assert.Equal(2, VisibleRows(host).Count);
         Assert.All(panel.Items, i => Assert.Equal(source.Id, i.Source.Id));
     }
@@ -207,12 +207,12 @@ public sealed class LibraryPanelViewTests : IDisposable
         await AddS57CollectionAsync("Charts");
         using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
-        var collection = panel.Nodes.Single();
+        var collection = panel.Tree.Nodes.Single();
         var source = collection.Children.Single();
 
         // The menu acts on the node under the pointer, which it selects first.
         var menu = host.RightClick(NodeLabel(host, source));
-        Assert.Same(source, panel.SelectedNode);
+        Assert.Same(source, panel.Tree.SelectedNode);
         host.Click(host.Find<MenuItem>("Library.NodeMenu.Rename", menu));
 
         // The box opens focused with the old name selected, so typing replaces it.
@@ -226,7 +226,7 @@ public sealed class LibraryPanelViewTests : IDisposable
 
         Assert.False(source.IsRenaming);
         Assert.Equal("Survey 2026", Assert.Single(Assert.Single(_library.Collections).Sources).Definition.DisplayName);
-        Assert.Equal("Survey 2026", panel.Nodes.Single().Children.Single().Name);
+        Assert.Equal("Survey 2026", panel.Tree.Nodes.Single().Children.Single().Name);
     }
 
     [AvaloniaFact]
@@ -235,7 +235,7 @@ public sealed class LibraryPanelViewTests : IDisposable
         await AddS57CollectionAsync("Charts");
         using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
-        var collection = panel.Nodes.Single();
+        var collection = panel.Tree.Nodes.Single();
 
         var menu = host.RightClick(NodeLabel(host, collection));
         host.Click(host.Find<MenuItem>("Library.NodeMenu.Rename", menu));

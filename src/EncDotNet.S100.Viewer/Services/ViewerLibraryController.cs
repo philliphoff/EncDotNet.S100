@@ -9,32 +9,37 @@ namespace EncDotNet.S100.Viewer.Services;
 /// <summary>
 /// The viewer's <see cref="ILibraryReader"/>: item state, tags and details come
 /// from the Library's rows (<see cref="LibraryRows"/>), and the collections and
-/// sources from the Library panel's tree, so they match what the user sees.
+/// sources from the Library tree, so they match what the user sees.
 /// </summary>
 internal sealed class ViewerLibraryController : ILibraryReader
 {
-    private readonly LibraryPanelViewModel _panel;
+    private readonly LibraryTreeViewModel _tree;
     private readonly LibraryRows _rows;
+    private readonly GlobalTimeService _viewTime;
     private readonly Func<IReadOnlyList<KnownCatalogueSource>> _userCatalogues;
     private readonly Func<Action, Task> _dispatch;
 
     /// <summary>Creates the reader.</summary>
-    /// <param name="panel">The Library panel, whose tree and view-time facet the tools report.</param>
+    /// <param name="tree">The Library tree, whose collections, sources and status lines the tools report.</param>
     /// <param name="rows">The Library's rows.</param>
+    /// <param name="viewTime">The Timeline's view time, for the <c>validAt</c> filter.</param>
     /// <param name="userCatalogues">The catalogues the user added to the known sources.</param>
     /// <param name="dispatch">Runs a read on the UI thread.</param>
     public ViewerLibraryController(
-        LibraryPanelViewModel panel,
+        LibraryTreeViewModel tree,
         LibraryRows rows,
+        GlobalTimeService viewTime,
         Func<IReadOnlyList<KnownCatalogueSource>> userCatalogues,
         Func<Action, Task> dispatch)
     {
-        ArgumentNullException.ThrowIfNull(panel);
+        ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(rows);
+        ArgumentNullException.ThrowIfNull(viewTime);
         ArgumentNullException.ThrowIfNull(userCatalogues);
         ArgumentNullException.ThrowIfNull(dispatch);
-        _panel = panel;
+        _tree = tree;
         _rows = rows;
+        _viewTime = viewTime;
         _userCatalogues = userCatalogues;
         _dispatch = dispatch;
     }
@@ -44,7 +49,7 @@ internal sealed class ViewerLibraryController : ILibraryReader
     {
         ct.ThrowIfCancellationRequested();
         IReadOnlyList<LibraryCollectionInfo> result = [];
-        await _dispatch(() => result = _panel.Nodes.Select(node => new LibraryCollectionInfo(
+        await _dispatch(() => result = _tree.Nodes.Select(node => new LibraryCollectionInfo(
             node.Collection.Id,
             node.Name,
             node.KindTag,
@@ -87,7 +92,7 @@ internal sealed class ViewerLibraryController : ILibraryReader
         if (query.ValidAtViewTime)
         {
             // No view time (no time-aware data loaded): nothing is valid at it.
-            if (_panel.CurrentViewTime is not { } viewTime)
+            if ((_viewTime.IsActive ? _viewTime.CurrentTime : (DateTime?)null) is not { } viewTime)
                 return LibraryQuery.ScopeOf(_rows.Collections, query.SourceId) is null ? null : [];
             validAt = viewTime;
         }

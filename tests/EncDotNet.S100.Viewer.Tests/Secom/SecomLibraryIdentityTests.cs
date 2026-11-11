@@ -93,16 +93,16 @@ public sealed class SecomLibraryIdentityTests : IDisposable
         await _library.WhenIdle();
         using var panel = Panel();
 
-        var row = panel.Nodes.Single().Children.Single();
+        var row = panel.Tree.Nodes.Single().Children.Single();
         Assert.Equal("SECOM · Bridge PC · no datasets yet", row.SecondaryName);
         Assert.Equal("Your certificate was refused", row.StatusLine);
         Assert.Equal("Choose another identity…", row.SecomFixText);
 
-        panel.SelectedNode = panel.Nodes.Single();
-        panel.OpenSecomFixCommand.Execute(row);
+        panel.Tree.SelectedNode = panel.Tree.Nodes.Single();
+        panel.Tree.OpenSecomFixCommand.Execute(row);
 
-        var details = panel.SecomDetails!;
-        Assert.Same(row, panel.SelectedNode);
+        var details = panel.Tree.SecomDetails!;
+        Assert.Same(row, panel.Tree.SelectedNode);
         Assert.True(panel.ShowsSecomDetails);
         Assert.True(details.Picker.IsOpen);
         Assert.StartsWith("Presented Bridge PC · refused ", details.PresentationLine, StringComparison.Ordinal);
@@ -115,12 +115,12 @@ public sealed class SecomLibraryIdentityTests : IDisposable
         _indexer.Accept(organisation.Id, organisation.Mrn!);
         details.Picker.Items.Single(i => i.Setting == organisation.Id).ChooseCommand.Execute(null);
         await _library.WhenIdle();
-        panel.Sync();
+        panel.Tree.Sync();
 
         Assert.Equal(organisation.Id, ((SecomSource)_library.Collections[0].Sources[0].Definition).Identity);
         Assert.Equal("Presented SoundCharts organisation · accepted", details.PresentationLine);
         Assert.Equal("Re-read with SoundCharts organisation · 1 dataset", details.RereadNote);
-        Assert.Equal("SECOM · SoundCharts organisation · 1 dataset", panel.Nodes.Single().Children.Single().SecondaryName);
+        Assert.Equal("SECOM · SoundCharts organisation · 1 dataset", panel.Tree.Nodes.Single().Children.Single().SecondaryName);
         Assert.Null(details.ActionText);
     }
 
@@ -132,15 +132,15 @@ public sealed class SecomLibraryIdentityTests : IDisposable
         await _library.WhenIdle();
         using var panel = Panel();
 
-        var row = panel.Nodes.Single();
+        var row = panel.Tree.Nodes.Single();
         Assert.Equal("SECOM · Default (not set) · no datasets yet", row.SecondaryName);
         Assert.Equal("Needs a certificate", row.StatusLine);
         Assert.Equal("Set up an identity…", row.SecomFixText);
-        panel.OpenSecomFixCommand.Execute(row);
+        panel.Tree.OpenSecomFixCommand.Execute(row);
         Assert.Equal([KeysTab.Identities], _opened);
 
-        Assert.Equal("Service asked for a certificate · none presented", panel.SecomDetails!.PresentationLine);
-        Assert.Equal("identity: default", panel.SecomDetails.Fields.Single(f => f.IsMono).Value);
+        Assert.Equal("Service asked for a certificate · none presented", panel.Tree.SecomDetails!.PresentationLine);
+        Assert.Equal("identity: default", panel.Tree.SecomDetails.Fields.Single(f => f.IsMono).Value);
     }
 
     [Fact]
@@ -152,19 +152,19 @@ public sealed class SecomLibraryIdentityTests : IDisposable
         await _library.WhenIdle();
         using var panel = Panel();
 
-        var row = panel.Nodes.Single();
+        var row = panel.Tree.Nodes.Single();
         Assert.Equal("SECOM · Default (Bridge PC) · 1 dataset", row.SecondaryName);
         Assert.Equal("Certificate ends in 12 days", row.StatusLine);
         Assert.Equal("Manage identities…", row.SecomFixText);
-        Assert.Null(panel.SecomDetails!.ActionText);  // the details don't repeat "Manage identities…"
+        Assert.Null(panel.Tree.SecomDetails!.ActionText);  // the details don't repeat "Manage identities…"
     }
 
     private LibraryPanelViewModel Panel()
     {
         var panel = TestLibrary.Panel(_library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
-        panel.OpenKeys = _opened.Add;
-        panel.Identities = _directory;
-        panel.Sync();
+        panel.Tree.OpenKeys = _opened.Add;
+        panel.Tree.Identities = _directory;
+        panel.Tree.Sync();
         return panel;
     }
 
