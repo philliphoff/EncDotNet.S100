@@ -65,7 +65,7 @@ public sealed class AmlStyleCatalog
     public const string StyleName = "Aml";
 
     /// <summary>The style's version: bump it whenever its symbols, palette or rules change.</summary>
-    public const int Version = 1;
+    public const int Version = 2;
 
     /// <summary>The caption the legend and the display section show (decision 23).</summary>
     public const string NoChecksNote = "AML depths aren't used for depth answers or route checks.";
@@ -97,7 +97,7 @@ public sealed class AmlStyleCatalog
         var resources = Modules.Select(m => m.Resources).ToList();
         Symbols = new AmlSymbols(
             Families,
-            classes.Where(c => c.Glyph is not null).Select(c => (c.Family, c.Glyph!)).Distinct(),
+            classes.SelectMany(c => c.Glyphs.Select(g => (c.Family, g))).Distinct(),
             resources.SelectMany(r => r.Symbols),
             [.. resources.Select(r => r.SymbolResolver).OfType<Func<string, string?>>()]);
         foreach (var style in Families.SelectMany(AmlSignature.LineStyles).Concat(resources.SelectMany(r => r.LineStyles)))
@@ -112,8 +112,8 @@ public sealed class AmlStyleCatalog
         ContentScope = ApplicationContentScope.For(StyleName, Version);
     }
 
-    /// <summary>The built-in modules, such as <see cref="RalAirStyles"/>, <see cref="ClbStyles"/> and <see cref="EsbEnvironmentalStyles"/>.</summary>
-    public static IReadOnlyList<IAmlStyleModule> BuiltInModules { get; } = [RalAirStyles.Module, RalOperationalStyles.Module, ClbStyles.Module, MffStyles.Module, ChartBackgroundStyles.Module, AirfieldStyles.Module, EsbEnvironmentalStyles.Module];
+    /// <summary>The built-in modules, such as <see cref="RalAirStyles"/>, <see cref="ClbStyles"/>, <see cref="EsbEnvironmentalStyles"/> and <see cref="SeabedStyles"/>.</summary>
+    public static IReadOnlyList<IAmlStyleModule> BuiltInModules { get; } = [RalAirStyles.Module, RalOperationalStyles.Module, ClbStyles.Module, MffStyles.Module, ChartBackgroundStyles.Module, AirfieldStyles.Module, EsbEnvironmentalStyles.Module, SeabedStyles.SboModule, SeabedStyles.LboModule];
 
     /// <summary>The catalogue of <see cref="BuiltInModules"/>.</summary>
     public static AmlStyleCatalog Default { get; } = new(BuiltInModules);

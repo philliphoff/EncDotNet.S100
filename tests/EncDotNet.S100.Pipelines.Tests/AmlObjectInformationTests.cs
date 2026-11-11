@@ -228,7 +228,8 @@ public class AmlObjectInformationTests
         Assert.True(result.TryGetValue(out var value));
         var obstruction = Assert.Single(value!.Features, f => f.FeatureId == ObstructionRef);
         Assert.Equal("Obstruction", obstruction.FeatureTypeName);
-        Assert.False(obstruction.Aml!.Drawn);
+        // The LBO seabed style rings chart-class obstructions (#1375).
+        Assert.True(obstruction.Aml!.Drawn);
     });
 
     [Fact]

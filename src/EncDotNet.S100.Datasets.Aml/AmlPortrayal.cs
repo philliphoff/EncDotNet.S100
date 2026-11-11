@@ -72,12 +72,18 @@ public sealed class AmlPortrayal
                 continue;
 
             var feature = Feature(dataSet, geometry, record, objectClass, ids);
-            if (feature is null)
-                continue;
-            features.Add(feature);
+            if (feature is not null)
+                features.Add(feature);
+        }
 
+        // Dense points cluster on each clustering's scale ladder (decision 20).
+        var ladders = Cluster(features);
+
+        foreach (var feature in features)
+        {
             var style = Catalog.Find(feature.FeatureType);
-            var built = style is null ? [] : Build(feature, style);
+            double? clusteredBeyond = style?.Clustering is { } c && ladders.TryGetValue(c, out var ladder) && ladder.AloneUntil.TryGetValue(feature, out var beyond) ? beyond : null;
+            var built = style is null ? [] : Build(feature, style, clusteredBeyond);
             if (built.Count == 0)
             {
                 undrawn.Add(feature.FeatureType);
@@ -85,8 +91,19 @@ public sealed class AmlPortrayal
             }
 
             drawn++;
-            if (!instructions.TryGetValue(style!.Family, out var list))
-                instructions[style.Family] = list = [];
+            Add(style!.Family, built);
+        }
+
+        foreach (var (clustering, ladder) in ladders)
+        {
+            foreach (var bubble in ladder.Bubbles)
+                Add(clustering.Family, [.. bubble.Build(clustering, new AmlDrawingContext(bubble.Anchor, clustering.Family))]);
+        }
+
+        void Add(AmlFamily family, IReadOnlyList<DrawingInstruction> built)
+        {
+            if (!instructions.TryGetValue(family, out var list))
+                instructions[family] = list = [];
             list.AddRange(built);
         }
 
@@ -108,11 +125,14 @@ public sealed class AmlPortrayal
     /// </summary>
     /// <param name="feature">The feature.</param>
     /// <param name="style">Its class's style.</param>
-    public static IReadOnlyList<DrawingInstruction> Build(AmlFeature feature, AmlClassStyle style)
+    public static IReadOnlyList<DrawingInstruction> Build(AmlFeature feature, AmlClassStyle style) => Build(feature, style, null);
+
+    // The drawing of one feature, drawn alone only up to clusteredBeyond when it clusters beyond that.
+    internal static IReadOnlyList<DrawingInstruction> Build(AmlFeature feature, AmlClassStyle style, double? clusteredBeyond)
     {
         ArgumentNullException.ThrowIfNull(feature);
         ArgumentNullException.ThrowIfNull(style);
-        var context = new AmlDrawingContext(feature, style.Family);
+        var context = new AmlDrawingContext(feature, style.Family, clusteredBeyond);
         if (style.Build is { } custom)
             return [.. custom(feature, context)];
 
@@ -133,6 +153,25 @@ public sealed class AmlPortrayal
             default:
                 return [];
         }
+    }
+
+    // The scale ladder of each clustering the catalogue's styles use, over the cell's points of its classes.
+    private Dictionary<AmlClustering, AmlClusterLadder> Cluster(IReadOnlyList<AmlFeature> features)
+    {
+        var points = new Dictionary<AmlClustering, List<(AmlFeature, double?)>>(ReferenceEqualityComparer.Instance);
+        foreach (var feature in features)
+        {
+            if (feature.GeometryType != S100GeometryType.Point || Catalog.Find(feature.FeatureType)?.Clustering is not { } clustering)
+                continue;
+            if (!points.TryGetValue(clustering, out var list))
+                points[clustering] = list = [];
+            list.Add((feature, AmlDrawingContext.FeatureScaleMinimum(feature)));
+        }
+
+        var ladders = new Dictionary<AmlClustering, AmlClusterLadder>(ReferenceEqualityComparer.Instance);
+        foreach (var (clustering, list) in points)
+            ladders[clustering] = AmlClusterLadder.Build(clustering, list);
+        return ladders;
     }
 
     private static AmlFeature? Feature(

@@ -24,6 +24,14 @@ namespace EncDotNet.S100.Datasets.Aml;
 /// <param name="Body">The glyph's SVG markup.</param>
 public sealed record AmlGlyph(string Name, string Description, string Body)
 {
+    /// <summary>
+    /// Whether the glyph is drawn in the AML frame; <see langword="true"/> by
+    /// default. An unframed glyph, such as a scour's strokes or a cluster
+    /// bubble, is drawn on its own and may use the whole symbol box, within
+    /// ±4.8 mm.
+    /// </summary>
+    public bool Framed { get; init; } = true;
+
     /// <summary>The air waypoint: an open triangle.</summary>
     public static AmlGlyph Waypoint { get; } = new(
         "WPT",

@@ -17,7 +17,7 @@ It depends on [`EncDotNet.S100.Core`](../EncDotNet.S100.Core/README.md),
 > checks.
 
 The design is in the AML design handoff (`docs/design/aml/HANDOFF.md`,
-decisions 15–19, 23 and 25) and epic #1369.
+decisions 15–20, 23 and 25) and epic #1369.
 
 ## Install
 
@@ -124,8 +124,15 @@ the sediment (SED) trials, use the same classes.
 | Environmental | `icemov` ice movement | Arrow turned to the drift (`icebdr`), "drift SE" |
 | Environmental | `icelin` ice line, `bchprf` beach profile | Line |
 | Environmental | ice leads, polynyas, sea ice, land ice, iceberg areas and the ESB zones | Area |
+| Seabed | `contct` contact (SBO) | Framed open circle; the framed mine when classified mine-like (MILCO) or identified as a mine |
+| Seabed | `mindev` mine (SBO) | Framed filled circle with four spikes, after the MIL-STD-2525C sea mine |
+| Seabed | `smalbo` small bottom object (AML 3.0) | As a contact, from its status |
+| Seabed | `senanm` sensor anomaly (LBO) | Framed dashed diamond |
+| Seabed | `iscour` impact scour (LBO) | Short parallel strokes, turned to its `orcard` |
+| Seabed | `WRECKS`, `OBSTRN`, `UWTROC` (LBO) | Chart classes: a dash-dot ring meaning "AML details on pick" |
 
-Other classes aren't drawn yet, but are still features. The IHO chart classes
+Seabed points carry no labels; their details are on pick. Other classes
+aren't drawn yet, but are still features. The IHO chart classes
 in ESB cells (lights, landmarks, coastline and the like) are left to the ENC.
 
 ### Sediment
@@ -170,10 +177,29 @@ corner chip `ClbStyles.NotForDepthChecksChip`, "AML · CLB not used for depth
 checks". CLB depths never feed depth answers or route checks.
 
 **Standard classes.** A class that is also an IHO S-57 chart class, such as
-`MIPARE`, is marked `IsChartClass`. AML draws only its own signature, the
-ticked boundary and the label, never the chart symbol. The chart symbol comes
+`MIPARE` or an LBO wreck, is marked `IsChartClass`. AML draws only its own
+signature, the ticked boundary and the label or the ring, never the chart symbol. The chart symbol comes
 from the ENC under it when the ENC has the feature. AML cells are never drawn
 with S-101 portrayal.
+
+### Clustering
+
+Dense SBO points cluster into a counted bubble, labelled such as "38 contacts
+· 2 mine-like", when they are within 24 px on screen. The bubble expands into
+smaller bubbles and then its points as you zoom in. LBO points cluster the
+same way, as "bottom objects".
+
+Clustering is on screen, but a cell is drawn once and its instructions serve
+every scale, and no renderer clusters points. So `Draw` clusters each
+clustering's points on a ladder of scales, 1:1,000 doubling to 1:4,096,000,
+and gives every instruction a scale window: a point draws only at scales where
+it is on its own, and each bubble only in its rung. The windows are ordinary
+`ScaleMinimum` and `ScaleMaximum` limits, so every renderer and the tile scale
+classes honour them unchanged. Each rung merges the clusters of the rung
+below, so a bubble always splits into the bubbles and points under it. A
+bubble is drawn at the member nearest its centre, and picking it picks that
+member. A class opts in with `AmlClassStyle.Clustering`; classes that share an
+`AmlClustering` cluster together.
 
 ## Add a family or a class
 
@@ -182,22 +208,23 @@ Styles are data, grouped in modules, one per file
 build a catalogue with it:
 
 ```csharp
-public static class SeabedStyles
+public static class MyStyles
 {
-    public static AmlGlyph Contact { get; } = new(
-        "CONTACT", "An open circle: a seabed contact.",
-        """<circle class="s{ink} f0" stroke-width="0.5" cx="0" cy="0" r="1.8"/>""");
+    public static AmlGlyph Viewpoint { get; } = new(
+        "VIEWPT", "A dot in a ring: a survey viewpoint.",
+        """<circle class="s{ink} f0" stroke-width="0.5" cx="0" cy="0" r="1.8"/><circle class="f{ink}" cx="0" cy="0" r="0.5"/>""");
 
     public static IAmlStyleModule Module { get; } = new AmlStyleModule(
-        "SBO",
-        [new AmlClassStyle("contct", AmlFamily.Seabed, AmlClassKind.Point, "Contact") { Glyph = Contact }]);
+        "My SBO extras",
+        [new AmlClassStyle("viewpt", AmlFamily.Seabed, AmlClassKind.Point, "Viewpoint") { Glyph = Viewpoint }]);
 }
 
-var catalog = new AmlStyleCatalog([.. AmlStyleCatalog.BuiltInModules, SeabedStyles.Module]);
+var catalog = new AmlStyleCatalog([.. AmlStyleCatalog.BuiltInModules, MyStyles.Module]);
 var drawing = new AmlPortrayal(catalog).Draw(cell);
 ```
 
-The catalogue makes the framed symbols, the line styles, the palette and the
+A glyph with `Framed = false` draws on its own, without the frame. The
+catalogue makes the symbols, the line styles, the palette and the
 legend from the styles, so no other code changes. A built-in module is also
 added to `AmlStyleCatalog.BuiltInModules`. A new colour family is a new
 `AmlFamily` value that its styles use.
