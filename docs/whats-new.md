@@ -6,6 +6,16 @@ month. For package versions and release assets, see
 
 ## November 2026
 
+- **Legend tab.** SoundCharts' right dock gains a tab strip, **Object
+  information** · **Legend**, and the legends of what the map draws move to
+  the Legend tab: one collapsible section per product or overlay (weather
+  fields, tropical cyclones, fronts, AML), in draw order, with **In view |
+  All loaded**, a filter and **Collapse all**. Swatches sit on the chart
+  background of the current palette. Open it with **View** > **Legend**
+  (Ctrl+Shift+L) or the **Legend** link under a Layer stack entry, which
+  replaces the entry's inline legend. It never opens by itself, and a pick
+  switches the dock back to Object information. When the dock is too narrow
+  for the tab labels, the tabs show icons only.
 - **S-102 relief shading.** An optional hillshade over the S-102 depth bands
   shows the shape of the seabed (dredged pits, sand waves, berth toes) in
   high-resolution bathymetry. It lights the depth surface from the north-west

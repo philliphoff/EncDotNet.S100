@@ -101,8 +101,8 @@ internal static partial class Strings
     public static string LayerStack_VisibilityVsActive_HelpText => Get(nameof(LayerStack_VisibilityVsActive_HelpText));
     public static string LayerStack_ChildCountFormat => Get(nameof(LayerStack_ChildCountFormat));
     public static string LayerStack_PriorityFormat => Get(nameof(LayerStack_PriorityFormat));
-    public static string LayerStack_LegendNameFormat => Get(nameof(LayerStack_LegendNameFormat));
-    public static string LayerStack_LegendRowsNameFormat => Get(nameof(LayerStack_LegendRowsNameFormat));
+    public static string LayerStack_LegendLink => Get(nameof(LayerStack_LegendLink));
+    public static string LayerStack_LegendLinkNameFormat => Get(nameof(LayerStack_LegendLinkNameFormat));
     public static string LayerStack_Plane_BaseChartUnder => Get(nameof(LayerStack_Plane_BaseChartUnder));
     public static string LayerStack_Plane_Bathymetry => Get(nameof(LayerStack_Plane_Bathymetry));
     public static string LayerStack_Plane_OnDemandSurface => Get(nameof(LayerStack_Plane_OnDemandSurface));
@@ -899,6 +899,8 @@ internal static partial class Strings
     // Display settings overlay (consolidated map command-bar settings)
     public static string DisplaySettings_Title => Get(nameof(DisplaySettings_Title));
     public static string Tooltip_DisplaySettings => Get(nameof(Tooltip_DisplaySettings));
+    public static string Label_MapLegend => Get(nameof(Label_MapLegend));
+    public static string Tooltip_MapLegend => Get(nameof(Tooltip_MapLegend));
     public static string Tooltip_CloseDisplaySettings => Get(nameof(Tooltip_CloseDisplaySettings));
     public static string DisplaySettings_DisplayBaseHeader => Get(nameof(DisplaySettings_DisplayBaseHeader));
     public static string DisplaySettings_TextHeader => Get(nameof(DisplaySettings_TextHeader));
@@ -2050,8 +2052,7 @@ internal static partial class Strings
     public static string Check_MinUkcPillFormat => Get(nameof(Check_MinUkcPillFormat));
     public static string Tooltip_CheckLegRow => Get(nameof(Tooltip_CheckLegRow));
     public static string Tooltip_CheckLowConfidence => Get(nameof(Tooltip_CheckLowConfidence));
-    public static string Dock_ObjectInformationEdge => Get(nameof(Dock_ObjectInformationEdge));
-    public static string Tooltip_ObjectInformationEdge => Get(nameof(Tooltip_ObjectInformationEdge));
+    public static string Tooltip_ShowDockTabFormat => Get(nameof(Tooltip_ShowDockTabFormat));
 
     // Clearance tab (#902).
     public static string Clearance_Title => Get(nameof(Clearance_Title));

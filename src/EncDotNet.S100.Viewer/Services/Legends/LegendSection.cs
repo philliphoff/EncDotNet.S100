@@ -127,3 +127,23 @@ internal static class LegendRows
         };
     }
 }
+
+/// <summary>A request to open the Legend tab (<see cref="LegendService.Show"/>).</summary>
+/// <param name="SectionId">The section to scroll to and expand; null for the tab as it was.</param>
+/// <param name="RowLabel">The label of the row to ring; null for none.</param>
+internal sealed record LegendShowRequest(string? SectionId, string? RowLabel);
+
+/// <summary>
+/// Legend sections that don't come from the drawn layer stack: app state such
+/// as the route check or the Library coverage outlines (legends design note
+/// D5). Added with <see cref="LegendService.AddSource"/>; its sections go on
+/// top.
+/// </summary>
+internal interface ILegendSectionSource
+{
+    /// <summary>The sections to show now, top first; empty while the state isn't on.</summary>
+    IReadOnlyList<LegendSection> Sections { get; }
+
+    /// <summary>Raised when <see cref="Sections"/> changes; the service rebuilds on the next UI frame.</summary>
+    event EventHandler? Changed;
+}

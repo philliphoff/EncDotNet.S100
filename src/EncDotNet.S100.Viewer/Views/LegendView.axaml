@@ -1,0 +1,269 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ic="using:FluentIcons.Avalonia"
+             xmlns:lg="using:EncDotNet.S100.Viewer.ViewModels.Legends"
+             xmlns:loc="using:EncDotNet.S100.Viewer.Resources"
+             xmlns:views="using:EncDotNet.S100.Viewer.Views"
+             x:Class="EncDotNet.S100.Viewer.Views.LegendView"
+             x:DataType="lg:LegendViewModel">
+
+    <UserControl.Styles>
+        <!-- A section's header toggle is named after the section, as the expander is (D11). -->
+        <Style Selector="Expander.legendSection /template/ :is(Button)">
+            <Setter Property="AutomationProperties.Name"
+                    Value="{Binding $parent[Expander].(AutomationProperties.Name)}" />
+            <Setter Property="MinHeight" Value="30" />
+        </Style>
+        <!-- A narrow dock (D21): the filter takes its own row under the switch. -->
+        <Style Selector="Grid#Toolbar > TextBox">
+            <Setter Property="Grid.Column" Value="1" />
+        </Style>
+        <Style Selector="Grid#Toolbar.narrow > TextBox">
+            <Setter Property="Grid.Row" Value="1" />
+            <Setter Property="Grid.Column" Value="0" />
+            <Setter Property="Grid.ColumnSpan" Value="3" />
+        </Style>
+        <Style Selector="Button.legendLink">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="MinHeight" Value="20" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <!-- D5: "No data at 14:20" in the header. -->
+        <Style Selector="TextBlock.legendDetail.noData">
+            <Setter Property="Foreground" Value="{DynamicResource WarningColor}" />
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+        <Style Selector="Border.legendChip">
+            <Setter Property="CornerRadius" Value="3" />
+            <Setter Property="Padding" Value="4,1" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <!-- The ring on the row a request named (the pick's In legend, D16). -->
+        <Style Selector="Border.legendRow">
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="3,1" />
+        </Style>
+        <Style Selector="Border.legendRow.highlighted">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+    </UserControl.Styles>
+
+    <DockPanel LastChildFill="True">
+
+        <!-- Toolbar (D4): In view | All loaded, the filter, Collapse all.
+             Later slices add their controls to this grid's free columns. -->
+        <Grid x:Name="Toolbar"
+              DockPanel.Dock="Top"
+              Margin="10,4,8,6"
+              ColumnDefinitions="Auto,*,Auto"
+              RowDefinitions="Auto,Auto"
+              ColumnSpacing="6"
+              RowSpacing="6">
+            <TabControl Grid.Column="0"
+                        Classes="pillTabs compact"
+                        AutomationProperties.AutomationId="Legend.Toolbar.InView"
+                        AutomationProperties.Name="{x:Static loc:Strings.Legend_ScopeName}"
+                        VerticalAlignment="Center"
+                        SelectedIndex="{Binding ScopeIndex, Mode=TwoWay}">
+                <TabItem AutomationProperties.AutomationId="Legend.Toolbar.ScopeInView"
+                         Header="{x:Static loc:Strings.Legend_ScopeInView}"
+                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_LegendScopeInView}" />
+                <TabItem AutomationProperties.AutomationId="Legend.Toolbar.ScopeAllLoaded"
+                         Header="{x:Static loc:Strings.Legend_ScopeAllLoaded}"
+                         ToolTip.Tip="{x:Static loc:Strings.Tooltip_LegendScopeAllLoaded}" />
+            </TabControl>
+            <TextBox AutomationProperties.AutomationId="Legend.Filter"
+                     AutomationProperties.Name="{x:Static loc:Strings.Legend_FilterName}"
+                     PlaceholderText="{x:Static loc:Strings.Legend_FilterWatermark}"
+                     Text="{Binding Filter, Mode=TwoWay}"
+                     MinWidth="48"
+                     Height="24"
+                     MinHeight="24"
+                     FontSize="12"
+                     Padding="6,0"
+                     VerticalContentAlignment="Center">
+                <TextBox.InnerRightContent>
+                    <Button AutomationProperties.AutomationId="Legend.ClearFilter"
+                            AutomationProperties.Name="{x:Static loc:Strings.Tooltip_LegendClearFilter}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_LegendClearFilter}"
+                            IsVisible="{Binding HasFilter}"
+                            Command="{Binding ClearFilterCommand}"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Width="20" Height="20" MinWidth="0" MinHeight="0" Padding="0">
+                        <ic:FluentIcon Icon="Dismiss" IconVariant="Regular" FontSize="11" />
+                    </Button>
+                </TextBox.InnerRightContent>
+            </TextBox>
+            <Button Grid.Column="2"
+                    HorizontalAlignment="Right"
+                    AutomationProperties.AutomationId="Legend.CollapseAll"
+                    AutomationProperties.Name="{x:Static loc:Strings.Legend_CollapseAll}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_LegendCollapseAll}"
+                    Command="{Binding CollapseAllCommand}"
+                    Classes="Ghost"
+                    Width="24" Height="24" MinWidth="0" MinHeight="0" Padding="0"
+                    VerticalAlignment="Center">
+                <ic:FluentIcon Icon="ArrowCollapseAll" IconVariant="Regular" FontSize="14" />
+            </Button>
+        </Grid>
+
+        <!-- Fixed rows under the toolbar that don't scroll or collapse: the S-98
+             position legend (D17, #1407). Each row view model brings its own
+             DataTemplate in this view's DataTemplates. -->
+        <ItemsControl DockPanel.Dock="Top"
+                      AutomationProperties.AutomationId="Legend.Pinned"
+                      IsVisible="{Binding HasPinnedRows}"
+                      ItemsSource="{Binding PinnedRows}"
+                      Margin="10,0,8,6" />
+
+            <ScrollViewer x:Name="Scroller"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="4,0,4,8" Spacing="2">
+                    <views:PlaceholderView IsVisible="{Binding IsEmpty}"
+                                           Icon="ColorLine"
+                                           Header="{Binding EmptyTitle}"
+                                           Description="{Binding EmptyDescription}"
+                                           Margin="0,24,0,0" />
+                    <ItemsControl x:Name="SectionList"
+                                  AutomationProperties.AutomationId="Legend.Sections"
+                                  ItemsSource="{Binding Sections}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="lg:LegendSectionViewModel">
+                                <Expander Classes="legendSection"
+                                          IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                          AutomationProperties.AutomationId="{Binding AutomationId}"
+                                          AutomationProperties.Name="{Binding AccessibleName}"
+                                          HorizontalAlignment="Stretch"
+                                          Margin="0,1"
+                                          Padding="0">
+                                    <Expander.Header>
+                                        <Grid ColumnDefinitions="Auto,Auto,*"
+                                              ColumnSpacing="7"
+                                              Background="Transparent"
+                                              ToolTip.Tip="{Binding HeaderTooltip}">
+                                            <Border Grid.Column="0" Classes="legendChip">
+                                                <TextBlock Text="{Binding Spec}"
+                                                           FontFamily="{StaticResource MonoFontFamily}"
+                                                           FontSize="10"
+                                                           Opacity="0.8" />
+                                            </Border>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding Title}"
+                                                       FontWeight="SemiBold"
+                                                       FontSize="12"
+                                                       VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       MaxWidth="200" />
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{Binding Detail}"
+                                                       AutomationProperties.AutomationId="Legend.Section.Detail"
+                                                       FontSize="11"
+                                                       Opacity="0.65"
+                                                       Classes="legendDetail"
+                                                       Classes.noData="{Binding HasNoData}"
+                                                       VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </Grid>
+                                    </Expander.Header>
+
+                                    <StackPanel Margin="12,2,4,6" Spacing="3">
+                                        <TextBlock Text="{Binding Caption}"
+                                                   IsVisible="{Binding HasCaption}"
+                                                   AutomationProperties.AutomationId="Legend.Section.Caption"
+                                                   FontSize="11"
+                                                   Opacity="0.75"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding MarinerSettings}"
+                                                   IsVisible="{Binding HasMarinerSettings}"
+                                                   AutomationProperties.AutomationId="Legend.Section.MarinerSettings"
+                                                   FontSize="11"
+                                                   Opacity="0.75"
+                                                   TextWrapping="Wrap" />
+                                        <ItemsControl ItemsSource="{Binding VisibleGroups}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="lg:LegendGroupViewModel">
+                                                    <StackPanel Spacing="1" Margin="0,2,0,0">
+                                                        <TextBlock Text="{Binding Title}"
+                                                                   IsVisible="{Binding ShowTitle}"
+                                                                   FontSize="10.5"
+                                                                   FontWeight="SemiBold"
+                                                                   Opacity="0.7"
+                                                                   Margin="0,2,0,1" />
+                                                        <ItemsControl ItemsSource="{Binding Rows}"
+                                                                      AutomationProperties.Name="{x:Static loc:Strings.Legend_RowsName}"
+                                                                      AutomationProperties.ControlTypeOverride="List">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate x:DataType="lg:LegendRowViewModel">
+                                                                    <Border Classes="legendRow"
+                                                                            Classes.highlighted="{Binding IsHighlighted}"
+                                                                            AutomationProperties.AutomationId="Legend.Row"
+                                                                            AutomationProperties.Name="{Binding Label}"
+                                                                            AutomationProperties.ControlTypeOverride="ListItem">
+                                                                        <StackPanel Orientation="Horizontal" Spacing="7">
+                                                                            <!-- D10: the glyph on a tile of the palette's chart background. -->
+                                                                            <Border Background="{Binding Tile}"
+                                                                                    CornerRadius="3"
+                                                                                    Width="36"
+                                                                                    Height="18"
+                                                                                    VerticalAlignment="Center"
+                                                                                    AutomationProperties.AutomationId="Legend.Row.Tile"
+                                                                                    AutomationProperties.AccessibilityView="Raw">
+                                                                                <Panel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                                                    <Border Width="20"
+                                                                                            Height="10"
+                                                                                            CornerRadius="2"
+                                                                                            BorderThickness="1"
+                                                                                            BorderBrush="{DynamicResource BorderColor}"
+                                                                                            Background="{Binding Swatch}"
+                                                                                            IsVisible="{Binding IsSwatch}" />
+                                                                                    <Image Source="{Binding Glyph}"
+                                                                                           Width="{Binding GlyphWidth}"
+                                                                                           Height="{Binding GlyphHeight}"
+                                                                                           IsVisible="{Binding HasGlyph}"
+                                                                                           Stretch="Fill" />
+                                                                                </Panel>
+                                                                            </Border>
+                                                                            <TextBlock Text="{Binding Label}"
+                                                                                       FontSize="11.5"
+                                                                                       VerticalAlignment="Center"
+                                                                                       TextTrimming="CharacterEllipsis" />
+                                                                        </StackPanel>
+                                                                    </Border>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Expander>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- In view: the products loaded but not in view, as one muted line (D4). -->
+                    <Button Classes="legendLink"
+                            AutomationProperties.AutomationId="Legend.NotInView"
+                            AutomationProperties.Name="{Binding NotInViewText}"
+                            IsVisible="{Binding HasNotInView}"
+                            Command="{Binding ShowAllLoadedCommand}"
+                            ToolTip.Tip="{x:Static loc:Strings.Tooltip_LegendScopeAllLoaded}"
+                            Margin="10,4,0,0"
+                            Opacity="0.75">
+                        <TextBlock Text="{Binding NotInViewText}" />
+                    </Button>
+                </StackPanel>
+            </ScrollViewer>
+    </DockPanel>
+</UserControl>
