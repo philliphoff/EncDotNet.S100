@@ -431,6 +431,7 @@ public abstract class GmlPortrayalCatalogueBase : IVectorPortrayalCatalogue
         {
             Name = symbolName,
             SvgContent = svgContent,
+            Title = catalogItem.Description.Summary,
         };
 
         _cache.Symbols[symbolName] = symbol;

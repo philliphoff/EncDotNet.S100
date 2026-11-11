@@ -86,6 +86,13 @@ public sealed class VectorPortrayalResult
     /// </summary>
     public Func<string, string?>? SymbolProvider { get; init; }
 
+    /// <summary>
+    /// Resolves an SVG symbol name to what it shows, from the portrayal
+    /// catalogue's description (<see cref="SvgSymbol.Title"/>), or null. A
+    /// legend of the symbols drawn labels its rows with it.
+    /// </summary>
+    public Func<string, string?>? SymbolTitleProvider { get; init; }
+
     /// <summary>Resolves a line-style name to its resolved style (or null).</summary>
     public Func<string, LineStyle?>? LineStyleProvider { get; init; }
 

@@ -466,6 +466,7 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
             SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
+            SymbolTitleProvider = name => prewarm.ResolveSymbolTitle(name),
             AreaFillProvider = name => prewarm.ResolveAreaFill(name),
             LineStyleProvider = name => prewarm.ResolveLineStyle(name),
             OutOfBandMinDisplayScale = null,

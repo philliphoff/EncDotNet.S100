@@ -31,6 +31,13 @@ public sealed class SvgSymbol
     public required string SvgContent { get; init; }
 
     /// <summary>
+    /// What the symbol shows, from the catalogue's description (e.g.
+    /// <c>"can buoy, paper-chart"</c>), or <see langword="null"/> when the
+    /// catalogue gives none. Legends label a symbol with it.
+    /// </summary>
+    public string? Title { get; init; }
+
+    /// <summary>
     /// X coordinate of the symbol's pivot (anchor) point, in the SVG's user
     /// units. Defaults to <c>0</c>; the bundled catalogues do not set it.
     /// </summary>

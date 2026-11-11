@@ -1379,7 +1379,7 @@
                                     CloseCommand="{Binding Layout.CloseDockCommand}"
                                     CloseCommandParameter="Right"
                                     CloseButtonToolTip="{x:Static loc:Strings.Tooltip_ClosePickPanel}"
-                                    IsVisible="{Binding Layout.IsRightDockShown}">
+                                    IsVisible="{Binding Layout.IsRightDockPanelVisible}">
                 <!-- Legends D2: OBJECT INFORMATION · LEGEND, icons only when the
                      dock is too narrow for the labels (D13, D21). -->
                 <views:ApplicationPanel.TitleContent>

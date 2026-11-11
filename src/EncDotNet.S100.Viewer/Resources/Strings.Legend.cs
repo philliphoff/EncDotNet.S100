@@ -70,4 +70,20 @@ internal static partial class Strings
     public static string Legend_RowsName => Get(nameof(Legend_RowsName));
 
     public static string Tooltip_LegendClearFilter => Get(nameof(Tooltip_LegendClearFilter));
+
+    public static string Legend_LibrarySpec => Get(nameof(Legend_LibrarySpec));
+
+    public static string Legend_LibraryTitle => Get(nameof(Legend_LibraryTitle));
+
+    public static string Legend_LibraryOutlinedFormat => Get(nameof(Legend_LibraryOutlinedFormat));
+
+    public static string Legend_LibraryOutlinedOneFormat => Get(nameof(Legend_LibraryOutlinedOneFormat));
+
+    public static string Legend_LibrarySelected => Get(nameof(Legend_LibrarySelected));
+
+    public static string Legend_ProductS101 => Get(nameof(Legend_ProductS101));
+
+    public static string Legend_CatalogueSomeFormat => Get(nameof(Legend_CatalogueSomeFormat));
+
+    public static string Legend_CatalogueAll => Get(nameof(Legend_CatalogueAll));
 }

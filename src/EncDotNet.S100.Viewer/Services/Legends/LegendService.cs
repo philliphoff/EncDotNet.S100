@@ -111,7 +111,12 @@ internal sealed class LegendService : IDisposable
             if (_isTabShown == value)
                 return;
             _isTabShown = value;
-            Changed?.Invoke(this, EventArgs.Empty);
+            // Catalogue keys (D7) are counted only while the tab shows, so
+            // showing it rebuilds, which raises Changed.
+            if (value && !_pending)
+                Invalidate();
+            else
+                Changed?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -207,7 +212,10 @@ internal sealed class LegendService : IDisposable
     {
         if (takeView)
             _view = TimelineMapScope.ViewOf(_viewport?.Current);
-        Sections = [.. FromSources(), .. Build(_loader.CurrentStackEntries)];
+        // Counting a catalogue product's drawn symbols (D7) walks its display
+        // list, so it's done while the tab shows, and when MCP asks.
+        var catalogueKeys = takeView || _isTabShown;
+        Sections = [.. FromSources(), .. Build(_loader.CurrentStackEntries, catalogueKeys)];
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -224,8 +232,9 @@ internal sealed class LegendService : IDisposable
         }
     }
 
-    private IReadOnlyList<LegendSection> Build(IReadOnlyList<LayerStackEntry> stack)
+    private IReadOnlyList<LegendSection> Build(IReadOnlyList<LayerStackEntry> stack, bool catalogueKeys)
     {
+        var scale = catalogueKeys ? ViewScale() : double.NaN;
         var byId = new Dictionary<string, DatasetEntry>(StringComparer.Ordinal);
         foreach (var entry in _datasets.Entries)
             byId.TryAdd(entry.Id.Value, entry);
@@ -238,11 +247,15 @@ internal sealed class LegendService : IDisposable
         for (var i = stack.Count - 1; i >= 0; i--)
         {
             var item = stack[i];
-            if (LegendOf(item) is not { } sub)
-                continue;
             byId.TryGetValue(item.SourceDatasetId, out var dataset);
             if (dataset is { IsVisible: false })
                 continue; // hidden by the user, so not drawn
+            if (LegendOf(item) is not { } sub)
+            {
+                if (catalogueKeys && item.Item.Payload is VectorStackPayload vector && IsCatalogueProduct(vector))
+                    AddCatalogueKey(item, vector, dataset, scale, sections, order);
+                continue;
+            }
 
             var spec = sub.Spec ?? dataset?.ProductSpec ?? string.Empty;
             var id = SectionId(spec, sub.Key);
@@ -255,11 +268,53 @@ internal sealed class LegendService : IDisposable
             section.Add(item.SourceDatasetId, dataset, sub);
         }
 
-        return [.. order.Select(Finish)];
+        return [.. order.Select(Finish).OfType<LegendSection>()];
     }
 
-    private LegendSection Finish(SectionBuilder section)
+    private void AddCatalogueKey(
+        LayerStackEntry item, VectorStackPayload vector, DatasetEntry? dataset, double scale,
+        Dictionary<string, SectionBuilder> sections, List<SectionBuilder> order)
     {
+        var spec = vector.Result.Spec.Name ?? dataset?.ProductSpec ?? string.Empty;
+        if (!sections.TryGetValue(spec, out var section))
+        {
+            section = new SectionBuilder(spec, spec, ProductTitle(spec) ?? spec, item.Plane) { Key = new CatalogueSymbolKey() };
+            sections.Add(spec, section);
+            order.Add(section);
+        }
+        else if (section.Key is null)
+        {
+            return; // the product's sub-layers carry their own legend
+        }
+
+        section.AddDataset(item.SourceDatasetId, dataset);
+        section.Key.Add(vector, item.SuppressedFeatures, _view, scale);
+    }
+
+    /// <summary>
+    /// True for a product drawn from a portrayal catalogue's symbols with no
+    /// legend of its own (S-101, S-57 through the S-101 catalogue, S-131…):
+    /// its section lists the symbols drawn in view (D7).
+    /// </summary>
+    private static bool IsCatalogueProduct(VectorStackPayload vector) =>
+        vector.Result.SymbolProvider is not null && vector.Result.SymbolTitleProvider is not null;
+
+    /// <summary>The display scale (1:N) at the view's centre, or NaN before the first view.</summary>
+    private double ViewScale() =>
+        _viewport?.Current is { } view
+            ? LazyLoading.LazyCellGate.ScaleDenominator(view.MercatorResolution, (view.MinLatitude + view.MaxLatitude) / 2)
+            : double.NaN;
+
+    private LegendSection? Finish(SectionBuilder section)
+    {
+        if (section.Key is { } key)
+        {
+            if (key.Count == 0)
+                return null; // nothing of it drawn in view
+            var (caption, group) = CatalogueGroup(section, key);
+            section.SetCatalogue(caption, group);
+        }
+
         var datasets = section.Datasets;
         var source = datasets.Count == 1
             ? datasets[0].Entry?.DisplayName ?? datasets[0].Id
@@ -289,6 +344,19 @@ internal sealed class LegendService : IDisposable
             Groups = [.. section.Groups],
         };
     }
+
+    /// <summary>A catalogue product's key (D7): its most drawn symbols, and how many it draws in all.</summary>
+    private static (string Caption, LegendGroup Group) CatalogueGroup(SectionBuilder section, CatalogueSymbolKey key)
+    {
+        var rows = key.Rows();
+        var caption = key.Count > rows.Count
+            ? string.Format(CultureInfo.CurrentCulture, Strings.Legend_CatalogueSomeFormat, rows.Count, key.Count)
+            : Strings.Legend_CatalogueAll;
+        return (caption, new LegendGroup(CatalogueGroupKey, section.Title, rows));
+    }
+
+    /// <summary>The group key of a catalogue product's drawn symbols.</summary>
+    internal const string CatalogueGroupKey = "catalogue.symbols";
 
     /// <summary>True when the dataset meets the view, or when the view or its footprint isn't known.</summary>
     private bool IsInView(DatasetEntry? entry) =>
@@ -325,6 +393,8 @@ internal sealed class LegendService : IDisposable
 
     private static string? ProductTitle(string spec) => spec.ToUpperInvariant() switch
     {
+        "S-101" => Strings.Legend_ProductS101,
+        "S-57" => Strings.Legend_ProductS101,
         "S-102" => Strings.Legend_ProductS102,
         "S-104" => Strings.TimelinePanel_ProductS104,
         "S-111" => Strings.TimelinePanel_ProductS111,
@@ -597,10 +667,25 @@ internal sealed class LegendService : IDisposable
 
         public List<SectionDataset> Datasets { get; } = [];
 
-        public void Add(string datasetId, DatasetEntry? entry, SubLayerLegend sub)
+        /// <summary>A catalogue product's drawn-symbol counter (D7), or null for a product with its own legend.</summary>
+        public CatalogueSymbolKey? Key { get; init; }
+
+        public void AddDataset(string datasetId, DatasetEntry? entry)
         {
             if (_datasetIds.Add(datasetId))
                 Datasets.Add(new SectionDataset(datasetId, entry));
+        }
+
+        public void SetCatalogue(string caption, LegendGroup group)
+        {
+            Caption = caption;
+            Groups.Clear();
+            Groups.Add(group);
+        }
+
+        public void Add(string datasetId, DatasetEntry? entry, SubLayerLegend sub)
+        {
+            AddDataset(datasetId, entry);
             if (_groupKeys.Add(sub.Key))
             {
                 // The caption is the topmost group's (D4): its first sub-layer is the top one.

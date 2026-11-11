@@ -142,6 +142,10 @@ internal static class CataloguePreWarm
         public string? ResolveSymbolSvg(string name)
             => Symbols.TryGetValue(name, out var s) ? s?.SvgContent : null;
 
+        /// <summary>Sync resolver returning what the named symbol shows (<see cref="SvgSymbol.Title"/>), or null.</summary>
+        public string? ResolveSymbolTitle(string name)
+            => Symbols.TryGetValue(name, out var s) ? s?.Title : null;
+
         /// <summary>Sync resolver returning the symbol record for the given name, or null.</summary>
         public SvgSymbol? ResolveSymbol(string name)
             => Symbols.TryGetValue(name, out var s) ? s : null;
