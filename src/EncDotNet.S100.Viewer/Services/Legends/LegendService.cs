@@ -6,6 +6,7 @@ using EncDotNet.S100.Core;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
+using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.ViewModels;
 
@@ -355,6 +356,136 @@ internal sealed class LegendService : IDisposable
     {
         ArgumentNullException.ThrowIfNull(item);
         return LegendOf(item) is { } sub ? SectionId(sub.Spec ?? string.Empty, sub.Key) : null;
+    }
+
+    /// <summary>
+    /// The id of the topmost section a loaded dataset draws in, for the
+    /// Datasets row's <b>Show legend</b> (#1410, D3); null when the dataset
+    /// draws no legend rows.
+    /// </summary>
+    /// <param name="datasetId">The dataset's session id (<see cref="DatasetEntry.Id"/>).</param>
+    internal string? SectionIdOfDataset(string datasetId)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(datasetId);
+        foreach (var section in Sections)
+        {
+            if (section.DatasetIds.Contains(datasetId, StringComparer.Ordinal))
+                return section.Id;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// The section and row a picked feature is drawn with, for its key line in
+    /// Object information and its <b>In legend</b> link (#1410, D3, D16); null
+    /// when no row of the drawn legend matches it. Found from what the pick
+    /// already has: its dataset, its feature reference and its values, against
+    /// the sub-layers that dataset draws now.
+    /// </summary>
+    /// <remarks>
+    /// A colour fill (S-102, a weather field) matches the band its value falls
+    /// in, an arrow layer (S-111, currents) its speed band, and a vector layer
+    /// that draws the feature its one row, or the row named by the feature's
+    /// class or one of its values (a front's "Cold front").
+    /// </remarks>
+    /// <param name="hit">The picked feature.</param>
+    /// <param name="latitude">Where it was picked, which selects an arrow layer's southern bands; null when unknown.</param>
+    internal LegendRowMatch? FindRow(PickHit hit, double? latitude)
+    {
+        ArgumentNullException.ThrowIfNull(hit);
+        if (hit.DatasetId is not { } datasetId)
+            return null;
+        var stack = _loader.CurrentStackEntries;
+        for (var i = stack.Count - 1; i >= 0; i--)
+        {
+            var item = stack[i];
+            if (!string.Equals(item.SourceDatasetId, datasetId, StringComparison.Ordinal)
+                || LegendOf(item) is not { } sub
+                || RowLabelOf(item.Item.Payload, hit, latitude) is not { } label)
+            {
+                continue;
+            }
+
+            var id = SectionId(sub.Spec ?? hit.ProductSpec ?? string.Empty, sub.Key);
+            if (Sections.FirstOrDefault(s => s.Id == id) is not { } section)
+                continue;
+            var row = section.Groups
+                .Where(g => g.Key == sub.Key)
+                .SelectMany(g => g.Rows)
+                .FirstOrDefault(r => string.Equals(r.Label, label, StringComparison.Ordinal));
+            if (row is not null)
+                return new LegendRowMatch(section, row);
+        }
+        return null;
+    }
+
+    private static string? RowLabelOf(object payload, PickHit hit, double? latitude) => payload switch
+    {
+        CoverageStackPayload { SubLayer: GridCoverageSubLayer { Coverage.ColorScheme: { } scheme } } =>
+            ValueOf(hit, scheme.FieldName) is { } value
+                ? scheme.Bands.FirstOrDefault(b => value >= b.MinValue && value < b.MaxValue)?.Label
+                : null,
+        CoverageStackPayload { SubLayer: ArrowCoverageSubLayer { Coverage.SymbolScheme: { } symbols } } =>
+            ValueOf(hit, symbols.ValueFieldName) is { } value
+                ? symbols.Resolve(value, latitude ?? 0)?.Label
+                : null,
+        VectorStackPayload vector => VectorRowLabel(vector.SubLayer, hit),
+        _ => null,
+    };
+
+    // A vector layer's row for a feature it draws, when the feature's
+    // geometry fits the row (a point a symbol, a curve a line, a surface a
+    // swatch or area): the layer's only row, or the line or area row named
+    // like the feature's class ("Cold front"). A symbol row needs more than a
+    // name: a tropical cyclone names every part after the storm's class, so
+    // its forecast points would ring the wrong symbol.
+    private static string? VectorRowLabel(VectorSubLayer subLayer, PickHit hit)
+    {
+        if (subLayer.Legend is not { Count: > 0 } rows)
+            return null;
+        var drawn = subLayer.Instructions
+            .Where(d => string.Equals(d.FeatureReference, hit.FeatureRef, StringComparison.Ordinal))
+            .ToList();
+        if (drawn.Count == 0)
+            return null;
+        // Products that don't report the geometry (the GML ones) show it by
+        // what they draw: a fill is a surface, a lone line a curve.
+        var geometry = hit.Geometry != Features.S100GeometryType.None ? hit.Geometry
+            : drawn.Any(d => d is AreaInstruction) ? Features.S100GeometryType.Surface
+            : drawn.Any(d => d is LineInstruction) ? Features.S100GeometryType.Curve
+            : Features.S100GeometryType.Point;
+        var fitting = rows.Where(r => Fits(LegendRows.KindOf(r), geometry)).ToList();
+        if (rows.Count == 1)
+            return fitting.Count == 1 ? fitting[0].Label : null;
+        var named = fitting
+            .Where(r => LegendRows.KindOf(r) != LegendRowKind.Symbol
+                && (string.Equals(r.Label, hit.FeatureTypeName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(r.Label, hit.FeatureType, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+        return named.Count == 1 ? named[0].Label : null;
+    }
+
+    private static bool Fits(LegendRowKind kind, Features.S100GeometryType geometry) => geometry switch
+    {
+        Features.S100GeometryType.Point => kind == LegendRowKind.Symbol,
+        Features.S100GeometryType.Curve => kind == LegendRowKind.Line,
+        Features.S100GeometryType.Surface => kind is LegendRowKind.Swatch or LegendRowKind.Area,
+        _ => false,
+    };
+
+    // The picked value of a coverage field: the attribute named after it.
+    private static float? ValueOf(PickHit hit, string fieldName)
+    {
+        foreach (var attribute in hit.Attributes)
+        {
+            if (string.Equals(attribute.Code, fieldName, StringComparison.Ordinal)
+                && float.TryParse(attribute.RawValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+                && float.IsFinite(value))
+            {
+                return value;
+            }
+        }
+        return null;
     }
 
     private static SubLayerLegend? LegendOf(LayerStackEntry item) => item.Item.Payload switch

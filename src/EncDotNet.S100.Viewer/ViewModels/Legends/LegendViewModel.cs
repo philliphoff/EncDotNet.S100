@@ -329,7 +329,9 @@ internal sealed class LegendViewModel : ViewModelBase, IActivityTabShown, IActiv
             : section.Source;
     }
 
-    private static IBrush TileOf(PaletteType palette)
+    /// <summary>The tile a row's glyph sits on: the palette's chart background (D10).</summary>
+    /// <param name="palette">The palette the map is drawn in.</param>
+    internal static IBrush TileOf(PaletteType palette)
     {
         lock (Tiles)
         {

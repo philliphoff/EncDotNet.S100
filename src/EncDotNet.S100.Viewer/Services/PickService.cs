@@ -284,19 +284,26 @@ internal sealed class PickService : IPickService
     /// the underlying info carries a station snapshot.
     /// </summary>
     private PickHit BuildHit(FeatureInfo info, DatasetEntry entry, IDatasetProcessor processor) =>
-        BuildHit(info, entry.DisplayName, processor, entry.NotForNavigation, entry.Credit);
+        BuildHit(info, entry.DisplayName, processor, entry.NotForNavigation, entry.Credit, entry.Id.Value);
 
     // A feature opened by dataset name (the warnings panel, reference
-    // navigation) finds its entry by name for the not-for-navigation flag.
-    private PickHit BuildHit(FeatureInfo info, string? datasetFileName, IDatasetProcessor processor) =>
-        BuildHit(
+    // navigation) finds its entry by name for the not-for-navigation flag
+    // and the id its Legend row is found by (#1410).
+    private PickHit BuildHit(FeatureInfo info, string? datasetFileName, IDatasetProcessor processor)
+    {
+        var named = _loader.EntryLayers.Keys
+            .Where(e => string.Equals(e.DisplayName, datasetFileName, StringComparison.Ordinal))
+            .ToList();
+        return BuildHit(
             info,
             datasetFileName,
             processor,
-            _loader.EntryLayers.Keys.Any(e => e.NotForNavigation
-                && string.Equals(e.DisplayName, datasetFileName, StringComparison.Ordinal)));
+            named.Any(e => e.NotForNavigation),
+            credit: null,
+            datasetId: named.Count == 1 ? named[0].Id.Value : null);
+    }
 
-    private PickHit BuildHit(FeatureInfo info, string? datasetFileName, IDatasetProcessor processor, bool notForNavigation, string? credit = null)
+    private PickHit BuildHit(FeatureInfo info, string? datasetFileName, IDatasetProcessor processor, bool notForNavigation, string? credit, string? datasetId)
     {
         return new PickHit
         {
@@ -315,6 +322,7 @@ internal sealed class PickService : IPickService
             NavigationalWarning = info.NavigationalWarning,
             NotForNavigation = notForNavigation,
             Credit = credit,
+            DatasetId = datasetId,
             Aml = processor is AmlDatasetProcessor aml ? AmlPickProvenance.From(aml, info) : null,
         };
     }

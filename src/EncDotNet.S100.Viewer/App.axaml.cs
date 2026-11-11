@@ -169,6 +169,11 @@ public partial class App : Application
         _services.GetRequiredService<AmlDisplayService>().Attach(
             _services.GetRequiredService<DatasetsViewModel>(),
             _services.GetRequiredService<IDatasetLoaderService>());
+        // Links to the Legend tab (#1410, legends D3): Show legend on Datasets
+        // rows and the In legend key lines in Object information.
+        var legend = _services.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>();
+        _services.GetRequiredService<DatasetsViewModel>().AttachLegend(legend);
+        _services.GetRequiredService<PickReportViewModel>().AttachLegend(legend);
         _services.GetRequiredService<ViewerPresentationCoordinator>();
         _services.GetRequiredService<LayerTimeCoordinator>();
         _services.GetRequiredService<PresentationRevealCoordinator>();
