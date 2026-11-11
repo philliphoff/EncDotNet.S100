@@ -621,6 +621,20 @@ public sealed class S57DatasetProcessor : IDatasetProcessor, IVectorPortrayalSou
     /// </summary>
     public CellRank? CellRank => CellExtent.Rank;
 
+    /// <inheritdoc/>
+    /// <remarks>DSID <c>EDTN</c>, <c>ISDT</c>, and the last update applied (<see cref="UpdateReport"/>) or else <c>UPDN</c>.</remarks>
+    public ChartCellEdition? Edition =>
+        _rawS57Document.DataSetIdentification is { } dsid && ChartCellEditions.Number(dsid.EditionNumber) is int edition
+            ? new ChartCellEdition(
+                edition,
+                UpdateReport?.AppliedThroughUpdateNumber ?? ChartCellEditions.Number(dsid.UpdateNumber) ?? 0,
+                ChartCellEditions.Date(dsid.IssueDate))
+            : null;
+
+    /// <inheritdoc/>
+    /// <remarks>The DSPM compilation scale (CSCL).</remarks>
+    public int? CompilationScale => S57Dataset.ResolveCompilationScale(_rawS57Document);
+
     /// <summary>
     /// Whether the cell's translated <c>DataCoverage</c> (from <c>M_COVR</c>
     /// with <c>CATCOV</c> = 1) contains a WGS-84 point. A cell that declares

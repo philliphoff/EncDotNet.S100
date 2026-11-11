@@ -597,7 +597,8 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.FollowPassageService>(),
                 timeline),
             new McpTools.Groups.LegendMcpToolGroup(
-                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>()),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.PositionLegendService>()),
             new McpTools.Groups.RouteCheckLegendMcpToolGroup(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState>(),
                 routes,
@@ -1730,6 +1731,16 @@ public partial class App : Application
             sp.GetRequiredService<ITimelineMapScope>(),
             UiThread.PostBackground,
             Task.Run));
+        // The S-98 position legend (#1407, legends D17): the Legend tab's first row.
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Legends.PositionLegendService(
+            sp.GetRequiredService<IDatasetLoaderService>(),
+            sp.GetRequiredService<DatasetsViewModel>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
+            sp.GetRequiredService<IMarinerSettingsProvider>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Depth.DepthBasisService>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>(),
+            UiThread.PostBackground,
+            Task.Run));
         services.AddSingleton<TimelineViewModel>(sp =>
         {
             var timeline = new TimelineViewModel(
@@ -2032,10 +2043,17 @@ public partial class App : Application
 
         // Legends (#1404, D2): the Legend tab after Object information. It never
         // opens by itself (D14); LegendService.Show raises its content signal.
-        services.AddSingleton(sp => new EncDotNet.S100.Viewer.ViewModels.Legends.LegendViewModel(
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>(),
-            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IViewTime>(),
-            sp.GetRequiredService<ITimeFormatProvider>()));
+        services.AddSingleton(sp =>
+        {
+            var legend = new EncDotNet.S100.Viewer.ViewModels.Legends.LegendViewModel(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IViewTime>(),
+                sp.GetRequiredService<ITimeFormatProvider>());
+            // D17: the S-98 position legend is the fixed first row (#1407).
+            legend.PinnedRows.Insert(0, new EncDotNet.S100.Viewer.ViewModels.Legends.PositionLegendRowViewModel(
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.PositionLegendService>()));
+            return legend;
+        });
         services.AddActivityTab<EncDotNet.S100.Viewer.ViewModels.Legends.LegendViewModel, LegendView>(
             id: ShellLayoutViewModel.LegendTabId,
             order: 20,

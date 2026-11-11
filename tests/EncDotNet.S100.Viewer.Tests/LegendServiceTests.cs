@@ -41,7 +41,7 @@ public sealed class LegendServiceTests
 
         public event EventHandler<MapViewportSnapshot>? ViewportChanged;
 
-        public void Publish(double south, double west, double north, double east)
+        public void Publish(double south, double west, double north, double east, double mercatorResolution = 10)
         {
             Current = new MapViewportSnapshot
             {
@@ -49,7 +49,7 @@ public sealed class LegendServiceTests
                 MinLongitude = west,
                 MaxLatitude = north,
                 MaxLongitude = east,
-                MercatorResolution = 10,
+                MercatorResolution = mercatorResolution,
             };
             ViewportChanged?.Invoke(this, Current);
         }
@@ -64,6 +64,17 @@ public sealed class LegendServiceTests
 
         public LegendService Create(PaletteType palette = PaletteType.Day) =>
             new(Loader, Datasets, Viewport, palette, Clock, action => action());
+
+        /// <summary>The position legend over the legend (#1407), with the default Mariner settings.</summary>
+        public PositionLegendService Position(LegendService legend) =>
+            new(Loader, Datasets, Viewport, new FixedMariner(), depthBasis: null, legend, action => action(), read => Task.FromResult(read()));
+
+        private sealed class FixedMariner : IMarinerSettingsProvider
+        {
+            public MarinerSettings Current => MarinerSettings.Default;
+
+            public event Action<MarinerSettings>? Changed { add { } remove { } }
+        }
 
         /// <summary>Adds a dataset whose footprint is the given box.</summary>
         public DatasetEntry Add(string fileName, string spec, double south, double west, double north, double east)

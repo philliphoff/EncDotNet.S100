@@ -1295,6 +1295,24 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
     /// </summary>
     public CellRank? CellRank => CellExtent.Rank;
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// DSID <c>DSED</c> (its leading whole number), the dataset reference date,
+    /// and the last update applied (<see cref="UpdateReport"/>) or else the
+    /// update number in the file name.
+    /// </remarks>
+    public ChartCellEdition? Edition =>
+        _dataset.Document.Identification is { EditionNumber: int edition } id
+            ? new ChartCellEdition(
+                edition,
+                _updateReport?.AppliedThroughUpdateNumber ?? id.UpdateNumber,
+                ChartCellEditions.Date(id.DatasetReferenceDate))
+            : null;
+
+    /// <inheritdoc/>
+    /// <remarks>The finest <c>DataCoverage.maximumDisplayScale</c>.</remarks>
+    public int? CompilationScale => Metadata.DisplayScale?.Maximum;
+
     /// <summary>
     /// Whether the cell's <c>DataCoverage</c> contains a WGS-84 point. A cell
     /// that declares no coverage is treated as covering every point.

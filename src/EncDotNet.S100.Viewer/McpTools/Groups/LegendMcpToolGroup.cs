@@ -7,15 +7,18 @@ namespace EncDotNet.S100.Viewer.McpTools.Groups;
 internal sealed class LegendMcpToolGroup : IViewerMcpToolGroup
 {
     private readonly LegendService _legend;
+    private readonly PositionLegendService _position;
 
-    public LegendMcpToolGroup(LegendService legend)
+    public LegendMcpToolGroup(LegendService legend, PositionLegendService position)
     {
         ArgumentNullException.ThrowIfNull(legend);
+        ArgumentNullException.ThrowIfNull(position);
         _legend = legend;
+        _position = position;
     }
 
     public IEnumerable<McpServerTool> CreateTools()
     {
-        yield return LegendMcpAdapter.Create(new GetLegendTool(_legend, new DispatcherRouteEditInvoker()));
+        yield return LegendMcpAdapter.Create(new GetLegendTool(_legend, _position, new DispatcherRouteEditInvoker()));
     }
 }
