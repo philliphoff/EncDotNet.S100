@@ -108,7 +108,8 @@ public sealed class AmlLegendSectionTests
         using var tab = new LegendViewModel(
             service,
             new ClockViewTime(new FakeTimeProvider(new DateTimeOffset(2026, 11, 10, 14, 20, 0, TimeSpan.Zero))),
-            new FixedTimeFormat());
+            new FixedTimeFormat(),
+            find: null);
 
         var section = Assert.Single(tab.Sections);
         var (red, green, blue) = Tools.MeasureOverlayAppearance.ChartBackgroundFor(PaletteType.Night);
@@ -126,7 +127,8 @@ public sealed class AmlLegendSectionTests
         using var tab = new LegendViewModel(
             service,
             new ClockViewTime(new FakeTimeProvider(new DateTimeOffset(2026, 11, 10, 14, 20, 0, TimeSpan.Zero))),
-            new FixedTimeFormat());
+            new FixedTimeFormat(),
+            find: null);
         var opened = 0;
         ((IActivityTabContentSignal)tab).ContentBecameAvailable += (_, _) => opened++;
         LegendRevealEventArgs? reveal = null;

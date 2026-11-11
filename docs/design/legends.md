@@ -312,6 +312,31 @@ section's **Legend** link at the tab.
 matching features on the map, as Chart reference's In view list does. It
 gets its own later slice, not the first build.
 
+Built in #1412. Chart reference has no In view list, so the rings follow the
+pick highlight: an accent stroke with a light casing (grey on Dusk and
+Night), a screen-constant ring around a point, the outline of a curve or an
+area, with no fill so overlapping areas don't darken. A row maps back to its
+features from the display lists the stack already holds; nothing is
+portrayed again:
+
+- A catalogue key row (S-101, S-57, D7) rings the features that draw its
+  symbol in view at the view scale, as the key counts them.
+- A vector layer's row (S-124, S-411, AML, fronts, tropical cyclones) rings
+  each drawn feature whose **In legend** row it is (the rule #1410 uses for a
+  pick): the layer's only row, or the line or area row named like the
+  feature's class, which the processor's feature list gives.
+- A station or isoline layer with one row rings what it draws.
+- A band of a colour or arrow ramp (S-102 depths, a weather field, S-111
+  speeds) rings nothing yet; tinting its area is
+  [#1433](https://github.com/philliphoff/EncDotNet.S100/issues/1433).
+
+The find waits until the pointer has rested on a row for 150 ms, and rings at
+most 100 features, top of the stack first. Keyboard focus on a row does the
+same as hover. The rings clear when the row is left, when the tab closes, and
+as soon as the map moves; while the row is still hovered they come back once
+the legend has followed the new view. `set_legend`'s `findRow` rings a row
+from MCP and its `find` reads what is ringed.
+
 **D20 (was Q8) — Zoom moves when the column wraps.** When the column wraps,
 the mode buttons keep their places on the right edge and the zoom buttons
 and compass move to the second column, as D15 describes.

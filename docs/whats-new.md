@@ -23,6 +23,16 @@ month. For package versions and release assets, see
   `set_legend` opens or closes the tab, sets In view and expands or collapses
   a section; it and `get_legend` replace `get_map_legend` and
   `set_map_legend`, which are removed.
+- **Hover to find in the Legend tab.** Resting the pointer on a Legend row,
+  or moving keyboard focus to it, rings the features that row describes on
+  the map, in the pick highlight's accent: a catalogue symbol (S-101, S-57),
+  a front, a warning area or an AML class, up to 100 features drawn in the
+  current view. The rings clear when you leave the row or move the map. A
+  band of a colour or arrow ramp (S-102 depths, a weather field, S-111
+  speeds) doesn't ring anything yet
+  ([#1433](https://github.com/philliphoff/EncDotNet.S100/issues/1433)). The
+  MCP tool `set_legend` takes `findRow` to ring a row and returns what is
+  ringed as `find`.
 - **S-102 relief shading.** An optional hillshade over the S-102 depth bands
   shows the shape of the seabed (dredged pits, sand waves, berth toes) in
   high-resolution bathymetry. It lights the depth surface from the north-west

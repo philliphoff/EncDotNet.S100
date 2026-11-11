@@ -40,6 +40,7 @@ public partial class MainWindow : ShadUI.Window
     private EventHandler? _renderActivityRefreshHandler;
     private EncDotNet.S100.Renderers.Mapsui.DynamicSources.S100DynamicSourceHost? _dynamicSourceOverlayHost;
     private EncDotNet.S100.Viewer.Services.PickHighlightController? _pickHighlightController;
+    private EncDotNet.S100.Viewer.Services.Legends.LegendFindOverlayController? _legendFindController;
     private EncDotNet.S100.Viewer.Services.DatasetExtentIndicatorController? _extentIndicatorController;
     private EncDotNet.S100.Viewer.Services.Aml.AmlCoverageOutlineController? _amlOutlineController;
 
@@ -276,6 +277,8 @@ public partial class MainWindow : ShadUI.Window
             _dynamicSourceOverlayHost = null;
             _pickHighlightController?.Dispose();
             _pickHighlightController = null;
+            _legendFindController?.Dispose();
+            _legendFindController = null;
             _extentIndicatorController?.Dispose();
             _extentIndicatorController = null;
             _amlOutlineController?.Dispose();
@@ -507,6 +510,14 @@ public partial class MainWindow : ShadUI.Window
             App.Services.GetRequiredService<SettingsViewModel>(),
             UiThread.RunOrPost,
             warningDrawing: App.Services.GetService<EncDotNet.S100.Viewer.Services.NavigationalWarningDrawingService>());
+
+        // Hover to find (#1412, legends D19): ring a hovered Legend row's features.
+        _legendFindController = new EncDotNet.S100.Viewer.Services.Legends.LegendFindOverlayController(
+            _mapHost,
+            App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>(),
+            App.Services.GetRequiredService<EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
+            App.Services.GetRequiredService<SettingsViewModel>(),
+            UiThread.RunOrPost);
 
         // Out-of-scale extent indicators: outline the extents of loaded
         // datasets that have zoomed out past their display-scale minimum, so a

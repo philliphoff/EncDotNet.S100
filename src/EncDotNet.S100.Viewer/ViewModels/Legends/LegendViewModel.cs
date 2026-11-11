@@ -42,6 +42,7 @@ internal sealed class LegendViewModel : ViewModelBase, IActivityTabShown, IActiv
     private static readonly Dictionary<PaletteType, IBrush> Tiles = [];
 
     private readonly LegendService _service;
+    private readonly LegendFindService? _find;
     private readonly ITimeFormatProvider _timeFormat;
     private readonly IViewTime _viewTime;
     private readonly Dictionary<string, LegendSectionViewModel> _byId = new(StringComparer.Ordinal);
@@ -54,12 +55,17 @@ internal sealed class LegendViewModel : ViewModelBase, IActivityTabShown, IActiv
     /// <param name="service">The sections.</param>
     /// <param name="viewTime">The view time, for "No data at 14:20".</param>
     /// <param name="timeFormat">The user's Local/UTC setting.</param>
-    public LegendViewModel(LegendService service, IViewTime viewTime, ITimeFormatProvider timeFormat)
+    /// <param name="find">
+    /// Hover to find (D19, #1412): rings a hovered or focused row's features
+    /// on the map; null in hosts without a map.
+    /// </param>
+    public LegendViewModel(LegendService service, IViewTime viewTime, ITimeFormatProvider timeFormat, LegendFindService? find)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(viewTime);
         ArgumentNullException.ThrowIfNull(timeFormat);
         _service = service;
+        _find = find;
         _viewTime = viewTime;
         _timeFormat = timeFormat;
         CollapseAllCommand = new RelayCommand(CollapseAll, () => Sections.Any(s => s.IsExpanded));
@@ -223,6 +229,45 @@ internal sealed class LegendViewModel : ViewModelBase, IActivityTabShown, IActiv
         Highlight(row);
         RevealRequested?.Invoke(this, new LegendRevealEventArgs(vm, row));
         return true;
+    }
+
+    /// <summary>
+    /// The pointer rests on, or keyboard focus moves to, a row: its features
+    /// in view are ringed on the map after a short wait (D19, #1412).
+    /// </summary>
+    /// <param name="row">The row.</param>
+    public void HoverRow(LegendRowViewModel row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        if (_find is null || Locate(row) is not { } at)
+            return;
+        _find.Hover(at.SectionId, row.Label, at.GroupKey);
+    }
+
+    /// <summary>The pointer or focus left a row: its rings clear.</summary>
+    /// <param name="row">The row.</param>
+    public void LeaveRow(LegendRowViewModel row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        if (_find is null)
+            return;
+        if (Locate(row) is { } at)
+            _find.Leave(at.SectionId, row.Label);
+        else
+            _find.Leave();
+    }
+
+    private (string SectionId, string GroupKey)? Locate(LegendRowViewModel row)
+    {
+        foreach (var section in _byId.Values)
+        {
+            foreach (var group in section.Groups)
+            {
+                if (group.Rows.Contains(row))
+                    return (section.Id, group.Key);
+            }
+        }
+        return null;
     }
 
     /// <inheritdoc />

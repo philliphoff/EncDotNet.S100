@@ -51,6 +51,9 @@
             <Setter Property="CornerRadius" Value="4" />
             <Setter Property="Padding" Value="3,1" />
         </Style>
+        <Style Selector="Border.legendRow:focus-visible">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
         <Style Selector="Border.legendRow.highlighted">
             <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
         </Style>
@@ -238,8 +241,15 @@
                                                                       AutomationProperties.ControlTypeOverride="List">
                                                             <ItemsControl.ItemTemplate>
                                                                 <DataTemplate x:DataType="lg:LegendRowViewModel">
+                                                                    <!-- D19 (#1412): hover or focus rings the row's features on the map. -->
                                                                     <Border Classes="legendRow"
                                                                             Classes.highlighted="{Binding IsHighlighted}"
+                                                                            Focusable="True"
+                                                                            Background="Transparent"
+                                                                            PointerEntered="OnRowPointerEntered"
+                                                                            PointerExited="OnRowPointerExited"
+                                                                            GotFocus="OnRowGotFocus"
+                                                                            LostFocus="OnRowLostFocus"
                                                                             AutomationProperties.AutomationId="Legend.Row"
                                                                             AutomationProperties.Name="{Binding Label}"
                                                                             AutomationProperties.ControlTypeOverride="ListItem">
