@@ -287,10 +287,10 @@ internal sealed class LegendService : IDisposable
 
     private static SubLayerLegend? LegendOf(LayerStackEntry item) => item.Item.Payload switch
     {
-        CoverageStackPayload { SubLayer: GridCoverageSubLayer { Legend.Count: > 0 } grid } coverage =>
-            new SubLayerLegend(coverage.Result.Spec.Name, grid.LayerKey, grid.LayerName, grid.Legend),
-        VectorStackPayload { SubLayer.Legend.Count: > 0 } vector =>
-            new SubLayerLegend(vector.Result.Spec.Name, vector.SubLayer.LayerKey, vector.SubLayer.LayerName, vector.SubLayer.Legend),
+        CoverageStackPayload { SubLayer: GridCoverageSubLayer { Legend: { Count: > 0 } gridLegend } grid } coverage =>
+            new SubLayerLegend(coverage.Result.Spec.Name, grid.LayerKey, grid.LayerName, gridLegend),
+        VectorStackPayload { SubLayer.Legend: { Count: > 0 } legend } vector =>
+            new SubLayerLegend(vector.Result.Spec.Name, vector.SubLayer.LayerKey, vector.SubLayer.LayerName, legend),
         _ => null,
     };
 
