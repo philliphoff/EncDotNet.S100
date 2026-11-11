@@ -77,14 +77,14 @@ public sealed class ForecastLibraryTests : IDisposable
     private static LibraryNodeViewModel Source(LibraryPanelViewModel panel) => Assert.Single(Assert.Single(panel.Tree.Nodes).Children);
 
     private static LibraryItemViewModel Model(LibraryPanelViewModel panel, string id) =>
-        panel.Items.Single(i => i.IsModelHeader && i.Name == id);
+        panel.List.Items.Single(i => i.IsModelHeader && i.Name == id);
 
     [Fact]
     public async Task Each_model_is_one_row_with_its_run_and_time_left_expanding_to_untagged_tiles()
     {
         using var panel = await PanelAsync();
 
-        Assert.Equal(["cbofs", "nyofs"], panel.Items.Select(i => i.Name));
+        Assert.Equal(["cbofs", "nyofs"], panel.List.Items.Select(i => i.Name));
         var cbofs = Model(panel, "cbofs");
         Assert.True(cbofs.IsNameMono);
         Assert.Equal("Chesapeake Bay", cbofs.Subtitle);
@@ -100,7 +100,7 @@ public sealed class ForecastLibraryTests : IDisposable
 
         cbofs.ToggleCommand!.Execute(null);
 
-        var tiles = panel.Items.Where(i => i.IsForecast && !i.IsModelHeader).ToArray();
+        var tiles = panel.List.Items.Where(i => i.IsForecast && !i.IsModelHeader).ToArray();
         Assert.Equal(2, tiles.Length);
         Assert.All(tiles, t =>
         {
@@ -125,14 +125,14 @@ public sealed class ForecastLibraryTests : IDisposable
         Assert.Equal(["New run"], cbofs.Tags.Select(t => t.Text));
         Assert.Equal("41 h left", cbofs.TimeLeftText);  // the downloaded 12:00Z run's window
 
-        Assert.Equal("1 new run · " + LibraryItemViewModel.FormatBytes(1_000_000), panel.BulkSummary);
-        Assert.Equal("cbofs 18:00Z replaces 12:00Z", panel.BulkScope);
-        Assert.Equal("Update 1", panel.DownloadListedText);
-        Assert.Equal(2, panel.UpdatesCount);
+        Assert.Equal("1 new run · " + LibraryItemViewModel.FormatBytes(1_000_000), panel.List.BulkSummary);
+        Assert.Equal("cbofs 18:00Z replaces 12:00Z", panel.List.BulkScope);
+        Assert.Equal("Update 1", panel.List.DownloadListedText);
+        Assert.Equal(2, panel.List.UpdatesCount);
         Assert.Contains("newer run for 1 model", Source(panel).StatusLine, StringComparison.Ordinal);
         Assert.Equal(LibraryNodeStatusKind.Warning, Source(panel).StatusKind);
 
-        panel.DownloadListedCommand.Execute(null);
+        panel.List.DownloadListedCommand.Execute(null);
 
         Assert.Equal(["111US00_CBOFS_US4VA1DD", "111US00_CBOFS_US4VA1DE"], _downloader.Requested.Order());
     }
@@ -145,7 +145,7 @@ public sealed class ForecastLibraryTests : IDisposable
         var nyofs = Model(panel, "nyofs");
         Assert.Equal(LibraryAvailability.Local, nyofs.Availability);
         Assert.Contains("1 of 2 runs local · 54 h left", Source(panel).StatusLine, StringComparison.Ordinal);
-        Assert.False(panel.IsCheckForRuns);
+        Assert.False(panel.List.IsCheckForRuns);
 
         // 55 h after the 19:00Z run: an hour past its 54 h window. The minute clock re-evaluates.
         _time.Advance(TimeSpan.FromHours(55));
@@ -157,14 +157,14 @@ public sealed class ForecastLibraryTests : IDisposable
         Assert.True(nyofs.IsWindowEnded);
         Assert.Equal("Ended 1 h ago", nyofs.TimeLeftText);
         nyofs.ToggleCommand!.Execute(null);
-        var tile = panel.Items.Single(i => i.Name == "111US00_NYOFS_US4NY1AP");
+        var tile = panel.List.Items.Single(i => i.Name == "111US00_NYOFS_US4NY1AP");
         Assert.Equal(LibraryAvailability.Expired, tile.Availability);
         Assert.True(tile.CanLoad);  // an expired run still loads, for looking back
         Assert.Empty(tile.Tags);
-        Assert.Equal(1, panel.UpdatesCount);
-        Assert.True(panel.IsCheckForRuns);
-        Assert.Equal("1 run expired", panel.BulkSummary);
-        Assert.False(panel.HasDownloadable);
+        Assert.Equal(1, panel.List.UpdatesCount);
+        Assert.True(panel.List.IsCheckForRuns);
+        Assert.Equal("1 run expired", panel.List.BulkSummary);
+        Assert.False(panel.List.HasDownloadable);
         Assert.Contains("1 runs expired · Refresh to look for new runs", Source(panel).StatusLine, StringComparison.Ordinal);
         Assert.Equal(LibraryNodeStatusKind.Error, Source(panel).StatusKind);
     }
@@ -243,7 +243,7 @@ public sealed class ForecastLibraryTests : IDisposable
     private Services.LibraryTimeSource TimeSource(LibraryPanelViewModel panel)
     {
         var library = new TestLibrary(_library, new NullLoader(), _downloader, _time);
-        return new(library.Rows, library.Open, library.Download, (source, key) => panel.Reveal(source, key), _time, action => action());
+        return new(library.Rows, library.Open, library.Download, (source, key) => panel.List.Reveal(source, key), _time, action => action());
     }
 
     [Fact]
@@ -300,33 +300,33 @@ public sealed class ForecastLibraryTests : IDisposable
         });
         using var panel = await PanelAsync(viewTime);
 
-        Assert.True(panel.HasViewTime);
-        Assert.Equal(3, panel.AtViewTimeCount);
+        Assert.True(panel.List.HasViewTime);
+        Assert.Equal(3, panel.List.AtViewTimeCount);
 
         viewTime.SetCurrentTime(Run.UtcDateTime.AddHours(50));
-        Assert.Equal(1, panel.AtViewTimeCount);
-        panel.IsAtViewTime = true;
-        Assert.Equal(["nyofs"], panel.Items.Where(i => i.IsModelHeader).Select(i => i.Name));
+        Assert.Equal(1, panel.List.AtViewTimeCount);
+        panel.List.IsAtViewTime = true;
+        Assert.Equal(["nyofs"], panel.List.Items.Where(i => i.IsModelHeader).Select(i => i.Name));
         // The toggle narrows the segments too.
-        Assert.Equal(1, panel.AllCount);
-        Assert.Equal(1, panel.OnlineCount);
+        Assert.Equal(1, panel.List.AllCount);
+        Assert.Equal(1, panel.List.OnlineCount);
     }
 
     [Fact]
     public async Task Reveal_selects_a_tile_and_opens_its_model()
     {
         using var panel = await PanelAsync();
-        panel.FilterText = "nyofs";
+        panel.List.FilterText = "nyofs";
         LibraryItemViewModel? revealed = null;
-        panel.Revealed += (_, item) => revealed = item;
+        panel.List.Revealed += (_, item) => revealed = item;
         var source = Source(panel).Source!.Id;
 
-        Assert.True(panel.Reveal(source, "cbofs/111US00_CBOFS_US4VA1DE"));
+        Assert.True(panel.List.Reveal(source, "cbofs/111US00_CBOFS_US4VA1DE"));
 
-        Assert.Equal("111US00_CBOFS_US4VA1DE", panel.SelectedItem?.Name);
-        Assert.Same(panel.SelectedItem, revealed);
-        Assert.Equal(string.Empty, panel.FilterText);
-        Assert.False(panel.Reveal(source, "cbofs/nothing"));
+        Assert.Equal("111US00_CBOFS_US4VA1DE", panel.List.SelectedItem?.Name);
+        Assert.Same(panel.List.SelectedItem, revealed);
+        Assert.Equal(string.Empty, panel.List.FilterText);
+        Assert.False(panel.List.Reveal(source, "cbofs/nothing"));
     }
 
     [Fact]
@@ -349,7 +349,7 @@ public sealed class ForecastLibraryTests : IDisposable
         panel.Details.ShowOnTimelineRequested += (_, window) => shown = window;
         panel.Details.GoToTimeRequested += (_, at) => went = at;
 
-        panel.SelectedItem = Model(panel, "nyofs");
+        panel.List.SelectedItem = Model(panel, "nyofs");
         Assert.True(panel.Details.HasValidWindow);
         panel.Details.ShowOnTimelineCommand.Execute(null);
         panel.Details.GoToRunStartCommand.Execute(null);

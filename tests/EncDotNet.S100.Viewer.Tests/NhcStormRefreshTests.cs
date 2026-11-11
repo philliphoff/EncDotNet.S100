@@ -194,7 +194,7 @@ public sealed class NhcStormRefreshTests : IDisposable
         using var disposeMonitor = monitor;
         var source = _library.Collections.SelectMany(c => c.Sources).Single(s => s.Id == sourceId);
         var item = Assert.Single(source.Index!.Items);
-        var row = new LibraryItemViewModel(item, source, _loader.StateOf, _downloader, "Weather", time: _time, download: null, timeFormat: null);
+        var row = new LibraryItemViewModel(item, source, new LibraryRowContext(_time, null, _loader.StateOf, _downloader, retry: null), "Weather");
 
         // The source says how many storms are active (V27).
         Assert.Equal("1 active", panel.Tree.Nodes.Single().StatusLine);
@@ -214,7 +214,7 @@ public sealed class NhcStormRefreshTests : IDisposable
 
         // Eight hours after advisory 20, it's stale.
         _time.Advance(TimeSpan.FromHours(8));
-        var stale = new LibraryItemViewModel(item, source, _loader.StateOf, _downloader, "Weather", time: _time, download: null, timeFormat: null);
+        var stale = new LibraryItemViewModel(item, source, new LibraryRowContext(_time, null, _loader.StateOf, _downloader, retry: null), "Weather");
         Assert.True(stale.IsStaleRun);
         Assert.Equal("Advisory 20 is over 7 hours old", stale.StaleRunText);
     }

@@ -115,29 +115,29 @@ public sealed class LibraryAmlTests : IDisposable
     {
         using var vm = await CreateAsync(Mixed);
 
-        Assert.Equal(["GB4X0000", "GB5X0000"], vm.Items.Take(2).Select(i => i.Name));
-        var header = vm.Items[2];
+        Assert.Equal(["GB4X0000", "GB5X0000"], vm.List.Items.Take(2).Select(i => i.Name));
+        var header = vm.List.Items[2];
         Assert.True(header.IsAmlSection);
         Assert.True(header.IsGroupHeader);
         Assert.Equal("ADDITIONAL MILITARY LAYERS · 5", header.SectionHeader);
         Assert.Empty(header.Tags);
         Assert.False(header.CanLoad);
-        Assert.All(vm.Items.Skip(3), i => Assert.True(i.IsAml));
-        Assert.Equal(5, vm.Items.Count(i => i.IsAml));
-        Assert.Equal("7", vm.ItemsSummary);  // datasets, never the header
+        Assert.All(vm.List.Items.Skip(3), i => Assert.True(i.IsAml));
+        Assert.Equal(5, vm.List.Items.Count(i => i.IsAml));
+        Assert.Equal("7", vm.List.ItemsSummary);  // datasets, never the header
 
         header.ToggleCommand!.Execute(null);
-        Assert.Equal(3, vm.Items.Count);
-        Assert.False(vm.Items[2].IsExpanded);
-        Assert.Equal("7", vm.ItemsSummary);
+        Assert.Equal(3, vm.List.Items.Count);
+        Assert.False(vm.List.Items[2].IsExpanded);
+        Assert.Equal("7", vm.List.ItemsSummary);
 
         // A text match inside the collapsed group shows it.
-        vm.FilterText = "UKL0";
-        Assert.Equal(["ADDITIONAL MILITARY LAYERS · 1", null], vm.Items.Select(i => i.SectionHeader));
+        vm.List.FilterText = "UKL0";
+        Assert.Equal(["ADDITIONAL MILITARY LAYERS · 1", null], vm.List.Items.Select(i => i.SectionHeader));
 
-        vm.FilterText = string.Empty;
-        vm.Items[2].ToggleCommand!.Execute(null);
-        Assert.Equal(8, vm.Items.Count);
+        vm.List.FilterText = string.Empty;
+        vm.List.Items[2].ToggleCommand!.Execute(null);
+        Assert.Equal(8, vm.List.Items.Count);
     }
 
     [Fact]
@@ -145,38 +145,38 @@ public sealed class LibraryAmlTests : IDisposable
     {
         using var vm = await CreateAsync(Enc("GB4X0000"), Enc("GB5X0000"));
 
-        Assert.False(vm.HasAml);
-        Assert.DoesNotContain(vm.Items, i => i.IsGroupHeader);
+        Assert.False(vm.List.HasAml);
+        Assert.DoesNotContain(vm.List.Items, i => i.IsGroupHeader);
     }
 
     [Fact]
     public async Task The_AML_chip_filters_by_product()
     {
         using var vm = await CreateAsync(Mixed);
-        Assert.True(vm.HasAml);
-        Assert.False(vm.IsAmlFilterActive);
-        Assert.Equal("AML", vm.AmlFilterText);
+        Assert.True(vm.List.HasAml);
+        Assert.False(vm.List.IsAmlFilterActive);
+        Assert.Equal("AML", vm.List.AmlFilterText);
 
-        vm.SetAmlFilterCommand.Execute(LibraryPanelViewModel.AmlFilterAllProducts);
-        Assert.True(vm.IsAmlFilterActive);
-        Assert.Equal("AML · All products", vm.AmlFilterText);
+        vm.List.SetAmlFilterCommand.Execute(LibraryListViewModel.AmlFilterAllProducts);
+        Assert.True(vm.List.IsAmlFilterActive);
+        Assert.Equal("AML · All products", vm.List.AmlFilterText);
         Assert.Equal(5, Cells(vm).Length);
-        Assert.Equal(5, vm.AllCount);
-        Assert.StartsWith("5 of 7", vm.ItemsSummary);
+        Assert.Equal(5, vm.List.AllCount);
+        Assert.StartsWith("5 of 7", vm.List.ItemsSummary);
 
         // A product takes its 3.0 cells too.
-        vm.SetAmlFilterCommand.Execute("CLB");
-        Assert.Equal("AML · CLB", vm.AmlFilterText);
+        vm.List.SetAmlFilterCommand.Execute("CLB");
+        Assert.Equal("AML · CLB", vm.List.AmlFilterText);
         Assert.Equal(["UKC6U114.000", "NOC6RA3B.000", "AMLDEU7U_NKKK4824_CLB_SB7_TrialData.000"], Cells(vm));
 
-        vm.SetAmlFilterCommand.Execute("3.0");
+        vm.List.SetAmlFilterCommand.Execute("3.0");
         Assert.Equal(["AMLDEU7U_NKKK4824_CLB_SB7_TrialData.000", "AMLDEU7U_NKKK0000_TrialData.000"], Cells(vm));
 
-        vm.SetAmlFilterCommand.Execute("SBO");
+        vm.List.SetAmlFilterCommand.Execute("SBO");
         Assert.Empty(Cells(vm));
 
-        vm.SetAmlFilterCommand.Execute(LibraryPanelViewModel.AmlFilterOff);
-        Assert.False(vm.IsAmlFilterActive);
+        vm.List.SetAmlFilterCommand.Execute(LibraryListViewModel.AmlFilterOff);
+        Assert.False(vm.List.IsAmlFilterActive);
         Assert.Equal(7, Cells(vm).Length);
     }
 
@@ -189,7 +189,7 @@ public sealed class LibraryAmlTests : IDisposable
     {
         using var vm = await CreateAsync(Mixed);
 
-        vm.FilterText = filter;
+        vm.List.FilterText = filter;
 
         Assert.Equal(count, Cells(vm).Length);
         Assert.All(Cells(vm), name => Assert.True(Row(vm, name).IsAml));
@@ -242,7 +242,7 @@ public sealed class LibraryAmlTests : IDisposable
     {
         using var vm = await CreateAsync(Mixed);
 
-        var group = Assert.Single(vm.Items[2].Details);
+        var group = Assert.Single(vm.List.Items[2].Details);
 
         Assert.Equal("Additional Military Layers", group.Title);
         Assert.Contains(group.Fields, f => f.Label == "Cells" && f.Value == "5");
@@ -253,7 +253,7 @@ public sealed class LibraryAmlTests : IDisposable
     {
         using var vm = await CreateAsync(Mixed);
         using var host = Headless.ViewHost.Show(new Views.LibraryPanelView { DataContext = vm }, width: 420, height: 900);
-        vm.SelectedItem = Row(vm, "NOC6RA3B.000");
+        vm.List.SelectedItem = Row(vm, "NOC6RA3B.000");
         host.Settle();
 
         var chips = host.All<Views.AmlMarkingChip>().Where(c => c.IsEffectivelyVisible).ToArray();
@@ -273,7 +273,7 @@ public sealed class LibraryAmlTests : IDisposable
         using var vm = await CreateAsync(Mixed);
         using var host = Headless.ViewHost.Show(new Views.LibraryPanelView { DataContext = vm }, width: 420, height: 900);
 
-        vm.SetAmlFilterCommand.Execute("LBO");
+        vm.List.SetAmlFilterCommand.Execute("LBO");
         host.Settle();
 
         var chip = host.Find<Avalonia.Controls.Button>("Library.AmlFilter");
@@ -285,10 +285,10 @@ public sealed class LibraryAmlTests : IDisposable
     }
 
     private static LibraryItemViewModel Row(LibraryPanelViewModel vm, string name) =>
-        vm.Items.Single(i => !i.IsGroupHeader && i.Name == name);
+        vm.List.Items.Single(i => !i.IsGroupHeader && i.Name == name);
 
     private static string[] Cells(LibraryPanelViewModel vm) =>
-        [.. vm.Items.Where(i => !i.IsGroupHeader).Select(i => i.Name)];
+        [.. vm.List.Items.Where(i => !i.IsGroupHeader).Select(i => i.Name)];
 
     /// <summary>Indexes every source as the given items.</summary>
     private sealed class FixedIndexer(IReadOnlyList<CollectionItem> items) : ICollectionSourceIndexer

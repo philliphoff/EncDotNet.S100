@@ -161,11 +161,8 @@ public sealed class SecomLibraryIdentityTests : IDisposable
 
     private LibraryPanelViewModel Panel()
     {
-        var panel = TestLibrary.Panel(_library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
-        panel.Tree.OpenKeys = _opened.Add;
-        panel.Tree.Identities = _directory;
-        panel.Tree.Sync();
-        return panel;
+        return TestLibrary.Panel(_library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null,
+            identities: _directory, openKeys: _opened.Add);
     }
 
     private SecomIdentityReference Import(string file, string name, string mrn, int daysLeft = 300) =>

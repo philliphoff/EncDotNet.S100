@@ -66,7 +66,7 @@ public sealed class LibraryPanelViewTests : IDisposable
 
         Assert.Same(source, panel.Tree.SelectedNode);
         Assert.Equal(2, VisibleRows(host).Count);
-        Assert.All(panel.Items, i => Assert.Equal(source.Id, i.Source.Id));
+        Assert.All(panel.List.Items, i => Assert.Equal(source.Id, i.Source.Id));
     }
 
     [AvaloniaFact]
@@ -90,9 +90,9 @@ public sealed class LibraryPanelViewTests : IDisposable
         using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
 
-        var item = panel.Items[1];
+        var item = panel.List.Items[1];
         host.Click(Row(host, item));
-        Assert.Same(item, panel.SelectedItem);
+        Assert.Same(item, panel.List.SelectedItem);
 
         host.Click(host.Find<Button>("Library.Details.Load"));
         await _library.WhenIdle();
@@ -107,10 +107,10 @@ public sealed class LibraryPanelViewTests : IDisposable
         using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
 
-        host.DoubleClick(Row(host, panel.Items[0]));
+        host.DoubleClick(Row(host, panel.List.Items[0]));
         await _library.WhenIdle();
 
-        Assert.Same(panel.Items[0], panel.SelectedItem);
+        Assert.Same(panel.List.Items[0], panel.List.SelectedItem);
         Assert.Equal([(false, 1)], _loader.Calls);
     }
 
@@ -122,9 +122,9 @@ public sealed class LibraryPanelViewTests : IDisposable
         using var host = Show(panel);
 
         // The keyboard path: focus the list, arrow to the second row, Enter.
-        host.Click(Row(host, panel.Items[0]));
+        host.Click(Row(host, panel.List.Items[0]));
         host.Press(PhysicalKey.ArrowDown);
-        Assert.Same(panel.Items[1], panel.SelectedItem);
+        Assert.Same(panel.List.Items[1], panel.List.SelectedItem);
         host.Press(PhysicalKey.Enter);
         await _library.WhenIdle();
 
@@ -140,14 +140,14 @@ public sealed class LibraryPanelViewTests : IDisposable
         using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
         var automation = new ViewerUiAutomation(() => [host.Window]);
-        var row = Row(host, panel.Items[1]);
+        var row = Row(host, panel.List.Items[1]);
 
-        var node = await RowNodeAsync(automation, panel.Items[1]);
+        var node = await RowNodeAsync(automation, panel.List.Items[1]);
         await automation.ActAsync(new UiTarget(null, node.Ref), UiAction.Select, null);
         host.Settle();
 
         Assert.True(row.IsSelected);
-        Assert.Same(panel.Items[1], panel.SelectedItem);
+        Assert.Same(panel.List.Items[1], panel.List.SelectedItem);
     }
 
     [AvaloniaFact]
@@ -157,14 +157,14 @@ public sealed class LibraryPanelViewTests : IDisposable
         _downloader.Status = new LibraryDownloadItemStatus(LibraryDownloadItemState.Failed, 0, null, "404");
         using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
-        var row = Row(host, panel.Items[0]);
+        var row = Row(host, panel.List.Items[0]);
 
         host.Click(host.Find<Button>("Library.Row.Tag", row));
         await _library.WhenIdle();
         Assert.Equal(1, _downloader.Downloads);
 
         var automation = new ViewerUiAutomation(() => [host.Window]);
-        var rowNode = await RowNodeAsync(automation, panel.Items[0]);
+        var rowNode = await RowNodeAsync(automation, panel.List.Items[0]);
         var tag = Assert.Single(rowNode.Children!, c => c.Id == "Library.Row.Tag");
         Assert.Equal(Strings.Library_Tag_FailedRetry, tag.Name);
         Assert.Contains("invoke", tag.Patterns);
@@ -190,8 +190,8 @@ public sealed class LibraryPanelViewTests : IDisposable
         await AddS57CollectionAsync();
         using var panel = TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         using var host = Show(panel);
-        host.Click(Row(host, panel.Items[0]));
-        var field = panel.Items[0].Details.SelectMany(g => g.Fields).Single(f => f.IsCopyable);
+        host.Click(Row(host, panel.List.Items[0]));
+        var field = panel.List.Items[0].Details.SelectMany(g => g.Fields).Single(f => f.IsCopyable);
 
         var automation = new ViewerUiAutomation(() => [host.Window]);
         var copy = await automation.ActAsync(new UiTarget("Library.Details.Field.Copy", null), UiAction.Invoke, null);

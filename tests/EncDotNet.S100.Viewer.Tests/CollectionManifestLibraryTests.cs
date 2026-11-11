@@ -209,10 +209,10 @@ public sealed class CollectionManifestLibraryTests : IDisposable
         Assert.True(peru.IsStatusWarning);
 
         panel.Tree.SelectedNode = source.Children[1];
-        Assert.Equal(2, panel.Items.Count);
-        Assert.All(panel.Items, i => Assert.Equal("BE", i.Item.Properties["group"]));
+        Assert.Equal(2, panel.List.Items.Count);
+        Assert.All(panel.List.Items, i => Assert.Equal("BE", i.Item.Properties["group"]));
 
-        var group = panel.Items[0].Details.Single(g => g.Title == "Source").Fields;
+        var group = panel.List.Items[0].Details.Single(g => g.Title == "Source").Fields;
         Assert.Contains(group, f => f.Label == "Group" && f.Value == "Belgium (BE)");
         Assert.DoesNotContain(group, f => f.Label is "group" or "groupName" or "Group name");
 
