@@ -38,16 +38,18 @@ public sealed class WeatherAutoRefreshTests : IDisposable
         _context.Dispose();
     }
 
-    private async Task<(LibraryPanelViewModel Panel, Guid SourceId)> PanelAsync()
+    private async Task<(LibraryPanelViewModel Panel, WeatherRunMonitor Monitor, Guid SourceId)> PanelAsync()
     {
         var known = KnownCatalogueSources.Find("noaa-wpc-surface")!;
         var source = new WeatherFeedSource(Guid.NewGuid(), null, known.CatalogUri, known.Weather!, new WeatherSelection());
         _library.Initialize();
         _library.AddCollection("Weather", [source]);
         await _library.WhenIdle();
-        var panel = new LibraryPanelViewModel(_library, new NoImporter(), _loader, _downloader, action => action(), time: _time, coalesce: action => action(), feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        var library = new TestLibrary(_library, _loader, _downloader, _time);
+        var panel = library.CreatePanel(new NoImporter(), action => action(), coalesce: action => action(), time: _time, feedHealth: null, viewTime: null, timeFormat: null, sync: null);
         panel.Sync();
-        return (panel, source.Id);
+        // The monitor checks on its own minute clock, as in the app.
+        return (panel, library.Monitor(_time, action => action()), source.Id);
     }
 
     [Fact]
@@ -55,13 +57,14 @@ public sealed class WeatherAutoRefreshTests : IDisposable
     {
         _downloader.Local = Start.AddHours(-1).AddMinutes(-20); // the 12Z analysis, on disk and loaded
         _loader.Loaded = true;
-        var (panel, _) = await PanelAsync();
+        var (panel, monitor, _) = await PanelAsync();
         using var disposePanel = panel;
+        using var disposeMonitor = monitor;
         Assert.Equal(1, _indexer.Reads);
 
-        // Two hours on: not due, on the Library's minute clock or when asked.
+        // Two hours on: not due, on the monitor's minute clock or when asked.
         _time.Advance(TimeSpan.FromHours(2));
-        Assert.Empty(await panel.RefreshDueWeatherAsync());
+        Assert.Empty(await monitor.RefreshDueAsync());
         Assert.Equal(1, _indexer.Reads);
 
         // Three hours on: the minute clock re-reads the source and replaces the analysis.
@@ -71,7 +74,7 @@ public sealed class WeatherAutoRefreshTests : IDisposable
         // Re-read once when due (and once more after the download, as any download does).
         Assert.True(_indexer.Reads >= 2);
         Assert.Equal(["wpc-analysis"], _downloader.Requested);
-        Assert.Empty(await panel.RefreshDueWeatherAsync());
+        Assert.Empty(await monitor.RefreshDueAsync());
     }
 
     private static async Task WaitForAsync(Func<bool> condition)
@@ -85,14 +88,72 @@ public sealed class WeatherAutoRefreshTests : IDisposable
     public async Task An_analysis_that_isnt_loaded_isnt_refreshed()
     {
         _downloader.Local = Start.AddHours(-1).AddMinutes(-20);
-        var (panel, _) = await PanelAsync();
+        var (panel, monitor, _) = await PanelAsync();
         using var disposePanel = panel;
+        using var disposeMonitor = monitor;
 
         _time.Advance(TimeSpan.FromHours(4));
 
-        Assert.Empty(await panel.RefreshDueWeatherAsync());
+        Assert.Empty(await monitor.RefreshDueAsync());
         Assert.Equal(1, _indexer.Reads);
         Assert.Empty(_downloader.Requested);
+    }
+
+    // ── Load latest run and pinning (#1395) ───────────────────────────
+
+    [Fact]
+    public async Task Load_latest_run_downloads_a_newer_analysis_and_loads_it()
+    {
+        _downloader.Local = Start.AddHours(-4).AddMinutes(-20); // the 09Z analysis; 12Z is listed
+        var (panel, monitor, sourceId) = await PanelAsync();
+        using var disposePanel = panel;
+        using var disposeMonitor = monitor;
+        var library = new TestLibrary(_library, _loader, _downloader, _time);
+
+        await library.LoadLatest.RunAsync(sourceId, ["wpc-analysis"]);
+
+        Assert.True(_indexer.Reads >= 2);
+        Assert.Equal(["wpc-analysis"], _downloader.Requested);
+        Assert.Equal(1, _loader.Opened);
+    }
+
+    [Fact]
+    public async Task Load_latest_run_loads_a_current_analysis_without_downloading_it()
+    {
+        _downloader.Local = Start.AddHours(-1).AddMinutes(-20); // the 12Z analysis, the latest
+        var (panel, monitor, sourceId) = await PanelAsync();
+        using var disposePanel = panel;
+        using var disposeMonitor = monitor;
+        var library = new TestLibrary(_library, _loader, _downloader, _time);
+
+        await library.LoadLatest.RunAsync(sourceId, ["wpc-analysis"]);
+
+        Assert.Empty(_downloader.Requested);
+        Assert.Equal(1, _loader.Opened);
+    }
+
+    [Fact]
+    public async Task Pinning_a_run_re_reads_its_source_and_a_run_without_a_copy_isnt_pinned()
+    {
+        var (panel, monitor, sourceId) = await PanelAsync();
+        using var disposePanel = panel;
+        using var disposeMonitor = monitor;
+        var library = new TestLibrary(_library, _loader, _downloader, _time);
+        var item = _library.Collections.SelectMany(c => c.Sources).Single(s => s.Id == sourceId).Index!.Items.Single();
+
+        Assert.False(library.PinRun.Pin(item, sourceId));
+        await _library.WhenIdle();
+        Assert.Equal(1, _indexer.Reads);
+
+        _downloader.Local = Start.AddHours(-1).AddMinutes(-20);
+        Assert.True(library.PinRun.Pin(item, sourceId));
+        await _library.WhenIdle();
+        Assert.Equal(2, _indexer.Reads);
+
+        Assert.True(library.PinRun.Unpin(item, sourceId));
+        await _library.WhenIdle();
+        Assert.Equal(3, _indexer.Reads);
+        Assert.False(library.PinRun.Unpin(item, sourceId));
     }
 
     /// <summary>Lists the latest analysis published at the clock: 12Z at the start, 15Z three hours on.</summary>
@@ -156,6 +217,18 @@ public sealed class WeatherAutoRefreshTests : IDisposable
             Requested.AddRange(items.Select(i => i.Name));
             return Task.FromResult(new LibraryDownloadResult(items.Count, 0, false));
         }
+
+        public List<string> Pinned { get; } = [];
+
+        public string? Pin(CollectionItem item)
+        {
+            if (Local is null)
+                return null;
+            Pinned.Add(item.Name);
+            return item.Name + "-pinned";
+        }
+
+        public bool Unpin(CollectionItem pinned) => Pinned.Remove(pinned.Name);
     }
 
     private sealed class Loader : ILibraryLoader
@@ -167,8 +240,13 @@ public sealed class WeatherAutoRefreshTests : IDisposable
         public LibraryLoadState StateOf(CollectionItem item) =>
             Loaded && item.Location is LocalItemLocation ? LibraryLoadState.Loaded : LibraryLoadState.None;
 
-        public Task<LibraryLoadResult> LoadAsync(IReadOnlyList<CollectionItem> items, bool defer, CancellationToken cancellationToken = default) =>
-            Task.FromResult(new LibraryLoadResult(items.Count, 0));
+        public int Opened { get; private set; }
+
+        public Task<LibraryLoadResult> LoadAsync(IReadOnlyList<CollectionItem> items, bool defer, CancellationToken cancellationToken = default)
+        {
+            Opened += items.Count;
+            return Task.FromResult(new LibraryLoadResult(items.Count, 0));
+        }
     }
 
     private sealed class NoImporter : ILibraryImporter

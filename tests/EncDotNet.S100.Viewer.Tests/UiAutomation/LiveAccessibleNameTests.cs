@@ -35,7 +35,7 @@ public sealed partial class LiveAccessibleNameTests
         library.Initialize();
         library.AddCollection("Charts", [new ExchangeSetSource(Guid.NewGuid(), null, context.CreateS57ExchangeSet("Charts"))]);
         await library.WhenIdle();
-        using var panel = new LibraryPanelViewModel(
+        using var panel = TestLibrary.Panel(
             library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System,
             feedHealth: null,
             notifications: null,

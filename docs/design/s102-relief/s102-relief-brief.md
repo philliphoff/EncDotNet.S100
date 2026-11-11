@@ -73,8 +73,13 @@ north-west and darken or lighten each cell by its slope.
 
 ## Known engineering limits (not for design)
 
-- Zoomed out, the viewer reads a shoal-biased overview grid. Shading there is
-  coarser and can look noisy. Shading is computed per dataset, so seams can
-  show where cells meet.
+- The viewer shades each cell once at full resolution and draws it as one
+  image. Zoomed out, that image is drawn with mipmaps, so the shading averages
+  smoothly instead of speckling, but detail finer than a screen pixel still
+  fades. Keeping broad features (channels, dredged basins) readable far out
+  would need shading from a smoothed surface as well.
+- Checked on the Rotterdam cells: the shading runs on across a cell junction.
+  The light line along some junctions shows with relief off too; it comes
+  from the S-102 portrayal at the cell edge, not from relief.
 - The prototype re-renders the surface when the switch changes, like the
   weather switches do.

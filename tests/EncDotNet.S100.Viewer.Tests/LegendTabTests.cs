@@ -3,6 +3,7 @@ using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
+using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
@@ -187,6 +188,45 @@ public sealed class LegendTabTests : IDisposable
 
         Assert.Equal("No data at 14:20 UTC", tab.Sections[0].Detail);
         Assert.True(tab.Sections[0].HasNoData);
+    }
+
+    [Fact]
+    public void S111_arrows_make_a_section_with_their_caption()
+    {
+        // Slice 4 (#1406) puts rows and a caption on every coverage kind, not
+        // only grids: the S-111 arrows' speed bands.
+        var grid = (GridCoverageSubLayer)((CoverageStackPayload)LayerStackLegendTests.FillEntry("111US00.h5", CurrentLegend).Item.Payload).SubLayer;
+        var arrows = new ArrowCoverageSubLayer
+        {
+            LayerKey = "s111.arrows",
+            LayerName = "Surface currents: 111US00.h5",
+            Plane = S98DisplayPlane.DynamicArrows,
+            Coverage = grid.Coverage,
+            Viewport = grid.Viewport,
+            SymbolProvider = _ => null,
+            FallbackExtent = new GeographicBounds(0, 0, 2, 2),
+            Legend = CurrentLegend,
+            LegendCaption = "Speed, kn · longer arrow = faster",
+        };
+        var result = new CoveragePortrayalResult
+        {
+            SubLayers = [arrows],
+            Spec = new EncDotNet.S100.Core.SpecRef("S-111", default),
+            SourceDatasetId = "111US00.h5",
+            Info = "test",
+        };
+        var f = new LegendServiceTests.Fixture();
+        f.Loader.SetEntries(new LayerStackEntry(
+            new Mapsui.Layers.MemoryLayer("111US00.h5"),
+            new SubLayerStackItem(new CoverageStackPayload(result, arrows), arrows.Plane, 0, "111US00.h5", "SurfaceCurrent")));
+        using var service = f.Create();
+        using var tab = Tab(service);
+
+        var section = Assert.Single(tab.Sections);
+        Assert.Equal("S-111", section.Id);
+        Assert.Equal("Speed, kn · longer arrow = faster", section.Caption);
+        Assert.True(section.HasCaption);
+        Assert.Equal(["0–1 kn", "1 kn and more"], section.Rows.Select(r => r.Label));
     }
 
     [Fact]

@@ -30,7 +30,7 @@ public sealed class LibraryKeepDownloadedTests : IDisposable
     }
 
     private LibraryPanelViewModel Panel() =>
-        new(_library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), a => a(), a => a(), TimeProvider.System, sync: _sync, feedHealth: null, notifications: null, viewTime: null, timeFormat: null);
+        TestLibrary.Panel(_library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), a => a(), a => a(), TimeProvider.System, sync: _sync, feedHealth: null, notifications: null, viewTime: null, timeFormat: null);
 
     [Fact]
     public void An_online_source_can_be_kept_downloaded_from_its_menu()

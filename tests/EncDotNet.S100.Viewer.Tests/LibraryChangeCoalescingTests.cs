@@ -1,7 +1,6 @@
 using Avalonia.Threading;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Viewer.Services;
-using EncDotNet.S100.Viewer.ViewModels;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -40,7 +39,7 @@ public sealed class LibraryChangeCoalescingTests : IDisposable
     [Fact]
     public void A_burst_of_loader_changes_refreshes_the_panel_once()
     {
-        using var panel = new LibraryPanelViewModel(
+        using var panel = TestLibrary.Panel(
             _library, new RecordingLibraryImporter(), _loader, _downloader, action => action(), coalesce: Post, time: TimeProvider.System,
             feedHealth: null,
             notifications: null,
@@ -62,14 +61,15 @@ public sealed class LibraryChangeCoalescingTests : IDisposable
     [Fact]
     public void A_burst_of_loader_changes_raises_the_timeline_change_once()
     {
-        using var panel = new LibraryPanelViewModel(
+        using var panel = TestLibrary.Panel(
             _library, new RecordingLibraryImporter(), new FakeLibraryLoader(), _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System,
             feedHealth: null,
             notifications: null,
             viewTime: null,
             timeFormat: null,
             sync: null);
-        var source = new LibraryTimeSource(panel, _library, _loader, TimeProvider.System, Post);
+        var library = new TestLibrary(_library, _loader, _downloader);
+        var source = new LibraryTimeSource(library.Rows, library.Open, library.Download, (_, _) => { }, TimeProvider.System, Post);
         var changes = 0;
         source.Changed += () => changes++;
 
@@ -85,7 +85,7 @@ public sealed class LibraryChangeCoalescingTests : IDisposable
     {
         // The defaults used to run the refresh inline on the UI thread, which
         // cleared the coalescing flag before the next change arrived.
-        using var panel = new LibraryPanelViewModel(
+        using var panel = TestLibrary.Panel(
             _library, new RecordingLibraryImporter(), new FakeLibraryLoader(), _downloader,
             EncDotNet.S100.Viewer.Services.UiThread.RunOrPost, EncDotNet.S100.Viewer.Services.UiThread.Post, TimeProvider.System,
             feedHealth: null,
@@ -93,7 +93,8 @@ public sealed class LibraryChangeCoalescingTests : IDisposable
             viewTime: null,
             timeFormat: null,
             sync: null);
-        var source = new LibraryTimeSource(panel, _library, _loader, TimeProvider.System, dispatch: EncDotNet.S100.Viewer.Services.UiThread.Post);
+        var library = new TestLibrary(_library, _loader, _downloader);
+        var source = new LibraryTimeSource(library.Rows, library.Open, library.Download, (_, _) => { }, TimeProvider.System, dispatch: EncDotNet.S100.Viewer.Services.UiThread.Post);
         var changes = 0;
         source.Changed += () => changes++;
 

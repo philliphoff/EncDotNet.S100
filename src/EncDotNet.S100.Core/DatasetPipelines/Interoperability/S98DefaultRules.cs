@@ -668,6 +668,7 @@ public static class S98DefaultRules
             PatternClipCacheKey = subLayer.PatternClipCacheKey,
             ApplyOutOfBandCap = subLayer.ApplyOutOfBandCap,
             Legend = subLayer.Legend,
+            LegendCaption = subLayer.LegendCaption,
         };
     }
 

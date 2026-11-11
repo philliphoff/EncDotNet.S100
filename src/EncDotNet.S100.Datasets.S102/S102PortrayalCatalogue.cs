@@ -1,5 +1,6 @@
 using System.Globalization;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Pipelines.Coverage;
 using EncDotNet.S100.Portrayals;
@@ -237,6 +238,53 @@ public class S102PortrayalCatalogue : ICoverageStyle, IPortrayalCatalogue
         Color = ActivePalette.Resolve(CoverageLimitColorToken),
         DashPattern = [4, 3],
     };
+
+    /// <summary>
+    /// The legend of the depth shades: one swatch per band of
+    /// <paramref name="scheme"/>, shallowest first, labelled with the band's
+    /// name from <c>BathymetryCoverage.lua</c> and its depth range in metres,
+    /// e.g. <c>"Shallow Water, 0–10 m"</c>. The ranges come from the Mariner
+    /// settings contours the rule was run with.
+    /// </summary>
+    /// <param name="scheme">The colour scheme from <see cref="ResolveColorScheme"/>, in the palette it was drawn in.</param>
+    public static IReadOnlyList<LegendEntry> BuildDepthLegend(CoverageColorScheme scheme)
+    {
+        ArgumentNullException.ThrowIfNull(scheme);
+        var labelled = new CoverageColorScheme
+        {
+            FieldName = scheme.FieldName,
+            Bands = [.. scheme.Bands.Select(b => new ColorBand
+            {
+                MinValue = b.MinValue,
+                MaxValue = b.MaxValue,
+                Color = b.Color,
+                Label = string.IsNullOrWhiteSpace(b.Label) ? null : $"{b.Label}, {DepthRange(b.MinValue, b.MaxValue)}",
+            })],
+        };
+        return LegendEntry.FromScheme(labelled);
+    }
+
+    /// <summary>
+    /// The caption naming the Mariner setting the depth shades follow, e.g.
+    /// <c>"Safety contour 10 m"</c>.
+    /// </summary>
+    /// <param name="settings">The mariner settings.</param>
+    public static string SafetyContourCaption(MarinerSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        return $"Safety contour {FormatMetres(ClampParameters(settings).Safety)} m";
+    }
+
+    private static string DepthRange(float min, float max) =>
+        (float.IsNegativeInfinity(min), float.IsPositiveInfinity(max)) switch
+        {
+            (true, true) => "all depths",
+            (true, false) => $"< {FormatMetres(max)} m",
+            (false, true) => $"\u2265 {FormatMetres(min)} m",
+            _ => $"{FormatMetres(min)}\u2013{FormatMetres(max)} m",
+        };
+
+    private static string FormatMetres(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
 
     /// <summary>The S-101 safety contour colour token (DEPARE03).</summary>
     public const string SafetyContourColorToken = "DEPSC";

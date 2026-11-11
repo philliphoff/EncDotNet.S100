@@ -26,7 +26,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         _context.Dispose();
     }
 
-    private LibraryPanelViewModel CreateViewModel() => new(_library, _importer, _loader, _downloader, action => action(), action => action(), TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+    private LibraryPanelViewModel CreateViewModel() => TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), action => action(), TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
 
     private async Task<DatasetCollection> AddS57CollectionAsync(string name = "Charts")
     {
@@ -409,37 +409,33 @@ public sealed class LibraryPanelViewModelTests : IDisposable
     public async Task Open_as_route_loads_an_S421_dataset_then_opens_it_as_a_route()
     {
         await AddS57CollectionAsync();
-        using var vm = CreateViewModel();
-        File.Copy(Path.Combine(AppContext.BaseDirectory, "TestData", "S421", "RTE-TEST-GBASIC.s421.gml"), Path.Combine(_context.Root, "RTE-TEST-GBASIC.s421.gml"));
+        var library = new TestLibrary(_library, _loader, _downloader);
+        using var vm = library.CreatePanel(_importer, action => action(), action => action(), TimeProvider.System, feedHealth: null, viewTime: null, timeFormat: null, sync: null);
+        var file = Path.Combine(_context.Root, "RTE-TEST-GBASIC.s421.gml");
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "TestData", "S421", "RTE-TEST-GBASIC.s421.gml"), file);
         var folder = new LibrarySource(new LocalFolderSource(Guid.NewGuid(), null, _context.Root), null, LibrarySourceState.Ready);
-        var route = vm.CreateItem(new CollectionItem
+        var route = library.Rows.Create(new CollectionItem
         {
             Key = "route",
             ProductSpec = "S-421",
             Name = "RTE-TEST-GBASIC",
             Location = new LocalItemLocation(_context.Root, "RTE-TEST-GBASIC.s421.gml", []),
         }, folder);
-        var opened = new List<CollectionItem>();
 
-        // Without the host's route opener, and on other products, there's no Open as route.
-        vm.SelectedItem = route;
-        Assert.False(vm.CanOpenAsRoute);
-        vm.OpenRoute = item =>
-        {
-            opened.Add(item);
-            return Task.CompletedTask;
-        };
+        // Other products have no Open as route.
         vm.SelectedItem = vm.Items.First(i => i.Item.ProductSpec != "S-421");
         Assert.False(vm.CanOpenAsRoute);
         Assert.False(vm.OpenAsRouteCommand.CanExecute(null));
 
         vm.SelectedItem = route;
         Assert.True(vm.CanOpenAsRoute);
+        _loader.Entry = new DatasetEntry(file, "S-421") { IsLoaded = true };
         vm.OpenAsRouteCommand.Execute(null);
 
         // An explicit load first, then the route.
         Assert.Equal((false, 1), (_loader.Calls.Single().Defer, _loader.Calls.Single().Count));
-        Assert.Same(route.EffectiveItem, Assert.Single(opened));
+        var opened = Assert.Single(library.Routes.Routes.Routes);
+        Assert.Same(opened, library.Routes.Routes.ActiveRoute);
     }
 
     [Fact]
@@ -569,7 +565,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         library.AddCollection("Community", [new ChartCatalogsFeedSource(
             Guid.NewGuid(), null, new Uri("https://example.test/TEST_Catalog.xml"), ChartCatalogsFilter.All)]);
         await library.WhenIdle();
-        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        using var vm = TestLibrary.Panel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         vm.SelectedItem = vm.Items.Single();
         var indexed = indexer.Calls;
 
@@ -591,7 +587,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         library.AddCollection("Shared", [new ChartCatalogsFeedSource(
             Guid.NewGuid(), null, new Uri("https://example.test/TEST_Catalog.xml"), ChartCatalogsFilter.All)]);
         await library.WhenIdle();
-        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        using var vm = TestLibrary.Panel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         vm.SelectedItem = vm.Items.Single();
         var indexed = indexer.Calls;
 
@@ -625,7 +621,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         var order = new List<string>();
         _loader.Closing = () => order.Add("close");
         _downloader.Downloading = () => order.Add("download");
-        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        using var vm = TestLibrary.Panel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         vm.SelectedItem = vm.Items.Single();
 
         (load ? vm.DownloadCommand : vm.DownloadOnlyCommand).Execute(null);
@@ -648,7 +644,7 @@ public sealed class LibraryPanelViewModelTests : IDisposable
         library.AddCollection("Romania", [new ChartCatalogsFeedSource(
             Guid.NewGuid(), null, new Uri("https://example.test/RO_IENC_Catalog.xml"), ChartCatalogsFilter.All)]);
         await library.WhenIdle();
-        using var vm = new LibraryPanelViewModel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        using var vm = TestLibrary.Panel(library, _importer, _loader, _downloader, action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
 
         // Base1 is unpacked (a collapsed group); Base2 is still a package.
         Assert.Equal(2, vm.Items.Count);

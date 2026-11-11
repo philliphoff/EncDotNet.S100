@@ -39,6 +39,12 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     private readonly ILibraryImporter _importer;
     private readonly ILibraryLoader _loader;
     private readonly ILibraryDownloader _downloader;
+    private readonly LibraryRows _rows;
+    private readonly OpenLibraryItemsWorkflow _open;
+    private readonly DownloadLibraryItemsWorkflow _download;
+    private readonly OpenLibraryItemAsRouteWorkflow _openAsRoute;
+    private readonly Library.LoadLatestWeatherRunWorkflow _loadLatest;
+    private readonly Library.PinWeatherRunWorkflow _pinRun;
     private readonly Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? _feedHealth;
     private readonly LibrarySync? _sync;
     private bool _availabilityRefreshPosted;
@@ -48,7 +54,6 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<(Guid Source, string Package), LibraryItemViewModel> _packageHeaders = [];
     private readonly HashSet<Guid> _collapsedAml = [];
     private string? _amlFilter;
-    private readonly Services.Notifications.INotificationService? _notifications;
     private readonly Action<Action> _dispatch;
 
     // Runs a coalesced refresh. Unlike _dispatch it always defers, even on the
@@ -83,12 +88,17 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// <param name="library">The Library the panel shows.</param>
     /// <param name="importer">Adds sources interactively.</param>
     /// <param name="loader">Loads datasets and reports their state.</param>
-    /// <param name="downloader">Downloads online items.</param>
+    /// <param name="downloader">Says whether items are downloaded, and how their downloads go.</param>
+    /// <param name="rows">Builds the list's rows.</param>
+    /// <param name="open">Opens items (Load, Load as you pan).</param>
+    /// <param name="download">Downloads items (Download, Download listed, Retry).</param>
+    /// <param name="openAsRoute">Opens an S-421 item as a route (Open as route).</param>
+    /// <param name="loadLatest">Loads a weather source's latest run (Load latest run).</param>
+    /// <param name="pinRun">Pins and unpins weather runs.</param>
     /// <param name="dispatch">Runs a change on the UI thread (the app passes <see cref="Services.UiThread.RunOrPost"/>).</param>
     /// <param name="coalesce">Queues a refresh for later on the UI thread, even from it, so a burst of changes refreshes once (the app passes <see cref="Services.UiThread.Post"/>).</param>
     /// <param name="time">The clock (forecast ages, staleness).</param>
     /// <param name="feedHealth">A shared feed's last reachability; <see langword="null"/> shows none.</param>
-    /// <param name="notifications">Where refresh results are announced; <see langword="null"/> for none.</param>
     /// <param name="viewTime">The time the map shows; <see langword="null"/> without a timeline.</param>
     /// <param name="timeFormat">The Local/UTC setting; <see langword="null"/> shows UTC.</param>
     /// <param name="sync">Keeps synced sources downloaded; <see langword="null"/> without syncing.</param>
@@ -97,11 +107,16 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         ILibraryImporter importer,
         ILibraryLoader loader,
         ILibraryDownloader downloader,
+        LibraryRows rows,
+        OpenLibraryItemsWorkflow open,
+        DownloadLibraryItemsWorkflow download,
+        OpenLibraryItemAsRouteWorkflow openAsRoute,
+        Library.LoadLatestWeatherRunWorkflow loadLatest,
+        Library.PinWeatherRunWorkflow pinRun,
         Action<Action> dispatch,
         Action<Action> coalesce,
         TimeProvider time,
         Func<CollectionSource, EncDotNet.S100.Collections.Indexing.FeedHealth?>? feedHealth,
-        Services.Notifications.INotificationService? notifications,
         Services.GlobalTimeService? viewTime,
         Services.ITimeFormatProvider? timeFormat,
         LibrarySync? sync)
@@ -117,9 +132,20 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         if (timeFormat is not null)
             timeFormat.TimeFormatChanged += _ => dispatch(OnTimeFormatChanged);
         _feedHealth = feedHealth;
-        _notifications = notifications;
         ArgumentNullException.ThrowIfNull(downloader);
+        ArgumentNullException.ThrowIfNull(rows);
+        ArgumentNullException.ThrowIfNull(open);
+        ArgumentNullException.ThrowIfNull(download);
+        ArgumentNullException.ThrowIfNull(openAsRoute);
+        ArgumentNullException.ThrowIfNull(loadLatest);
+        ArgumentNullException.ThrowIfNull(pinRun);
         _downloader = downloader;
+        _rows = rows;
+        _open = open;
+        _download = download;
+        _openAsRoute = openAsRoute;
+        _loadLatest = loadLatest;
+        _pinRun = pinRun;
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(importer);
         ArgumentNullException.ThrowIfNull(loader);
@@ -196,6 +222,8 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         _loader.Changed += OnLoaderChanged;
         _downloader.Changed += OnLoaderChanged;
         _downloader.ProgressChanged += OnDownloadProgress;
+        _download.Starting += OnDownloadStarting;
+        _download.PackagesUnpacked += OnPackagesUnpacked;
 
         _library.Changed += OnLibraryChanged;
 
@@ -301,12 +329,6 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     /// <summary>Opens Settings → Keys &amp; certificates on a tab; set by the host.</summary>
     internal Action<Keys.KeysTab>? OpenKeys { get; set; }
-
-    /// <summary>
-    /// Opens a loaded S-421 item as a received route in the Routes panel, the
-    /// only way a Library dataset becomes a route; set by the host.
-    /// </summary>
-    internal Func<CollectionItem, Task>? OpenRoute { get; set; }
 
     /// <summary>
     /// The progress line for background chart preparation (#1266), shown under
@@ -816,12 +838,6 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(SelectedSyncs));
     }
 
-    /// <summary>A source's name as its tree node shows it, for its Datasets row (#809).</summary>
-    internal string SourceDisplayName(Guid sourceId) =>
-        Nodes.SelectMany(c => c.Children.Prepend(c)).FirstOrDefault(n => !n.IsGroup && n.Source?.Id == sourceId)?.Name
-        ?? _library.Collections.SelectMany(c => c.Sources).FirstOrDefault(s => s.Id == sourceId)?.Definition.DisplayName
-        ?? sourceId.ToString("N")[..8];
-
     /// <summary>Applies the name typed while renaming.</summary>
     public ICommand CommitRenameCommand { get; }
 
@@ -911,8 +927,8 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     public ICommand OpenAsRouteCommand { get; }
 
     /// <summary>True when the selected dataset is an S-421 route on disk, which Open as route opens.</summary>
-    public bool CanOpenAsRoute => OpenRoute is not null
-        && _selectedItem is { IsGroupHeader: false } item
+    public bool CanOpenAsRoute =>
+        _selectedItem is { IsGroupHeader: false } item
         && string.Equals(item.Item.ProductSpec, "S-421", StringComparison.OrdinalIgnoreCase)
         && (item.CanLoad || item.IsLoadedNow);
 
@@ -1309,7 +1325,6 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void OnClockTick()
     {
-        _ = RefreshDueWeatherAsync();
         var forecasts = _allItems.Where(i => i.IsForecast).ToArray();
         if (forecasts.Length == 0)
             return;
@@ -1454,195 +1469,61 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     }
 
     private Task LoadSelectedAsync() =>
-        _selectedItem is { } item ? LoadLabelledAsync([item], defer: false) : Task.CompletedTask;
+        _selectedItem is { } item ? LoadRowsAsync([item], defer: false) : Task.CompletedTask;
 
     private async Task OpenSelectedAsRouteAsync()
     {
-        if (!CanOpenAsRoute || _selectedItem is not { } item || OpenRoute is not { } open)
+        if (!CanOpenAsRoute || _selectedItem is not { } item)
             return;
-        // An explicit load, also for a dataset loaded as you pan, so the
-        // route's dataset stays loaded wherever the map goes.
-        await LoadLabelledAsync([item], defer: false).ConfigureAwait(true);
-        await open(item.EffectiveItem).ConfigureAwait(true);
+        await _openAsRoute.RunAsync(item.State).ConfigureAwait(true);
     }
 
     private Task LoadListedAsYouPanAsync() =>
-        LoadLabelledAsync(ListedDatasets().ToArray(), defer: true);
+        LoadRowsAsync(ListedDatasets().ToArray(), defer: true);
 
-    /// <summary>
-    /// Opens <paramref name="rows"/> labelled with their Library sources, so the
-    /// Datasets panel shows each source's datasets under one row (#809).
-    /// </summary>
-    private Task<LibraryLoadResult> LoadLabelledAsync(IReadOnlyList<LibraryItemViewModel> rows, bool defer)
-    {
-        var labels = new Dictionary<Guid, LibrarySourceLabel>();
-        var sourceOf = new Dictionary<CollectionItem, LibrarySourceLabel>(ReferenceEqualityComparer.Instance);
-        var items = new CollectionItem[rows.Count];
-        for (var i = 0; i < rows.Count; i++)
-        {
-            var source = rows[i].Source;
-            if (!labels.TryGetValue(source.Id, out var label))
-                labels[source.Id] = label = new LibrarySourceLabel(source.Id, SourceDisplayName(source.Id));
-            items[i] = rows[i].EffectiveItem;
-            sourceOf[items[i]] = label;
-        }
-
-        return _loader.LoadAsync(items, defer, item => sourceOf.GetValueOrDefault(item));
-    }
-
-
+    /// <summary>Opens <paramref name="rows"/> now, or as the map pans to them when <paramref name="defer"/> is true.</summary>
+    private Task<LibraryLoadResult> LoadRowsAsync(IReadOnlyList<LibraryItemViewModel> rows, bool defer) =>
+        _open.RunAsync([.. rows.Select(row => row.State)], defer);
 
     private Task DownloadSelectedAsync() => DownloadSelectedAsync(load: true);
 
     private Task DownloadSelectedAsync(bool load) =>
-        _selectedItem is { } item ? DownloadItemAsync(item, load) : Task.CompletedTask;
+        _selectedItem is { } item ? DownloadRowsAsync([item], load) : Task.CompletedTask;
 
-    /// <summary>Downloads one row (the details' Download, "Load after download", or a retry), then optionally loads it.</summary>
-    private Task DownloadItemAsync(LibraryItemViewModel item, bool load) => DownloadRowsAsync([item], load);
-
-    /// <summary>
-    /// Downloads <paramref name="rows"/> as the details' Download does, then
-    /// optionally loads them (also used by the MCP <c>library_action</c> tool, #715).
-    /// </summary>
-    internal async Task DownloadRowsAsync(IReadOnlyList<LibraryItemViewModel> rows, bool load)
+    /// <summary>Downloads <paramref name="rows"/> (the details' Download, "Load after download"), then optionally opens them.</summary>
+    private async Task DownloadRowsAsync(IReadOnlyList<LibraryItemViewModel> rows, bool load)
     {
-        TrackDownloads(rows);
-        var replaced = CloseReplacedCopies(rows);
-        try
+        var outcome = await _download.RunAsync([.. rows.Select(row => (row.Item, row.Source))], load).ConfigureAwait(true);
+        if (outcome.Download.Downloaded > 0 && outcome.ReindexedSources.Count == 0)
         {
-            var result = await _downloader.DownloadAsync(rows.Select(row => row.Item).ToArray()).ConfigureAwait(true);
-            if (result.Downloaded == 0)
-                return;
-
-            // A package's cells (and their coverage) appear once its source re-indexes.
-            if (ReindexSources(rows))
-            {
-                await AnnouncePackagesAsync(rows).ConfigureAwait(true);
-                return;
-            }
-
             foreach (var row in rows)
                 row.RefreshAvailability();
-            if (load)
-                await LoadLabelledAsync(rows, defer: false).ConfigureAwait(true);
-        }
-        finally
-        {
-            await ReopenAsync(replaced).ConfigureAwait(true);
         }
     }
 
-    /// <summary>
-    /// Closes the open datasets a download of <paramref name="rows"/> replaces
-    /// (#1075): an open copy keeps its files open (a GRIB2 run, a lazily read
-    /// S-111 grid), and Windows won't move or delete them; closing also lets
-    /// the new copy open rather than the old one staying on the map.
-    /// </summary>
-    private LibraryReplacedCopies CloseReplacedCopies(IEnumerable<LibraryItemViewModel> rows) =>
-        LibraryReplacedCopies.Close(
-            rows.Where(row => _downloader.CanDownload(row.Item)).Select(row => (row.Item, (LibrarySource?)row.Source)),
-            _downloader,
-            _loader.StateOf,
-            _loader.Close);
+    private Task DownloadListedAsync() =>
+        _download.RunAsync([.. Downloadable().Select(row => (row.Item, row.Source))], load: false);
 
-    /// <summary>Opens the copies <see cref="CloseReplacedCopies"/> closed again (the new copy, or the old one when the download failed), unless already open.</summary>
-    private Task ReopenAsync(LibraryReplacedCopies replaced) =>
-        replaced.ReopenAsync((reopen, defer) =>
-        {
-            var sourceOf = new Dictionary<CollectionItem, LibrarySourceLabel>(ReferenceEqualityComparer.Instance);
-            foreach (var (local, source) in reopen)
-            {
-                if (source is not null)
-                    sourceOf[local] = new LibrarySourceLabel(source.Id, SourceDisplayName(source.Id));
-            }
-
-            return _loader.LoadAsync([.. reopen.Select(r => r.Local)], defer, item => sourceOf.GetValueOrDefault(item));
-        });
-
-    /// <summary>Opens <paramref name="rows"/> now, or as the map pans to them when <paramref name="defer"/> is true.</summary>
-    internal Task<LibraryLoadResult> LoadRowsAsync(IReadOnlyList<LibraryItemViewModel> rows, bool defer) =>
-        LoadLabelledAsync(rows, defer);
-
-    /// <summary>The downloader behind the panel, for download progress and cancelling.</summary>
-    internal ILibraryDownloader Downloader => _downloader;
-
-    private async Task DownloadListedAsync()
-    {
-        var items = Downloadable().ToArray();
+    /// <summary>Notes the sources a download starts on, for the tree's status lines (also for downloads the Timeline or MCP start).</summary>
+    private void OnDownloadStarting(object? sender, IReadOnlyList<(CollectionItem Item, LibrarySource Source)> items) =>
         TrackDownloads(items);
-        var replaced = CloseReplacedCopies(items);
-        try
-        {
-            var result = await _downloader.DownloadAsync(items.Select(i => i.Item).ToArray()).ConfigureAwait(true);
-            if (result.Downloaded > 0 && ReindexSources(items))
-                await AnnouncePackagesAsync(items).ConfigureAwait(true);
-        }
-        finally
-        {
-            await ReopenAsync(replaced).ConfigureAwait(true);
-        }
-    }
 
-    /// <summary>
-    /// Once the re-index lists an unpacked package's datasets, opens its group
-    /// (once) and says how many datasets it held.
-    /// </summary>
-    private async Task AnnouncePackagesAsync(IEnumerable<LibraryItemViewModel> items)
+    /// <summary>Opens the groups of packages whose datasets the Library now lists (once).</summary>
+    private void OnPackagesUnpacked(object? sender, IReadOnlyList<(Guid Source, string Package)> packages)
     {
-        var packages = items
-            .Where(i => i.IsPackageEntry)
-            .Select(i => (i.Source.Id, ((RemoteItemLocation)i.Item.Location).Package!))
-            .Distinct()
-            .ToArray();
-        if (packages.Length == 0)
-            return;
-
-        await _library.WhenIdle().ConfigureAwait(true);
-        var counts = packages.Select(p => _library.Collections
-                .SelectMany(c => c.Sources)
-                .Where(s => s.Id == p.Item1)
-                .SelectMany(s => s.Index?.Items ?? [])
-                .Count(i => i.Properties.TryGetValue("package", out var pkg) && pkg == p.Item2 && !LibraryItemText.IsPackageEntry(i)))
-            .ToArray();
         foreach (var package in packages)
             _expandedPackages.Add(package);
         _dispatch(() => RebuildItems(force: true));
-
-        var datasets = counts.Sum();
-        if (datasets == 0)
-            return;
-        _notifications?.Create(Strings.Toast_LibraryUnpackedTitle)
-            .WithSeverity(Services.Notifications.NotificationSeverity.Success)
-            .WithContent(packages.Length == 1
-                ? string.Format(CultureInfo.CurrentCulture, Strings.Toast_LibraryUnpackedFormat, datasets)
-                : string.Format(CultureInfo.CurrentCulture, Strings.Toast_LibraryUnpackedManyFormat, packages.Length, datasets))
-            .Show();
     }
 
     /// <summary>Remembers which sources' datasets are downloading, for the tree's status lines.</summary>
-    private void TrackDownloads(IEnumerable<LibraryItemViewModel> items)
+    private void TrackDownloads(IEnumerable<(CollectionItem Item, LibrarySource Source)> items)
     {
         lock (_downloadingBySource)
         {
             foreach (var group in items.GroupBy(i => i.Source.Id))
                 _downloadingBySource[group.Key] = group.Select(i => i.Item).ToList();
         }
-    }
-
-    /// <summary>
-    /// Re-indexes the sources of downloaded <paramref name="items"/>, so what an
-    /// index reads from a downloaded copy appears: a package's cells (community
-    /// lists list a downloaded package's cells, not the package), a SECOM
-    /// object's bounds and signature. A source whose index does not read its
-    /// copies is confirmed unchanged by its fingerprint. Returns true when any
-    /// item was a package (items with a stated layout, such as S-100 feeds,
-    /// are listed as themselves already).
-    /// </summary>
-    private bool ReindexSources(IReadOnlyCollection<LibraryItemViewModel> items)
-    {
-        foreach (var source in items.Where(i => i.Item.Location is RemoteItemLocation).Select(i => i.Source.Id).Distinct())
-            _library.Refresh(sourceId: source);
-        return items.Any(i => i.Item.Location is RemoteItemLocation { Package: not null, Layout: null });
     }
 
     /// <summary>
@@ -1762,31 +1643,18 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// </summary>
     internal List<LibraryItemViewModel> HitsAt(GeoPosition position) =>
         LibraryQuery.HitsAt(_library.Collections, position)
-            .Select(p => CreateItem(p.Item, p.Source))
+            .Select(p => _rows.Create(p.Item, p.Source))
             .ToList();
 
     /// <summary>The collections the Library holds now, sources and indexes included.</summary>
     internal IReadOnlyList<LibraryCollection> Collections => _library.Collections;
 
-    /// <summary>
-    /// A row view model for <paramref name="item"/>, wired exactly as the
-    /// panel's own rows are, so its state, tags and details match what the
-    /// user sees (used by the MCP Library tools, #715).
-    /// </summary>
-    internal LibraryItemViewModel CreateItem(CollectionItem item, LibrarySource source) =>
-        new(item, source, _loader.StateOf, _downloader, CollectionNameOf(source.Id), RetryDownloadAsync, _time, _runFormat);
-
-    private string? CollectionNameOf(Guid sourceId) =>
-        _library.Collections.FirstOrDefault(c => c.Sources.Any(s => s.Id == sourceId))?.Definition.Name;
-
     private IReadOnlyList<LibraryItemViewModel> BuildNodeItems(LibraryNodeViewModel? node) =>
         node is null
             ? []
             : node.EnumerateItems()
-                .Select(p => new LibraryItemViewModel(p.Item, p.Source, _loader.StateOf, _downloader, node.Collection.Definition.Name, RetryDownloadAsync, _time, _runFormat))
+                .Select(p => _rows.Create(p.Item, p.Source, node.Collection.Definition.Name))
                 .ToArray();
-
-    private Task RetryDownloadAsync(LibraryItemViewModel item) => DownloadItemAsync(item, load: false);
 
     private static bool SameItem(LibraryItemViewModel a, LibraryItemViewModel b) =>
         a.Source.Id == b.Source.Id && a.Item.Key == b.Item.Key;

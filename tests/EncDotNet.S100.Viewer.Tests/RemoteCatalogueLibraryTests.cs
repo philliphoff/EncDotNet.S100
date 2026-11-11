@@ -60,7 +60,7 @@ public sealed class RemoteCatalogueLibraryTests : IDisposable
         _library.Initialize();
         _library.AddCollection("S-102", [new S100CatalogueFeedSource(Guid.NewGuid(), null, CatalogUri, S100CatalogueFilter.All)]);
         await _library.WhenIdle();
-        var panel = new LibraryPanelViewModel(
+        var panel = TestLibrary.Panel(
             _library, new NullImporter(), new NullLoader(), _downloader, action => action(), feedHealth: _ => _health, coalesce: action => action(), time: TimeProvider.System,
             notifications: null,
             viewTime: null,

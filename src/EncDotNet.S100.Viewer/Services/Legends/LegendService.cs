@@ -13,7 +13,7 @@ namespace EncDotNet.S100.Viewer.Services.Legends;
 
 /// <summary>
 /// The one home of the viewer's legend rows (legends design note D1): gathers
-/// the legends the drawn sub-layers carry (<see cref="GridCoverageSubLayer.Legend"/>,
+/// the legends the drawn sub-layers carry (<see cref="CoverageSubLayerBase.Legend"/>,
 /// <see cref="VectorSubLayer.Legend"/>) into one <see cref="LegendSection"/> per
 /// product or overlay, in draw order, top first (D5).
 /// </summary>
@@ -284,6 +284,7 @@ internal sealed class LegendService : IDisposable
             IsInView = datasets.Any(d => IsInView(d.Entry)),
             IsExpanded = !_expanded.TryGetValue(section.Id, out var expanded) || expanded,
             Plane = section.Plane,
+            Caption = section.Caption,
             Groups = [.. section.Groups],
         };
     }
@@ -358,10 +359,12 @@ internal sealed class LegendService : IDisposable
 
     private static SubLayerLegend? LegendOf(LayerStackEntry item) => item.Item.Payload switch
     {
-        CoverageStackPayload { SubLayer: GridCoverageSubLayer { Legend.Count: > 0 } grid } coverage =>
-            new SubLayerLegend(coverage.Result.Spec.Name, grid.LayerKey, grid.LayerName, grid.Legend),
+        // Every coverage kind can carry rows (#1406): S-102 grids, S-104
+        // isolines and stations, S-111 arrows and stations, weather fills.
+        CoverageStackPayload { SubLayer: { Legend.Count: > 0 } coverage } payload =>
+            new SubLayerLegend(payload.Result.Spec.Name, coverage.LayerKey, coverage.LayerName, coverage.Legend, coverage.LegendCaption),
         VectorStackPayload { SubLayer.Legend.Count: > 0 } vector =>
-            new SubLayerLegend(vector.Result.Spec.Name, vector.SubLayer.LayerKey, vector.SubLayer.LayerName, vector.SubLayer.Legend),
+            new SubLayerLegend(vector.Result.Spec.Name, vector.SubLayer.LayerKey, vector.SubLayer.LayerName, vector.SubLayer.Legend, vector.SubLayer.LegendCaption),
         _ => null,
     };
 
@@ -440,7 +443,7 @@ internal sealed class LegendService : IDisposable
             _viewport.ViewportChanged -= OnViewportChanged;
     }
 
-    private sealed record SubLayerLegend(string? Spec, string Key, string Name, IReadOnlyList<LegendEntry> Rows);
+    private sealed record SubLayerLegend(string? Spec, string Key, string Name, IReadOnlyList<LegendEntry> Rows, string? Caption);
 
     private sealed record SectionDataset(string Id, DatasetEntry? Entry);
 
@@ -459,6 +462,8 @@ internal sealed class LegendService : IDisposable
 
         public List<LegendGroup> Groups { get; } = [];
 
+        public string? Caption { get; private set; }
+
         public List<SectionDataset> Datasets { get; } = [];
 
         public void Add(string datasetId, DatasetEntry? entry, SubLayerLegend sub)
@@ -466,7 +471,12 @@ internal sealed class LegendService : IDisposable
             if (_datasetIds.Add(datasetId))
                 Datasets.Add(new SectionDataset(datasetId, entry));
             if (_groupKeys.Add(sub.Key))
+            {
+                // The caption is the topmost group's (D4): its first sub-layer is the top one.
+                if (Groups.Count == 0)
+                    Caption = sub.Caption;
                 Groups.Add(new LegendGroup(sub.Key, GroupTitle(sub.Name), sub.Rows));
+            }
         }
     }
 }

@@ -161,10 +161,8 @@ public sealed class SecomLibraryIdentityTests : IDisposable
 
     private LibraryPanelViewModel Panel()
     {
-        var panel = new LibraryPanelViewModel(_library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null)
-        {
-            OpenKeys = _opened.Add,
-        };
+        var panel = TestLibrary.Panel(_library, new RecordingLibraryImporter(), new FakeLibraryLoader(), new FakeLibraryDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        panel.OpenKeys = _opened.Add;
         panel.Identities = _directory;
         panel.Sync();
         return panel;

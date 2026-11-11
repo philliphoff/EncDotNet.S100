@@ -10,6 +10,7 @@ namespace EncDotNet.S100.Cli.Tests;
 /// recently used first across fingerprints, and a clear that touches only the
 /// cache's own folders.
 /// </summary>
+[Collection(SharedSchedulerCollection.Name)]
 public sealed class TilesServeDiskCacheTests : IDisposable
 {
     private const string FingerprintA = "0123456789abcdef0123456789abcdef";
@@ -43,9 +44,9 @@ public sealed class TilesServeDiskCacheTests : IDisposable
     {
         using (var first = new DiskTileCache(CacheRoot, FingerprintA, TileImageFormat.Png, 1 << 20))
         {
-            first.Add(Key(0), Tile(100));
-            first.Add(Key(1), []);
-            first.Add(Key(0, "night"), Tile(50, 9));
+            Add(first, Key(0), Tile(100));
+            Add(first, Key(1), []);
+            Add(first, Key(0, "night"), Tile(50, 9));
         }
 
         Assert.True(File.Exists(Path.Combine(CacheRoot, DiskTileCache.KindName, FingerprintA, "day", "3", "0", "1.png")));
@@ -106,7 +107,7 @@ public sealed class TilesServeDiskCacheTests : IDisposable
     public void Clearing_deletes_only_the_cache_folders()
     {
         using (var cache = new DiskTileCache(CacheRoot, FingerprintA, TileImageFormat.Png, 1 << 20))
-            cache.Add(Key(0), Tile(10));
+            Add(cache, Key(0), Tile(10));
         var unrelatedFile = Path.Combine(CacheRoot, "notes.txt");
         var unrelatedFolder = Path.Combine(CacheRoot, "photos");
         File.WriteAllText(unrelatedFile, "keep me");
