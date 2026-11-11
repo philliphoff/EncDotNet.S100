@@ -165,7 +165,7 @@ public sealed class ProductLegendTests
         try
         {
             using var manager = S111TestCatalogues.Create();
-            var processor = new S111DatasetProcessor(path, manager, Transforms);
+            using var processor = new S111DatasetProcessor(path, manager, Transforms);
             var result = await processor.BuildCoveragePortrayalAsync(
                 new RenderContext { Palette = palette }, TestContext.Current.CancellationToken);
             return result.SubLayers.OfType<ArrowCoverageSubLayer>().Single();
