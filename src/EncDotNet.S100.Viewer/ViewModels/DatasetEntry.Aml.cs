@@ -129,11 +129,13 @@ internal sealed partial class DatasetEntry
     /// <summary>
     /// Whether the map outlines the cell's coverage (decision 9): the row is
     /// visible and the cell isn't drawn, or it's drawn but every one of its
-    /// sub-layers is hidden. The row's eye turns it off.
+    /// sub-layers is hidden. The row's eye turns it off, and so does the
+    /// display panel hiding the cell (<see cref="IsHiddenByDisplay"/>).
     /// </summary>
     public bool ShowsAmlCoverageOutline =>
         _aml is { } aml
         && IsVisible
+        && !IsHiddenByDisplay
         && (!aml.Drawn || (SubLayers.Count > 0 && SubLayers.All(s => !s.IsVisible)));
 
     private void RaiseAmlChanged()

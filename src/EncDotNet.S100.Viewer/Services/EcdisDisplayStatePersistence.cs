@@ -66,6 +66,11 @@ internal static class EcdisDisplayStatePersistence
             settings.EcdisShowNavigationalWarnings,
             settings.EcdisLayerVisibility);
 
+        state.HydrateAml(
+            (settings.EcdisHiddenAmlProducts ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            settings.EcdisFollowAmlScaleBands);
+
         // Persist on every change. Cheap because settings.json is small.
         state.Changed += () =>
         {
@@ -95,6 +100,18 @@ internal static class EcdisDisplayStatePersistence
             if (settings.EcdisShowNavigationalWarnings == state.ShowNavigationalWarnings)
                 return;
             settings.EcdisShowNavigationalWarnings = state.ShowNavigationalWarnings;
+            Save(settings);
+        };
+        state.AmlDisplayChanged += () =>
+        {
+            var hidden = string.Join(",", state.HiddenAmlProducts.Order(StringComparer.OrdinalIgnoreCase));
+            if (settings.EcdisHiddenAmlProducts == hidden
+                && settings.EcdisFollowAmlScaleBands == state.FollowAmlScaleBands)
+            {
+                return;
+            }
+            settings.EcdisHiddenAmlProducts = hidden;
+            settings.EcdisFollowAmlScaleBands = state.FollowAmlScaleBands;
             Save(settings);
         };
         return state;

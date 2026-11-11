@@ -116,6 +116,11 @@ public sealed class AmlDatasetsTests : IDisposable
         Assert.False(entry.ShowsAmlCoverageOutline);
         entry.IsVisible = true;
 
+        // Hidden by the display panel (a product switch or the scale bands).
+        entry.IsHiddenByDisplay = true;
+        Assert.False(entry.ShowsAmlCoverageOutline);
+        entry.IsHiddenByDisplay = false;
+
         // Drawn, with its layers showing: the drawing says where it is.
         entry.SetAml(cell with { Drawn = true });
         var layer = new DatasetSubLayer("aml.air", "Air");

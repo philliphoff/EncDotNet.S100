@@ -350,6 +350,20 @@ internal sealed partial class ViewerSettings
     public bool EcdisShowNavigationalWarnings { get; set; } = true;
 
     /// <summary>
+    /// The AML products the display panel's Additional Military Layers section
+    /// has switched off, as a comma-separated list of product codes
+    /// (<c>CLB</c>, <c>RAL</c>, …, <c>3.0</c>). Empty by default: every
+    /// product shows (AML handoff decision 24).
+    /// </summary>
+    public string EcdisHiddenAmlProducts { get; set; } = "";
+
+    /// <summary>
+    /// The Additional Military Layers section's Follow AML scale bands switch
+    /// (AML handoff decision 26). On by default.
+    /// </summary>
+    public bool EcdisFollowAmlScaleBands { get; set; } = true;
+
+    /// <summary>
     /// The Display controls' map-wide switches for optional product layers,
     /// keyed by the processor's sub-layer key: today the Weather section's
     /// <c>weather.pressure.isobars</c>, <c>weather.wind.speed</c> and
