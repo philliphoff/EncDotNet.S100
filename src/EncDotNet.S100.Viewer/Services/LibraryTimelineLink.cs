@@ -16,13 +16,13 @@ internal sealed class LibraryTimelineLink
         ArgumentNullException.ThrowIfNull(timeline);
         ArgumentNullException.ThrowIfNull(time);
         ArgumentNullException.ThrowIfNull(layout);
-        library.ShowOnTimelineRequested += (_, window) =>
+        library.Details.ShowOnTimelineRequested += (_, window) =>
         {
             layout.IsBottomDockOpen = true;
             timeline.IsCollapsedToStrip = false;
             timeline.SetWindow(window.Start, window.End);
         };
-        library.GoToTimeRequested += (_, at) =>
+        library.Details.GoToTimeRequested += (_, at) =>
         {
             layout.IsBottomDockOpen = true;
             time.SetCurrentTime(at);

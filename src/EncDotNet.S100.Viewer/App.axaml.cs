@@ -1561,19 +1561,26 @@ public partial class App : Application
             tree.Identities = sp.GetRequiredService<Services.Secom.SecomIdentityDirectory>();
             return tree;
         });
+        services.AddSingleton(sp => new LibraryDetailsViewModel(
+            sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
+            sp.GetRequiredService<Library.ILibraryDownloader>(),
+            sp.GetRequiredService<Library.OpenLibraryItemsWorkflow>(),
+            sp.GetRequiredService<Library.DownloadLibraryItemsWorkflow>(),
+            sp.GetRequiredService<Library.OpenLibraryItemAsRouteWorkflow>(),
+            sp.GetRequiredService<Library.LoadLatestWeatherRunWorkflow>(),
+            sp.GetRequiredService<Library.PinWeatherRunWorkflow>(),
+            sp.GetRequiredService<GlobalTimeService>()));
         services.AddSingleton(sp =>
         {
             var panel = new LibraryPanelViewModel(
                 sp.GetRequiredService<EncDotNet.S100.Collections.Library.CollectionLibrary>(),
                 sp.GetRequiredService<LibraryTreeViewModel>(),
+                sp.GetRequiredService<LibraryDetailsViewModel>(),
                 sp.GetRequiredService<Library.ILibraryLoader>(),
                 sp.GetRequiredService<Library.ILibraryDownloader>(),
                 sp.GetRequiredService<Library.LibraryRows>(),
                 sp.GetRequiredService<Library.OpenLibraryItemsWorkflow>(),
                 sp.GetRequiredService<Library.DownloadLibraryItemsWorkflow>(),
-                sp.GetRequiredService<Library.OpenLibraryItemAsRouteWorkflow>(),
-                sp.GetRequiredService<Library.LoadLatestWeatherRunWorkflow>(),
-                sp.GetRequiredService<Library.PinWeatherRunWorkflow>(),
                 UiThread.RunOrPost,
                 UiThread.Post,
                 sp.GetRequiredService<TimeProvider>(),

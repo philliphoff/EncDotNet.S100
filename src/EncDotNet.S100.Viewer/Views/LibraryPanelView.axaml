@@ -594,25 +594,25 @@
                 <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="8,6,8,4">
                     <!-- After a map tap: the tap selected one of the outlined datasets there and left the list
                          alone. Step through them, or list every dataset at the point ("List these"). -->
-                    <Panel IsVisible="{Binding HasTap}">
+                    <Panel IsVisible="{Binding Tap.HasTap}">
                         <Border Background="{DynamicResource AccentBrush}" Opacity="0.06" CornerRadius="6" />
                         <Border BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1" Opacity="0.3" CornerRadius="6" />
                         <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="6" Margin="8,2,2,2">
                             <ic:FluentIcon Grid.Column="0" Icon="Location" FontSize="14"
                                            Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
                             <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="{StaticResource LibrarySecondaryFontSize}" TextTrimming="CharacterEllipsis">
-                                <Run Text="{Binding TapHitsText}" FontWeight="SemiBold" />
-                                <Run Text="{Binding TapPositionText}" />
+                                <Run Text="{Binding Tap.TapHitsText}" FontWeight="SemiBold" />
+                                <Run Text="{Binding Tap.TapPositionText}" />
                             </TextBlock>
                             <Button Grid.Column="2" Classes="Ghost" Padding="6,0" FontSize="{StaticResource LibrarySecondaryFontSize}"
                                     AutomationProperties.AutomationId="Library.Tap.Next"
                                     Content="{x:Static loc:Strings.Library_LocationNext}"
-                                    Command="{Binding NextTapHitCommand}" />
+                                    Command="{Binding Tap.NextTapHitCommand}" />
                             <Button Grid.Column="3" Classes="Ghost" Padding="6,0" FontSize="{StaticResource LibrarySecondaryFontSize}"
                                     AutomationProperties.AutomationId="Library.Tap.ListAll"
                                     Content="{x:Static loc:Strings.Library_TapListThese}"
-                                    Command="{Binding ListTapHitsCommand}" />
-                            <Button Grid.Column="4" Classes="Icon" Padding="2" Command="{Binding ClearTapCommand}"
+                                    Command="{Binding Tap.ListTapHitsCommand}" />
+                            <Button Grid.Column="4" Classes="Icon" Padding="2" Command="{Binding Tap.ClearTapCommand}"
                                     AutomationProperties.AutomationId="Library.Tap.Clear"
                                     AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ClearTap}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClearTap}">
@@ -622,23 +622,23 @@
                     </Panel>
                     <!-- After "List these": how many datasets cover the point, and a way to step through them. -->
                     <!-- A thin accent outline over a faint accent wash (both follow the user's accent colour). -->
-                    <Panel IsVisible="{Binding HasLocation}" ToolTip.Tip="{Binding LocationSummary}">
+                    <Panel IsVisible="{Binding Tap.HasLocation}" ToolTip.Tip="{Binding Tap.LocationSummary}">
                         <Border Background="{DynamicResource AccentBrush}" Opacity="0.06" CornerRadius="6" />
                         <Border BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1" Opacity="0.3" CornerRadius="6" />
                         <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="6" Margin="8,2,2,2">
                             <ic:FluentIcon Grid.Column="0" Icon="Location" FontSize="14"
                                            Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
                             <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="{StaticResource LibrarySecondaryFontSize}" TextTrimming="CharacterEllipsis">
-                                <Run Text="{Binding LocationHitsText}" FontWeight="SemiBold" />
-                                <Run Text="{Binding LocationCoverText}" />
+                                <Run Text="{Binding Tap.LocationHitsText}" FontWeight="SemiBold" />
+                                <Run Text="{Binding Tap.LocationCoverText}" />
                             </TextBlock>
-                            <TextBlock Grid.Column="2" Text="{Binding LocationPositionText}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6"
+                            <TextBlock Grid.Column="2" Text="{Binding Tap.LocationPositionText}" FontSize="{StaticResource LibrarySecondaryFontSize}" Opacity="0.6"
                                        FontFamily="{StaticResource MonoFontFamily}" VerticalAlignment="Center" />
                             <Button Grid.Column="3" Classes="Ghost" Padding="6,0" FontSize="{StaticResource LibrarySecondaryFontSize}"
                                     AutomationProperties.AutomationId="Library.Location.Next"
                                     Content="{x:Static loc:Strings.Library_LocationNext}"
-                                    Command="{Binding NextAtLocationCommand}" />
-                            <Button Grid.Column="4" Classes="Icon" Padding="2" Command="{Binding ClearLocationCommand}"
+                                    Command="{Binding Tap.NextAtLocationCommand}" />
+                            <Button Grid.Column="4" Classes="Icon" Padding="2" Command="{Binding Tap.ClearLocationCommand}"
                                     AutomationProperties.AutomationId="Library.Location.Clear"
                                     AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ClearLocation}"
                                     ToolTip.Tip="{x:Static loc:Strings.Tooltip_ClearLocation}">
@@ -950,7 +950,7 @@
                                                           Marking="{Binding SelectedItem.AmlRowMarking, FallbackValue={x:Null}}"
                                                           AutomationProperties.AutomationId="Library.Details.AmlMarking" />
                                     <Button Classes="Primary libraryHeaderAction"
-                                            Command="{Binding DownloadOnlyCommand}"
+                                            Command="{Binding Details.DownloadOnlyCommand}"
                                             AutomationProperties.AutomationId="Library.Details.Download"
                                             IsVisible="{Binding SelectedItem.CanDownload, FallbackValue=False}"
                                             ToolTip.Tip="{Binding SelectedItem.DownloadTooltip}"
@@ -959,39 +959,39 @@
                                     </Button>
                                     <!-- #711 G3: the dataset's window on the Timeline. -->
                                     <Button Classes="Icon libraryHeaderAction"
-                                            Command="{Binding ShowOnTimelineCommand}"
+                                            Command="{Binding Details.ShowOnTimelineCommand}"
                                             AutomationProperties.AutomationId="Library.Details.ShowOnTimeline"
-                                            IsVisible="{Binding HasValidWindow}"
+                                            IsVisible="{Binding Details.HasValidWindow}"
                                             ToolTip.Tip="{x:Static loc:Strings.Library_ShowOnTimeline}"
                                             AutomationProperties.Name="{x:Static loc:Strings.Library_ShowOnTimeline}">
                                         <ic:FluentIcon Icon="Clock" FontSize="16" />
                                     </Button>
                                     <Button Classes="Icon libraryHeaderAction"
-                                            Command="{Binding GoToRunStartCommand}"
+                                            Command="{Binding Details.GoToRunStartCommand}"
                                             AutomationProperties.AutomationId="Library.Details.GoToRunStart"
-                                            IsVisible="{Binding HasValidWindow}"
+                                            IsVisible="{Binding Details.HasValidWindow}"
                                             ToolTip.Tip="{x:Static loc:Strings.Library_GoToRunStart}"
                                             AutomationProperties.Name="{x:Static loc:Strings.Library_GoToRunStart}">
                                         <ic:FluentIcon Icon="Previous" FontSize="16" />
                                     </Button>
                                     <!-- An S-421 dataset becomes a route only from here or Import route…. -->
                                     <Button Classes="Icon libraryHeaderAction"
-                                            Command="{Binding OpenAsRouteCommand}"
+                                            Command="{Binding Details.OpenAsRouteCommand}"
                                             AutomationProperties.AutomationId="Library.Details.OpenAsRoute"
-                                            IsVisible="{Binding CanOpenAsRoute}"
+                                            IsVisible="{Binding Details.CanOpenAsRoute}"
                                             ToolTip.Tip="{x:Static loc:Strings.Tooltip_LibraryOpenAsRoute}"
                                             AutomationProperties.Name="{x:Static loc:Strings.Library_OpenAsRoute}">
                                         <ic:FluentIcon Icon="Flow" FontSize="16" />
                                     </Button>
                                     <Button Classes="Icon libraryHeaderAction"
-                                            Command="{Binding ZoomToCommand}"
+                                            Command="{Binding Details.ZoomToCommand}"
                                             AutomationProperties.AutomationId="Library.Details.ZoomTo"
                                             ToolTip.Tip="{x:Static loc:Strings.Button_ZoomTo}"
                                             AutomationProperties.Name="{x:Static loc:Strings.Button_ZoomTo}">
                                         <ic:FluentIcon Icon="ZoomFit" FontSize="16" />
                                     </Button>
                                     <Button Classes="Icon libraryHeaderAction"
-                                            Command="{Binding LoadOrDownloadCommand}"
+                                            Command="{Binding Details.LoadOrDownloadCommand}"
                                             AutomationProperties.AutomationId="Library.Details.Load"
                                             ToolTip.Tip="{Binding SelectedItem.LoadTooltip}"
                                             AutomationProperties.Name="{Binding SelectedItem.LoadTooltip}">
@@ -1020,21 +1020,21 @@
                                        FontSize="{StaticResource LibrarySecondaryFontSize}" TextWrapping="Wrap" />
                             <WrapPanel Margin="28,4,0,0" IsVisible="{Binding SelectedItem.IsWeatherRun, FallbackValue=False}">
                                 <Button Classes="Ghost" Padding="6,0" Height="24" MinHeight="0" Margin="0,0,4,0"
-                                        Command="{Binding LoadLatestRunCommand}"
+                                        Command="{Binding Details.LoadLatestRunCommand}"
                                         IsVisible="{Binding SelectedItem.CanLoadLatestRun, FallbackValue=False}"
                                         AutomationProperties.AutomationId="Library.Details.LoadLatestRun"
                                         AutomationProperties.Name="{x:Static loc:Strings.Library_LoadLatestRun}"
                                         FontSize="{StaticResource LibrarySecondaryFontSize}"
                                         Content="{x:Static loc:Strings.Library_LoadLatestRun}" />
                                 <Button Classes="Ghost" Padding="6,0" Height="24" MinHeight="0" Margin="0,0,4,0"
-                                        Command="{Binding PinRunCommand}"
+                                        Command="{Binding Details.PinRunCommand}"
                                         IsVisible="{Binding SelectedItem.CanPinRun, FallbackValue=False}"
                                         AutomationProperties.AutomationId="Library.Details.PinRun"
                                         AutomationProperties.Name="{x:Static loc:Strings.Library_PinRun}"
                                         FontSize="{StaticResource LibrarySecondaryFontSize}"
                                         Content="{x:Static loc:Strings.Library_PinRun}" />
                                 <Button Classes="Ghost" Padding="6,0" Height="24" MinHeight="0"
-                                        Command="{Binding UnpinRunCommand}"
+                                        Command="{Binding Details.UnpinRunCommand}"
                                         IsVisible="{Binding SelectedItem.IsPinnedRun, FallbackValue=False}"
                                         AutomationProperties.AutomationId="Library.Details.UnpinRun"
                                         AutomationProperties.Name="{x:Static loc:Strings.Library_UnpinRun}"
@@ -1184,21 +1184,21 @@
                         </ItemsControl>
 
                         <!-- The S-102 tile in the same grid cell as an S-111 tile (#685, B7). -->
-                        <Border IsVisible="{Binding HasPairing}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
+                        <Border IsVisible="{Binding Details.HasPairing}" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1"
                                 CornerRadius="6" Padding="10,8">
                             <Grid ColumnDefinitions="18,*,Auto" ColumnSpacing="10">
                                 <views:LibrarySwatch Grid.Column="0" State="Online" Width="18" VerticalAlignment="Center" />
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Pairing.Title, FallbackValue=''}" FontWeight="SemiBold"
+                                    <TextBlock Text="{Binding Details.Pairing.Title, FallbackValue=''}" FontWeight="SemiBold"
                                                FontSize="{StaticResource LibrarySecondaryFontSize}" />
-                                    <TextBlock Text="{Binding Pairing.Detail, FallbackValue=''}" Opacity="0.65" TextWrapping="Wrap"
+                                    <TextBlock Text="{Binding Details.Pairing.Detail, FallbackValue=''}" Opacity="0.65" TextWrapping="Wrap"
                                                FontSize="{StaticResource LibrarySecondaryFontSize}" />
                                 </StackPanel>
                                 <Button Grid.Column="2" Classes="Outline libraryCompact" VerticalAlignment="Center"
                                         AutomationProperties.AutomationId="Library.Details.GetPairing"
                                         Content="{x:Static loc:Strings.Library_Pairing_Get}"
-                                        Command="{Binding Pairing.GetCommand, FallbackValue={x:Null}}"
-                                        IsVisible="{Binding Pairing.CanGet, FallbackValue=False}" />
+                                        Command="{Binding Details.Pairing.GetCommand, FallbackValue={x:Null}}"
+                                        IsVisible="{Binding Details.Pairing.CanGet, FallbackValue=False}" />
                             </Grid>
                         </Border>
                     </StackPanel>

@@ -13,6 +13,8 @@
     <UserSecretsId>encdotnet-s100-apphost</UserSecretsId>
     <!-- The Aspire SDK floats its own dependency versions; opt out of CPM here. -->
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <!-- Aspire 13.6 warns that the AppHost runs without the Aspire CLI bundle; it is started with dotnet run, not the aspire CLI. -->
+    <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);ASPIRE010</MSBuildWarningsAsMessages>
   </PropertyGroup>
 
   <ItemGroup>

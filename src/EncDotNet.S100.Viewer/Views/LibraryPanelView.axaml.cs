@@ -72,7 +72,7 @@ public partial class LibraryPanelView : UserControl
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(LibraryPanelViewModel.SelectedItem)
-            || _viewModel is not { HasTap: true, SelectedItem: { } item }
+            || _viewModel is not { Tap.HasTap: true, SelectedItem: { } item }
             || this.FindControl<ListBox>("ItemList") is not { } list)
         {
             return;
@@ -200,9 +200,9 @@ public partial class LibraryPanelView : UserControl
     {
         if (DataContext is not LibraryPanelViewModel vm)
             return;
-        vm.CenterOnSelected();
-        if (vm.LoadCommand.CanExecute(null))
-            vm.LoadCommand.Execute(null);
+        vm.Details.CenterOnItem();
+        if (vm.Details.LoadCommand.CanExecute(null))
+            vm.Details.LoadCommand.Execute(null);
     }
 
     private void OnListContainerPrepared(object? sender, ContainerPreparedEventArgs e)

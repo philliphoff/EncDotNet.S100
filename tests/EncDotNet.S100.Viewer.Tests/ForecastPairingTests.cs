@@ -128,9 +128,9 @@ public sealed class ForecastPairingTests : IDisposable
         var source = SourceOf(panel, "Currents");
         panel.Tree.SelectedNode = source;
 
-        panel.ListModelsAt(new GeoPosition(37.6, -76.6), [(source.Id, "cbofs")]);
+        panel.Tap.ListModelsAt(new GeoPosition(37.6, -76.6), [(source.Id, "cbofs")]);
 
-        Assert.True(panel.HasLocation);
+        Assert.True(panel.Tap.HasLocation);
         Assert.True(panel.SelectedItem!.IsModelHeader);
         Assert.Equal("cbofs", panel.SelectedItem.Name);
     }
@@ -144,8 +144,8 @@ public sealed class ForecastPairingTests : IDisposable
 
         panel.SelectedItem = panel.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DD");
 
-        var pairing = Assert.IsType<LibraryPairing>(panel.Pairing);
-        Assert.True(panel.HasPairing);
+        var pairing = Assert.IsType<LibraryPairing>(panel.Details.Pairing);
+        Assert.True(panel.Details.HasPairing);
         Assert.Equal("Bathymetry for this tile", pairing.Title);
         Assert.Equal("S-102 102US004VA1DD · same grid cell · Online · " + LibraryItemViewModel.FormatBytes(3_100_000), pairing.Detail);
         Assert.True(pairing.CanGet);
@@ -155,7 +155,7 @@ public sealed class ForecastPairingTests : IDisposable
 
         // A tile whose cell has no S-102 tile listed offers nothing.
         panel.SelectedItem = panel.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DE");
-        Assert.Null(panel.Pairing);
+        Assert.Null(panel.Details.Pairing);
     }
 
     [Fact]
@@ -168,8 +168,8 @@ public sealed class ForecastPairingTests : IDisposable
             panel.Items.Single(i => i.IsModelHeader).ToggleCommand!.Execute(null);
             panel.SelectedItem = panel.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DD");
 
-            Assert.False(panel.Pairing!.CanGet);
-            Assert.Contains("· Local", panel.Pairing.Detail, StringComparison.Ordinal);
+            Assert.False(panel.Details.Pairing!.CanGet);
+            Assert.Contains("· Local", panel.Details.Pairing.Detail, StringComparison.Ordinal);
         }
     }
 
@@ -182,7 +182,7 @@ public sealed class ForecastPairingTests : IDisposable
 
         panel.SelectedItem = panel.Items.Single(i => i.Name == "111US00_CBOFS_US4VA1DD");
 
-        Assert.False(panel.HasPairing);
+        Assert.False(panel.Details.HasPairing);
     }
 
     [Fact]
