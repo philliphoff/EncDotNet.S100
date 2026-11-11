@@ -1479,6 +1479,79 @@
                     </StackPanel>
                 </Border>
 
+                <!--
+                    Key (#1410, legends design note D3, D16): the Legend row each
+                    picked feature is drawn with, glyph on the chart-background
+                    tile as in the Legend tab, and In legend, which switches to
+                    the Legend tab, expands the section and rings the row.
+                -->
+                <Border BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,1,0,0"
+                        Padding="0,8,0,0"
+                        AutomationProperties.AutomationId="PickReport.LegendKey"
+                        IsVisible="{Binding HasLegendKey}">
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="{x:Static loc:Strings.Pick_LegendKeyHeading}"
+                                   FontSize="10"
+                                   FontWeight="Normal"
+                                   LetterSpacing="1"
+                                   Opacity="0.7" />
+                        <ItemsControl ItemsSource="{Binding LegendKey}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:PickLegendKeyLine">
+                                    <Grid ColumnDefinitions="Auto,*,Auto"
+                                          MinHeight="22"
+                                          AutomationProperties.AutomationId="PickReport.LegendKey.Line"
+                                          AutomationProperties.Name="{Binding Text}">
+                                        <Border Grid.Column="0"
+                                                Background="{Binding Row.Tile}"
+                                                CornerRadius="3"
+                                                Width="28"
+                                                Height="16"
+                                                Margin="0,0,8,0"
+                                                VerticalAlignment="Center"
+                                                AutomationProperties.AccessibilityView="Raw">
+                                            <Panel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Border Width="18"
+                                                        Height="10"
+                                                        CornerRadius="2"
+                                                        BorderThickness="1"
+                                                        BorderBrush="{DynamicResource BorderColor}"
+                                                        Background="{Binding Row.Swatch}"
+                                                        IsVisible="{Binding Row.IsSwatch}" />
+                                                <Image Source="{Binding Row.Glyph}"
+                                                       MaxWidth="26"
+                                                       MaxHeight="14"
+                                                       IsVisible="{Binding Row.HasGlyph}"
+                                                       Stretch="Uniform" />
+                                            </Panel>
+                                        </Border>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Text}"
+                                                   FontSize="12"
+                                                   VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <Button Grid.Column="2"
+                                                Padding="6,0"
+                                                Margin="8,0,0,0"
+                                                Background="Transparent"
+                                                VerticalAlignment="Center"
+                                                AutomationProperties.AutomationId="Legend.Row.InLegend"
+                                                AutomationProperties.Name="{Binding InLegendName}"
+                                                ToolTip.Tip="{Binding InLegendName}"
+                                                Command="{Binding ShowInLegendCommand}">
+                                            <TextBlock Text="{x:Static loc:Strings.Pick_InLegend}"
+                                                       FontSize="11.5"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource PrimaryColor}" />
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
                 <!-- Beneath a Warning card the attributes fold, closed by default. -->
                 <Expander IsVisible="{Binding HasWarningCard}"
                           AutomationProperties.AutomationId="PickReport.WarningAttributes"

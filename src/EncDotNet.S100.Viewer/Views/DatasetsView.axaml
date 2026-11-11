@@ -713,6 +713,12 @@
                                               AutomationProperties.AutomationId="Datasets.RowMenu.Isolate"
                                               Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).IsolateCommand}"
                                               CommandParameter="{Binding}" />
+                                    <!-- #1410 (legends D3): only for a dataset that draws legend rows. -->
+                                    <MenuItem Header="{x:Static loc:Strings.Menu_ShowDatasetLegend}"
+                                              AutomationProperties.AutomationId="Datasets.RowMenu.ShowLegend"
+                                              Command="{Binding $parent[ListBox].((vm:DatasetsViewModel)DataContext).ShowLegendCommand}"
+                                              CommandParameter="{Binding}"
+                                              IsVisible="{Binding $self.IsEffectivelyEnabled}" />
                                 </ContextMenu>
                             </Border.ContextMenu>
                             <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">

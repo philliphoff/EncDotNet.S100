@@ -1344,6 +1344,39 @@ internal sealed class DatasetsViewModel : ViewModelBase
     public ICommand ResetOpacityCommand { get; }
 
     /// <summary>
+    /// Opens the Legend tab at the dataset's section: <b>Show legend</b> in a
+    /// row's menu (#1410, legends design note D3). Enabled, and shown, only
+    /// for a dataset that draws legend rows; nothing until
+    /// <see cref="AttachLegend"/>.
+    /// </summary>
+    public IRelayCommand<DatasetEntry> ShowLegendCommand { get; }
+
+    private Services.Legends.LegendService? _legend;
+
+    /// <summary>Connects <see cref="ShowLegendCommand"/> to the Legend tab's service.</summary>
+    /// <param name="legend">The legend service.</param>
+    internal void AttachLegend(Services.Legends.LegendService legend)
+    {
+        ArgumentNullException.ThrowIfNull(legend);
+        if (_legend is not null)
+            _legend.Changed -= OnLegendChanged;
+        _legend = legend;
+        legend.Changed += OnLegendChanged;
+        ShowLegendCommand.NotifyCanExecuteChanged();
+    }
+
+    private void OnLegendChanged(object? sender, EventArgs e) => ShowLegendCommand.NotifyCanExecuteChanged();
+
+    private string? LegendSectionOf(DatasetEntry? entry) =>
+        entry is null ? null : _legend?.SectionIdOfDataset(entry.Id.Value);
+
+    private void ShowLegend(DatasetEntry? entry)
+    {
+        if (LegendSectionOf(entry) is { } sectionId)
+            _legend!.Show(sectionId);
+    }
+
+    /// <summary>
     /// Raised with the file's path when <see cref="LoadFromPathAsync"/> (or
     /// <see cref="ReportUnrecognizedFile"/>) rejects a file because no product
     /// recognised it. The window shows it as a warning toast, saying why when
@@ -1404,6 +1437,7 @@ internal sealed class DatasetsViewModel : ViewModelBase
         HideAllCommand = new RelayCommand(HideAll);
         IsolateCommand = new RelayCommand<DatasetEntry>(Isolate);
         ResetOpacityCommand = new RelayCommand(ResetOpacity);
+        ShowLegendCommand = new RelayCommand<DatasetEntry>(ShowLegend, entry => LegendSectionOf(entry) is not null);
 
         // Re-apply paint order whenever the entries collection is
         // mutated by reorder commands. Add/remove side-effects flow

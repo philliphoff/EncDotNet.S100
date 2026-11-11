@@ -44,6 +44,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     private PickLocation? _location;
     private DepthOverTimeViewModel? _locationDepth;
     private string _chartBasisLine = string.Empty;
+    private Services.Legends.LegendService? _legend;
 
     public PickReportViewModel()
         : this(timeFormat: null, marinerSettings: null)
@@ -641,6 +642,54 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
     public bool HasLocationDepthSeries => _locationDepth is not null;
 
     /// <summary>
+    /// Shows the picked features' Legend rows as key lines (#1410, legends
+    /// design note D3, D16), each with an <b>In legend</b> link that opens the
+    /// Legend tab at the row. The lines follow the legend as it rebuilds (a
+    /// palette change, a pan). Without a legend the report has no key.
+    /// </summary>
+    /// <param name="legend">The legend service.</param>
+    internal void AttachLegend(Services.Legends.LegendService legend)
+    {
+        ArgumentNullException.ThrowIfNull(legend);
+        if (_legend is not null)
+            _legend.Changed -= OnLegendChanged;
+        _legend = legend;
+        legend.Changed += OnLegendChanged;
+        RefreshLegendKey();
+    }
+
+    /// <summary>
+    /// One key line per picked feature that a Legend row matches, in hit
+    /// order, each row once: "S-102 · 2–10 m" with its swatch (round 3's C).
+    /// </summary>
+    public ObservableCollection<PickLegendKeyLine> LegendKey { get; } = new();
+
+    /// <summary>True when <see cref="LegendKey"/> has lines to show.</summary>
+    public bool HasLegendKey => LegendKey.Count > 0;
+
+    private void OnLegendChanged(object? sender, EventArgs e) => RefreshLegendKey();
+
+    private void RefreshLegendKey()
+    {
+        LegendKey.Clear();
+        if (_legend is { } legend)
+        {
+            var tile = Legends.LegendViewModel.TileOf(legend.Palette);
+            var seen = new HashSet<(string Section, string Row)>();
+            foreach (var hit in Hits)
+            {
+                if (legend.FindRow(hit, _location?.Latitude) is { } match
+                    && seen.Add((match.Section.Id, match.Row.Label)))
+                {
+                    LegendKey.Add(new PickLegendKeyLine(match, tile, legend.Show));
+                }
+            }
+        }
+        OnPropertyChanged(nameof(HasLegendKey));
+    }
+
+
+    /// <summary>
     /// Mariner-friendly degrees-decimal-minutes rendering of
     /// <see cref="Location"/> for display in the panel, or <c>null</c> when
     /// no location is available.
@@ -1208,6 +1257,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(HasDynamicHits));
         OnPropertyChanged(nameof(HasDatasetPick));
         SelectedHit = WarningCards.Count > 0 ? WarningCards[0].Hit : hits.Count > 0 ? hits[0] : null;
+        RefreshLegendKey();
         if (hits.Count == 0)
         {
             // ApplyHitToDetailFields(null) cleared the detail fields;
@@ -1287,6 +1337,7 @@ internal sealed class PickReportViewModel : ViewModelBase, EncDotNet.S100.Viewer
         OnPropertyChanged(nameof(HasMultipleHits));
         OnPropertyChanged(nameof(HasDynamicHits));
         OnPropertyChanged(nameof(HasDatasetPick));
+        RefreshLegendKey();
     }
 
     private void ClearWarningCards()
