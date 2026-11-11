@@ -120,7 +120,110 @@ internal sealed class GetLegendTool
         entry is SwatchLegendEntry swatch ? swatch.Color : null);
 }
 
-/// <summary>Wraps <see cref="GetLegendTool"/> as an MCP server tool.</summary>
+/// <summary>Request payload for <see cref="SetLegendTool"/>.</summary>
+/// <param name="Open">True shows the Legend tab, false closes it; null leaves it.</param>
+/// <param name="InView">True for the tab's In view scope, false for All loaded; null leaves it.</param>
+/// <param name="Section">The section id to expand or collapse (and, with <paramref name="Open"/> true, scroll to).</param>
+/// <param name="Expanded">True expands <paramref name="Section"/>, false collapses it; null leaves it.</param>
+[Description("What set_legend changes; omitted fields are left as they are.")]
+internal sealed record SetLegendRequest(
+    [property: Description("True shows the Legend tab, false closes it.")] bool? Open = null,
+    [property: Description("True for the tab's In view scope, false for All loaded.")] bool? InView = null,
+    [property: Description("The section id to expand or collapse, and with open: true to scroll to.")] string? Section = null,
+    [property: Description("True expands the section, false collapses it.")] bool? Expanded = null);
+
+/// <summary>What <see cref="SetLegendTool"/> leaves.</summary>
+[Description("The legend after set_legend: the tab's scope and what get_legend returns for it.")]
+internal sealed record SetLegendResult(
+    [property: Description("The Legend tab's scope: 'in_view' or 'all_loaded'.")] string Scope,
+    [property: Description("The legend as get_legend returns it, listing the sections the tab's scope shows.")] LegendDto Legend);
+
+/// <summary>
+/// Changes the Legend tab (MCP <c>set_legend</c>, legends design note D12):
+/// opens or closes it, sets In view or All loaded, and expands or collapses a
+/// section. Replaces <c>set_map_legend</c> (#1408).
+/// </summary>
+internal sealed class SetLegendTool
+{
+    /// <summary>The MCP tool name.</summary>
+    public const string Name = "set_legend";
+
+    private readonly LegendService _service;
+    private readonly ViewModels.Legends.LegendViewModel _tab;
+    private readonly Services.IViewerUiControllerAccessor _ui;
+    private readonly IRouteEditInvoker _invoker;
+
+    public SetLegendTool(LegendService service, ViewModels.Legends.LegendViewModel tab, Services.IViewerUiControllerAccessor ui, IRouteEditInvoker invoker)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(tab);
+        ArgumentNullException.ThrowIfNull(ui);
+        ArgumentNullException.ThrowIfNull(invoker);
+        _service = service;
+        _tab = tab;
+        _ui = ui;
+        _invoker = invoker;
+    }
+
+    /// <summary>
+    /// Applies the request: the section's expanded state and the scope first,
+    /// then the tab (opening at the section when one is named and not
+    /// collapsed).
+    /// </summary>
+    public async Task<ToolResult<SetLegendResult>> InvokeAsync(SetLegendRequest request, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ct.ThrowIfCancellationRequested();
+        var section = request.Section?.Trim();
+        if (section is { Length: 0 })
+            section = null;
+        if (request.Expanded is not null && section is null)
+            return ToolResult<SetLegendResult>.Err(new InvalidArgument("section", "expanded needs the section id to expand or collapse"));
+
+        var known = await _invoker.InvokeAsync(() =>
+        {
+            _service.Refresh();
+            if (section is not null && !_service.Sections.Any(s => string.Equals(s.Id, section, StringComparison.Ordinal)))
+                return false;
+            if (section is not null && request.Expanded is { } expanded)
+            {
+                _service.SetExpanded(section, expanded);
+                _service.Refresh();
+            }
+
+            if (request.InView is { } inView)
+                _tab.IsAllLoaded = !inView;
+            return true;
+        }).ConfigureAwait(false);
+        if (!known)
+        {
+            return ToolResult<SetLegendResult>.Err(new InvalidArgument(
+                "section", $"no legend section '{section}' is loaded; call get_legend with all: true for the ids"));
+        }
+
+        if (request.Open is { } open)
+        {
+            if (_ui.Current is not { } controller)
+                return ToolResult<SetLegendResult>.Err(new UiNotReady("the viewer's UI controller has not been initialised yet"));
+            var outcome = await controller.SetPanelVisibilityAsync(ViewModels.ShellLayoutViewModel.LegendTabId, open, ct).ConfigureAwait(false);
+            if (open && !outcome.Available)
+                return ToolResult<SetLegendResult>.Err(new PanelUnavailable(ViewModels.ShellLayoutViewModel.LegendTabId));
+        }
+
+        var result = await _invoker.InvokeAsync(() =>
+        {
+            if (request.Open == true && section is not null && request.Expanded != false)
+                _tab.ShowSection(section);
+            _service.Refresh();
+            return new SetLegendResult(
+                _tab.IsAllLoaded ? "all_loaded" : "in_view",
+                GetLegendTool.ToDto(_service, _tab.IsAllLoaded));
+        }).ConfigureAwait(false);
+        return ToolResult<SetLegendResult>.Ok(result);
+    }
+}
+
+/// <summary>Wraps the legend tools as MCP server tools.</summary>
 internal static class LegendMcpAdapter
 {
     /// <summary>Creates <c>get_legend</c>.</summary>
@@ -142,6 +245,30 @@ internal static class LegendMcpAdapter
                 + "text, and its rows (kind, label, colour) in groups per sub-layer, in the current palette. By default only "
                 + "sections in view; all: true lists every loaded one. Also returns whether the Legend tab is shown and how "
                 + "many loaded products are out of view. Read-only; viewer-injected tool.",
+            SerializerOptions = McpAdapterShared.Options,
+        });
+    }
+
+    /// <summary>Creates <c>set_legend</c>.</summary>
+    public static McpServerTool Create(SetLegendTool inner)
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        var del = (
+            [Description("True to show the right dock's Legend tab (opening the dock), false to close it (the dock goes back to the tab it showed before, or closes); omit to leave it.")] bool? open = null,
+            [Description("True for the tab's In view scope (products in the map view), false for All loaded; omit to leave it.")] bool? inView = null,
+            [Description("A section id from get_legend (\"RouteCheck\", \"S-111\", \"weather.wave.height\") to expand or collapse; with open: true the tab also scrolls to it, switching to All loaded or clearing the filter if they hide it.")] string? section = null,
+            [Description("True to expand the section, false to collapse it (remembered per section); needs section.")] bool? expanded = null,
+            CancellationToken ct = default) =>
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetLegendRequest(open, inView, section, expanded), ct));
+        return McpServerTool.Create(del, new McpServerToolCreateOptions
+        {
+            Name = SetLegendTool.Name,
+            Description =
+                "Changes the live viewer's Legend tab: opens or closes it, sets In view or All loaded, and expands or "
+                + "collapses a section. Every argument is optional; omitted ones are left as they are. While the tab is "
+                + "shown the Check route map card hides (and the map's legend reserve drops to 0); the card shows the "
+                + "same 'RouteCheck' section while Check route is on. Returns the tab's scope and what get_legend returns "
+                + "for it. Replaces set_map_legend. Viewer-injected tool — mutates live state.",
             SerializerOptions = McpAdapterShared.Options,
         });
     }

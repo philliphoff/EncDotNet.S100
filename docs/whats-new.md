@@ -16,6 +16,13 @@ month. For package versions and release assets, see
   replaces the entry's inline legend. It never opens by itself, and a pick
   switches the dock back to Object information. When the dock is too narrow
   for the tab labels, the tabs show icons only.
+- **Route check in the Legend tab.** While Check route is on, the route
+  check's legend (UKC at ETA, findings, storm at ETA) is the top section of
+  the Legend tab. The compact card at the map's bottom left shows the same
+  rows while the tab isn't shown, and hides when it is. The MCP tool
+  `set_legend` opens or closes the tab, sets In view and expands or collapses
+  a section; it and `get_legend` replace `get_map_legend` and
+  `set_map_legend`, which are removed.
 - **S-102 relief shading.** An optional hillshade over the S-102 depth bands
   shows the shape of the seabed (dredged pits, sand waves, berth toes) in
   high-resolution bathymetry. It lights the depth surface from the north-west

@@ -1146,10 +1146,10 @@ public partial class MainWindow : ShadUI.Window
         // #959 C8: the map legend, a control at the map's bottom left. The
         // finding chip (drawn by the overlay) sits above it, so the overlay
         // learns its height.
+        // #1408 D6: it's the route check's Legend section, drawn compact; it
+        // hides (and the reserve drops to 0) while the Legend tab is shown.
         _routeCheckLegend = new EncDotNet.S100.Viewer.ViewModels.RouteCheckLegendViewModel(
-            _routeStore,
-            _passageCheck,
-            _routeAppearance,
+            App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>(),
             App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.PassageCheck.RouteCheckLegendState>());
         RouteCheckLegend.DataContext = _routeCheckLegend;
         // #1374: the AML CLB chip ("not used for depth checks").
