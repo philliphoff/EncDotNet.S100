@@ -108,5 +108,7 @@
           href: design/chart-wide-water-level-adjustment.md
         - name: Predefined display combinations
           href: design/predefined-display-combinations.md
+        - name: Legends
+          href: design/legends.md
         - name: Viewer view model dependencies
           href: design/viewer-view-model-dependencies.md
