@@ -39,25 +39,25 @@ public sealed class LibraryKeepDownloadedTests : IDisposable
         var folder = new LocalFolderSource(Guid.NewGuid(), "Charts", _context.Root);
         _library.AddCollection("Mixed", [noaa, folder]);
         using var panel = Panel();
-        var collection = Assert.Single(panel.Nodes);
+        var collection = Assert.Single(panel.Tree.Nodes);
 
-        panel.SelectedNode = collection.Children.Single(n => n.Source?.Id == folder.Id);
-        Assert.False(panel.CanSyncSelected);  // a local folder is always current
+        panel.Tree.SelectedNode = collection.Children.Single(n => n.Source?.Id == folder.Id);
+        Assert.False(panel.Tree.CanSyncSelected);  // a local folder is always current
 
-        panel.SelectedNode = collection.Children.Single(n => n.Source?.Id == noaa.Id);
-        Assert.True(panel.CanSyncSelected);
-        Assert.False(panel.SelectedSyncs);
+        panel.Tree.SelectedNode = collection.Children.Single(n => n.Source?.Id == noaa.Id);
+        Assert.True(panel.Tree.CanSyncSelected);
+        Assert.False(panel.Tree.SelectedSyncs);
 
-        panel.ToggleSyncCommand.Execute(null);
+        panel.Tree.ToggleSyncCommand.Execute(null);
 
         var stored = _library.Collections.Single().Sources.Single(s => s.Id == noaa.Id).Definition;
         Assert.True(stored.Sync);
         Assert.False(_library.Collections.Single().Sources.Single(s => s.Id == folder.Id).Definition.Sync);
 
         // On the collection: the toggle applies to its online sources only.
-        panel.SelectedNode = panel.Nodes.Single();
-        Assert.True(panel.SelectedSyncs);
-        panel.ToggleSyncCommand.Execute(null);
+        panel.Tree.SelectedNode = panel.Tree.Nodes.Single();
+        Assert.True(panel.Tree.SelectedSyncs);
+        panel.Tree.ToggleSyncCommand.Execute(null);
         Assert.False(_library.Collections.Single().Sources.Single(s => s.Id == noaa.Id).Definition.Sync);
     }
 

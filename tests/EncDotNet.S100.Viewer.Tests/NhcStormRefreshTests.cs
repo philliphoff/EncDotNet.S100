@@ -59,7 +59,7 @@ public sealed class NhcStormRefreshTests : IDisposable
         await _library.WhenIdle();
         var library = new TestLibrary(_library, _loader, _downloader, _time, notifications: _notifications);
         var panel = library.CreatePanel(new NoImporter(), action => action(), coalesce: action => action(), time: _time, feedHealth: null, viewTime: null, timeFormat: null, sync: null);
-        panel.Sync();
+        panel.Tree.Sync();
         // The monitor checks on its own minute clock, as in the app.
         return (panel, library.Monitor(_time, action => action()), source.Id);
     }
@@ -197,7 +197,7 @@ public sealed class NhcStormRefreshTests : IDisposable
         var row = new LibraryItemViewModel(item, source, _loader.StateOf, _downloader, "Weather", time: _time, download: null, timeFormat: null);
 
         // The source says how many storms are active (V27).
-        Assert.Equal("1 active", panel.Nodes.Single().StatusLine);
+        Assert.Equal("1 active", panel.Tree.Nodes.Single().StatusLine);
 
         Assert.True(row.IsStorm);
         Assert.False(row.ShowsOutlineSwatch);

@@ -899,6 +899,8 @@ internal static partial class Strings
     // Display settings overlay (consolidated map command-bar settings)
     public static string DisplaySettings_Title => Get(nameof(DisplaySettings_Title));
     public static string Tooltip_DisplaySettings => Get(nameof(Tooltip_DisplaySettings));
+    public static string Label_MapLegend => Get(nameof(Label_MapLegend));
+    public static string Tooltip_MapLegend => Get(nameof(Tooltip_MapLegend));
     public static string Tooltip_CloseDisplaySettings => Get(nameof(Tooltip_CloseDisplaySettings));
     public static string DisplaySettings_DisplayBaseHeader => Get(nameof(DisplaySettings_DisplayBaseHeader));
     public static string DisplaySettings_TextHeader => Get(nameof(DisplaySettings_TextHeader));
