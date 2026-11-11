@@ -16,21 +16,13 @@ namespace EncDotNet.S100.Renderers.Mapsui;
 /// </summary>
 public sealed class SmoothRasterStyle : BaseStyle
 {
-    private SKImage? _image;
-    private byte[]? _imageData;
-
-    // The decoded raster, decoded once per raster and kept with the style.
-    internal SKImage? GetImage(MRaster raster)
-    {
-        if (_image is not null && ReferenceEquals(_imageData, raster.Data))
-            return _image;
-
-        _image?.Dispose();
-        using var bitmap = SKBitmap.Decode(raster.Data);
-        _image = bitmap is null ? null : SKImage.FromBitmap(bitmap);
-        _imageData = raster.Data;
-        return _image;
-    }
+    /// <summary>
+    /// The raster image, drawn over the feature's extent. Held here rather
+    /// than encoded into the feature's <see cref="MRaster"/>: a shaded surface
+    /// barely compresses, so a PNG round trip would cost more than the
+    /// shading itself.
+    /// </summary>
+    public required SKImage Image { get; init; }
 }
 
 /// <summary>
@@ -55,12 +47,8 @@ public sealed class SmoothRasterRenderer : ISkiaStyleRenderer
     /// <inheritdoc/>
     public bool Draw(SKCanvas canvas, Viewport viewport, ILayer layer, IFeature feature, IStyle style, RenderService renderService, long iteration)
     {
-        if (style is not SmoothRasterStyle smooth
-            || feature is not RasterFeature { Raster: { } raster, Extent: { } extent })
-            return false;
-
-        var image = smooth.GetImage(raster);
-        if (image is null)
+        if (style is not SmoothRasterStyle { Image: { } image }
+            || feature is not RasterFeature { Extent: { } extent })
             return false;
 
         float opacity = (float)Math.Clamp(layer.Opacity * style.Opacity, 0, 1);
