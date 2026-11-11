@@ -3,7 +3,6 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Collections.Library;
-using EncDotNet.S100.DataModel;
 
 namespace EncDotNet.S100.Viewer.ViewModels;
 
