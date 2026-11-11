@@ -1783,6 +1783,70 @@
   <data name="Status_OverscaleFactor" xml:space="preserve">
     <value>{0:0.0}×</value>
   </data>
+  <data name="PositionLegend_Heading" xml:space="preserve">
+    <value>AT VIEW CENTRE</value>
+    <comment>Caps heading of the Legend tab's position row (S-98 position legend, legends D17)</comment>
+  </data>
+  <data name="PositionLegend_Name" xml:space="preserve">
+    <value>Position legend at the view centre</value>
+    <comment>Accessible name of the Legend tab's position row</comment>
+  </data>
+  <data name="PositionLegend_DepthsMetres" xml:space="preserve">
+    <value>Depths in metres</value>
+    <comment>Position legend: depth unit (S-98 §9.1.4)</comment>
+  </data>
+  <data name="PositionLegend_DepthsFeet" xml:space="preserve">
+    <value>Depths in feet</value>
+    <comment>Position legend: depth unit</comment>
+  </data>
+  <data name="PositionLegend_DepthsFathomsFeet" xml:space="preserve">
+    <value>Depths in fathoms and feet</value>
+    <comment>Position legend: depth unit</comment>
+  </data>
+  <data name="PositionLegend_DepthsFathoms" xml:space="preserve">
+    <value>Depths in fathoms</value>
+    <comment>Position legend: depth unit</comment>
+  </data>
+  <data name="PositionLegend_SafetyContourFormat" xml:space="preserve">
+    <value>Safety contour {0}</value>
+    <comment>Position legend: the Mariner setting; {0} is the depth with its unit, e.g. "10 m"</comment>
+  </data>
+  <data name="PositionLegend_DatumNotDeclared" xml:space="preserve">
+    <value>Datum not declared</value>
+    <comment>Position legend when the cell at the view centre declares no sounding datum</comment>
+  </data>
+  <data name="PositionLegend_NoChart" xml:space="preserve">
+    <value>No chart at the view centre</value>
+    <comment>Position legend when no chart cell covers the view centre (D17)</comment>
+  </data>
+  <data name="PositionLegend_EditionFormat" xml:space="preserve">
+    <value>ed. {0}</value>
+    <comment>Position legend: the cell's edition number</comment>
+  </data>
+  <data name="PositionLegend_EditionUpdateFormat" xml:space="preserve">
+    <value>ed. {0} upd. {1}</value>
+    <comment>Position legend: the cell's edition and the last update applied</comment>
+  </data>
+  <data name="PositionLegend_CompiledFormat" xml:space="preserve">
+    <value>compiled {0}</value>
+    <comment>Position legend: the cell's compilation scale, e.g. "compiled 1:12 000"</comment>
+  </data>
+  <data name="PositionLegend_ShownFormat" xml:space="preserve">
+    <value>shown {0}</value>
+    <comment>Position legend: the display scale, e.g. "shown 1:22 000"</comment>
+  </data>
+  <data name="PositionLegend_OverscaleFormat" xml:space="preserve">
+    <value>{0:0.0}× overscale</value>
+    <comment>Position legend: the display is finer than the cell's compilation scale</comment>
+  </data>
+  <data name="PositionLegend_Separator" xml:space="preserve">
+    <value> · </value>
+    <comment>Separator between position legend items</comment>
+  </data>
+  <data name="Tooltip_PositionLegend" xml:space="preserve">
+    <value>Units, depth datum and safety contour, then the chart cell at the view centre with its edition and compilation scale against the display scale. Updates when the map stops moving.</value>
+    <comment>Tooltip of the Legend tab's position row</comment>
+  </data>
   <data name="Status_OverscalePopupHeader" xml:space="preserve">
     <value>Overscaled cells in view</value>
   </data>

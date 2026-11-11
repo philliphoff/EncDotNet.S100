@@ -5,6 +5,7 @@ using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Pipelines;
 using EncDotNet.S100.Viewer.McpTools;
 using EncDotNet.S100.Viewer.Services;
+using EncDotNet.S100.Viewer.Services.Legends;
 
 namespace EncDotNet.S100.Viewer.Tests;
 
@@ -21,6 +22,9 @@ public sealed class LegendMcpToolTests
         Assert.True(result.TryGetValue(out var value), result.TryGetError(out var e) ? e.Message : "");
         return value!;
     }
+
+    private static GetLegendTool Tool(LegendServiceTests.Fixture f, LegendService service) =>
+        new(service, f.Position(service), new InlineInvoker());
 
     private static LegendServiceTests.Fixture TwoProducts()
     {
@@ -46,7 +50,7 @@ public sealed class LegendMcpToolTests
     {
         var f = TwoProducts();
         using var service = f.Create(PaletteType.Dusk);
-        var tool = new GetLegendTool(service, new InlineInvoker());
+        var tool = Tool(f, service);
 
         // get_legend takes the current view, without waiting for pan end.
         f.Viewport.Publish(39, -76, 42, -73);
@@ -76,7 +80,7 @@ public sealed class LegendMcpToolTests
         var f = TwoProducts();
         using var service = f.Create();
         service.IsTabShown = true;
-        var tool = new GetLegendTool(service, new InlineInvoker());
+        var tool = Tool(f, service);
         f.Viewport.Publish(39, -76, 42, -73);
 
         var dto = Value(await tool.InvokeAsync(all: true, ct: TestContext.Current.CancellationToken));
@@ -98,7 +102,7 @@ public sealed class LegendMcpToolTests
         f.Datasets.Entries.Single(e => e.Id.Value == "111US00_a.h5")
             .SetLayerTime(new LayerTime("no data · last 18:00Z, 6 h earlier", LayerTimeState.NoData, null), null);
         using var service = f.Create();
-        var tool = new GetLegendTool(service, new InlineInvoker());
+        var tool = Tool(f, service);
 
         var dto = Value(await tool.InvokeAsync(all: true, ct: TestContext.Current.CancellationToken));
 
@@ -112,7 +116,7 @@ public sealed class LegendMcpToolTests
     {
         var f = TwoProducts();
         using var service = f.Create();
-        var dto = Value(await new GetLegendTool(service, new InlineInvoker()).InvokeAsync(all: true, ct: TestContext.Current.CancellationToken));
+        var dto = Value(await Tool(f, service).InvokeAsync(all: true, ct: TestContext.Current.CancellationToken));
 
         using var json = JsonDocument.Parse(JsonSerializer.Serialize(dto, McpAdapterShared.Options));
 
@@ -130,7 +134,7 @@ public sealed class LegendMcpToolTests
         var f = new LegendServiceTests.Fixture();
         using var service = f.Create();
 
-        var tool = LegendMcpAdapter.Create(new GetLegendTool(service, new InlineInvoker()));
+        var tool = LegendMcpAdapter.Create(Tool(f, service));
 
         Assert.Equal("get_legend", tool.ProtocolTool.Name);
     }

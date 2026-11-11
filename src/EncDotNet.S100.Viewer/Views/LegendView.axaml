@@ -56,6 +56,40 @@
         </Style>
     </UserControl.Styles>
 
+    <UserControl.DataTemplates>
+        <!-- The S-98 position legend (D17, #1407): fixed first row under the toolbar. -->
+        <DataTemplate DataType="lg:PositionLegendRowViewModel">
+            <Border AutomationProperties.AutomationId="Legend.Position"
+                    AutomationProperties.Name="{Binding AccessibleName}"
+                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_PositionLegend}"
+                    Background="{DynamicResource MutedBackgroundColor}"
+                    BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="8,5,8,6">
+                <StackPanel Spacing="2">
+                    <TextBlock Text="{x:Static loc:Strings.PositionLegend_Heading}"
+                               FontSize="10"
+                               FontWeight="Bold"
+                               LetterSpacing="0.6"
+                               Opacity="0.65" />
+                    <TextBlock Text="{Binding SettingsLine}"
+                               AutomationProperties.AutomationId="Legend.Position.Settings"
+                               FontSize="11.5"
+                               TextWrapping="Wrap" />
+                    <TextBlock AutomationProperties.AutomationId="Legend.Position.Cell"
+                               FontSize="11.5"
+                               Opacity="0.8"
+                               TextWrapping="Wrap">
+                        <Run Text="{Binding CellName}"
+                             FontFamily="{StaticResource MonoFontFamily}"
+                             FontSize="11" /><Run Text="{Binding CellDetail}" />
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
     <DockPanel LastChildFill="True">
 
         <!-- Toolbar (D4): In view | All loaded, the filter, Collapse all.
