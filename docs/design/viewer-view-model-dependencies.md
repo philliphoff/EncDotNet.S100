@@ -226,33 +226,33 @@ Each slice keeps the UI and the MCP tool list identical (same check as
 #1382: `tools/list` schema hashes). The order puts the ones with outside
 callers first:
 
-1. **Library download and open workfl (#1394).**
+1. **Library download and open workflows (#1394).**
    - Add `DownloadLibraryItemsWorkflow` and `OpenLibraryItemsWorkflow`
      over `LibraryOperations`, plus `LibrarySourceNames`.
    - `ViewerLibraryEditor`, `ViewerLibraryController` and
      `LibraryTimeSource` stop taking the panel.
-2. **Weather runs out of the Library pa (#1395).** Add `WeatherRunMonitor` plus
+2. **Weather runs out of the Library panel (#1395).** Add `WeatherRunMonitor` plus
    the load-latest, pin and storm-marker workflows. The weather tests stop
    building a panel.
-3. **Library panel sp (#1396).** Split it into tree, list, details and tap-hit
+3. **Library panel split (#1396).** Split it into tree, list, details and tap-hit
    child view models, and make `LibraryItemViewModel` plain state.
-4. **Open a navigational warn (#1397).**
+4. **Open a navigational warning (#1397).**
    - Add `OpenNavigationalWarningWorkflow` and
      `ObjectInformationSelection`.
    - Pass the warnings panel's dependencies through its constructor only.
    - Split out `RouteScopeViewModel`.
-5. **Settings service and pa (#1398).** Add `ViewerSettingsService`, one
+5. **Settings service and pages (#1398).** Add `ViewerSettingsService`, one
    `ISettingsPage` view model per Settings page, and
    `ResetApplicationDataWorkflow`.
-6. **Catalogue direct (#1399).** Add `AddCatalogueByUrlWorkflow` and
+6. **Catalogue directory (#1399).** Add `AddCatalogueByUrlWorkflow` and
    `SecomServiceDirectory`, shared with MCP `add_library_source` and
    `list_secom_services` (this fixes the Unreachable drift). Remove the
    `Func<>` arguments.
-7. **Routes pa (#1400).**
+7. **Routes panel (#1400).**
    - Add `RouteEditCommands`, shared with `McpTools/RouteTools.cs`.
    - Inject `PassageCheckViewModel` directly.
    - Split out `RouteExchangeFooterViewModel`.
-8. **Pick report and station cha (#1401).** Leave one constructor, and add
+8. **Pick report and station charts (#1401).** Leave one constructor, and add
    `ExaminerLinks`, `PickAttributeFormatter` and `StationChartContext`.
    `PickService` returns data, not view models.
 
