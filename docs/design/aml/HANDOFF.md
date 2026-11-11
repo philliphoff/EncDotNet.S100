@@ -9,7 +9,7 @@ The mock is a reference, not code to port. Build it with Avalonia + ShadUI and t
 
 ## Frames
 
-Screenshots are in [`screenshots/`](screenshots/), one per artboard section.
+Screenshots are in the `screenshots/` folder, one per artboard section.
 
 | Frame | Brief | What it shows | Screenshot |
 |---|---|---|---|
