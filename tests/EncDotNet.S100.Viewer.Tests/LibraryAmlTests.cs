@@ -34,7 +34,7 @@ public sealed class LibraryAmlTests : IDisposable
         _library.Initialize();
         _library.AddCollection("Mixed", [new LocalFolderSource(Guid.NewGuid(), null, _context.Root)]);
         await _library.WhenIdle();
-        return new LibraryPanelViewModel(_library, _importer, _loader, _downloader, action => action(), action => action(),
+        return TestLibrary.Panel(_library, _importer, _loader, _downloader, action => action(), action => action(),
             TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
     }
 

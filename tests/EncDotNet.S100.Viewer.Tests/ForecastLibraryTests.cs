@@ -64,7 +64,7 @@ public sealed class ForecastLibraryTests : IDisposable
         _library.Initialize();
         _library.AddCollection("S-111", [new S100ForecastFeedSource(Guid.NewGuid(), null, ModelsUri, [Cbofs, Nyofs])]);
         await _library.WhenIdle();
-        var panel = new LibraryPanelViewModel(
+        var panel = TestLibrary.Panel(
             _library, new NullImporter(), new NullLoader(), _downloader, action => action(), time: _time, viewTime: viewTime, timeFormat: timeFormat, coalesce: action => action(),
             feedHealth: null,
             notifications: null,
@@ -240,8 +240,11 @@ public sealed class ForecastLibraryTests : IDisposable
 
     // ── the Timeline link (#711) ───────────────────────────────────────
 
-    private Services.LibraryTimeSource TimeSource(LibraryPanelViewModel panel) =>
-        new(panel, _library, new NullLoader(), _time, action => action());
+    private Services.LibraryTimeSource TimeSource(LibraryPanelViewModel panel)
+    {
+        var library = new TestLibrary(_library, new NullLoader(), _downloader, _time);
+        return new(library.Rows, library.Open, library.Download, (source, key) => panel.Reveal(source, key), _time, action => action());
+    }
 
     [Fact]
     public async Task The_timeline_knows_each_tiles_window_online_on_disk_and_a_newer_run()

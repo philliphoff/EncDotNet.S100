@@ -188,7 +188,7 @@ public sealed class CollectionManifestLibraryTests : IDisposable
         var path = CreateManifest();
         _library.AddCollection("Test", [new LocalManifestSource(Guid.NewGuid(), "Test", path, LocalManifestFilter.All)]);
         await _library.WhenIdle();
-        using var panel = new LibraryPanelViewModel(
+        using var panel = TestLibrary.Panel(
             _library, new NullImporter(), new NullLoader(), new NullDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System,
             feedHealth: null,
             notifications: null,
@@ -232,7 +232,7 @@ public sealed class CollectionManifestLibraryTests : IDisposable
         _library.AddCollection("Test", [new LocalManifestSource(
             Guid.NewGuid(), null, path, new LocalManifestFilter { Groups = ["AU"] })]);
         await _library.WhenIdle();
-        using var panel = new LibraryPanelViewModel(
+        using var panel = TestLibrary.Panel(
             _library, new NullImporter(), new NullLoader(), new NullDownloader(), action => action(), coalesce: action => action(), time: TimeProvider.System,
             feedHealth: null,
             notifications: null,

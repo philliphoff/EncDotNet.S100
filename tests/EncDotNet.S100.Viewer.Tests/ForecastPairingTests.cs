@@ -81,7 +81,7 @@ public sealed class ForecastPairingTests : IDisposable
         }
 
         await _library.WhenIdle();
-        var panel = new LibraryPanelViewModel(_library, _importer, new NullLoader(), _downloader, action => action(), time: _time, coalesce: action => action(), feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        var panel = TestLibrary.Panel(_library, _importer, new NullLoader(), _downloader, action => action(), time: _time, coalesce: action => action(), feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
         panel.Sync();
         return panel;
     }
