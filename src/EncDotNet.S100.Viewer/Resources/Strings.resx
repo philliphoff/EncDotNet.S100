@@ -7958,6 +7958,17 @@
     <value>Weather</value>
     <comment>Tag of a weather finding in the findings list</comment>
   </data>
+  <data name="EcdisPanel_BathymetryHeader" xml:space="preserve">
+    <value>Bathymetry</value>
+    <comment>Display controls section header for S-102 bathymetry. Shown while an S-102 dataset is loaded.</comment>
+  </data>
+  <data name="EcdisPanel_Bathymetry_ReliefShading" xml:space="preserve">
+    <value>Relief shading</value>
+    <comment>Display controls switch: a hillshade over the S-102 depth bands so the seabed's shape shows. Not part of the S-102 portrayal.</comment>
+  </data>
+  <data name="Tooltip_EcdisPanel_Bathymetry_ReliefShading" xml:space="preserve">
+    <value>Shade the S-102 depth surface by its slope, lit from the north-west, so the shape of the seabed shows. A display aid, not part of the S-102 portrayal: the depth band colours keep their meaning. Off by default.</value>
+  </data>
   <data name="AmlDisplay_Legend" xml:space="preserve">
     <value>Legend</value>
     <comment>Link in the display panel's Additional Military Layers section that opens the AML legend flyout</comment>

@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using EncDotNet.S100.Datasets.Pipelines;
+using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Datasets.Weather;
 using EncDotNet.S100.Portrayals;
 using EncDotNet.S100.Viewer.Diagnostics;
@@ -119,9 +120,27 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// True when there is nothing to control: no loaded vector spec, no
-    /// weather dataset and no AML cell.
+    /// weather dataset, no AML cell and no S-102 bathymetry.
     /// </summary>
-    public bool IsEmpty => Specs.Count == 0 && !HasWeatherData && !HasAml;
+    public bool IsEmpty => Specs.Count == 0 && !HasWeatherData && !HasAml && !HasBathymetryData;
+
+    /// <summary>
+    /// Whether an S-102 bathymetry dataset is loaded, which shows the
+    /// Bathymetry section. Its switch applies to every S-102 dataset and is
+    /// kept with the display settings whether or not one is loaded.
+    /// </summary>
+    public bool HasBathymetryData { get; private set; }
+
+    /// <summary>
+    /// The Bathymetry section's Relief shading switch: a hillshade over the
+    /// S-102 depth bands (<see cref="S102Relief"/>). Not part of the S-102
+    /// portrayal, so off by default.
+    /// </summary>
+    public bool IsReliefShadingVisible
+    {
+        get => _state.GetLayerVisible(S102Relief.LayerKey) ?? false;
+        set => _state.SetLayerVisible(S102Relief.LayerKey, value);
+    }
 
     /// <summary>
     /// Whether a weather dataset is loaded (a GRIB2 or NetCDF grid, a tropical
@@ -382,6 +401,7 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsWindRadiiVisible));
         OnPropertyChanged(nameof(IsPastTrackVisible));
         OnPropertyChanged(nameof(IsForecastTimesVisible));
+        OnPropertyChanged(nameof(IsReliefShadingVisible));
         OnPropertyChanged(nameof(ActiveCategory));
         OnPropertyChanged(nameof(IsDisplayBase));
         OnPropertyChanged(nameof(IsStandard));
@@ -410,6 +430,15 @@ internal sealed class EcdisDisplayPanelViewModel : ViewModelBase, IDisposable
         {
             HasWeatherData = hasWeather;
             OnPropertyChanged(nameof(HasWeatherData));
+            OnPropertyChanged(nameof(IsEmpty));
+            OnPropertyChanged(nameof(ShowsViewAboveEmptyState));
+        }
+
+        var hasBathymetry = _datasets.Entries.Any(e => string.Equals(e.ProductSpec, "S-102", StringComparison.OrdinalIgnoreCase));
+        if (hasBathymetry != HasBathymetryData)
+        {
+            HasBathymetryData = hasBathymetry;
+            OnPropertyChanged(nameof(HasBathymetryData));
             OnPropertyChanged(nameof(IsEmpty));
             OnPropertyChanged(nameof(ShowsViewAboveEmptyState));
         }
