@@ -1,6 +1,5 @@
 using System.Globalization;
 using EncDotNet.S100.Collections;
-using EncDotNet.S100.Collections.Indexing;
 using EncDotNet.S100.Collections.Library;
 using EncDotNet.S100.Collections.Weather;
 using EncDotNet.S100.Datasets.TropicalCyclones;
