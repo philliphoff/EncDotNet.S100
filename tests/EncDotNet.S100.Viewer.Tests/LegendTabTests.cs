@@ -73,7 +73,7 @@ public sealed class LegendTabTests : IDisposable
     }
 
     private static LegendViewModel Tab(LegendService service, FixedFormat? format = null) =>
-        new(service, new ClockViewTime(new FakeTimeProvider(new DateTimeOffset(2026, 11, 10, 14, 20, 0, TimeSpan.Zero))), format ?? new FixedFormat(TimeFormat.Utc));
+        new(service, new ClockViewTime(new FakeTimeProvider(new DateTimeOffset(2026, 11, 10, 14, 20, 0, TimeSpan.Zero))), format ?? new FixedFormat(TimeFormat.Utc), find: null);
 
     [Fact]
     public void In_view_shows_only_what_the_view_draws_with_a_line_for_the_rest()

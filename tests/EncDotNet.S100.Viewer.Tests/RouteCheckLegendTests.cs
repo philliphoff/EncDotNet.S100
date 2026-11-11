@@ -91,7 +91,7 @@ public sealed class RouteCheckLegendTests(WarningsScenarioFixture fixture) : ICl
     private static PositionLegendService Position(LegendService service) => new LegendServiceTests.Fixture().Position(service);
 
     private static LegendViewModel Tab(LegendService service) =>
-        new(service, new ClockViewTime(new FakeTimeProvider(new DateTimeOffset(2026, 11, 10, 14, 20, 0, TimeSpan.Zero))), new FixedFormat());
+        new(service, new ClockViewTime(new FakeTimeProvider(new DateTimeOffset(2026, 11, 10, 14, 20, 0, TimeSpan.Zero))), new FixedFormat(), find: null);
 
     private async Task<WarningsRouteCheck> CheckedAsync()
     {
@@ -198,7 +198,7 @@ public sealed class RouteCheckLegendTests(WarningsScenarioFixture fixture) : ICl
         using var tab = Tab(service);
         using var card = new RouteCheckLegendViewModel(service, new RouteCheckLegendState(settings: null));
         var dock = new LegendDock(service);
-        var tool = new SetLegendTool(service, Position(service), tab, new FakeUiControllerAccessor { Current = dock }, new InlineInvoker());
+        var tool = new SetLegendTool(service, Position(service), tab, new FakeUiControllerAccessor { Current = dock }, new InlineInvoker(), new LegendFindService(service, viewport: null, TimeProvider.System, action => action()));
         var ct = TestContext.Current.CancellationToken;
 
         // Open: the tab shows and the card hides.
@@ -238,7 +238,7 @@ public sealed class RouteCheckLegendTests(WarningsScenarioFixture fixture) : ICl
         using var tab = Tab(service);
         var ct = TestContext.Current.CancellationToken;
         var accessor = new FakeUiControllerAccessor();
-        var tool = new SetLegendTool(service, Position(service), tab, accessor, new InlineInvoker());
+        var tool = new SetLegendTool(service, Position(service), tab, accessor, new InlineInvoker(), new LegendFindService(service, viewport: null, TimeProvider.System, action => action()));
 
         // Opening at a collapsed section expands it.
         service.SetExpanded(RouteCheckLegendSource.SectionId, false);

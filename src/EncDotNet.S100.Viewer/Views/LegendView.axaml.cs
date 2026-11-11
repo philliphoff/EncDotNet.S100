@@ -62,6 +62,36 @@ public partial class LegendView : UserControl
         }
     }
 
+    // Hover to find (D19, #1412): the pointer resting on a row, or keyboard
+    // focus on it, rings its features on the map; leaving clears them.
+    private void OnRowPointerEntered(object? sender, Avalonia.Input.PointerEventArgs e)
+    {
+        if (RowOf(sender) is { } row)
+            _viewModel?.HoverRow(row);
+    }
+
+    private void OnRowPointerExited(object? sender, Avalonia.Input.PointerEventArgs e)
+    {
+        // Keyboard focus keeps its row ringed after the pointer passes over.
+        if (RowOf(sender) is { } row && sender is Control { IsFocused: false })
+            _viewModel?.LeaveRow(row);
+    }
+
+    private void OnRowGotFocus(object? sender, Avalonia.Input.FocusChangedEventArgs e)
+    {
+        if (RowOf(sender) is { } row)
+            _viewModel?.HoverRow(row);
+    }
+
+    private void OnRowLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (RowOf(sender) is { } row && sender is Control { IsPointerOver: false })
+            _viewModel?.LeaveRow(row);
+    }
+
+    private static LegendRowViewModel? RowOf(object? sender) =>
+        (sender as Control)?.DataContext as LegendRowViewModel;
+
     private void OnRevealRequested(object? sender, LegendRevealEventArgs e)
     {
         // After layout, so a section just added or expanded has its place.

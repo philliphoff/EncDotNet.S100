@@ -605,7 +605,8 @@ public partial class App : Application
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.PositionLegendService>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.Legends.LegendViewModel>(),
-                sp.GetRequiredService<IViewerUiControllerAccessor>()),
+                sp.GetRequiredService<IViewerUiControllerAccessor>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>()),
             new McpTools.Groups.MeasuringMcpToolGroup(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.MeasureSession>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.ViewModels.MeasureCardViewModel>(),
@@ -1739,6 +1740,12 @@ public partial class App : Application
                 () => legend.Palette));
             return legend;
         });
+        // Hover to find (#1412, legends D19): a hovered Legend row rings its features.
+        services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Legends.LegendFindService(
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>(),
+            sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
+            sp.GetRequiredService<TimeProvider>(),
+            UiThread.RunOrPost));
         services.AddSingleton(sp => new EncDotNet.S100.Viewer.Services.Depth.DepthBasisService(
             sp.GetRequiredService<IDatasetLoaderService>(),
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IMapViewportNotifier>(),
@@ -2068,7 +2075,8 @@ public partial class App : Application
             var legend = new EncDotNet.S100.Viewer.ViewModels.Legends.LegendViewModel(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>(),
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.IViewTime>(),
-                sp.GetRequiredService<ITimeFormatProvider>());
+                sp.GetRequiredService<ITimeFormatProvider>(),
+                sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendFindService>());
             // D17: the S-98 position legend is the fixed first row (#1407).
             legend.PinnedRows.Insert(0, new EncDotNet.S100.Viewer.ViewModels.Legends.PositionLegendRowViewModel(
                 sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.PositionLegendService>()));

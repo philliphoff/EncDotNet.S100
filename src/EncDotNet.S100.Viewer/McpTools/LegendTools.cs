@@ -184,23 +184,75 @@ internal sealed class GetLegendTool
 /// <param name="InView">True for the tab's In view scope, false for All loaded; null leaves it.</param>
 /// <param name="Section">The section id to expand or collapse (and, with <paramref name="Open"/> true, scroll to).</param>
 /// <param name="Expanded">True expands <paramref name="Section"/>, false collapses it; null leaves it.</param>
+/// <param name="FindRow">The label of a row in <paramref name="Section"/> to ring on the map now, "" to clear the rings; null leaves them.</param>
 [Description("What set_legend changes; omitted fields are left as they are.")]
 internal sealed record SetLegendRequest(
     [property: Description("True shows the Legend tab, false closes it.")] bool? Open = null,
     [property: Description("True for the tab's In view scope, false for All loaded.")] bool? InView = null,
     [property: Description("The section id to expand or collapse, and with open: true to scroll to.")] string? Section = null,
-    [property: Description("True expands the section, false collapses it.")] bool? Expanded = null);
+    [property: Description("True expands the section, false collapses it.")] bool? Expanded = null,
+    [property: Description("A row label in the section to ring its features in the map view, as hovering the row does; \"\" clears the rings.")] string? FindRow = null);
+
+/// <summary>One feature ringed by hover to find.</summary>
+[Description("One ringed feature: its geometry kind and the centre of its bounds.")]
+internal sealed record LegendFindRingDto(
+    [property: Description("'point', 'curve' or 'area'.")] string Geometry,
+    [property: Description("Latitude of the centre of the ring's bounds.")] double Latitude,
+    [property: Description("Longitude of the centre of the ring's bounds.")] double Longitude);
+
+/// <summary>What hover to find rings now (D19, #1412).</summary>
+[Description("The features a hovered (or set_legend findRow) Legend row rings on the map.")]
+internal sealed record LegendFindDto(
+    [property: Description("The row's section id.")] string Section,
+    [property: Description("The row's label.")] string Row,
+    [property: Description("'features' when the row's drawn features are ringed; 'band' for a band of a colour or arrow ramp (S-102 depths, a weather field, S-111 speeds), whose area isn't ringed yet; 'none' when no drawn sub-layer has the row.")] string Kind,
+    [property: Description("How many drawn features in the map view match the row.")] int Matched,
+    [property: Description("How many are ringed: at most 100, top of the stack first.")] int Ringed,
+    [property: Description("The rings (an area of several parts gives one per part).")] IReadOnlyList<LegendFindRingDto> Rings)
+{
+    /// <summary>The DTO of a find.</summary>
+    public static LegendFindDto From(LegendFeatureFind find)
+    {
+        ArgumentNullException.ThrowIfNull(find);
+        return new LegendFindDto(
+            find.SectionId,
+            find.RowLabel,
+            find.Kind switch
+            {
+                LegendFindKind.Features => "features",
+                LegendFindKind.Band => "band",
+                _ => "none",
+            },
+            find.MatchCount,
+            find.RingedCount,
+            [.. find.Rings.Select(Ring)]);
+    }
+
+    private static LegendFindRingDto Ring(Tools.PickHighlightGeometry ring)
+    {
+        var (kind, positions) =
+            ring.ExteriorRing.Count > 0 ? ("area", ring.ExteriorRing)
+            : ring.Curves.Count > 0 ? ("curve", ring.Curves.SelectMany(c => c).ToList())
+            : ("point", (IReadOnlyList<EncDotNet.S100.DataModel.GeoPosition>)ring.Points);
+        var bounds = EncDotNet.S100.Collections.GeoBounds.FromPositions(positions);
+        return bounds is { } b
+            ? new LegendFindRingDto(kind, (b.South + b.North) / 2, b.CrossesAntimeridian ? EncDotNet.S100.Collections.GeoBounds.NormalizeLongitude(b.West + (b.LongitudeSpan / 2)) : (b.West + b.East) / 2)
+            : new LegendFindRingDto(kind, double.NaN, double.NaN);
+    }
+}
 
 /// <summary>What <see cref="SetLegendTool"/> leaves.</summary>
 [Description("The legend after set_legend: the tab's scope and what get_legend returns for it.")]
 internal sealed record SetLegendResult(
     [property: Description("The Legend tab's scope: 'in_view' or 'all_loaded'.")] string Scope,
-    [property: Description("The legend as get_legend returns it, listing the sections the tab's scope shows.")] LegendDto Legend);
+    [property: Description("The legend as get_legend returns it, listing the sections the tab's scope shows.")] LegendDto Legend,
+    [property: Description("What hover to find rings on the map now (a hovered row's, or findRow's); null when nothing is ringed. Call set_legend with no arguments to read it.")] LegendFindDto? Find);
 
 /// <summary>
 /// Changes the Legend tab (MCP <c>set_legend</c>, legends design note D12):
-/// opens or closes it, sets In view or All loaded, and expands or collapses a
-/// section. Replaces <c>set_map_legend</c> (#1408).
+/// opens or closes it, sets In view or All loaded, expands or collapses a
+/// section, and rings a row's features as hovering it does (#1412). Replaces
+/// <c>set_map_legend</c> (#1408).
 /// </summary>
 internal sealed class SetLegendTool
 {
@@ -212,9 +264,12 @@ internal sealed class SetLegendTool
     private readonly ViewModels.Legends.LegendViewModel _tab;
     private readonly Services.IViewerUiControllerAccessor _ui;
     private readonly IRouteEditInvoker _invoker;
+    private readonly LegendFindService _find;
 
-    public SetLegendTool(LegendService service, PositionLegendService position, ViewModels.Legends.LegendViewModel tab, Services.IViewerUiControllerAccessor ui, IRouteEditInvoker invoker)
+    public SetLegendTool(LegendService service, PositionLegendService position, ViewModels.Legends.LegendViewModel tab, Services.IViewerUiControllerAccessor ui, IRouteEditInvoker invoker, LegendFindService find)
     {
+        ArgumentNullException.ThrowIfNull(find);
+        _find = find;
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(position);
         ArgumentNullException.ThrowIfNull(tab);
@@ -241,6 +296,8 @@ internal sealed class SetLegendTool
             section = null;
         if (request.Expanded is not null && section is null)
             return ToolResult<SetLegendResult>.Err(new InvalidArgument("section", "expanded needs the section id to expand or collapse"));
+        if (request.FindRow is { Length: > 0 } && section is null)
+            return ToolResult<SetLegendResult>.Err(new InvalidArgument("section", "findRow needs the section id the row is in"));
 
         var known = await _invoker.InvokeAsync(() =>
         {
@@ -255,6 +312,8 @@ internal sealed class SetLegendTool
 
             if (request.InView is { } inView)
                 _tab.IsAllLoaded = !inView;
+            if (request.FindRow is { Length: 0 })
+                _find.Leave();
             return true;
         }).ConfigureAwait(false);
         if (!known)
@@ -280,9 +339,22 @@ internal sealed class SetLegendTool
             return _position.RefreshAsync();
         }).ConfigureAwait(false);
         await position.WaitAsync(ct).ConfigureAwait(false);
+        if (request.FindRow is { Length: > 0 } row)
+        {
+            var rowKnown = await _invoker.InvokeAsync(() =>
+                _service.Sections.First(s => string.Equals(s.Id, section, StringComparison.Ordinal)).Rows
+                    .Any(r => string.Equals(r.Label, row, StringComparison.Ordinal))
+                && _find.FindNow(section!, row) is not null).ConfigureAwait(false);
+            if (!rowKnown)
+            {
+                return ToolResult<SetLegendResult>.Err(new InvalidArgument(
+                    "findRow", $"section '{section}' has no row '{row}'; call get_legend for its rows"));
+            }
+        }
         var result = await _invoker.InvokeAsync(() => new SetLegendResult(
             _tab.IsAllLoaded ? "all_loaded" : "in_view",
-            GetLegendTool.ToDto(_service, _position.Current, _tab.IsAllLoaded))).ConfigureAwait(false);
+            GetLegendTool.ToDto(_service, _position.Current, _tab.IsAllLoaded),
+            _find.Current is { } found ? LegendFindDto.From(found) : null)).ConfigureAwait(false);
         return ToolResult<SetLegendResult>.Ok(result);
     }
 }
@@ -324,17 +396,21 @@ internal static class LegendMcpAdapter
             [Description("True for the tab's In view scope (products in the map view), false for All loaded; omit to leave it.")] bool? inView = null,
             [Description("A section id from get_legend (\"RouteCheck\", \"S-111\", \"weather.wave.height\") to expand or collapse; with open: true the tab also scrolls to it, switching to All loaded or clearing the filter if they hide it.")] string? section = null,
             [Description("True to expand the section, false to collapse it (remembered per section); needs section.")] bool? expanded = null,
+            [Description("A row label in the section (from get_legend) to ring its features drawn in the map view now, as hovering the row in the Legend tab does; \"\" clears the rings. Needs section.")] string? findRow = null,
             CancellationToken ct = default) =>
-            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetLegendRequest(open, inView, section, expanded), ct));
+            McpAdapterShared.DispatchAsync(() => inner.InvokeAsync(new SetLegendRequest(open, inView, section, expanded, findRow), ct));
         return McpServerTool.Create(del, new McpServerToolCreateOptions
         {
             Name = SetLegendTool.Name,
             Description =
-                "Changes the live viewer's Legend tab: opens or closes it, sets In view or All loaded, and expands or "
-                + "collapses a section. Every argument is optional; omitted ones are left as they are. While the tab is "
+                "Changes the live viewer's Legend tab: opens or closes it, sets In view or All loaded, expands or "
+                + "collapses a section, and rings a row's features on the map (findRow, as hovering the row does: up to 100 "
+                + "features drawn in the map view; a band of a colour or arrow ramp reports kind 'band' and rings nothing yet; "
+                + "the rings clear when the map moves). Every argument is optional; omitted ones are left as they are; with "
+                + "none it just reads the state, including what is ringed now. While the tab is "
                 + "shown the Check route map card hides (and the map's legend reserve drops to 0); the card shows the "
                 + "same 'RouteCheck' section while Check route is on. Returns the tab's scope and what get_legend returns "
-                + "for it. Replaces set_map_legend. Viewer-injected tool — mutates live state.",
+                + "for it, and what is ringed ('find'). Replaces set_map_legend. Viewer-injected tool — mutates live state.",
             SerializerOptions = McpAdapterShared.Options,
         });
     }

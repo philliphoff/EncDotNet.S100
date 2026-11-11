@@ -3,10 +3,10 @@ using System.ComponentModel;
 using System.Globalization;
 using EncDotNet.S100.Collections;
 using EncDotNet.S100.Core;
+using EncDotNet.S100.Datasets.Pipelines;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
 using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Pipelines;
-using EncDotNet.S100.Pipelines.Vector;
 using EncDotNet.S100.Viewer.Resources;
 using EncDotNet.S100.Viewer.ViewModels;
 
@@ -296,7 +296,7 @@ internal sealed class LegendService : IDisposable
     /// legend of its own (S-101, S-57 through the S-101 catalogue, S-131…):
     /// its section lists the symbols drawn in view (D7).
     /// </summary>
-    private static bool IsCatalogueProduct(VectorStackPayload vector) =>
+    internal static bool IsCatalogueProduct(VectorStackPayload vector) =>
         vector.Result.SymbolProvider is not null && vector.Result.SymbolTitleProvider is not null;
 
     /// <summary>The display scale (1:N) at the view's centre, or NaN before the first view.</summary>
@@ -489,6 +489,44 @@ internal sealed class LegendService : IDisposable
         return null;
     }
 
+    /// <summary>
+    /// The features a legend row describes that are drawn in the current map
+    /// view (#1412, D19): what hovering the row rings. Read from the stack's
+    /// display lists; nothing is portrayed again.
+    /// </summary>
+    /// <param name="sectionId">The row's section.</param>
+    /// <param name="rowLabel">The row's label.</param>
+    /// <param name="groupKey">The row's sub-layer key, or null for the first group with the label.</param>
+    /// <param name="maxRings">The most features to ring.</param>
+    /// <returns>Null when no section has that id.</returns>
+    internal LegendFeatureFind? FindFeatures(string sectionId, string rowLabel, string? groupKey = null, int maxRings = LegendFeatureFinder.MaxRings)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(sectionId);
+        ArgumentNullException.ThrowIfNull(rowLabel);
+        if (Sections.FirstOrDefault(s => string.Equals(s.Id, sectionId, StringComparison.Ordinal)) is not { } section)
+            return null;
+
+        var entries = new Dictionary<string, DatasetEntry>(StringComparer.Ordinal);
+        foreach (var entry in _datasets.Entries)
+            entries.TryAdd(entry.Id.Value, entry);
+        // The snapshot leases the processors while their feature lists are read.
+        using var snapshot = _loader.AcquireProcessors();
+        var processors = new Dictionary<string, IDatasetProcessor>(StringComparer.Ordinal);
+        foreach (var (entry, processor) in snapshot)
+            processors.TryAdd(entry.Id.Value, processor);
+
+        return LegendFeatureFinder.Find(
+            section,
+            rowLabel,
+            groupKey,
+            _loader.CurrentStackEntries,
+            id => !entries.TryGetValue(id, out var e) || e.IsVisible,
+            id => processors.GetValueOrDefault(id),
+            TimelineMapScope.ViewOf(_viewport?.Current),
+            ViewScale(),
+            maxRings);
+    }
+
     private static string? RowLabelOf(object payload, PickHit hit, double? latitude) => payload switch
     {
         CoverageStackPayload { SubLayer: GridCoverageSubLayer { Coverage.ColorScheme: { } scheme } } =>
@@ -503,12 +541,7 @@ internal sealed class LegendService : IDisposable
         _ => null,
     };
 
-    // A vector layer's row for a feature it draws, when the feature's
-    // geometry fits the row (a point a symbol, a curve a line, a surface a
-    // swatch or area): the layer's only row, or the line or area row named
-    // like the feature's class ("Cold front"). A symbol row needs more than a
-    // name: a tropical cyclone names every part after the storm's class, so
-    // its forecast points would ring the wrong symbol.
+    // A vector layer's row for a feature it draws.
     private static string? VectorRowLabel(VectorSubLayer subLayer, PickHit hit)
     {
         if (subLayer.Legend is not { Count: > 0 } rows)
@@ -520,17 +553,30 @@ internal sealed class LegendService : IDisposable
             return null;
         // Products that don't report the geometry (the GML ones) show it by
         // what they draw: a fill is a surface, a lone line a curve.
-        var geometry = hit.Geometry != Features.S100GeometryType.None ? hit.Geometry
-            : drawn.Any(d => d is AreaInstruction) ? Features.S100GeometryType.Surface
-            : drawn.Any(d => d is LineInstruction) ? Features.S100GeometryType.Curve
-            : Features.S100GeometryType.Point;
-        var fitting = rows.Where(r => Fits(LegendRows.KindOf(r), geometry)).ToList();
+        var geometry = hit.Geometry != Features.S100GeometryType.None ? hit.Geometry : DrawnShape.Of(drawn).Geometry;
+        return VectorRowLabel(rows, new LegendFeatureFacts(geometry, hit.FeatureType, hit.FeatureTypeName));
+    }
+
+    /// <summary>
+    /// A vector layer's row for a feature it draws, when the feature's
+    /// geometry fits the row (a point a symbol, a curve a line, a surface a
+    /// swatch or area): the layer's only row, or the line or area row named
+    /// like the feature's class ("Cold front"). A symbol row needs more than a
+    /// name: a tropical cyclone names every part after the storm's class, so
+    /// its forecast points would ring the wrong symbol. Shared by a pick's
+    /// <b>In legend</b> row (#1410) and the features a hovered row rings (#1412).
+    /// </summary>
+    /// <param name="rows">The layer's legend rows.</param>
+    /// <param name="feature">The feature's geometry and class.</param>
+    internal static string? VectorRowLabel(IReadOnlyList<LegendEntry> rows, LegendFeatureFacts feature)
+    {
+        var fitting = rows.Where(r => Fits(LegendRows.KindOf(r), feature.Geometry)).ToList();
         if (rows.Count == 1)
             return fitting.Count == 1 ? fitting[0].Label : null;
         var named = fitting
             .Where(r => LegendRows.KindOf(r) != LegendRowKind.Symbol
-                && (string.Equals(r.Label, hit.FeatureTypeName, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(r.Label, hit.FeatureType, StringComparison.OrdinalIgnoreCase)))
+                && (string.Equals(r.Label, feature.FeatureTypeName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(r.Label, feature.FeatureType, StringComparison.OrdinalIgnoreCase)))
             .ToList();
         return named.Count == 1 ? named[0].Label : null;
     }
@@ -558,7 +604,7 @@ internal sealed class LegendService : IDisposable
         return null;
     }
 
-    private static SubLayerLegend? LegendOf(LayerStackEntry item) => item.Item.Payload switch
+    internal static SubLayerLegend? LegendOf(LayerStackEntry item) => item.Item.Payload switch
     {
         // Every coverage kind can carry rows (#1406): S-102 grids, S-104
         // isolines and stations, S-111 arrows and stations, weather fills.
@@ -644,7 +690,7 @@ internal sealed class LegendService : IDisposable
             _viewport.ViewportChanged -= OnViewportChanged;
     }
 
-    private sealed record SubLayerLegend(string? Spec, string Key, string Name, IReadOnlyList<LegendEntry> Rows, string? Caption, string? Title);
+    internal sealed record SubLayerLegend(string? Spec, string Key, string Name, IReadOnlyList<LegendEntry> Rows, string? Caption, string? Title);
 
     private sealed record SectionDataset(string Id, DatasetEntry? Entry);
 

@@ -55,6 +55,29 @@ internal sealed class CatalogueSymbolKey
         if (payload.Result.SymbolProvider is null)
             return;
 
+        foreach (var symbol in Drawn(payload, suppressed, view, scaleDenominator))
+        {
+            if (!_tallies.TryGetValue(symbol.Name, out var tally))
+                _tallies.Add(symbol.Name, tally = new Tally(payload.Result));
+            tally.Count++;
+        }
+    }
+
+    /// <summary>
+    /// The point symbols <paramref name="payload"/> draws inside
+    /// <paramref name="view"/> at <paramref name="scaleDenominator"/>, as the
+    /// key counts them: what a hovered key row rings (#1412).
+    /// </summary>
+    /// <param name="payload">A vector stack entry's payload.</param>
+    /// <param name="suppressed">The features an S-98 rule removed from the entry, or null.</param>
+    /// <param name="view">The map view, or null for everywhere.</param>
+    /// <param name="scaleDenominator">The display scale (1:N), or NaN to ignore SCAMIN.</param>
+    internal static IEnumerable<DrawnSymbol> Drawn(VectorStackPayload payload, IReadOnlySet<string>? suppressed, GeoBounds? view, double scaleDenominator)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+        if (payload.Result.SymbolProvider is null)
+            yield break;
+
         foreach (var symbol in Index.GetValue(payload.SubLayer, _ => Build(payload)))
         {
             if (suppressed is not null && suppressed.Contains(symbol.FeatureReference))
@@ -67,10 +90,7 @@ internal sealed class CatalogueSymbolKey
             }
             if (view is { } v && !v.Intersects(symbol.Bounds))
                 continue;
-
-            if (!_tallies.TryGetValue(symbol.Name, out var tally))
-                _tallies.Add(symbol.Name, tally = new Tally(payload.Result));
-            tally.Count++;
+            yield return symbol;
         }
     }
 
@@ -141,7 +161,7 @@ internal sealed class CatalogueSymbolKey
                 continue;
 
             var scaleMinimum = cap is { } c ? Math.Min(point.ScaleMinimum ?? double.MaxValue, c) : point.ScaleMinimum;
-            symbols.Add(new DrawnSymbol(name, point.FeatureReference, box, scaleMinimum, point.ScaleMaximum));
+            symbols.Add(new DrawnSymbol(name, point.FeatureReference, box, scaleMinimum, point.ScaleMaximum, point.CoordinateOverride));
         }
 
         return symbols;
@@ -157,7 +177,14 @@ internal sealed class CatalogueSymbolKey
         return GeoBounds.FromPositions(positions);
     }
 
-    private sealed record DrawnSymbol(string Name, string FeatureReference, GeoBounds Bounds, double? ScaleMinimum, double? ScaleMaximum);
+    /// <summary>A point symbol a display list draws.</summary>
+    /// <param name="Name">The symbol name (<c>"BOYCAN01"</c>).</param>
+    /// <param name="FeatureReference">The feature that draws it.</param>
+    /// <param name="Bounds">The feature's footprint, or the symbol's position.</param>
+    /// <param name="ScaleMinimum">The SCAMIN it draws to, with the out-of-band cap.</param>
+    /// <param name="ScaleMaximum">The SCAMAX it draws from.</param>
+    /// <param name="At">Where the symbol is placed when not on the feature's own geometry.</param>
+    internal sealed record DrawnSymbol(string Name, string FeatureReference, GeoBounds Bounds, double? ScaleMinimum, double? ScaleMaximum, GeoPosition? At);
 
     private sealed class Tally(VectorPortrayalResult result)
     {

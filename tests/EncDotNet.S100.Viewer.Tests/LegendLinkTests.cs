@@ -342,7 +342,8 @@ public sealed class LegendLinkTests : IDisposable
         using var legendVm = new LegendViewModel(
             service,
             new ClockViewTime(new FakeTimeProvider(new DateTimeOffset(2026, 11, 10, 14, 20, 0, TimeSpan.Zero))),
-            new LegendServiceTimeFormat());
+            new LegendServiceTimeFormat(),
+            find: null);
         var report = scene.Report();
         var pickTab = new Tab { Id = ShellLayoutViewModel.PickReportTabId, Order = 10, Title = "Object information", ViewModel = report };
         var legendTab = new Tab { Id = ShellLayoutViewModel.LegendTabId, Order = 20, Title = "Legend", ViewModel = legendVm };
