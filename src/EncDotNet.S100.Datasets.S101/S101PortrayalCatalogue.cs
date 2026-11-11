@@ -431,6 +431,7 @@ public sealed class S101PortrayalCatalogue : IVectorPortrayalCatalogue
         {
             Name = symbolName,
             SvgContent = svgContent,
+            Title = catalogItem.Description.Summary,
         };
     }
 

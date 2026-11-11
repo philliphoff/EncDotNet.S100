@@ -8126,6 +8126,30 @@
     <value>AML provenance</value>
     <comment>Accessible name of the AML provenance strip in Object Information (#1372)</comment>
   </data>
+  <data name="Legend_LibrarySpec" xml:space="preserve">
+    <value>Library</value>
+  </data>
+  <data name="Legend_LibraryTitle" xml:space="preserve">
+    <value>Coverage outlines</value>
+  </data>
+  <data name="Legend_LibraryOutlinedFormat" xml:space="preserve">
+    <value>{0} outlined</value>
+  </data>
+  <data name="Legend_LibraryOutlinedOneFormat" xml:space="preserve">
+    <value>1 outlined</value>
+  </data>
+  <data name="Legend_LibrarySelected" xml:space="preserve">
+    <value>Selected</value>
+  </data>
+  <data name="Legend_ProductS101" xml:space="preserve">
+    <value>Electronic navigational chart</value>
+  </data>
+  <data name="Legend_CatalogueSomeFormat" xml:space="preserve">
+    <value>{0} of {1} symbols drawn in view</value>
+  </data>
+  <data name="Legend_CatalogueAll" xml:space="preserve">
+    <value>Symbols drawn in view</value>
+  </data>
   <data name="Legend_SourceCountFormat" xml:space="preserve">
     <value>{0} datasets</value>
     <comment>Legend section source summary when several datasets make the section; {0} is the count</comment>

@@ -1007,6 +1007,7 @@ public sealed class S101DatasetProcessor : IDatasetProcessor, IDepthAdjustablePr
             SymbolScale = context?.SymbolScale ?? 1.0,
             TextScale = context?.TextScale ?? 1.0,
             SymbolProvider = name => prewarm.ResolveSymbolSvg(name),
+            SymbolTitleProvider = name => prewarm.ResolveSymbolTitle(name),
             AreaFillProvider = name => prewarm.ResolveAreaFill(name),
             LineStyleProvider = name => prewarm.ResolveLineStyle(name),
             LayerNames = new[] { $"{LayerKeyPrefix}.areas", $"{LayerKeyPrefix}.linework" },

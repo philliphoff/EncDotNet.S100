@@ -172,6 +172,22 @@ public partial class MainWindow : ShadUI.Window
 
         // The Time HUD and the dock follow the map's width (#712 F5).
         MapArea.SizeChanged += (_, e) => _viewModel.Layout.MapWidth = e.NewSize.Width;
+
+        // Legends D9: in a narrow window the right dock opens folded; its edge
+        // tab shows it over the map's right edge, and Escape or a map click
+        // folds it again.
+        _viewModel.Layout.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ShellLayoutViewModel.IsRightDockOverlaid))
+                ApplyRightDockOverlay();
+        };
+        AddHandler(KeyDownEvent, (_, e) =>
+        {
+            if (e.Key == Key.Escape && _viewModel.Layout.FoldOverlaidRightDock())
+                e.Handled = true;
+        }, RoutingStrategies.Tunnel);
+        MapArea.AddHandler(PointerPressedEvent, (_, _) => _viewModel.Layout.FoldOverlaidRightDock(),
+            RoutingStrategies.Tunnel, handledEventsToo: true);
         SizeChanged += (_, e) => _viewModel.Layout.WindowWidth = e.NewSize.Width;
 
         // Hand the loader a map host now that the Mapsui control exists, and
@@ -264,6 +280,8 @@ public partial class MainWindow : ShadUI.Window
             _extentIndicatorController = null;
             _amlOutlineController?.Dispose();
             _amlOutlineController = null;
+            if (_libraryCoverageController is not null)
+                App.Services.GetService<EncDotNet.S100.Viewer.Services.Legends.LegendService>()?.RemoveSource(_libraryCoverageController);
             _libraryCoverageController?.Dispose();
             _libraryCoverageController = null;
             _adjustedAreaBoundary?.Dispose();
@@ -543,6 +561,9 @@ public partial class MainWindow : ShadUI.Window
                 EncDotNet.S100.Viewer.Tools.IMeasureOverlayAppearanceProvider>(),
             () => App.Services.GetRequiredService<MapCapabilityAccessor<IMapViewportController>>().Current,
             UiThread.RunOrPost);
+        // Legends D8: its outline styles show as the Legend tab's Library coverage section.
+        App.Services.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>()
+            .AddSource(_libraryCoverageController);
 
         // Chart-wide water level adjustment (#1132): the edge of the adjusted area.
         _adjustedAreaBoundary = new EncDotNet.S100.Viewer.Services.Depth.AdjustedAreaBoundaryController(
@@ -1731,6 +1752,27 @@ public partial class MainWindow : ShadUI.Window
     {
         var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(sourcePath));
         return ExchangeSetDetection.IsS57CataloguePath(full) ? Path.GetDirectoryName(full)! : full;
+    }
+
+    /// <summary>
+    /// Moves the right dock over the map's right edge while it's shown from a
+    /// narrow fold (legends D9), so the map keeps its width; back into its
+    /// column otherwise.
+    /// </summary>
+    private void ApplyRightDockOverlay()
+    {
+        var overlaid = _viewModel.Layout.IsRightDockOverlaid;
+        Avalonia.Controls.Grid.SetColumn(RightDockPanel, overlaid ? 2 : 4);
+        RightDockPanel.HorizontalAlignment = overlaid
+            ? Avalonia.Layout.HorizontalAlignment.Right
+            : Avalonia.Layout.HorizontalAlignment.Stretch;
+        RightDockPanel.Width = overlaid
+            ? Math.Max(
+                ShellLayoutViewModel.RightDockMinimumWidth,
+                Math.Min(_viewModel.Layout.RightDockSavedWidth ?? ShellLayoutViewModel.RightDockDefaultWidth,
+                    MapArea.Bounds.Width - ShellLayoutViewModel.RightDockOverlayMapMargin))
+            : double.NaN;
+        RightDockPanel.ZIndex = overlaid ? 100 : 0;
     }
 
     private void OnTimelineKeyDown(object? sender, KeyEventArgs e)
