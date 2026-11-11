@@ -43,6 +43,10 @@ internal sealed class TestLibrary
         Open = new OpenLibraryItemsWorkflow(loader, Names);
         Download = new DownloadLibraryItemsWorkflow(library, downloader, loader, Open, Notifications);
         Rows = new LibraryRows(library, loader, downloader, Download, time ?? TimeProvider.System, timeFormat ?? new UtcFormat());
+        MarkFinal = new MarkFinalStormsWorkflow(library, loader, downloader, Open, time ?? TimeProvider.System);
+        LoadLatest = new LoadLatestWeatherRunWorkflow(library, downloader, Rows, Download, Open, MarkFinal);
+        PinRun = new PinWeatherRunWorkflow(library, downloader);
+        Storms = new StormAdvisoryWatch(library, MarkFinal, LoadLatest, Notifications);
         Routes = new RoutesService(new ClockViewTime(TimeProvider.System));
         OpenAsRoute = new OpenLibraryItemAsRouteWorkflow(Open, new LibraryRouteOpener(
             loader,
@@ -70,6 +74,18 @@ internal sealed class TestLibrary
 
     public OpenLibraryItemAsRouteWorkflow OpenAsRoute { get; }
 
+    public MarkFinalStormsWorkflow MarkFinal { get; }
+
+    public LoadLatestWeatherRunWorkflow LoadLatest { get; }
+
+    public PinWeatherRunWorkflow PinRun { get; }
+
+    public StormAdvisoryWatch Storms { get; }
+
+    /// <summary>A weather run monitor over these workflows, on <paramref name="time"/>'s minute clock.</summary>
+    public WeatherRunMonitor Monitor(TimeProvider time, Action<Action> dispatch) =>
+        new(_library, Rows, LoadLatest, Storms, time, dispatch);
+
     /// <summary>The routes Open as route opens items into.</summary>
     public RoutesService Routes { get; }
 
@@ -91,7 +107,7 @@ internal sealed class TestLibrary
         ITimeFormatProvider? timeFormat,
         LibrarySync? sync) =>
         new TestLibrary(library, loader, downloader, time, timeFormat, notifications)
-            .CreatePanel(importer, dispatch, coalesce, time, feedHealth, notifications, viewTime, timeFormat, sync);
+            .CreatePanel(importer, dispatch, coalesce, time, feedHealth, viewTime, timeFormat, sync);
 
     /// <summary>A Library panel over these rows and workflows.</summary>
     public LibraryPanelViewModel CreatePanel(
@@ -100,12 +116,11 @@ internal sealed class TestLibrary
         Action<Action> coalesce,
         TimeProvider time,
         Func<CollectionSource, FeedHealth?>? feedHealth,
-        INotificationService? notifications,
         GlobalTimeService? viewTime,
         ITimeFormatProvider? timeFormat,
         LibrarySync? sync) =>
-        new(_library, importer, _loader, _downloader, Rows, Open, Download, OpenAsRoute,
-            dispatch, coalesce, time, feedHealth, notifications, viewTime, timeFormat, sync);
+        new(_library, importer, _loader, _downloader, Rows, Open, Download, OpenAsRoute, LoadLatest, PinRun,
+            dispatch, coalesce, time, feedHealth, viewTime, timeFormat, sync);
 
     private sealed class UtcFormat : ITimeFormatProvider
     {

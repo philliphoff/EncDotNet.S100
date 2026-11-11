@@ -83,6 +83,10 @@ internal sealed class LibraryRows
     /// <param name="item">The indexed item.</param>
     public LibraryDownloadItemStatus? StatusOf(CollectionItem item) => _downloader.StatusOf(item);
 
+    /// <summary>True when <paramref name="item"/>'s data (its downloaded copy, for an online item) is open now.</summary>
+    /// <param name="item">The indexed item.</param>
+    public bool IsOpen(CollectionItem item) => _loader.StateOf(_downloader.Localize(item)) == LibraryLoadState.Loaded;
+
     /// <summary>A row for <paramref name="item"/>, named with the collection its source is in.</summary>
     /// <param name="item">The indexed item.</param>
     /// <param name="source">The source it was indexed from.</param>

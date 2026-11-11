@@ -32,7 +32,7 @@ public sealed class LibraryEditToolsTests : IDisposable
         _library = _context.CreateService(CollectionIndexer.CreateDefault(feeds: [new RemoteIndexer()]));
         _library.Initialize();
         _workflows = new TestLibrary(_library, _loader, _downloader);
-        _panel = _workflows.CreatePanel(new NoImporter(), action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, notifications: null, viewTime: null, timeFormat: null, sync: null);
+        _panel = _workflows.CreatePanel(new NoImporter(), action => action(), coalesce: action => action(), time: TimeProvider.System, feedHealth: null, viewTime: null, timeFormat: null, sync: null);
         var reader = Reader();
         _editor = new ViewerLibraryEditor(
             _library,
