@@ -1773,7 +1773,29 @@ public partial class MainWindow : ShadUI.Window
                     MapArea.Bounds.Width - ShellLayoutViewModel.RightDockOverlayMapMargin))
             : double.NaN;
         RightDockPanel.ZIndex = overlaid ? 100 : 0;
+
+        // Docked, the panel shows the window behind it; over the map it needs
+        // an opaque surface of its own.
+        _rightDockOverlayBackground?.Dispose();
+        _rightDockOverlayBackground = null;
+        if (overlaid)
+        {
+            _rightDockOverlayBackground = RightDockPanel.Bind(
+                BackgroundProperty,
+                Avalonia.Controls.ResourceNodeExtensions.GetResourceObservable(this, "BackgroundColor", static value => value switch
+                {
+                    Color c => new Avalonia.Media.Immutable.ImmutableSolidColorBrush(Color.FromRgb(c.R, c.G, c.B)),
+                    ISolidColorBrush b => new Avalonia.Media.Immutable.ImmutableSolidColorBrush(Color.FromRgb(b.Color.R, b.Color.G, b.Color.B)),
+                    _ => Brushes.White,
+                }));
+        }
+        else
+        {
+            RightDockPanel.ClearValue(BackgroundProperty);
+        }
     }
+
+    private IDisposable? _rightDockOverlayBackground;
 
     private void OnTimelineKeyDown(object? sender, KeyEventArgs e)
     {
