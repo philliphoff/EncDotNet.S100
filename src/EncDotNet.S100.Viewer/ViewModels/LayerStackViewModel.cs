@@ -1,8 +1,6 @@
 using System.Collections.ObjectModel;
-using Avalonia.Media;
 using Avalonia.Threading;
 using EncDotNet.S100.Datasets.Pipelines.Interoperability;
-using EncDotNet.S100.Datasets.Pipelines.Portrayal;
 using EncDotNet.S100.Interoperability;
 using EncDotNet.S100.Renderers.Mapsui.DynamicSources;
 using EncDotNet.S100.Viewer.Resources;
@@ -88,13 +86,15 @@ internal sealed class LayerStackViewModel : ViewModelBase
     public string ActiveVsVisibilityHelp => Strings.LayerStack_VisibilityVsActive_HelpText;
 
     private readonly Func<string, string?>? _inactiveReason;
+    private readonly Action<string>? _showLegend;
 
     public LayerStackViewModel(
         IDatasetLoaderService loader,
         IS100DynamicSourceRegistry? dynamicSources,
         ITimeFormatProvider? timeFormat,
         Services.DisplayCombinations.DisplayCombinationService? displayCombinations,
-        DatasetsViewModel? datasets)
+        DatasetsViewModel? datasets,
+        LegendService? legend)
     {
         ArgumentNullException.ThrowIfNull(loader);
         _loader = loader;
@@ -108,6 +108,8 @@ internal sealed class LayerStackViewModel : ViewModelBase
         }
         _dynamicSources = dynamicSources;
         _timeFormat = timeFormat;
+        if (legend is not null)
+            _showLegend = id => legend.Show(id);
         _ = _timeFormat; // reserved for PR-L4 per-entry timestamp display
         _loader.LayerStackChanged += OnLayerStackChanged;
         if (_dynamicSources is not null)
@@ -180,7 +182,7 @@ internal sealed class LayerStackViewModel : ViewModelBase
             var datasetChildren = planeEntriesList
                 .OrderByDescending(e => e.WithinPlanePriority)
                 .ThenBy(e => e.SourceDatasetId, StringComparer.Ordinal)
-                .Select(e => (ViewModelBase)new LayerStackEntryViewModel(_loader, e, _inactiveReason));
+                .Select(e => (ViewModelBase)new LayerStackEntryViewModel(_loader, e, _inactiveReason, _showLegend));
 
             // Dynamic rows: placed below the dataset rows in the panel.
             var dynamicChildren = dynamicForPlane
@@ -352,44 +354,53 @@ internal sealed class LayerStackEntryViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// The legend of a sub-layer that carries one, row by row: the colour
-    /// bands of a weather fill (<see cref="GridCoverageSubLayer.Legend"/>,
-    /// #1072), or the symbol, line and area rows of a vector overlay
-    /// (<see cref="VectorSubLayer.Legend"/>, #1293); empty otherwise. The
-    /// colours are those of the palette the sub-layer was last drawn in.
+    /// The id of the Legend tab section that holds this entry's legend
+    /// (<see cref="LegendSection.Id"/>), or null when its sub-layer carries
+    /// none. The entry shows a one-line <b>Legend</b> link in place of the
+    /// rows (legends design note D8).
     /// </summary>
-    public IReadOnlyList<LayerStackLegendItemViewModel> Legend { get; }
+    public string? LegendSectionId { get; }
 
-    /// <summary>Whether the entry shows a legend.</summary>
-    public bool HasLegend => Legend.Count > 0;
+    /// <summary>Whether the entry shows the <b>Legend</b> link.</summary>
+    public bool HasLegend => LegendSectionId is not null && _showLegend is not null;
 
-    /// <summary>
-    /// The legend's accessible name, e.g. "Legend of Wave height: gfswave.grib2,
-    /// 15 bands" for a colour fill, or "Legend of Fronts: codsus_hr.txt, 5
-    /// items" when it has symbol or line rows, from the sub-layer's name.
-    /// </summary>
-    public string LegendName => string.Format(
+    /// <summary>The link's accessible name, "Show the legend of Wave height: gfswave.grib2".</summary>
+    public string LegendLinkName => string.Format(
         System.Globalization.CultureInfo.CurrentCulture,
-        Legend.All(row => row.IsSwatch) ? Strings.LayerStack_LegendNameFormat : Strings.LayerStack_LegendRowsNameFormat,
+        Strings.LayerStack_LegendLinkNameFormat,
         Entry.Item.Payload switch
         {
             CoverageStackPayload coverage => coverage.SubLayer.LayerName,
             VectorStackPayload vector => vector.SubLayer.LayerName,
             _ => DatasetLabel,
-        },
-        Legend.Count);
+        });
 
+    /// <summary>Opens the Legend tab at this entry's section.</summary>
+    public CommunityToolkit.Mvvm.Input.IRelayCommand ShowLegendCommand { get; }
+
+    private readonly Action<string>? _showLegend;
+
+    /// <summary>Creates the row of one layer stack entry.</summary>
+    /// <param name="loader">Reads and sets the entry's Active state.</param>
+    /// <param name="entry">The entry.</param>
+    /// <param name="inactiveReason">Why a dataset is inactive ("Not in Pilotage"); null for none.</param>
+    /// <param name="showLegend">Opens the Legend tab at a section id; null where there is no Legend tab.</param>
     public LayerStackEntryViewModel(
         IDatasetLoaderService loader,
         LayerStackEntry entry,
-        Func<string, string?>? inactiveReason)
+        Func<string, string?>? inactiveReason,
+        Action<string>? showLegend)
     {
         ArgumentNullException.ThrowIfNull(loader);
         ArgumentNullException.ThrowIfNull(entry);
         _loader = loader;
         Entry = entry;
-        Legend = LegendOf(entry);
+        LegendSectionId = LegendService.SectionIdOf(entry);
         _inactiveReason = inactiveReason;
+        _showLegend = showLegend;
+        ShowLegendCommand = new CommunityToolkit.Mvvm.Input.RelayCommand(
+            () => _showLegend!(LegendSectionId!),
+            () => HasLegend);
     }
 
     private readonly Func<string, string?>? _inactiveReason;
@@ -400,87 +411,4 @@ internal sealed class LayerStackEntryViewModel : ViewModelBase
     /// </summary>
     public string ActiveTooltip =>
         _inactiveReason?.Invoke(Entry.SourceDatasetId) ?? Strings.LayerStack_ActiveTooltip;
-
-    private static IReadOnlyList<LayerStackLegendItemViewModel> LegendOf(LayerStackEntry entry)
-    {
-        var legend = entry.Item.Payload switch
-        {
-            CoverageStackPayload { SubLayer: GridCoverageSubLayer grid } => grid.Legend,
-            VectorStackPayload vector => vector.SubLayer.Legend,
-            _ => null,
-        };
-        return legend is { Count: > 0 }
-            ? legend.Select(e => new LayerStackLegendItemViewModel(e)).ToArray()
-            : [];
-    }
-}
-
-/// <summary>
-/// One row of a layer stack entry's legend: a glyph and its label. A plain
-/// colour band shows as a swatch (<see cref="Swatch"/>); an outlined area, a
-/// symbol or a line sample as a picture drawn by
-/// <see cref="Renderers.Skia.LegendGlyphRenderer"/> (<see cref="Glyph"/>).
-/// </summary>
-internal sealed class LayerStackLegendItemViewModel : ViewModelBase
-{
-    /// <summary>The device scale glyphs are drawn at, so they stay sharp on a high-density display.</summary>
-    private const float GlyphDeviceScale = 2f;
-
-    private readonly LegendEntry _entry;
-    private Avalonia.Media.Imaging.Bitmap? _glyph;
-
-    /// <summary>Creates a legend row.</summary>
-    /// <param name="entry">The legend row of the sub-layer.</param>
-    public LayerStackLegendItemViewModel(LegendEntry entry)
-    {
-        ArgumentNullException.ThrowIfNull(entry);
-        ArgumentNullException.ThrowIfNull(entry.Label);
-        _entry = entry;
-        Label = entry.Label;
-        Kind = LegendRows.KindOf(entry);
-        Color = entry is SwatchLegendEntry swatch ? swatch.Color : null;
-        Swatch = Color is not null && Avalonia.Media.Color.TryParse(Color, out var parsed)
-            ? new Avalonia.Media.Immutable.ImmutableSolidColorBrush(parsed)
-            : Brushes.Transparent;
-        (GlyphWidth, GlyphHeight) = Renderers.Skia.LegendGlyphRenderer.SizeOf(entry);
-    }
-
-    /// <summary>What the row's glyph shows.</summary>
-    public LegendRowKind Kind { get; }
-
-    /// <summary>The swatch colour as a hex string, or <see langword="null"/> for a symbol or line row.</summary>
-    public string? Color { get; }
-
-    /// <summary>The row label; also the row's accessible name.</summary>
-    public string Label { get; }
-
-    /// <summary>The swatch brush; transparent for a row without a colour.</summary>
-    public IBrush Swatch { get; }
-
-    /// <summary>Whether the row is a plain colour swatch, drawn as a bordered box.</summary>
-    public bool IsSwatch => Kind == LegendRowKind.Swatch;
-
-    /// <summary>Whether the row shows a drawn glyph: an area, a symbol or a line sample.</summary>
-    public bool HasGlyph => !IsSwatch;
-
-    /// <summary>The glyph's width in logical pixels.</summary>
-    public int GlyphWidth { get; }
-
-    /// <summary>The glyph's height in logical pixels.</summary>
-    public int GlyphHeight { get; }
-
-    /// <summary>
-    /// The glyph picture of an area, symbol or line row, drawn on first use;
-    /// <see langword="null"/> for a plain swatch.
-    /// </summary>
-    public Avalonia.Media.IImage? Glyph => IsSwatch ? null : _glyph ??= RenderGlyph(_entry);
-
-    private static Avalonia.Media.Imaging.Bitmap RenderGlyph(LegendEntry entry)
-    {
-        using var bitmap = Renderers.Skia.LegendGlyphRenderer.Render(entry, GlyphDeviceScale);
-        using var image = SkiaSharp.SKImage.FromBitmap(bitmap);
-        using var png = image.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
-        using var stream = new MemoryStream(png.ToArray());
-        return new Avalonia.Media.Imaging.Bitmap(stream);
-    }
 }

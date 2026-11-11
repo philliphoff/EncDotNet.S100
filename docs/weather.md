@@ -201,7 +201,9 @@ made from its data. The Library can fetch some of these sources for you.
    files, or **All files** for a GRIB2 file or bulletin with no extension.
 
    The Datasets panel lists it, and the Layer stack lists the layers it
-   draws; the wave height fill's entry shows a colour legend.
+   draws. The wave height fill's colour legend is in the **Legend** tab of
+   the right dock: choose **View** > **Legend**, or **Legend** under the
+   fill's Layer stack entry.
 2. Open **Display controls**. While a weather dataset is loaded (a GRIB2 or
    NetCDF grid, a tropical cyclone or a surface analysis), its **Weather**
    section has nine switches for every weather grid, and three for tropical
@@ -241,7 +243,7 @@ station and mesh datasets don't hide model currents.
 Restricted visibility is drawn in grey in the three bands marine forecasts
 use: very poor (fog, under 1000 m), poor (1000 m to 2 nautical miles) and
 moderate (2 to 5 nautical miles). Good visibility isn't drawn, so most of
-the chart stays clear. Its entry in the Layer stack shows the legend.
+the chart stays clear. Its legend is in the Legend tab.
 
 Freezing spray (vessel icing) is worked out from the 10 m wind, the 2 m air
 temperature and the sea temperature with Overland's icing predictor, the
@@ -269,7 +271,7 @@ CAPE is common. Read it with the precipitation and the official forecast.
 Cloud cover is a light grey veil, drawn more faintly than the other fills,
 in three bands: partly cloudy (25 to 50 %), mostly cloudy (50 to 75 %) and
 cloudy (75 % and more). Precipitation, thunderstorm risk and cloud cover are
-off until you switch them on, and each shows its legend in the Layer stack.
+off until you switch them on, and each has its legend in the Legend tab.
 
 The wave height, sea surface temperature, visibility, freezing spray,
 precipitation, thunderstorm risk and cloud cover fills are clipped to water
@@ -314,8 +316,8 @@ one plum-grey storm ink, so it doesn't look like a chart colour or a warning:
   UTC setting.
 
 In the **Layer stack**, a storm has two entries: its lines and symbols under
-**Other chart overlays**, and its cone and radii under **On-demand surface**,
-each with a legend. Pick any part of the storm to see it in **Object
+**Other chart overlays**, and its cone and radii under **On-demand surface**.
+Both legends are in one **Tropical cyclones** section of the Legend tab. Pick any part of the storm to see it in **Object
 information**: the advisory, its issue time and when the next is due, the
 position, wind, pressure and movement, the part you picked, and the radii in
 each quadrant.
@@ -439,7 +441,8 @@ a stationary front each symbol faces, so the triangles go on the left of the
 line as WPC lists its points and the semicircles on the right.
 
 The Layer stack lists the analysis on **Other chart overlays**, above the
-isobars, with a legend of the five line types and the pressure centre. Pick
+isobars. Its Legend tab section shows the five line types and the pressure
+centre. Pick
 a front or centre to see it in Object information: "Weather analysis, not
 for navigation.", then the analysis time, when the next one is due (3 hours
 later), its intensity if the bulletin gives one, and the bulletin's own

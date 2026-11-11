@@ -73,13 +73,13 @@
     <value>{0}</value>
     <comment>{0} = number of layer entries in this S-98 display plane.</comment>
   </data>
-  <data name="LayerStack_LegendNameFormat" xml:space="preserve">
-    <value>Legend of {0}, {1} bands</value>
-    <comment>Accessible name of a colour fill's legend in the Layer Stack (#1072). {0} is the layer name, e.g. "Wave height: gfswave.grib2"; {1} the number of colour bands.</comment>
+  <data name="LayerStack_LegendLink" xml:space="preserve">
+    <value>Legend</value>
+    <comment>One-line link under a Layer Stack entry whose layer has a legend; opens the Legend tab at its section (legends D8)</comment>
   </data>
-  <data name="LayerStack_LegendRowsNameFormat" xml:space="preserve">
-    <value>Legend of {0}, {1} items</value>
-    <comment>Accessible name of a Layer Stack legend with symbol or line rows (#1293), e.g. a storm's symbols or a surface analysis's fronts. {0} is the layer name; {1} the number of rows.</comment>
+  <data name="LayerStack_LegendLinkNameFormat" xml:space="preserve">
+    <value>Show the legend of {0}</value>
+    <comment>Accessible name and tooltip of the Layer Stack's Legend link; {0} is the layer name, e.g. "Wave height: gfswave.grib2"</comment>
   </data>
   <data name="LayerStack_PriorityFormat" xml:space="preserve">
     <value>#{0}</value>
@@ -899,7 +899,7 @@
 
   <!-- Pick (Object Information) panel -->
   <data name="Pick_PanelTitle" xml:space="preserve">
-    <value>OBJECT INFORMATION</value>
+    <value>Object information</value>
   </data>
   <data name="PickReport_EmptyTitle" xml:space="preserve">
     <value>No feature picked</value>
@@ -6190,11 +6190,9 @@
   <data name="Tooltip_CheckLowConfidence" xml:space="preserve">
     <value>Lower confidence: charted depth from S-101, or datums that can't be confirmed to agree. The tint still shows the clearance.</value>
   </data>
-  <data name="Dock_ObjectInformationEdge" xml:space="preserve">
-    <value>OBJECT INFORMATION</value>
-  </data>
-  <data name="Tooltip_ObjectInformationEdge" xml:space="preserve">
-    <value>Show Object Information</value>
+  <data name="Tooltip_ShowDockTabFormat" xml:space="preserve">
+    <value>Show {0}</value>
+    <comment>Tooltip and name of the folded right dock's edge tab; {0} is the tab it shows, "Object information" or "Legend"</comment>
   </data>
   <data name="Clearance_Title" xml:space="preserve">
     <value>Clearance</value>
@@ -8151,5 +8149,113 @@
   <data name="Legend_ProductAml" xml:space="preserve">
     <value>Additional Military Layers</value>
     <comment>Legend section title of AML</comment>
+  </data>
+  <data name="Legend_TabTitle" xml:space="preserve">
+    <value>Legend</value>
+    <comment>Title of the Legend tab in the right dock (legends D2)</comment>
+  </data>
+  <data name="Label_Activity_Legend" xml:space="preserve">
+    <value>Legend</value>
+    <comment>Accessible name of the Legend tab</comment>
+  </data>
+  <data name="Tooltip_Legend" xml:space="preserve">
+    <value>Legend of what the map draws</value>
+    <comment>Tooltip of the Legend tab</comment>
+  </data>
+  <data name="Menu_Legend" xml:space="preserve">
+    <value>Legend</value>
+    <comment>View › Appearance › Legend: shows or hides the Legend tab (legends D3)</comment>
+  </data>
+  <data name="Legend_ScopeName" xml:space="preserve">
+    <value>Which legends to show</value>
+    <comment>Accessible name of the In view | All loaded switch</comment>
+  </data>
+  <data name="Legend_ScopeInView" xml:space="preserve">
+    <value>In view</value>
+    <comment>Legend toolbar: only products drawn in the map view (legends D4)</comment>
+  </data>
+  <data name="Legend_ScopeAllLoaded" xml:space="preserve">
+    <value>All loaded</value>
+    <comment>Legend toolbar: every loaded product with a legend</comment>
+  </data>
+  <data name="Tooltip_LegendScopeInView" xml:space="preserve">
+    <value>Products drawn in the map view</value>
+  </data>
+  <data name="Tooltip_LegendScopeAllLoaded" xml:space="preserve">
+    <value>Every loaded product with a legend, in view or not</value>
+  </data>
+  <data name="Legend_FilterWatermark" xml:space="preserve">
+    <value>Filter</value>
+    <comment>Watermark of the Legend filter field</comment>
+  </data>
+  <data name="Legend_FilterName" xml:space="preserve">
+    <value>Filter legend rows</value>
+    <comment>Accessible name of the Legend filter field</comment>
+  </data>
+  <data name="Legend_CollapseAll" xml:space="preserve">
+    <value>Collapse all</value>
+    <comment>Legend toolbar button</comment>
+  </data>
+  <data name="Tooltip_LegendCollapseAll" xml:space="preserve">
+    <value>Collapse every section</value>
+  </data>
+  <data name="Legend_SectionNameFormat" xml:space="preserve">
+    <value>{0} {1}, {2} entries</value>
+    <comment>Accessible name of a Legend section (legends D11); {0} product chip, {1} product name, {2} row count</comment>
+  </data>
+  <data name="Legend_SectionNameOneFormat" xml:space="preserve">
+    <value>{0} {1}, 1 entry</value>
+    <comment>Accessible name of a Legend section with one row; {0} product chip, {1} product name</comment>
+  </data>
+  <data name="Legend_SectionTooltipFormat" xml:space="preserve">
+    <value>{0} {1}
+{2}</value>
+    <comment>Tooltip of a Legend section header; {0} product chip, {1} name, {2} source and time</comment>
+  </data>
+  <data name="Legend_SourceAndTimeFormat" xml:space="preserve">
+    <value>{0} · {1}</value>
+    <comment>Legend section header detail; {0} source, {1} time summary</comment>
+  </data>
+  <data name="Legend_NoDataAtFormat" xml:space="preserve">
+    <value>No data at {0}</value>
+    <comment>Legend section header when the product has no data at the view time (legends D5); {0} is the view time of day</comment>
+  </data>
+  <data name="Legend_NotInViewFormat" xml:space="preserve">
+    <value>{0} more loaded, not in view</value>
+    <comment>Muted line under the In view sections; {0} is how many loaded products are not in view. Clicking it shows All loaded</comment>
+  </data>
+  <data name="Legend_NotInViewOneFormat" xml:space="preserve">
+    <value>1 more loaded, not in view</value>
+    <comment>As Legend_NotInViewFormat, for one product</comment>
+  </data>
+  <data name="Legend_EmptyTitle" xml:space="preserve">
+    <value>No legends yet</value>
+    <comment>Legend tab empty state</comment>
+  </data>
+  <data name="Legend_EmptyDescription" xml:space="preserve">
+    <value>Weather overlays, AML and other products that have a legend show it here once loaded.</value>
+    <comment>Legend tab empty state</comment>
+  </data>
+  <data name="Legend_NothingInViewTitle" xml:space="preserve">
+    <value>Nothing in view</value>
+    <comment>Legend tab empty state with In view selected</comment>
+  </data>
+  <data name="Legend_NothingInViewDescription" xml:space="preserve">
+    <value>No product with a legend is drawn in the map view.</value>
+  </data>
+  <data name="Legend_NoMatchTitle" xml:space="preserve">
+    <value>No matches</value>
+    <comment>Legend tab empty state when the filter matches nothing</comment>
+  </data>
+  <data name="Legend_NoMatchDescriptionFormat" xml:space="preserve">
+    <value>No section or row matches “{0}”.</value>
+    <comment>{0} is the filter text</comment>
+  </data>
+  <data name="Legend_RowsName" xml:space="preserve">
+    <value>Legend rows</value>
+    <comment>Accessible name of a Legend sections list of rows</comment>
+  </data>
+  <data name="Tooltip_LegendClearFilter" xml:space="preserve">
+    <value>Clear the filter</value>
   </data>
 </root>

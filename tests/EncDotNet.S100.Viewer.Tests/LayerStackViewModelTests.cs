@@ -21,7 +21,7 @@ public class LayerStackViewModelTests
             Entry("b.h5", S98DisplayPlane.Bathymetry, 20),
             Entry("c.gml", S98DisplayPlane.MarinerOverlay, 30));
 
-        var vm = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null);
+        var vm = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null, legend: null);
 
         var planes = vm.Planes.Select(p => p.Plane).ToList();
         // Top-first order: MarinerOverlay before Bathymetry before BaseChartUnder.
@@ -42,7 +42,7 @@ public class LayerStackViewModelTests
             Entry("high.gml", S98DisplayPlane.MarinerOverlay, 99),
             Entry("mid.gml", S98DisplayPlane.MarinerOverlay, 50));
 
-        var vm = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null);
+        var vm = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null, legend: null);
 
         var plane = Assert.Single(vm.Planes);
         var ids = plane.Children
@@ -57,7 +57,7 @@ public class LayerStackViewModelTests
         var loader = new ControllableLoader();
         loader.SetEntries(Entry("a.000", S98DisplayPlane.BaseChartUnder, 10));
 
-        var vm = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null);
+        var vm = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null, legend: null);
         Assert.Single(vm.Planes); // only the populated plane
 
         vm.ShowEmptyPlanes = true;
@@ -71,7 +71,7 @@ public class LayerStackViewModelTests
     public void LayerStackChanged_TriggersRebuild()
     {
         var loader = new ControllableLoader();
-        var vm = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null);
+        var vm = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null, legend: null);
         Assert.Empty(vm.Planes);
 
         loader.SetEntries(Entry("a.000", S98DisplayPlane.BaseChartUnder, 10));
@@ -86,7 +86,7 @@ public class LayerStackViewModelTests
     {
         var loader = new ControllableLoader();
         loader.SetEntries(Entry("a.000", S98DisplayPlane.BaseChartUnder, 10));
-        var vm = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null);
+        var vm = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null, legend: null);
 
         // Collapse the plane.
         var plane = vm.Planes[0];
@@ -107,7 +107,7 @@ public class LayerStackViewModelTests
     {
         var loader = new ControllableLoader();
         loader.SetEntries(Entry("a.000", S98DisplayPlane.BaseChartUnder, 10));
-        var vm = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null);
+        var vm = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null, legend: null);
 
         var entry = (LayerStackEntryViewModel)vm.Planes[0].Children[0];
         Assert.True(entry.IsActive); // default

@@ -81,7 +81,7 @@ public sealed partial class LiveAccessibleNameTests
             StackEntry("US5SEAFL.000", S98DisplayPlane.BaseChartUnder, 10),
             StackEntry("102US00_BATHY.h5", S98DisplayPlane.Bathymetry, 20),
             LayerStackLegendTests.FillEntry("gfswave-20261025.grib2", [new SwatchLegendEntry("#F3EEFF", "0–0.5 m"), new SwatchLegendEntry("#E5DFFC", "0.5–1 m")]));
-        var stack = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null);
+        var stack = new LayerStackViewModel(loader, dynamicSources: null, timeFormat: null, displayCombinations: null, datasets: null, legend: null);
         using var host = ViewHost.Show(new LayerStackView { DataContext = stack }, width: 420, height: 700);
 
         await AssertRealNamesAsync(host, minimumRows: 0);

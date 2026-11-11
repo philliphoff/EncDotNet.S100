@@ -53,43 +53,14 @@
         <!-- Cmd+R / Ctrl+R toggles Range & bearing (#1130 D11). -->
         <KeyBinding Gesture="Cmd+R" Command="{Binding MapTools.ToggleRangeBearingModeCommand}" />
         <KeyBinding Gesture="Ctrl+R" Command="{Binding MapTools.ToggleRangeBearingModeCommand}" />
+        <!-- View › Legend (legends D3). -->
+        <KeyBinding Gesture="Ctrl+Shift+L" Command="{Binding Layout.ToggleLegendCommand}" />
         <!-- Enter / Backspace are tool actions while a tool is active. -->
         <KeyBinding Gesture="Enter" Command="{Binding MapTools.ToolCommitCommand}" />
         <KeyBinding Gesture="Back" Command="{Binding MapTools.ToolBackstepCommand}" />
     </shadui:Window.KeyBindings>
 
     <shadui:Window.Styles>
-        <!-- Bottom-dock tabs (#902 D1): upper-case labels, the selected one
-             underlined in the accent colour. -->
-        <Style Selector="ToggleButton.dockTab">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="MinHeight" Value="0" />
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="LetterSpacing" Value="1" />
-            <Setter Property="Template">
-                <ControlTemplate>
-                    <Border x:Name="Underline"
-                            BorderThickness="0,0,0,2"
-                            BorderBrush="Transparent"
-                            Padding="0,6,0,4"
-                            Background="Transparent">
-                        <ContentPresenter Content="{TemplateBinding Content}"
-                                          Foreground="{TemplateBinding Foreground}"
-                                          VerticalAlignment="Center" />
-                    </Border>
-                </ControlTemplate>
-            </Setter>
-            <Setter Property="Opacity" Value="0.65" />
-        </Style>
-        <Style Selector="ToggleButton.dockTab:checked">
-            <Setter Property="Opacity" Value="1" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-        </Style>
-        <Style Selector="ToggleButton.dockTab:checked /template/ Border#Underline">
-            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
-        </Style>
         <!-- The Clearance tab's Distance / Time switch (#902 D1). -->
         <Style Selector="ToggleButton.dockSegment">
             <Setter Property="Height" Value="22" />
@@ -1276,54 +1247,10 @@
                                        FontSize="11"
                                        LetterSpacing="1"
                                        VerticalAlignment="Center" />
-                            <ItemsControl ItemsSource="{Binding Layout.VisibleBottomTabs}"
-                                          IsVisible="{Binding Layout.HasBottomDockTabs}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Horizontal" Spacing="14" />
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="activities:IActivityTab">
-                                        <ToggleButton Classes="dockTab"
-                                                      AutomationProperties.AutomationId="{Binding Id, StringFormat=Dock.Tab.{0}}"
-                                                      AutomationProperties.Name="{Binding Title}"
-                                                      Command="{Binding $parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.SelectTabCommand}"
-                                                      CommandParameter="{Binding}">
-                                            <!-- The title, and a count badge such as the Logs tab's
-                                                 new warnings (#1080). -->
-                                            <StackPanel Orientation="Horizontal" Spacing="5">
-                                                <TextBlock Text="{Binding Title, Converter={x:Static conv:ToUpperConverter.Instance}}"
-                                                           VerticalAlignment="Center" />
-                                                <Border IsVisible="{Binding HasBadge}"
-                                                        IsHitTestVisible="False"
-                                                        VerticalAlignment="Center"
-                                                        MinWidth="15"
-                                                        Height="15"
-                                                        Padding="4,0"
-                                                        CornerRadius="7.5"
-                                                        Background="{DynamicResource AccentBrush}"
-                                                        AutomationProperties.AutomationId="{Binding Id, StringFormat=Dock.Tab.{0}Badge}"
-                                                        AutomationProperties.Name="{Binding BadgeName}">
-                                                    <TextBlock Text="{Binding BadgeCount}"
-                                                               FontSize="9.5"
-                                                               LetterSpacing="0"
-                                                               FontWeight="SemiBold"
-                                                               Foreground="White"
-                                                               HorizontalAlignment="Center"
-                                                               VerticalAlignment="Center" />
-                                                </Border>
-                                            </StackPanel>
-                                            <ToggleButton.IsChecked>
-                                                <MultiBinding Mode="OneWay" Converter="{x:Static activities:ActiveTabConverter.Instance}">
-                                                    <Binding Path="$parent[shadui:Window].((vm:MainViewModel)DataContext).Layout.SelectedBottomTabId" />
-                                                    <Binding Path="Id" />
-                                                </MultiBinding>
-                                            </ToggleButton.IsChecked>
-                                        </ToggleButton>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                            <views:DockTabStrip Tabs="{Binding Layout.VisibleBottomTabs}"
+                                                SelectedTabId="{Binding Layout.SelectedBottomTabId}"
+                                                SelectCommand="{Binding Layout.SelectTabCommand}"
+                                                IsVisible="{Binding Layout.HasBottomDockTabs}" />
                         </Panel>
                     </views:ApplicationPanel.TitleContent>
                     <views:ApplicationPanel.HeaderContent>
@@ -1401,15 +1328,32 @@
                                     CloseCommand="{Binding Layout.CloseDockCommand}"
                                     CloseCommandParameter="Right"
                                     CloseButtonToolTip="{x:Static loc:Strings.Tooltip_ClosePickPanel}"
-                                    IsVisible="{Binding Layout.IsRightDockShown}" />
+                                    IsVisible="{Binding Layout.IsRightDockShown}">
+                <!-- Legends D2: OBJECT INFORMATION · LEGEND, icons only when the
+                     dock is too narrow for the labels (D13, D21). -->
+                <views:ApplicationPanel.TitleContent>
+                    <Panel>
+                        <TextBlock Text="{Binding Layout.RightDockTitle, Converter={x:Static conv:ToUpperConverter.Instance}}"
+                                   IsVisible="{Binding !Layout.HasRightDockTabs}"
+                                   FontSize="11"
+                                   LetterSpacing="1"
+                                   VerticalAlignment="Center" />
+                        <views:DockTabStrip x:Name="RightDockTabs"
+                                            Tabs="{Binding Layout.VisibleRightTabs}"
+                                            SelectedTabId="{Binding Layout.SelectedRightTabId}"
+                                            SelectCommand="{Binding Layout.SelectTabCommand}"
+                                            IsVisible="{Binding Layout.HasRightDockTabs}" />
+                    </Panel>
+                </views:ApplicationPanel.TitleContent>
+            </views:ApplicationPanel>
 
             <!-- Check passage folds the Object Information dock to a 26 px
                  edge tab with a vertical label (#901, C1); clicking it, or
                  turning the mode off, restores the dock. -->
             <Button Grid.Column="5"
                     AutomationProperties.AutomationId="Dock.ObjectInformationEdge"
-                    AutomationProperties.Name="{x:Static loc:Strings.Tooltip_ObjectInformationEdge}"
-                    ToolTip.Tip="{x:Static loc:Strings.Tooltip_ObjectInformationEdge}"
+                    AutomationProperties.Name="{Binding Layout.RightDockEdgeTooltip}"
+                    ToolTip.Tip="{Binding Layout.RightDockEdgeTooltip}"
                     IsVisible="{Binding Layout.IsRightDockEdgeTabVisible}"
                     Command="{Binding Layout.UnfoldRightDockCommand}"
                     Width="26"
@@ -1426,7 +1370,7 @@
                     <LayoutTransformControl.LayoutTransform>
                         <RotateTransform Angle="90" />
                     </LayoutTransformControl.LayoutTransform>
-                    <TextBlock Text="{x:Static loc:Strings.Dock_ObjectInformationEdge}"
+                    <TextBlock Text="{Binding Layout.RightDockTitle, Converter={x:Static conv:ToUpperConverter.Instance}}"
                                FontSize="10.5"
                                FontWeight="SemiBold"
                                LetterSpacing="1"

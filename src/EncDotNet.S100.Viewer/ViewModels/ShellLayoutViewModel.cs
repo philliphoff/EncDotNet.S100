@@ -125,6 +125,9 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(SelectedRightTabId));
                 OnPropertyChanged(nameof(RightDockTitle));
+                OnPropertyChanged(nameof(RightDockEdgeTooltip));
+                OnPropertyChanged(nameof(IsLegendTabShown));
+                UpdateRightTabsShown();
 
                 // PR-M3: persist the selected right-dock tab id so the
                 // user's last choice survives restart. Both user clicks
@@ -245,8 +248,7 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
         {
             if (!SetProperty(ref _isRightDockOpen, value))
                 return;
-            OnPropertyChanged(nameof(IsRightDockShown));
-            OnPropertyChanged(nameof(IsRightDockEdgeTabVisible));
+            OnRightDockShownChanged();
             if (_settingsInitialized)
             {
                 _settings.IsRightDockOpen = value;
@@ -268,9 +270,16 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
         {
             if (!SetProperty(ref _isRightDockFolded, value))
                 return;
-            OnPropertyChanged(nameof(IsRightDockShown));
-            OnPropertyChanged(nameof(IsRightDockEdgeTabVisible));
+            OnRightDockShownChanged();
         }
+    }
+
+    private void OnRightDockShownChanged()
+    {
+        OnPropertyChanged(nameof(IsRightDockShown));
+        OnPropertyChanged(nameof(IsRightDockEdgeTabVisible));
+        OnPropertyChanged(nameof(IsLegendTabShown));
+        UpdateRightTabsShown();
     }
 
     /// <summary>Whether the right dock's panel is shown: open and not folded.</summary>
@@ -278,6 +287,10 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
 
     /// <summary>Whether the folded dock's edge tab is shown.</summary>
     public bool IsRightDockEdgeTabVisible => IsRightDockOpen && IsRightDockFolded;
+
+    /// <summary>The folded dock's edge tab tooltip and name: "Show Object information", "Show Legend".</summary>
+    public string RightDockEdgeTooltip => string.Format(
+        System.Globalization.CultureInfo.CurrentCulture, Resources.Strings.Tooltip_ShowDockTabFormat, _selectedRightTab?.Name ?? string.Empty);
 
     /// <summary>Unfolds the right dock from its edge tab.</summary>
     public ICommand UnfoldRightDockCommand => _unfoldRightDockCommand ??= new RelayCommand(() => IsRightDockFolded = false);
@@ -607,6 +620,11 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
     {
         if (tab.Dock == TabDock.Bottom)
             OnBottomTabVisibilityChanged(tab);
+        if (tab.Dock == TabDock.Right)
+        {
+            OnPropertyChanged(nameof(VisibleRightTabs));
+            OnPropertyChanged(nameof(HasRightDockTabs));
+        }
 
         if (tab.IsVisible) return;
 
@@ -655,6 +673,82 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
             if (tab.ViewModel is IActivityTabShown shown)
                 shown.IsTabShown = IsBottomDockShown && ReferenceEquals(_selectedBottomTab, tab);
         }
+    }
+
+    /// <summary>Id of the Object information tab in the right dock.</summary>
+    internal const string PickReportTabId = "PickReport";
+
+    /// <summary>Id of the Legend tab in the right dock (#1404, legends design note D2).</summary>
+    internal const string LegendTabId = "Legend";
+
+    /// <summary>
+    /// Tells the right-dock tabs that care (<see cref="IActivityTabShown"/>)
+    /// whether the user can see them now: the Legend tab tells
+    /// <see cref="Services.Legends.LegendService.IsTabShown"/>.
+    /// </summary>
+    private void UpdateRightTabsShown()
+    {
+        foreach (var tab in RightTabs)
+        {
+            if (tab.ViewModel is IActivityTabShown shown)
+                shown.IsTabShown = IsRightDockShown && ReferenceEquals(_selectedRightTab, tab);
+        }
+    }
+
+    /// <summary>The right-dock tabs that can be shown now, for the dock's tab strip (D2).</summary>
+    public IReadOnlyList<IActivityTab> VisibleRightTabs => RightTabs.Where(t => t.IsVisible).ToArray();
+
+    /// <summary>Whether the right dock shows a tab strip instead of a title: more than one tab is available.</summary>
+    public bool HasRightDockTabs => RightTabs.Count(t => t.IsVisible) > 1;
+
+    /// <summary>Whether the right dock is showing the Legend tab (View › Legend's check mark).</summary>
+    public bool IsLegendTabShown => IsRightDockShown && SelectedRightTabId == LegendTabId;
+
+    private IActivityTab? _rightTabBeforeLegend;
+    private bool _rightDockOpenBeforeLegend;
+
+    /// <summary>
+    /// View › Legend (Ctrl+Shift+L): shows the Legend tab, unfolding the dock
+    /// if Check passage folded it; pressed again, puts back the tab the dock
+    /// showed before, or closes the dock if it was closed (D3, D15).
+    /// </summary>
+    public ICommand ToggleLegendCommand => _toggleLegendCommand ??= new RelayCommand(ToggleLegend);
+
+    private ICommand? _toggleLegendCommand;
+
+    private void ToggleLegend()
+    {
+        if (!_tabsById.TryGetValue(LegendTabId, out var legend) || !legend.IsVisible)
+            return;
+
+        if (IsLegendTabShown)
+        {
+            if (_rightDockOpenBeforeLegend && _rightTabBeforeLegend is { IsVisible: true } previous && !ReferenceEquals(previous, legend))
+            {
+                SelectedRightTab = previous;
+            }
+            else
+            {
+                IsRightDockOpen = false;
+                RightDockClosed?.Invoke(legend);
+            }
+            return;
+        }
+
+        ShowLegendTab(legend);
+    }
+
+    /// <summary>Shows the Legend tab, remembering what the dock showed so the toggle can put it back.</summary>
+    private void ShowLegendTab(IActivityTab legend)
+    {
+        if (!IsLegendTabShown)
+        {
+            _rightDockOpenBeforeLegend = IsRightDockShown;
+            _rightTabBeforeLegend = _selectedRightTab;
+        }
+        IsRightDockFolded = false;
+        SelectedRightTab = legend;
+        IsRightDockOpen = true;
     }
 
     /// <summary>Opens the bottom dock on the Logs tab (Help › Show logs, #1080).</summary>
@@ -990,6 +1084,7 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
         // Setters check this flag to avoid writing during initial assignment.
         _settingsInitialized = true;
         UpdateBottomTabsShown();
+        UpdateRightTabsShown();
     }
 
     private void WireAutoOpenSubscriptions()
@@ -1007,6 +1102,10 @@ internal sealed class ShellLayoutViewModel : ViewModelBase
                     case TabDock.Left:
                         SelectedLeftTab = captured;
                         IsLeftDockOpen = true;
+                        break;
+                    case TabDock.Right when captured.Id == LegendTabId:
+                        // LegendService.Show: a link opened the tab (D8).
+                        ShowLegendTab(captured);
                         break;
                     case TabDock.Right:
                         SelectedRightTab = captured;
