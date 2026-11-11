@@ -1743,9 +1743,13 @@ public partial class App : Application
         services.AddSingleton(sp => new DisplayCombinationsViewModel(
             sp.GetRequiredService<EncDotNet.S100.Viewer.Services.DisplayCombinations.DisplayCombinationService>(),
             sp.GetRequiredService<IViewerUiControllerAccessor>()));
-        services.AddSingleton(sp => new AmlDisplaySectionViewModel(
-            sp.GetRequiredService<AmlDisplayService>(),
-            EncDotNet.S100.Datasets.Pipelines.AmlOverlayPortrayal.Default.Catalog));
+        services.AddSingleton(sp =>
+        {
+            var legend = sp.GetRequiredService<EncDotNet.S100.Viewer.Services.Legends.LegendService>();
+            return new AmlDisplaySectionViewModel(
+                sp.GetRequiredService<AmlDisplayService>(),
+                sectionId => legend.Show(sectionId));
+        });
         services.AddSingleton<EcdisDisplayPanelViewModel>();
         services.AddSingleton<HelmViewModel>();
         services.AddSingleton<RoutesPanelViewModel>();
