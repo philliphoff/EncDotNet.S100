@@ -35,7 +35,7 @@ namespace EncDotNet.S100.Viewer.Services;
 /// <para>
 /// A plain map tap while the overlay is active selects the most detailed
 /// outlined dataset under the tap, and leaves the list alone
-/// (<see cref="LibraryPanelViewModel.SelectTapHits"/>). Only what is drawn can
+/// (<see cref="LibraryTapViewModel.SelectTapHits"/>). Only what is drawn can
 /// be hit: the same candidates the overlay outlines, plus loaded datasets.
 /// Tapping the same spot again steps to the next hit; tapping where nothing
 /// is outlined clears the tap. The panel's "Zoom to" moves the map to a
@@ -112,8 +112,8 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         _layer = new MemoryLayer { Name = LayerName, Style = null, Features = new List<IFeature>() };
 
         _panel.PropertyChanged += OnPanelChanged;
-        _panel.ZoomRequested += OnZoomRequested;
-        _panel.CenterRequested += OnCenterRequested;
+        _panel.Details.ZoomRequested += OnZoomRequested;
+        _panel.Details.CenterRequested += OnCenterRequested;
         _layout.PropertyChanged += OnLayoutChanged;
         _viewport.ViewportChanged += OnViewportChanged;
         _appearance.Changed += OnAppearanceChanged;
@@ -156,14 +156,14 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         if (areaHits.Where(a => a.Area.Model is not null).ToArray() is { Length: > 0 } models)
         {
             _lastTap = null;
-            _panel.ListModelsAt(tap.Position, models.Select(m => (m.SourceId, m.Area.Model!)).ToArray());
+            _panel.Tap.ListModelsAt(tap.Position, models.Select(m => (m.SourceId, m.Area.Model!)).ToArray());
             return true;
         }
 
         if (areaHits.FirstOrDefault() is { Area: { } area } hit)
         {
             _lastTap = null;
-            _panel.ClearTap();
+            _panel.Tap.ClearTap();
             _panel.SelectArea(hit.SourceId, area.Folder);
             return true;
         }
@@ -172,13 +172,13 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         if (hits.Count == 0)
         {
             _lastTap = null;
-            _panel.ClearTap();
+            _panel.Tap.ClearTap();
             return false;
         }
 
-        var sameSpot = _panel.HasTap && MapTap.IsSameSpot(_lastTap, tap);
+        var sameSpot = _panel.Tap.HasTap && MapTap.IsSameSpot(_lastTap, tap);
         _lastTap = tap;
-        _panel.SelectTapHits(tap.Position, hits, sameSpot);
+        _panel.Tap.SelectTapHits(tap.Position, hits, sameSpot);
         return true;
     }
 
@@ -579,8 +579,8 @@ internal sealed class LibraryCoverageOverlayController : IDisposable
         _disposed = true;
 
         _panel.PropertyChanged -= OnPanelChanged;
-        _panel.ZoomRequested -= OnZoomRequested;
-        _panel.CenterRequested -= OnCenterRequested;
+        _panel.Details.ZoomRequested -= OnZoomRequested;
+        _panel.Details.CenterRequested -= OnCenterRequested;
         _layout.PropertyChanged -= OnLayoutChanged;
         _viewport.ViewportChanged -= OnViewportChanged;
         _appearance.Changed -= OnAppearanceChanged;

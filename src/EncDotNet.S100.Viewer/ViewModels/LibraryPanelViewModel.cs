@@ -32,7 +32,7 @@ internal enum LibraryStateFilter
 /// filterable list, and the selected dataset's metadata — without loading any
 /// dataset.
 /// </summary>
-internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
+internal sealed class LibraryPanelViewModel : ViewModelBase, ILibraryTapList, IDisposable
 {
     private readonly CollectionLibrary _library;
     private readonly LibraryTreeViewModel _tree;
@@ -41,9 +41,8 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     private readonly LibraryRows _rows;
     private readonly OpenLibraryItemsWorkflow _open;
     private readonly DownloadLibraryItemsWorkflow _download;
-    private readonly OpenLibraryItemAsRouteWorkflow _openAsRoute;
-    private readonly Library.LoadLatestWeatherRunWorkflow _loadLatest;
-    private readonly Library.PinWeatherRunWorkflow _pinRun;
+    private readonly LibraryDetailsViewModel _details;
+    private readonly LibraryTapViewModel _tap;
     private bool _availabilityRefreshPosted;
     private bool _progressRefreshPosted;
     private readonly object _gate = new();
@@ -74,21 +73,15 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     private IReadOnlyList<LibraryItemViewModel> _textFiltered = [];
     private int _listedDatasets;
     private bool _showCoverage = true;
-    private GeoPosition? _location;
-    private GeoPosition? _tapPosition;
-    private IReadOnlyList<LibraryItemViewModel>? _tapHits;
-    private bool _selectingTapHit;
 
     /// <param name="library">The Library the panel shows.</param>
     /// <param name="tree">The collections and sources; the list shows the selected node's datasets.</param>
+    /// <param name="details">The selected dataset's actions.</param>
     /// <param name="loader">Loads datasets and reports their state.</param>
     /// <param name="downloader">Says whether items are downloaded, and how their downloads go.</param>
     /// <param name="rows">Builds the list's rows.</param>
-    /// <param name="open">Opens items (Load, Load as you pan).</param>
-    /// <param name="download">Downloads items (Download, Download listed, Retry).</param>
-    /// <param name="openAsRoute">Opens an S-421 item as a route (Open as route).</param>
-    /// <param name="loadLatest">Loads a weather source's latest run (Load latest run).</param>
-    /// <param name="pinRun">Pins and unpins weather runs.</param>
+    /// <param name="open">Opens the listed items (Load as you pan).</param>
+    /// <param name="download">Downloads the listed items (Download listed), and says which packages it unpacked.</param>
     /// <param name="dispatch">Runs a change on the UI thread (the app passes <see cref="Services.UiThread.RunOrPost"/>).</param>
     /// <param name="coalesce">Queues a refresh for later on the UI thread, even from it, so a burst of changes refreshes once (the app passes <see cref="Services.UiThread.Post"/>).</param>
     /// <param name="time">The clock (forecast ages, staleness).</param>
@@ -97,14 +90,12 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     public LibraryPanelViewModel(
         CollectionLibrary library,
         LibraryTreeViewModel tree,
+        LibraryDetailsViewModel details,
         ILibraryLoader loader,
         ILibraryDownloader downloader,
         LibraryRows rows,
         OpenLibraryItemsWorkflow open,
         DownloadLibraryItemsWorkflow download,
-        OpenLibraryItemAsRouteWorkflow openAsRoute,
-        Library.LoadLatestWeatherRunWorkflow loadLatest,
-        Library.PinWeatherRunWorkflow pinRun,
         Action<Action> dispatch,
         Action<Action> coalesce,
         TimeProvider time,
@@ -122,16 +113,13 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         ArgumentNullException.ThrowIfNull(rows);
         ArgumentNullException.ThrowIfNull(open);
         ArgumentNullException.ThrowIfNull(download);
-        ArgumentNullException.ThrowIfNull(openAsRoute);
-        ArgumentNullException.ThrowIfNull(loadLatest);
-        ArgumentNullException.ThrowIfNull(pinRun);
+        ArgumentNullException.ThrowIfNull(details);
         _downloader = downloader;
         _rows = rows;
         _open = open;
         _download = download;
-        _openAsRoute = openAsRoute;
-        _loadLatest = loadLatest;
-        _pinRun = pinRun;
+        _details = details;
+        _tap = new LibraryTapViewModel(this);
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(tree);
         ArgumentNullException.ThrowIfNull(loader);
@@ -148,39 +136,9 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
             AmlFilterAllProducts => string.Empty,
             _ => product,
         });
-        ZoomToCommand = new RelayCommand(ZoomToSelected, () => _selectedItem?.HasBounds == true);
-        ClearLocationCommand = new RelayCommand(() => SetLocation(null));
-        NextAtLocationCommand = new RelayCommand(NextAtLocation, () => _location is not null && _items.Count > 1);
-        NextTapHitCommand = new RelayCommand(NextTapHit, () => TapHitCount > 1);
-        ListTapHitsCommand = new RelayCommand(ListTapHits, () => _tapPosition is not null);
-        ClearTapCommand = new RelayCommand(ClearTap);
-        LoadCommand = new AsyncRelayCommand(LoadSelectedAsync, () => _selectedItem?.CanLoad == true);
         LoadAsYouPanCommand = new AsyncRelayCommand(LoadListedAsYouPanAsync, () => _items.Count > 0);
-        DownloadCommand = new AsyncRelayCommand(DownloadSelectedAsync, () => _selectedItem?.CanDownload == true);
-        DownloadOnlyCommand = new AsyncRelayCommand(() => DownloadSelectedAsync(load: false), () => _selectedItem?.CanDownload == true);
-        LoadOrDownloadCommand = new AsyncRelayCommand(
-            () => _selectedItem?.CanLoadAfterDownload == true ? DownloadSelectedAsync(load: true) : LoadSelectedAsync(),
-            () => _selectedItem is { } item && (item.CanLoad || item.CanLoadAfterDownload));
-        OpenAsRouteCommand = new AsyncRelayCommand(OpenSelectedAsRouteAsync, () => CanOpenAsRoute);
-        LoadLatestRunCommand = new AsyncRelayCommand(LoadLatestRunAsync, () => _selectedItem?.CanLoadLatestRun == true);
-        PinRunCommand = new RelayCommand(PinSelectedRun, () => _selectedItem?.CanPinRun == true);
-        UnpinRunCommand = new RelayCommand(UnpinSelectedRun, () => _selectedItem?.IsPinnedRun == true);
         DownloadListedCommand = new AsyncRelayCommand(DownloadListedAsync, () => DownloadableCount > 0);
         CancelDownloadsCommand = new RelayCommand(() => _downloader.CancelAll(), () => IsBulkDownloading);
-        ShowOnTimelineCommand = new RelayCommand(
-            () =>
-            {
-                if (_selectedItem?.ValidWindow is { } window)
-                    ShowOnTimelineRequested?.Invoke(this, window);
-            },
-            () => HasViewTime && _selectedItem?.ValidWindow is not null);
-        GoToRunStartCommand = new RelayCommand(
-            () =>
-            {
-                if (_selectedItem?.ValidWindow is { } window)
-                    GoToTimeRequested?.Invoke(this, window.Start);
-            },
-            () => HasViewTime && _selectedItem?.ValidWindow is not null);
         if (_viewTime is not null)
         {
             // The "At view time" facet follows the Timeline (#711, handoff G2).
@@ -204,11 +162,17 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// <summary>The collections and sources; the list shows the selected node's datasets.</summary>
     public LibraryTreeViewModel Tree => _tree;
 
+    /// <summary>The details pane: the selected dataset's actions.</summary>
+    public LibraryDetailsViewModel Details => _details;
+
+    /// <summary>The map tap's banner and the list at a map location.</summary>
+    public LibraryTapViewModel Tap => _tap;
+
     private void OnSelectedNodeChanged(object? sender, EventArgs e)
     {
-        EndTap();
-        if (_location is not null)
-            SetLocation(null);
+        _tap.EndTap();
+        if (_tap.HasLocation)
+            _tap.SetLocation(null);
         else
             RebuildItems(force: true);
     }
@@ -238,28 +202,11 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref _selectedItem, value))
             {
-                // Picking a row by hand keeps the tap while the row is one of its hits.
-                if (!_selectingTapHit && _tapHits is not null && (value is null || TapHitIndexOf(value) < 0))
-                    EndTap();
-
                 OnPropertyChanged(nameof(HasSelectedItem));
                 OnPropertyChanged(nameof(ShowsSecomDetails));
                 OnPropertyChanged(nameof(ShowsItemPlaceholder));
-                OnPropertyChanged(nameof(LocationHitIndex));
-                OnPropertyChanged(nameof(LocationPositionText));
-                OnPropertyChanged(nameof(TapPositionText));
-                ((RelayCommand)ZoomToCommand).NotifyCanExecuteChanged();
-                ((AsyncRelayCommand)LoadCommand).NotifyCanExecuteChanged();
-                ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
-                ((AsyncRelayCommand)DownloadOnlyCommand).NotifyCanExecuteChanged();
-                ((AsyncRelayCommand)LoadOrDownloadCommand).NotifyCanExecuteChanged();
-                ((AsyncRelayCommand)OpenAsRouteCommand).NotifyCanExecuteChanged();
-                NotifyWeatherRunCommands();
-                ((RelayCommand)ShowOnTimelineCommand).NotifyCanExecuteChanged();
-                ((RelayCommand)GoToRunStartCommand).NotifyCanExecuteChanged();
-                OnPropertyChanged(nameof(HasValidWindow));
-                OnPropertyChanged(nameof(CanOpenAsRoute));
-                UpdatePairing();
+                _tap.OnSelectionChanged();
+                _details.Item = value;
             }
         }
     }
@@ -276,62 +223,6 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// <summary>True when the details pane shows its "select a dataset" placeholder.</summary>
     public bool ShowsItemPlaceholder => _selectedItem is null && !ShowsSecomDetails;
 
-    private LibraryPairing? _pairing;
-
-    /// <summary>
-    /// For a selected S-111 tile, its S-102 twin in the same grid cell, when an
-    /// S-102 collection lists it (#685, handoff B7); otherwise <see langword="null"/>.
-    /// </summary>
-    public LibraryPairing? Pairing
-    {
-        get => _pairing;
-        private set
-        {
-            if (SetProperty(ref _pairing, value))
-                OnPropertyChanged(nameof(HasPairing));
-        }
-    }
-
-    /// <summary>True when <see cref="Pairing"/> is shown.</summary>
-    public bool HasPairing => _pairing is not null;
-
-    private void UpdatePairing()
-    {
-        if (_selectedItem is not { IsForecast: true, IsModelHeader: false } tile
-            || ForecastRuns.BathymetryTwinOf(tile.Item.Name) is not { } twin)
-        {
-            Pairing = null;
-            return;
-        }
-
-        var match = _library.Collections
-            .SelectMany(c => c.Sources)
-            .Where(s => s.Definition is S100CatalogueFeedSource && s.Index is not null)
-            .SelectMany(s => s.Index!.Items)
-            .FirstOrDefault(i => string.Equals(i.Name, twin, StringComparison.OrdinalIgnoreCase));
-        if (match is null)
-        {
-            Pairing = null;
-            return;
-        }
-
-        var local = _downloader.Localize(match).Location is LocalItemLocation;
-        var size = (match.Location as RemoteItemLocation)?.SizeBytes;
-        var detail = string.Join(" · ", new[]
-        {
-            $"{match.ProductSpec} {match.Name}",
-            Strings.Library_Pairing_SameCell,
-            local ? Strings.Library_Availability_Local : Strings.Library_Availability_Online,
-            size is { } bytes && !local ? LibraryItemViewModel.FormatBytes(bytes) : null,
-        }.OfType<string>());
-        Pairing = new LibraryPairing(Strings.Library_Pairing_Bathymetry, detail, local,
-            new AsyncRelayCommand(async () =>
-            {
-                await _downloader.DownloadAsync([match]).ConfigureAwait(true);
-                UpdatePairing();
-            }, () => !local && _downloader.CanDownload(match)));
-    }
-
     /// <summary>True when a dataset is selected.</summary>
     public bool HasSelectedItem => _selectedItem is not null;
 
@@ -343,7 +234,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref _filterText, value ?? string.Empty))
             {
-                EndTap();
+                _tap.EndTap();
                 ApplyFilter();
             }
         }
@@ -357,7 +248,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref _showCancelled, value))
             {
-                EndTap();
+                _tap.EndTap();
                 ApplyFilter();
             }
         }
@@ -375,7 +266,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
                 OnPropertyChanged(nameof(IsStateLocal));
                 OnPropertyChanged(nameof(IsStateOnline));
                 OnPropertyChanged(nameof(IsStateUpdates));
-                EndTap();
+                _tap.EndTap();
                 ApplyFilter();
             }
         }
@@ -409,7 +300,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
                 return;
             _amlFilter = value;
             RaiseAmlFilter();
-            EndTap();
+            _tap.EndTap();
             ApplyFilter();
         }
     }
@@ -454,7 +345,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref _atViewTime, value))
             {
-                EndTap();
+                _tap.EndTap();
                 ApplyFilter();
             }
         }
@@ -468,21 +359,6 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
 
     /// <summary>Of the datasets matching the text, how many hold data at the view time.</summary>
     public int AtViewTimeCount { get; private set; }
-
-    /// <summary>True when the selected dataset has a time window (forecast run or time coverage).</summary>
-    public bool HasValidWindow => _selectedItem?.ValidWindow is not null;
-
-    /// <summary>Shows the selected dataset's window on the Timeline (#711, handoff G3).</summary>
-    public ICommand ShowOnTimelineCommand { get; }
-
-    /// <summary>Moves the Timeline's view time to the start of the selected dataset's run or window.</summary>
-    public ICommand GoToRunStartCommand { get; }
-
-    /// <summary>Raised with a window the Timeline should show.</summary>
-    public event EventHandler<(DateTime Start, DateTime End)>? ShowOnTimelineRequested;
-
-    /// <summary>Raised with a time the Timeline should move to.</summary>
-    public event EventHandler<DateTime>? GoToTimeRequested;
 
     /// <summary>Raised after <see cref="Reveal"/> selected a dataset, so the view can show the panel and scroll to it.</summary>
     public event EventHandler<LibraryItemViewModel>? Revealed;
@@ -499,8 +375,8 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
             ?? _tree.Nodes.FirstOrDefault(n => n.EnumerateItems().Any(p => p.Source.Id == sourceId && p.Item.Key == key));
         if (node is null)
             return false;
-        if (_location is not null)
-            SetLocation(null);
+        if (_tap.HasLocation)
+            _tap.SetLocation(null);
         _filterText = string.Empty;
         OnPropertyChanged(nameof(FilterText));
         _stateFilter = LibraryStateFilter.All;
@@ -530,8 +406,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     private void OnViewTimeChanged()
     {
         OnPropertyChanged(nameof(HasViewTime));
-        ((RelayCommand)ShowOnTimelineCommand).NotifyCanExecuteChanged();
-        ((RelayCommand)GoToRunStartCommand).NotifyCanExecuteChanged();
+        _details.Refresh();
         if (_atViewTime)
             ApplyFilter();
         else
@@ -557,43 +432,6 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         set => SetProperty(ref _showCoverage, value);
     }
 
-    /// <summary>
-    /// The map location the list is filtered to (set by the tap banner's "List these"), or
-    /// <see langword="null"/> to list the selected node's datasets.
-    /// </summary>
-    public GeoPosition? Location => _location;
-
-    /// <summary>True when the list shows the datasets at a map location.</summary>
-    public bool HasLocation => _location is not null;
-
-    /// <summary>"Datasets at 57°N 152°W" for the location chip.</summary>
-    public string LocationSummary => _location is { } p
-        ? string.Format(CultureInfo.CurrentCulture, Strings.Library_AtLocationFormat, LatLonFormatter.Format(p.Latitude, p.Longitude))
-        : string.Empty;
-
-    /// <summary>Raised when the user asks to zoom the map to a dataset's bounds.</summary>
-    public event EventHandler<GeoBounds>? ZoomRequested;
-
-    /// <summary>Raised when the user asks to centre the map on a dataset without changing the zoom.</summary>
-    public event EventHandler<GeoPosition>? CenterRequested;
-
-    /// <summary>
-    /// Centres the map on the selected dataset (its bounds' centre), keeping
-    /// the zoom — e.g. when its row is double-clicked and it may be off screen.
-    /// </summary>
-    public void CenterOnSelected()
-    {
-        if (_selectedItem is { IsGroupHeader: false, Item.Bounds: { } bounds })
-            CenterRequested?.Invoke(this, CenterOf(bounds));
-    }
-
-    /// <summary>The centre of <paramref name="bounds"/>, across the antimeridian when they cross it.</summary>
-    internal static GeoPosition CenterOf(GeoBounds bounds)
-    {
-        var east = bounds.CrossesAntimeridian ? bounds.East + 360 : bounds.East;
-        return new GeoPosition((bounds.South + bounds.North) / 2, GeoBounds.NormalizeLongitude((bounds.West + east) / 2));
-    }
-
     /// <summary>"116", or "8 of 116" when filtered, shown inside the filter box.</summary>
     public string ItemsSummary =>
         ListedCount == _allItems.Count
@@ -604,86 +442,10 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     /// How many datasets pass the filters — including those inside a collapsed
     /// package group, and never the groups' header rows.
     /// </summary>
-    private int ListedCount => _listedDatasets;
-
-    /// <summary>Zooms the map to the selected dataset.</summary>
-    public ICommand ZoomToCommand { get; }
-
-    /// <summary>Returns the list to the selected node's datasets.</summary>
-    public ICommand ClearLocationCommand { get; }
-
-    /// <summary>Selects the next dataset covering the tapped point (as tapping the same spot again does).</summary>
-    public ICommand NextAtLocationCommand { get; }
-
-    /// <summary>How many listed datasets cover the tapped point.</summary>
-    public int LocationHitCount => _location is null ? 0 : ListedCount;
-
-    /// <summary>The selected dataset's 1-based position among them, or 0 when none is selected.</summary>
-    public int LocationHitIndex => _location is null || _selectedItem is null ? 0 : IndexOf(_selectedItem) + 1;
-
-    /// <summary>"3 datasets" for the map-tap banner.</summary>
-    public string LocationHitsText => LocationHitCount == 1
-        ? Strings.Library_LocationHitsOne
-        : string.Format(CultureInfo.CurrentCulture, Strings.Library_LocationHitsFormat, LocationHitCount);
-
-    /// <summary>"cover this point" (or "covers" for one).</summary>
-    public string LocationCoverText => LocationHitCount == 1 ? Strings.Library_LocationCovers : Strings.Library_LocationCover;
-
-    /// <summary>"1 / 3" for the map-tap banner.</summary>
-    public string LocationPositionText =>
-        string.Format(CultureInfo.CurrentCulture, Strings.Library_LocationIndexFormat, LocationHitIndex, LocationHitCount);
-
-    /// <summary>
-    /// True while a map tap is active and the list is not already the point
-    /// list: the tap banner ("2 here · 1 of 2") shows.
-    /// </summary>
-    public bool HasTap => _tapHits is not null && _location is null;
-
-    /// <summary>How many outlined datasets the active tap hit.</summary>
-    public int TapHitCount => _tapHits?.Count ?? 0;
-
-    /// <summary>"2 here" for the tap banner.</summary>
-    public string TapHitsText => string.Format(CultureInfo.CurrentCulture, Strings.Library_TapHereFormat, TapHitCount);
-
-    /// <summary>"· 1 of 2" for the tap banner.</summary>
-    public string TapPositionText => string.Format(CultureInfo.CurrentCulture, Strings.Library_TapIndexFormat,
-        _selectedItem is null ? 0 : TapHitIndexOf(_selectedItem) + 1, TapHitCount);
-
-    /// <summary>Selects the next dataset the tap hit, wrapping round (as tapping the same spot again does).</summary>
-    public ICommand NextTapHitCommand { get; }
-
-    /// <summary>Lists the datasets at the tapped point, from every collection (what a tap used to do).</summary>
-    public ICommand ListTapHitsCommand { get; }
-
-    /// <summary>Ends the tap: hides the banner and clears the selection.</summary>
-    public ICommand ClearTapCommand { get; }
-
-    /// <summary>Loads the selected dataset now.</summary>
-    public ICommand LoadCommand { get; }
+    public int ListedCount => _listedDatasets;
 
     /// <summary>Registers every listed local dataset to load as it comes into view.</summary>
     public ICommand LoadAsYouPanCommand { get; }
-
-    /// <summary>Downloads the selected online dataset, then loads it ("Load after download").</summary>
-    public ICommand DownloadCommand { get; }
-
-    /// <summary>Downloads the selected online dataset without loading it.</summary>
-    public ICommand DownloadOnlyCommand { get; }
-
-    /// <summary>
-    /// The details header's one Load button: loads a local dataset, or
-    /// downloads an online one and then loads it.
-    /// </summary>
-    public ICommand LoadOrDownloadCommand { get; }
-
-    /// <summary>Loads the selected S-421 dataset (if it isn't) and opens it as a route in the Routes panel.</summary>
-    public ICommand OpenAsRouteCommand { get; }
-
-    /// <summary>True when the selected dataset is an S-421 route on disk, which Open as route opens.</summary>
-    public bool CanOpenAsRoute =>
-        _selectedItem is { IsGroupHeader: false } item
-        && string.Equals(item.Item.ProductSpec, "S-421", StringComparison.OrdinalIgnoreCase)
-        && (item.CanLoad || item.IsLoadedNow);
 
     /// <summary>Downloads every listed online (or outdated) dataset.</summary>
     public ICommand DownloadListedCommand { get; }
@@ -787,7 +549,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>True when the list is narrowed by text, state or a map tap.</summary>
-    private bool IsFiltered => _filterText.Trim().Length > 0 || _stateFilter != LibraryStateFilter.All || _location is not null || _amlFilter is not null;
+    private bool IsFiltered => _filterText.Trim().Length > 0 || _stateFilter != LibraryStateFilter.All || _tap.HasLocation || _amlFilter is not null;
 
     /// <summary>How many listed datasets can be downloaded.</summary>
     public int DownloadableCount => Downloadable().Count();
@@ -899,136 +661,6 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         }
     }
 
-    /// <summary>
-    /// Lists what covers a tapped point inside forecast model domains (#685,
-    /// handoff E1): the list is filtered to the point, so each model there shows
-    /// with its tiles, and the smallest domain's model (listed first in
-    /// <paramref name="smallestFirst"/>) is selected.
-    /// </summary>
-    public void ListModelsAt(GeoPosition position, IReadOnlyList<(Guid SourceId, string Model)> smallestFirst)
-    {
-        ArgumentNullException.ThrowIfNull(smallestFirst);
-        EndTap();
-        SetLocation(position);
-        SelectedItem = smallestFirst
-            .Select(m => _items.FirstOrDefault(i => i.Source.Id == m.SourceId && i.IsForecast
-                && (i.IsModelHeader || i.IsForecastRunRow) && ForecastRuns.ModelOf(i.Item) == m.Model))
-            .FirstOrDefault(i => i is not null) ?? _selectedItem;
-    }
-
-    /// <summary>
-    /// Handles a map tap that hit <paramref name="hits"/> (listed, outlined
-    /// datasets, most detailed first): selects the first, or — when the same
-    /// spot was tapped again — the one after the current selection. The list
-    /// itself does not change; the tap banner offers Next and "List these".
-    /// </summary>
-    public void SelectTapHits(GeoPosition position, IReadOnlyList<LibraryItemViewModel> hits, bool sameSpot)
-    {
-        ArgumentNullException.ThrowIfNull(hits);
-        if (hits.Count == 0)
-        {
-            ClearTap();
-            return;
-        }
-
-        var current = _selectedItem is null ? -1 : IndexIn(hits, _selectedItem);
-        _tapPosition = position;
-        _tapHits = hits;
-        SelectTapHit(sameSpot && current >= 0 ? (current + 1) % hits.Count : 0);
-        OnTapChanged();
-    }
-
-    /// <summary>Ends any map tap and clears the selection (a tap where nothing is outlined, or the banner's ×).</summary>
-    public void ClearTap()
-    {
-        EndTap();
-        SelectedItem = null;
-    }
-
-    private void NextTapHit()
-    {
-        if (_tapHits is not { Count: > 0 } hits)
-            return;
-        var current = _selectedItem is null ? -1 : IndexIn(hits, _selectedItem);
-        SelectTapHit((current + 1) % hits.Count);
-    }
-
-    private void SelectTapHit(int index)
-    {
-        var hit = _tapHits![index];
-        _selectingTapHit = true;
-        try
-        {
-            // The list may have been rebuilt since the tap; select the row as listed now.
-            SelectedItem = _items.FirstOrDefault(i => SameItem(i, hit)) ?? hit;
-        }
-        finally
-        {
-            _selectingTapHit = false;
-        }
-    }
-
-    private void ListTapHits()
-    {
-        if (_tapPosition is not { } position)
-            return;
-        EndTap();
-        SetLocation(position);
-    }
-
-    /// <summary>Forgets the map tap (the banner hides); the selection is left alone.</summary>
-    private void EndTap()
-    {
-        if (_tapHits is null)
-            return;
-        _tapHits = null;
-        _tapPosition = null;
-        OnTapChanged();
-    }
-
-    private void OnTapChanged()
-    {
-        OnPropertyChanged(nameof(HasTap));
-        OnPropertyChanged(nameof(TapHitCount));
-        OnPropertyChanged(nameof(TapHitsText));
-        OnPropertyChanged(nameof(TapPositionText));
-        ((RelayCommand)NextTapHitCommand).NotifyCanExecuteChanged();
-        ((RelayCommand)ListTapHitsCommand).NotifyCanExecuteChanged();
-    }
-
-    private int TapHitIndexOf(LibraryItemViewModel item) => _tapHits is { } hits ? IndexIn(hits, item) : -1;
-
-    private static int IndexIn(IReadOnlyList<LibraryItemViewModel> items, LibraryItemViewModel item)
-    {
-        for (var i = 0; i < items.Count; i++)
-        {
-            if (SameItem(items[i], item))
-                return i;
-        }
-
-        return -1;
-    }
-
-    /// <summary>Selects the next dataset at the tapped point, wrapping round.</summary>
-    private void NextAtLocation()
-    {
-        if (_location is null || _items.Count == 0)
-            return;
-        var next = _selectedItem is null ? 0 : (IndexOf(_selectedItem) + 1) % _items.Count;
-        SelectedItem = _items[next];
-    }
-
-    private int IndexOf(LibraryItemViewModel item)
-    {
-        for (var i = 0; i < _items.Count; i++)
-        {
-            if (SameItem(_items[i], item))
-                return i;
-        }
-
-        return -1;
-    }
-
     public void Dispose()
     {
         _clock?.Dispose();
@@ -1120,19 +752,13 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
             foreach (var header in _packageHeaders.Values.Where(h => h.IsModelHeader))
                 header.Members = header.Members;
             _tree.RefreshStatus();
-            UpdatePairing();
+            _details.Refresh();
             RefreshDownloadProgress();
             // A dataset whose state changed may now belong to another segment.
             if (_stateFilter == LibraryStateFilter.All)
                 Recount();
             else
                 ApplyFilter();
-            ((AsyncRelayCommand)LoadCommand).NotifyCanExecuteChanged();
-            ((AsyncRelayCommand)DownloadCommand).NotifyCanExecuteChanged();
-            ((AsyncRelayCommand)DownloadOnlyCommand).NotifyCanExecuteChanged();
-            ((AsyncRelayCommand)LoadOrDownloadCommand).NotifyCanExecuteChanged();
-            ((AsyncRelayCommand)OpenAsRouteCommand).NotifyCanExecuteChanged();
-            OnPropertyChanged(nameof(CanOpenAsRoute));
             ((AsyncRelayCommand)DownloadListedCommand).NotifyCanExecuteChanged();
             OnPropertyChanged(nameof(DownloadListedText));
             OnPropertyChanged(nameof(HasDownloadable));
@@ -1143,38 +769,12 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         });
     }
 
-    private Task LoadSelectedAsync() =>
-        _selectedItem is { } item ? LoadRowsAsync([item], defer: false) : Task.CompletedTask;
-
-    private async Task OpenSelectedAsRouteAsync()
-    {
-        if (!CanOpenAsRoute || _selectedItem is not { } item)
-            return;
-        await _openAsRoute.RunAsync(item.State).ConfigureAwait(true);
-    }
-
     private Task LoadListedAsYouPanAsync() =>
         LoadRowsAsync(ListedDatasets().ToArray(), defer: true);
 
     /// <summary>Opens <paramref name="rows"/> now, or as the map pans to them when <paramref name="defer"/> is true.</summary>
     private Task<LibraryLoadResult> LoadRowsAsync(IReadOnlyList<LibraryItemViewModel> rows, bool defer) =>
         _open.RunAsync([.. rows.Select(row => row.State)], defer);
-
-    private Task DownloadSelectedAsync() => DownloadSelectedAsync(load: true);
-
-    private Task DownloadSelectedAsync(bool load) =>
-        _selectedItem is { } item ? DownloadRowsAsync([item], load) : Task.CompletedTask;
-
-    /// <summary>Downloads <paramref name="rows"/> (the details' Download, "Load after download"), then optionally opens them.</summary>
-    private async Task DownloadRowsAsync(IReadOnlyList<LibraryItemViewModel> rows, bool load)
-    {
-        var outcome = await _download.RunAsync([.. rows.Select(row => (row.Item, row.Source))], load).ConfigureAwait(true);
-        if (outcome.Download.Downloaded > 0 && outcome.ReindexedSources.Count == 0)
-        {
-            foreach (var row in rows)
-                row.RefreshAvailability();
-        }
-    }
 
     private Task DownloadListedAsync() =>
         _download.RunAsync([.. Downloadable().Select(row => (row.Item, row.Source))], load: false);
@@ -1187,21 +787,15 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         _dispatch(() => RebuildItems(force: true));
     }
 
-    private void SetLocation(GeoPosition? position)
+    /// <inheritdoc/>
+    public void ListAt(GeoPosition? position)
     {
-        _location = position;
-        OnPropertyChanged(nameof(Location));
-        OnPropertyChanged(nameof(HasLocation));
-        OnPropertyChanged(nameof(HasTap));
-        OnPropertyChanged(nameof(LocationSummary));
-        ((RelayCommand)NextAtLocationCommand).NotifyCanExecuteChanged();
-
         var selected = _selectedItem;
         _itemsBasis = null;
         _allItems = position is { } p ? HitsAt(p) : BuildNodeItems(_tree.SelectedNode);
         UpdateHasAml();
         ApplyFilter();
-        SelectedItem = selected is null ? null : _items.FirstOrDefault(i => SameItem(i, selected));
+        SelectedItem = selected is null ? null : _items.FirstOrDefault(i => LibraryTapViewModel.SameItem(i, selected));
     }
 
     /// <summary>
@@ -1223,24 +817,15 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
                 .Select(p => _rows.Create(p.Item, p.Source, node.Collection.Definition.Name))
                 .ToArray();
 
-    private static bool SameItem(LibraryItemViewModel a, LibraryItemViewModel b) =>
-        a.Source.Id == b.Source.Id && a.Item.Key == b.Item.Key;
-
-    private void ZoomToSelected()
-    {
-        if (_selectedItem?.Item.Bounds is { } bounds)
-            ZoomRequested?.Invoke(this, bounds);
-    }
-
     private void RebuildItems(bool force)
     {
-        if (_location is { } location)
+        if (_tap.Location is { } location)
         {
             // Listing datasets at a map location: refresh the hits only when
             // the library itself changed.
             if (force)
                 return;
-            SetLocation(location);
+            ListAt(location);
             return;
         }
 
@@ -1277,11 +862,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
         _listedDatasets = listed.Length;
         Items = SectionAml(GroupPackages(listed, expandAll: filter.Length > 0), expandAll: filter.Length > 0);
         Recount();
-        OnPropertyChanged(nameof(LocationHitCount));
-        OnPropertyChanged(nameof(LocationHitsText));
-        OnPropertyChanged(nameof(LocationCoverText));
-        OnPropertyChanged(nameof(LocationPositionText));
-        ((RelayCommand)NextAtLocationCommand).NotifyCanExecuteChanged();
+        _tap.OnListChanged();
         OnPropertyChanged(nameof(ItemsSummary));
         OnPropertyChanged(nameof(HasBulkBar));
         OnPropertyChanged(nameof(IsBulkOffline));
@@ -1454,7 +1035,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
             _collapsedAml.Add(header.Source.Id);
         var selected = _selectedItem;
         ApplyFilter();
-        SelectedItem = selected is null ? null : _items.FirstOrDefault(i => SameItem(i, selected));
+        SelectedItem = selected is null ? null : _items.FirstOrDefault(i => LibraryTapViewModel.SameItem(i, selected));
     }
 
     /// <summary>
@@ -1478,7 +1059,7 @@ internal sealed partial class LibraryPanelViewModel : ViewModelBase, IDisposable
             _expandedPackages.Add(header.GroupKey);
         var selected = _selectedItem;
         ApplyFilter();
-        SelectedItem = selected is null ? null : _items.FirstOrDefault(i => SameItem(i, selected));
+        SelectedItem = selected is null ? null : _items.FirstOrDefault(i => LibraryTapViewModel.SameItem(i, selected));
     }
 
     /// <summary>"18:00Z", or the local short time, as the user reads runs (#730).</summary>

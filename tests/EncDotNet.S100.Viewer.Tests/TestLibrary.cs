@@ -109,7 +109,7 @@ internal sealed class TestLibrary
         new TestLibrary(library, loader, downloader, time, timeFormat, notifications)
             .CreatePanel(importer, dispatch, coalesce, time, feedHealth, viewTime, timeFormat, sync);
 
-    /// <summary>A Library panel, and its tree, over these rows and workflows.</summary>
+    /// <summary>A Library panel, and its tree and details, over these rows and workflows.</summary>
     public LibraryPanelViewModel CreatePanel(
         ILibraryImporter importer,
         Action<Action> dispatch,
@@ -122,7 +122,8 @@ internal sealed class TestLibrary
     {
         var tree = new LibraryTreeViewModel(
             _library, importer, new LibraryNodeStatus(_downloader, Download, sync, feedHealth, time), timeFormat, dispatch, time);
-        return new(_library, tree, _loader, _downloader, Rows, Open, Download, OpenAsRoute, LoadLatest, PinRun,
+        var details = new LibraryDetailsViewModel(_library, _downloader, Open, Download, OpenAsRoute, LoadLatest, PinRun, viewTime);
+        return new(_library, tree, details, _loader, _downloader, Rows, Open, Download,
             dispatch, coalesce, time, viewTime, timeFormat);
     }
 

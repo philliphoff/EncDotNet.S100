@@ -346,13 +346,13 @@ public sealed class ForecastLibraryTests : IDisposable
         using var panel = await PanelAsync(viewTime);
         (DateTime, DateTime)? shown = null;
         DateTime? went = null;
-        panel.ShowOnTimelineRequested += (_, window) => shown = window;
-        panel.GoToTimeRequested += (_, at) => went = at;
+        panel.Details.ShowOnTimelineRequested += (_, window) => shown = window;
+        panel.Details.GoToTimeRequested += (_, at) => went = at;
 
         panel.SelectedItem = Model(panel, "nyofs");
-        Assert.True(panel.HasValidWindow);
-        panel.ShowOnTimelineCommand.Execute(null);
-        panel.GoToRunStartCommand.Execute(null);
+        Assert.True(panel.Details.HasValidWindow);
+        panel.Details.ShowOnTimelineCommand.Execute(null);
+        panel.Details.GoToRunStartCommand.Execute(null);
 
         Assert.Equal((Run.AddHours(1).UtcDateTime, Run.AddHours(55).UtcDateTime), shown);
         Assert.Equal(Run.AddHours(1).UtcDateTime, went);
